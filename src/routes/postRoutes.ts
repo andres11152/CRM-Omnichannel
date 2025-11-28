@@ -1,6 +1,6 @@
 import express from 'express';
-import { getPosts, createPost, getPost, updatePost, deletePost } from '../controllers/postsController';
-import { protect } from '../middleware/authMiddleware';
+import { getPosts, createPost, getPost, updatePost, deletePost } from '@/controllers/postsController';
+import { protect } from '@/middleware/authMiddleware';
 import { validate } from '../middleware/validationMiddleware';
 import { z } from 'zod';
 

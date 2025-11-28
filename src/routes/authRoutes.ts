@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { signup, login } from '@/controllers/authController';
+import { signup, login } from '@/controllers/authController'; // Usar alias
 import { validate } from '@/middleware/validationMiddleware';
 import { z } from 'zod';
 

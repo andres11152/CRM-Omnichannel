@@ -1,6 +1,6 @@
 
 import { PrismaClient } from '@prisma/client';
-import { AppError } from '../utils/AppError';
+import { AppError } from '@/utils/AppError';
 
 const prisma = new PrismaClient();
 
@@ -31,7 +31,7 @@ export class IngestionService {
       let conversation = await prisma.conversation.findFirst({
         where: {
           companyId,
-          createdById: user.id,
+          participants: { some: { id: user.id } },
         },
       });
 
@@ -39,9 +39,11 @@ export class IngestionService {
         conversation = await prisma.conversation.create({
           data: {
             companyId,
-            createdById: user.id,
             subject: subject || `Conversation with ${customerName}`,
             status: 'OPEN',
+            participants: {
+              connect: { id: user.id },
+            },
           },
         });
       }
@@ -52,7 +54,7 @@ export class IngestionService {
           channel,
           direction: 'INBOUND',
           conversationId: conversation.id,
-          authorId: user.id,
+          senderId: user.id,
         },
       });
 

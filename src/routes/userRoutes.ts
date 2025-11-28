@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getUsers, getUser, updateUser, deleteUser } from '@/controllers/usersController';
+import { getUsers, getUser, updateUser, deleteUser } from '@/controllers/usersController'; // Usar alias
 import { protect } from '@/middleware/authMiddleware';
 import { validate } from '@/middleware/validationMiddleware';
 import { z } from 'zod';

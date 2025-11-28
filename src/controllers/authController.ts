@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { catchAsync } from '../utils/catchAsync';
-import { AppError } from '../utils/AppError';
-import { prisma } from '../../prisma';
+import { catchAsync } from '@/utils/catchAsync';
+import { AppError } from '@/utils/AppError';
+import { prisma } from '@/../prisma';
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
 
@@ -25,7 +25,7 @@ export const signToken = (payload: TokenPayload) => {
   const options: SignOptions = {
     expiresIn,
   };
-  return jwt.sign(payload, jwtSecret, options);
+  return jwt.sign({ ...payload }, jwtSecret, options);
 };
 
 export const signup = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
@@ -56,7 +56,7 @@ export const signup = catchAsync(async (req: Request, res: Response, next: NextF
   const token = signToken({
     id: newUser.id,
     role: newUser.role || 'user', // Asumiendo que el modelo User tiene un campo 'role'
-    companyId: newUser.company_id, // Asumiendo que el modelo User tiene un campo 'company_id'
+    companyId: newUser.companyId, // CORRECCIÓN: El campo es companyId (camelCase)
   });
 
   res.status(201).json({

@@ -1,0 +1,43 @@
+services:
+  db: # Servicio de PostgreSQL
+    image: postgres:15
+    restart: always
+    env_file:
+      - .env # Carga las variables desde el archivo .env
+    ports:
+      - "5432:5432" # Expone el puerto 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis: # Servicio de Redis
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379" # Puerto estándar de Redis
+    volumes:
+      - redisdata:/data
+
+  api: # Tu API (Java/Node.js)
+    build: .
+    ports:
+      - "4000:4000" # Mapeamos al puerto 4000 definido en tu .env
+    env_file:
+      - .env # Carga las variables desde el archivo .env
+    environment:
+      # Las variables de conexión se leen desde .env, pero sobrescribimos los hosts
+      # para que usen los nombres de servicio de Docker en lugar de 'localhost'.
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      NODE_ENV: development # Definir el entorno
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+      - /app/node_modules
+    # El comando se define en el Dockerfile o se cambia para producción
+    command: npm run dev # Para desarrollo. En producción sería 'npm start'
+
+volumes:
+  pgdata:
+  redisdata:

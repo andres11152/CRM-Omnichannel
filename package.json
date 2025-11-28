@@ -1,0 +1,58 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Backend for Reply",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev -r tsconfig-paths/register --respawn server.ts",
+    "postinstall": "prisma generate",
+    "test": "jest --testTimeout=10000",
+    "test:migrate": "dotenv -e .env -- npx prisma migrate deploy --schema=./prisma/schema.prisma && dotenv -e .env -- npx prisma db seed",
+    "prod:migrate": "dotenv -e .env.production -- npx prisma migrate deploy --schema=./prisma/schema.prisma && dotenv -e .env.production -- npx prisma db seed"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.525.0",
+    "@aws-sdk/s3-request-presigner": "^3.525.0",
+    "@prisma/client": "^5.22.0",
+    "@socket.io/redis-adapter": "^8.2.1",
+    "@socket.io/redis-emitter": "^5.1.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "redis": "^4.6.13",
+    "socket.io": "^4.7.4",
+    "stripe": "^14.20.0",
+    "winston": "^3.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.11.25",
+    "@types/supertest": "^6.0.3",
+    "dotenv-cli": "^7.4.4",
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.0",
+    "prisma": "^5.22.0",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.5",
+    "ts-node-dev": "^2.0.0",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.4.2"
+  }
+}

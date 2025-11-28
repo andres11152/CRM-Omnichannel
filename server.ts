@@ -1,3 +1,5 @@
+import 'module-alias/register'; // ¡IMPORTANTE! Debe ser la primera línea
+
 import express from 'express';
 import { createServer } from 'http';
 import { verifyWebhook, handleIncomingWebhook } from './src/controllers/metaController';

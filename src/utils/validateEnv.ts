@@ -8,8 +8,8 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1, 'JWT_SECRET es requerido'),
   REDIS_URL: z.string().min(1, 'REDIS_URL es requerido'),
   META_VERIFY_TOKEN: z.string().min(1, 'META_VERIFY_TOKEN es requerido'),
-  STRIPE_SECRET_KEY: z.string().min(1, 'STRIPE_SECRET_KEY es requerido'),
-  STRIPE_WEBHOOK_SECRET: z.string().min(1, 'STRIPE_WEBHOOK_SECRET es requerido'),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
   FRONTEND_URL: z.string().min(1, 'FRONTEND_URL es requerido'),
 });
 

@@ -9,7 +9,7 @@ import { securityMiddleware } from './src/middleware/securityMiddleware';
 import { apiLimiter, authLimiter } from './src/middleware/rateLimitMiddleware';
 
 // --- NEW IMPORTS ---
-import { createCheckoutSession, createPortalSession, stripeWebhook } from './src/controllers/paymentController';
+import { stripeWebhook } from './src/controllers/paymentController'; // Mantenemos solo el webhook por ahora
 import { registerCompany } from './src/controllers/onboardingController';
 import authRouter from './src/routes/authRoutes';
 import userRouter from './src/routes/userRoutes';
@@ -18,7 +18,6 @@ import replyRouter from './src/routes/replyRoutes';
 import adminRouter from './src/routes/adminRoutes';
 import conversationRouter from './src/routes/conversationRoutes';
 import { protect } from './src/middleware/authMiddleware';
-import { createCheckoutSessionSchema } from './src/middleware/paymentSchemas';
 import { validate } from './src/middleware/validationMiddleware';
 import { superAdminGuard } from './src/middleware/superAdminMiddleware';
 
@@ -76,8 +75,8 @@ app.use('/api/users', apiLimiter, protect, userRouter);
 app.use('/api/posts', apiLimiter, protect, postRouter);
 app.use('/api/replies', apiLimiter, protect, replyRouter);
 app.use('/api/conversations', apiLimiter, protect, conversationRouter);
-app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);
-app.post('/api/create-portal-session', apiLimiter, protect, createPortalSession);
+// app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);
+// app.post('/api/create-portal-session', apiLimiter, protect, createPortalSession);
 
 
 

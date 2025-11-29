@@ -1,4 +1,4 @@
-import 'module-alias/register'; // ¡IMPORTANTE! Debe ser la primera línea
+// import 'module-alias/register'; // Ya no es necesario, se carga con el script 'start'
 
 // --- LOAD ENVIRONMENT VARIABLES ---
 import dotenv from 'dotenv';

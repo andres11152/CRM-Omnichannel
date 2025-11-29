@@ -15,7 +15,7 @@ import { securityMiddleware } from '@/middleware/securityMiddleware';
 import { apiLimiter, authLimiter } from '@/middleware/rateLimitMiddleware';
 
 // --- NEW IMPORTS ---
-import { stripeWebhook } from '@/controllers/paymentController';
+// import { stripeWebhook } from '@/controllers/paymentController'; // Deshabilitado para v1.0
 import { registerCompany } from '@/controllers/onboardingController';
 import authRouter from '@/routes/authRoutes';
 import userRouter from '@/routes/userRoutes';
@@ -25,6 +25,7 @@ import adminRouter from '@/routes/adminRoutes';
 import ticketRouter from '@/routes/ticketRoutes'; // Importar el nuevo router de tickets
 import queueRouter from '@/routes/queueRoutes'; // Importar el nuevo router de colas
 import conversationRouter from '@/routes/conversationRoutes';
+import webhookRouter from '@/routes/webhookRoutes';
 import { protect } from '@/middleware/authMiddleware';
 import { superAdminGuard } from '@/middleware/superAdminMiddleware';
 import { whatsappService } from '@/services/whatsapp.service';
@@ -41,7 +42,7 @@ const app = express();
 const httpServer = createServer(app);
 
 // --- STRIPE WEBHOOK (Must be before JSON parser) ---
-app.post('/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
+// app.post('/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook); // Deshabilitado para v1.0
 
 // Configurar Express para que confíe en el proxy inverso (ej. Nginx, Heroku, etc.)
 // Esto es crucial para que el rate-limiting funcione correctamente con req.ip.
@@ -91,6 +92,7 @@ app.use('/api/replies', apiLimiter, protect, replyRouter);
 app.use('/api/tickets', apiLimiter, protect, ticketRouter); // Añadir la ruta de tickets para usuarios autenticados
 app.use('/api/queues', apiLimiter, protect, queueRouter); // Añadir la ruta de colas para usuarios autenticados
 app.use('/api/conversations', apiLimiter, protect, conversationRouter);
+app.use('/api/webhooks', apiLimiter, protect, webhookRouter);
 // app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);
 // app.post('/api/create-portal-session', apiLimiter, protect, createPortalSession);
 

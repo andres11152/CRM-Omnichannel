@@ -1,6 +1,6 @@
 
 import Stripe from 'stripe';
-import { prisma } from '@/../prisma';
+import { PrismaClient } from '@prisma/client';
 import { AppError } from '@/utils/AppError';
 import { Logger } from '@/utils/logger';
 
@@ -8,6 +8,8 @@ import { Logger } from '@/utils/logger';
  * STRIPE SERVICE
  * Handles all payment-related logic.
  */
+
+const prisma = new PrismaClient();
 
 // Initialize Stripe with Secret Key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock_key', {

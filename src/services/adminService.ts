@@ -1,10 +1,8 @@
-
-import type { Company, Plan, CompanyStatus, Prisma } from '@prisma/client';
-import { Buffer } from 'buffer';
-import { prisma } from '@/../prisma';
+import type { Company, Plan, CompanyStatus, Prisma } from "@prisma/client";
+import { Buffer } from "buffer";
+import { prisma } from "@/config/prisma";
 
 export const adminService = {
-
   // --- TENANT MANAGEMENT ---
 
   async getAllCompanies() {
@@ -13,14 +11,14 @@ export const adminService = {
 
   async updateCompanyStatus(companyId: string, status: CompanyStatus) {
     // La lógica ahora usa los valores del enum de Prisma
-    const isActive = (status === 'ACTIVE' || status === 'TRIAL');
-    
+    const isActive = status === "ACTIVE" || status === "TRIAL";
+
     return prisma.company.update({
       where: { id: companyId },
       data: { status, isActive },
     });
   },
-  
+
   async createCompany(data: Prisma.CompanyCreateInput) {
     const newCompany = await prisma.company.create({
       data: data,
@@ -59,16 +57,18 @@ export const adminService = {
   },
 
   // --- SECURITY: IMPERSONATION ---
-  
+
   async generateImpersonationToken(targetCompanyId: string) {
     const spoofedUser = {
-      id: 'u_impersonated_' + Date.now(),
+      id: "u_impersonated_" + Date.now(),
       email: `admin@${targetCompanyId}.com`,
-      role: 'master',
+      role: "master",
       companyId: targetCompanyId,
-      isImpersonated: true
+      isImpersonated: true,
     };
-    const mockToken = `eyJ_IMPERSONATED_${Buffer.from(JSON.stringify(spoofedUser)).toString('base64')}`;
+    const mockToken = `eyJ_IMPERSONATED_${Buffer.from(
+      JSON.stringify(spoofedUser)
+    ).toString("base64")}`;
     return { token: mockToken, user: spoofedUser };
-  }
+  },
 };

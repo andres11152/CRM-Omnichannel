@@ -168,6 +168,19 @@ model ApiKey {
   @@map("api_keys")
 }
 
+model Webhook {
+  id        String   @id @default(cuid())
+  companyId String
+  url       String
+  secretKey String?
+  events    String[]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("webhooks")
+}
+
 // --- Modelos del Foro/Blog ---
 
 model Post {

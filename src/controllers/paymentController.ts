@@ -1,34 +1,41 @@
-
-import { Response } from 'express';
-import { AuthenticatedRequest } from '@/types/types';
-import { stripeService } from '@/services/stripeService';
-import { prisma } from '@/../prisma';
-import { catchAsync } from '@/utils/catchAsync';
-import { AppError } from '@/utils/AppError';
+import { Response } from "express";
+import { AuthenticatedRequest } from "@/types/types";
+import { stripeService } from "@/services/stripeService";
+import { prisma } from "@/config/prisma";
+import { catchAsync } from "@/utils/catchAsync";
+import { AppError } from "@/utils/AppError";
 
 /**
  * PAYMENT CONTROLLER
  */
 
 // POST /api/create-checkout-session
-export const createCheckoutSession = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
+export const createCheckoutSession = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
     const { priceId } = req.body;
     const companyId = req.companyId;
     const userEmail = req.user?.email;
 
     // La validación de priceId ahora la hace el middleware de Zod.
-    if (!companyId || !userEmail) throw new AppError("Datos de usuario incompletos", 400);
+    if (!companyId || !userEmail)
+      throw new AppError("Datos de usuario incompletos", 400);
 
-    const url = await stripeService.createCheckoutSession(companyId, priceId, userEmail);
+    const url = await stripeService.createCheckoutSession(
+      companyId,
+      priceId,
+      userEmail
+    );
 
     res.status(200).json({ url });
-});
+  }
+);
 
 // POST /api/create-portal-session
-export const createPortalSession = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
+export const createPortalSession = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
     const companyId = req.companyId;
     if (!companyId) {
-        throw new AppError("Contexto de compañía no encontrado.", 400);
+      throw new AppError("Contexto de compañía no encontrado.", 400);
     }
 
     // La lógica para encontrar el customerId y crear la sesión ahora está encapsulada en el servicio.
@@ -36,14 +43,15 @@ export const createPortalSession = catchAsync(async (req: AuthenticatedRequest, 
     const url = await stripeService.createPortalSession(companyId);
 
     res.status(200).json({ url });
-});
+  }
+);
 
 // POST /webhook/stripe
 // Note: This route needs 'express.raw({type: "application/json"})' middleware in server.ts
 export const stripeWebhook = catchAsync(async (req: any, res: Response) => {
-    const sig = req.headers['stripe-signature'];
-    
-    await stripeService.handleWebhook(sig, req.body);
+  const sig = req.headers["stripe-signature"];
 
-    res.json({ received: true });
+  await stripeService.handleWebhook(sig, req.body);
+
+  res.json({ received: true });
 });

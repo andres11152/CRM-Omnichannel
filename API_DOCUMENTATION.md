@@ -273,41 +273,6 @@ Endpoints for a Super Admin to manage a specific company's data. The `companyId`
 
 ---
 
-#### 3.3. Create Stripe Checkout Session
-- **`POST /api/tenant/create-checkout-session`**
-- **Description:** Generates a Stripe Checkout URL for the company to subscribe to a new plan.
-- **Frontend Action:** Redirect the user to the `url` returned in the response.
-
-**Request Body:**
-```json
-{
-  "priceId": "price_1P..." // The Stripe Price ID of the plan
-}
-```
-
-**Success Response (200 OK):**
-```json
-{
-  "url": "https://checkout.stripe.com/c/pay/..."
-}
-```
-
----
-
-#### 3.4. Create Stripe Portal Session
-- **`POST /api/tenant/create-portal-session`**
-- **Description:** Generates a Stripe Customer Portal URL, allowing the company to manage their existing subscription (e.g., update payment methods, cancel).
-- **Frontend Action:** Redirect the user to the `url` returned in the response.
-
-**Success Response (200 OK):**
-```json
-{
-  "url": "https://billing.stripe.com/p/session/..."
-}
-```
-
----
-
 ### 5. General User Routes (`/api/users`, `/api/posts`, etc.)
 **🔒 Requires: Standard User Token**
 

@@ -5,8 +5,8 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
     "dev": "ts-node-dev -r tsconfig-paths/register --respawn server.ts",
+    "start": "node dist/server.js",
     "postinstall": "prisma generate",
     "test": "jest --testTimeout=10000",
     "test:migrate": "dotenv -e .env -- npx prisma migrate deploy --schema=./prisma/schema.prisma && dotenv -e .env -- npx prisma db seed",

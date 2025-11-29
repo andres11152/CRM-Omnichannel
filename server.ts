@@ -1,4 +1,4 @@
-// import 'module-alias/register'; // Se elimina para usar solo tsconfig-paths
+import 'module-alias/register'; // ¡IMPORTANTE! Debe ser la primera línea
 
 // --- LOAD ENVIRONMENT VARIABLES ---
 import dotenv from 'dotenv';

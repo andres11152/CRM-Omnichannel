@@ -23,6 +23,7 @@ import postRouter from '@/routes/postRoutes';
 import replyRouter from '@/routes/replyRoutes';
 import adminRouter from '@/routes/adminRoutes';
 import ticketRouter from '@/routes/ticketRoutes'; // Importar el nuevo router de tickets
+import queueRouter from '@/routes/queueRoutes'; // Importar el nuevo router de colas
 import conversationRouter from '@/routes/conversationRoutes';
 import { protect } from '@/middleware/authMiddleware';
 import { superAdminGuard } from '@/middleware/superAdminMiddleware';
@@ -66,6 +67,12 @@ app.get('/', (req, res) => {
     });
 });
 
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'success',
+        message: 'API Service is healthy.'
+    });
+});
 // --- PUBLIC ROUTES ---
 app.post('/api/onboarding', authLimiter, registerCompany); // Usamos app.post para ser explícitos
 app.get('/webhook', verifyWebhook);
@@ -82,6 +89,7 @@ app.use('/api/users', apiLimiter, protect, userRouter);
 app.use('/api/posts', apiLimiter, protect, postRouter);
 app.use('/api/replies', apiLimiter, protect, replyRouter);
 app.use('/api/tickets', apiLimiter, protect, ticketRouter); // Añadir la ruta de tickets para usuarios autenticados
+app.use('/api/queues', apiLimiter, protect, queueRouter); // Añadir la ruta de colas para usuarios autenticados
 app.use('/api/conversations', apiLimiter, protect, conversationRouter);
 // app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);
 // app.post('/api/create-portal-session', apiLimiter, protect, createPortalSession);

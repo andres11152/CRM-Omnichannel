@@ -17,7 +17,7 @@
     "seed": "node dist/prisma/seed.js"
   },
   "_moduleAliases": {
-    "@": "dist"
+    "@": "dist/src"
   },
   "keywords": [],
   "author": "",

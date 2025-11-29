@@ -1,8 +1,8 @@
-import express from 'express';
+import express from "express";
 
 const router = express.Router();
 
 // Placeholder para la funcionalidad de Colas/Queues
-router.route('/').get((req, res) => res.status(200).json({ message: 'GET /queues not implemented' }));
+router.route("/").get((req, res) => res.status(200).json([]));
 
 export default router;

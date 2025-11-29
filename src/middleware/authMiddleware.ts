@@ -30,6 +30,7 @@ export const protect = catchAsync(
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
     } catch (error) {
+      console.error("[Auth] Token verification failed:", error);
       return next(new AppError("Token inválido o expirado", 401));
     }
 
@@ -38,6 +39,7 @@ export const protect = catchAsync(
       where: { id: decoded.id },
     });
     if (!currentUser) {
+      console.error(`[Auth] User not found for ID: ${decoded.id}`);
       return next(
         new AppError("El usuario perteneciente a este token ya no existe.", 401)
       );

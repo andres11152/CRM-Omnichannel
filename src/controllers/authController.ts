@@ -89,13 +89,18 @@ export const login = catchAsync(
       );
     }
 
+    console.log(`[LOGIN DEBUG] Attempting login for email: ${email}`);
+
     // 2) Buscar al usuario y seleccionar explícitamente el campo 'password'
+    console.log("[LOGIN DEBUG] Querying database for user...");
     const user = await (prisma.user.findUnique({
       where: { email },
     }) as Promise<any>);
+    console.log(`[LOGIN DEBUG] User found: ${user ? "YES" : "NO"}`);
 
     // 3) Verificar si el usuario existe y la contraseña es correcta
     if (!user || !(await bcrypt.compare(password, user.password))) {
+      console.log("[LOGIN DEBUG] Password mismatch or user not found");
       return next(new AppError("Email o contraseña incorrectos", 401));
     }
 

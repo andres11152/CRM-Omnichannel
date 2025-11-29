@@ -3,7 +3,7 @@
     "target": "ES2020",
     "module": "commonjs",
     "rootDir": "./",
-    "baseUrl": "./",
+    "baseUrl": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "moduleResolution": "node",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["*"]
     }
   },
   "include": ["src/**/*.ts", "server.ts", "prisma/seed.ts"],

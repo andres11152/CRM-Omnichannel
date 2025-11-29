@@ -1,34 +1,38 @@
-import 'module-alias/register'; // ¡IMPORTANTE! Debe ser la primera línea
+// import 'module-alias/register'; // Se elimina para usar solo tsconfig-paths
+
+// --- LOAD ENVIRONMENT VARIABLES ---
+import dotenv from 'dotenv';
+dotenv.config();
 
 import express from 'express';
 import { createServer } from 'http';
-import { verifyWebhook, handleIncomingWebhook } from './src/controllers/metaController';
-import { gateway } from './src/gateways/socketGateway'; // Ya estaba bien
-import { globalErrorHandler } from './src/middleware/errorMiddleware';
-import { AppError } from './src/utils/AppError';
-import { Logger } from './src/utils/logger';
-import { securityMiddleware } from './src/middleware/securityMiddleware';
-import { apiLimiter, authLimiter } from './src/middleware/rateLimitMiddleware';
+import { verifyWebhook, handleIncomingWebhook } from '@/controllers/metaController';
+import { gateway } from '@/gateways/socketGateway';
+import { globalErrorHandler } from '@/middleware/errorMiddleware';
+import { AppError } from '@/utils/AppError';
+import { Logger } from '@/utils/logger';
+import { securityMiddleware } from '@/middleware/securityMiddleware';
+import { apiLimiter, authLimiter } from '@/middleware/rateLimitMiddleware';
 
 // --- NEW IMPORTS ---
-import { stripeWebhook } from './src/controllers/paymentController'; // Mantenemos solo el webhook por ahora
-import { registerCompany } from './src/controllers/onboardingController';
-import authRouter from './src/routes/authRoutes';
-import userRouter from './src/routes/userRoutes';
-import postRouter from './src/routes/postRoutes';
-import replyRouter from './src/routes/replyRoutes';
-import adminRouter from './src/routes/adminRoutes';
-import conversationRouter from './src/routes/conversationRoutes';
-import { protect } from './src/middleware/authMiddleware';
-import { validate } from './src/middleware/validationMiddleware';
-import { superAdminGuard } from './src/middleware/superAdminMiddleware';
+import { stripeWebhook } from '@/controllers/paymentController';
+import { registerCompany } from '@/controllers/onboardingController';
+import authRouter from '@/routes/authRoutes';
+import userRouter from '@/routes/userRoutes';
+import postRouter from '@/routes/postRoutes';
+import replyRouter from '@/routes/replyRoutes';
+import adminRouter from '@/routes/adminRoutes';
+import conversationRouter from '@/routes/conversationRoutes';
+import { protect } from '@/middleware/authMiddleware';
+import { superAdminGuard } from '@/middleware/superAdminMiddleware';
+import { whatsappService } from '@/services/whatsapp.service';
 
 
 // HANDLE UNCAUGHT EXCEPTIONS (Sync Errors)
-(process as any).on('uncaughtException', (err: any) => {
-  console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
-  console.error(err.name, err.message);
-  process.exit(1);
+(process as any).on('uncaughtException', (err: Error) => {
+  Logger.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
+  Logger.error(err); // Usar el logger y loguear el objeto completo
+  process.exit(1); // Salir después de loguear
 });
 
 const app = express();
@@ -97,9 +101,15 @@ app.use((req, res, next) => {
 app.use(globalErrorHandler);
 
 // HANDLE UNHANDLED REJECTIONS (Async Errors)
-(process as any).on('unhandledRejection', (err: Error) => {
+(process as any).on('unhandledRejection', (reason: any) => {
   Logger.error('UNHANDLED REJECTION! 💥 Shutting down...');
-  Logger.error(err.name, err.message);
+  // Asegurarnos de que siempre logueamos un objeto Error para tener un stack trace
+  if (reason instanceof Error) {
+    Logger.error(reason);
+  } else {
+    Logger.error(new Error(`Promise rejected with non-error value: ${reason}`));
+  }
+
   httpServer.close(() => {
     process.exit(1);
   });
@@ -112,9 +122,13 @@ const PORT = process.env.PORT || 4000;
 if (require.main === module) {
   httpServer.listen(PORT, () => {
     console.log(`✅ ¡ÉXITO! CRM SaaS Backend corriendo en el puerto ${PORT}`);
-    // Inicializa el gateway solo cuando el servidor principal arranca
+    
+    // Inicializa los servicios de forma asíncrona después de que el servidor esté escuchando
     gateway.initialize(httpServer).catch(err => {
-      Logger.warn(`⚠️  Socket.io/Redis Warning: ${err.message}`);
+      Logger.error(`[Gateway] Failed to initialize: ${err}`);
+    });
+    whatsappService.initialize().catch(err => {
+      Logger.error(`[WhatsApp] Failed to initialize: ${err}`);
     });
   });
 }

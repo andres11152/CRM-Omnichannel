@@ -20,18 +20,16 @@ const colors = {
 
 winston.addColors(colors);
 
-const format = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
-  winston.format.json()
-);
-
 const transports = [
   // Console transport for Development
   new winston.transports.Console({
     format: winston.format.combine(
+      winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
       winston.format.colorize({ all: true }),
       winston.format.printf(
-        (info) => `${info.timestamp} ${info.level}: ${info.message}`
+        // Si el log incluye un stack trace, lo imprimimos. De lo contrario, solo el mensaje.
+        (info) =>
+          `${info.timestamp} ${info.level}: ${info.stack || info.message}`
       )
     ),
   }),
@@ -39,13 +37,22 @@ const transports = [
   new winston.transports.File({
     filename: 'logs/error.log',
     level: 'error',
+    format: winston.format.combine(
+      winston.format.timestamp(),
+      winston.format.json()
+    ),
   }),
-  new winston.transports.File({ filename: 'logs/combined.log' }),
+  new winston.transports.File({
+    filename: 'logs/combined.log',
+    format: winston.format.combine(
+      winston.format.timestamp(),
+      winston.format.json()
+    ),
+  }),
 ];
 
 export const Logger = winston.createLogger({
   level: process.env.NODE_ENV === 'development' ? 'debug' : 'warn',
   levels,
-  format,
   transports,
 });

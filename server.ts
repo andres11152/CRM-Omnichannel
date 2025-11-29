@@ -22,6 +22,7 @@ import userRouter from '@/routes/userRoutes';
 import postRouter from '@/routes/postRoutes';
 import replyRouter from '@/routes/replyRoutes';
 import adminRouter from '@/routes/adminRoutes';
+import ticketRouter from '@/routes/ticketRoutes'; // Importar el nuevo router de tickets
 import conversationRouter from '@/routes/conversationRoutes';
 import { protect } from '@/middleware/authMiddleware';
 import { superAdminGuard } from '@/middleware/superAdminMiddleware';
@@ -80,6 +81,7 @@ app.use('/api/admin', protect, superAdminGuard, adminRouter);
 app.use('/api/users', apiLimiter, protect, userRouter);
 app.use('/api/posts', apiLimiter, protect, postRouter);
 app.use('/api/replies', apiLimiter, protect, replyRouter);
+app.use('/api/tickets', apiLimiter, protect, ticketRouter); // Añadir la ruta de tickets para usuarios autenticados
 app.use('/api/conversations', apiLimiter, protect, conversationRouter);
 // app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);
 // app.post('/api/create-portal-session', apiLimiter, protect, createPortalSession);
@@ -127,6 +129,7 @@ if (require.main === module) {
     gateway.initialize(httpServer).catch(err => {
       Logger.error(`[Gateway] Failed to initialize: ${err}`);
     });
+    // Inicializa el servicio de WhatsApp
     whatsappService.initialize().catch(err => {
       Logger.error(`[WhatsApp] Failed to initialize: ${err}`);
     });

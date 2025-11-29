@@ -4,7 +4,7 @@
 
 **Base URL:** `http://localhost:4000`  
 **API Version:** 1.0.0  
-**Last Updated:** November 21, 2025
+**Last Updated:** November 29, 2025
 
 ---
 
@@ -16,7 +16,7 @@ The API uses JWTs for authentication, delivered in the `Authorization: Bearer <t
 
 | Token Type | Role(s) | Grants Access To | How to Obtain | Lifespan |
 | :--- | :--- | :--- | :--- | :--- |
-| **Standard User Token** | `USER`, `AGENT`, `ADMIN` | General application features (`/api/users`, `/api/posts`, etc.) within their own company. | Standard `/api/auth/login` or `/api/auth/signup`. | 7 days |
+| **Standard User Token** | `USER`, `AGENT`, `ADMIN` | General application features (`/api/users`, `/api/posts`, etc.) within their own company. | Standard `/api/auth/login` or `/api/onboarding`. | 7 days |
 | **Super Admin Token** | `MASTER` | All standard routes PLUS the powerful `/api/admin/*` routes for platform management. | Login with a user account that has the `MASTER` role in the database. | 7 days |
 | **Impersonation Token** | `ADMIN` (scoped) | Tenant-specific routes (`/api/tenant/*`). This token carries a specific `companyId` in its payload. | The `/api/admin/companies/:companyId/impersonate` endpoint (requires a Super Admin Token). | 1 hour |
 
@@ -30,18 +30,20 @@ The API uses JWTs for authentication, delivered in the `Authorization: Bearer <t
 
 ## 📋 Endpoints
 
-### 1. Authentication (`/api/auth`)
+### 1. Onboarding & Authentication (`/api/onboarding`, `/api/auth`)
 
 Public endpoints for user account management.
 
-#### 1.1. User Sign Up
-- **`POST /api/auth/signup`**
-- **Description:** Registers a new user and their associated company. In a multi-tenant system, this is the entry point for a new organization.
+#### 1.1. Register New Company & User
+- **`POST /api/onboarding`**
+- **Description:** The primary entry point for a new organization. Registers a new company and creates the initial `ADMIN` user for that company.
 - **Auth:** ❌ None
 
 **Request Body:**
 ```json
 {
+  "companyName": "Example Corp",
+  "companySlug": "example-corp",
   "name": "Andres Betancourt",
   "email": "andres@examplecorp.com",
   "password": "password123",
@@ -58,6 +60,7 @@ Public endpoints for user account management.
   "data": {
     "user": {
       "id": "clx0k...",
+      "companyId": "cly1z...",
       "email": "andres@examplecorp.com",
       "name": "Andres Betancourt",
       "createdAt": "2025-11-21T20:54:00.000Z",
@@ -73,7 +76,7 @@ Public endpoints for user account management.
 
 ---
 
-#### 1.2. User Login
+#### 1.2. User Login (`/api/auth/login`)
 - **`POST /api/auth/login`**
 - **Description:** Authenticates a user and returns a token based on their role.
 - **Auth:** ❌ None
@@ -105,7 +108,38 @@ Public endpoints for user account management.
 
 ---
 
-### 2. Super Admin (`/api/admin`)
+### 2. Webhooks (`/webhook`)
+
+Endpoints designed to be called by external services, specifically Meta (Facebook/WhatsApp).
+
+#### 2.1. Verify Webhook Subscription
+- **`GET /webhook`**
+- **Description:** Used by Meta for the initial handshake to verify the webhook endpoint. Your application must respond with the `hub.challenge` value. This is handled automatically by the server.
+- **Auth:** ❌ None (Uses `hub.verify_token` query parameter for verification)
+
+**Query Parameters:**
+- `hub.mode` (string): Should be `subscribe`.
+- `hub.verify_token` (string): Your secret verification token.
+- `hub.challenge` (string): A random string to be echoed back.
+
+**Success Response (200 OK):**
+- The raw `challenge` string.
+
+---
+
+#### 2.2. Receive Incoming Messages
+- **`POST /webhook`**
+- **Description:** The endpoint that Meta calls every time a new message (text, media, status update) is sent to your WhatsApp Business number. The server processes this message, saves it, and notifies connected clients via WebSockets.
+- **Auth:** ❌ None (Security is handled by verifying the request's signature, a standard Meta practice).
+
+**Request Body:**
+- A complex JSON object from Meta. See Meta's official documentation for the full structure.
+
+**Success Response (200 OK):**
+- The server always responds with a `200 OK` immediately to acknowledge receipt and prevent Meta from retrying the webhook. All processing happens asynchronously.
+
+---
+### 3. Super Admin (`/api/admin`)
 **🔒 Requires: Super Admin Token**
 
 Global platform management endpoints.
@@ -190,7 +224,7 @@ Global platform management endpoints.
 
 ---
 
-### 3. Tenant Management (`/api/tenant`)
+### 4. Tenant Management (`/api/tenant`)
 **🔒 Requires: Impersonation Token**
 
 Endpoints for a Super Admin to manage a specific company's data. The `companyId` is automatically extracted from the token.
@@ -274,7 +308,7 @@ Endpoints for a Super Admin to manage a specific company's data. The `companyId`
 
 ---
 
-### 4. General User Routes (`/api/users`, `/api/posts`, etc.)
+### 5. General User Routes (`/api/users`, `/api/posts`, etc.)
 **🔒 Requires: Standard User Token**
 
 These are the everyday endpoints used by authenticated users within the application. All data is automatically scoped to their company. The documentation for these is largely accurate in the previous version and is omitted here for brevity, but follows the same principles.
@@ -311,6 +345,28 @@ These are the everyday endpoints used by authenticated users within the applicat
 | `priority` | `string` | ❌ No | Enum: `LOW`, `MEDIUM`, `HIGH`, `URGENT`. |
 | `createdAt` | `string` | ❌ No | ISO 8601 date string. |
 | `assignedToId` | `string` | ✅ Yes | ID of the agent assigned to the ticket. |
+
+---
+### Conversation
+| Field | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `string` | ❌ No | Unique identifier (CUID). |
+| `subject` | `string` | ✅ Yes | Optional subject for the conversation. |
+| `status` | `string` | ❌ No | Enum: `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`. |
+| `companyId` | `string` | ❌ No | The company this conversation belongs to. |
+| `assignedToId` | `string` | ✅ Yes | ID of the agent assigned to the conversation. |
+
+### Message
+| Field | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `string` | ❌ No | Unique identifier (CUID). |
+| `content` | `string` | ❌ No | The body of the message (text or caption). |
+| `channel` | `string` | ❌ No | Enum indicating the origin, e.g., `WHATSAPP`. |
+| `direction` | `string` | ❌ No | Enum: `INBOUND` or `OUTBOUND`. |
+| `createdAt` | `string` | ❌ No | ISO 8601 date string. |
+| `conversationId` | `string` | ❌ No | The conversation this message is part of. |
+| `senderId` | `string` | ❌ No | The ID of the `User` who sent the message. |
+
 
 ---
 

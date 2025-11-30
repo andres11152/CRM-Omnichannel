@@ -226,3 +226,82 @@
 {"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T06:06:05.230Z"}
 {"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T06:14:01.897Z"}
 {"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T06:28:38.532Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-11-29T16:06:59.535Z"}
+{"level":"error","message":"[Server] WhatsApp init failed (non-fatal): PrismaClientKnownRequestError: \nInvalid `prisma.whatsAppSession.findMany()` invocation:\n\n\nThe table `public.whatsapp_sessions` does not exist in the current database.","timestamp":"2025-11-29T16:07:45.476Z"}
+{"level":"error","message":"[Server] WhatsApp init failed (non-fatal): PrismaClientKnownRequestError: \nInvalid `prisma.whatsAppSession.findMany()` invocation:\n\n\nThe table `public.whatsapp_sessions` does not exist in the current database.","timestamp":"2025-11-29T16:07:45.656Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:07:47.096Z"}
+{"level":"error","message":"[Server] WhatsApp init failed (non-fatal): PrismaClientKnownRequestError: \nInvalid `prisma.whatsAppSession.findMany()` invocation:\n\n\nThe table `public.whatsapp_sessions` does not exist in the current database.","timestamp":"2025-11-29T16:11:52.409Z"}
+{"level":"error","message":"[Server] WhatsApp init failed (non-fatal): PrismaClientKnownRequestError: \nInvalid `prisma.whatsAppSession.findMany()` invocation:\n\n\nThe table `public.whatsapp_sessions` does not exist in the current database.","timestamp":"2025-11-29T16:11:52.622Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:11:53.410Z"}
+{"level":"error","message":"[Server] WhatsApp init failed (non-fatal): PrismaClientKnownRequestError: \nInvalid `prisma.whatsAppSession.findMany()` invocation:\n\n\nThe table `public.whatsapp_sessions` does not exist in the current database.","timestamp":"2025-11-29T16:13:29.002Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:13:29.844Z"}
+{"level":"error","message":"[Server] WhatsApp init failed (non-fatal): PrismaClientKnownRequestError: \nInvalid `prisma.whatsAppSession.findMany()` invocation:\n\n\nThe table `public.whatsapp_sessions` does not exist in the current database.","timestamp":"2025-11-29T16:14:01.488Z"}
+{"level":"error","message":"[Server] WhatsApp init failed (non-fatal): PrismaClientKnownRequestError: \nInvalid `prisma.whatsAppSession.findMany()` invocation:\n\n\nThe table `public.whatsapp_sessions` does not exist in the current database.","timestamp":"2025-11-29T16:15:05.413Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:20:02.228Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-11-29T16:25:02.102Z"}
+{"clientVersion":"5.22.0","code":"P2025","level":"error","meta":{"cause":"Record to update not found.","modelName":"WhatsAppSession"},"name":"PrismaClientKnownRequestError","timestamp":"2025-11-29T16:25:02.105Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:25:49.343Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:26:16.352Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-11-29T16:27:42.769Z"}
+{"clientVersion":"5.22.0","code":"P2025","level":"error","meta":{"cause":"Record to update not found.","modelName":"WhatsAppSession"},"name":"PrismaClientKnownRequestError","timestamp":"2025-11-29T16:27:42.771Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:28:49.548Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:31:11.773Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:31:23.854Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:32:11.874Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-11-29T16:32:52.099Z"}
+{"clientVersion":"5.22.0","code":"P2025","level":"error","meta":{"cause":"Record to update not found.","modelName":"WhatsAppSession"},"name":"PrismaClientKnownRequestError","timestamp":"2025-11-29T16:32:52.100Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:33:54.163Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:37:34.656Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-11-29T16:37:35.322Z"}
+{"level":"error","timestamp":"2025-11-29T16:37:35.323Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:40:54.673Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:51:24.908Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:55:50.714Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T16:58:16.215Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T17:09:19.777Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T17:22:04.003Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T17:43:03.466Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T17:43:41.311Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T17:44:04.417Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T19:48:29.528Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T20:41:40.912Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T20:41:59.563Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T20:54:27.449Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-29T22:19:30.176Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T02:18:58.990Z"}
+{"level":"error","message":"[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter. Too many requests. Please try again later.","timestamp":"2025-11-30T02:19:40.169Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T02:19:40.473Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T02:20:00.299Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T02:21:10.609Z"}
+{"level":"error","message":"[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter. Too many requests. Please try again later.","timestamp":"2025-11-30T02:23:29.511Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T02:23:29.675Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T02:23:31.796Z"}
+{"level":"warn","message":"[Admin] IMPERSONATION EVENT: master@reply.com is logging into company cmijekvtr00029egk1084dqgf","timestamp":"2025-11-30T03:12:19.397Z"}
+{"level":"error","message":"[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter. Too many requests. Please try again later.","timestamp":"2025-11-30T03:16:41.052Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:16:41.346Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:16:41.404Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:16:41.477Z"}
+{"level":"warn","message":"[Admin] IMPERSONATION EVENT: master@reply.com is logging into company cmijekvtr00029egk1084dqgf","timestamp":"2025-11-30T03:19:40.590Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:22:39.461Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:22:39.474Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:22:39.510Z"}
+{"level":"warn","message":"[Admin] IMPERSONATION EVENT: master@reply.com is logging into company cmijekvtr00029egk1084dqgf","timestamp":"2025-11-30T03:24:33.893Z"}
+{"level":"error","message":"[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter. Too many requests. Please try again later.","timestamp":"2025-11-30T03:26:36.064Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:26:36.150Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:26:36.181Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:26:36.240Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:35:00.655Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:35:00.712Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:35:00.732Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:37:45.941Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:37:46.811Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:38:05.317Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:38:05.346Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:38:20.308Z"}
+{"level":"error","message":"[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter. Too many requests. Please try again later.","timestamp":"2025-11-30T03:43:27.100Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:43:27.172Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:43:27.195Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:43:27.201Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:43:27.295Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:43:35.619Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-11-30T03:54:14.774Z"}

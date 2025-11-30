@@ -1,19 +1,16 @@
-
-import Stripe from 'stripe';
-import { PrismaClient } from '@prisma/client';
-import { AppError } from '@/utils/AppError';
-import { Logger } from '@/utils/logger';
+import Stripe from "stripe";
+import { prisma } from "@/config/prisma";
+import { AppError } from "@/utils/AppError";
+import { Logger } from "@/utils/logger";
 
 /**
  * STRIPE SERVICE
  * Handles all payment-related logic.
  */
 
-const prisma = new PrismaClient();
-
 // Initialize Stripe with Secret Key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock_key', {
-  apiVersion: '2023-10-16', // Ensure API version stability
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_mock_key", {
+  apiVersion: "2023-10-16", // Ensure API version stability
 });
 
 export const stripeService = {
@@ -23,9 +20,14 @@ export const stripeService = {
    * @param userEmail The email of the user, used if a new customer needs to be created.
    * @returns The Stripe Customer ID.
    */
-  async findOrCreateStripeCustomerId(companyId: string, userEmail: string): Promise<string> {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
-    if (!company) throw new AppError('Compañía no encontrada.', 404);
+  async findOrCreateStripeCustomerId(
+    companyId: string,
+    userEmail: string
+  ): Promise<string> {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) throw new AppError("Compañía no encontrada.", 404);
 
     if (company.stripeCustomerId) {
       return company.stripeCustomerId;
@@ -47,12 +49,19 @@ export const stripeService = {
     return customer.id;
   },
 
-  async createCheckoutSession(companyId: string, priceId: string, userEmail: string): Promise<string> {
-    const customerId = await this.findOrCreateStripeCustomerId(companyId, userEmail);
+  async createCheckoutSession(
+    companyId: string,
+    priceId: string,
+    userEmail: string
+  ): Promise<string> {
+    const customerId = await this.findOrCreateStripeCustomerId(
+      companyId,
+      userEmail
+    );
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
-      mode: 'subscription',
+      mode: "subscription",
       customer: customerId, // Usamos el ID de cliente correcto
       metadata: { companyId },
       success_url: `${process.env.FRONTEND_URL}/?success=true`,
@@ -62,20 +71,29 @@ export const stripeService = {
   },
 
   async createPortalSession(companyId: string): Promise<string> {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company || !company.stripeCustomerId) {
-      throw new AppError('ID de cliente de Stripe no encontrado para esta compañía.', 404);
+      throw new AppError(
+        "ID de cliente de Stripe no encontrado para esta compañía.",
+        404
+      );
     }
     const session = await stripe.billingPortal.sessions.create({
       customer: company.stripeCustomerId, // Usamos el ID de cliente correcto
-      return_url: process.env.FRONTEND_URL || 'http://localhost:5173',
+      return_url: process.env.FRONTEND_URL || "http://localhost:5173",
     });
     return session.url!;
   },
 
   async handleWebhook(signature: string, rawBody: any) {
     // ... (la lógica del webhook permanece igual)
-    const event = stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET!);
+    const event = stripe.webhooks.constructEvent(
+      rawBody,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
     // ...
   },
 };

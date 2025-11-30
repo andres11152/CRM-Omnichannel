@@ -16,10 +16,18 @@ const router = express.Router();
 
 // ...
 
-router.route("/").get(async (req, res) => {
+router.route("/").get(async (req: any, res) => {
   try {
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res
+        .status(400)
+        .json({ message: "Company ID missing from request" });
+    }
+
     // Fetch conversations with participants and latest message
     const conversations = await prisma.conversation.findMany({
+      where: { companyId },
       include: {
         participants: true,
         messages: {
@@ -60,7 +68,9 @@ router.route("/").get(async (req, res) => {
     res.status(200).json(tickets);
   } catch (error) {
     console.error("Error fetching tickets:", error);
-    res.status(500).json({ message: "Failed to fetch tickets" });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch tickets", error: String(error) });
   }
 });
 router

@@ -1,8 +1,5 @@
-
-import { PrismaClient } from '@prisma/client';
-import { AppError } from '@/utils/AppError';
-
-const prisma = new PrismaClient();
+import { prisma } from "@/config/prisma";
+import { AppError } from "@/utils/AppError";
 
 export class IngestionService {
   public static async ingestMessage(
@@ -14,7 +11,9 @@ export class IngestionService {
     subject?: string
   ) {
     try {
-      let user = await prisma.user.findUnique({ where: { email: customerEmail } });
+      let user = await prisma.user.findUnique({
+        where: { email: customerEmail },
+      });
 
       if (!user) {
         user = await prisma.user.create({
@@ -22,8 +21,8 @@ export class IngestionService {
             email: customerEmail,
             name: customerName,
             companyId: companyId,
-            role: 'USER',
-            password: '', // Users created this way don't need a password initially
+            role: "USER",
+            password: "", // Users created this way don't need a password initially
           },
         });
       }
@@ -40,7 +39,7 @@ export class IngestionService {
           data: {
             companyId,
             subject: subject || `Conversation with ${customerName}`,
-            status: 'OPEN',
+            status: "OPEN",
             participants: {
               connect: { id: user.id },
             },
@@ -52,7 +51,7 @@ export class IngestionService {
         data: {
           content,
           channel,
-          direction: 'INBOUND',
+          direction: "INBOUND",
           conversationId: conversation.id,
           senderId: user.id,
         },
@@ -60,7 +59,7 @@ export class IngestionService {
 
       return { conversation, message };
     } catch (error) {
-      throw new AppError('Error ingesting message', 500);
+      throw new AppError("Error ingesting message", 500);
     }
   }
 }

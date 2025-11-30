@@ -30,7 +30,7 @@ export const signToken = (payload: TokenPayload) => {
 
 export const signup = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { name, email, password, passwordConfirm } = req.body;
+    const { name, email, password, passwordConfirm, companyId } = req.body;
 
     if (!email || !password) {
       return next(
@@ -52,6 +52,8 @@ export const signup = catchAsync(
         name,
         email,
         password: hashedPassword, // Guardamos la contraseña encriptada
+        companyId: companyId || undefined, // Allow linking to company if provided
+        role: companyId ? "AGENT" : "ADMIN", // Default to AGENT if added to company, else ADMIN (new tenant)
       } as any,
     }) as Promise<any>);
 

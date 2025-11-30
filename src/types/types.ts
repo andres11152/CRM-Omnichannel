@@ -1,13 +1,14 @@
-
 export enum SenderType {
-  USER = 'USER', AGENT = 'AGENT', BOT = 'BOT'
+  USER = "USER",
+  AGENT = "AGENT",
+  BOT = "BOT",
 }
 
 export enum WebhookEvents {
-  MESSAGE_RECEIVED = 'message.received',
-  MESSAGE_SENT = 'message.sent',
-  STATUS_UPDATED = 'status.updated',
-  CONTACT_CREATED = 'contact.created'
+  MESSAGE_RECEIVED = "message.received",
+  MESSAGE_SENT = "message.sent",
+  STATUS_UPDATED = "status.updated",
+  CONTACT_CREATED = "contact.created",
 }
 
 export interface Webhook {
@@ -20,12 +21,13 @@ export interface Webhook {
 }
 
 // Authenticated request type for controllers that require `req.user`
-import { Request } from 'express';
+import { Request } from "express";
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     email?: string;
     role?: string;
+    companyId?: string;
   };
   companyId?: string;
 }

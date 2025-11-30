@@ -1,12 +1,21 @@
 import type { Company, Plan, CompanyStatus, Prisma } from "@prisma/client";
 import { Buffer } from "buffer";
 import { prisma } from "@/config/prisma";
+import { signToken } from "@/controllers/authController";
 
 export const adminService = {
   // --- TENANT MANAGEMENT ---
 
   async getAllCompanies() {
-    return prisma.company.findMany();
+    return prisma.company.findMany({
+      include: {
+        users: {
+          where: { role: "ADMIN" },
+          select: { email: true },
+          take: 1,
+        },
+      },
+    });
   },
 
   async updateCompanyStatus(companyId: string, status: CompanyStatus) {
@@ -59,16 +68,37 @@ export const adminService = {
   // --- SECURITY: IMPERSONATION ---
 
   async generateImpersonationToken(targetCompanyId: string) {
-    const spoofedUser = {
-      id: "u_impersonated_" + Date.now(),
-      email: `admin@${targetCompanyId}.com`,
-      role: "master",
-      companyId: targetCompanyId,
-      isImpersonated: true,
-    };
-    const mockToken = `eyJ_IMPERSONATED_${Buffer.from(
-      JSON.stringify(spoofedUser)
-    ).toString("base64")}`;
-    return { token: mockToken, user: spoofedUser };
+    const adminUser = await prisma.user.findFirst({
+      where: {
+        companyId: targetCompanyId,
+        role: "ADMIN",
+      },
+    });
+
+    if (!adminUser) {
+      // Fallback: try to find any user if no ADMIN exists
+      const anyUser = await prisma.user.findFirst({
+        where: { companyId: targetCompanyId },
+      });
+
+      if (!anyUser) {
+        throw new Error("No se encontraron usuarios para esta empresa.");
+      }
+
+      const token = signToken({
+        id: anyUser.id,
+        role: anyUser.role,
+        companyId: anyUser.companyId,
+      });
+      return { token, user: anyUser };
+    }
+
+    const token = signToken({
+      id: adminUser.id,
+      role: adminUser.role,
+      companyId: adminUser.companyId,
+    });
+
+    return { token, user: adminUser };
   },
 };

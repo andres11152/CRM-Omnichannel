@@ -4,6 +4,7 @@ import { protect } from "@/middleware/authMiddleware";
 
 const router = Router();
 
-router.get("/:companyId", protect, webhookController.getCompanyWebhooks);
+router.get("/", protect, webhookController.getCompanyWebhooks);
+router.post("/", protect, webhookController.createWebhook);
 
 export default router;

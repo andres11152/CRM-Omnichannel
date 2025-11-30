@@ -9,13 +9,84 @@ import { AuthenticatedRequest } from "@/types/types";
  * Obtiene una lista de todos los usuarios de la base de datos.
  */
 export const getUsers = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const users = await prisma.user.findMany();
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { role } = req.query;
+    const companyId = req.companyId || req.user?.companyId;
+
+    const where: any = {};
+
+    // Filter by Company (Multi-tenancy)
+    if (companyId) {
+      where.companyId = companyId;
+    }
+
+    // Filter by Role if provided
+    if (role) {
+      where.role = role;
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        companyId: true,
+        createdAt: true,
+        // Exclude password
+      },
+    });
 
     res.status(200).json({
       status: "success",
       results: users.length,
       data: { users },
+    });
+  }
+);
+
+/**
+ * CREATE USER CONTROLLER (Admin only)
+ * Crea un nuevo usuario vinculado a la compañía del admin.
+ */
+import bcrypt from "bcryptjs";
+
+export const createUser = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { name, email, password, role } = req.body;
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return next(
+        new AppError("No se pudo determinar la compañía del usuario.", 400)
+      );
+    }
+
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return next(new AppError("El email ya está registrado.", 400));
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        companyId,
+        role: role || "AGENT",
+      },
+    });
+
+    // Remove password from output
+    const { password: _, ...userWithoutPassword } = newUser;
+
+    res.status(201).json({
+      status: "success",
+      data: { user: userWithoutPassword },
     });
   }
 );
@@ -51,8 +122,26 @@ export const updateUser = catchAsync(
     const { id } = req.params;
     const { email, name } = req.body;
 
-    // Un usuario solo puede editar su propio perfil (a menos que sea admin, lógica a añadir después)
-    if (id !== req.user?.id) {
+    // Un usuario solo puede editar su propio perfil (a menos que sea admin)
+    const companyId = (req as any).companyId;
+
+    // Permitir si es el mismo usuario
+    const isSelf = id === req.user?.id;
+    // Permitir si es ADMIN de la misma compañía y el objetivo es un AGENT
+    let isAdminEditingAgent = false;
+
+    if (req.user?.role === "ADMIN" && companyId && !isSelf) {
+      const targetUser = await prisma.user.findUnique({ where: { id } });
+      if (
+        targetUser &&
+        targetUser.companyId === companyId &&
+        targetUser.role === "AGENT"
+      ) {
+        isAdminEditingAgent = true;
+      }
+    }
+
+    if (!isSelf && !isAdminEditingAgent) {
       return next(
         new AppError("No tienes permiso para editar este perfil.", 403)
       );
@@ -82,35 +171,44 @@ export const deleteUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
 
-    // Lógica de negocio: Por ahora, nadie puede eliminar usuarios a través de la API.
-    // Un super admin podría, pero esa lógica iría en un controlador de admin.
+    // Lógica de negocio: Permitir a ADMIN eliminar AGENT de su misma compañía
+    const companyId = (req as any).companyId;
+    if (req.user?.role === "ADMIN" && companyId) {
+      const targetUser = await prisma.user.findUnique({ where: { id } });
+
+      if (!targetUser) {
+        return next(new AppError("Usuario no encontrado", 404));
+      }
+
+      if (targetUser.companyId !== companyId) {
+        return next(
+          new AppError(
+            "No tienes permiso para eliminar usuarios de otra compañía.",
+            403
+          )
+        );
+      }
+
+      // Opcional: Impedir eliminar otros ADMINs
+      if (targetUser.role !== "AGENT") {
+        return next(
+          new AppError("Solo puedes eliminar cuentas de Agentes.", 403)
+        );
+      }
+
+      await prisma.user.delete({ where: { id } });
+      return res.status(204).send();
+    }
+
+    // Fallback para otros casos (o si el usuario intenta borrarse a sí mismo, que también podríamos permitir)
     if (id !== req.user?.id) {
       return next(
         new AppError("No tienes permiso para eliminar usuarios.", 403)
       );
     }
-    return next(
-      new AppError(
-        "La eliminación de usuarios no está permitida a través de esta ruta.",
-        403
-      )
-    );
 
-    // Primero, verificamos si el usuario existe para dar un error 404 claro si no se encuentra.
-    const user = await prisma.user.findUnique({
-      where: { id },
-    });
-
-    if (!user) {
-      return next(
-        new AppError("No se encontró un usuario con ese ID para eliminar", 404)
-      );
-    }
-
-    // Si el usuario existe, lo eliminamos.
+    // Auto-eliminación (si se desea permitir)
     await prisma.user.delete({ where: { id } });
-
-    // Es estándar responder con 204 No Content para una eliminación exitosa.
     res.status(204).send();
   }
 );

@@ -27,13 +27,16 @@ import replyRouter from "@/routes/replyRoutes";
 import adminRouter from "@/routes/adminRoutes";
 import ticketRouter from "@/routes/ticketRoutes"; // Importar el nuevo router de tickets
 import queueRouter from "@/routes/queueRoutes"; // Importar el nuevo router de colas
+import campaignRouter from "@/routes/campaignRoutes";
+import tagRouter from "@/routes/tagRoutes";
+import flowRouter from "@/routes/flowRoutes";
 import conversationRouter from "@/routes/conversationRoutes";
 import webhookRouter from "@/routes/webhookRoutes";
 import integrationRouter from "@/routes/integrationRoutes";
-import tenantRouter from "@/routes/tenantRoutes";
 import { protect } from "@/middleware/authMiddleware";
 import { superAdminGuard } from "@/middleware/superAdminMiddleware";
 import { whatsappService } from "@/services/whatsapp.service";
+import whatsappRouter from "@/routes/whatsappRoutes";
 
 // HANDLE UNCAUGHT EXCEPTIONS (Sync Errors)
 (process as any).on("uncaughtException", (err: Error) => {
@@ -95,10 +98,13 @@ app.use("/api/posts", apiLimiter, protect, postRouter);
 app.use("/api/replies", apiLimiter, protect, replyRouter);
 app.use("/api/tickets", apiLimiter, protect, ticketRouter); // Añadir la ruta de tickets para usuarios autenticados
 app.use("/api/queues", apiLimiter, protect, queueRouter); // Añadir la ruta de colas para usuarios autenticados
+app.use("/api/campaigns", apiLimiter, protect, campaignRouter);
+app.use("/api/tags", apiLimiter, protect, tagRouter);
+app.use("/api/flows", apiLimiter, protect, flowRouter);
 app.use("/api/conversations", apiLimiter, protect, conversationRouter);
 app.use("/api/webhooks", apiLimiter, protect, webhookRouter);
 app.use("/api/integrations", apiLimiter, protect, integrationRouter);
-app.use("/api/tenant", apiLimiter, protect, tenantRouter);
+app.use("/api/whatsapp", apiLimiter, protect, whatsappRouter);
 // app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);
 // app.post('/api/create-portal-session', apiLimiter, protect, createPortalSession);
 
@@ -140,9 +146,10 @@ if (require.main === module) {
     try {
       // Inicializa los servicios antes de escuchar
       try {
-        await whatsappService.initialize();
+        // await whatsappService.initialize();
+        Logger.info("[Server] WhatsApp init skipped for debugging");
       } catch (e) {
-        Logger.error(`[Server] WhatsApp init failed (non-fatal): ${e}`);
+        Logger.error(`[Server] WhatsApp init skipped: ${e}`);
       }
 
       await gateway.initialize(httpServer);

@@ -147,15 +147,20 @@ class WhatsAppService {
   private async handleIncomingMessage(sessionId: string, m: any) {
     try {
       const msg = m.messages[0];
-      if (!msg.message || msg.key.fromMe) return;
+      if (!msg.message) return; // Allow fromMe messages
 
       const remoteJid = msg.key.remoteJid;
+      const isOutbound = msg.key.fromMe;
       const text =
         msg.message.conversation || msg.message.extendedTextMessage?.text;
 
       if (!remoteJid || !text) return;
 
-      console.log(`[WhatsApp] [${sessionId}] Msg from ${remoteJid}: ${text}`);
+      console.log(
+        `[WhatsApp] [${sessionId}] Msg ${
+          isOutbound ? "TO" : "FROM"
+        } ${remoteJid}: ${text}`
+      );
 
       // Find the session record to get companyId
       const sessionRecord = await prisma.whatsAppSession.findUnique({
@@ -184,10 +189,10 @@ class WhatsAppService {
           ? msg.pushName
           : `Usuario WhatsApp`;
 
-      // Find or Create User
-      let contact = await prisma.user.findUnique({ where: { email } });
-      if (!contact) {
-        contact = await prisma.user.create({
+      // Find or Create User (The Customer/Contact)
+      let customerUser = await prisma.user.findUnique({ where: { email } });
+      if (!customerUser) {
+        customerUser = await prisma.user.create({
           data: {
             email,
             name: contactName,
@@ -219,13 +224,43 @@ class WhatsAppService {
         }
       }
 
+      // Determine Sender ID
+      let senderId = customerUser.id;
+      let senderName = customerUser.name;
+      let senderType = "USER";
+
+      if (isOutbound) {
+        // If message is from ME (Mobile), assign to a "Mobile Agent" user
+        const mobileEmail = `mobile_${companyId}@reply.com`;
+        let mobileUser = await prisma.user.findUnique({
+          where: { email: mobileEmail },
+        });
+
+        if (!mobileUser) {
+          mobileUser = await prisma.user.create({
+            data: {
+              email: mobileEmail,
+              name: "Desde Celular",
+              password: await import("bcryptjs").then((b) =>
+                b.hash("123456", 10)
+              ),
+              role: "AGENT",
+              companyId: companyId,
+            },
+          });
+        }
+        senderId = mobileUser.id;
+        senderName = mobileUser.name;
+        senderType = "AGENT";
+      }
+
       // Find or Create Conversation
       // 1. Try to find an OPEN conversation for this contact first (to avoid duplicates)
       let conversation = await (prisma as any).conversation.findFirst({
         where: {
           companyId: companyId,
           status: "OPEN",
-          participants: { some: { id: contact.id } },
+          participants: { some: { id: customerUser.id } },
         },
       });
 
@@ -234,7 +269,7 @@ class WhatsAppService {
         conversation = await (prisma as any).conversation.findFirst({
           where: {
             companyId: companyId,
-            participants: { some: { id: contact.id } },
+            participants: { some: { id: customerUser.id } },
             OR: [
               { channelId: sessionRecord.phone },
               { channelId: sessionId },
@@ -266,7 +301,7 @@ class WhatsAppService {
             channelId: sessionRecord.phone || sessionId,
             subject: `WhatsApp: ${contactName}`,
             status: "OPEN",
-            participants: { connect: [{ id: contact.id }] },
+            participants: { connect: [{ id: customerUser.id }] },
           },
         });
       } else {
@@ -284,9 +319,9 @@ class WhatsAppService {
         data: {
           content: text,
           channel: "WHATSAPP",
-          direction: "INBOUND",
+          direction: isOutbound ? "OUTBOUND" : "INBOUND",
           conversationId: conversation.id,
-          senderId: contact.id,
+          senderId: senderId,
         },
       });
 
@@ -295,8 +330,8 @@ class WhatsAppService {
       io?.emit("message", {
         ...newMessage,
         ticketId: conversation.id,
-        senderName: contact.name,
-        senderType: "USER",
+        senderName: senderName,
+        senderType: senderType,
       });
 
       // --- SYNC QUEUE ID FALLBACK ---
@@ -318,7 +353,8 @@ class WhatsAppService {
       }
 
       // --- AI AUTO-RESPONSE ---
-      if (conversation.queueId) {
+      // ONLY trigger AI if message is INBOUND (from customer)
+      if (conversation.queueId && !isOutbound) {
         try {
           const queue = await (prisma as any).queue.findUnique({
             where: { id: conversation.queueId },
@@ -339,7 +375,7 @@ class WhatsAppService {
             });
 
             const history = historyMessages.reverse().map((m: any) => ({
-              role: m.senderId === contact.id ? "user" : "model",
+              role: m.senderId === customerUser.id ? "user" : "model",
               parts: m.content,
             }));
 
@@ -540,6 +576,84 @@ class WhatsAppService {
       return sessions;
     } catch (error) {
       console.error(`[WhatsApp] Error listing sessions:`, error);
+      throw error;
+    }
+  }
+
+  async syncMessages(companyId: string, fromDate: Date) {
+    console.log(
+      `[WhatsApp] Syncing messages for company ${companyId} from ${fromDate}`
+    );
+    try {
+      const conversations = await (prisma as any).conversation.findMany({
+        where: {
+          companyId,
+          channelId: { not: null },
+        },
+      });
+
+      const session = await (prisma as any).whatsAppSession.findFirst({
+        where: { companyId, status: "CONNECTED" },
+      });
+
+      if (!session || !this.sessions.has(session.sessionId)) {
+        throw new Error(
+          "No connected WhatsApp session found for this company."
+        );
+      }
+
+      const sock = this.sessions.get(session.sessionId);
+      let totalSynced = 0;
+
+      for (const conv of conversations) {
+        if (!conv.channelId) continue;
+        try {
+          const jid = conv.channelId.includes("@")
+            ? conv.channelId
+            : `${conv.channelId}@s.whatsapp.net`;
+
+          // Using any cast to bypass TS error as discussed
+          const messages = await (sock as any).fetchMessagesFromWA(jid, 50);
+          if (!messages) continue;
+
+          for (const msg of messages) {
+            const msgTime = (msg.messageTimestamp as number) * 1000;
+            if (new Date(msgTime) < fromDate) continue;
+
+            const content =
+              msg.message?.conversation ||
+              msg.message?.extendedTextMessage?.text;
+            if (!content) continue;
+
+            const exists = await (prisma as any).message.findFirst({
+              where: {
+                conversationId: conv.id,
+                content: content,
+                createdAt: {
+                  gte: new Date(msgTime - 2000),
+                  lte: new Date(msgTime + 2000),
+                },
+              },
+            });
+
+            if (exists) continue;
+
+            await this.handleIncomingMessage(session.sessionId, {
+              messages: [msg],
+              type: "notify",
+            });
+            totalSynced++;
+          }
+        } catch (err) {
+          console.error(
+            `[WhatsApp] Error syncing chat ${conv.channelId}:`,
+            err
+          );
+        }
+      }
+      return { synced: totalSynced };
+    } catch (error) {
+      console.error(`[WhatsApp] Error syncing messages:`, error);
       throw error;
     }
   }

@@ -1,4 +1,9 @@
-import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl as awsGetSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   s3Client,
   BUCKET_NAME,
@@ -66,11 +71,23 @@ const compressImage = async (
   }
 };
 
+export interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination: string;
+  filename: string;
+  path: string;
+  buffer: Buffer;
+}
+
 /**
  * Upload file to S3 or local storage
  */
 export const uploadFile = async (
-  file: Express.Multer.File,
+  file: MulterFile,
   options: {
     companyId: string;
     type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
@@ -103,7 +120,7 @@ export const uploadFile = async (
         Key: key,
         Body: fileBuffer,
         ContentType: file.mimetype,
-        ACL: "public-read", // Make files publicly accessible
+        ACL: "private", // Explicitly private
       });
 
       await s3Client.send(command);
@@ -177,10 +194,31 @@ export const deleteFile = async (key: string): Promise<void> => {
 };
 
 /**
+ * Get Signed URL for private S3 file
+ */
+export const getSignedUrl = async (key: string): Promise<string> => {
+  if (USE_S3 && s3Client) {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+      });
+      // URL valid for 1 hour
+      return await awsGetSignedUrl(s3Client, command, { expiresIn: 3600 });
+    } catch (error) {
+      console.error("Error generating signed URL:", error);
+      return "";
+    }
+  }
+  // Local fallback
+  return `${LOCAL_BASE_URL}/${key}`; // Assuming key is relative path for local
+};
+
+/**
  * Validate file type
  */
 export const validateFileType = (
-  file: Express.Multer.File
+  file: MulterFile
 ): {
   isValid: boolean;
   type?: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
@@ -264,7 +302,7 @@ export const validateFileType = (
  * Validate file size based on type
  */
 export const validateFileSize = (
-  file: Express.Multer.File,
+  file: MulterFile,
   type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT"
 ): { isValid: boolean; error?: string } => {
   const sizeLimits = {

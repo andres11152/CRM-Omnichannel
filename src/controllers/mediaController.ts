@@ -6,6 +6,7 @@ import {
   deleteFile,
   validateFileType,
   validateFileSize,
+  getSignedUrl,
 } from "../services/uploadService";
 
 /**
@@ -196,13 +197,24 @@ export const getMedia = async (req: AuthenticatedRequest, res: Response) => {
       prisma.media.count({ where }),
     ]);
 
+    // Generate signed URLs for S3 files
+    const mediaWithSignedUrls = await Promise.all(
+      media.map(async (m) => {
+        if (m.url.includes("s3.amazonaws.com")) {
+          const signedUrl = await getSignedUrl(m.key);
+          return { ...m, url: signedUrl };
+        }
+        return m;
+      })
+    );
+
     res.status(200).json({
       status: "success",
       results: media.length,
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum),
-      data: { media },
+      data: { media: mediaWithSignedUrls },
     });
   } catch (error) {
     console.error("Error fetching media:", error);
@@ -239,6 +251,12 @@ export const getMediaById = async (
 
     if (!media) {
       return res.status(404).json({ message: "Archivo no encontrado" });
+    }
+
+    // Generate signed URL if S3
+    if (media.url.includes("s3.amazonaws.com")) {
+      const signedUrl = await getSignedUrl(media.key);
+      (media as any).url = signedUrl;
     }
 
     res.status(200).json({

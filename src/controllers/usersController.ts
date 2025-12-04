@@ -34,8 +34,7 @@ export const getUsers = catchAsync(
         role: true,
         companyId: true,
         createdAt: true,
-        companyId: true,
-        createdAt: true,
+
         queues: {
           select: {
             id: true,

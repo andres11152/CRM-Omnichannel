@@ -3,7 +3,6 @@ import { catchAsync } from "@/utils/catchAsync";
 import { prisma } from "@/config/prisma";
 import { AuthenticatedRequest } from "@/types/types";
 import crypto from "crypto";
-import bcrypt from "bcrypt";
 
 export const listApiKeys = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {

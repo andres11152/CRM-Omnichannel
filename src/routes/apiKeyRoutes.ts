@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "@/middleware/auth"; // Asegurar que el path es correcto, en server.ts es '@/middleware/authMiddleware'
+import { protect } from "@/middleware/authMiddleware"; // Asegurar que el path es correcto, en server.ts es '@/middleware/authMiddleware'
 import {
   listApiKeys,
   createApiKey,

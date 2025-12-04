@@ -31,4 +31,8 @@ export interface AuthenticatedRequest extends Request {
     companyId?: string;
   };
   companyId?: string;
+  file?: Express.Multer.File;
+  files?:
+    | Express.Multer.File[]
+    | { [fieldname: string]: Express.Multer.File[] };
 }

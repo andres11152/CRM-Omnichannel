@@ -1,103 +1,189 @@
 import express from "express";
 import { whatsappService } from "@/services/whatsapp.service";
+import { AuthenticatedRequest } from "@/types/types";
+import { protect } from "@/middleware/authMiddleware";
+import * as integrationController from "@/controllers/integrationController";
 
 const router = express.Router();
 
+// All routes here should be protected
+router.use(protect);
+
 // List Integrations
-router.get("/", (req, res) => {
+router.get("/", async (req: express.Request, res: express.Response) => {
   try {
-    const status = whatsappService.getStatus();
-    const integrations = [
-      {
-        id: "whatsapp-1",
-        companyId: "default", // TODO: Get from req.user
-        type: "whatsapp_cloud", // Using this type for compatibility with frontend filter
-        name: "WhatsApp (Baileys)",
-        status: status.status === "open" ? "connected" : "disconnected",
-        config: {
-          phone: status.user?.id
-            ? status.user.id.split(":")[0]
-            : status.user?.name || "Linked Device",
-        },
-        connectedAt: status.status === "open" ? new Date() : undefined,
+    const authReq = req as AuthenticatedRequest;
+    const companyId = authReq.companyId || authReq.user?.companyId;
+
+    if (!companyId) {
+      return res.status(400).json({ message: "Company ID missing" });
+    }
+
+    const sessions = await whatsappService.listSessions(companyId);
+
+    // For now, we only support one session per company in the UI logic,
+    // but the backend supports multiple. We'll map them.
+    const integrations = sessions.map((session: any, index: number) => ({
+      id: session.sessionId,
+      companyId: session.companyId,
+      type: "whatsapp_cloud", // Using this type for compatibility with frontend filter
+      name: `WhatsApp (${session.phone || "Linked Device"})`,
+      status: session.status === "CONNECTED" ? "connected" : "disconnected",
+      config: {
+        phone: session.phone || "Linked Device",
       },
-    ];
+      connectedAt:
+        session.status === "CONNECTED" ? session.updatedAt : undefined,
+    }));
+
     res.status(200).json(integrations);
   } catch (error) {
+    console.error("List integrations error:", error);
     res.status(500).json({ message: "Failed to list integrations" });
   }
 });
 
-// WhatsApp Session Management
-router.get("/whatsapp/session", (req, res) => {
-  try {
-    const status = whatsappService.getStatus();
-    res.status(200).json(status);
-  } catch (error) {
-    res.status(500).json({ message: "Failed to get session status" });
-  }
-});
+// WhatsApp Session Management - Get Status of FIRST session or specific one
+router.get(
+  "/whatsapp/session",
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const companyId = authReq.companyId || authReq.user?.companyId;
 
-router.get("/whatsapp/status", (req, res) => {
-  try {
-    const status = whatsappService.getStatus();
-    res.status(200).json(status);
-  } catch (error) {
-    res.status(500).json({ message: "Failed to get session status" });
-  }
-});
-
-router.post("/whatsapp/session", async (req, res) => {
-  try {
-    await whatsappService.initialize();
-
-    // Poll for QR code for up to 30 seconds
-    let attempts = 0;
-    const maxAttempts = 60; // 60 * 500ms = 30 seconds
-
-    const checkQr = async () => {
-      const status = whatsappService.getStatus();
-      if (status.qrCode) {
-        res.status(200).json({
-          message: "Session initialization started",
-          qr: status.qrCode,
-        });
-        return true;
+      if (!companyId) {
+        return res.status(400).json({ message: "Company ID missing" });
       }
-      if (status.status === "open") {
-        res
-          .status(200)
-          .json({ message: "Already connected", status: "connected" });
-        return true;
-      }
-      return false;
-    };
 
-    const poll = setInterval(async () => {
-      attempts++;
-      const found = await checkQr();
-      if (found) {
-        clearInterval(poll);
-      } else if (attempts >= maxAttempts) {
-        clearInterval(poll);
-        res.status(200).json({
-          message:
-            "Session initialization started, please check status endpoint for QR",
-        });
-      }
-    }, 500);
-  } catch (error) {
-    res.status(500).json({ message: "Failed to init session" });
-  }
-});
+      // Get the most recent session
+      const sessions = await whatsappService.listSessions(companyId);
+      const session = sessions[0]; // Just take the first one for now
 
-router.delete("/whatsapp/session", async (req, res) => {
-  try {
-    await whatsappService.logout();
-    res.status(200).json({ message: "Logged out successfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to logout" });
+      if (!session) {
+        return res.status(200).json({ status: "disconnected" });
+      }
+
+      res.status(200).json(session);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get session status" });
+    }
   }
-});
+);
+
+router.get(
+  "/whatsapp/status",
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const companyId = authReq.companyId || authReq.user?.companyId;
+
+      if (!companyId) {
+        return res.status(400).json({ message: "Company ID missing" });
+      }
+
+      const sessions = await whatsappService.listSessions(companyId);
+      const session = sessions[0];
+
+      if (!session) {
+        return res.status(200).json({ status: "disconnected" });
+      }
+
+      res.status(200).json(session);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get session status" });
+    }
+  }
+);
+
+router.post(
+  "/whatsapp/session",
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const companyId = authReq.companyId || authReq.user?.companyId;
+
+      if (!companyId) {
+        return res.status(400).json({ message: "Company ID missing" });
+      }
+
+      // Check if session exists
+      const sessions = await whatsappService.listSessions(companyId);
+      let session = sessions[0];
+
+      if (!session) {
+        session = await whatsappService.createSession(companyId);
+      } else if (session.status === "DISCONNECTED") {
+        // Re-initialize if disconnected
+        await whatsappService.initializeSession(session.sessionId);
+      }
+
+      // Poll for QR code for up to 30 seconds
+      let attempts = 0;
+      const maxAttempts = 60; // 60 * 500ms = 30 seconds
+
+      const checkQr = async () => {
+        const currentSession = await whatsappService.getSessionStatus(
+          session.sessionId
+        );
+        if (currentSession?.qrCode) {
+          res.status(200).json({
+            message: "Session initialization started",
+            qr: currentSession.qrCode,
+          });
+          return true;
+        }
+        if (currentSession?.status === "CONNECTED") {
+          res
+            .status(200)
+            .json({ message: "Already connected", status: "connected" });
+          return true;
+        }
+        return false;
+      };
+
+      const poll = setInterval(async () => {
+        attempts++;
+        const found = await checkQr();
+        if (found) {
+          clearInterval(poll);
+        } else if (attempts >= maxAttempts) {
+          clearInterval(poll);
+          res.status(200).json({
+            message:
+              "Session initialization started, please check status endpoint for QR",
+          });
+        }
+      }, 500);
+    } catch (error) {
+      console.error("Init session error:", error);
+      res.status(500).json({ message: "Failed to init session" });
+    }
+  }
+);
+
+router.delete(
+  "/whatsapp/session",
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const companyId = authReq.companyId || authReq.user?.companyId;
+
+      if (!companyId) {
+        return res.status(400).json({ message: "Company ID missing" });
+      }
+
+      const sessions = await whatsappService.listSessions(companyId);
+      for (const session of sessions) {
+        await whatsappService.deleteSession(session.sessionId);
+      }
+
+      res.status(200).json({ message: "Logged out successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to logout" });
+    }
+  }
+);
+
+router.post("/whatsapp/sync", integrationController.syncMessages);
 
 export default router;

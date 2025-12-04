@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "@/middleware/auth";
+import { protect } from "@/middleware/authMiddleware";
 import { webhookController } from "@/controllers/webhookController";
 import {
   listApiKeys,

@@ -97,6 +97,7 @@ export const login = catchAsync(
     console.log("[LOGIN DEBUG] Querying database for user...");
     const user = await (prisma.user.findUnique({
       where: { email },
+      include: { company: true }, // Include company to check status
     }) as Promise<any>);
     console.log(`[LOGIN DEBUG] User found: ${user ? "YES" : "NO"}`);
 
@@ -106,12 +107,28 @@ export const login = catchAsync(
       return next(new AppError("Email o contraseña incorrectos", 401));
     }
 
-    // 4) Si todo es correcto, enviar el token al cliente
+    // 4) Verificar estado de la empresa
+    if (user.company) {
+      // SOLO BLOQUEAMOS SI ESTÁ BANEADA.
+      // INACTIVE, OVERDUE, CANCELED pueden entrar pero con restricciones (manejado en frontend/backend middleware)
+      const restrictedStatuses = ["BANNED"];
+      if (restrictedStatuses.includes(user.company.status)) {
+        return next(
+          new AppError(
+            `Acceso denegado: Su cuenta está en estado ${user.company.status}. Contacte a soporte.`,
+            403
+          )
+        );
+      }
+    }
+
+    // 5) Si todo es correcto, enviar el token al cliente
     const token = signToken({
       id: user.id,
       role: user.role || "user",
       companyId: user.companyId,
-    });
+      companyStatus: user.company?.status, // Add status to payload
+    } as any);
 
     res.status(200).json({
       status: "success",

@@ -13,7 +13,15 @@ interface AuthenticatedRequest extends Request {
 
 export const createQueue = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { name, department, description, promptTemplateId } = req.body;
+    const {
+      name,
+      departmentId,
+      description,
+      promptTemplateId,
+      type,
+      config,
+      aiAssistantId,
+    } = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
@@ -23,13 +31,12 @@ export const createQueue = catchAsync(
     const queue = await prisma.queue.create({
       data: {
         name,
-        description, // Note: Schema calls it 'description', frontend might send 'department' as part of description or we need to update schema/frontend.
-        // Wait, schema has 'description'. Frontend sends 'department'.
-        // I should probably store 'department' in description or add a field.
-        // For now, let's map department to description or just ignore it if schema doesn't have it.
-        // Schema: name, description, isActive, companyId.
-        // I will append department to description for now or just store it.
+        description,
+        type: type || "MANUAL",
+        config: config || {},
         companyId,
+        departmentId: departmentId || null,
+        aiAssistantId: aiAssistantId || null,
       },
     });
 
@@ -47,6 +54,13 @@ export const getQueues = catchAsync(
 
     const queues = await prisma.queue.findMany({
       where: { companyId },
+      include: {
+        department: true,
+        aiAssistant: true,
+        _count: {
+          select: { tickets: true, agents: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -57,7 +71,15 @@ export const getQueues = catchAsync(
 export const updateQueue = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const { name, description, isActive } = req.body;
+    const {
+      name,
+      description,
+      isActive,
+      type,
+      config,
+      departmentId,
+      aiAssistantId,
+    } = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     const queue = await prisma.queue.findFirst({
@@ -70,7 +92,15 @@ export const updateQueue = catchAsync(
 
     const updatedQueue = await prisma.queue.update({
       where: { id },
-      data: { name, description, isActive },
+      data: {
+        name,
+        description,
+        isActive,
+        type,
+        config,
+        departmentId,
+        aiAssistantId,
+      },
     });
 
     res.status(200).json(updatedQueue);

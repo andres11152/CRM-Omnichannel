@@ -21,6 +21,8 @@ const updateUserSchema = z.object({
   body: z.object({
     name: z.string().min(1, "El nombre no puede estar vacío.").optional(),
     email: z.string().email("Email no válido.").optional(),
+    preferences: z.any().optional(),
+    queueIds: z.array(z.string()).optional(),
   }),
 });
 

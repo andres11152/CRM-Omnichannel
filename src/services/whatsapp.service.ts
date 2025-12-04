@@ -21,7 +21,7 @@ class WhatsAppService {
   // Load all active sessions from DB on startup
   async initialize() {
     console.log("[WhatsApp] Initializing all sessions...");
-    const sessions = await (prisma as any).whatsAppSession.findMany();
+    const sessions = await prisma.whatsAppSession.findMany();
     for (const session of sessions) {
       await this.initializeSession(session.sessionId);
     }
@@ -30,7 +30,7 @@ class WhatsAppService {
   async createSession(companyId: string) {
     console.log(`[WhatsApp] Creating new session for company ${companyId}`);
     try {
-      const session = await (prisma as any).whatsAppSession.create({
+      const session = await prisma.whatsAppSession.create({
         data: {
           companyId,
           sessionId: `session_${companyId}_${Date.now()}`,
@@ -73,7 +73,7 @@ class WhatsAppService {
           try {
             const qrImage = await QRCode.toDataURL(qr);
             this.qrCodes.set(sessionId, qrImage);
-            await (prisma as any).whatsAppSession.update({
+            await prisma.whatsAppSession.update({
               where: { sessionId },
               data: { qrCode: qrImage, status: "SCANNING" },
             });
@@ -105,7 +105,7 @@ class WhatsAppService {
             this.qrCodes.delete(sessionId);
             try {
               // Try to update status to DISCONNECTED, but ignore if record is already deleted
-              await (prisma as any).whatsAppSession.update({
+              await prisma.whatsAppSession.update({
                 where: { sessionId },
                 data: { status: "DISCONNECTED", qrCode: null },
               });
@@ -123,7 +123,7 @@ class WhatsAppService {
           const user = sock.user;
           const phone = user?.id?.split(":")[0];
 
-          await (prisma as any).whatsAppSession.update({
+          await prisma.whatsAppSession.update({
             where: { sessionId },
             data: {
               status: "CONNECTED",
@@ -158,7 +158,7 @@ class WhatsAppService {
       console.log(`[WhatsApp] [${sessionId}] Msg from ${remoteJid}: ${text}`);
 
       // Find the session record to get companyId
-      const sessionRecord = await (prisma as any).whatsAppSession.findUnique({
+      const sessionRecord = await prisma.whatsAppSession.findUnique({
         where: { sessionId },
         include: { company: true },
       });
@@ -178,7 +178,11 @@ class WhatsAppService {
       }
 
       const email = `${phone}@whatsapp.user`;
-      const pushName = msg.pushName || phone;
+      // Use pushName from WhatsApp, or a professional default name
+      const contactName =
+        msg.pushName && msg.pushName !== phone
+          ? msg.pushName
+          : `Usuario WhatsApp`;
 
       // Find or Create User
       let contact = await prisma.user.findUnique({ where: { email } });
@@ -186,7 +190,7 @@ class WhatsAppService {
         contact = await prisma.user.create({
           data: {
             email,
-            name: pushName,
+            name: contactName,
             password: await import("bcryptjs").then((b) =>
               b.hash("123456", 10)
             ),
@@ -194,35 +198,65 @@ class WhatsAppService {
             companyId: companyId,
           },
         });
+
+        // Also create a Contact entry with proper phone number
+        try {
+          await prisma.contact.create({
+            data: {
+              companyId: companyId,
+              name: contactName,
+              email: email,
+              phone: phone, // This is where the phone number belongs
+              notes: `Auto-creado desde WhatsApp`,
+              tags: ["whatsapp"],
+            },
+          });
+          console.log(
+            `[WhatsApp] Created Contact entry for ${contactName} with phone ${phone}`
+          );
+        } catch (err) {
+          console.log(`[WhatsApp] Contact might already exist or error:`, err);
+        }
       }
 
       // Find or Create Conversation
-      // We link conversation to the specific channel (sessionId/phone)
+      // 1. Try to find an OPEN conversation for this contact first (to avoid duplicates)
       let conversation = await (prisma as any).conversation.findFirst({
         where: {
           companyId: companyId,
-          channelId: sessionRecord.phone || sessionId, // Link to this specific bot number
+          status: "OPEN",
           participants: { some: { id: contact.id } },
         },
       });
 
+      // 2. If no OPEN conversation, check for ANY conversation (legacy fallback)
       if (!conversation) {
-        // Fallback: Check if there's an open conversation without channelId or matching this user
-        // to avoid duplicates if we just switched architectures
         conversation = await (prisma as any).conversation.findFirst({
           where: {
             companyId: companyId,
             participants: { some: { id: contact.id } },
-            // If we want to be strict, we only match if channelId is null or matches
-            // OR: we just create a new one if channelId doesn't match?
-            // Let's try to reuse if channelId is null (legacy)
             OR: [
               { channelId: sessionRecord.phone },
               { channelId: sessionId },
               { channelId: null },
             ],
           },
+          orderBy: { updatedAt: "desc" }, // Get the most recent one
         });
+
+        // If we found a CLOSED one, we might want to REOPEN it or Create NEW.
+        // For now, let's reuse it and set to OPEN if it was closed?
+        // Or better: if it's closed, create a NEW one to start fresh session?
+        // User request implies they want to avoid duplicates, so reusing might be better OR
+        // ensuring the UI groups them.
+        // Let's stick to: If found (even closed), reuse it.
+        if (conversation && conversation.status !== "OPEN") {
+          await (prisma as any).conversation.update({
+            where: { id: conversation.id },
+            data: { status: "OPEN" },
+          });
+          conversation.status = "OPEN";
+        }
       }
 
       if (!conversation) {
@@ -230,7 +264,7 @@ class WhatsAppService {
           data: {
             companyId: companyId,
             channelId: sessionRecord.phone || sessionId,
-            subject: `WhatsApp: ${pushName}`,
+            subject: `WhatsApp: ${contactName}`,
             status: "OPEN",
             participants: { connect: [{ id: contact.id }] },
           },
@@ -264,12 +298,125 @@ class WhatsAppService {
         senderName: contact.name,
         senderType: "USER",
       });
+
+      // --- SYNC QUEUE ID FALLBACK ---
+      if (!conversation.queueId) {
+        const ticket = await (prisma as any).ticket.findFirst({
+          where: { conversationId: conversation.id, status: "OPEN" },
+          orderBy: { createdAt: "desc" },
+        });
+        if (ticket && ticket.queueId) {
+          console.log(
+            `[AI Fix] Found linked ticket with queueId ${ticket.queueId}. Syncing...`
+          );
+          await (prisma as any).conversation.update({
+            where: { id: conversation.id },
+            data: { queueId: ticket.queueId },
+          });
+          conversation.queueId = ticket.queueId;
+        }
+      }
+
+      // --- AI AUTO-RESPONSE ---
+      if (conversation.queueId) {
+        try {
+          const queue = await (prisma as any).queue.findUnique({
+            where: { id: conversation.queueId },
+            include: { aiAssistant: true },
+          });
+
+          if (queue?.aiAssistant) {
+            console.log(
+              `[AI] Queue has assistant: ${queue.aiAssistant.name}. Generating response...`
+            );
+
+            // Get history (last 10 messages)
+            const historyMessages = await (prisma as any).message.findMany({
+              where: { conversationId: conversation.id },
+              orderBy: { createdAt: "desc" },
+              take: 10,
+              skip: 1, // Skip the current message we just added
+            });
+
+            const history = historyMessages.reverse().map((m: any) => ({
+              role: m.senderId === contact.id ? "user" : "model",
+              parts: m.content,
+            }));
+
+            const { generateAIResponse } = await import("./aiResponseService");
+            const aiResponse = await generateAIResponse(
+              companyId,
+              queue.aiAssistant.id,
+              text,
+              history
+            );
+
+            if (aiResponse) {
+              console.log(`[AI] Response generated: ${aiResponse}`);
+
+              // Send via WhatsApp
+              await this.sendMessage(
+                remoteJid,
+                aiResponse,
+                conversation.channelId
+              );
+
+              // Find or Create Bot User
+              let botSender = await (prisma as any).user.findFirst({
+                where: { email: `bot_${companyId}@reply.com` },
+              });
+              if (!botSender) {
+                botSender = await (prisma as any).user.create({
+                  data: {
+                    email: `bot_${companyId}@reply.com`,
+                    name: queue.aiAssistant.name || "AI Assistant",
+                    password: "bot", // Dummy
+                    role: "AGENT",
+                    companyId,
+                  },
+                });
+              }
+
+              // Save to DB
+              const responseMsg = await (prisma as any).message.create({
+                data: {
+                  content: aiResponse,
+                  channel: "WHATSAPP",
+                  direction: "OUTBOUND",
+                  conversationId: conversation.id,
+                  senderId: botSender.id,
+                },
+              });
+
+              // Emit socket for the AI response
+              io?.emit("message", {
+                ...responseMsg,
+                ticketId: conversation.id,
+                senderName: botSender.name,
+                senderType: "BOT",
+              });
+            }
+          }
+        } catch (aiError) {
+          console.error("[AI] Error in auto-response loop:", aiError);
+        }
+      }
+      // -----------------------
     } catch (error) {
       console.error(`[WhatsApp] Error processing message: ${error}`);
     }
   }
 
-  async sendMessage(to: string, text: string, channelId?: string) {
+  async sendMessage(
+    to: string,
+    text: string,
+    channelId?: string,
+    media?: {
+      url: string;
+      type: "image" | "video" | "document";
+      caption?: string;
+    }
+  ) {
     // We need to find the right session.
     // If channelId is provided (e.g. from conversation), use it.
     // Otherwise, try to find ANY connected session.
@@ -312,7 +459,28 @@ class WhatsAppService {
     try {
       console.log(`[WhatsApp] Sending via session ${usedSessionId} to ${to}`);
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
-      await sock.sendMessage(jid, { text });
+
+      if (media) {
+        console.log(`[WhatsApp] Sending media: ${media.type}`);
+        if (media.type === "image") {
+          await sock.sendMessage(jid, {
+            image: { url: media.url },
+            caption: text || media.caption,
+          });
+        } else if (media.type === "video") {
+          await sock.sendMessage(jid, {
+            video: { url: media.url },
+            caption: text || media.caption,
+          });
+        } else {
+          await sock.sendMessage(jid, {
+            document: { url: media.url },
+            caption: text || media.caption,
+          });
+        }
+      } else {
+        await sock.sendMessage(jid, { text });
+      }
       return true;
     } catch (error) {
       console.error(`[WhatsApp] Send failed: ${error}`);

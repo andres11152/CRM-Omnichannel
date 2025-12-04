@@ -37,6 +37,18 @@ import { protect } from "@/middleware/authMiddleware";
 import { superAdminGuard } from "@/middleware/superAdminMiddleware";
 import { whatsappService } from "@/services/whatsapp.service";
 import whatsappRouter from "@/routes/whatsappRoutes";
+import templateRouter from "@/routes/templateRoutes";
+import { contactRouter } from "@/routes/contactRoutes";
+import mediaRouter from "@/routes/mediaRoutes";
+import accountRouter from "@/routes/accountRoutes";
+import dealRouter from "@/routes/dealRoutes";
+import activityRouter from "@/routes/activityRoutes";
+import departmentRouter from "@/routes/departmentRoutes";
+import apiKeyRouter from "@/routes/apiKeyRoutes";
+import dashboardRouter from "@/routes/dashboardRoutes";
+import aiRouter from "@/routes/aiRoutes";
+import quickReplyRouter from "@/routes/quickReplyRoutes";
+import { workflowEngine } from "@/services/workflowEngine";
 
 // HANDLE UNCAUGHT EXCEPTIONS (Sync Errors)
 (process as any).on("uncaughtException", (err: Error) => {
@@ -56,10 +68,15 @@ const httpServer = createServer(app);
 app.set("trust proxy", 1);
 
 // --- SECURITY & PARSING ---
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // Aplicamos Helmet y CORS. El Rate Limiting se aplicará por ruta.
 // Es crucial que securityMiddleware NO aplique un rate-limiter global.
 securityMiddleware(app);
+
+// --- STATIC FILE SERVING FOR LOCAL MEDIA ---
+import path from "path";
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 // --- HTTP LOGGER ---
 app.use((req, res, next) => {
@@ -103,8 +120,20 @@ app.use("/api/tags", apiLimiter, protect, tagRouter);
 app.use("/api/flows", apiLimiter, protect, flowRouter);
 app.use("/api/conversations", apiLimiter, protect, conversationRouter);
 app.use("/api/webhooks", apiLimiter, protect, webhookRouter);
+app.use("/api/api-keys", apiLimiter, protect, apiKeyRouter);
 app.use("/api/integrations", apiLimiter, protect, integrationRouter);
+
 app.use("/api/whatsapp", apiLimiter, protect, whatsappRouter);
+app.use("/api/templates", apiLimiter, protect, templateRouter);
+app.use("/api/contacts", apiLimiter, protect, contactRouter);
+app.use("/api/media", apiLimiter, protect, mediaRouter);
+app.use("/api/accounts", apiLimiter, protect, accountRouter);
+app.use("/api/deals", apiLimiter, protect, dealRouter);
+app.use("/api/activities", apiLimiter, protect, activityRouter);
+app.use("/api/departments", apiLimiter, protect, departmentRouter);
+app.use("/api/dashboard", apiLimiter, protect, dashboardRouter);
+app.use("/api/ai", apiLimiter, protect, aiRouter);
+app.use("/api/quick-replies", apiLimiter, protect, quickReplyRouter);
 // app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);
 // app.post('/api/create-portal-session', apiLimiter, protect, createPortalSession);
 
@@ -146,13 +175,18 @@ if (require.main === module) {
     try {
       // Inicializa los servicios antes de escuchar
       try {
-        // await whatsappService.initialize();
-        Logger.info("[Server] WhatsApp init skipped for debugging");
+        await whatsappService.initialize();
+        Logger.info("[Server] WhatsApp service initialized successfully");
       } catch (e) {
-        Logger.error(`[Server] WhatsApp init skipped: ${e}`);
+        Logger.error(`[Server] WhatsApp init error: ${e}`);
       }
+      // Logger.warn("[Server] WhatsApp initialization temporarily disabled");
 
       await gateway.initialize(httpServer);
+
+      // Initialize Workflow Engine (Listeners)
+      // Just importing it is enough as it's a singleton instantiated on import
+      Logger.info("[Server] Workflow Engine initialized");
 
       httpServer.listen(PORT, () => {
         console.log(

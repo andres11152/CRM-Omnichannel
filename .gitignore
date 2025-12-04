@@ -2,3 +2,44 @@ node_modules
 dist
 .env
 baileys_auth_info/
+
+# Build artifacts
+build/
+*.log
+build_log.txt
+build_output.txt
+tsc_errors.log
+tsc_errors.txt
+tsc_output.txt
+prisma_output.txt
+
+# Test coverage
+coverage/
+
+# Media uploads (local storage)
+uploads/
+
+# Environment duplicates
+.env.local
+.env.*.local
+
+# Temporary files
+temp-prisma-client/
+*.tar.gz
+
+# Debug files
+debug-*.ts
+debug-*.js
+test-*.ts
+test-*.js
+
+# Generated files
+force-generate.js
+generate-*.js
+prisma.js
+
+# Reference files (not needed in production)
+manual_migrations_reference.sql
+
+# Logs directory
+logs/*.log

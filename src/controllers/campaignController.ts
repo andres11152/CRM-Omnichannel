@@ -26,12 +26,14 @@ export const createCampaign = catchAsync(
 
     try {
       await prisma.$executeRaw`
-            INSERT INTO campaigns (id, "companyId", name, "messageContent", "targetTags", config, "templateId", status, stats, "createdAt", "updatedAt")
+            INSERT INTO campaigns (id, "companyId", name, "messageContent", "targetTags", config, "templateId", status, stats, "createdAt", "updatedAt", channel, subject)
             VALUES (${id}, ${companyId}, ${name}, ${messageContent}, ${
         targetTags || []
       }, ${
         config || {}
-      }::jsonb, ${templateId}, 'draft', ${initialStats}::jsonb, ${now}, ${now})
+      }::jsonb, ${templateId}, 'draft', ${initialStats}::jsonb, ${now}, ${now}, ${
+        req.body.channel || "WHATSAPP"
+      }::"Channel", ${req.body.subject || null})
         `;
 
       const result =
@@ -108,10 +110,13 @@ export const updateCampaign = catchAsync(
     const newTemplateId =
       data.templateId !== undefined ? data.templateId : current.templateId;
 
+    const newChannel = data.channel !== undefined ? data.channel : (current as any).channel;
+    const newSubject = data.subject !== undefined ? data.subject : (current as any).subject;
+
     try {
       await prisma.$executeRaw`
             UPDATE campaigns 
-            SET name = ${newName}, "messageContent" = ${newMessage}, "targetTags" = ${newTags}, config = ${newConfig}::jsonb, status = ${newStatus}, "templateId" = ${newTemplateId}, "updatedAt" = ${now}
+            SET name = ${newName}, "messageContent" = ${newMessage}, "targetTags" = ${newTags}, config = ${newConfig}::jsonb, status = ${newStatus}, "templateId" = ${newTemplateId}, "updatedAt" = ${now}, channel = ${newChannel}::"Channel", subject = ${newSubject}
             WHERE id = ${id}
         `;
 

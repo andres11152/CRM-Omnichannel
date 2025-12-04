@@ -54,12 +54,28 @@ export const getTags = catchAsync(
     }
 
     try {
-      const tags = await prisma.$queryRaw`
-            SELECT * FROM tags 
-            WHERE "companyId" = ${companyId} 
-            ORDER BY name ASC
-        `;
-      res.status(200).json(tags);
+      const tags = await prisma.tag.findMany({
+        where: { companyId },
+        orderBy: { name: "asc" },
+      });
+
+      // Calculate count of contacts for each tag
+      // Since tags are stored as a string array in Contact, we count manually
+      const tagsWithCounts = await Promise.all(
+        tags.map(async (tag) => {
+          const count = await prisma.contact.count({
+            where: {
+              companyId,
+              tags: {
+                has: tag.name,
+              },
+            },
+          });
+          return { ...tag, count };
+        })
+      );
+
+      res.status(200).json(tagsWithCounts);
     } catch (error) {
       console.error("Error fetching tags:", error);
       return next(new AppError("Failed to fetch tags", 500));

@@ -7,7 +7,41 @@ import { AuthenticatedRequest } from "@/types/types";
 
 export const protect = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    // 1) Obtener el token y verificar si existe
+    // 0) API Key Authentication (for external systems)
+    if (req.headers["x-api-key"]) {
+      const apiKey = req.headers["x-api-key"] as string;
+      // Import crypto dynamically or ensure it's imported at top
+      const crypto = require("crypto");
+      const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
+
+      const storedKey = await prisma.apiKey.findUnique({
+        where: { keyHash },
+      });
+
+      if (!storedKey) {
+        return next(new AppError("Invalid API Key", 401));
+      }
+
+      // Update last used (async, don't await to not block)
+      prisma.apiKey
+        .update({
+          where: { id: storedKey.id },
+          data: { lastUsedAt: new Date() },
+        })
+        .catch(console.error);
+
+      req.companyId = storedKey.companyId;
+      req.user = {
+        id: "api-system",
+        role: "ADMIN",
+        email: "system@api",
+        name: storedKey.name,
+        companyId: storedKey.companyId,
+      };
+      return next();
+    }
+
+    // 1) Bearer Token Authentication (for frontend users)
     let token;
     if (
       req.headers.authorization &&
@@ -53,7 +87,13 @@ export const protect = catchAsync(
 
     // GARANTIZAR ACCESO A LA RUTA PROTEGIDA
     // Adjuntamos la información del token y la compañía a la petición
-    req.user = { id: decoded.id, role: decoded.role, email: currentUser.email }; // Agregamos el email del usuario actual
+    req.user = {
+      id: decoded.id,
+      role: decoded.role,
+      email: currentUser.email,
+      name: currentUser.name,
+      companyId: decoded.companyId, // Fix: Attach companyId to user object
+    };
     req.companyId = decoded.companyId; // Adjuntamos el companyId directamente a la request
     next();
   }

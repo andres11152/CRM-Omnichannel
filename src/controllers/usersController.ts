@@ -34,6 +34,14 @@ export const getUsers = catchAsync(
         role: true,
         companyId: true,
         createdAt: true,
+        companyId: true,
+        createdAt: true,
+        queues: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         // Exclude password
       },
     });
@@ -120,7 +128,7 @@ export const getUser = catchAsync(
 export const updateUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const { email, name } = req.body;
+    const { email, name, preferences, queueIds } = req.body;
 
     // Un usuario solo puede editar su propio perfil (a menos que sea admin)
     const companyId = (req as any).companyId;
@@ -153,6 +161,15 @@ export const updateUser = catchAsync(
       data: {
         email,
         name,
+        preferences,
+        queues: queueIds
+          ? {
+              set: queueIds.map((qId: string) => ({ id: qId })),
+            }
+          : undefined,
+      },
+      include: {
+        queues: true,
       },
     });
 

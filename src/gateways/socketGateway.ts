@@ -1,11 +1,11 @@
 // BACKEND CODE (Node.js / NestJS compatible)
 // Install: npm install socket.io @socket.io/redis-adapter redis
 
-import { Server, Socket } from 'socket.io';
-import { createAdapter } from '@socket.io/redis-adapter';
-import { createClient } from 'redis';
-import type { Message } from '@prisma/client'; // Usar el tipo de Prisma
-import { Logger } from '@/utils/logger'; // Usar alias de ruta
+import { Server, Socket } from "socket.io";
+import { createAdapter } from "@socket.io/redis-adapter";
+import { createClient } from "redis";
+import type { Message } from "@prisma/client"; // Usar el tipo de Prisma
+import { Logger } from "@/utils/logger"; // Usar alias de ruta
 
 /**
  * SOCKET GATEWAY SINGLETON (Clustered)
@@ -14,6 +14,7 @@ import { Logger } from '@/utils/logger'; // Usar alias de ruta
  */
 class WebSocketGateway {
   private io: Server | null = null;
+  private pubClient: any = null;
 
   /**
    * Initialize the Socket.io Server with Redis Adapter
@@ -24,55 +25,64 @@ class WebSocketGateway {
     // Only connect to Redis if URL is provided (Production Mode)
     if (process.env.REDIS_URL) {
       try {
-        const pubClient = createClient({ url: process.env.REDIS_URL });
-        const subClient = pubClient.duplicate();
+        this.pubClient = createClient({ url: process.env.REDIS_URL });
+        const subClient = this.pubClient.duplicate();
 
-        await Promise.all([pubClient.connect(), subClient.connect()]);
+        await Promise.all([this.pubClient.connect(), subClient.connect()]);
 
         adapterConfig = {
-          adapter: createAdapter(pubClient, subClient)
+          adapter: createAdapter(this.pubClient, subClient),
         };
-        
-        Logger.info('[Gateway] 🚀 Redis Adapter connected for Horizontal Scaling');
+
+        Logger.info(
+          "[Gateway] 🚀 Redis Adapter connected for Horizontal Scaling"
+        );
       } catch (error) {
-        Logger.error('[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter.', error);
+        Logger.error(
+          "[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter.",
+          error
+        );
       }
     }
 
     this.io = new Server(httpServer, {
       ...adapterConfig,
       cors: {
-        origin: process.env.FRONTEND_URL || '*', 
-        methods: ['GET', 'POST'],
-        credentials: true
+        origin: true, // Allow any origin in development/production for now to fix connection issues
+        methods: ["GET", "POST"],
+        credentials: true,
       },
       // Transports: Start with polling, upgrade to websocket (Standard reliability)
-      transports: ['polling', 'websocket'] 
+      transports: ["polling", "websocket"],
     });
 
-    Logger.info('[Gateway] WebSocket Server Initialized');
+    Logger.info("[Gateway] WebSocket Server Initialized");
     this.handleConnections();
   }
 
   private handleConnections() {
     if (!this.io) return;
 
-    this.io.on('connection', (socket: Socket) => {
+    this.io.on("connection", (socket: Socket) => {
       const agentId = socket.handshake.query.agentId as string;
 
       if (agentId) {
-        Logger.info(`[Gateway] Agent connected: ${agentId} (Socket: ${socket.id} | Node: ${process.env.NODE_APP_INSTANCE || 'Master'})`);
+        Logger.info(
+          `[Gateway] Agent connected: ${agentId} (Socket: ${
+            socket.id
+          } | Node: ${process.env.NODE_APP_INSTANCE || "Master"})`
+        );
         socket.join(`agent:${agentId}`);
-        
-        socket.on('agent_status_change', (status) => {
-           Logger.info(`[Gateway] Agent ${agentId} is now ${status}`);
+
+        socket.on("agent_status_change", (status) => {
+          Logger.info(`[Gateway] Agent ${agentId} is now ${status}`);
         });
 
-        socket.on('disconnect', () => {
+        socket.on("disconnect", () => {
           Logger.info(`[Gateway] Agent disconnected: ${agentId}`);
         });
       } else {
-        Logger.warn('[Gateway] Connection rejected: No Agent ID provided');
+        Logger.warn("[Gateway] Connection rejected: No Agent ID provided");
         socket.disconnect();
       }
     });
@@ -80,6 +90,10 @@ class WebSocketGateway {
 
   public getIO() {
     return this.io;
+  }
+
+  public isRedisConnected(): boolean {
+    return !!this.pubClient && this.pubClient.isOpen;
   }
 }
 

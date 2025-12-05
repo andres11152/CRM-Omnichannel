@@ -324,6 +324,18 @@ export const replyToConversation = catchAsync(
 
     // Emit Socket Event for Outgoing Message
     const io = gateway.getIO();
+
+    if (!io) {
+      console.error(
+        "[Reply] CRITICAL: Socket.io instance is NULL! Gateway not initialized properly."
+      );
+    } else {
+      console.log(
+        "[Reply] Socket.io instance is active, client count:",
+        (io as any).engine?.clientsCount || "unknown"
+      );
+    }
+
     const socketPayload = {
       ...message,
       ticketId: conversation.id,
@@ -336,6 +348,7 @@ export const replyToConversation = catchAsync(
       JSON.stringify(socketPayload, null, 2)
     );
     io?.emit("message", socketPayload);
+    console.log("[Reply] Socket message emitted successfully");
 
     res.status(201).json({
       status: "success",

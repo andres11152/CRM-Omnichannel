@@ -333,12 +333,26 @@ class WhatsAppService {
 
       // Emit Socket
       const io = (await import("@/gateways/socketGateway")).gateway.getIO();
-      io?.emit("message", {
+
+      if (!io) {
+        console.error("[WhatsApp] CRITICAL: Socket.io instance is NULL!");
+      } else {
+        console.log("[WhatsApp] Socket.io active, emitting message event");
+      }
+
+      const socketPayload = {
         ...newMessage,
         ticketId: conversation.id,
         senderName: senderName,
         senderType: senderType,
-      });
+      };
+
+      console.log(
+        "[WhatsApp] Emitting socket message:",
+        JSON.stringify(socketPayload, null, 2)
+      );
+      io?.emit("message", socketPayload);
+      console.log("[WhatsApp] Socket message emitted");
 
       // --- SYNC QUEUE ID FALLBACK ---
       if (!conversation.queueId) {

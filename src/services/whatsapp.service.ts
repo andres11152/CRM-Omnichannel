@@ -483,17 +483,31 @@ class WhatsAppService {
     let usedSessionId;
 
     if (channelId) {
-      // Try to find session by phone (channelId) or sessionId
-      // We need to look up which sessionId corresponds to this phone
-      const session = await prisma.whatsAppSession.findFirst({
-        where: {
-          OR: [{ phone: channelId }, { sessionId: channelId }],
-          status: "CONNECTED",
-        },
-      });
-      if (session && this.sessions.has(session.sessionId)) {
-        sock = this.sessions.get(session.sessionId);
-        usedSessionId = session.sessionId;
+      try {
+        // Try to find session by phone (channelId) or sessionId
+        // We need to look up which sessionId corresponds to this phone
+        const session = await prisma.whatsAppSession.findFirst({
+          where: {
+            OR: [{ phone: channelId }, { sessionId: channelId }],
+            status: "CONNECTED",
+          },
+        });
+        if (
+          session &&
+          session.sessionId &&
+          this.sessions.has(session.sessionId)
+        ) {
+          sock = this.sessions.get(session.sessionId);
+          usedSessionId = session.sessionId;
+          console.log(
+            `[WhatsApp] Found session for channel ${channelId}: ${usedSessionId}`
+          );
+        }
+      } catch (error) {
+        console.warn(
+          `[WhatsApp] Error finding session for channel ${channelId}:`,
+          error
+        );
       }
     }
 
@@ -505,6 +519,7 @@ class WhatsAppService {
       for (const [id, s] of this.sessions.entries()) {
         sock = s;
         usedSessionId = id;
+        console.log(`[WhatsApp] Using fallback session: ${id}`);
         break;
       }
     }

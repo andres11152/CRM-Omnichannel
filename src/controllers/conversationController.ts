@@ -313,7 +313,7 @@ export const replyToConversation = catchAsync(
         await whatsappService.sendMessage(
           phone,
           messageContent, // Use the computed content which handles empty/attachment cases
-          undefined,
+          conversation.channelId || undefined, // Pass channelId to help find the right session
           attachment
         );
       } catch (error) {

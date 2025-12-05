@@ -8,14 +8,24 @@ import cors from "cors"; // Import the cors package
 export const securityMiddleware = (app: Express) => {
   // Define allowed origins from environment variable or default to localhost for development
   // It's good practice to use an environment variable for production origins
-  const allowedOrigins = process.env.CORS_ORIGINS
+  const defaultOrigins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://reply.software",
+    "https://www.reply.software",
+  ];
+
+  const envOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(",")
-    : [
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "https://reply.software",
-        "https://www.reply.software",
-      ];
+    : [];
+
+  if (process.env.FRONTEND_URL) {
+    // Remove trailing slash if present
+    const frontendUrl = process.env.FRONTEND_URL.replace(/\/$/, "");
+    envOrigins.push(frontendUrl);
+  }
+
+  const allowedOrigins = [...defaultOrigins, ...envOrigins];
 
   // Configure CORS middleware
   app.use(

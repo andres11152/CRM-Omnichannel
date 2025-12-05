@@ -317,7 +317,7 @@ export const replyToConversation = catchAsync(
           attachment
         );
       } catch (error) {
-        console.error("[Reply] Failed to send WhatsApp message:", error);
+        console.error("[Reply] Failed to sendnpm run build WhatsApp message:", error);
         // Do not throw, so the message is still saved in DB and returned to UI
       }
     }

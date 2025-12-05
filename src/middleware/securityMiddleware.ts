@@ -10,7 +10,12 @@ export const securityMiddleware = (app: Express) => {
   // It's good practice to use an environment variable for production origins
   const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(",")
-    : ["http://localhost:5173", "http://localhost:5174"];
+    : [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://reply.software",
+        "https://www.reply.software",
+      ];
 
   // Configure CORS middleware
   app.use(

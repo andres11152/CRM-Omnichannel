@@ -55,6 +55,12 @@ class WhatsAppService {
     console.log(`[WhatsApp] Initializing session: ${sessionId}`);
     const authPath = path.resolve(`baileys_auth_info/${sessionId}`);
 
+    // Ensure parent directory exists
+    const parentDir = path.dirname(authPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+
     try {
       const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
@@ -256,7 +262,7 @@ class WhatsAppService {
 
       // Find or Create Conversation
       // 1. Try to find an OPEN conversation for this contact first (to avoid duplicates)
-      let conversation = await (prisma as any).conversation.findFirst({
+      let conversation = await prisma.conversation.findFirst({
         where: {
           companyId: companyId,
           status: "OPEN",
@@ -266,7 +272,7 @@ class WhatsAppService {
 
       // 2. If no OPEN conversation, check for ANY conversation (legacy fallback)
       if (!conversation) {
-        conversation = await (prisma as any).conversation.findFirst({
+        conversation = await prisma.conversation.findFirst({
           where: {
             companyId: companyId,
             participants: { some: { id: customerUser.id } },
@@ -286,7 +292,7 @@ class WhatsAppService {
         // ensuring the UI groups them.
         // Let's stick to: If found (even closed), reuse it.
         if (conversation && conversation.status !== "OPEN") {
-          await (prisma as any).conversation.update({
+          await prisma.conversation.update({
             where: { id: conversation.id },
             data: { status: "OPEN" },
           });
@@ -295,7 +301,7 @@ class WhatsAppService {
       }
 
       if (!conversation) {
-        conversation = await (prisma as any).conversation.create({
+        conversation = await prisma.conversation.create({
           data: {
             companyId: companyId,
             channelId: sessionRecord.phone || sessionId,
@@ -307,7 +313,7 @@ class WhatsAppService {
       } else {
         // Update channelId if it was null
         if (!conversation.channelId) {
-          await (prisma as any).conversation.update({
+          await prisma.conversation.update({
             where: { id: conversation.id },
             data: { channelId: sessionRecord.phone || sessionId },
           });
@@ -336,7 +342,7 @@ class WhatsAppService {
 
       // --- SYNC QUEUE ID FALLBACK ---
       if (!conversation.queueId) {
-        const ticket = await (prisma as any).ticket.findFirst({
+        const ticket = await prisma.ticket.findFirst({
           where: { conversationId: conversation.id, status: "OPEN" },
           orderBy: { createdAt: "desc" },
         });
@@ -344,7 +350,7 @@ class WhatsAppService {
           console.log(
             `[AI Fix] Found linked ticket with queueId ${ticket.queueId}. Syncing...`
           );
-          await (prisma as any).conversation.update({
+          await prisma.conversation.update({
             where: { id: conversation.id },
             data: { queueId: ticket.queueId },
           });
@@ -356,7 +362,7 @@ class WhatsAppService {
       // ONLY trigger AI if message is INBOUND (from customer)
       if (conversation.queueId && !isOutbound) {
         try {
-          const queue = await (prisma as any).queue.findUnique({
+          const queue = await prisma.queue.findUnique({
             where: { id: conversation.queueId },
             include: { aiAssistant: true },
           });
@@ -367,7 +373,7 @@ class WhatsAppService {
             );
 
             // Get history (last 10 messages)
-            const historyMessages = await (prisma as any).message.findMany({
+            const historyMessages = await prisma.message.findMany({
               where: { conversationId: conversation.id },
               orderBy: { createdAt: "desc" },
               take: 10,
@@ -375,7 +381,9 @@ class WhatsAppService {
             });
 
             const history = historyMessages.reverse().map((m: any) => ({
-              role: m.senderId === customerUser.id ? "user" : "model",
+              role: (m.senderId === customerUser.id ? "user" : "model") as
+                | "user"
+                | "model",
               parts: m.content,
             }));
 
@@ -394,15 +402,15 @@ class WhatsAppService {
               await this.sendMessage(
                 remoteJid,
                 aiResponse,
-                conversation.channelId
+                conversation.channelId || undefined
               );
 
               // Find or Create Bot User
-              let botSender = await (prisma as any).user.findFirst({
+              let botSender = await prisma.user.findFirst({
                 where: { email: `bot_${companyId}@reply.com` },
               });
               if (!botSender) {
-                botSender = await (prisma as any).user.create({
+                botSender = await prisma.user.create({
                   data: {
                     email: `bot_${companyId}@reply.com`,
                     name: queue.aiAssistant.name || "AI Assistant",
@@ -414,7 +422,7 @@ class WhatsAppService {
               }
 
               // Save to DB
-              const responseMsg = await (prisma as any).message.create({
+              const responseMsg = await prisma.message.create({
                 data: {
                   content: aiResponse,
                   channel: "WHATSAPP",
@@ -463,7 +471,7 @@ class WhatsAppService {
     if (channelId) {
       // Try to find session by phone (channelId) or sessionId
       // We need to look up which sessionId corresponds to this phone
-      const session = await (prisma as any).whatsAppSession.findFirst({
+      const session = await prisma.whatsAppSession.findFirst({
         where: {
           OR: [{ phone: channelId }, { sessionId: channelId }],
           status: "CONNECTED",
@@ -543,7 +551,7 @@ class WhatsAppService {
       await this.deleteSessionFiles(sessionId);
 
       console.log(`[WhatsApp] Deleting DB record for ${sessionId}...`);
-      await (prisma as any).whatsAppSession.delete({ where: { sessionId } });
+      await prisma.whatsAppSession.delete({ where: { sessionId } });
       console.log(`[WhatsApp] Session ${sessionId} deleted successfully.`);
     } catch (error) {
       console.error(`[WhatsApp] Error deleting session ${sessionId}:`, error);
@@ -560,7 +568,7 @@ class WhatsAppService {
 
   // Helper for frontend to get QR
   async getSessionStatus(sessionId: string) {
-    const session = await (prisma as any).whatsAppSession.findUnique({
+    const session = await prisma.whatsAppSession.findUnique({
       where: { sessionId },
     });
     return session;
@@ -569,7 +577,7 @@ class WhatsAppService {
   async listSessions(companyId: string) {
     console.log(`[WhatsApp] Listing sessions for company ${companyId}`);
     try {
-      const sessions = await (prisma as any).whatsAppSession.findMany({
+      const sessions = await prisma.whatsAppSession.findMany({
         where: { companyId },
       });
       console.log(`[WhatsApp] Found ${sessions.length} sessions.`);
@@ -585,14 +593,14 @@ class WhatsAppService {
       `[WhatsApp] Syncing messages for company ${companyId} from ${fromDate}`
     );
     try {
-      const conversations = await (prisma as any).conversation.findMany({
+      const conversations = await prisma.conversation.findMany({
         where: {
           companyId,
           channelId: { not: null },
         },
       });
 
-      const session = await (prisma as any).whatsAppSession.findFirst({
+      const session = await prisma.whatsAppSession.findFirst({
         where: { companyId, status: "CONNECTED" },
       });
 
@@ -625,7 +633,7 @@ class WhatsAppService {
               msg.message?.extendedTextMessage?.text;
             if (!content) continue;
 
-            const exists = await (prisma as any).message.findFirst({
+            const exists = await prisma.message.findFirst({
               where: {
                 conversationId: conv.id,
                 content: content,

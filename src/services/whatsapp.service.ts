@@ -620,6 +620,14 @@ class WhatsAppService {
             ? conv.channelId
             : `${conv.channelId}@s.whatsapp.net`;
 
+          // Check if method exists (it likely doesn't in standard Baileys without a store/plugin)
+          if (typeof (sock as any).fetchMessagesFromWA !== "function") {
+            console.warn(
+              `[WhatsApp] fetchMessagesFromWA not available on socket. Skipping sync for ${jid}`
+            );
+            continue;
+          }
+
           // Using any cast to bypass TS error as discussed
           const messages = await (sock as any).fetchMessagesFromWA(jid, 50);
           if (!messages) continue;

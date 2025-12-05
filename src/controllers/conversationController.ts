@@ -306,10 +306,20 @@ export const replyToConversation = catchAsync(
     console.log("[Reply] Message record created with id", message.id);
 
     // Send to WhatsApp if channel matches
-    if (channel === "WHATSAPP" && customer) {
+    if (channel === "WHATSAPP" && customer && customer.email) {
       const phone = customer.email.split("@")[0];
       console.log("[Reply] Sending WhatsApp message to", phone);
-      await whatsappService.sendMessage(phone, content, undefined, attachment);
+      try {
+        await whatsappService.sendMessage(
+          phone,
+          messageContent, // Use the computed content which handles empty/attachment cases
+          undefined,
+          attachment
+        );
+      } catch (error) {
+        console.error("[Reply] Failed to send WhatsApp message:", error);
+        // Do not throw, so the message is still saved in DB and returned to UI
+      }
     }
 
     // Emit Socket Event for Outgoing Message

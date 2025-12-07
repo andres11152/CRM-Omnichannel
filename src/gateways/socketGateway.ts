@@ -22,6 +22,17 @@ class WebSocketGateway {
   public async initialize(httpServer: any) {
     let adapterConfig = {};
 
+    // Debug: Log REDIS_URL status
+    Logger.info(`[Gateway] REDIS_URL configured: ${!!process.env.REDIS_URL}`);
+    if (process.env.REDIS_URL) {
+      Logger.info(
+        `[Gateway] REDIS_URL value: ${process.env.REDIS_URL.substring(
+          0,
+          20
+        )}...`
+      );
+    }
+
     // Only connect to Redis if URL is provided (Production Mode)
     if (process.env.REDIS_URL) {
       try {
@@ -43,6 +54,8 @@ class WebSocketGateway {
           error
         );
       }
+    } else {
+      Logger.warn("[Gateway] ⚠️ No REDIS_URL found. Using Memory Adapter.");
     }
 
     this.io = new Server(httpServer, {

@@ -63,3 +63,6 @@
 {"code":"ECONNRESET","errno":-4077,"level":"error","message":"[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter. read ECONNRESET","stack":"Error: read ECONNRESET\n    at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20)","syscall":"read","timestamp":"2025-12-04T22:48:45.770Z"}
 {"level":"error","message":"[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter. Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at process.processTimers (node:internal/timers:519:7)","timestamp":"2025-12-04T22:49:34.255Z"}
 {"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-04T23:37:05.332Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T15:47:30.152Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T17:17:50.216Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T17:27:11.426Z"}

@@ -4,6 +4,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { prisma } from "@/config/prisma";
 import { AuthenticatedRequest } from "@/types/types";
+import { whatsappService } from "@/services/whatsapp.service";
 
 export const createCampaign = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -44,6 +45,13 @@ export const createCampaign = catchAsync(
         status: "success",
         data: { campaign },
       });
+
+      // Trigger Execution in Background if 'processing' (Send Now)
+      if (req.body.status === "processing") {
+        executeCampaign(id, companyId).catch((err) =>
+          console.error(`[Campaign] Error executing ${id}:`, err)
+        );
+      }
     } catch (error) {
       console.error("Error creating campaign:", error);
       return next(new AppError("Failed to create campaign", 500));
@@ -110,8 +118,10 @@ export const updateCampaign = catchAsync(
     const newTemplateId =
       data.templateId !== undefined ? data.templateId : current.templateId;
 
-    const newChannel = data.channel !== undefined ? data.channel : (current as any).channel;
-    const newSubject = data.subject !== undefined ? data.subject : (current as any).subject;
+    const newChannel =
+      data.channel !== undefined ? data.channel : (current as any).channel;
+    const newSubject =
+      data.subject !== undefined ? data.subject : (current as any).subject;
 
     try {
       await prisma.$executeRaw`
@@ -127,6 +137,13 @@ export const updateCampaign = catchAsync(
         status: "success",
         data: { campaign: (result as any[])[0] },
       });
+
+      // Trigger Execution if status changed to processing
+      if (newStatus === "processing" && current.status !== "processing") {
+        executeCampaign(id, companyId).catch((err) =>
+          console.error(`[Campaign] Error executing ${id}:`, err)
+        );
+      }
     } catch (error) {
       console.error("Error updating campaign:", error);
       return next(new AppError("Failed to update campaign", 500));

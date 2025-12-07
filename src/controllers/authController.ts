@@ -21,7 +21,7 @@ export const signToken = (payload: TokenPayload) => {
   if (!jwtSecret) {
     throw new AppError("JWT_SECRET no está definido en el archivo .env", 500);
   }
-  const expiresIn = "7d";
+  const expiresIn = "30m";
   const options: SignOptions = {
     expiresIn,
   };
@@ -133,6 +133,9 @@ export const login = catchAsync(
     res.status(200).json({
       status: "success",
       token,
+      data: {
+        user,
+      },
     });
   }
 );

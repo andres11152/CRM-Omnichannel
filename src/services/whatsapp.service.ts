@@ -1,21 +1,19 @@
-import makeWASocket, {
-  DisconnectReason,
-  useMultiFileAuthState,
-} from "@whiskeysockets/baileys";
+import makeWASocket, { DisconnectReason } from "@whiskeysockets/baileys";
+import { usePrismaAuthState } from "./baileysAuth";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
 import { prisma } from "@/config/prisma";
-import fs from "fs";
-import path from "path";
 
 class WhatsAppService {
   // Map sessionId -> socket
   private sessions: Map<string, any> = new Map();
   // Map sessionId -> QR Code (base64)
   private qrCodes: Map<string, string> = new Map();
+  // Map sessionId -> attempts count
+  private reconnectAttempts: Map<string, number> = new Map();
 
   constructor() {
-    // this.initialize(); // Removed to avoid unhandled rejection and double init
+    // Session loader moved to initialize()
   }
 
   // Load all active sessions from DB on startup
@@ -53,16 +51,10 @@ class WhatsAppService {
     }
 
     console.log(`[WhatsApp] Initializing session: ${sessionId}`);
-    const authPath = path.resolve(`baileys_auth_info/${sessionId}`);
 
-    // Ensure parent directory exists
-    const parentDir = path.dirname(authPath);
-    if (!fs.existsSync(parentDir)) {
-      fs.mkdirSync(parentDir, { recursive: true });
-    }
-
+    // DB Auth - No file paths needed
     try {
-      const { state, saveCreds } = await useMultiFileAuthState(authPath);
+      const { state, saveCreds } = await usePrismaAuthState(sessionId);
 
       const sock = makeWASocket({
         auth: state,
@@ -75,6 +67,7 @@ class WhatsAppService {
       sock.ev.on("connection.update", async (update: any) => {
         const { connection, lastDisconnect, qr } = update;
 
+        // --- REAL TIMELINE QR ---
         if (qr) {
           try {
             const qrImage = await QRCode.toDataURL(qr);
@@ -84,11 +77,18 @@ class WhatsAppService {
               data: { qrCode: qrImage, status: "SCANNING" },
             });
             console.log(`[WhatsApp] QR Code received for ${sessionId}`);
+
+            // Emit Socket Event
+            try {
+              const { gateway } = await import("@/gateways/socketGateway");
+              gateway.getIO()?.emit("qr.updated", { sessionId, qr: qrImage });
+            } catch (ignore) {}
           } catch (err) {
             console.error(`[WhatsApp] QR Gen Error: ${err}`);
           }
         }
 
+        // --- CONNECTION STATUS ---
         if (connection === "close") {
           const shouldReconnect =
             (lastDisconnect?.error as any)?.output?.statusCode !==
@@ -102,29 +102,127 @@ class WhatsAppService {
           this.sessions.delete(sessionId);
 
           if (shouldReconnect) {
-            this.initializeSession(sessionId);
+            // --- EXPONENTIAL BACKOFF ---
+            const attempts = this.reconnectAttempts.get(sessionId) || 0;
+            const delay = Math.min(1000 * Math.pow(2, attempts), 60000); // Max 60s
+            this.reconnectAttempts.set(sessionId, attempts + 1);
+
+            console.log(
+              `[WhatsApp] Reconnecting session ${sessionId} in ${delay}ms (Attempt ${
+                attempts + 1
+              })...`
+            );
+
+            // Notify Frontend
+            try {
+              const { gateway } = await import("@/gateways/socketGateway");
+              gateway.getIO()?.emit("session.status", {
+                sessionId,
+                status: "RECONNECTING",
+                attempt: attempts + 1,
+                nextAttemptIn: delay,
+              });
+            } catch (ignore) {}
+
+            // Dispatch Webhook
+            try {
+              const session = await prisma.whatsAppSession.findUnique({
+                where: { sessionId },
+              });
+              if (session) {
+                const { webhookDispatcher } = await import(
+                  "@/services/webhookDispatcher"
+                );
+                await webhookDispatcher.trigger(
+                  session.companyId,
+                  "system.reconnecting",
+                  {
+                    sessionId,
+                    attempt: attempts + 1,
+                    nextAttemptIn: delay,
+                    timestamp: new Date(),
+                  }
+                );
+              }
+            } catch (webhookErr) {
+              console.warn("[WhatsApp] Webhook dispatch failed:", webhookErr);
+            }
+
+            setTimeout(() => this.initializeSession(sessionId), delay);
           } else {
             // Logged out
             console.log(
               `[WhatsApp] Session ${sessionId} logged out. Cleaning up...`
             );
             this.qrCodes.delete(sessionId);
+            this.reconnectAttempts.delete(sessionId);
+
             try {
-              // Try to update status to DISCONNECTED, but ignore if record is already deleted
+              // Try to update status to DISCONNECTED
               await prisma.whatsAppSession.update({
                 where: { sessionId },
                 data: { status: "DISCONNECTED", qrCode: null },
               });
+
+              // Notify Frontend
+              try {
+                const { gateway } = await import("@/gateways/socketGateway");
+                gateway.getIO()?.emit("session.status", {
+                  sessionId,
+                  status: "DISCONNECTED",
+                  reason: "LOGGED_OUT",
+                });
+                gateway.getIO()?.emit("system.event", {
+                  type: "DEVICE_DISCONNECTED",
+                  sessionId,
+                });
+              } catch (ignore) {}
+
+              // Dispatch Webhook for external integrations
+              try {
+                const session = await prisma.whatsAppSession.findUnique({
+                  where: { sessionId },
+                });
+                if (session) {
+                  const { webhookDispatcher } = await import(
+                    "@/services/webhookDispatcher"
+                  );
+                  await webhookDispatcher.trigger(
+                    session.companyId,
+                    "system.device_disconnected",
+                    {
+                      sessionId,
+                      phone: session.phone,
+                      reason: "LOGGED_OUT",
+                      timestamp: new Date(),
+                    }
+                  );
+                }
+              } catch (webhookErr) {
+                console.warn("[WhatsApp] Webhook dispatch failed:", webhookErr);
+              }
             } catch (e) {
               console.warn(
                 `[WhatsApp] Could not update session status (might be deleted): ${e}`
               );
             }
-            await this.deleteSessionFiles(sessionId);
+            // Clean up credentials from DB on logout
+            try {
+              await prisma.whatsAppCredential.deleteMany({
+                where: { sessionId },
+              });
+              await prisma.whatsAppSession.delete({ where: { sessionId } });
+            } catch (err) {
+              console.error(
+                `[WhatsApp] Error cleaning up session ${sessionId}:`,
+                err
+              );
+            }
           }
         } else if (connection === "open") {
           console.log(`[WhatsApp] Session ${sessionId} OPEN! 🚀`);
           this.qrCodes.delete(sessionId);
+          this.reconnectAttempts.delete(sessionId);
 
           const user = sock.user;
           const phone = user?.id?.split(":")[0];
@@ -137,13 +235,34 @@ class WhatsAppService {
               phone: phone,
             },
           });
+
+          // Notify Frontend
+          try {
+            const { gateway } = await import("@/gateways/socketGateway");
+            gateway.getIO()?.emit("session.status", {
+              sessionId,
+              status: "CONNECTED",
+              phone,
+            });
+            gateway.getIO()?.emit("system.event", {
+              type: "CONNECTION_RESTORED",
+              sessionId,
+            });
+          } catch (ignore) {}
         }
       });
 
       sock.ev.on("creds.update", saveCreds);
 
       sock.ev.on("messages.upsert", async (m: any) => {
-        this.handleIncomingMessage(sessionId, m);
+        // console.log(`[WhatsApp] Messages upsert: ${m.messages.length} messages, type: ${m.type}`);
+        // Handle all messages, not just the first one
+        for (const msg of m.messages) {
+          await this.handleIncomingMessage(sessionId, {
+            messages: [msg],
+            type: m.type,
+          });
+        }
       });
     } catch (error) {
       console.error(`[WhatsApp] Init failed for ${sessionId}:`, error);
@@ -576,8 +695,13 @@ class WhatsAppService {
       }
       this.qrCodes.delete(sessionId);
 
-      console.log(`[WhatsApp] Deleting files for ${sessionId}...`);
-      await this.deleteSessionFiles(sessionId);
+      console.log(`[WhatsApp] Deleting session credentials from DB...`);
+      // Credentials are cascade deleted? No, we need to delete them manually or rely on cascading if sessionId was a foreign key.
+      // In our schema, WhatsAppCredential relates to a string sessionId, not a foreign key constraint to WhatsAppSession necessarily.
+      // So we should delete them.
+      await prisma.whatsAppCredential.deleteMany({
+        where: { sessionId },
+      });
 
       console.log(`[WhatsApp] Deleting DB record for ${sessionId}...`);
       await prisma.whatsAppSession.delete({ where: { sessionId } });
@@ -585,13 +709,6 @@ class WhatsAppService {
     } catch (error) {
       console.error(`[WhatsApp] Error deleting session ${sessionId}:`, error);
       throw error;
-    }
-  }
-
-  private async deleteSessionFiles(sessionId: string) {
-    const sessionPath = path.resolve(`baileys_auth_info/${sessionId}`);
-    if (fs.existsSync(sessionPath)) {
-      fs.rmSync(sessionPath, { recursive: true, force: true });
     }
   }
 

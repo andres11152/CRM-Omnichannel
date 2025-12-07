@@ -1,546 +1,466 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// 1. Define la fuente de datos.
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
-enum Channel {
-  EMAIL
-  WHATSAPP
-  SMS
-  WEB_CHAT
-  TELEGRAM
-  FACEBOOK_MESSENGER
-  INSTAGRAM_DM
-}
-
-enum MessageDirection {
-  INBOUND
-  OUTBOUND
-}
-
-enum ConversationStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
-}
-
-model Conversation {
-  id         String             @id @default(cuid())
-  subject    String?
-  status     ConversationStatus @default(OPEN)
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-  resolvedAt DateTime?
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  // ID of the specific channel/session (e.g. WhatsApp phone number or Session ID)
-  channelId String?
-
-  // Relación con participantes (muchos a muchos implícito)
-  participants User[] @relation("Participants")
-
-  // Agente asignado
-  assignedToId String?
-  assignedTo   User?   @relation("AssignedConversations", fields: [assignedToId], references: [id], onDelete: NoAction)
-
-  messages Message[]
-  tags     String[]
-  tickets  Ticket[]
-
-  queueId String?
-  queue   Queue?  @relation(fields: [queueId], references: [id])
-
-  @@map("conversations")
-}
-
-model Message {
-  id        String           @id @default(cuid())
-  content   String
-  channel   Channel
-  direction MessageDirection
-  createdAt DateTime         @default(now())
-
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  // Remitente del mensaje
-  senderId String
-  sender   User   @relation("SenderMessages", fields: [senderId], references: [id], onDelete: NoAction)
-
-  metadata Json? // For attachments, etc.
-
-  @@map("messages")
-}
-
-// --- Modelos de Autenticación y SaaS Multi-Tenant ---
-
-enum UserRole {
-  USER
-  AGENT
-  ADMIN
-  MASTER
-}
-
-enum CompanyStatus {
-  ACTIVE
-  INACTIVE
-  TRIAL
-  OVERDUE
-  CANCELED
-  BANNED
-}
-
-model Company {
-  id                 String        @id @default(cuid())
-  name               String
-  slug               String?       @unique
-  logoUrl            String?
-  status             CompanyStatus @default(TRIAL)
-  isActive           Boolean       @default(true)
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-  subscriptionEndsAt DateTime?
-
-  // Enhanced Profile Fields
-  address          String?
-  phone            String?
-  website          String?
-  timezone         String        @default("UTC")
-  
-  // JSON Settings (Business Hours, Auto-Replies, etc.)
-  settings         Json?         @default("{}")
-
-  // Relaciones
-  users            User[]
-  tickets          Ticket[]
-  apiKeys          ApiKey[]
-  conversations    Conversation[]
-  whatsappSessions WhatsAppSession[]
-  departments      Department[]
-  queues           Queue[]
-  campaigns        Campaign[]
-  tags             Tag[]
-  workflows        Workflow[]
-  media            Media[]
-  accounts         Account[]
-  deals            Deal[]
-  activities       Activity[]
-  contacts         Contact[]
-  messageTemplates MessageTemplate[]
-  aiConfig         AIConfig?
-  aiAssistants     AIAssistant[]
-  quickReplies     QuickReply[]
-
-  // Relación con Stripe y Planes
-  planId               String?
-  plan                 Plan?   @relation(fields: [planId], references: [id])
-  stripeCustomerId     String? @unique
-  stripeSubscriptionId String? @unique
-
-  @@map("companies")
-}
-
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String
-  role      UserRole @default(AGENT)
-  preferences Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relación con Compañía (Tenant)
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  // Relaciones del foro/blog
-  posts   Post[] // Posts creados por el usuario
-  replies Reply[] // Respuestas creadas por el usuario
-
-  // Relaciones de Tickets
-  createdTickets  Ticket[] @relation("CreatedTickets")
-  assignedTickets Ticket[] @relation("AssignedTickets")
-
-  // Relaciones de Conversaciones (Mensajería)
-  sentMessages          Message[]      @relation("SenderMessages") // Mensajes que el usuario envió
-  assignedConversations Conversation[] @relation("AssignedConversations") // Conversaciones asignadas al agente
-  conversations         Conversation[] @relation("Participants") // Conversaciones donde participa
-
-  // Relaciones de Colas
-  queues Queue[] @relation("QueueAgents")
-
-  // Relaciones de Media
-  uploadedMedia Media[]
-
-  // CRM Relations
-  assignedDeals      Deal[]     @relation("AssignedDeals")
-  assignedActivities Activity[] @relation("AssignedActivities")
-  createdActivities  Activity[] @relation("CreatedActivities")
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model TestModel {
-  id String @id @default(cuid())
+  id String @id
 }
 
-model Workflow {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
-  
-  triggerType   String   @default("KEYWORD") // KEYWORD, EVENT
-  triggerConfig Json?    // { keyword: "hola" } or { event: "DEAL_UPDATE" }
-
-  nodes       Json?
-  edges       Json?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  executions  WorkflowExecution[]
-
-  @@map("workflows")
+model User {
+  id                                       String          @id
+  email                                    String          @unique
+  name                                     String?
+  password                                 String
+  createdAt                                DateTime        @default(now())
+  updatedAt                                DateTime
+  companyId                                String?
+  role                                     UserRole        @default(AGENT)
+  preferences                              Json?
+  companies                                companies?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Participants                             Participants[]
+  QueueAgents                              QueueAgents[]
+  activities_activities_assignedToIdToUser activities[]    @relation("activities_assignedToIdToUser")
+  activities_activities_createdByIdToUser  activities[]    @relation("activities_createdByIdToUser")
+  conversations                            conversations[]
+  deals                                    deals[]
+  media                                    media[]
+  messages                                 messages[]
+  posts                                    posts[]
+  replies                                  replies[]
+  tickets_tickets_assignedToIdToUser       tickets[]       @relation("tickets_assignedToIdToUser")
+  tickets_tickets_createdByIdToUser        tickets[]       @relation("tickets_createdByIdToUser")
 }
 
-model WorkflowExecution {
-  id          String   @id @default(cuid())
-  workflowId  String
-  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  status      String
-  startedAt   DateTime @default(now())
-  completedAt DateTime?
-  logs        Json?
-  error       String?
+model Participants {
+  A             String
+  B             String
+  conversations conversations @relation(fields: [A], references: [id], onDelete: Cascade)
+  User          User          @relation(fields: [B], references: [id], onDelete: Cascade)
 
-  @@map("workflow_executions")
+  @@unique([A, B], map: "_Participants_AB_unique")
+  @@index([B], map: "_Participants_B_index")
+  @@map("_Participants")
 }
 
-model WhatsAppSession {
-  id        String   @id @default(cuid())
+model QueueAgents {
+  A      String
+  B      String
+  queues queues @relation(fields: [A], references: [id], onDelete: Cascade)
+  User   User   @relation(fields: [B], references: [id], onDelete: Cascade)
+
+  @@unique([A, B], map: "_QueueAgents_AB_unique")
+  @@index([B], map: "_QueueAgents_B_index")
+  @@map("_QueueAgents")
+}
+
+model accounts {
+  id         String       @id
+  companyId  String
+  name       String
+  industry   String?
+  website    String?
+  size       String?
+  address    String?
+  status     String       @default("ACTIVE")
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime
+  email      String?
+  companies  companies    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  activities activities[]
+  contacts   contacts[]
+  deals      deals[]
+
+  @@index([companyId])
+}
+
+model activities {
+  id                                 String       @id
+  companyId                          String
+  type                               ActivityType @default(NOTE)
+  subject                            String
+  description                        String?
+  status                             String       @default("PENDING")
+  dueDate                            DateTime?
+  accountId                          String?
+  dealId                             String?
+  contactId                          String?
+  assignedToId                       String?
+  createdById                        String
+  createdAt                          DateTime     @default(now())
+  updatedAt                          DateTime
+  accounts                           accounts?    @relation(fields: [accountId], references: [id])
+  User_activities_assignedToIdToUser User?        @relation("activities_assignedToIdToUser", fields: [assignedToId], references: [id])
+  companies                          companies    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contacts                           contacts?    @relation(fields: [contactId], references: [id])
+  User_activities_createdByIdToUser  User         @relation("activities_createdByIdToUser", fields: [createdById], references: [id])
+  deals                              deals?       @relation(fields: [dealId], references: [id])
+
+  @@index([companyId])
+}
+
+model ai_assistants {
+  id            String    @id
+  companyId     String
+  name          String
+  description   String?
+  modelProvider String
+  modelName     String
+  systemPrompt  String
+  temperature   Float     @default(0.7)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime
+  companies     companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  queues        queues[]
+}
+
+model ai_configs {
+  id        String    @id
+  companyId String    @unique
+  openaiKey String?
+  geminiKey String?
+  isActive  Boolean   @default(true)
+  updatedAt DateTime
+  companies companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model api_keys {
+  id         String    @id
+  keyHash    String    @unique
+  keyPrefix  String
+  name       String
+  companyId  String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  companies  companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model campaigns {
+  id             String    @id
+  companyId      String
+  name           String
+  templateId     String?
+  messageContent String
+  targetTags     String[]
+  status         String    @default("draft")
+  config         Json?
+  stats          Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime
+  channel        Channel   @default(WHATSAPP)
+  subject        String?
+  companies      companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model companies {
+  id                   String              @id
+  name                 String
+  slug                 String?             @unique
+  logoUrl              String?
+  status               CompanyStatus       @default(TRIAL)
+  isActive             Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime
+  subscriptionEndsAt   DateTime?
+  planId               String?
+  stripeCustomerId     String?             @unique
+  stripeSubscriptionId String?             @unique
+  User                 User[]
+  accounts             accounts[]
+  activities           activities[]
+  ai_assistants        ai_assistants[]
+  ai_configs           ai_configs?
+  api_keys             api_keys[]
+  campaigns            campaigns[]
+  plans                plans?              @relation(fields: [planId], references: [id])
+  contacts             contacts[]
+  conversations        conversations[]
+  deals                deals[]
+  departments          departments[]
+  media                media[]
+  message_templates    message_templates[]
+  queues               queues[]
+  quick_replies        quick_replies[]
+  tags                 tags[]
+  tickets              tickets[]
+  whatsapp_sessions    whatsapp_sessions[]
+  workflows            workflows[]
+}
+
+model contacts {
+  id           String       @id
+  companyId    String
+  name         String
+  email        String?
+  phone        String?
+  avatarUrl    String?
+  tags         String[]
+  customFields Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime
+  notes        String?
+  accountId    String?
+  activities   activities[]
+  accounts     accounts?    @relation(fields: [accountId], references: [id])
+  companies    companies    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deals        deals[]
+}
+
+model conversations {
+  id           String             @id
+  subject      String?
+  status       ConversationStatus @default(OPEN)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime
+  resolvedAt   DateTime?
+  companyId    String
+  assignedToId String?
+  channelId    String?
+  tags         String[]
+  queueId      String?
+  Participants Participants[]
+  User         User?              @relation(fields: [assignedToId], references: [id], onDelete: NoAction)
+  companies    companies          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  queues       queues?            @relation(fields: [queueId], references: [id])
+  messages     messages[]
+  tickets      tickets[]
+}
+
+model deals {
+  id                String       @id
+  companyId         String
+  title             String
+  value             Float        @default(0)
+  currency          String       @default("USD")
+  stage             DealStage    @default(NEW)
+  probability       Int          @default(10)
+  expectedCloseDate DateTime?
+  accountId         String?
+  contactId         String?
+  assignedToId      String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime
+  activities        activities[]
+  accounts          accounts?    @relation(fields: [accountId], references: [id])
+  User              User?        @relation(fields: [assignedToId], references: [id])
+  companies         companies    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contacts          contacts?    @relation(fields: [contactId], references: [id])
+
+  @@index([companyId])
+  @@index([stage])
+}
+
+model departments {
+  id        String    @id
+  name      String
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sessionId String   @unique // Folder name for auth creds
-  phone     String?
-  status    String   @default("DISCONNECTED") // CONNECTED, DISCONNECTED, SCANNING
-  qrCode    String? // Base64 QR for frontend display
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  companies companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  queues    queues[]
 
-  @@map("whatsapp_sessions")
+  @@unique([companyId, name])
 }
 
-model WhatsAppCredential {
-  id        String   @id @default(cuid())
-  sessionId String
-  key       String // The key (e.g., "creds", "app-state-sync-key-aaaa")
-  value     String // JSON stringified value
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model media {
+  id           String    @id
+  companyId    String
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  url          String
+  key          String
+  type         MediaType
+  category     String?
+  tags         String[]
+  description  String?
+  uploadedById String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime
+  companies    companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  User         User      @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
 
-  @@unique([sessionId, key])
-  @@map("whatsapp_credentials")
+  @@index([companyId])
+  @@index([createdAt])
+  @@index([type])
+  @@index([uploadedById])
 }
 
-model Plan {
-  id        String    @id @unique
+model message_templates {
+  id         String    @id
+  companyId  String
+  name       String
+  language   String    @default("es")
+  category   String    @default("MARKETING")
+  status     String    @default("approved")
+  components Json
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime
+  channel    Channel   @default(WHATSAPP)
+  subject    String?
+  companies  companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model messages {
+  id             String           @id
+  content        String
+  channel        Channel
+  direction      MessageDirection
+  createdAt      DateTime         @default(now())
+  conversationId String
+  senderId       String
+  metadata       Json?
+  conversations  conversations    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  User           User             @relation(fields: [senderId], references: [id], onDelete: NoAction)
+}
+
+model plans {
+  id        String      @id @unique
   name      String
   price     Float
-  config    Json // { max_users: number; max_queues: number; }
-  companies Company[]
-
-  @@map("plans")
+  config    Json
+  companies companies[]
 }
 
-model ApiKey {
-  id         String    @id @default(cuid())
-  keyHash    String    @unique // Hash de la clave, nunca la clave en texto plano
-  keyPrefix  String // Prefijo no sensible para identificación (ej. "sk_live_...")
-  name       String // Un nombre descriptivo dado por el usuario
-  companyId  String
-  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt  DateTime  @default(now())
-  lastUsedAt DateTime? // Opcional: para rastrear el uso
-
-  @@map("api_keys")
+model posts {
+  id        String    @id
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  authorId  String
+  User      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replies   replies[]
 }
 
-model Webhook {
-  id        String   @id @default(cuid())
+model queues {
+  id            String          @id
+  name          String
+  description   String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  companyId     String
+  departmentId  String?
+  config        Json?
+  type          QueueType       @default(MANUAL)
+  aiAssistantId String?
+  QueueAgents   QueueAgents[]
+  conversations conversations[]
+  ai_assistants ai_assistants?  @relation(fields: [aiAssistantId], references: [id])
+  companies     companies       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departments   departments?    @relation(fields: [departmentId], references: [id])
+  tickets       tickets[]
+}
+
+model quick_replies {
+  id        String    @id
+  companyId String
+  title     String
+  content   String
+  category  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  companies companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model replies {
+  id        String   @id
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  authorId  String
+  postId    String
+  User      User     @relation(fields: [authorId], references: [id], onDelete: NoAction)
+  posts     posts    @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model tags {
+  id        String    @id
+  name      String
+  color     String
+  companyId String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  companies companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+}
+
+model tickets {
+  id                              String         @id
+  subject                         String
+  description                     String
+  status                          TicketStatus   @default(OPEN)
+  priority                        TicketPriority @default(MEDIUM)
+  createdAt                       DateTime       @default(now())
+  updatedAt                       DateTime
+  resolvedAt                      DateTime?
+  companyId                       String
+  createdById                     String
+  assignedToId                    String?
+  queueId                         String?
+  conversationId                  String?
+  User_tickets_assignedToIdToUser User?          @relation("tickets_assignedToIdToUser", fields: [assignedToId], references: [id], onDelete: NoAction)
+  companies                       companies      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversations                   conversations? @relation(fields: [conversationId], references: [id])
+  User_tickets_createdByIdToUser  User           @relation("tickets_createdByIdToUser", fields: [createdById], references: [id], onDelete: NoAction)
+  queues                          queues?        @relation(fields: [queueId], references: [id])
+}
+
+model webhooks {
+  id        String   @id
   companyId String
   url       String
   secretKey String?
   events    String[]
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("webhooks")
+  updatedAt DateTime
 }
 
-// --- Modelos del Foro/Blog ---
-
-model Post {
-  id        String   @id @default(cuid())
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  authorId String
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
-  replies Reply[]
-
-  @@map("posts")
-}
-
-model Reply {
-  id        String   @id @default(cuid())
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  authorId String
-  author   User   @relation(fields: [authorId], references: [id], onDelete: NoAction)
-
-  postId String
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@map("replies")
-}
-
-// --- Modelos de Soporte (Tickets) ---
-
-enum TicketStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
-}
-
-enum TicketPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-model Ticket {
-  id          String         @id @default(cuid())
-  subject     String
-  description String
-  status      TicketStatus   @default(OPEN)
-  priority    TicketPriority @default(MEDIUM)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  resolvedAt  DateTime?
-
-  companyId    String
-  company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdById  String
-  createdBy    User    @relation("CreatedTickets", fields: [createdById], references: [id], onDelete: NoAction)
-  assignedToId String?
-  assignedTo   User?   @relation("AssignedTickets", fields: [assignedToId], references: [id], onDelete: NoAction)
-
-  queueId String?
-  queue   Queue?  @relation(fields: [queueId], references: [id])
-
-  conversationId String?
-  conversation   Conversation? @relation(fields: [conversationId], references: [id])
-
-  @@map("tickets")
-}
-
-enum QueueType {
-  MANUAL
-  ROUND_ROBIN
-  AI
-}
-
-model Department {
-  id        String   @id @default(cuid())
-  name      String
+model whatsapp_sessions {
+  id        String    @id
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  queues    Queue[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([companyId, name])
-  @@map("departments")
+  sessionId String    @unique
+  phone     String?
+  status    String    @default("DISCONNECTED")
+  qrCode    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  companies companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
-model Queue {
-  id          String    @id @default(cuid())
-  name        String
-  description String?
-  isActive    Boolean   @default(true)
-  type        QueueType @default(MANUAL)
-  config      Json? // { maxCapacity: number, etc. }
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-
-  tickets Ticket[]
-  agents  User[]   @relation("QueueAgents")
-  
-  // AI Relation
-  aiAssistantId String?
-  aiAssistant   AIAssistant? @relation(fields: [aiAssistantId], references: [id])
-
-  conversations Conversation[]
-
-  @@map("queues")
+model workflow_executions {
+  id          String    @id
+  workflowId  String
+  status      String
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  logs        Json?
+  error       String?
+  workflows   workflows @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 }
 
-model AIConfig {
-  id        String   @id @default(cuid())
-  companyId String   @unique
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
-  openaiKey String?
-  geminiKey String?
-  
-  isActive  Boolean  @default(true)
-  updatedAt DateTime @updatedAt
-
-  @@map("ai_configs")
-}
-
-model AIAssistant {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
-  name        String
-  description String?
-  modelProvider String // "OPENAI" | "GEMINI"
-  modelName     String // "gpt-4o", "gemini-1.5-pro"
-  
-  systemPrompt  String // @db.Text is implicit in Prisma for String usually, but good to note
-  temperature   Float  @default(0.7)
-  
-  queues      Queue[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("ai_assistants")
-}
-
-model Campaign {
-  id             String   @id @default(cuid())
-  companyId      String
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name           String
-  channel        Channel  @default(WHATSAPP)
-  subject        String?
-  templateId     String?
-  messageContent String
-  targetTags     String[]
-  status         String   @default("draft")
-  config         Json?
-  stats          Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@map("campaigns")
-}
-
-model Tag {
-  id        String   @id @default(cuid())
-  name      String
-  color     String
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([companyId, name])
-  @@map("tags")
-}
-
-model MessageTemplate {
-  id         String   @id @default(cuid())
-  companyId  String
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name       String
-  channel    Channel  @default(WHATSAPP)
-  subject    String?
-  language   String   @default("es")
-  category   String   @default("MARKETING")
-  status     String   @default("approved")
-  components Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@map("message_templates")
-}
-
-model QuickReply {
-  id        String   @id @default(cuid())
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  title     String
-  content   String
-  category  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("quick_replies")
-}
-
-model Contact {
-  id           String   @id @default(cuid())
-  companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name         String
-  email        String?
-  phone        String?
-  avatarUrl    String?
-  tags         String[]
-  notes        String?
-  customFields Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // CRM Relations
-  accountId  String?
-  account    Account?   @relation(fields: [accountId], references: [id])
-  deals      Deal[]
-  activities Activity[]
-
-  @@map("contacts")
-}
-
-// --- CRM Models ---
-
-enum DealStage {
-  NEW
-  QUALIFIED
-  PROPOSAL
-  NEGOTIATION
-  WON
-  LOST
+model workflows {
+  id                  String                @id
+  companyId           String
+  name                String
+  description         String?
+  isActive            Boolean               @default(true)
+  triggerType         String                @default("KEYWORD")
+  triggerConfig       Json?
+  nodes               Json?
+  edges               Json?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  workflow_executions workflow_executions[]
+  companies           companies             @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 enum ActivityType {
@@ -551,95 +471,41 @@ enum ActivityType {
   TASK
 }
 
-model Account {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name      String
-  industry  String?
-  website   String?
-  email     String?
-  size      String? // e.g. "1-10", "11-50"
-  address   String?
-  status    String  @default("ACTIVE") // ACTIVE, CHURNED, LEAD
-
-  contacts   Contact[]
-  deals      Deal[]
-  activities Activity[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId])
-  @@map("accounts")
+enum Channel {
+  EMAIL
+  WHATSAPP
+  WEB_CHAT
+  TELEGRAM
+  FACEBOOK_MESSENGER
+  INSTAGRAM_DM
+  SMS
 }
 
-model Deal {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  title             String
-  value             Float     @default(0)
-  currency          String    @default("USD")
-  stage             DealStage @default(NEW)
-  probability       Int       @default(10) // 0-100%
-  expectedCloseDate DateTime?
-
-  accountId String?
-  account   Account? @relation(fields: [accountId], references: [id])
-
-  contactId String?
-  contact   Contact? @relation(fields: [contactId], references: [id])
-
-  assignedToId String?
-  assignedTo   User?   @relation("AssignedDeals", fields: [assignedToId], references: [id])
-
-  activities Activity[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId])
-  @@index([stage])
-  @@map("deals")
+enum CompanyStatus {
+  ACTIVE
+  TRIAL
+  OVERDUE
+  CANCELED
+  BANNED
+  INACTIVE
 }
 
-model Activity {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  type        ActivityType @default(NOTE)
-  subject     String
-  description String?
-  status      String       @default("PENDING") // PENDING, COMPLETED
-  dueDate     DateTime?
-
-  // Relations (Polymorphic-ish)
-  accountId String?
-  account   Account? @relation(fields: [accountId], references: [id])
-
-  dealId String?
-  deal   Deal?   @relation(fields: [dealId], references: [id])
-
-  contactId String?
-  contact   Contact? @relation(fields: [contactId], references: [id])
-
-  assignedToId String?
-  assignedTo   User?   @relation("AssignedActivities", fields: [assignedToId], references: [id])
-
-  createdById String
-  createdBy   User   @relation("CreatedActivities", fields: [createdById], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId])
-  @@map("activities")
+enum ConversationStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
 }
 
-// Media Library
+enum DealStage {
+  NEW
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
 enum MediaType {
   IMAGE
   AUDIO
@@ -647,36 +513,57 @@ enum MediaType {
   DOCUMENT
 }
 
-model Media {
-  id        String  @id @default(cuid())
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum QueueType {
+  MANUAL
+  ROUND_ROBIN
+  AI
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum UserRole {
+  USER
+  AGENT
+  ADMIN
+  MASTER
+}
+
+model whatsapp_sessions {
+  id        String   @id @default(cuid())
   companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sessionId String   @unique
+  phone     String?
+  status    String   @default("DISCONNECTED")
+  qrCode    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  companies companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
 
-  // File Information
-  filename     String // Stored filename (unique)
-  originalName String // Original filename from upload
-  mimeType     String // MIME type (image/jpeg, audio/mp3, etc.)
-  size         Int // File size in bytes
-  url          String // Full URL (S3 or local)
-  key          String // S3 key or local path
-
-  // Metadata
-  type        MediaType // IMAGE, AUDIO, VIDEO, DOCUMENT
-  category    String? // Optional category (marketing, support, etc.)
-  tags        String[] // Tags for search
-  description String? // Optional description
-
-  // Upload Information
-  uploadedById String
-  uploadedBy   User   @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
-
-  // Timestamps
+model whatsapp_credentials {
+  id        String   @id @default(cuid())
+  sessionId String
+  key       String
+  value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([companyId])
-  @@index([type])
-  @@index([uploadedById])
-  @@index([createdAt])
-  @@map("media")
+  @@unique([sessionId, key])
 }

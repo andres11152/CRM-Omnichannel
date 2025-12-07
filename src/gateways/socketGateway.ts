@@ -78,6 +78,28 @@ class WebSocketGateway {
           Logger.info(`[Gateway] Agent ${agentId} is now ${status}`);
         });
 
+        // Typing Indicators for Multi-Agent Collaboration
+        socket.on(
+          "agent.typing",
+          (data: { ticketId: string; agentId: string; agentName: string }) => {
+            Logger.info(
+              `[Gateway] Agent ${data.agentName} is typing in ticket ${data.ticketId}`
+            );
+            // Broadcast to all connected clients (other agents will filter by ticketId)
+            socket.broadcast.emit("agent.typing", data);
+          }
+        );
+
+        socket.on(
+          "agent.stopped_typing",
+          (data: { ticketId: string; agentId: string }) => {
+            Logger.info(
+              `[Gateway] Agent ${data.agentId} stopped typing in ticket ${data.ticketId}`
+            );
+            socket.broadcast.emit("agent.stopped_typing", data);
+          }
+        );
+
         socket.on("disconnect", () => {
           Logger.info(`[Gateway] Agent disconnected: ${agentId}`);
         });

@@ -590,8 +590,9 @@ class WhatsAppService {
     channelId?: string,
     media?: {
       url: string;
-      type: "image" | "video" | "document";
+      type: "image" | "video" | "document" | "audio";
       caption?: string;
+      ptt?: boolean; // Push-To-Talk flag for voice notes
     }
   ) {
     // We need to find the right session.
@@ -652,6 +653,48 @@ class WhatsAppService {
       console.log(`[WhatsApp] Sending via session ${usedSessionId} to ${to}`);
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
 
+      // --- ANTI-BLOCK: NUMBER VALIDATION ---
+      // Check if the number has WhatsApp before sending (prevents blocks)
+      try {
+        const [result] = await sock.onWhatsApp(
+          to.replace("@s.whatsapp.net", "")
+        );
+        if (!result || !result.exists) {
+          console.warn(
+            `[WhatsApp] Number ${to} does not have WhatsApp. Aborting send.`
+          );
+          return false;
+        }
+        console.log(`[WhatsApp] ✓ Number ${to} validated (has WhatsApp)`);
+      } catch (validationError) {
+        console.warn(
+          `[WhatsApp] Could not validate number ${to}:`,
+          validationError
+        );
+        // Continue anyway if validation fails (network issue, etc.)
+      }
+
+      // --- ANTI-BLOCK: PRESENCE SIMULATION ---
+      // Simulate human-like behavior by showing "typing" or "recording" before sending
+      const isMediaMessage = !!media;
+      const presenceType =
+        isMediaMessage && media.type === "video" ? "recording" : "composing";
+      const delay = this.calculateHumanDelay(text, isMediaMessage);
+
+      console.log(
+        `[WhatsApp] Simulating presence: ${presenceType} for ${delay}ms`
+      );
+
+      // Send presence indicator
+      await sock.sendPresenceUpdate(presenceType, jid);
+
+      // Wait for realistic delay
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
+      // Stop presence (go back to "available")
+      await sock.sendPresenceUpdate("paused", jid);
+
+      // --- SEND MESSAGE ---
       if (media) {
         console.log(`[WhatsApp] Sending media: ${media.type}`);
         if (media.type === "image") {
@@ -664,6 +707,18 @@ class WhatsAppService {
             video: { url: media.url },
             caption: text || media.caption,
           });
+        } else if (media.type === "audio") {
+          // Voice Note (PTT) or Regular Audio
+          await sock.sendMessage(jid, {
+            audio: { url: media.url },
+            mimetype: "audio/ogg; codecs=opus", // WhatsApp voice note format
+            ptt: media.ptt !== false, // Default to true for voice notes
+          });
+          console.log(
+            `[WhatsApp] Sent as ${
+              media.ptt !== false ? "Voice Note (PTT)" : "Audio File"
+            }`
+          );
         } else {
           await sock.sendMessage(jid, {
             document: { url: media.url },
@@ -673,11 +728,35 @@ class WhatsAppService {
       } else {
         await sock.sendMessage(jid, { text });
       }
+
+      console.log(`[WhatsApp] ✓ Message sent successfully to ${to}`);
       return true;
     } catch (error) {
       console.error(`[WhatsApp] Send failed: ${error}`);
       return false;
     }
+  }
+
+  /**
+   * Calculate a realistic human-like delay based on message length
+   * Simulates typing speed: ~40-60 characters per second
+   */
+  private calculateHumanDelay(text: string, isMedia: boolean): number {
+    if (isMedia) {
+      // Media messages: 2-4 seconds (simulating file selection/upload)
+      return Math.floor(Math.random() * 2000) + 2000; // 2000-4000ms
+    }
+
+    const textLength = text?.length || 0;
+    const baseDelay = 1000; // Minimum 1 second
+    const typingSpeed = 50; // characters per second
+    const calculatedDelay = (textLength / typingSpeed) * 1000;
+
+    // Add random jitter (±20%) to make it more human-like
+    const jitter = calculatedDelay * 0.2 * (Math.random() - 0.5);
+    const finalDelay = Math.min(baseDelay + calculatedDelay + jitter, 8000); // Max 8 seconds
+
+    return Math.floor(finalDelay);
   }
 
   async deleteSession(sessionId: string) {

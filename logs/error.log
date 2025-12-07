@@ -66,3 +66,13 @@
 {"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T15:47:30.152Z"}
 {"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T17:17:50.216Z"}
 {"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T17:27:11.426Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T17:33:45.848Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T17:41:26.926Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T17:47:25.027Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-07T17:53:53.893Z"}
+{"level":"error","message":"[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter. Client IP address is not in the allowlist.","timestamp":"2025-12-07T19:29:51.328Z"}
+{"level":"error","message":"UNCAUGHT EXCEPTION! 💥 Shutting down...","timestamp":"2025-12-07T19:46:26.987Z"}
+{"level":"error","message":"[Server] WhatsApp init error: TypeError: Cannot read properties of undefined (reading 'findMany')","timestamp":"2025-12-07T20:00:49.635Z"}
+{"level":"error","message":"[Server] WhatsApp init error: TypeError: Cannot read properties of undefined (reading 'findMany')","timestamp":"2025-12-07T20:02:42.307Z"}
+{"level":"error","message":"[Server] WhatsApp init error: TypeError: Cannot read properties of undefined (reading 'findMany')","timestamp":"2025-12-07T20:05:37.520Z"}
+{"level":"error","message":"[Server] WhatsApp init error: TypeError: Cannot read properties of undefined (reading 'findMany')","timestamp":"2025-12-07T20:07:01.372Z"}

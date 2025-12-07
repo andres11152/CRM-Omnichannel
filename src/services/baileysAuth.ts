@@ -80,8 +80,8 @@ export const usePrismaAuthState = async (
     state: {
       creds,
       keys: {
-        get: async (type: string, ids: string[]) => {
-          const data: { [key: string]: SignalDataTypeMap[typeof type] } = {};
+        get: async (type, ids: string[]) => {
+          const data: any = {};
           await Promise.all(
             ids.map(async (id) => {
               let value = await readData(type, id);

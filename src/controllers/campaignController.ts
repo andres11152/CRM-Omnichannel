@@ -51,7 +51,7 @@ export const createCampaign = catchAsync(
       // Trigger Execution in Background if 'processing' (Send Now)
       if (req.body.status === "processing") {
         campaignService
-          .executeCampaign(id, companyId)
+          .executeCampaign(id, companyId!)
           .catch((err: any) =>
             console.error(`[Campaign] Error executing ${id}:`, err)
           );
@@ -145,7 +145,7 @@ export const updateCampaign = catchAsync(
       // Trigger Execution if status changed to processing
       if (newStatus === "processing" && current.status !== "processing") {
         campaignService
-          .executeCampaign(id, companyId)
+          .executeCampaign(id, companyId!)
           .catch((err: any) =>
             console.error(`[Campaign] Error executing ${id}:`, err)
           );

@@ -36,13 +36,13 @@ export const adminService = {
     });
 
     // Invalidate cache
-    await cacheService.delete('admin:companies:all');
+    await cacheService.delete("admin:companies:all");
     await cacheService.invalidateCompany(companyId);
 
     return updated;
   },
 
-  async createCompany(data: prisma.companiesCreateInput) {
+  async createCompany(data: Prisma.CompanyCreateInput) {
     const newCompany = await prisma.company.create({
       data: data,
     });

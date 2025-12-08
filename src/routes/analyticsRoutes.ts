@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../controllers/authController";
+import { protect } from "../middleware/authMiddleware";
 import {
   getHeatmap,
   getAgentPerformance,

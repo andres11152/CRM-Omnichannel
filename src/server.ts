@@ -142,9 +142,8 @@ app.use("/api/usage", apiLimiter, protect, usageRouter);
 app.use("/api/analytics", apiLimiter, protect, analyticsRouter);
 
 // Public Webhooks
-import webhookRouter from "@/routes/webhookRoutes"; // Keep this local import or move to top if preferred, but respecting original structure.
-// Actually, webhookRouter is already imported at the top (line 34).
-// The code at line 141 re-imports it. I will just add analytics line before webhooks.
+// webhookRouter is already imported at the top.
+import { webhookLimiter } from "@/middleware/rateLimitMiddleware";
 
 app.use("/api/webhooks", webhookLimiter, webhookRouter);
 

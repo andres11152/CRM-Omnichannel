@@ -13,8 +13,7 @@ const keyGenerator = (req: Request, res: Response): string => {
   }
 
   // 2. Fallback usando el helper nativo que maneja IPv6 correctamente
-  // para evitar el ValidationError de express-rate-limit
-  return ipKeyGenerator(req as any, res);
+  return ipKeyGenerator(req as any, res as any);
 };
 
 /**
@@ -41,7 +40,7 @@ export const apiLimiter = rateLimit({
 export const webhookLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   limit: 3000, // 50 req/sec - Necesario para ráfagas de mensajes
-  keyGenerator: (req, res) => ipKeyGenerator(req as any, res),
+  keyGenerator: (req, res) => ipKeyGenerator(req as any, res as any),
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: "error", message: "Webhook rate limit exceeded" },
@@ -60,7 +59,8 @@ export const authLimiter = rateLimit({
   // cumplimos con la recomendación de seguridad de la librería.
   // Usamos `as any` para forzar la compatibilidad de tipos, resolviendo el conflicto
   // entre el `req` de rate-limit y el que espera `ipKeyGenerator`.
-  keyGenerator: (req: Request) => ipKeyGenerator(req as any),
+  keyGenerator: (req: Request, res: Response) =>
+    ipKeyGenerator(req as any, res as any),
   standardHeaders: true,
   legacyHeaders: false,
   message: {

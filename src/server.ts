@@ -141,10 +141,7 @@ import analyticsRouter from "@/routes/analyticsRoutes";
 app.use("/api/usage", apiLimiter, protect, usageRouter);
 app.use("/api/analytics", apiLimiter, protect, analyticsRouter);
 
-// Public Webhooks
-// webhookRouter is already imported at the top.
-import { webhookLimiter } from "@/middleware/rateLimitMiddleware";
-
+// Public Webhooks (using specialized limiter)
 app.use("/api/webhooks", webhookLimiter, webhookRouter);
 
 // app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);

@@ -290,295 +290,30 @@ class WhatsAppService {
       // Find the session record to get companyId
       const sessionRecord = await prisma.whatsAppSession.findUnique({
         where: { sessionId },
-        include: { company: true },
       });
 
       if (!sessionRecord) {
-        console.error(`[WhatsApp] Session record not found for ${sessionId}`);
+        console.warn(`[WhatsApp] Session record not found for ${sessionId}`);
         return;
       }
 
-      const companyId = sessionRecord.companyId;
-      let phone = remoteJid.split("@")[0];
+      // IMPORT DYNAMICALLY TO AVOID CIRCULAR DEPENDENCY ISSUES
+      const { messageProcessor } = await import("./messageProcessor.service");
 
-      // FIX: Map specific Danish number to Colombian number
-      if (phone === "45908938997905") {
-        console.log("[WhatsApp] Remapping Danish number 45... to 573242450628");
-        phone = "573242450628";
-      }
-
-      const email = `${phone}@whatsapp.user`;
-      // Use pushName from WhatsApp, or a professional default name
-      const contactName =
-        msg.pushName && msg.pushName !== phone
-          ? msg.pushName
-          : `Usuario WhatsApp`;
-
-      // Find or Create User (The Customer/Contact)
-      let customerUser = await prisma.user.findUnique({ where: { email } });
-      if (!customerUser) {
-        customerUser = await prisma.user.create({
-          data: {
-            email,
-            name: contactName,
-            password: await import("bcryptjs").then((b) =>
-              b.hash("123456", 10)
-            ),
-            role: "USER",
-            companyId: companyId,
-          },
-        });
-
-        // Also create a Contact entry with proper phone number
-        try {
-          await prisma.contact.create({
-            data: {
-              companyId: companyId,
-              name: contactName,
-              email: email,
-              phone: phone, // This is where the phone number belongs
-              notes: `Auto-creado desde WhatsApp`,
-              tags: ["whatsapp"],
-            },
-          });
-          console.log(
-            `[WhatsApp] Created Contact entry for ${contactName} with phone ${phone}`
-          );
-        } catch (err) {
-          console.log(`[WhatsApp] Contact might already exist or error:`, err);
-        }
-      }
-
-      // Determine Sender ID
-      let senderId = customerUser.id;
-      let senderName = customerUser.name;
-      let senderType = "USER";
-
-      if (isOutbound) {
-        // If message is from ME (Mobile), assign to a "Mobile Agent" user
-        const mobileEmail = `mobile_${companyId}@reply.com`;
-        let mobileUser = await prisma.user.findUnique({
-          where: { email: mobileEmail },
-        });
-
-        if (!mobileUser) {
-          mobileUser = await prisma.user.create({
-            data: {
-              email: mobileEmail,
-              name: "Desde Celular",
-              password: await import("bcryptjs").then((b) =>
-                b.hash("123456", 10)
-              ),
-              role: "AGENT",
-              companyId: companyId,
-            },
-          });
-        }
-        senderId = mobileUser.id;
-        senderName = mobileUser.name;
-        senderType = "AGENT";
-      }
-
-      // Find or Create Conversation
-      // 1. Try to find an OPEN conversation for this contact first (to avoid duplicates)
-      let conversation = await prisma.conversation.findFirst({
-        where: {
-          companyId: companyId,
-          status: "OPEN",
-          participants: { some: { id: customerUser.id } },
-        },
+      await messageProcessor.process({
+        companyId: sessionRecord.companyId,
+        sessionId,
+        remoteJid,
+        text,
+        isOutbound: !!isOutbound,
+        contactName: msg.pushName || undefined,
+        senderName: isOutbound ? "Me" : undefined,
       });
 
-      // 2. If no OPEN conversation, check for ANY conversation (legacy fallback)
-      if (!conversation) {
-        conversation = await prisma.conversation.findFirst({
-          where: {
-            companyId: companyId,
-            participants: { some: { id: customerUser.id } },
-            OR: [
-              { channelId: sessionRecord.phone },
-              { channelId: sessionId },
-              { channelId: null },
-            ],
-          },
-          orderBy: { updatedAt: "desc" }, // Get the most recent one
-        });
+      // LOGIC DELEGATED TO messageProcessor.service.ts
+      return;
 
-        // If we found a CLOSED one, we might want to REOPEN it or Create NEW.
-        // For now, let's reuse it and set to OPEN if it was closed?
-        // Or better: if it's closed, create a NEW one to start fresh session?
-        // User request implies they want to avoid duplicates, so reusing might be better OR
-        // ensuring the UI groups them.
-        // Let's stick to: If found (even closed), reuse it.
-        if (conversation && conversation.status !== "OPEN") {
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: { status: "OPEN" },
-          });
-          conversation.status = "OPEN";
-        }
-      }
-
-      if (!conversation) {
-        conversation = await prisma.conversation.create({
-          data: {
-            companyId: companyId,
-            channelId: sessionRecord.phone || sessionId,
-            subject: `WhatsApp: ${contactName}`,
-            status: "OPEN",
-            participants: { connect: [{ id: customerUser.id }] },
-          },
-        });
-      } else {
-        // Update channelId if it was null
-        if (!conversation.channelId) {
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: { channelId: sessionRecord.phone || sessionId },
-          });
-        }
-      }
-
-      // Create Message
-      const newMessage = await prisma.message.create({
-        data: {
-          content: text,
-          channel: "WHATSAPP",
-          direction: isOutbound ? "OUTBOUND" : "INBOUND",
-          conversationId: conversation.id,
-          senderId: senderId,
-        },
-      });
-
-      // Emit Socket
-      const io = (await import("@/gateways/socketGateway")).gateway.getIO();
-
-      if (!io) {
-        console.error("[WhatsApp] CRITICAL: Socket.io instance is NULL!");
-      } else {
-        console.log("[WhatsApp] Socket.io active, emitting message event");
-      }
-
-      const socketPayload = {
-        ...newMessage,
-        ticketId: conversation.id,
-        senderName: senderName,
-        senderType: senderType,
-      };
-
-      console.log(
-        "[WhatsApp] Emitting socket message:",
-        JSON.stringify(socketPayload, null, 2)
-      );
-      io?.emit("message", socketPayload);
-      console.log("[WhatsApp] Socket message emitted");
-
-      // --- SYNC QUEUE ID FALLBACK ---
-      if (!conversation.queueId) {
-        const ticket = await prisma.ticket.findFirst({
-          where: { conversationId: conversation.id, status: "OPEN" },
-          orderBy: { createdAt: "desc" },
-        });
-        if (ticket && ticket.queueId) {
-          console.log(
-            `[AI Fix] Found linked ticket with queueId ${ticket.queueId}. Syncing...`
-          );
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: { queueId: ticket.queueId },
-          });
-          conversation.queueId = ticket.queueId;
-        }
-      }
-
-      // --- AI AUTO-RESPONSE ---
-      // ONLY trigger AI if message is INBOUND (from customer)
-      if (conversation.queueId && !isOutbound) {
-        try {
-          const queue = await prisma.queue.findUnique({
-            where: { id: conversation.queueId },
-            include: { aiAssistant: true },
-          });
-
-          if (queue?.aiAssistant) {
-            console.log(
-              `[AI] Queue has assistant: ${queue.aiAssistant.name}. Generating response...`
-            );
-
-            // Get history (last 10 messages)
-            const historyMessages = await prisma.message.findMany({
-              where: { conversationId: conversation.id },
-              orderBy: { createdAt: "desc" },
-              take: 10,
-              skip: 1, // Skip the current message we just added
-            });
-
-            const history = historyMessages.reverse().map((m: any) => ({
-              role: (m.senderId === customerUser.id ? "user" : "model") as
-                | "user"
-                | "model",
-              parts: m.content,
-            }));
-
-            const { generateAIResponse } = await import("./aiResponseService");
-            const aiResponse = await generateAIResponse(
-              companyId,
-              queue.aiAssistant.id,
-              text,
-              history
-            );
-
-            if (aiResponse) {
-              console.log(`[AI] Response generated: ${aiResponse}`);
-
-              // Send via WhatsApp
-              await this.sendMessage(
-                remoteJid,
-                aiResponse,
-                conversation.channelId || undefined
-              );
-
-              // Find or Create Bot User
-              let botSender = await prisma.user.findFirst({
-                where: { email: `bot_${companyId}@reply.com` },
-              });
-              if (!botSender) {
-                botSender = await prisma.user.create({
-                  data: {
-                    email: `bot_${companyId}@reply.com`,
-                    name: queue.aiAssistant.name || "AI Assistant",
-                    password: "bot", // Dummy
-                    role: "AGENT",
-                    companyId,
-                  },
-                });
-              }
-
-              // Save to DB
-              const responseMsg = await prisma.message.create({
-                data: {
-                  content: aiResponse,
-                  channel: "WHATSAPP",
-                  direction: "OUTBOUND",
-                  conversationId: conversation.id,
-                  senderId: botSender.id,
-                },
-              });
-
-              // Emit socket for the AI response
-              io?.emit("message", {
-                ...responseMsg,
-                ticketId: conversation.id,
-                senderName: botSender.name,
-                senderType: "BOT",
-              });
-            }
-          }
-        } catch (aiError) {
-          console.error("[AI] Error in auto-response loop:", aiError);
-        }
-      }
-      // -----------------------
+      /* OLD LOGIC REMOVED FOR CLEAN ARCHITECTURE */
     } catch (error) {
       console.error(`[WhatsApp] Error processing message: ${error}`);
     }

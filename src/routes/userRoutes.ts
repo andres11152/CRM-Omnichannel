@@ -8,6 +8,7 @@ import {
 } from "@/controllers/usersController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
+import { checkPlanLimit } from "@/middleware/planLimitsMiddleware";
 import { z } from "zod";
 
 const router = Router();
@@ -15,7 +16,7 @@ const router = Router();
 // Todas las rutas de aquí para abajo están protegidas
 router.use(protect);
 
-router.route("/").get(getUsers).post(createUser);
+router.route("/").get(getUsers).post(checkPlanLimit("users"), createUser);
 
 const updateUserSchema = z.object({
   body: z.object({

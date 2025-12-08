@@ -62,6 +62,19 @@ model Conversation {
   queueId String?
   queue   Queue?  @relation(fields: [queueId], references: [id])
 
+  // === PERFORMANCE INDEXES ===
+  // For: Get all conversations by company (most common query)
+  @@index([companyId, updatedAt(sort: Desc)])
+  
+  // For: Get conversations by status per company
+  @@index([companyId, status, updatedAt(sort: Desc)])
+  
+  // For: Get assigned conversations by agent
+  @@index([assignedToId, status, updatedAt(sort: Desc)])
+  
+  // For: Get conversations by queue
+  @@index([queueId, status, updatedAt(sort: Desc)])
+
   @@map("conversations")
 }
 
@@ -80,6 +93,13 @@ model Message {
   sender   User   @relation("SenderMessages", fields: [senderId], references: [id], onDelete: NoAction)
 
   metadata Json? // For attachments, etc.
+
+  // === PERFORMANCE INDEXES ===
+  // For: Get messages by conversation (most critical query)
+  @@index([conversationId, createdAt(sort: Desc)])
+  
+  // For: Get messages by sender
+  @@index([senderId, createdAt(sort: Desc)])
 
   @@map("messages")
 }
@@ -189,6 +209,14 @@ model User {
   assignedDeals      Deal[]     @relation("AssignedDeals")
   assignedActivities Activity[] @relation("AssignedActivities")
   createdActivities  Activity[] @relation("CreatedActivities")
+
+  // === PERFORMANCE INDEXES ===
+  // For: Get users by company and role (very common)
+  @@index([companyId, role, createdAt(sort: Desc)])
+  
+  // For: Email lookup is already covered by @unique
+  
+  @@map("users")
 }
 
 model TestModel {
@@ -240,6 +268,10 @@ model WhatsAppSession {
   qrCode    String? // Base64 QR for frontend display
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // === PERFORMANCE INDEXES ===
+  // For: Get sessions by company and status
+  @@index([companyId, status, createdAt(sort: Desc)])
 
   @@map("whatsapp_sessions")
 }
@@ -362,6 +394,19 @@ model Ticket {
   conversationId String?
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
 
+  // === PERFORMANCE INDEXES ===
+  // For: Get tickets by company and status (dashboard query)
+  @@index([companyId, status, createdAt(sort: Desc)])
+  
+  // For: Get tickets by assignee
+  @@index([assignedToId, status, createdAt(sort: Desc)])
+  
+  // For: Get tickets by queue
+  @@index([queueId, status, createdAt(sort: Desc)])
+  
+  // For: Get tickets by priority for sorting
+  @@index([companyId, priority, status, createdAt(sort: Desc)])
+
   @@map("tickets")
 }
 
@@ -408,6 +453,13 @@ model Queue {
   aiAssistant   AIAssistant? @relation(fields: [aiAssistantId], references: [id])
 
   conversations Conversation[]
+
+  // === PERFORMANCE INDEXES ===
+  // For: Get queues by company (common query)
+  @@index([companyId, isActive, createdAt(sort: Desc)])
+  
+  // For: Get queues by department
+  @@index([departmentId, isActive])
 
   @@map("queues")
 }

@@ -54,7 +54,10 @@ export const globalErrorHandler = (
     error.stack = err.stack;
   }
 
-  console.error("[GLOBAL ERROR HANDLER]", err); // Log full error to console
+  // Silence operational errors (4xx) from spamming the logs
+  if (!error.isOperational || error.statusCode >= 500) {
+    console.error("[GLOBAL ERROR HANDLER] 💥", err);
+  }
 
   process.env.NODE_ENV === "development"
     ? sendErrorDev(error, res)

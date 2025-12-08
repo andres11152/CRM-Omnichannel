@@ -48,6 +48,7 @@ import apiKeyRouter from "@/routes/apiKeyRoutes";
 import dashboardRouter from "@/routes/dashboardRoutes";
 import aiRouter from "@/routes/aiRoutes";
 import quickReplyRouter from "@/routes/quickReplyRoutes";
+import usageRouter from "@/routes/usageRoutes";
 import { workflowEngine } from "@/services/workflowEngine";
 
 // HANDLE UNCAUGHT EXCEPTIONS (Sync Errors)
@@ -134,6 +135,19 @@ app.use("/api/departments", apiLimiter, protect, departmentRouter);
 app.use("/api/dashboard", apiLimiter, protect, dashboardRouter);
 app.use("/api/ai", apiLimiter, protect, aiRouter);
 app.use("/api/quick-replies", apiLimiter, protect, quickReplyRouter);
+import { webhookLimiter } from "@/middleware/rateLimitMiddleware";
+import analyticsRouter from "@/routes/analyticsRoutes";
+
+app.use("/api/usage", apiLimiter, protect, usageRouter);
+app.use("/api/analytics", apiLimiter, protect, analyticsRouter);
+
+// Public Webhooks
+import webhookRouter from "@/routes/webhookRoutes"; // Keep this local import or move to top if preferred, but respecting original structure.
+// Actually, webhookRouter is already imported at the top (line 34).
+// The code at line 141 re-imports it. I will just add analytics line before webhooks.
+
+app.use("/api/webhooks", webhookLimiter, webhookRouter);
+
 // app.post('/api/create-checkout-session', apiLimiter, protect, validate(createCheckoutSessionSchema), createCheckoutSession);
 // app.post('/api/create-portal-session', apiLimiter, protect, createPortalSession);
 

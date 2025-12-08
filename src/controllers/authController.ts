@@ -21,7 +21,9 @@ export const signToken = (payload: TokenPayload) => {
   if (!jwtSecret) {
     throw new AppError("JWT_SECRET no está definido en el archivo .env", 500);
   }
-  const expiresIn = "30m";
+  // '7d' provee un excelente balance de UX (no loguearse diario)
+  // manteniendo razonable seguridad (rota semanalmente).
+  const expiresIn = "7d";
   const options: SignOptions = {
     expiresIn,
   };
@@ -97,7 +99,11 @@ export const login = catchAsync(
     console.log("[LOGIN DEBUG] Querying database for user...");
     const user = await (prisma.user.findUnique({
       where: { email },
-      include: { company: true }, // Include company to check status
+      include: {
+        company: {
+          include: { plan: true },
+        },
+      },
     }) as Promise<any>);
     console.log(`[LOGIN DEBUG] User found: ${user ? "YES" : "NO"}`);
 
@@ -127,7 +133,8 @@ export const login = catchAsync(
       id: user.id,
       role: user.role || "user",
       companyId: user.companyId,
-      companyStatus: user.company?.status, // Add status to payload
+      companyStatus: user.company?.status,
+      planId: user.company?.planId,
     } as any);
 
     res.status(200).json({

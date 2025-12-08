@@ -5,6 +5,7 @@ import { AppError } from "@/utils/AppError";
 import { prisma } from "@/config/prisma";
 import { AuthenticatedRequest } from "@/types/types";
 import { whatsappService } from "@/services/whatsapp.service";
+import { campaignService } from "@/services/campaignService";
 
 export const createCampaign = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -47,11 +48,13 @@ export const createCampaign = catchAsync(
       });
 
       // Trigger Execution in Background if 'processing' (Send Now)
+      // Trigger Execution in Background if 'processing' (Send Now)
       if (req.body.status === "processing") {
-        // TODO: Implement executeCampaign function
-        // executeCampaign(id, companyId).catch((err: any) =>
-        //   console.error(`[Campaign] Error executing ${id}:`, err)
-        // );
+        campaignService
+          .executeCampaign(id, companyId)
+          .catch((err: any) =>
+            console.error(`[Campaign] Error executing ${id}:`, err)
+          );
       }
     } catch (error) {
       console.error("Error creating campaign:", error);
@@ -141,10 +144,11 @@ export const updateCampaign = catchAsync(
 
       // Trigger Execution if status changed to processing
       if (newStatus === "processing" && current.status !== "processing") {
-        // TODO: Implement executeCampaign function
-        // executeCampaign(id, companyId).catch((err: any) =>
-        //   console.error(`[Campaign] Error executing ${id}:`, err)
-        // );
+        campaignService
+          .executeCampaign(id, companyId)
+          .catch((err: any) =>
+            console.error(`[Campaign] Error executing ${id}:`, err)
+          );
       }
     } catch (error) {
       console.error("Error updating campaign:", error);

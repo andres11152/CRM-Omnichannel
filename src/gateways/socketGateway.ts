@@ -23,9 +23,9 @@ class WebSocketGateway {
     let adapterConfig = {};
 
     // Debug: Log REDIS_URL status
-    Logger.info(`[Gateway] REDIS_URL configured: ${!!process.env.REDIS_URL}`);
+    console.log(`[Gateway] REDIS_URL configured: ${!!process.env.REDIS_URL}`);
     if (process.env.REDIS_URL) {
-      Logger.info(
+      console.log(
         `[Gateway] REDIS_URL value: ${process.env.REDIS_URL.substring(
           0,
           20
@@ -45,17 +45,17 @@ class WebSocketGateway {
           adapter: createAdapter(this.pubClient, subClient),
         };
 
-        Logger.info(
+        console.log(
           "[Gateway] 🚀 Redis Adapter connected for Horizontal Scaling"
         );
       } catch (error) {
-        Logger.error(
+        console.error(
           "[Gateway] ⚠️ Redis Connection Failed. Falling back to Memory Adapter.",
           error
         );
       }
     } else {
-      Logger.warn("[Gateway] ⚠️ No REDIS_URL found. Using Memory Adapter.");
+      console.warn("[Gateway] ⚠️ No REDIS_URL found. Using Memory Adapter.");
     }
 
     this.io = new Server(httpServer, {

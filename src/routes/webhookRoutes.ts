@@ -1,11 +1,17 @@
-import { Router } from "express";
+import express from "express";
 import { webhookController } from "@/controllers/webhookController";
 
-const router = Router();
+const router = express.Router();
 
-router.get("/", webhookController.getCompanyWebhooks);
-router.post("/", webhookController.createWebhook);
-router.delete("/:id", webhookController.deleteWebhook);
-router.patch("/:id/toggle", webhookController.toggleWebhook);
+/**
+ * WEBHOOK ROUTES
+ * Public endpoints for external services to push data
+ */
+
+// Generic WhatsApp Webhook
+router.post("/whatsapp/:companyId", webhookController.handleWhatsappWebhook);
+
+// Meta/Facebook Webhook Verification
+router.get("/meta/:companyId", webhookController.verifyMetaWebhook);
 
 export default router;

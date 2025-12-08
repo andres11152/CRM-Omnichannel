@@ -1,69 +1,67 @@
 import { Request, Response } from "express";
-import { catchAsync } from "@/utils/catchAsync";
-import { webhookService } from "@/services/webhookService";
-import { AppError } from "@/utils/AppError";
-import { HTTP_STATUS } from "@/constants/httpStatus";
-
-import { prisma } from "@/config/prisma";
+import { messageProcessor } from "@/services/messageProcessor.service";
+import { Logger } from "@/utils/logger";
 
 export const webhookController = {
-  getCompanyWebhooks: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as any).companyId;
-    if (!companyId) {
-      throw new AppError("Company ID is required", HTTP_STATUS.BAD_REQUEST);
-    }
-    // Use prisma directly to get all (including inactive)
-    const webhooks = await prisma.webhook.findMany({ where: { companyId } });
-    res.status(HTTP_STATUS.OK).json(webhooks);
-  }),
+  /**
+   * Handle incoming WhatsApp Webhook (Generic Format)
+   * POST /api/webhooks/whatsapp/:companyId
+   */
+  async handleWhatsappWebhook(req: Request, res: Response) {
+    const { companyId } = req.params;
+    const payload = req.body;
 
-  createWebhook: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as any).companyId;
-    if (!companyId) {
-      throw new AppError("Company ID is required", HTTP_STATUS.BAD_REQUEST);
+    // Validate payload
+    if (!payload.from || !payload.text) {
+      return res
+        .status(400)
+        .json({ error: "Invalid payload. 'from' and 'text' required." });
     }
-    const { url, events, description } = req.body;
-    if (!url || !events) {
-      throw new AppError(
-        "URL and events are required",
-        HTTP_STATUS.BAD_REQUEST
+
+    try {
+      Logger.info(
+        `[Webhook] Received message for company ${companyId} from ${payload.from}`
       );
+
+      // Async processing (don't block webhook response)
+      messageProcessor
+        .process({
+          companyId,
+          sessionId: payload.sessionId || "external_webhook",
+          remoteJid: payload.from, // e.g., "573001234567@s.whatsapp.net"
+          text: payload.text,
+          isOutbound: payload.direction === "outbound",
+          contactName: payload.contactName,
+          senderName: payload.senderName,
+        })
+        .catch((err) => {
+          Logger.error(`[Webhook] Async processing failed:`, err);
+        });
+
+      return res.status(200).json({ status: "received" });
+    } catch (error) {
+      Logger.error(`[Webhook] Error handling webhook:`, error);
+      return res.status(500).json({ error: "Internal Server Error" });
     }
+  },
 
-    const webhook = await prisma.webhook.create({
-      data: {
-        companyId,
-        url,
-        events,
-        // description, // Add to schema if missing, or ignore
-        isActive: true,
-        secretKey:
-          "whsec_" +
-          Math.random().toString(36).substring(2, 15) +
-          Math.random().toString(36).substring(2, 15),
-      },
-    });
+  /**
+   * Meta/Facebook Verification Challenge
+   * GET /api/webhooks/meta/:companyId
+   */
+  async verifyMetaWebhook(req: Request, res: Response) {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
 
-    res.status(HTTP_STATUS.CREATED).json(webhook);
-  }),
-
-  deleteWebhook: catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const companyId = (req as any).companyId;
-    await prisma.webhook.deleteMany({ where: { id, companyId } });
-    res.status(204).send();
-  }),
-
-  toggleWebhook: catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const companyId = (req as any).companyId;
-    const wh = await prisma.webhook.findFirst({ where: { id, companyId } });
-    if (!wh) throw new AppError("Webhook not found", 404);
-
-    const updated = await prisma.webhook.update({
-      where: { id },
-      data: { isActive: !wh.isActive },
-    });
-    res.json(updated);
-  }),
+    if (mode && token) {
+      if (mode === "subscribe" && token === process.env.META_VERIFY_TOKEN) {
+        console.log("WEBHOOK_VERIFIED");
+        return res.status(200).send(challenge);
+      } else {
+        return res.sendStatus(403);
+      }
+    }
+    return res.sendStatus(400);
+  },
 };

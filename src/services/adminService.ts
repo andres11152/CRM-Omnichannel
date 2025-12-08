@@ -2,33 +2,47 @@ import type { Company, Plan, CompanyStatus, Prisma } from "@prisma/client";
 import { Buffer } from "buffer";
 import { prisma } from "@/config/prisma";
 import { signToken } from "@/controllers/authController";
+import { cacheService } from "@/services/cacheService";
 
 export const adminService = {
   // --- TENANT MANAGEMENT ---
 
   async getAllCompanies() {
-    return prisma.company.findMany({
-      include: {
-        users: {
-          where: { role: "ADMIN" },
-          select: { email: true },
-          take: 1,
-        },
+    // Cache for 2 minutes (companies don't change often)
+    return cacheService.wrap(
+      "admin:companies:all",
+      async () => {
+        return prisma.company.findMany({
+          include: {
+            users: {
+              where: { role: "ADMIN" },
+              select: { email: true },
+              take: 1,
+            },
+          },
+        });
       },
-    });
+      120 // 2 minutes TTL
+    );
   },
 
   async updateCompanyStatus(companyId: string, status: CompanyStatus) {
     // La lógica ahora usa los valores del enum de Prisma
     const isActive = status === "ACTIVE" || status === "TRIAL";
 
-    return prisma.company.update({
+    const updated = await prisma.company.update({
       where: { id: companyId },
       data: { status, isActive },
     });
+
+    // Invalidate cache
+    await cacheService.delete('admin:companies:all');
+    await cacheService.invalidateCompany(companyId);
+
+    return updated;
   },
 
-  async createCompany(data: Prisma.CompanyCreateInput) {
+  async createCompany(data: prisma.companiesCreateInput) {
     const newCompany = await prisma.company.create({
       data: data,
     });
@@ -96,32 +110,103 @@ export const adminService = {
   async getCompanyMetrics(companyId: string) {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // 1. Active Users
-    const activeUsers = await prisma.user.count({
-      where: { companyId },
+    // Get company with plan
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      include: { plan: true },
     });
 
-    // 2. Tickets (Month)
-    const ticketsThisMonth = await prisma.ticket.count({
-      where: {
-        companyId,
-        createdAt: {
-          gte: startOfMonth,
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    // === BUSINESS METRICS ===
+    const planPrice = company.plan?.price || 0;
+    const mrr = planPrice; // Monthly Recurring Revenue
+    const daysUntilRenewal = company.subscriptionEndsAt
+      ? Math.ceil(
+          (company.subscriptionEndsAt.getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24)
+        )
+      : null;
+
+    // === USAGE METRICS (with limits) ===
+    const [
+      totalUsers,
+      activeWhatsAppSessions,
+      totalQueues,
+      ticketsThisMonth,
+      ticketsLastMonth,
+      aiAssistants,
+    ] = await Promise.all([
+      prisma.user.count({ where: { companyId } }),
+      prisma.whatsAppSession.count({
+        where: { companyId, status: "CONNECTED" },
+      }),
+      prisma.queue.count({ where: { companyId } }),
+      prisma.ticket.count({
+        where: { companyId, createdAt: { gte: startOfMonth } },
+      }),
+      prisma.ticket.count({
+        where: {
+          companyId,
+          createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         },
+      }),
+      prisma.aIAssistant.count({ where: { companyId } }),
+    ]);
+
+    const planLimits = company.plan?.config as any;
+    const usagePercentages = {
+      users:
+        planLimits?.max_users > 0
+          ? (totalUsers / planLimits.max_users) * 100
+          : 0,
+      whatsapp:
+        planLimits?.max_whatsapp_sessions > 0
+          ? (activeWhatsAppSessions / planLimits.max_whatsapp_sessions) * 100
+          : 0,
+      queues:
+        planLimits?.max_queues > 0
+          ? (totalQueues / planLimits.max_queues) * 100
+          : 0,
+    };
+
+    const ticketGrowth =
+      ticketsLastMonth > 0
+        ? ((ticketsThisMonth - ticketsLastMonth) / ticketsLastMonth) * 100
+        : 0;
+
+    // === ENGAGEMENT METRICS ===
+    const lastAdminLogin = await prisma.user.findFirst({
+      where: { companyId, role: "ADMIN" },
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    });
+
+    const conversationsThisMonth = await prisma.conversation.count({
+      where: { companyId, createdAt: { gte: startOfMonth } },
+    });
+
+    const messagesThisMonth = await prisma.message.count({
+      where: {
+        conversation: { companyId },
+        createdAt: { gte: startOfMonth },
       },
     });
 
-    // 3. AI Resolution %
+    // === AI METRICS ===
     const resolvedTickets = await prisma.ticket.findMany({
       where: {
         companyId,
         status: "RESOLVED",
         resolvedAt: { not: null },
+        createdAt: { gte: startOfMonth },
       },
-      include: {
-        queue: true,
-      },
+      include: { queue: true },
     });
 
     const totalResolved = resolvedTickets.length;
@@ -129,12 +214,9 @@ export const adminService = {
     let totalResolutionTime = 0;
 
     for (const ticket of resolvedTickets) {
-      // Check if resolved by AI (heuristic: queue type is AI)
       if (ticket.queue?.type === "AI") {
         aiResolvedCount++;
       }
-
-      // Calculate resolution time
       if (ticket.resolvedAt) {
         const diff = ticket.resolvedAt.getTime() - ticket.createdAt.getTime();
         totalResolutionTime += diff;
@@ -143,15 +225,117 @@ export const adminService = {
 
     const aiResolutionRate =
       totalResolved > 0 ? (aiResolvedCount / totalResolved) * 100 : 0;
-    const avgResolutionTime =
-      totalResolved > 0 ? totalResolutionTime / totalResolved : 0;
+    const avgResolutionTimeSeconds =
+      totalResolved > 0 ? totalResolutionTime / totalResolved / 1000 : 0;
+
+    // === HEALTH METRICS ===
+    const openTickets = await prisma.ticket.count({
+      where: { companyId, status: { in: ["OPEN", "IN_PROGRESS"] } },
+    });
+
+    const overdueTickets = await prisma.ticket.count({
+      where: {
+        companyId,
+        status: { in: ["OPEN", "IN_PROGRESS"] },
+        createdAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) }, // Older than 24h
+      },
+    });
 
     return {
-      activeUsers,
-      ticketsThisMonth,
-      aiResolutionRate: Math.round(aiResolutionRate),
-      avgResolutionTime: Math.round(avgResolutionTime / 1000), // in seconds
+      // Business
+      business: {
+        mrr,
+        plan: {
+          name: company.plan?.name || "No Plan",
+          price: planPrice,
+        },
+        status: company.status,
+        daysUntilRenewal,
+        isActive: company.isActive,
+      },
+
+      // Usage
+      usage: {
+        users: {
+          current: totalUsers,
+          limit: planLimits?.max_users || 0,
+          percentage: Math.round(usagePercentages.users),
+        },
+        whatsapp: {
+          current: activeWhatsAppSessions,
+          limit: planLimits?.max_whatsapp_sessions || 0,
+          percentage: Math.round(usagePercentages.whatsapp),
+        },
+        queues: {
+          current: totalQueues,
+          limit: planLimits?.max_queues || 0,
+          percentage: Math.round(usagePercentages.queues),
+        },
+        aiAssistants: {
+          current: aiAssistants,
+          limit: planLimits?.max_ai_assistants || 0,
+        },
+        tickets: {
+          thisMonth: ticketsThisMonth,
+          lastMonth: ticketsLastMonth,
+          growth: Math.round(ticketGrowth),
+        },
+      },
+
+      // Engagement
+      engagement: {
+        lastAdminLogin: lastAdminLogin?.updatedAt || null,
+        conversationsThisMonth,
+        messagesThisMonth,
+        avgMessagesPerConversation:
+          conversationsThisMonth > 0
+            ? Math.round(messagesThisMonth / conversationsThisMonth)
+            : 0,
+      },
+
+      // AI Performance
+      ai: {
+        resolutionRate: Math.round(aiResolutionRate),
+        ticketsResolved: aiResolvedCount,
+        avgResolutionTimeSeconds: Math.round(avgResolutionTimeSeconds),
+      },
+
+      // Health
+      health: {
+        openTickets,
+        overdueTickets,
+        healthScore: this.calculateHealthScore(
+          openTickets,
+          overdueTickets,
+          totalUsers,
+          activeWhatsAppSessions
+        ),
+      },
     };
+  },
+
+  calculateHealthScore(
+    openTickets: number,
+    overdueTickets: number,
+    users: number,
+    whatsappSessions: number
+  ): number {
+    let score = 100;
+
+    // Penalize for overdue tickets
+    if (overdueTickets > 10) score -= 30;
+    else if (overdueTickets > 5) score -= 15;
+    else if (overdueTickets > 0) score -= 5;
+
+    // Penalize for too many open tickets
+    if (openTickets > 50) score -= 20;
+    else if (openTickets > 20) score -= 10;
+
+    // Penalize for inactive (no users or whatsapp)
+    if (users === 0) score -= 25;
+    if (whatsappSessions === 0) score -= 15;
+
+    return Math.max(0, score);
   },
 
   async generateImpersonationToken(targetCompanyId: string) {

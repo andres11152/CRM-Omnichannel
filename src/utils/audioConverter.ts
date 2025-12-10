@@ -54,7 +54,7 @@ export async function convertAudioToMP4(
           console.log("[AudioConverter] Conversion completed successfully");
           resolve();
         })
-        .on("error", (err) => {
+        .on("error", (err: Error) => {
           console.error("[AudioConverter] Conversion error:", err);
           reject(err);
         })

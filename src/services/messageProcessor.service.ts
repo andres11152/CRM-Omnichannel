@@ -87,34 +87,60 @@ export const messageProcessor = {
     }
 
     // Find or Create Conversation
-    // 1. Try to find an OPEN conversation for this contact first
+    console.log(
+      `[MessageProcessor] Looking for conversation: phone=${phone}, customerId=${customerUser.id}`
+    );
+
+    // 1. Try to find an OPEN conversation for this contact by participant OR phone
     let conversation = await prisma.conversation.findFirst({
       where: {
         companyId: companyId,
         status: "OPEN",
-        participants: { some: { id: customerUser.id } },
+        OR: [
+          { participants: { some: { id: customerUser.id } } },
+          { channelId: phone }, // Also search by phone number
+        ],
       },
     });
 
+    if (conversation) {
+      console.log(
+        `[MessageProcessor] Found OPEN conversation: ${conversation.id}, channelId=${conversation.channelId}`
+      );
+    }
+
     // 2. If no OPEN conversation, check for ANY conversation (legacy fallback)
     if (!conversation) {
+      console.log(
+        `[MessageProcessor] No OPEN conversation found, searching for ANY conversation...`
+      );
       conversation = await prisma.conversation.findFirst({
         where: {
           companyId: companyId,
-          participants: { some: { id: customerUser.id } },
-          // REMOVED STRICT SESSION ID CHECK to prevent duplicates
-          // If a user talks, we want their history, regardless of which session/device handled it.
+          OR: [
+            { participants: { some: { id: customerUser.id } } },
+            { channelId: phone }, // Also search by phone number
+          ],
         },
         orderBy: { updatedAt: "desc" },
       });
 
-      // Reuse if found
+      if (conversation) {
+        console.log(
+          `[MessageProcessor] Found closed conversation: ${conversation.id}, status=${conversation.status}, reopening...`
+        );
+      }
+
+      // Reuse if found and reopen it
       if (conversation && conversation.status !== "OPEN") {
         await prisma.conversation.update({
           where: { id: conversation.id },
           data: { status: "OPEN" },
         });
         conversation.status = "OPEN";
+        console.log(
+          `[MessageProcessor] Conversation ${conversation.id} reopened`
+        );
       }
     }
 
@@ -167,23 +193,33 @@ export const messageProcessor = {
         );
       }
 
+      console.log(
+        `[MessageProcessor] Creating NEW conversation for phone=${phone}, customer=${customerUser.email}`
+      );
       conversation = await prisma.conversation.create({
         data: {
           companyId: companyId,
-          channelId: sessionId,
+          channelId: phone, // Use phone number, NOT sessionId
           subject: `WhatsApp: ${dbSenderName}`,
           status: "OPEN",
           assignedToId, // Assign the agent
           participants: { connect: [{ id: customerUser.id }] },
         },
       });
+      console.log(
+        `[MessageProcessor] Created conversation ${conversation.id} with channelId=${conversation.channelId}`
+      );
     } else {
-      // Ensure channelId is set
-      if (!conversation.channelId) {
+      // Ensure channelId is set to phone number (not sessionId)
+      if (
+        !conversation.channelId ||
+        conversation.channelId.startsWith("session_")
+      ) {
         await prisma.conversation.update({
           where: { id: conversation.id },
-          data: { channelId: sessionId },
+          data: { channelId: phone },
         });
+        conversation.channelId = phone;
       }
     }
 

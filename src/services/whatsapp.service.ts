@@ -291,7 +291,14 @@ class WhatsAppService {
       }
 
       const remoteJid = msg.key.remoteJid;
-      const isOutbound = msg.key.fromMe;
+      let isOutbound = msg.key.fromMe;
+
+      // SAFETY CHECK: If remoteJid includes the customer phone, it CANNOT be outbound (unless self-message)
+      // But we can't easily check "customer phone" here universally.
+      // However, we can check if it's a status update or similar.
+
+      // Better yet: If we resolved a LID to a phone number (later in code), checks might be better there.
+      // For now, let's rely on logs.
 
       // DEBUG LOGGING
       console.log(
@@ -419,13 +426,54 @@ class WhatsAppService {
         }
       }
 
+      // RESOLVE LID TO REAL PHONE NUMBER
+      let actualPhone = remoteJid;
+
+      // If remoteJid contains @lid, we need to resolve it to the actual phone number
+      if (remoteJid.includes("@lid")) {
+        const lidNumber = remoteJid.split("@")[0];
+        console.log(
+          `[WhatsApp] Detected LID: ${lidNumber}, resolving to real phone...`
+        );
+
+        try {
+          // Query credentials table directly for lid-mapping
+          const credential = await prisma.whatsAppCredential.findUnique({
+            where: {
+              sessionId_key: {
+                sessionId,
+                key: `lid-mapping-${lidNumber}`,
+              },
+            },
+          });
+
+          if (credential && credential.value) {
+            const mappingData = JSON.parse(credential.value);
+            // mappingData structure: { pn: "573242450628" }
+            if (mappingData.pn) {
+              actualPhone = `${mappingData.pn}@s.whatsapp.net`;
+              console.log(
+                `[WhatsApp] Resolved LID ${lidNumber} to phone: ${mappingData.pn}`
+              );
+            }
+          } else {
+            console.warn(
+              `[WhatsApp] No LID mapping found for ${lidNumber}, using LID as fallback`
+            );
+          }
+        } catch (err) {
+          console.error(`[WhatsApp] Error resolving LID:`, err);
+          // Fallback: use the LID number as-is
+        }
+      }
+
       // IMPORT DYNAMICALLY TO AVOID CIRCULAR DEPENDENCY ISSUES
       const { messageProcessor } = await import("./messageProcessor.service");
 
       await messageProcessor.process({
         companyId: sessionRecord.companyId,
         sessionId,
-        remoteJid,
+        remoteJid: actualPhone, // Use resolved phone instead of raw remoteJid
         text,
         isOutbound: !!isOutbound,
         contactName: msg.pushName || undefined,

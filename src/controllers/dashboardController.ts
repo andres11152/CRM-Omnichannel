@@ -77,10 +77,22 @@ export const getDashboardStats = catchAsync(
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       .slice(0, 5);
 
-    // 3. Fetch Metrics (Optional optimization: do this here instead of frontend)
-    // For now, we return activities.
+    // 3. Fetch Metrics
+    const [activeTicketsCount, totalMessagesCount] = await Promise.all([
+      prisma.ticket.count({
+        where: {
+          companyId,
+          status: { notIn: ["RESOLVED", "CLOSED"] },
+        },
+      }),
+      prisma.message.count({
+        where: {
+          conversation: { companyId },
+        },
+      }),
+    ]);
 
-    // 3. Prepare Plan Data
+    // 4. Prepare Plan Data
     const planConfig = company?.plan?.config as any;
     const planData = {
       name: company?.plan?.name || "Sin Plan",
@@ -93,6 +105,119 @@ export const getDashboardStats = catchAsync(
       data: {
         activities,
         plan: planData,
+        metrics: {
+          activeTickets: activeTicketsCount,
+          totalMessages: totalMessagesCount,
+          aiResolution: "0%", // Placeholder
+          avgResponseTime: "0s", // Placeholder
+        },
+      },
+    });
+  }
+);
+
+export const getSalesStats = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const companyId = req.companyId || req.user?.companyId;
+
+    if (!companyId) {
+      return res.status(400).json({ message: "Company ID required" });
+    }
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // 1. Fetch Deals
+    const deals = await prisma.deal.findMany({
+      where: { companyId },
+      select: {
+        value: true,
+        stage: true,
+        probability: true,
+        updatedAt: true,
+      },
+    });
+
+    // 2. Fetch Leaderboard (Agents by activities completed this month)
+    const topAgents = await prisma.user.findMany({
+      where: { companyId, role: { in: ["AGENT", "ADMIN"] } },
+      select: {
+        id: true,
+        name: true,
+        // avatarUrl removed as it doesn't exist
+        _count: {
+          select: {
+            createdActivities: {
+              where: {
+                createdAt: { gte: startOfMonth },
+                status: "COMPLETED",
+              },
+            },
+            assignedDeals: {
+              where: {
+                stage: "WON",
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdActivities: {
+          _count: "desc",
+        },
+      },
+      take: 5,
+    });
+
+    // 3. Calculate Metrics
+    let pipelineValue = 0;
+    let forecastValue = 0;
+    let wonCount = 0;
+    let lostCount = 0;
+    let wonValue = 0;
+
+    deals.forEach((deal) => {
+      // Pipeline Value (All open deals)
+      if (deal.stage !== "WON" && deal.stage !== "LOST") {
+        pipelineValue += deal.value;
+        forecastValue += deal.value * (deal.probability / 100);
+      }
+
+      // Won/Lost Stats (Monthly)
+      if (deal.updatedAt >= startOfMonth) {
+        if (deal.stage === "WON") {
+          wonCount++;
+          wonValue += deal.value;
+        } else if (deal.stage === "LOST") {
+          lostCount++;
+        }
+      }
+    });
+
+    const totalClosedThisMonth = wonCount + lostCount;
+    const conversionRate =
+      totalClosedThisMonth > 0
+        ? Math.round((wonCount / totalClosedThisMonth) * 100)
+        : 0;
+
+    // 4. Format Leaderboard
+    const leaderboard = topAgents.map((agent: any) => ({
+      id: agent.id,
+      name: agent.name,
+      activities: agent._count.createdActivities,
+      dealsWon: agent._count.assignedDeals,
+      avatar: null,
+    }));
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        forecast: Math.round(forecastValue),
+        pipelineValue: Math.round(pipelineValue),
+        wonCount, // This month
+        wonValue, // This month
+        conversionRate,
+        leaderboard,
       },
     });
   }

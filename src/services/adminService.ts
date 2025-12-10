@@ -60,7 +60,7 @@ export const adminService = {
       subscriptionEndsAt?: Date | string | null;
     }
   ) {
-    return prisma.company.update({
+    const updated = await prisma.company.update({
       where: { id: companyId },
       data: {
         name: data.name,
@@ -74,6 +74,12 @@ export const adminService = {
       },
       include: { plan: true },
     });
+
+    // Invalidate cache
+    await cacheService.delete("admin:companies:all");
+    await cacheService.invalidateCompany(companyId);
+
+    return updated;
   },
 
   // --- PLAN MANAGEMENT ---

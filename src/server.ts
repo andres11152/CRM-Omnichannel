@@ -49,6 +49,7 @@ import dashboardRouter from "@/routes/dashboardRoutes";
 import aiRouter from "@/routes/aiRoutes";
 import quickReplyRouter from "@/routes/quickReplyRoutes";
 import usageRouter from "@/routes/usageRoutes";
+import googleAuthRouter from "@/routes/googleAuthRoutes";
 import { workflowEngine } from "@/services/workflowEngine";
 
 // HANDLE UNCAUGHT EXCEPTIONS (Sync Errors)
@@ -77,11 +78,14 @@ securityMiddleware(app);
 
 // --- STATIC FILE SERVING FOR LOCAL MEDIA ---
 import path from "path";
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "public", "uploads"))
+);
 
 // --- HTTP LOGGER ---
 app.use((req, res, next) => {
-  Logger.http(`${req.method} ${req.url}`);
+  // Logger.http(`${req.method} ${req.url}`);
   next();
 });
 
@@ -135,6 +139,7 @@ app.use("/api/departments", apiLimiter, protect, departmentRouter);
 app.use("/api/dashboard", apiLimiter, protect, dashboardRouter);
 app.use("/api/ai", apiLimiter, protect, aiRouter);
 app.use("/api/quick-replies", apiLimiter, protect, quickReplyRouter);
+app.use("/api/google", apiLimiter, googleAuthRouter); // Note: /auth uses protect, /callback doesn't
 import { webhookLimiter } from "@/middleware/rateLimitMiddleware";
 import analyticsRouter from "@/routes/analyticsRoutes";
 
@@ -185,10 +190,14 @@ if (require.main === module) {
     try {
       // Inicializa los servicios antes de escuchar
       try {
-        await whatsappService.initialize();
-        Logger.info("[Server] WhatsApp service initialized successfully");
+        // Don't await WhatsApp init to avoid blocking server startup
+        whatsappService.initialize().then(() => {
+             Logger.info("[Server] WhatsApp service initialized successfully");
+        }).catch(e => {
+             Logger.error(`[Server] WhatsApp init error: ${e}`);
+        });
       } catch (e) {
-        Logger.error(`[Server] WhatsApp init error: ${e}`);
+        Logger.error(`[Server] WhatsApp init start error: ${e}`);
       }
       // Logger.warn("[Server] WhatsApp initialization temporarily disabled");
 
@@ -198,7 +207,7 @@ if (require.main === module) {
       // Just importing it is enough as it's a singleton instantiated on import
       Logger.info("[Server] Workflow Engine initialized");
 
-      httpServer.listen(PORT, () => {
+      httpServer.listen(Number(PORT), "0.0.0.0", () => {
         console.log(
           `✅ ¡ÉXITO! CRM SaaS Backend corriendo en el puerto ${PORT}`
         );

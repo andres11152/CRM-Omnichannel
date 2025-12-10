@@ -209,6 +209,11 @@ model User {
   assignedDeals      Deal[]     @relation("AssignedDeals")
   assignedActivities Activity[] @relation("AssignedActivities")
   createdActivities  Activity[] @relation("CreatedActivities")
+  participatingActivities Activity[] @relation("ActivityParticipants")
+
+  // Google Calendar Integration
+  googleCalendarToken        String? // Access token
+  googleCalendarRefreshToken String? // Refresh token for long-term access
 
   // === PERFORMANCE INDEXES ===
   // For: Get users by company and role (very common)
@@ -668,6 +673,8 @@ model Activity {
   status      String       @default("PENDING") // PENDING, COMPLETED
   dueDate     DateTime?
 
+  googleEventId String? // Store Google Calendar Event ID
+
   // Relations (Polymorphic-ish)
   accountId String?
   account   Account? @relation(fields: [accountId], references: [id])
@@ -683,6 +690,8 @@ model Activity {
 
   createdById String
   createdBy   User   @relation("CreatedActivities", fields: [createdById], references: [id])
+
+  participants User[] @relation("ActivityParticipants")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

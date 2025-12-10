@@ -3,6 +3,18 @@ import { usePrismaAuthState } from "./baileysAuth";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
 import { prisma } from "@/config/prisma";
+import { writeFile, mkdir } from "fs/promises";
+import * as path from "path";
+import { downloadMediaMessage } from "@whiskeysockets/baileys";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
+
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+  console.log(`[WhatsApp] ffmpeg path set to: ${ffmpegPath}`);
+} else {
+  console.warn("[WhatsApp] ffmpeg-static executable not found!");
+}
 
 class WhatsAppService {
   // Map sessionId -> socket
@@ -11,6 +23,8 @@ class WhatsAppService {
   private qrCodes: Map<string, string> = new Map();
   // Map sessionId -> attempts count
   private reconnectAttempts: Map<string, number> = new Map();
+  // Cache for deduplicating outbound messages (CRM sent vs Phone sent)
+  private recentOutboundIds: Set<string> = new Set();
 
   constructor() {
     // Session loader moved to initialize()
@@ -255,9 +269,8 @@ class WhatsAppService {
       sock.ev.on("creds.update", saveCreds);
 
       sock.ev.on("messages.upsert", async (m: any) => {
-        // console.log(`[WhatsApp] Messages upsert: ${m.messages.length} messages, type: ${m.type}`);
-        // Handle all messages, not just the first one
         for (const msg of m.messages) {
+          // console.log(`[WhatsApp] Messages upsert: ${m.messages.length} messages, type: ${m.type}`);
           await this.handleIncomingMessage(sessionId, {
             messages: [msg],
             type: m.type,
@@ -272,20 +285,76 @@ class WhatsAppService {
   private async handleIncomingMessage(sessionId: string, m: any) {
     try {
       const msg = m.messages[0];
-      if (!msg.message) return; // Allow fromMe messages
+      if (!msg.message) {
+        // console.log("[WhatsApp] Skipped message with no content (protocol message?)");
+        return;
+      }
 
       const remoteJid = msg.key.remoteJid;
       const isOutbound = msg.key.fromMe;
-      const text =
-        msg.message.conversation || msg.message.extendedTextMessage?.text;
 
-      if (!remoteJid || !text) return;
-
+      // DEBUG LOGGING
       console.log(
-        `[WhatsApp] [${sessionId}] Msg ${
-          isOutbound ? "TO" : "FROM"
-        } ${remoteJid}: ${text}`
+        `[WhatsApp] Incoming Upsert: ID=${msg.key.id}, Outbound=${isOutbound}, JID=${remoteJid}`
       );
+      console.log(
+        `[WhatsApp] Raw Message Keys: ${Object.keys(msg.message).join(", ")}`
+      );
+
+      // Handle Outbound Messages Deduplication (Fix for Mobile Sync)
+      if (isOutbound) {
+        if (msg.key.id && this.recentOutboundIds.has(msg.key.id)) {
+          console.log(`[WhatsApp] Ignoring CRM echo message: ${msg.key.id}`);
+          this.recentOutboundIds.delete(msg.key.id);
+          return;
+        }
+        console.log(
+          `[WhatsApp] Syncing outbound message from phone: ${msg.key.id}`
+        );
+        // Allow it to proceed -> will be saved as "Sent from Mobile Agent"
+      }
+
+      // CRITICAL: Ignore status updates (broadcasts)
+      if (remoteJid === "status@broadcast") {
+        console.log(
+          `[WhatsApp] Ignoring status broadcast from ${msg.key.participant}`
+        );
+        return;
+      }
+
+      // Determine content type and extract text/caption
+      let text = "";
+      let mediaType = "";
+      let mediaBuffer: Buffer | null = null;
+      let mimeType = "";
+
+      if (msg.message.conversation) {
+        text = msg.message.conversation;
+      } else if (msg.message.extendedTextMessage?.text) {
+        text = msg.message.extendedTextMessage.text;
+      } else if (msg.message.imageMessage) {
+        text = msg.message.imageMessage.caption || "";
+        mediaType = "image";
+        mimeType = msg.message.imageMessage.mimetype || "image/jpeg";
+      } else if (msg.message.videoMessage) {
+        text = msg.message.videoMessage.caption || "";
+        mediaType = "video";
+        mimeType = msg.message.videoMessage.mimetype || "video/mp4";
+      } else if (msg.message.documentMessage) {
+        text =
+          msg.message.documentMessage.caption ||
+          msg.message.documentMessage.fileName ||
+          "";
+        mediaType = "document";
+        mimeType = msg.message.documentMessage.mimetype || "application/pdf";
+      } else if (msg.message.audioMessage) {
+        mediaType = "audio";
+        mimeType = msg.message.audioMessage.mimetype || "audio/mp4";
+      }
+
+      // If no text and no media, ignore (e.g. protocol messages)
+      if (!text && !mediaType) return;
+      if (!remoteJid) return;
 
       // Find the session record to get companyId
       const sessionRecord = await prisma.whatsAppSession.findUnique({
@@ -295,6 +364,59 @@ class WhatsAppService {
       if (!sessionRecord) {
         console.warn(`[WhatsApp] Session record not found for ${sessionId}`);
         return;
+      }
+
+      let mediaInfo = undefined;
+
+      // Handle Media Download
+      if (mediaType) {
+        try {
+          // Download buffer
+          mediaBuffer = (await downloadMediaMessage(
+            msg,
+            "buffer",
+            {} as any,
+            { logger: console as any, reuploadRequest: sessionRecord.id as any } // Mock logger
+          )) as Buffer;
+
+          if (mediaBuffer) {
+            // Ensure uploads directory exists
+            const uploadDir = path.join(
+              process.cwd(),
+              "public",
+              "uploads",
+              sessionRecord.companyId
+            );
+            await mkdir(uploadDir, { recursive: true });
+
+            // Generate filename
+            const ext = mimeType.split("/")[1]?.split(";")[0] || "bin";
+            const filename = `${Date.now()}_${Math.random()
+              .toString(36)
+              .substring(7)}.${ext}`;
+            const filePath = path.join(uploadDir, filename);
+
+            // Write file
+            await writeFile(filePath, mediaBuffer);
+
+            // Public URL (Assuming server serves /uploads static route)
+            const publicUrl = `/uploads/${sessionRecord.companyId}/${filename}`;
+
+            mediaInfo = {
+              url: publicUrl,
+              type: mediaType,
+              mimetype: mimeType,
+              caption: text,
+            };
+
+            console.log(`[WhatsApp] Media saved: ${publicUrl}`);
+
+            // If text is empty (image without caption), use a placeholder to ensure message is created
+            if (!text) text = `[${mediaType.toUpperCase()}]`;
+          }
+        } catch (err) {
+          console.error(`[WhatsApp] Error downloading media:`, err);
+        }
       }
 
       // IMPORT DYNAMICALLY TO AVOID CIRCULAR DEPENDENCY ISSUES
@@ -308,12 +430,11 @@ class WhatsAppService {
         isOutbound: !!isOutbound,
         contactName: msg.pushName || undefined,
         senderName: isOutbound ? "Me" : undefined,
+        hasMedia: !!mediaInfo,
+        media: mediaInfo,
       });
 
-      // LOGIC DELEGATED TO messageProcessor.service.ts
       return;
-
-      /* OLD LOGIC REMOVED FOR CLEAN ARCHITECTURE */
     } catch (error) {
       console.error(`[WhatsApp] Error processing message: ${error}`);
     }
@@ -325,21 +446,26 @@ class WhatsAppService {
     channelId?: string,
     media?: {
       url: string;
-      type: "image" | "video" | "document";
+      type: "image" | "video" | "document" | "audio";
       caption?: string;
+      mimetype?: string;
+      isVoiceNote?: boolean;
     }
   ) {
-    // We need to find the right session.
-    // If channelId is provided (e.g. from conversation), use it.
-    // Otherwise, try to find ANY connected session.
+    console.log("============================================");
+    console.log("[WhatsApp] sendMessage CALLED");
+    console.log("[WhatsApp] To:", to);
+    console.log("[WhatsApp] Text:", text);
+    console.log("[WhatsApp] ChannelId:", channelId);
+    console.log("[WhatsApp] Has Media:", !!media);
+    console.log("[WhatsApp] Active Sessions Count:", this.sessions.size);
+    console.log("============================================");
 
     let sock;
     let usedSessionId;
 
     if (channelId) {
       try {
-        // Try to find session by phone (channelId) or sessionId
-        // We need to look up which sessionId corresponds to this phone
         const session = await prisma.whatsAppSession.findFirst({
           where: {
             OR: [{ phone: channelId }, { sessionId: channelId }],
@@ -353,9 +479,6 @@ class WhatsAppService {
         ) {
           sock = this.sessions.get(session.sessionId);
           usedSessionId = session.sessionId;
-          console.log(
-            `[WhatsApp] Found session for channel ${channelId}: ${usedSessionId}`
-          );
         }
       } catch (error) {
         console.warn(
@@ -366,14 +489,9 @@ class WhatsAppService {
     }
 
     if (!sock) {
-      // Fallback: Use the first connected session we have
-      console.warn(
-        `[WhatsApp] No specific session found for channel ${channelId}, using fallback.`
-      );
       for (const [id, s] of this.sessions.entries()) {
         sock = s;
         usedSessionId = id;
-        console.log(`[WhatsApp] Using fallback session: ${id}`);
         break;
       }
     }
@@ -388,25 +506,134 @@ class WhatsAppService {
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
 
       if (media) {
-        console.log(`[WhatsApp] Sending media: ${media.type}`);
+        console.log(`[WhatsApp] Sending media type: '${media.type}'`);
+        console.log(
+          `[WhatsApp] Full media object:`,
+          JSON.stringify(media, null, 2)
+        );
+
         if (media.type === "image") {
-          await sock.sendMessage(jid, {
+          const response = await sock.sendMessage(jid, {
             image: { url: media.url },
             caption: text || media.caption,
           });
+          if (response?.key?.id) {
+            this.recentOutboundIds.add(response.key.id);
+            setTimeout(
+              () => this.recentOutboundIds.delete(response.key.id!),
+              30000
+            );
+          }
         } else if (media.type === "video") {
-          await sock.sendMessage(jid, {
+          const response = await sock.sendMessage(jid, {
             video: { url: media.url },
             caption: text || media.caption,
           });
+          if (response?.key?.id) {
+            this.recentOutboundIds.add(response.key.id);
+            setTimeout(
+              () => this.recentOutboundIds.delete(response.key.id!),
+              30000
+            );
+          }
+        } else if (media.type === "audio") {
+          // Convert audio to WhatsApp-compatible format if needed
+          let audioPath = media.url;
+          let shouldCleanup = false;
+
+          try {
+            console.log(
+              "[WhatsApp] Processing audio message. URL starts with data:",
+              media.url.startsWith("data:")
+            );
+
+            // If it's a base64 data URL, convert it
+            if (media.url.startsWith("data:")) {
+              console.log(
+                "[WhatsApp] Converting audio from WebM to OGG/Opus..."
+              );
+              const { convertAudioToMP4, cleanupTempFile } = await import(
+                "@/utils/audioConverter"
+              );
+              audioPath = await convertAudioToMP4(media.url);
+              shouldCleanup = true;
+              console.log(
+                "[WhatsApp] Audio conversion successful. Path:",
+                audioPath
+              );
+            } else {
+              console.log("[WhatsApp] Using existing audio URL:", audioPath);
+            }
+
+            console.log("[WhatsApp] Reading audio file into buffer...");
+            const response = await sock.sendMessage(jid, {
+              audio: await import("fs").then((fs) =>
+                fs.promises.readFile(audioPath)
+              ),
+              ptt: media.isVoiceNote,
+              mimetype: "audio/ogg; codecs=opus",
+            });
+
+            if (response?.key?.id) {
+              this.recentOutboundIds.add(response.key.id);
+              setTimeout(
+                () => this.recentOutboundIds.delete(response.key.id!),
+                30000
+              );
+            }
+            console.log("[WhatsApp] Socket send executed.");
+
+            // Cleanup temp file if we created one
+            if (shouldCleanup) {
+              const { cleanupTempFile } = await import(
+                "@/utils/audioConverter"
+              );
+              await cleanupTempFile(audioPath);
+              console.log("[WhatsApp] Temp file cleanup done.");
+            }
+
+            console.log(
+              "[WhatsApp] Audio message (OGG/Opus) process finished successfully"
+            );
+          } catch (conversionError) {
+            console.error(
+              "[WhatsApp] Audio conversion/send CRITICAL FAILURE:",
+              conversionError
+            );
+
+            // Cleanup on error
+            if (shouldCleanup && audioPath !== media.url) {
+              const { cleanupTempFile } = await import(
+                "@/utils/audioConverter"
+              );
+              await cleanupTempFile(audioPath).catch(() => {});
+            }
+
+            throw conversionError;
+          }
         } else {
-          await sock.sendMessage(jid, {
+          const response = await sock.sendMessage(jid, {
             document: { url: media.url },
             caption: text || media.caption,
+            mimetype: media.mimetype,
           });
+          if (response?.key?.id) {
+            this.recentOutboundIds.add(response.key.id);
+            setTimeout(
+              () => this.recentOutboundIds.delete(response.key.id!),
+              30000
+            );
+          }
         }
       } else {
-        await sock.sendMessage(jid, { text });
+        const response = await sock.sendMessage(jid, { text });
+        if (response?.key?.id) {
+          this.recentOutboundIds.add(response.key.id);
+          setTimeout(
+            () => this.recentOutboundIds.delete(response.key.id!),
+            30000
+          );
+        }
       }
       return true;
     } catch (error) {

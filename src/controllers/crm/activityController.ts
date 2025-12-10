@@ -3,6 +3,7 @@ import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
 import { prisma } from "../../config/prisma";
+import { GoogleCalendarService } from "../../services/googleCalendarService";
 
 const resolveContactId = async (id: string, companyId: string) => {
   if (!id) return undefined;
@@ -66,6 +67,7 @@ export const getActivities = catchAsync(
       include: {
         createdBy: { select: { name: true, email: true } },
         assignedTo: { select: { name: true, email: true } },
+        participants: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -93,6 +95,7 @@ export const createActivity = catchAsync(
       dealId,
       contactId,
       assignedToId,
+      participantIds, // Array of user IDs
     } = req.body;
 
     if (!companyId || !userId) {
@@ -116,8 +119,45 @@ export const createActivity = catchAsync(
             : undefined,
         assignedToId:
           assignedToId && assignedToId !== "" ? assignedToId : undefined,
+        participants:
+          participantIds && Array.isArray(participantIds) && participantIds.length > 0
+            ? { connect: participantIds.map((id: string) => ({ id })) }
+            : undefined,
       },
     });
+
+    // Google Calendar Sync: If type is MEETING and dueDate exists
+    if (type === "MEETING" && dueDate) {
+      const targetUserId = assignedToId || userId;
+
+      try {
+        console.log("[ActivityController] Triggering Google Calendar sync");
+        const googleEventId = await GoogleCalendarService.createMeetingEvent(
+          targetUserId,
+          {
+            subject,
+            description,
+            dueDate: new Date(dueDate),
+            assignedToId,
+            participantIds, // Pass participants to service
+          }
+        );
+
+        if (googleEventId) {
+          // Update activity with Google Event ID
+          await prisma.activity.update({
+            where: { id: activity.id },
+            data: { googleEventId },
+          });
+          console.log(
+            "[ActivityController] Saved Google Event ID:",
+            googleEventId
+          );
+        }
+      } catch (err) {
+        console.error("[ActivityController] Google Calendar sync failed:", err);
+      }
+    }
 
     res.status(201).json({
       status: "success",
@@ -134,6 +174,7 @@ export const updateActivity = catchAsync(
 
     const activity = await prisma.activity.findFirst({
       where: { id, companyId },
+      include: { participants: true },
     });
 
     if (!activity) {
@@ -141,17 +182,82 @@ export const updateActivity = catchAsync(
     }
 
     // Sanitize update data
-    const updateData = { ...req.body };
+    const updateData: any = { ...req.body };
     if (updateData.accountId === "") updateData.accountId = null;
     if (updateData.dealId === "") updateData.dealId = null;
     if (updateData.contactId === "") updateData.contactId = null;
     if (updateData.assignedToId === "") updateData.assignedToId = null;
     if (updateData.dueDate) updateData.dueDate = new Date(updateData.dueDate);
 
+    // Handle participants update
+    if (updateData.participantIds) {
+       updateData.participants = {
+          set: updateData.participantIds.map((pid: string) => ({ id: pid }))
+       };
+       delete updateData.participantIds;
+    }
+
     const updatedActivity = await prisma.activity.update({
       where: { id },
       data: updateData,
+      include: { participants: true } // Return updated participants
     });
+
+    // Update Google Calendar event if it exists and relevant fields changed
+    if (
+      activity.googleEventId &&
+      (updateData.subject ||
+        updateData.description ||
+        updateData.dueDate ||
+        updateData.assignedToId ||
+        updateData.participants)
+    ) {
+      console.log(
+        "[ActivityController] Attempting to update Google Calendar event...",
+        {
+          eventId: activity.googleEventId,
+          changedFields: Object.keys(updateData),
+        }
+      );
+
+      const targetUserId =
+        updatedActivity.assignedToId || updatedActivity.createdById;
+      
+      const activityData = {
+        subject: updatedActivity.subject,
+        description: updatedActivity.description || undefined,
+        dueDate: updatedActivity.dueDate
+          ? new Date(updatedActivity.dueDate)
+          : new Date(),
+        assignedToId: updatedActivity.assignedToId || undefined,
+        participantIds: updatedActivity.participants.map(p => p.id),
+      };
+
+      if (updatedActivity.dueDate) {
+        console.log(
+          "[ActivityController] Calling GoogleCalendarService.updateMeetingEvent",
+          { targetUserId, eventId: activity.googleEventId }
+        );
+        await GoogleCalendarService.updateMeetingEvent(
+          targetUserId,
+          activity.googleEventId,
+          activityData
+        );
+      } else {
+        console.log(
+          "[ActivityController] Skipping Google Update: No Due Date on updated activity"
+        );
+      }
+    } else {
+      console.log(
+        "[ActivityController] Skipping Google Update: No Google Event ID or no relevant changes",
+        {
+          hasGoogleEventId: !!activity.googleEventId,
+          googleEventId: activity.googleEventId,
+          updateDataKeys: Object.keys(updateData),
+        }
+      );
+    }
 
     res.status(200).json({
       status: "success",
@@ -172,6 +278,22 @@ export const deleteActivity = catchAsync(
 
     if (!activity) {
       return next(new AppError("Activity not found", 404));
+    }
+
+    // Delete from Google Calendar if it exists
+    if (
+      activity.googleEventId &&
+      (activity.assignedToId || activity.createdById)
+    ) {
+      const targetUserId = activity.assignedToId || activity.createdById;
+      console.log(
+        "[ActivityController] Deleting from Google Calendar:",
+        activity.googleEventId
+      );
+      await GoogleCalendarService.deleteMeetingEvent(
+        targetUserId,
+        activity.googleEventId
+      );
     }
 
     await prisma.activity.delete({ where: { id } });

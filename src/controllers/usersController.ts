@@ -3,6 +3,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { prisma } from "@/config/prisma";
 import { AuthenticatedRequest } from "@/types/types";
+import bcrypt from "bcryptjs";
 
 /**
  * GET USERS CONTROLLER
@@ -57,12 +58,12 @@ export const getUsers = catchAsync(
  * CREATE USER CONTROLLER (Admin only)
  * Crea un nuevo usuario vinculado a la compañía del admin.
  */
-import bcrypt from "bcryptjs";
 
 export const createUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    console.log("[Users] createUser called", req.body);
     const { name, email, password, role } = req.body;
-    const companyId = req.companyId;
+    const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
       return next(
@@ -76,7 +77,9 @@ export const createUser = catchAsync(
       return next(new AppError("El email ya está registrado.", 400));
     }
 
+    console.log("[Users] Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 12);
+    console.log("[Users] Creating user in DB...");
 
     const newUser = await prisma.user.create({
       data: {

@@ -27,7 +27,7 @@ router.get("/system-status", getSystemStatus);
 router.get("/dashboard-stats", getDashboardStats);
 router.get("/companies", listCompanies);
 router.post("/companies", validate(createCompanySchema), createCompany);
-router.patch("/companies/:companyId", updateCompany);
+router.put("/companies/:companyId", updateCompany);
 router.patch(
   "/companies/:companyId/status",
   validate(updateCompanyStatusSchema), // <-- APLICAMOS LA VALIDACIÓN AQUÍ

@@ -39,6 +39,14 @@ class WebSocketGateway {
         this.pubClient = createClient({ url: process.env.REDIS_URL });
         const subClient = this.pubClient.duplicate();
 
+        // Prevent "missing 'error' handler" crash
+        this.pubClient.on("error", (err: any) =>
+          Logger.error("Redis Pub Client Error", err)
+        );
+        subClient.on("error", (err: any) =>
+          Logger.error("Redis Sub Client Error", err)
+        );
+
         await Promise.all([this.pubClient.connect(), subClient.connect()]);
 
         adapterConfig = {
@@ -79,6 +87,12 @@ class WebSocketGateway {
     this.io.on("connection", (socket: Socket) => {
       const agentId = socket.handshake.query.agentId as string;
 
+      console.log(
+        `[Gateway] New connection attempt. AgentID: ${
+          agentId || "MISSING"
+        }, Socket: ${socket.id}`
+      );
+
       if (agentId) {
         Logger.info(
           `[Gateway] Agent connected: ${agentId} (Socket: ${
@@ -95,8 +109,17 @@ class WebSocketGateway {
           Logger.info(`[Gateway] Agent disconnected: ${agentId}`);
         });
       } else {
-        Logger.warn("[Gateway] Connection rejected: No Agent ID provided");
-        socket.disconnect();
+        // Allow connection but warn - useful for debugging
+        Logger.warn(
+          `[Gateway] Connection allowed without Agent ID (Socket: ${socket.id})`
+        );
+
+        socket.on("disconnect", () => {
+          Logger.info(`[Gateway] Anonymous socket disconnected: ${socket.id}`);
+        });
+
+        // Don't disconnect automatically to allow debugging
+        // socket.disconnect();
       }
     });
   }

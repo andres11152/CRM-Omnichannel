@@ -18,17 +18,25 @@ export const checkPlanLimit = (resourceType: ResourceType) => {
     try {
       const companyId = req.companyId || req.user?.companyId;
 
+      console.log(
+        `[PlanLimit] Checking limit for ${resourceType}. CompanyId: ${companyId}`
+      );
+
       if (!companyId) {
+        console.log("[PlanLimit] No companyId, skipping check.");
         // No company = MASTER user or special case, allow
         return next();
       }
 
+      console.log("[PlanLimit] Can create resource?");
       const canCreate = await planLimitsService.canCreateResource(
         companyId,
         resourceType
       );
+      console.log(`[PlanLimit] Can create: ${canCreate}`);
 
       if (!canCreate) {
+        console.log("[PlanLimit] Limit reached, fetching details...");
         const { limit, current } = await planLimitsService.checkPlanLimit(
           companyId,
           resourceType
@@ -47,6 +55,7 @@ export const checkPlanLimit = (resourceType: ResourceType) => {
 
       next();
     } catch (error) {
+      console.error("[PlanLimit] Error checking limit:", error);
       next(error);
     }
   };

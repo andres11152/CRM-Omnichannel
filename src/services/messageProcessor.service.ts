@@ -11,6 +11,12 @@ interface IncomingMessagePayload {
   contactName?: string;
   senderName?: string; // For outbound agents
   hasMedia?: boolean;
+  media?: {
+    url: string;
+    type: string; // "image", "video", "document", "audio"
+    mimetype?: string;
+    caption?: string;
+  };
 }
 
 /**
@@ -189,11 +195,23 @@ export const messageProcessor = {
         direction: isOutbound ? "OUTBOUND" : "INBOUND",
         conversationId: conversation.id,
         senderId: dbSenderId,
+        metadata: payload.media ? { attachment: payload.media } : undefined,
       },
     });
 
     // Emit Socket Event
     const io = gateway.getIO();
+
+    if (!io) {
+      console.error("[MessageProcessor] CRITICAL: Socket.io instance is NULL!");
+    } else {
+      console.log(
+        `[MessageProcessor] Socket.io active. Clients: ${
+          (io as any).engine?.clientsCount || 0
+        }`
+      );
+    }
+
     const socketPayload = {
       ...newMessage,
       ticketId: conversation.id, // Frontend uses ticketId alias
@@ -201,8 +219,12 @@ export const messageProcessor = {
       senderType: dbSenderType,
     };
 
+    console.log(
+      `[MessageProcessor] Emitting message to company: ${companyId}, ticketId: ${conversation.id}`
+    );
     io?.to(companyId).emit("message", socketPayload); // Broadcast to company room
     io?.emit("message", socketPayload); // Legacy global broadcast (for safety)
+    console.log(`[MessageProcessor] Message emitted successfully`);
 
     // --- SYNC QUEUE ID FALLBACK ---
     if (!conversation.queueId) {

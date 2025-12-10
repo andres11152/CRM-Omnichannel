@@ -26,7 +26,7 @@ export const createSession = catchAsync(
     const maxSessions = (company.plan?.config as any)?.max_whatsapp || 1; // Default to 1 if no plan or config
     const currentSessions = company.whatsappSessions.length;
 
-    if (currentSessions >= maxSessions) {
+    if (maxSessions !== -1 && currentSessions >= maxSessions) {
       throw new AppError(
         `Plan limit reached. Your plan allows ${maxSessions} WhatsApp connection(s). Please upgrade to add more.`,
         403

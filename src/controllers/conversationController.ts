@@ -37,8 +37,32 @@ export const createConversation = catchAsync(
       });
     }
 
-    // 2. Create Conversation
-    const conversation = await prisma.conversation.create({
+    // 2. Check if conversation already exists for this phone/channelId
+    let conversation = await prisma.conversation.findFirst({
+      where: {
+        companyId: req.companyId,
+        channelId: phone,
+        status: "OPEN",
+      },
+      include: { participants: true, messages: true },
+    });
+
+    if (conversation) {
+      // Conversation already exists, return it
+      console.log(
+        `[CreateConv] Found existing conversation for ${phone}:`,
+        conversation.id
+      );
+
+      res.status(200).json({
+        status: "success",
+        data: { conversation },
+      });
+      return;
+    }
+
+    // 3. Create new Conversation if it doesn't exist
+    conversation = await prisma.conversation.create({
       data: {
         companyId: req.companyId,
         subject: name || phone,
@@ -51,7 +75,7 @@ export const createConversation = catchAsync(
       include: { participants: true, messages: true },
     });
 
-    // 3. Create Ticket
+    // 4. Create Ticket (only for new conversations)
     await prisma.ticket.create({
       data: {
         subject: `Chat con ${name || phone}`,
@@ -66,7 +90,7 @@ export const createConversation = catchAsync(
       },
     });
 
-    // 4. Send Message if provided
+    // 5. Send Message if provided
     if (message) {
       await prisma.message.create({
         data: {
@@ -203,6 +227,12 @@ export const getConversation = catchAsync(
 
 export const replyToConversation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
+    console.log("============================================");
+    console.log("[Reply] FUNCTION CALLED - replyToConversation");
+    console.log("[Reply] Request Body:", JSON.stringify(req.body, null, 2));
+    console.log("[Reply] Conversation ID:", req.params.id);
+    console.log("============================================");
+
     console.log("[Reply] Debug Auth:", {
       user: req.user,
       companyId: req.companyId,
@@ -269,11 +299,27 @@ export const replyToConversation = catchAsync(
 
     // Find the customer (USER role)
     const customer = conversation.participants.find((p) => p.role === "USER");
+
+    console.log(
+      "[Reply] Participants:",
+      JSON.stringify(
+        conversation.participants.map((p) => ({
+          id: p.id,
+          role: p.role,
+          email: p.email,
+        })),
+        null,
+        2
+      )
+    );
+
     if (!customer || !customer.email) {
       // Fallback or error? For now, log warning.
       console.warn(
         `[Reply] No customer found for conversation ${conversation.id}`
       );
+    } else {
+      console.log("[Reply] Found Customer:", customer.email);
     }
 
     // Log before creating DB record
@@ -306,20 +352,44 @@ export const replyToConversation = catchAsync(
     console.log("[Reply] Message record created with id", message.id);
 
     // Send to WhatsApp if channel matches
-    if (channel === "WHATSAPP" && customer && customer.email) {
+    const shouldSendToWhatsapp =
+      channel === "WHATSAPP" && !!customer && !!customer.email;
+    console.log(
+      `[Reply] Decision to send to WA: ${shouldSendToWhatsapp} (Channel: ${channel}, HasCustomer: ${!!customer}, HasEmail: ${!!customer?.email})`
+    );
+
+    if (shouldSendToWhatsapp && customer && customer.email) {
+      // Extract phone number from customer email (format: PHONENUMBER@whatsapp.user)
+      // channelId contains the sessionId, NOT the phone number
       const phone = customer.email.split("@")[0];
-      console.log("[Reply] Sending WhatsApp message to", phone);
+      console.log(
+        `[Reply] Attempting to send WA message (Service method call next). Phone: ${phone}`
+      );
+      console.log(
+        "[Reply] Attachment Payload:",
+        JSON.stringify(attachment, null, 2)
+      );
+      console.log(
+        "[Reply] Attachment Debug:",
+        JSON.stringify(attachment, null, 2)
+      );
       try {
         await whatsappService.sendMessage(
           phone,
-          messageContent, // Use the computed content which handles empty/attachment cases
-          conversation.channelId || undefined, // Pass channelId to help find the right session
+          messageContent,
+          conversation.channelId || undefined,
           attachment
         );
       } catch (error) {
         console.error("[Reply] Failed to send WhatsApp message:", error);
         // Do not throw, so the message is still saved in DB and returned to UI
       }
+    } else {
+      console.warn("[Reply] SKIPPING WhatsApp send. Reason:", {
+        channelMatch: channel === "WHATSAPP",
+        hasCustomer: !!customer,
+        hasEmail: !!customer?.email,
+      });
     }
 
     // Emit Socket Event for Outgoing Message
@@ -343,9 +413,23 @@ export const replyToConversation = catchAsync(
       senderType: "AGENT",
       attachment: attachment, // Explicitly send attachment to frontend
     };
+
+    // Create a safe log payload avoiding huge base64 strings
+    const safeLogPayload = { ...socketPayload };
+    if (
+      safeLogPayload.attachment &&
+      safeLogPayload.attachment.url &&
+      safeLogPayload.attachment.url.length > 100
+    ) {
+      safeLogPayload.attachment = {
+        ...safeLogPayload.attachment,
+        url: safeLogPayload.attachment.url.substring(0, 50) + "...",
+      };
+    }
+
     console.log(
       "[Reply] Emitting socket message:",
-      JSON.stringify(socketPayload, null, 2)
+      JSON.stringify(safeLogPayload, null, 2)
     );
     io?.emit("message", socketPayload);
     console.log("[Reply] Socket message emitted successfully");

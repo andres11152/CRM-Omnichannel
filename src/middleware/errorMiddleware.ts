@@ -31,7 +31,10 @@ const handlePrismaError = (err: Prisma.PrismaClientKnownRequestError) => {
     return new AppError(`Recurso no encontrado. ${err.meta?.cause || ""}`, 404);
   }
   // Añade aquí otros códigos de error de Prisma que quieras manejar.
-  return new AppError("Error inesperado en la base de datos.", 500);
+  return new AppError(
+    `Error de base de datos (${err.code}): ${err.message}`,
+    500
+  );
 };
 
 export const globalErrorHandler = (

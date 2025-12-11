@@ -324,6 +324,27 @@ export const messageProcessor = {
       });
 
       if (queue?.aiAssistant) {
+        // --- ANTI-LOOP PROTECTION ---
+        // Check if the last message was already sent by a bot or agent to prevent loops
+        const lastMessage = await prisma.message.findFirst({
+          where: { conversationId },
+          orderBy: { createdAt: "desc" },
+          include: { sender: true },
+        });
+
+        // Loop condition: Last sender was a BOT or AGENT (and not the user)
+        // We only want to reply if the last message was INBOUND (from USER)
+        if (
+          lastMessage?.direction === "OUTBOUND" ||
+          lastMessage?.sender?.role === "AGENT"
+        ) {
+          console.warn(
+            `[AI] Skipping response. Last message was OUTBOUND/AGENT (${lastMessage?.sender?.name}) to avoid loops.`
+          );
+          return;
+        }
+        // -----------------------------
+
         // Get history
         const historyMessages = await prisma.message.findMany({
           where: { conversationId: conversationId },

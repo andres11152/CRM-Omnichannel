@@ -104,7 +104,7 @@ export const campaignService = {
           // It assumes "isOutbound" means "I read this from the phone".
 
           // So we MUST send it explicitly here.
-          await whatsappService.sendMessage(remoteJid, content);
+          await whatsappService.sendMessage(remoteJid, content, { companyId });
 
           stats.sent++;
 

@@ -121,108 +121,144 @@ export class WhatsAppService extends EventEmitter {
 
   /** Initialise a single session (creates socket, auth state, listeners) - Public for reconnection */
   public async initializeSession(sessionId: string) {
-    const { usePrismaAuthState } = await import("./baileysAuth");
-    const { state, saveCreds } = await usePrismaAuthState(sessionId);
+    try {
+      const { usePrismaAuthState } = await import("./baileysAuth");
+      const { state, saveCreds } = await usePrismaAuthState(sessionId);
 
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: true,
-    });
-    this.sessions.set(sessionId, sock);
+      const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        connectTimeoutMs: 60000,
+      });
+      this.sessions.set(sessionId, sock);
 
-    sock.ev.on("creds.update", saveCreds);
-    sock.ev.on("connection.update", async (update) => {
-      const { connection, lastDisconnect, qr } = update;
-      const { gateway } = await import("@/gateways/socketGateway");
+      sock.ev.on("creds.update", saveCreds);
+      sock.ev.on("connection.update", async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        const { gateway } = await import("@/gateways/socketGateway");
 
-      if (qr) {
-        // Persist QR in DB so polling can pick it up if socket fails
-        await prisma.whatsAppSession.update({
-          where: { sessionId },
-          data: { qrCode: qr, status: "SCANNING" },
-        });
+        if (qr) {
+          // Persist QR in DB so polling can pick it up if socket fails
+          await prisma.whatsAppSession.update({
+            where: { sessionId },
+            data: { qrCode: qr, status: "SCANNING" },
+          });
 
-        gateway.getIO()?.emit("qr.updated", { sessionId, qr });
-      }
+          gateway.getIO()?.emit("qr.updated", { sessionId, qr });
+        }
 
-      if (connection === "open") {
-        console.log(`[WhatsApp] Session ${sessionId} CONNECTED`);
+        if (connection === "open") {
+          console.log(`[WhatsApp] Session ${sessionId} CONNECTED`);
 
-        // Update DB
-        const user = sock.user;
-        const phone = user?.id?.split(":")[0];
-
-        await prisma.whatsAppSession.update({
-          where: { sessionId },
-          data: {
-            status: "CONNECTED",
-            phone: phone || undefined,
-            qrCode: null,
-          }, // Clear QR
-        });
-
-        gateway.getIO()?.emit("session.status", {
-          sessionId,
-          status: "CONNECTED",
-          phone,
-        });
-      }
-
-      if (connection === "close") {
-        const shouldReconnect =
-          (lastDisconnect?.error as any)?.output?.statusCode !==
-          DisconnectReason.loggedOut;
-
-        if (shouldReconnect) {
-          await this.initializeSession(sessionId);
-        } else {
-          this.sessions.delete(sessionId);
+          // Update DB
+          const user = sock.user;
+          const phone = user?.id?.split(":")[0];
 
           await prisma.whatsAppSession.update({
             where: { sessionId },
-            data: { status: "DISCONNECTED" },
+            data: {
+              status: "CONNECTED",
+              phone: phone || undefined,
+              qrCode: null,
+            }, // Clear QR
           });
 
-          gateway
-            .getIO()
-            ?.emit("session.status", { sessionId, status: "DISCONNECTED" });
+          gateway.getIO()?.emit("session.status", {
+            sessionId,
+            status: "CONNECTED",
+            phone,
+          });
         }
-      }
-    });
 
-    // 🔍 DEBUG: Monitor ALL Baileys events
-    console.log(
-      "🎯 [DEBUG] Registering event listeners for session:",
-      sessionId
-    );
-    const monitorEvents = [
-      "messages.upsert",
-      "messages.update",
-      "message-receipt.update",
-    ];
-    monitorEvents.forEach((eventName) => {
-      sock.ev.on(eventName as any, (data: any) => {
-        console.log(`🔥 [DEBUG] Event "${eventName}" received`);
-      });
-    });
+        if (connection === "close") {
+          const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+          const shouldReconnect =
+            statusCode !== DisconnectReason.loggedOut && statusCode !== 401;
 
-    sock.ev.on("messages.upsert", async (msgEvent) => {
-      console.log("🔔 [DEBUG] messages.upsert EVENT FIRED", {
-        type: msgEvent.type,
-        count: msgEvent.messages?.length,
+          if (shouldReconnect) {
+            console.log(
+              `[WhatsApp] Connection closed for ${sessionId} (Status: ${statusCode}). Reconnecting...`
+            );
+            // Delay reconnection slightly to avoid loops
+            setTimeout(() => this.initializeSession(sessionId), 5000);
+          } else {
+            console.log(
+              `[WhatsApp] Session ${sessionId} logged out or invalid (Status: ${statusCode}). Cleaning up...`
+            );
+            this.sessions.delete(sessionId);
+
+            await prisma.whatsAppSession.update({
+              where: { sessionId },
+              data: { status: "DISCONNECTED", qrCode: null },
+            });
+
+            // Clean up credentials to prevent future "Failed to upload pre-keys" or loops
+            try {
+              await prisma.whatsAppCredential.deleteMany({
+                where: { sessionId },
+              });
+            } catch (e) {
+              console.error("[WhatsApp] Error cleanup credentials:", e);
+            }
+
+            gateway
+              .getIO()
+              ?.emit("session.status", { sessionId, status: "DISCONNECTED" });
+          }
+        }
       });
-      if (msgEvent.type !== "notify" || !msgEvent.messages) {
-        console.log("⚠️ [DEBUG] Skipping - type:", msgEvent.type);
-        return;
-      }
-      for (const msg of msgEvent.messages) {
-        console.log("📨 [DEBUG] Processing message:", {
-          id: msg.key?.id,
-          from: msg.key?.remoteJid,
+
+      // 🔍 DEBUG: Monitor ALL Baileys events
+      console.log(
+        "🎯 [DEBUG] Registering event listeners for session:",
+        sessionId
+      );
+      const monitorEvents = [
+        "messages.upsert",
+        "messages.update",
+        "message-receipt.update",
+      ];
+      monitorEvents.forEach((eventName) => {
+        sock.ev.on(eventName as any, (data: any) => {
+          console.log(`🔥 [DEBUG] Event "${eventName}" received`);
         });
-        await this.handleIncomingMessage(msg, sessionId);
-      }
-    });
+      });
+
+      sock.ev.on("messages.upsert", async (msgEvent) => {
+        console.log("🔔 [DEBUG] messages.upsert EVENT FIRED", {
+          type: msgEvent.type,
+          count: msgEvent.messages?.length,
+        });
+        if (msgEvent.type !== "notify" || !msgEvent.messages) {
+          console.log("⚠️ [DEBUG] Skipping - type:", msgEvent.type);
+          return;
+        }
+        for (const msg of msgEvent.messages) {
+          console.log("📨 [DEBUG] Processing message:", {
+            id: msg.key?.id,
+            from: msg.key?.remoteJid,
+          });
+          await this.handleIncomingMessage(msg, sessionId);
+        }
+      });
+    } catch (error) {
+      console.error(
+        `[WhatsApp] Failed to initialize session ${sessionId}:`,
+        error
+      );
+      // Mark as disconnected so user knows to retry
+      await prisma.whatsAppSession.update({
+        where: { sessionId },
+        data: { status: "DISCONNECTED" },
+      });
+      // Allow retry trigger from UI
+      const { gateway } = await import("@/gateways/socketGateway");
+      gateway.getIO()?.emit("session.status", {
+        sessionId,
+        status: "DISCONNECTED",
+        error: String(error),
+      });
+    }
   }
 
   /** Process an incoming WhatsApp message */
@@ -377,21 +413,29 @@ export class WhatsAppService extends EventEmitter {
   public async sendMessage(
     to: string,
     text: string,
-    channelId?: string,
-    media?: {
-      url: string;
-      type: "image" | "video" | "document" | "audio";
-      caption?: string;
-      mimetype?: string;
-      isVoiceNote?: boolean;
+    options: {
+      companyId: string;
+      channelId?: string;
+      media?: {
+        url: string;
+        type: "image" | "video" | "document" | "audio";
+        caption?: string;
+        mimetype?: string;
+        isVoiceNote?: boolean;
+      };
     }
   ): Promise<boolean> {
+    const { companyId, channelId, media } = options;
+
     // Find appropriate socket
     let sock: WASocket | undefined;
     let usedSessionId: string | undefined;
+
+    // 1. Try to find session by channelId (if provided and valid)
     if (channelId) {
       const session = await prisma.whatsAppSession.findFirst({
         where: {
+          companyId,
           OR: [{ phone: channelId }, { sessionId: channelId }],
           status: "CONNECTED",
         },
@@ -401,15 +445,28 @@ export class WhatsAppService extends EventEmitter {
         usedSessionId = session.sessionId;
       }
     }
+
+    // 2. Fallback: Use ANY connected session for this company
     if (!sock) {
-      for (const [id, s] of this.sessions.entries()) {
-        sock = s;
-        usedSessionId = id;
-        break;
+      const sessions = await prisma.whatsAppSession.findMany({
+        where: { companyId, status: "CONNECTED" },
+      });
+
+      for (const s of sessions) {
+        if (this.sessions.has(s.sessionId)) {
+          sock = this.sessions.get(s.sessionId);
+          usedSessionId = s.sessionId;
+          break; // Use first available
+        }
       }
     }
+
     if (!sock || !usedSessionId) {
-      console.error("[WhatsApp] No active sessions available!");
+      console.error(
+        `[WhatsApp] No active sessions available for company ${companyId}`
+      );
+      // Try to re-initialize sessions for this company as a Hail Mary
+      await this.initializeAllSessions();
       return false;
     }
 

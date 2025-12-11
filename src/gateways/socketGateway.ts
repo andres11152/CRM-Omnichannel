@@ -4,17 +4,64 @@ import { Logger } from "@/utils/logger";
 /**
  * SOCKET GATEWAY SINGLETON (Clustered)
  * This class manages the Real-Time connection layer.
- * 🛡️ SENIOR FIX: Running in MEMORY MODE to ensure reliable connectivity in local dev.
+ * 🛡️ PRODUCTION READY: Auto-detects Redis for scaling, falls back to Memory for local dev.
  */
 class WebSocketGateway {
   private io: Server | null = null;
+  private redisPubClient: any = null;
+  private redisSubClient: any = null;
+  private isRedisActive: boolean = false;
 
   /**
    * Initialize the Socket.io Server
    */
   public async initialize(httpServer: any) {
-    Logger.info("[Gateway] Initializing Socket.io (Memory Mode)");
+    Logger.info("[Gateway] Initializing Socket.io...");
 
+    let adapter: any = undefined;
+
+    // 1. Setup Redis Adapter if REDIS_URL is present
+    if (process.env.REDIS_URL) {
+      try {
+        Logger.info("[Gateway] REDIS_URL detected, attempting connection...");
+        const { createClient } = await import("redis");
+        const { createAdapter } = await import("@socket.io/redis-adapter");
+
+        const pubClient = createClient({ url: process.env.REDIS_URL });
+        const subClient = pubClient.duplicate();
+
+        pubClient.on("error", (err) =>
+          Logger.error("[Gateway] Redis Pub Error:", err)
+        );
+        subClient.on("error", (err) =>
+          Logger.error("[Gateway] Redis Sub Error:", err)
+        );
+
+        await Promise.all([pubClient.connect(), subClient.connect()]);
+
+        this.redisPubClient = pubClient;
+        this.redisSubClient = subClient;
+        this.isRedisActive = true;
+
+        adapter = createAdapter(pubClient, subClient);
+        Logger.info(
+          "[Gateway] ✅ Redis Adapter Configured & Connected (Production Mode)"
+        );
+      } catch (error) {
+        Logger.error(
+          "[Gateway] ❌ Failed to connect to Redis. Falling back to Memory Mode.",
+          error
+        );
+        this.isRedisActive = false;
+        // Proceed without adapter (Memory Mode)
+      }
+    } else {
+      Logger.warn(
+        "[Gateway] REDIS_URL not found. Running in Memory Mode (Local Dev)."
+      );
+    }
+
+    // 2. Create IO Server
     this.io = new Server(httpServer, {
       cors: {
         origin: [
@@ -30,9 +77,14 @@ class WebSocketGateway {
       transports: ["polling", "websocket"],
       pingTimeout: 20000,
       pingInterval: 25000,
+      adapter: adapter, // Will be undefined in Memory Mode (default)
     });
 
-    Logger.info("[Gateway] WebSocket Server Initialized (Memory Mode)");
+    Logger.info(
+      `[Gateway] WebSocket Server Initialized (${
+        this.isRedisActive ? "REDIS" : "MEMORY"
+      } Mode)`
+    );
     this.handleConnections();
   }
 
@@ -43,7 +95,7 @@ class WebSocketGateway {
       const agentId = socket.handshake.query.agentId as string;
 
       if (agentId) {
-        Logger.info(`[Gateway] Agent connected: ${agentId}`);
+        // Logger.info(`[Gateway] Agent connected: ${agentId}`); // Reduce noise
         socket.join(`agent:${agentId}`);
 
         socket.on("agent_status_change", (status: string) => {
@@ -58,11 +110,11 @@ class WebSocketGateway {
         });
 
         socket.on("disconnect", () => {
-          Logger.info(`[Gateway] Agent disconnected: ${agentId}`);
+          // Logger.info(`[Gateway] Agent disconnected: ${agentId}`);
         });
       } else {
         // Anonymous connection (logging but allowing)
-        Logger.warn(`[Gateway] Anonymous connection: ${socket.id}`);
+        // Logger.warn(`[Gateway] Anonymous connection: ${socket.id}`);
         socket.on("disconnect", () => {
           // Silent disconnect
         });
@@ -75,7 +127,7 @@ class WebSocketGateway {
   }
 
   public isRedisConnected(): boolean {
-    return false; // Valid in Memory Mode
+    return this.isRedisActive;
   }
 }
 

@@ -109,7 +109,9 @@ export const createConversation = catchAsync(
 
       // Send to WhatsApp
       try {
-        await whatsappService.sendMessage(cleanPhone, message);
+        await whatsappService.sendMessage(cleanPhone, message, {
+          companyId: req.companyId,
+        });
       } catch (e) {
         console.error("Failed to send initial WhatsApp message", e);
       }
@@ -333,12 +335,10 @@ export const replyToConversation = catchAsync(
     if (shouldSendToWhatsapp && customer && customer.email) {
       const phone = customer.email.split("@")[0];
       try {
-        await whatsappService.sendMessage(
-          phone,
-          messageContent,
-          conversation.channelId || undefined,
-          attachment
-        );
+        await whatsappService.sendMessage(phone, messageContent, {
+          companyId: req.companyId,
+          media: attachment,
+        });
       } catch (error) {
         console.error("[Reply] Failed to send WhatsApp message:", error);
       }

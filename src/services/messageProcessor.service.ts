@@ -274,13 +274,35 @@ export const messageProcessor = {
       attachment: (newMessage.metadata as any)?.attachment || undefined,
     };
 
-    io?.to(conversation.id).emit("message", socketPayload);
-    io?.to(customerUser.id).emit("message", socketPayload);
-    if (conversation.channelId) {
-      io?.to(conversation.channelId).emit("message", socketPayload);
+    console.log(`[MessageProcessor] 🚀 Emitting message in real-time:`, {
+      conversationId: conversation.id,
+      messageId: newMessage.id,
+      direction: newMessage.direction,
+      ioExists: !!io,
+      rooms: [
+        conversation.id,
+        customerUser.id,
+        conversation.channelId,
+        companyId,
+      ],
+    });
+
+    if (!io) {
+      console.error(
+        "[MessageProcessor] ❌ Socket.IO not initialized! Messages will not be delivered in real-time."
+      );
+    } else {
+      io.to(conversation.id).emit("message", socketPayload);
+      io.to(customerUser.id).emit("message", socketPayload);
+      if (conversation.channelId) {
+        io.to(conversation.channelId).emit("message", socketPayload);
+      }
+      io.to(companyId).emit("message", socketPayload);
+      io.emit("message", socketPayload); // Global broadcast as fallback
+      console.log(
+        `[MessageProcessor] ✅ Message emitted to all rooms successfully`
+      );
     }
-    io?.to(companyId).emit("message", socketPayload);
-    io?.emit("message", socketPayload);
 
     // --- SYNC QUEUE ID FALLBACK ---
     if (!conversation.queueId) {
@@ -372,9 +394,14 @@ export const messageProcessor = {
 
         if (aiResponse) {
           // --- KILL SWITCH: Block known error loops ---
-          if (aiResponse.includes("Lo siento, no puedo procesar tu solicitud") || aiResponse.includes("Error interno")) {
-             console.warn(`[AI] BLOCKED RECURSIVE ERROR MESSAGE: "${aiResponse}"`);
-             return;
+          if (
+            aiResponse.includes("Lo siento, no puedo procesar tu solicitud") ||
+            aiResponse.includes("Error interno")
+          ) {
+            console.warn(
+              `[AI] BLOCKED RECURSIVE ERROR MESSAGE: "${aiResponse}"`
+            );
+            return;
           }
 
           // We need to send the message back via WhatsApp Service
@@ -383,9 +410,9 @@ export const messageProcessor = {
           const { whatsappService } = await import("./whatsapp.service");
 
           await whatsappService.sendMessage(
-            "unknown", // RemoteJid is tricky here unless queried from conversation participants
+            channelId || "unknown",
             aiResponse,
-            channelId
+            { companyId }
           );
 
           // Create Bot User & Message

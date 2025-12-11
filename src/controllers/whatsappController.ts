@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { whatsappService } from "@/services/whatsapp.service";
+import { planLimitsService } from "@/services/planLimitsService";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { prisma } from "@/config/prisma";
@@ -14,21 +15,18 @@ export const createSession = catchAsync(
     }
 
     // 1. Check Plan Limits
-    const company = await prisma.company.findUnique({
-      where: { id: req.companyId },
-      include: { plan: true, whatsappSessions: true },
-    });
+    const canCreate = await planLimitsService.canCreateResource(
+      req.companyId,
+      "whatsapp_sessions"
+    );
 
-    if (!company) {
-      throw new AppError("Company not found", 404);
-    }
-
-    const maxSessions = (company.plan?.config as any)?.max_whatsapp || 1; // Default to 1 if no plan or config
-    const currentSessions = company.whatsappSessions.length;
-
-    if (maxSessions !== -1 && currentSessions >= maxSessions) {
+    if (!canCreate) {
+      const { limit } = await planLimitsService.checkPlanLimit(
+        req.companyId,
+        "whatsapp_sessions"
+      );
       throw new AppError(
-        `Plan limit reached. Your plan allows ${maxSessions} WhatsApp connection(s). Please upgrade to add more.`,
+        `Plan limit reached. Your plan allows ${limit} WhatsApp connection(s). Please upgrade to add more.`,
         403
       );
     }
@@ -44,7 +42,7 @@ export const createSession = catchAsync(
 
 export const getSessions = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    console.log("[WhatsAppController] getSessions called");
+    // console.log("[WhatsAppController] getSessions called"); // Too verbose - fires every second
     if (!req.companyId) {
       console.error("[WhatsAppController] No company ID in request");
       throw new Error("No company ID");

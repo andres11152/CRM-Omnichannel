@@ -42,7 +42,20 @@ export async function getPlanLimits(
         return null;
       }
 
-      return company.plan.config as unknown as PlanLimits;
+      const config = (company.plan.config as any) || {};
+
+      // Normalize config keys to match interface
+      return {
+        max_users: config.max_users ?? 1,
+        max_whatsapp_sessions:
+          config.max_whatsapp_connections ??
+          config.max_whatsapp_sessions ??
+          config.max_whatsapp ??
+          1,
+        max_queues: config.max_queues ?? 1,
+        max_tickets_per_month: config.max_tickets_per_month ?? -1, // Default unlimited for now
+        max_ai_assistants: config.max_ai_assistants ?? 1,
+      } as PlanLimits;
     },
     300 // 5 minutes TTL (plans rarely change)
   );

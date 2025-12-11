@@ -5,91 +5,143 @@ import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 
 export const contactController = {
-  createContact: catchAsync(async (req: Request, res: Response) => {
+  // Create or Update a contact based on ID, phone or email
+  upsertContact: catchAsync(async (req: Request, res: Response) => {
     const companyId = (req as any).companyId;
-    const { name, email, phone, avatarUrl, tags, notes, customFields } =
+    let { id, name, email, phone, avatarUrl, tags, notes, customFields } =
       req.body;
 
-    if (!name) {
-      throw new AppError("Name is required", HTTP_STATUS.BAD_REQUEST);
+    // 1. CLEANUP & VALIDATION
+    // Force clean tech emails
+    if (
+      email &&
+      (email.includes("@whatsapp.user") || email.includes("@c.us"))
+    ) {
+      email = null;
+    }
+    // Treat empty as null
+    if (email === "") email = null;
+    if (phone === "") phone = null;
+
+    if (!phone && !email && !id) {
+      throw new AppError(
+        "Phone, Email or ID is required",
+        HTTP_STATUS.BAD_REQUEST
+      );
     }
 
-    // Use raw query to avoid Prisma schema sync issues
-    const id = `c-${Date.now()}`;
-    const now = new Date().toISOString();
+    // Attempt to find existing contact
+    let existingContact = null;
 
-    // Simple raw insert for robustness
-    await prisma.$executeRaw`
-      INSERT INTO "contacts" ("id", "companyId", "name", "email", "phone", "avatarUrl", "tags", "notes", "customFields", "createdAt", "updatedAt")
-      VALUES (${id}, ${companyId}, ${name}, ${email || null}, ${
-      phone || null
-    }, ${avatarUrl || null}, ${tags || []}, ${notes || null}, ${
-      customFields ? JSON.stringify(customFields) : null
-    }::jsonb, ${now}::timestamp, ${now}::timestamp)
-    `;
+    // A. Try by ID (most reliable for edits)
+    if (id) {
+      existingContact = await prisma.contact.findFirst({
+        where: { id, companyId },
+      });
+    }
 
-    const newContact = {
-      id,
-      companyId,
-      name,
-      email,
-      phone,
-      avatarUrl,
-      tags: tags || [],
-      notes,
-      customFields,
-      createdAt: now,
-      updatedAt: now,
-    };
+    // B. Try by Phone/Email if no ID or ID not found
+    if (!existingContact) {
+      existingContact = await prisma.contact.findFirst({
+        where: {
+          companyId,
+          OR: [phone ? { phone } : {}, email ? { email } : {}].filter(
+            (c) => Object.keys(c).length > 0
+          ),
+        },
+      });
+    }
 
-    res.status(HTTP_STATUS.CREATED).json(newContact);
+    let contact;
+    if (existingContact) {
+      // Update existing
+      contact = await prisma.contact.update({
+        where: { id: existingContact.id },
+        data: {
+          name: name || undefined,
+          // Explicitly allow null to clear bad emails
+          email: email,
+          phone: phone || undefined,
+          tags: tags || undefined,
+          notes: notes || undefined,
+          customFields: customFields || undefined,
+          avatarUrl: avatarUrl || undefined,
+        },
+      });
+    } else {
+      // Create new
+      contact = await prisma.contact.create({
+        data: {
+          companyId,
+          name: name || "New Contact",
+          email, // Can be null
+          phone,
+          tags: tags || [],
+          notes,
+          customFields: customFields || {},
+          avatarUrl,
+        },
+      });
+    }
+
+    res.status(HTTP_STATUS.OK).json(contact);
   }),
 
   getContacts: catchAsync(async (req: Request, res: Response) => {
     const companyId = (req as any).companyId;
+    const { search } = req.query;
 
-    console.log(
-      "[ContactController] Fetching contacts for company:",
-      companyId
-    );
+    const where: any = { companyId };
+    if (search) {
+      where.OR = [
+        { name: { contains: String(search), mode: "insensitive" } },
+        { phone: { contains: String(search) } },
+        { email: { contains: String(search), mode: "insensitive" } },
+      ];
+    }
 
-    // Raw query
-    const contacts = await prisma.$queryRaw`
-      SELECT * FROM "contacts" WHERE "companyId" = ${companyId} ORDER BY "createdAt" DESC
-    `;
-
-    console.log("[ContactController] Found contacts:", contacts);
-    console.log(
-      "[ContactController] Number of contacts:",
-      Array.isArray(contacts) ? contacts.length : 0
-    );
+    const contacts = await prisma.contact.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
 
     res.status(HTTP_STATUS.OK).json(contacts);
   }),
 
-  updateContact: catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
+  // Get specific contact by ID or Phone (for chat integration)
+  getContactDetail: catchAsync(async (req: Request, res: Response) => {
     const companyId = (req as any).companyId;
-    const { name, email, phone, tags, notes } = req.body;
+    const { id, phone } = req.query;
 
-    const now = new Date().toISOString();
+    if (!id && !phone) throw new AppError("ID or Phone required", 400);
 
-    await prisma.$executeRaw`
-        UPDATE "contacts" 
-        SET "name" = ${name}, "email" = ${email}, "phone" = ${phone}, "tags" = ${tags}, "notes" = ${notes}, "updatedAt" = ${now}::timestamp
-        WHERE "id" = ${id} AND "companyId" = ${companyId}
-    `;
+    let contact;
+    if (id) {
+      contact = await prisma.contact.findFirst({
+        where: { id: String(id), companyId },
+      });
+    } else if (phone) {
+      contact = await prisma.contact.findFirst({
+        where: { phone: String(phone), companyId },
+      });
+    }
 
-    res.status(HTTP_STATUS.OK).json({ status: "success" });
+    if (!contact) {
+      // Return empty/null instead of error to allow frontend to show "Create Contact" form
+      return res.status(200).json(null);
+    }
+
+    res.status(HTTP_STATUS.OK).json(contact);
   }),
 
   deleteContact: catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
     const companyId = (req as any).companyId;
 
-    await prisma.$executeRaw`
-        DELETE FROM "contacts" WHERE "id" = ${id} AND "companyId" = ${companyId}
-    `;
+    await prisma.contact.deleteMany({
+      where: { id, companyId },
+    });
 
     res.status(HTTP_STATUS.OK).json({ status: "success" });
   }),
@@ -183,20 +235,36 @@ export const contactController = {
         type: "ACTIVITY",
         id: a.id,
         date: a.createdAt,
-        title: `${a.type}: ${a.subject}`,
+        title: `${
+          a.type === "CALL"
+            ? "Llamada"
+            : a.type === "MEETING"
+            ? "Reunión"
+            : "Tarea"
+        }: ${a.subject}`,
         subtitle: a.description || "",
         icon: a.type === "CALL" ? "📞" : "📅",
         color: "yellow",
       })),
-      ...tickets.map((t) => ({
-        type: "TICKET",
-        id: t.id,
-        date: t.createdAt,
-        title: `Ticket #${t.id.substring(0, 5)}: ${t.subject}`,
-        subtitle: t.status,
-        icon: "🎫",
-        color: "red",
-      })),
+      ...tickets.map((t) => {
+        const statusText =
+          t.status === "OPEN"
+            ? "Abierto"
+            : t.status === "RESOLVED"
+            ? "Resuelto"
+            : t.status === "CLOSED"
+            ? "Cerrado"
+            : t.status;
+        return {
+          type: "TICKET",
+          id: t.id,
+          date: t.createdAt,
+          title: `Ticket #${t.ticketNumber}: ${t.subject}`,
+          subtitle: statusText,
+          icon: "🎫",
+          color: "red",
+        };
+      }),
       ...conversations.map((c) => ({
         type: "CONVERSATION",
         id: c.id,

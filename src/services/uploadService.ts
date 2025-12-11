@@ -253,6 +253,7 @@ export const validateFileType = (
       "audio/ogg",
       "audio/mp4",
       "audio/x-m4a",
+      "audio/webm", // CRITICAL for Voice Notes recorded in browser
     ];
     if (allowedAudioTypes.includes(mimeType)) {
       return { isValid: true, type: "AUDIO" };

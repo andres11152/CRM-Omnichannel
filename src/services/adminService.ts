@@ -60,6 +60,10 @@ export const adminService = {
       subscriptionEndsAt?: Date | string | null;
     }
   ) {
+    console.log(
+      `[AdminService] Updating company ${companyId}. Data:`,
+      JSON.stringify(data)
+    );
     const updated = await prisma.company.update({
       where: { id: companyId },
       data: {
@@ -67,7 +71,7 @@ export const adminService = {
         slug: data.slug,
         planId: data.planId,
         status: data.status,
-        subscriptionEndsAt: data.subscriptionEndsAt,
+        subscriptionEndsAt: data.subscriptionEndsAt ? new Date(data.subscriptionEndsAt) : data.subscriptionEndsAt,
         isActive: data.status
           ? data.status === "ACTIVE" || data.status === "TRIAL"
           : undefined,

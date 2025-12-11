@@ -63,14 +63,14 @@ export const protect = catchAsync(
     let decoded: JwtPayload;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
-      console.log("[Auth] Token decoded:", decoded);
+      // console.log("[Auth] Token decoded:", decoded); // Too verbose
     } catch (error) {
       console.error("[Auth] Token verification failed:", error);
       return next(new AppError("Token inválido o expirado", 401));
     }
 
     // 3) Verificar si el usuario aún existe
-    console.log("[Auth] Verifying user existence for ID:", decoded.id);
+    // console.log("[Auth] Verifying user existence for ID:", decoded.id); // Too verbose
     if (!prisma) {
       console.error("[Auth] CRITICAL: Prisma client is undefined!");
       return next(new AppError("Database connection error", 500));

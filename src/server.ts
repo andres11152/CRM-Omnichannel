@@ -191,11 +191,14 @@ if (require.main === module) {
       // Inicializa los servicios antes de escuchar
       try {
         // Don't await WhatsApp init to avoid blocking server startup
-        whatsappService.initialize().then(() => {
-             Logger.info("[Server] WhatsApp service initialized successfully");
-        }).catch(e => {
-             Logger.error(`[Server] WhatsApp init error: ${e}`);
-        });
+        whatsappService
+          .initialize()
+          .then(() => {
+            Logger.info("[Server] WhatsApp service initialized successfully");
+          })
+          .catch((e) => {
+            Logger.error(`[Server] WhatsApp init error: ${e}`);
+          });
       } catch (e) {
         Logger.error(`[Server] WhatsApp init start error: ${e}`);
       }
@@ -207,8 +210,8 @@ if (require.main === module) {
       // Just importing it is enough as it's a singleton instantiated on import
       Logger.info("[Server] Workflow Engine initialized");
 
-      httpServer.listen(Number(PORT), "0.0.0.0", () => {
-        console.log(
+      httpServer.listen(Number(PORT), () => {
+        Logger.info(
           `✅ ¡ÉXITO! CRM SaaS Backend corriendo en el puerto ${PORT}`
         );
       });

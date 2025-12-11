@@ -45,10 +45,20 @@ export const createTicket = catchAsync(
       return next(new AppError("Company ID or User ID missing", 400));
     }
 
+    // Get next ticket number for this company
+    const lastTicket = await prisma.ticket.findFirst({
+      where: { companyId },
+      orderBy: { ticketNumber: "desc" },
+      select: { ticketNumber: true },
+    });
+
+    const nextTicketNumber = (lastTicket?.ticketNumber || 0) + 1;
+
     const newTicket = await prisma.ticket.create({
       data: {
         subject,
         description,
+        ticketNumber: nextTicketNumber,
         priority: priority || "MEDIUM",
         status: status || "OPEN",
         companyId,

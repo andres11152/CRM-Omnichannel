@@ -15,7 +15,13 @@ export const getDashboardStats = catchAsync(
     const [recentTickets, recentUsers, companyData, userCount] =
       await Promise.all([
         prisma.ticket.findMany({
-          where: { companyId },
+          where: {
+            companyId,
+            // Only show tickets with valid conversations
+            conversation: {
+              isNot: null,
+            },
+          },
           orderBy: { updatedAt: "desc" },
           take: 5,
           include: { createdBy: true, assignedTo: true },
@@ -83,6 +89,10 @@ export const getDashboardStats = catchAsync(
         where: {
           companyId,
           status: { notIn: ["RESOLVED", "CLOSED"] },
+          // Only count tickets with valid conversations
+          conversation: {
+            isNot: null,
+          },
         },
       }),
       prisma.message.count({

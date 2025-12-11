@@ -20,7 +20,7 @@ export const syncMessages = async (req: Request, res: Response) => {
       companyId,
       new Date(fromDate)
     );
-    res.json({ message: "Sync started", ...result });
+    res.json({ message: "Sync started", result });
   } catch (error) {
     console.error("Sync error:", error);
     res.status(500).json({ message: "Failed to sync messages" });

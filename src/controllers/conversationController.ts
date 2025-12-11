@@ -18,18 +18,24 @@ export const createConversation = catchAsync(
       throw new AppError("Not authorized", 401);
     }
 
-    // 1. Check if user exists (Customer)
-    const email = `${phone}@c.us`; // WhatsApp ID format convention
-    let customer = await prisma.user.findUnique({
-      where: { email },
+    // Clean phone number (remove non-digits)
+    const cleanPhone = phone.replace(/[^\d]/g, "");
+
+    // 1. Check if user exists (Customer) - use same format as WhatsApp service
+    const email = `${cleanPhone}@whatsapp.user`;
+    let customer = await prisma.user.findFirst({
+      where: {
+        email,
+        companyId: req.companyId,
+      },
     });
 
     if (!customer) {
-      // Create new customer user
+      // Create new customer user with proper name
       customer = await prisma.user.create({
         data: {
           email,
-          name: name || phone,
+          name: name || cleanPhone, // Use provided name or phone as fallback
           password: "$2a$10$DummyHashForCustomerUser123456", // Dummy hash
           role: "USER",
           companyId: req.companyId,
@@ -41,7 +47,7 @@ export const createConversation = catchAsync(
     let conversation = await prisma.conversation.findFirst({
       where: {
         companyId: req.companyId,
-        channelId: phone,
+        channelId: cleanPhone,
         status: "OPEN",
       },
       include: { participants: true, messages: true },
@@ -49,10 +55,6 @@ export const createConversation = catchAsync(
 
     if (conversation) {
       // Conversation already exists, return it
-      console.log(
-        `[CreateConv] Found existing conversation for ${phone}:`,
-        conversation.id
-      );
 
       res.status(200).json({
         status: "success",
@@ -65,19 +67,23 @@ export const createConversation = catchAsync(
     conversation = await prisma.conversation.create({
       data: {
         companyId: req.companyId,
-        subject: name || phone,
+        subject: name || cleanPhone,
         status: "OPEN",
         participants: {
           connect: [{ id: customer.id }, { id: req.user.id }],
         },
-        channelId: phone,
+        channelId: cleanPhone,
       },
       include: { participants: true, messages: true },
     });
 
     // 4. Create Ticket (only for new conversations)
+    const ticketCount = await prisma.ticket.count({
+      where: { companyId: req.companyId },
+    });
     await prisma.ticket.create({
       data: {
+        ticketNumber: ticketCount + 1,
         subject: `Chat con ${name || phone}`,
         description: message || "Chat iniciado manualmente por agente",
         status: "OPEN",
@@ -86,7 +92,6 @@ export const createConversation = catchAsync(
         createdById: customer.id,
         assignedToId: req.user.id,
         conversationId: conversation.id,
-        queueId: null,
       },
     });
 
@@ -104,7 +109,7 @@ export const createConversation = catchAsync(
 
       // Send to WhatsApp
       try {
-        await whatsappService.sendMessage(phone, message);
+        await whatsappService.sendMessage(cleanPhone, message);
       } catch (e) {
         console.error("Failed to send initial WhatsApp message", e);
       }
@@ -214,9 +219,18 @@ export const getConversation = catchAsync(
       throw new AppError("No conversation found with that ID", 404);
     }
 
+    // Transform messages to extract attachment from metadata for frontend compatibility
+    const conversationWithTransformed = {
+      ...conversation,
+      messages: conversation.messages.map((msg: any) => ({
+        ...msg,
+        attachment: msg.metadata?.attachment || undefined,
+      })),
+    };
+
     res.status(200).json({
       status: "success",
-      data: { conversation },
+      data: { conversation: conversationWithTransformed },
     });
   }
 );
@@ -227,16 +241,6 @@ export const getConversation = catchAsync(
 
 export const replyToConversation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    console.log("============================================");
-    console.log("[Reply] FUNCTION CALLED - replyToConversation");
-    console.log("[Reply] Request Body:", JSON.stringify(req.body, null, 2));
-    console.log("[Reply] Conversation ID:", req.params.id);
-    console.log("============================================");
-
-    console.log("[Reply] Debug Auth:", {
-      user: req.user,
-      companyId: req.companyId,
-    });
     if (!req.user || !req.companyId) {
       throw new AppError("Not authorized", 401);
     }
@@ -263,10 +267,7 @@ export const replyToConversation = catchAsync(
           });
         } else {
           // Create new conversation for this ticket
-          console.log(
-            "[Reply] Creating new conversation for ticket",
-            ticket.id
-          );
+
           conversation = await prisma.conversation.create({
             data: {
               companyId: ticket.companyId,
@@ -300,36 +301,11 @@ export const replyToConversation = catchAsync(
     // Find the customer (USER role)
     const customer = conversation.participants.find((p) => p.role === "USER");
 
-    console.log(
-      "[Reply] Participants:",
-      JSON.stringify(
-        conversation.participants.map((p) => ({
-          id: p.id,
-          role: p.role,
-          email: p.email,
-        })),
-        null,
-        2
-      )
-    );
-
     if (!customer || !customer.email) {
-      // Fallback or error? For now, log warning.
       console.warn(
         `[Reply] No customer found for conversation ${conversation.id}`
       );
-    } else {
-      console.log("[Reply] Found Customer:", customer.email);
     }
-
-    // Log before creating DB record
-    console.log("[Reply] Creating message record in DB", {
-      content,
-      channel,
-      conversationId: conversation.id,
-      senderId: req.user.id,
-      hasAttachment: !!attachment,
-    });
 
     const messageContent =
       content ||
@@ -349,30 +325,13 @@ export const replyToConversation = catchAsync(
         metadata: attachment ? { attachment } : undefined,
       },
     });
-    console.log("[Reply] Message record created with id", message.id);
 
     // Send to WhatsApp if channel matches
     const shouldSendToWhatsapp =
       channel === "WHATSAPP" && !!customer && !!customer.email;
-    console.log(
-      `[Reply] Decision to send to WA: ${shouldSendToWhatsapp} (Channel: ${channel}, HasCustomer: ${!!customer}, HasEmail: ${!!customer?.email})`
-    );
 
     if (shouldSendToWhatsapp && customer && customer.email) {
-      // Extract phone number from customer email (format: PHONENUMBER@whatsapp.user)
-      // channelId contains the sessionId, NOT the phone number
       const phone = customer.email.split("@")[0];
-      console.log(
-        `[Reply] Attempting to send WA message (Service method call next). Phone: ${phone}`
-      );
-      console.log(
-        "[Reply] Attachment Payload:",
-        JSON.stringify(attachment, null, 2)
-      );
-      console.log(
-        "[Reply] Attachment Debug:",
-        JSON.stringify(attachment, null, 2)
-      );
       try {
         await whatsappService.sendMessage(
           phone,
@@ -382,28 +341,16 @@ export const replyToConversation = catchAsync(
         );
       } catch (error) {
         console.error("[Reply] Failed to send WhatsApp message:", error);
-        // Do not throw, so the message is still saved in DB and returned to UI
       }
-    } else {
-      console.warn("[Reply] SKIPPING WhatsApp send. Reason:", {
-        channelMatch: channel === "WHATSAPP",
-        hasCustomer: !!customer,
-        hasEmail: !!customer?.email,
-      });
     }
 
     // Emit Socket Event for Outgoing Message
     const io = gateway.getIO();
 
     if (!io) {
-      console.error(
-        "[Reply] CRITICAL: Socket.io instance is NULL! Gateway not initialized properly."
-      );
+      console.error("❌ [Reply] CRITICAL: Socket.io instance is NULL!");
     } else {
-      console.log(
-        "[Reply] Socket.io instance is active, client count:",
-        (io as any).engine?.clientsCount || "unknown"
-      );
+      console.log("✅ [Reply] Socket.io is ready, emitting message...");
     }
 
     const socketPayload = {
@@ -411,33 +358,23 @@ export const replyToConversation = catchAsync(
       ticketId: conversation.id,
       senderName: req.user.name || "Agente",
       senderType: "AGENT",
-      attachment: attachment, // Explicitly send attachment to frontend
+      attachment: attachment,
     };
 
-    // Create a safe log payload avoiding huge base64 strings
-    const safeLogPayload = { ...socketPayload };
-    if (
-      safeLogPayload.attachment &&
-      safeLogPayload.attachment.url &&
-      safeLogPayload.attachment.url.length > 100
-    ) {
-      safeLogPayload.attachment = {
-        ...safeLogPayload.attachment,
-        url: safeLogPayload.attachment.url.substring(0, 50) + "...",
-      };
-    }
+    console.log("🚀 [Reply] Emitting socket 'message' event:", {
+      ticketId: socketPayload.ticketId,
+      content: socketPayload.content.substring(0, 50),
+      hasAttachment: !!socketPayload.attachment,
+    });
 
-    console.log(
-      "[Reply] Emitting socket message:",
-      JSON.stringify(safeLogPayload, null, 2)
-    );
     io?.emit("message", socketPayload);
-    console.log("[Reply] Socket message emitted successfully");
+    console.log("✅ [Reply] Socket message emitted successfully");
 
     res.status(201).json({
       status: "success",
       data: { message: socketPayload },
     });
+    console.log("✅ [Reply] HTTP Response sent to frontend");
   }
 );
 

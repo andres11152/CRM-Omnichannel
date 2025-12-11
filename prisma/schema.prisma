@@ -377,14 +377,15 @@ enum TicketPriority {
 }
 
 model Ticket {
-  id          String         @id @default(cuid())
-  subject     String
-  description String
-  status      TicketStatus   @default(OPEN)
-  priority    TicketPriority @default(MEDIUM)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  resolvedAt  DateTime?
+  id           String         @id @default(cuid())
+  ticketNumber Int            // Sequential number per company (e.g. 1, 2, 3...)
+  subject      String
+  description  String
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  resolvedAt   DateTime?
 
   companyId    String
   company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)

@@ -24,6 +24,10 @@ interface IncomingMessagePayload {
  * Centralizes logic for processing incoming messages from ANY source
  * (Baileys, WhatsApp Cloud API, External Webhooks)
  */
+
+// Lock to prevent creating multiple conversations for same number simultaneously
+const conversationLocks = new Map<string, Promise<any>>();
+
 export const messageProcessor = {
   async process(payload: IncomingMessagePayload) {
     const {
@@ -38,6 +42,43 @@ export const messageProcessor = {
 
     const phone = remoteJid.split("@")[0];
 
+    // Create a lock key to prevent race conditions
+    const lockKey = `${companyId}-${phone}`;
+
+    // If there's already a process running for this phone, wait for it
+    if (conversationLocks.has(lockKey)) {
+      await conversationLocks.get(lockKey);
+    }
+
+    // Create a new lock promise
+    const lockPromise = this._processMessage(payload);
+    conversationLocks.set(lockKey, lockPromise);
+
+    try {
+      return await lockPromise;
+    } finally {
+      // Release lock after 2 seconds
+      setTimeout(() => conversationLocks.delete(lockKey), 2000);
+    }
+  },
+
+  async _processMessage(payload: IncomingMessagePayload) {
+    const {
+      companyId,
+      sessionId,
+      remoteJid,
+      text,
+      isOutbound,
+      contactName, // This comes from msg.pushName
+      senderName,
+    } = payload;
+
+    const phone = remoteJid.split("@")[0];
+
+    // Determine best display name: pushName > phone number
+    const displayName =
+      contactName && contactName !== "Unknown Contact" ? contactName : phone;
+
     // 1. Find or Create CUSTOMER User
     let customerUser = await prisma.user.findFirst({
       where: {
@@ -47,15 +88,34 @@ export const messageProcessor = {
     });
 
     if (!customerUser) {
+      // Create new contact with best available name
       customerUser = await prisma.user.create({
         data: {
           email: `${phone}@whatsapp.user`,
-          name: contactName || phone, // Use pushName if available
+          name: displayName,
           password: await bcrypt.hash("123456", 10),
           role: "USER",
           companyId: companyId,
         },
       });
+    } else {
+      // Update name if we got a better name (real name vs phone number)
+      const currentNameIsGeneric =
+        !customerUser.name ||
+        customerUser.name === phone ||
+        customerUser.name === "Unknown Contact";
+
+      const newNameIsBetter =
+        contactName &&
+        contactName !== "Unknown Contact" &&
+        contactName !== phone;
+
+      if (currentNameIsGeneric && newNameIsBetter) {
+        customerUser = await prisma.user.update({
+          where: { id: customerUser.id },
+          data: { name: contactName },
+        });
+      }
     }
 
     // Determine Sender ID
@@ -87,60 +147,39 @@ export const messageProcessor = {
     }
 
     // Find or Create Conversation
-    console.log(
-      `[MessageProcessor] Looking for conversation: phone=${phone}, customerId=${customerUser.id}`
-    );
+    const cleanPhone = phone.replace(/[^\d]/g, "");
 
-    // 1. Try to find an OPEN conversation for this contact by participant OR phone
     let conversation = await prisma.conversation.findFirst({
       where: {
         companyId: companyId,
         status: "OPEN",
         OR: [
           { participants: { some: { id: customerUser.id } } },
-          { channelId: phone }, // Also search by phone number
+          { channelId: { contains: cleanPhone } }, // Search by phone (flexible)
+          { channelId: phone }, // Exact match as backup
         ],
       },
     });
 
-    if (conversation) {
-      console.log(
-        `[MessageProcessor] Found OPEN conversation: ${conversation.id}, channelId=${conversation.channelId}`
-      );
-    }
-
-    // 2. If no OPEN conversation, check for ANY conversation (legacy fallback)
     if (!conversation) {
-      console.log(
-        `[MessageProcessor] No OPEN conversation found, searching for ANY conversation...`
-      );
       conversation = await prisma.conversation.findFirst({
         where: {
           companyId: companyId,
           OR: [
             { participants: { some: { id: customerUser.id } } },
-            { channelId: phone }, // Also search by phone number
+            { channelId: { contains: cleanPhone } },
+            { channelId: phone },
           ],
         },
         orderBy: { updatedAt: "desc" },
       });
 
-      if (conversation) {
-        console.log(
-          `[MessageProcessor] Found closed conversation: ${conversation.id}, status=${conversation.status}, reopening...`
-        );
-      }
-
-      // Reuse if found and reopen it
       if (conversation && conversation.status !== "OPEN") {
         await prisma.conversation.update({
           where: { id: conversation.id },
           data: { status: "OPEN" },
         });
         conversation.status = "OPEN";
-        console.log(
-          `[MessageProcessor] Conversation ${conversation.id} reopened`
-        );
       }
     }
 
@@ -180,11 +219,7 @@ export const messageProcessor = {
             }))
             .sort((a, b) => a.count - b.count);
 
-          // 4. Assign to the least busy
           assignedToId = agentCounts[0].id;
-          console.log(
-            `[Round Robin] Assigned to ${assignedToId} (Load: ${agentCounts[0].count})`
-          );
         }
       } catch (err) {
         console.error(
@@ -193,24 +228,17 @@ export const messageProcessor = {
         );
       }
 
-      console.log(
-        `[MessageProcessor] Creating NEW conversation for phone=${phone}, customer=${customerUser.email}`
-      );
       conversation = await prisma.conversation.create({
         data: {
           companyId: companyId,
-          channelId: phone, // Use phone number, NOT sessionId
+          channelId: phone,
           subject: `WhatsApp: ${dbSenderName}`,
           status: "OPEN",
-          assignedToId, // Assign the agent
+          assignedToId,
           participants: { connect: [{ id: customerUser.id }] },
         },
       });
-      console.log(
-        `[MessageProcessor] Created conversation ${conversation.id} with channelId=${conversation.channelId}`
-      );
     } else {
-      // Ensure channelId is set to phone number (not sessionId)
       if (
         !conversation.channelId ||
         conversation.channelId.startsWith("session_")
@@ -235,32 +263,24 @@ export const messageProcessor = {
       },
     });
 
-    // Emit Socket Event
     const io = gateway.getIO();
-
-    if (!io) {
-      console.error("[MessageProcessor] CRITICAL: Socket.io instance is NULL!");
-    } else {
-      console.log(
-        `[MessageProcessor] Socket.io active. Clients: ${
-          (io as any).engine?.clientsCount || 0
-        }`
-      );
-    }
 
     const socketPayload = {
       ...newMessage,
       ticketId: conversation.id, // Frontend uses ticketId alias
       senderName: dbSenderName,
       senderType: dbSenderType,
+      // Extract attachment from metadata for frontend compatibility
+      attachment: (newMessage.metadata as any)?.attachment || undefined,
     };
 
-    console.log(
-      `[MessageProcessor] Emitting message to company: ${companyId}, ticketId: ${conversation.id}`
-    );
-    io?.to(companyId).emit("message", socketPayload); // Broadcast to company room
-    io?.emit("message", socketPayload); // Legacy global broadcast (for safety)
-    console.log(`[MessageProcessor] Message emitted successfully`);
+    io?.to(conversation.id).emit("message", socketPayload);
+    io?.to(customerUser.id).emit("message", socketPayload);
+    if (conversation.channelId) {
+      io?.to(conversation.channelId).emit("message", socketPayload);
+    }
+    io?.to(companyId).emit("message", socketPayload);
+    io?.emit("message", socketPayload);
 
     // --- SYNC QUEUE ID FALLBACK ---
     if (!conversation.queueId) {

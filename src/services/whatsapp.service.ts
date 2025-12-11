@@ -562,18 +562,24 @@ export class WhatsAppService extends EventEmitter {
 
   // ----- Session management helpers (delete, status, list) -----
   public async deleteSession(sessionId: string) {
-    const sock = this.sessions.get(sessionId);
-    if (sock) {
-      try {
-        await sock.logout();
-      } catch (e) {
-        console.warn(`[WhatsApp] Logout error (ignored)`, e);
+    try {
+      const sock = this.sessions.get(sessionId);
+      if (sock) {
+        try {
+          await sock.logout();
+        } catch (e) {
+          console.warn(`[WhatsApp] Logout error (ignored)`, e);
+        }
+        this.sessions.delete(sessionId);
       }
-      this.sessions.delete(sessionId);
+      this.qrCodes?.delete?.(sessionId);
+
+      await prisma.whatsAppCredential.deleteMany({ where: { sessionId } });
+      await prisma.whatsAppSession.delete({ where: { sessionId } });
+    } catch (error) {
+      console.error(`[WhatsApp] Error deleting session ${sessionId}:`, error);
+      // Don't throw - prevent server crashes
     }
-    this.qrCodes?.delete?.(sessionId);
-    await prisma.whatsAppCredential.deleteMany({ where: { sessionId } });
-    await prisma.whatsAppSession.delete({ where: { sessionId } });
   }
 
   public async getSessionStatus(sessionId: string) {

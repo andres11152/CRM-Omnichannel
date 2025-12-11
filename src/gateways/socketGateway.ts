@@ -21,6 +21,8 @@ class WebSocketGateway {
           "http://localhost:5173",
           "http://localhost:5174",
           "http://localhost:3000",
+          "https://reply.software",
+          "https://www.reply.software",
         ],
         methods: ["GET", "POST"],
         credentials: true,

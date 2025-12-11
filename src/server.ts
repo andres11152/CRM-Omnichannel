@@ -50,6 +50,7 @@ import aiRouter from "@/routes/aiRoutes";
 import quickReplyRouter from "@/routes/quickReplyRoutes";
 import usageRouter from "@/routes/usageRoutes";
 import googleAuthRouter from "@/routes/googleAuthRoutes";
+import companyRouter from "@/routes/companyRoutes";
 import { workflowEngine } from "@/services/workflowEngine";
 
 // HANDLE UNCAUGHT EXCEPTIONS (Sync Errors)
@@ -144,6 +145,7 @@ import { webhookLimiter } from "@/middleware/rateLimitMiddleware";
 import analyticsRouter from "@/routes/analyticsRoutes";
 
 app.use("/api/usage", apiLimiter, protect, usageRouter);
+app.use("/api/company", apiLimiter, protect, companyRouter);
 app.use("/api/analytics", apiLimiter, protect, analyticsRouter);
 
 // Public Webhooks (using specialized limiter)

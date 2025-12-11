@@ -139,9 +139,29 @@ export const contactController = {
     const { id } = req.params;
     const companyId = (req as any).companyId;
 
-    await prisma.contact.deleteMany({
+    // 1. Unlink Deals (preserve the deal, just remove contact association)
+    await prisma.deal.updateMany({
+      where: { contactId: id, companyId },
+      data: { contactId: null },
+    });
+
+    // 2. Unlink Activities (preserve activity, history remains)
+    await prisma.activity.updateMany({
+      where: { contactId: id, companyId },
+      data: { contactId: null },
+    });
+
+    // 3. Delete Contact
+    const result = await prisma.contact.deleteMany({
       where: { id, companyId },
     });
+
+    if (result.count === 0) {
+      throw new AppError(
+        "Contact not found or already deleted",
+        HTTP_STATUS.NOT_FOUND
+      );
+    }
 
     res.status(HTTP_STATUS.OK).json({ status: "success" });
   }),

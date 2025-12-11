@@ -70,7 +70,12 @@ export async function getCurrentUsage(companyId: string): Promise<UsageStats> {
 
   const [users, whatsappSessions, queues, ticketsThisMonth, aiAssistants] =
     await Promise.all([
-      prisma.user.count({ where: { companyId } }),
+      prisma.user.count({
+        where: {
+          companyId,
+          role: { in: ["AGENT", "ADMIN", "MASTER"] },
+        },
+      }),
       prisma.whatsAppSession.count({ where: { companyId } }),
       prisma.queue.count({ where: { companyId } }),
       prisma.ticket.count({

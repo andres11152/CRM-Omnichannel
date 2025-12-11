@@ -120,7 +120,9 @@ export const createActivity = catchAsync(
         assignedToId:
           assignedToId && assignedToId !== "" ? assignedToId : undefined,
         participants:
-          participantIds && Array.isArray(participantIds) && participantIds.length > 0
+          participantIds &&
+          Array.isArray(participantIds) &&
+          participantIds.length > 0
             ? { connect: participantIds.map((id: string) => ({ id })) }
             : undefined,
       },
@@ -191,52 +193,38 @@ export const updateActivity = catchAsync(
 
     // Handle participants update
     if (updateData.participantIds) {
-       updateData.participants = {
-          set: updateData.participantIds.map((pid: string) => ({ id: pid }))
-       };
-       delete updateData.participantIds;
+      updateData.participants = {
+        set: updateData.participantIds.map((pid: string) => ({ id: pid })),
+      };
+      delete updateData.participantIds;
     }
 
     const updatedActivity = await prisma.activity.update({
       where: { id },
       data: updateData,
-      include: { participants: true } // Return updated participants
+      include: { participants: true }, // Return updated participants
     });
 
-    // Update Google Calendar event if it exists and relevant fields changed
-    if (
-      activity.googleEventId &&
-      (updateData.subject ||
-        updateData.description ||
-        updateData.dueDate ||
-        updateData.assignedToId ||
-        updateData.participants)
-    ) {
-      console.log(
-        "[ActivityController] Attempting to update Google Calendar event...",
-        {
-          eventId: activity.googleEventId,
-          changedFields: Object.keys(updateData),
-        }
-      );
+    // Update Google Calendar event logic
+    const shouldSyncWithGoogle =
+      updatedActivity.type === "MEETING" && updatedActivity.dueDate;
 
+    if (shouldSyncWithGoogle) {
       const targetUserId =
         updatedActivity.assignedToId || updatedActivity.createdById;
-      
       const activityData = {
         subject: updatedActivity.subject,
         description: updatedActivity.description || undefined,
-        dueDate: updatedActivity.dueDate
-          ? new Date(updatedActivity.dueDate)
-          : new Date(),
+        dueDate: new Date(updatedActivity.dueDate!),
         assignedToId: updatedActivity.assignedToId || undefined,
-        participantIds: updatedActivity.participants.map(p => p.id),
+        participantIds: updatedActivity.participants.map((p) => p.id),
       };
 
-      if (updatedActivity.dueDate) {
+      if (activity.googleEventId) {
+        // CASE A: Exists in Google -> Update it
         console.log(
-          "[ActivityController] Calling GoogleCalendarService.updateMeetingEvent",
-          { targetUserId, eventId: activity.googleEventId }
+          "[ActivityController] Updating existing Google Calendar event...",
+          { eventId: activity.googleEventId }
         );
         await GoogleCalendarService.updateMeetingEvent(
           targetUserId,
@@ -244,19 +232,33 @@ export const updateActivity = catchAsync(
           activityData
         );
       } else {
+        // CASE B: Missing in Google (Legacy/Error) -> Create it (Self-Healing)
         console.log(
-          "[ActivityController] Skipping Google Update: No Due Date on updated activity"
+          "[ActivityController] Meeting has no Google ID. Creating new event in Google Calendar (Self-Healing)..."
         );
-      }
-    } else {
-      console.log(
-        "[ActivityController] Skipping Google Update: No Google Event ID or no relevant changes",
-        {
-          hasGoogleEventId: !!activity.googleEventId,
-          googleEventId: activity.googleEventId,
-          updateDataKeys: Object.keys(updateData),
+        try {
+          const newEventId = await GoogleCalendarService.createMeetingEvent(
+            targetUserId,
+            activityData
+          );
+
+          if (newEventId) {
+            await prisma.activity.update({
+              where: { id: updatedActivity.id },
+              data: { googleEventId: newEventId },
+            });
+            console.log(
+              "[ActivityController] ✅ Linked legacy meeting to new Google Event:",
+              newEventId
+            );
+          }
+        } catch (err) {
+          console.error(
+            "[ActivityController] Failed to self-heal Google Event:",
+            err
+          );
         }
-      );
+      }
     }
 
     res.status(200).json({

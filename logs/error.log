@@ -607,3 +607,213 @@
 {"level":"error","message":"[Gateway] Redis Pub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T19:40:03.402Z"}
 {"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T19:43:38.244Z"}
 {"level":"error","message":"[Gateway] Redis Sub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T19:54:41.475Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T20:15:59.468Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T20:17:00.300Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T20:22:18.178Z"}
+{"clientVersion":"5.22.0","code":"P2025","level":"error","meta":{"cause":"Record to update not found.","modelName":"WhatsAppSession"},"name":"PrismaClientKnownRequestError","timestamp":"2025-12-11T20:22:18.179Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T20:26:09.418Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T20:27:21.101Z"}
+{"level":"error","message":"[Gateway] Redis Sub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T20:31:21.139Z"}
+{"level":"error","message":"[Gateway] Redis Sub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T20:39:57.722Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T20:41:13.703Z"}
+{"level":"error","message":"[Gateway] Redis Sub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T20:45:22.524Z"}
+{"level":"error","message":"[Gateway] Redis Sub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T20:49:17.366Z"}
+{"level":"error","message":"[Gateway] Redis Sub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T20:54:13.284Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T21:06:29.851Z"}
+{"level":"error","message":"[Gateway] Redis Pub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:11:55.268Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:11:55.273Z"}
+{"level":"error","timestamp":"2025-12-11T21:11:55.274Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T21:19:06.294Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:22:54.270Z"}
+{"level":"error","message":"[Gateway] Redis Pub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:28:26.672Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:28:26.685Z"}
+{"level":"error","timestamp":"2025-12-11T21:28:26.688Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T21:31:23.106Z"}
+{"level":"error","message":"[Gateway] Redis Sub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:36:05.028Z"}
+{"level":"error","message":"[Gateway] Redis Sub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:42:52.515Z"}
+{"level":"error","message":"[Gateway] Redis Pub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:47:58.001Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.009Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.010Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.012Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.013Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.014Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.015Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.016Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.017Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.018Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.020Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.021Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.022Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.022Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.023Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.023Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.024Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.024Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.025Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.026Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.027Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.072Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.073Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.073Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.074Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.074Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.078Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.079Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.079Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.080Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.080Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.081Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.082Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.082Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.083Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.083Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.084Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.085Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.106Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.107Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.107Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.119Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.119Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.120Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.120Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.121Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.121Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.122Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.122Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.123Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.123Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.124Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.124Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.124Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.125Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.125Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.127Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.132Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.133Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.133Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.134Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.135Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.136Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.136Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.137Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.137Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.138Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.139Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.140Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.141Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.142Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.142Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.143Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.144Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.144Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.144Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.145Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.145Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.146Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.146Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.151Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.152Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.152Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.152Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.153Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.153Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.154Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.154Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.155Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.155Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.156Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.156Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.157Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.157Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.158Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.158Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.159Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.159Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.160Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.160Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.161Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.162Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.162Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.163Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.170Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.171Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.172Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.173Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.173Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.174Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.174Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.175Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.176Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.176Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.177Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.177Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.178Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.180Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.181Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.181Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.182Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.182Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.182Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.183Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.183Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.184Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.184Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.185Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.185Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.186Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.186Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.187Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.187Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.188Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.188Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.189Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.189Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.194Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.195Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.195Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.196Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.196Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.197Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.197Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.198Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.198Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.199Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.199Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.200Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.200Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.201Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.201Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.202Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.202Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.203Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.203Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.204Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.204Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.205Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.205Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.206Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.206Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.207Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.207Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.208Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.208Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.209Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:47:58.209Z"}
+{"level":"error","timestamp":"2025-12-11T21:47:58.210Z"}
+{"level":"error","message":"[Gateway] Redis Pub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:50:15.963Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:50:15.965Z"}
+{"level":"error","timestamp":"2025-12-11T21:50:15.965Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:53:27.800Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T21:55:55.638Z"}
+{"level":"error","message":"[Gateway] Redis Pub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:56:36.297Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:56:36.299Z"}
+{"level":"error","timestamp":"2025-12-11T21:56:36.300Z"}
+{"level":"error","message":"[Gateway] Redis Pub Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T21:58:22.064Z"}
+{"level":"error","message":"UNHANDLED REJECTION! 💥 Shutting down...","timestamp":"2025-12-11T21:58:22.067Z"}
+{"level":"error","timestamp":"2025-12-11T21:58:22.068Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T21:58:53.464Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T21:59:34.192Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T22:12:09.647Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Connection timeout","stack":"Error: Connection timeout\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:177:124)\n    at Object.onceWrapper (node:events:638:28)\n    at TLSSocket.emit (node:events:524:28)\n    at TLSSocket.Socket._onTimeout (node:net:595:8)\n    at listOnTimeout (node:internal/timers:581:17)\n    at processTimers (node:internal/timers:519:7)","timestamp":"2025-12-11T22:21:18.663Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T22:41:46.211Z"}
+{"level":"error","message":"[Cache] Redis Client Error: Socket closed unexpectedly","stack":"Error: Socket closed unexpectedly\n    at TLSSocket.<anonymous> (C:\\Users\\Andres Betancourt\\Desktop\\Desarrollos Personales\\Reply\\backend\\node_modules\\@redis\\client\\dist\\lib\\client\\socket.js:194:118)\n    at Object.onceWrapper (node:events:639:26)\n    at TLSSocket.emit (node:events:536:35)\n    at node:net:343:12\n    at TCP.done (node:_tls_wrap:648:7)\n    at TCP.callbackTrampoline (node:internal/async_hooks:130:17)","timestamp":"2025-12-11T22:43:18.289Z"}

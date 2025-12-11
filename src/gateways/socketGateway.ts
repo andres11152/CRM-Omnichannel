@@ -21,7 +21,7 @@ class WebSocketGateway {
     let adapter: any = undefined;
 
     // 1. Setup Redis Adapter if REDIS_URL is present
-    if (process.env.REDIS_URL) {
+    if (false && process.env.REDIS_URL) {
       try {
         Logger.info("[Gateway] REDIS_URL detected, attempting connection...");
         const { createClient } = await import("redis");
@@ -37,7 +37,23 @@ class WebSocketGateway {
           Logger.error("[Gateway] Redis Sub Error:", err)
         );
 
-        await Promise.all([pubClient.connect(), subClient.connect()]);
+        // Timeout wrapper for Redis connection
+        const connectWithTimeout = (client: any) => {
+          return Promise.race([
+            client.connect(),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error("Redis connection timeout")),
+                3000
+              )
+            ),
+          ]);
+        };
+
+        await Promise.all([
+          connectWithTimeout(pubClient),
+          connectWithTimeout(subClient),
+        ]);
 
         this.redisPubClient = pubClient;
         this.redisSubClient = subClient;

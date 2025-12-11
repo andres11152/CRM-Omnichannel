@@ -87,12 +87,21 @@ export const messageProcessor = {
 
     // Determine best display name
     // ✅ CRITICAL: For OUTBOUND messages, contactName is YOUR name (Skycode Agency)
-    // We need the CUSTOMER's name, so use phone number instead
-    const displayName = isOutbound
-      ? phone // For outbound: always use phone number (we don't have customer's name)
-      : contactName && contactName !== "Unknown Contact"
-      ? contactName
-      : phone;
+    // We need the CUSTOMER's name.
+    let displayName = phone;
+
+    if (!isOutbound && contactName && contactName !== "Unknown Contact") {
+      displayName = contactName;
+    } else if (isOutbound) {
+      // Try to find real name from CRM Contacts
+      const crmContact = await prisma.contact.findFirst({
+        where: {
+          companyId,
+          OR: [{ phone: phone }, { phone: `+${phone}` }],
+        },
+      });
+      if (crmContact) displayName = crmContact.name;
+    }
 
     // 1. Find or Create CUSTOMER User
     let customerUser = await prisma.user.findFirst({
@@ -127,7 +136,10 @@ export const messageProcessor = {
         customerUser.name === phone ||
         customerUser.name === "Unknown Contact";
 
+      // CRITICAL FIX: Only update name if INBOUND.
+      // If outbound, contactName is sender (Agent), so ignore it.
       const newNameIsBetter =
+        !isOutbound && // <--- Added Check
         contactName &&
         contactName !== "Unknown Contact" &&
         contactName !== phone;
@@ -137,6 +149,41 @@ export const messageProcessor = {
           where: { id: customerUser.id },
           data: { name: contactName },
         });
+      }
+
+      // --- SELF-HEALING LOGIC FOR "SKYCODE AGENCY" BUG ---
+      // If we are sending a message (Outbound) and the customer user matches OUR name (contactName),
+      // or literally matches "Skycode Agency", it means the data is corrupted.
+      // We must revert it to the phone number or CRM name instantly.
+      if (
+        isOutbound &&
+        (customerUser.name === contactName ||
+          customerUser.name === "Skycode Agency")
+      ) {
+        console.log(
+          `🚑 [MessageProcessor] CORRUPTION DETECTED: Customer has Agent Name (${customerUser.name}). Fixing...`
+        );
+
+        let realName = phone;
+        // Try to find real name from CRM Contacts
+        const crmContact = await prisma.contact.findFirst({
+          where: {
+            companyId,
+            OR: [{ phone: phone }, { phone: `+${phone}` }],
+          },
+        });
+
+        if (crmContact) {
+          realName = crmContact.name;
+        }
+
+        customerUser = await prisma.user.update({
+          where: { id: customerUser.id },
+          data: { name: realName },
+        });
+        console.log(
+          `✅ [MessageProcessor] FIXED: Renamed customer to ${realName}`
+        );
       }
     }
 
@@ -149,26 +196,38 @@ export const messageProcessor = {
       console.log(
         `📤 [MessageProcessor] OUTBOUND: Message sent FROM your mobile TO contact: ${phone}`
       );
-      // If message is from ME (Mobile), assign to a "Mobile Agent" user
-      const mobileEmail = `mobile_${companyId}@reply.com`;
-      let mobileUser = await prisma.user.findUnique({
-        where: { email: mobileEmail },
+
+      // SENIOR FIX: Do NOT create fake agents. Attribute to the Company Admin.
+      // We assume the owner/admin is the one using the phone linked to the instance.
+      const adminUser = await prisma.user.findFirst({
+        where: {
+          companyId,
+          role: { in: ["ADMIN", "MASTER"] }, // Find the main admin
+        },
+        orderBy: { createdAt: "asc" }, // Usually the first user created is the owner
       });
 
-      if (!mobileUser) {
-        mobileUser = await prisma.user.create({
-          data: {
-            email: mobileEmail,
-            name: senderName || "Desde Celular",
-            password: await bcrypt.hash("123456", 10),
-            role: "AGENT",
-            companyId: companyId,
-          },
-        });
+      if (adminUser) {
+        dbSenderId = adminUser.id;
+        dbSenderName = adminUser.name || "Admin";
+        dbSenderType = adminUser.role;
+      } else {
+        // Fallback only if NO admin exists (should be impossible in valid system)
+        console.warn(
+          `⚠️ [MessageProcessor] No Admin found for company ${companyId}. Attributing to system.`
+        );
+        // We intentionally don't create a user here to avoid pollution.
+        // If strict FK is enforced, better to fail than pollute,
+        // but we'll use the customer ID temporarily if absolutely needed to save the message,
+        // though ideally we should have an admin.
+
+        // Let's use the first user found of any role as failsafe
+        const anyUser = await prisma.user.findFirst({ where: { companyId } });
+        if (anyUser) {
+          dbSenderId = anyUser.id;
+          dbSenderName = anyUser.name || "User";
+        }
       }
-      dbSenderId = mobileUser.id;
-      dbSenderName = mobileUser.name || "Agente";
-      dbSenderType = "AGENT";
     } else {
       console.log(
         `📥 [MessageProcessor] INBOUND: Message received FROM contact: ${dbSenderName}`

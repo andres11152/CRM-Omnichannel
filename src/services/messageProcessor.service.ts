@@ -371,6 +371,12 @@ export const messageProcessor = {
         );
 
         if (aiResponse) {
+          // --- KILL SWITCH: Block known error loops ---
+          if (aiResponse.includes("Lo siento, no puedo procesar tu solicitud") || aiResponse.includes("Error interno")) {
+             console.warn(`[AI] BLOCKED RECURSIVE ERROR MESSAGE: "${aiResponse}"`);
+             return;
+          }
+
           // We need to send the message back via WhatsApp Service
           // This is a circle dependency risk if we import whatsappService directly
           // Solution: Use dynamic import or pass a callback. For now dynamic import.

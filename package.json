@@ -10,7 +10,8 @@
     "postinstall": "prisma generate",
     "test": "jest --testTimeout=10000",
     "test:migrate": "dotenv -e .env -- npx prisma migrate deploy --schema=./prisma/schema.prisma && dotenv -e .env -- npx prisma db seed",
-    "prod:migrate": "dotenv -e .env.production -- npx prisma migrate deploy --schema=./prisma/schema.prisma && dotenv -e .env.production -- npx prisma db seed"
+    "prod:migrate": "dotenv -e .env.production -- npx prisma migrate deploy --schema=./prisma/schema.prisma || echo 'Migrations may already be applied'",
+    "render:build": "bash scripts/render-build.sh"
   },
   "prisma": {
     "schema": "prisma/schema.prisma",

@@ -138,45 +138,83 @@ router.route("/:id").delete(async (req: any, res) => {
     const companyId = req.companyId;
     const userRole = req.user?.role;
 
+    console.log(
+      `[DELETE Ticket] Attempting to delete ticket: ${id} by user role: ${userRole}`
+    );
+
     // Only ADMIN users can delete tickets
     if (userRole !== "ADMIN") {
+      console.warn(
+        `[DELETE Ticket] ❌ Unauthorized: User role ${userRole} cannot delete`
+      );
       return res.status(403).json({
         message: "Solo administradores pueden eliminar tickets",
       });
     }
 
-    // Verify conversation belongs to user's company
+    // Verify conversation exists and belongs to user's company
     const conversation = await prisma.conversation.findUnique({
       where: { id },
+      include: {
+        messages: { select: { id: true } },
+        participants: { select: { id: true, name: true } },
+      },
     });
 
     if (!conversation) {
+      console.warn(`[DELETE Ticket] ❌ Ticket not found: ${id}`);
       return res.status(404).json({ message: "Ticket no encontrado" });
     }
 
     if (conversation.companyId !== companyId) {
+      console.warn(
+        `[DELETE Ticket] ❌ Company mismatch: ${conversation.companyId} !== ${companyId}`
+      );
       return res.status(403).json({
         message: "No tienes permiso para eliminar este ticket",
       });
     }
 
-    // Delete associated messages first (cascade delete)
-    await prisma.message.deleteMany({
+    console.log(
+      `[DELETE Ticket] 🗑️  Deleting conversation: ${id} (${conversation.messages.length} messages)`
+    );
+
+    // Delete associated messages first (explicit cascade)
+    const deletedMessages = await prisma.message.deleteMany({
       where: { conversationId: id },
     });
+
+    console.log(`[DELETE Ticket] ✅ Deleted ${deletedMessages.count} messages`);
 
     // Delete the conversation
     await prisma.conversation.delete({
       where: { id },
     });
 
+    console.log(`[DELETE Ticket] ✅ Conversation deleted successfully`);
+
+    // ✅ Emit socket event to notify all clients
+    const { gateway } = await import("@/gateways/socketGateway");
+    const io = gateway.getIO();
+
+    if (io) {
+      // Notify the company that this ticket was deleted
+      io.to(companyId).emit("ticket_deleted", { ticketId: id });
+      console.log(
+        `[DELETE Ticket] 📡 Emitted ticket_deleted event to company: ${companyId}`
+      );
+    }
+
     res.status(200).json({
       status: "success",
       message: "Ticket eliminado correctamente",
     });
-  } catch (error) {
-    console.error("Error deleting ticket:", error);
-    res.status(500).json({ message: "Error al eliminar ticket" });
+  } catch (error: any) {
+    console.error("[DELETE Ticket] ❌ Error:", error);
+    res.status(500).json({
+      message: "Error al eliminar ticket",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 });
 

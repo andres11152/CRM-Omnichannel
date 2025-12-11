@@ -293,6 +293,18 @@ export class WhatsAppService extends EventEmitter {
 
       console.log("📥 [DEBUG] Processing message from:", remoteJid);
 
+      // ✅ CRITICAL: Detect if message is from YOU (sent from your mobile)
+      // In WhatsApp, msg.key.fromMe = true means YOU sent it
+      const isOutbound = msg.key?.fromMe === true;
+      console.log("📊 [DEBUG] Message direction:", {
+        fromMe: msg.key?.fromMe,
+        isOutbound,
+        remoteJid,
+        explanation: isOutbound
+          ? "YOU sent this message from your mobile"
+          : "Contact sent you this message",
+      });
+
       // Extract basic content
       let text = "";
       let mediaType = "";
@@ -397,7 +409,7 @@ export class WhatsAppService extends EventEmitter {
         sessionId,
         remoteJid: actualPhone,
         text,
-        isOutbound: false,
+        isOutbound, // ✅ Now correctly detects if YOU sent this from your phone
         contactName: msg.pushName || undefined,
         senderName: undefined,
         hasMedia: !!mediaInfo,

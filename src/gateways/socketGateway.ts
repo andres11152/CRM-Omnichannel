@@ -106,6 +106,17 @@ class WebSocketGateway {
         socket.on("join", (room: string) => {
           if (room) {
             socket.join(room);
+            Logger.info(`[Gateway] Socket ${socket.id} joined room: ${room}`);
+          }
+        });
+
+        // ✅ Handle join_room event for conversation-specific rooms
+        socket.on("join_room", (data: { conversationId: string }) => {
+          if (data.conversationId) {
+            socket.join(data.conversationId);
+            Logger.info(
+              `[Gateway] 🚪 Socket ${socket.id} joined conversation: ${data.conversationId}`
+            );
           }
         });
 

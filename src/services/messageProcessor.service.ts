@@ -75,9 +75,24 @@ export const messageProcessor = {
 
     const phone = remoteJid.split("@")[0];
 
-    // Determine best display name: pushName > phone number
-    const displayName =
-      contactName && contactName !== "Unknown Contact" ? contactName : phone;
+    console.log(`🔍 [MessageProcessor] PROCESSING MESSAGE:`, {
+      remoteJid,
+      phone,
+      isOutbound,
+      companyId,
+      explanation: isOutbound
+        ? `Outbound: YOU sent message TO ${phone}`
+        : `Inbound: ${phone} sent message TO you`,
+    });
+
+    // Determine best display name
+    // ✅ CRITICAL: For OUTBOUND messages, contactName is YOUR name (Skycode Agency)
+    // We need the CUSTOMER's name, so use phone number instead
+    const displayName = isOutbound
+      ? phone // For outbound: always use phone number (we don't have customer's name)
+      : contactName && contactName !== "Unknown Contact"
+      ? contactName
+      : phone;
 
     // 1. Find or Create CUSTOMER User
     let customerUser = await prisma.user.findFirst({
@@ -89,6 +104,13 @@ export const messageProcessor = {
 
     if (!customerUser) {
       // Create new contact with best available name
+      console.log(`🆕 [MessageProcessor] Creating NEW customer user:`, {
+        phone,
+        email: `${phone}@whatsapp.user`,
+        displayName,
+        isOutbound,
+      });
+
       customerUser = await prisma.user.create({
         data: {
           email: `${phone}@whatsapp.user`,
@@ -124,6 +146,9 @@ export const messageProcessor = {
     let dbSenderType = "USER";
 
     if (isOutbound) {
+      console.log(
+        `📤 [MessageProcessor] OUTBOUND: Message sent FROM your mobile TO contact: ${phone}`
+      );
       // If message is from ME (Mobile), assign to a "Mobile Agent" user
       const mobileEmail = `mobile_${companyId}@reply.com`;
       let mobileUser = await prisma.user.findUnique({
@@ -144,43 +169,63 @@ export const messageProcessor = {
       dbSenderId = mobileUser.id;
       dbSenderName = mobileUser.name || "Agente";
       dbSenderType = "AGENT";
+    } else {
+      console.log(
+        `📥 [MessageProcessor] INBOUND: Message received FROM contact: ${dbSenderName}`
+      );
     }
 
     // Find or Create Conversation
+    // ✅ CRITICAL: Use channelId (phone number) as UNIQUE identifier
+    // One phone = One conversation (WhatsApp Web behavior)
     const cleanPhone = phone.replace(/[^\d]/g, "");
 
+    console.log(
+      `🔍 [MessageProcessor] Looking for conversation with channelId: ${phone}`
+    );
+
+    // 1. Try exact match first (most common)
     let conversation = await prisma.conversation.findFirst({
       where: {
         companyId: companyId,
-        status: "OPEN",
-        OR: [
-          { participants: { some: { id: customerUser.id } } },
-          { channelId: { contains: cleanPhone } }, // Search by phone (flexible)
-          { channelId: phone }, // Exact match as backup
-        ],
+        channelId: phone, // Exact match: 573123456789@s.whatsapp.net
       },
+      orderBy: { updatedAt: "desc" },
     });
 
+    // 2. Fallback: Try with clean phone number only (for legacy conversations)
     if (!conversation) {
       conversation = await prisma.conversation.findFirst({
         where: {
           companyId: companyId,
-          OR: [
-            { participants: { some: { id: customerUser.id } } },
-            { channelId: { contains: cleanPhone } },
-            { channelId: phone },
-          ],
+          channelId: cleanPhone, // Just digits: 573123456789
         },
         orderBy: { updatedAt: "desc" },
       });
 
-      if (conversation && conversation.status !== "OPEN") {
+      // Update legacy conversation to use full JID format
+      if (conversation) {
+        console.log(
+          `⚠️ [MessageProcessor] Found legacy conversation, updating channelId`
+        );
         await prisma.conversation.update({
           where: { id: conversation.id },
-          data: { status: "OPEN" },
+          data: { channelId: phone },
         });
-        conversation.status = "OPEN";
+        conversation.channelId = phone;
       }
+    }
+
+    // 3. Re-open closed conversations if found
+    if (conversation && conversation.status !== "OPEN") {
+      console.log(
+        `🔓 [MessageProcessor] Re-opening closed conversation: ${conversation.id}`
+      );
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { status: "OPEN" },
+      });
+      conversation.status = "OPEN";
     }
 
     if (!conversation) {
@@ -228,29 +273,59 @@ export const messageProcessor = {
         );
       }
 
+      // ✅ CRITICAL: Subject must ALWAYS be the CUSTOMER name, not the sender
+      // This ensures the chat appears with the correct contact in the list
+      const conversationSubject = `WhatsApp: ${
+        customerUser.name || displayName
+      }`;
+
       conversation = await prisma.conversation.create({
         data: {
           companyId: companyId,
           channelId: phone,
-          subject: `WhatsApp: ${dbSenderName}`,
+          subject: conversationSubject,
           status: "OPEN",
           assignedToId,
           participants: { connect: [{ id: customerUser.id }] },
         },
       });
+      console.log(
+        `✅ [MessageProcessor] Created NEW conversation: ${conversation.id}`
+      );
     } else {
+      // ✅ Ensure customer is a participant (might not be if conversation was created differently)
+      const participants = await prisma.conversation.findUnique({
+        where: { id: conversation.id },
+        include: { participants: { where: { id: customerUser.id } } },
+      });
+
+      if (
+        !participants?.participants ||
+        participants.participants.length === 0
+      ) {
+        console.log(
+          `⚠️ [MessageProcessor] Adding customer as participant to conversation`
+        );
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { participants: { connect: [{ id: customerUser.id }] } },
+        });
+      }
+
+      // Update channelId if it's legacy format
       if (
         !conversation.channelId ||
         conversation.channelId.startsWith("session_")
       ) {
+        console.log(`⚠️ [MessageProcessor] Updating legacy channelId format`);
         await prisma.conversation.update({
           where: { id: conversation.id },
           data: { channelId: phone },
         });
         conversation.channelId = phone;
       }
+      console.log(`Found existing conversation: ${conversation.id}`);
     }
-
     // Create Message
     const newMessage = await prisma.message.create({
       data: {
@@ -292,15 +367,12 @@ export const messageProcessor = {
         "[MessageProcessor] ❌ Socket.IO not initialized! Messages will not be delivered in real-time."
       );
     } else {
+      // ✅ ONLY emit to conversation room to prevent duplicates
+      // Clients join this room by conversation ID
       io.to(conversation.id).emit("message", socketPayload);
-      io.to(customerUser.id).emit("message", socketPayload);
-      if (conversation.channelId) {
-        io.to(conversation.channelId).emit("message", socketPayload);
-      }
-      io.to(companyId).emit("message", socketPayload);
-      io.emit("message", socketPayload); // Global broadcast as fallback
+
       console.log(
-        `[MessageProcessor] ✅ Message emitted to all rooms successfully`
+        `[MessageProcessor] ✅ Message emitted to conversation room: ${conversation.id}`
       );
     }
 

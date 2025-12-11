@@ -27,11 +27,24 @@ export const securityMiddleware = (app: Express) => {
 
   const allowedOrigins = [...defaultOrigins, ...envOrigins];
 
+  console.log("[CORS] Allowed origins:", allowedOrigins);
+
   // Configure CORS middleware
   app.use(
     cors({
-      origin: true, // Allow any origin (mirrors request origin) for LAN/Dev access
-      credentials: true, // Allow cookies to be sent
+      origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+
+        // Check if origin is in allowed list
+        if (allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          console.warn(`[CORS] Blocked origin: ${origin}`);
+          callback(null, true); // Still allow but log warning (change to false to block)
+        }
+      },
+      credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: [
         "Origin",

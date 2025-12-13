@@ -16,11 +16,9 @@ export const syncMessages = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "fromDate is required" });
     }
 
-    const result = await whatsappService.syncMessages(
-      companyId,
-      new Date(fromDate)
-    );
-    res.json({ message: "Sync started", result });
+    // Deprecated functionality
+    // const result = await whatsappService.syncMessages(companyId, new Date(fromDate));
+    res.json({ message: "Sync functionality is deprecated" });
   } catch (error) {
     console.error("Sync error:", error);
     res.status(500).json({ message: "Failed to sync messages" });

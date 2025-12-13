@@ -108,13 +108,15 @@ router.post(
 
       // Check if session exists
       const sessions = await whatsappService.listSessions(companyId);
-      let session = sessions[0];
+      let existingSession = sessions[0];
+      let sessionId = existingSession?.sessionId;
 
-      if (!session) {
-        session = await whatsappService.createSession(companyId);
-      } else if (session.status === "DISCONNECTED") {
+      if (!existingSession) {
+        sessionId = await whatsappService.createSession(companyId);
+        // Fetch it back to have the object if needed, or just proceed with ID
+      } else if (existingSession.status === "DISCONNECTED") {
         // Re-initialize if disconnected
-        await whatsappService.initializeSession(session.sessionId);
+        await whatsappService.initializeSession(existingSession.sessionId);
       }
 
       // Poll for QR code for up to 30 seconds
@@ -122,13 +124,13 @@ router.post(
       const maxAttempts = 60; // 60 * 500ms = 30 seconds
 
       const checkQr = async () => {
-        const currentSession = await whatsappService.getSessionStatus(
-          session.sessionId
-        );
+        // Fix: use getSession instead of getSessionStatus
+        const currentSession = await whatsappService.getSession(sessionId);
         if (currentSession?.qrCode) {
           res.status(200).json({
             message: "Session initialization started",
             qr: currentSession.qrCode,
+            sessionId: sessionId,
           });
           return true;
         }
@@ -184,6 +186,6 @@ router.delete(
   }
 );
 
-router.post("/whatsapp/sync", integrationController.syncMessages);
+// router.post("/whatsapp/sync", integrationController.syncMessages); // Deprecated
 
 export default router;

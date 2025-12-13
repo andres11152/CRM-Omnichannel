@@ -443,6 +443,22 @@ export class WhatsAppService extends EventEmitter {
   }
 
   /**
+   * Get single session status
+   */
+  public async getSession(sessionId: string) {
+    const session = await prisma.whatsAppSession.findUnique({
+      where: { sessionId },
+    });
+    if (!session) return null;
+
+    return {
+      ...session,
+      isConnected:
+        this.sessions.has(sessionId) && session.status === "CONNECTED",
+    };
+  }
+
+  /**
    * Send Outbound Message
    */
   public async sendMessage(

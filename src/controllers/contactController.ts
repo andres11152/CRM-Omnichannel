@@ -92,28 +92,29 @@ export const contactController = {
       try {
         const cleanPhone = phone.replace(/\D/g, ""); // Remove + or spaces
         if (cleanPhone.length > 5) {
-            // Find users with this phone
-             const users = await prisma.user.findMany({
-                 where: {
-                     phone: { contains: cleanPhone },
-                     role: { not: 'ADMIN' }, // Don't rename Admins accidentally
-                     OR: [
-                         { role: 'CUSTOMER' },
-                         { role: 'USER' } // Depending on schema defaults
-                     ]
-                 }
-             });
-             
-             for (const user of users) {
-                 await prisma.user.update({
-                     where: { id: user.id },
-                     data: { name: name || user.name }
-                 });
-                 console.log(`[ContactController] 🔄 Synced name "${name}" to User ${user.id}`);
-             }
+          // Find users with this phone
+          const users = await prisma.user.findMany({
+            where: {
+              phone: { contains: cleanPhone },
+              role: { not: "ADMIN" }, // Don't rename Admins accidentally
+              OR: [
+                { role: "USER" }, // Depending on schema defaults
+              ],
+            },
+          });
+
+          for (const user of users) {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { name: name || user.name },
+            });
+            console.log(
+              `[ContactController] 🔄 Synced name "${name}" to User ${user.id}`
+            );
+          }
         }
       } catch (err) {
-          console.error("[ContactController] Failed to sync User name:", err);
+        console.error("[ContactController] Failed to sync User name:", err);
       }
     }
 

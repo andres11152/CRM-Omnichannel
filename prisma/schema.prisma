@@ -83,6 +83,7 @@ model Message {
   content   String
   channel   Channel
   direction MessageDirection
+  status    String           @default("SENT") // SENT, DELIVERED, READ, FAILED
   createdAt DateTime         @default(now())
 
   conversationId String

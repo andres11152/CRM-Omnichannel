@@ -1,10 +1,10 @@
 // src/services/whatsapp.service.ts
+import { prisma } from "@/config/prisma";
 import makeWASocket, {
   DisconnectReason,
   WASocket,
   fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
-import { PrismaClient } from "@prisma/client";
 import { EventEmitter } from "events";
 import path from "path";
 import { mkdir, writeFile, rm } from "fs/promises";
@@ -14,8 +14,6 @@ import { useRedisAuthState } from "./baileysRedisAuth";
 import { gateway } from "@/gateways/socketGateway";
 import redisClient from "@/config/redis";
 import { phoneNumberSchema } from "@/utils/validators";
-
-const prisma = new PrismaClient();
 
 /**
  * WhatsApp Service Singleton
@@ -295,13 +293,23 @@ export class WhatsAppService extends EventEmitter {
         return;
       }
 
-      // ✅ SMART JID SELECTION: Fix for LID/Ghost numbers
-      // Prioritize remoteJidAlt (real phone) -> participant -> remoteJid
-      // This ensures we get the usable phone number instead of the Technical LID
-      let jidToProcess =
-        (msg.key as any).remoteJidAlt ||
-        msg.key?.participant ||
-        msg.key?.remoteJid;
+      const isOutbound = msg.key?.fromMe === true;
+
+      // ✅ SMART JID SELECTION (Mirror Mode Support)
+      let jidToProcess = null;
+
+      if (isOutbound) {
+        // If sending FROM phone (Mirror), the remoteJid is the Recipient (The Customer)
+        jidToProcess = msg.key?.remoteJid;
+        console.log(`[WhatsApp] 🪞 Mirror Mode: Outbound to ${jidToProcess}`);
+      } else {
+        // If receiving (Inbound), we want the Sender (The Customer)
+        // Prioritize remoteJidAlt (real phone) -> participant -> remoteJid
+        jidToProcess =
+          (msg.key as any).remoteJidAlt ||
+          msg.key?.participant ||
+          msg.key?.remoteJid;
+      }
 
       console.log("🎯 SELECTED JID TO PROCESS:", jidToProcess);
 
@@ -314,8 +322,6 @@ export class WhatsAppService extends EventEmitter {
       }
 
       const remoteJid = jidToProcess;
-
-      const isOutbound = msg.key?.fromMe === true;
 
       // Extract basic content
       let text =
@@ -537,13 +543,43 @@ export class WhatsAppService extends EventEmitter {
     }
 
     if (!sock) {
+      // 2.1 Try to find any active session in memory for this company
       const sessions = await prisma.whatsAppSession.findMany({
         where: { companyId, status: "CONNECTED" },
       });
+
       for (const s of sessions) {
         if (this.sessions.has(s.sessionId)) {
           sock = this.sessions.get(s.sessionId);
           break;
+        }
+      }
+
+      // 2.2 SELF-HEALING: If no memory session but DB says connected, revive it!
+      if (!sock && sessions.length > 0) {
+        const victim = sessions[0]; // Take the first one
+        Logger.warn(
+          `[WhatsApp] 🚑 Session ${victim.sessionId} indicates CONNECTED in DB but missing in memory. Attempting lazy revival...`
+        );
+
+        if (!this.initializingSessions.has(victim.sessionId)) {
+          this.initializeSession(victim.sessionId).catch((e) =>
+            console.error(e)
+          );
+        }
+
+        // Wait up to 3 seconds for binding
+        let attempts = 0;
+        while (!this.sessions.has(victim.sessionId) && attempts < 15) {
+          await new Promise((r) => setTimeout(r, 200));
+          attempts++;
+        }
+
+        if (this.sessions.has(victim.sessionId)) {
+          sock = this.sessions.get(victim.sessionId);
+          Logger.info(
+            `[WhatsApp] 🚑 Revival successful for ${victim.sessionId}`
+          );
         }
       }
     }
@@ -587,14 +623,15 @@ export class WhatsAppService extends EventEmitter {
 
       Logger.info(`[WhatsApp] ✅ Sent to ${cleanPhone}`);
 
-      // 4. PERSIST to DB (Crucial Step)
+      // 4. PERSIST to DB (Crucial Step: STATUS SENT)
       const message = await prisma.message.create({
         data: {
           content: text || (media ? `[${media.type.toUpperCase()}]` : ""),
           channel: "WHATSAPP",
           direction: "OUTBOUND",
+          status: "SENT", // ✅ Explicit Status
           conversationId,
-          senderId, // The Agent who sent it
+          senderId,
           metadata: media ? { media } : undefined,
         },
         include: { sender: true },
@@ -603,30 +640,29 @@ export class WhatsAppService extends EventEmitter {
       // 5. EMIT Real-Time Event
       const io = gateway.getIO();
       if (io) {
-        // Emit to Chat Room
-        // Payload matches ChatInterface expects
+        // ... (Emission logic remains same)
         const socketPayload = {
           ...message,
           senderType: "AGENT",
-          ticketId: conversationId, // Legacy compat
+          ticketId: conversationId,
         };
 
         io.to(conversationId).emit("conversation.new_message", socketPayload);
-        io.to(conversationId).emit("message", socketPayload); // Double emit for safety
+        io.to(conversationId).emit("message", socketPayload);
 
         // Update Dashboard List
         io.to(`company:${companyId}`).emit("conversation.updated", {
           id: conversationId,
           lastMessage: text,
           lastMessageAt: new Date(),
-          unreadCount: 0, // Outbound resets unread? No, just keeps 0
+          unreadCount: 0,
         });
       }
 
-      return message;
+      return message; // ✅ Return DB Object
     } catch (err) {
-      Logger.error(`[WhatsApp] Send failed to ${jid}`, err);
-      throw err;
+      Logger.error(`[WhatsApp] Send or Persistence failed to ${jid}`, err);
+      throw err; // ✅ Force Error Propagation
     }
   }
 }

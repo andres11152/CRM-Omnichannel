@@ -1,15 +1,19 @@
 import { prisma } from "@/config/prisma";
 import { gateway } from "@/gateways/socketGateway";
+import { Prisma, MessageDirection, Channel, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
+/**
+ * 🛡️ TYPE DEFINITIONS (Strict & Scalable)
+ */
 interface IncomingMessagePayload {
   companyId: string;
-  sessionId: string; // channelId
-  remoteJid: string; // Phone number
+  sessionId: string;
+  remoteJid: string; // Raw Phone number or JID
   text: string;
   isOutbound: boolean;
   contactName?: string;
-  senderName?: string; // For outbound agents
+  senderName?: string;
   hasMedia?: boolean;
   media?: {
     url: string;
@@ -20,467 +24,312 @@ interface IncomingMessagePayload {
 }
 
 /**
- * MESSAGE PROCESSOR SERVICE
- * Centralizes logic for processing incoming messages from ANY source
- * (Baileys, WhatsApp Cloud API, External Webhooks)
+ * 🛡️ BLACKLIST FOR GENERIC NAMES
+ * Centralized list of names we NEVER want to save in the DB.
  */
+const INVALID_NAMES_REGEX =
+  /^(unknown( contact)?|usuario( de)? whatsapp|sin nombre|whatsapp user)$/i;
 
-// Lock to prevent creating multiple conversations for same number simultaneously
-const conversationLocks = new Map<string, Promise<any>>();
-
-// Helper to aggressively normalize JID to a clean phone number
-const getRealNumber = (jid: string | null | undefined): string | null => {
+/**
+ * 🧠 UTILITY: JID Normalizer
+ * Converts messy JIDs (12345:11@s.whatsapp.net) into clean ints (12345)
+ */
+const normalizeJid = (jid: string): string | null => {
   if (!jid) return null;
 
-  // 1. Basic String Cleaning (Remove suffixes like @s.whatsapp.net or @lid)
-  let clean = jid.toString().split("@")[0];
+  // 1. Remove domain and artifacts
+  let clean = jid.split("@")[0].split(":")[0];
 
-  // 2. Remove ANY non-digit character to get pure numbers
+  // 2. Keep only digits
   clean = clean.replace(/\D/g, "");
 
-  console.log(
-    `[MessageProcessor] normalizePhone: Input="${jid}" -> Processed="${clean}"`
-  );
-
-  // 3. GRACEFUL SKIP for known Ghost/LID numbers
-  // 459... and 252... are known technical prefixes for LIDs.
-  if (clean.length > 15 || clean.startsWith("459") || clean.startsWith("252")) {
-    console.log(
-      `[MessageProcessor] 👻 Skipping internal LID/System message: ${clean}`
-    );
-    return null;
-  }
-
-  // 4. Strict Check for too short (invalid numbers)
-  if (clean.length < 7) {
-    console.warn(
-      `[MessageProcessor] ⚠️ Skipping invalid/short phone. Cleaned: "${clean}"`
-    );
+  // 3. Filter Technical/Ghost LIDs (critical for Baileys)
+  if (
+    clean.length > 15 ||
+    clean.startsWith("459") ||
+    clean.startsWith("252") ||
+    clean.length < 7
+  ) {
+    console.warn(`[JID Normalizer] 👻 Blocking Ghost/LID Number: ${clean}`);
     return null;
   }
 
   return clean;
 };
 
+/**
+ * 🧠 UTILITY: Name Sanitizer
+ * Returns a valid name or NULL if the name is garbage.
+ */
+const sanitizeName = (
+  rawName: string | undefined,
+  phone: string
+): string | null => {
+  if (!rawName) return null;
+  const trimmed = rawName.trim();
+  if (trimmed === "" || INVALID_NAMES_REGEX.test(trimmed)) return null;
+  return trimmed;
+};
+
 export const messageProcessor = {
+  /**
+   * 🚀 ENTRY POINT
+   * Handles concurrency locally. For SaaS Scale, move this to BullMQ.
+   */
   async process(payload: IncomingMessagePayload) {
-    const { companyId, remoteJid } = payload;
+    const { remoteJid, companyId } = payload;
 
-    // ✅ JID NORMALIZATION
-    const phone = getRealNumber(remoteJid);
-    if (!phone) {
-      // Gracefully skip internal messages without error
-      return;
-    }
+    const phone = normalizeJid(remoteJid);
+    if (!phone) return; // Skip invalid JIDs silently
 
-    // Create a lock key to prevent race conditions
-    const lockKey = `${companyId}-${phone}`;
-
-    // If there's already a process running for this phone, wait for it
-    if (conversationLocks.has(lockKey)) {
-      await conversationLocks.get(lockKey);
-    }
-
-    // Create a new lock promise
-    // Pass the NORMALIZED phone as remoteJid to the internal processor
-    const lockPromise = this._processMessage({ ...payload, remoteJid: phone });
-    conversationLocks.set(lockKey, lockPromise);
-
-    try {
-      return await lockPromise;
-    } catch (error) {
-      console.error("[MessageProcessor] ❌ Error in process execution:", error);
-    } finally {
-      // Release lock after 2 seconds to allow subsequent messages
-      setTimeout(() => conversationLocks.delete(lockKey), 2000);
-    }
+    const sanitizedPayload = { ...payload, remoteJid: phone };
+    await this._processSafe(sanitizedPayload);
   },
 
-  async _processMessage(payload: IncomingMessagePayload) {
+  /**
+   * 🔒 CORE LOGIC
+   * Uses Transactions and Atomic operations where possible.
+   */
+  async _processSafe(payload: IncomingMessagePayload) {
     try {
       const {
         companyId,
-        remoteJid: phone, // Already normalized in process()
+        remoteJid: phone,
         text,
         isOutbound,
-        contactName, // This comes from msg.pushName
-        senderName,
-        hasMedia,
         media,
+        hasMedia,
       } = payload;
 
       console.log(
-        `🔍 [MessageProcessor] Message from ${phone} (${
+        `[MsgProcessor] ⚡ Processing ${
           isOutbound ? "OUT" : "IN"
-        })`
+        } | Phone: ${phone}`
       );
 
-      // 🔥 SANITIZE ContactName (Never trust "Unknown" from WhatsApp)
-      const sanitizedContactName =
-        contactName &&
-        !/^unknown( contact)?$/i.test(contactName.trim()) && // Regex for case-insensitive check
-        contactName.trim() !== ""
-          ? contactName
-          : null;
+      // 1. DETERMINE DISPLAY NAME (The "Truth")
+      const rawContactName = payload.contactName || payload.senderName;
+      const cleanContactName = sanitizeName(rawContactName, phone);
 
-      // Determine INITIAL display name (ALWAYS use phone as minimum)
-      let displayName = sanitizedContactName || phone;
+      let displayName = cleanContactName || phone;
 
-      // CRM CONTACT SYNC (Find or Create)
-      let crmContact = await prisma.contact.findFirst({
-        where: {
-          companyId,
-          OR: [{ phone: phone }, { phone: `+${phone}` }],
-        },
+      // 2. GET OR CREATE CONTACT (Atomic-ish)
+      let contact = await prisma.contact.findFirst({
+        where: { companyId, phone },
       });
 
-      console.log(`📇 [MessageProcessor] CRM Contact Search:`, {
-        found: !!crmContact,
-        currentName: crmContact?.name,
-        currentId: crmContact?.id,
-      });
+      if (contact) {
+        // UPDATE EXISTING: Only if we have a BETTER name and !isOutbound
+        const currentNameIsGeneric =
+          contact.name === phone || INVALID_NAMES_REGEX.test(contact.name);
 
-      if (!crmContact && !isOutbound) {
-        // Create NEW Contact with clean name
-        console.log(
-          `👤 [MessageProcessor] Creating NEW CRM Contact with name: "${displayName}"`
-        );
-        try {
-          crmContact = await prisma.contact.create({
-            data: {
-              companyId,
-              name: displayName, // Will be phone or real name, NEVER "Unknown"
-              phone: phone,
-              tags: ["WHATSAPP_LEAD"],
-            },
+        if (!isOutbound && cleanContactName && currentNameIsGeneric) {
+          console.log(
+            `[MsgProcessor] ♻️ Upgrading Name: ${contact.name} -> ${cleanContactName}`
+          );
+          contact = await prisma.contact.update({
+            where: { id: contact.id },
+            data: { name: cleanContactName },
           });
-          console.log(
-            `✅ [MessageProcessor] CRM Contact Created: ${crmContact.id}`
-          );
-        } catch (e) {
-          console.error("❌ Failed to create CRM contact", e);
-        }
-      } else if (crmContact) {
-        // 🔥 CRITICAL: Update old contact BEFORE using its name
-        const contactHasBadName =
-          !crmContact.name ||
-          crmContact.name === "Unknown" ||
-          crmContact.name === "Unknown Contact" ||
-          crmContact.name.trim() === "";
-
-        const weHaveBetterName =
-          sanitizedContactName && sanitizedContactName !== phone;
-
-        // Update if: contact name is bad, OR we have a better name
-        if (
-          contactHasBadName ||
-          (weHaveBetterName && crmContact.name !== sanitizedContactName)
-        ) {
-          const newName = weHaveBetterName ? sanitizedContactName : phone;
-          console.log(
-            `♻️ [MessageProcessor] Updating CRM Contact "${crmContact.name}" → "${newName}"`
-          );
-
-          try {
-            crmContact = await prisma.contact.update({
-              where: { id: crmContact.id },
-              data: { name: newName },
-            });
-            console.log(`✅ [MessageProcessor] CRM Contact Updated`);
-          } catch (e) {
-            console.error("❌ Failed to update CRM contact", e);
-          }
-        }
-      }
-
-      // 🔥 NOW determine FINAL displayName from cleaned Contact
-      if (
-        crmContact &&
-        crmContact.name &&
-        crmContact.name !== "Unknown" &&
-        crmContact.name !== "Unknown Contact"
-      ) {
-        displayName = crmContact.name;
-        console.log(
-          `📝 [MessageProcessor] Using CRM Contact name: "${displayName}"`
-        );
-      } else {
-        // Fallback to phone if contact somehow still has bad name
-        displayName = sanitizedContactName || phone;
-        console.log(
-          `📝 [MessageProcessor] Using fallback name: "${displayName}"`
-        );
-      }
-
-      console.log(`✨ [MessageProcessor] FINAL Display Name: "${displayName}"`);
-
-      // 1. Find or Create CUSTOMER User
-      let customerUser = await prisma.user.findFirst({
-        where: {
-          email: `${phone}@whatsapp.user`,
-          companyId: companyId,
-        },
-      });
-
-      if (!customerUser) {
-        console.log(
-          `🆕 [MessageProcessor] Creating NEW User with name: "${displayName}"`
-        );
-        customerUser = await prisma.user.create({
-          data: {
-            email: `${phone}@whatsapp.user`,
-            name: displayName, // Now guaranteed to be clean
-            phone: phone, // 🔥 EXPLICITLY STORE PHONE
-            password: await bcrypt.hash("123456", 10),
-            role: "USER",
-            companyId: companyId,
-          },
-        });
-        console.log(`✅ [MessageProcessor] User Created: ${customerUser.id}`);
-      } else {
-        console.log(
-          `🔍 [MessageProcessor] Found existing User: ${customerUser.id}, name: "${customerUser.name}"`
-        );
-
-        // Update User if name is bad or we have better name
-        const currentName = customerUser.name || "";
-        const userNameIsBad =
-          currentName === "Unknown" ||
-          currentName === "Unknown Contact" ||
-          currentName === "";
-
-        const needsUpdate =
-          userNameIsBad || currentName !== displayName || !customerUser.phone; // Also update if phone is missing
-
-        if (needsUpdate) {
-          console.log(
-            `♻️ [MessageProcessor] Updating User name: "${currentName}" → "${displayName}"`
-          );
-          try {
-            customerUser = await prisma.user.update({
-              where: { id: customerUser.id },
-              data: {
-                name: displayName,
-                phone: phone, // 🔥 ENSURE PHONE IS SAVED
-              },
-            });
-            console.log(`✅ [MessageProcessor] User Updated`);
-          } catch (e) {
-            console.error("❌ Failed to update User", e);
-          }
-        }
-      }
-
-      // Determine Sender ID
-      let dbSenderId = customerUser.id;
-      // UNUSED: let dbSenderName = customerUser.name || phone;
-
-      if (isOutbound) {
-        // Find Admin/Agent sender
-        const adminUser = await prisma.user.findFirst({
-          where: {
-            companyId,
-            role: { in: ["ADMIN", "MASTER"] },
-          },
-          orderBy: { createdAt: "asc" },
-        });
-
-        if (adminUser) {
-          dbSenderId = adminUser.id;
-          // dbSenderName = adminUser.name || "Admin";
+          displayName = cleanContactName;
         } else {
-          const anyUser = await prisma.user.findFirst({ where: { companyId } });
-          if (anyUser) {
-            dbSenderId = anyUser.id;
-            // dbSenderName = anyUser.name || "User";
-          }
+          // Keep existing robust name
+          displayName = contact.name;
         }
+      } else if (!isOutbound) {
+        // CREATE NEW CONTACT (Only on Inbound)
+        console.log(`[MsgProcessor] 👤 Creating Contact: ${displayName}`);
+        contact = await prisma.contact.create({
+          data: {
+            companyId,
+            phone,
+            name: displayName,
+            tags: ["WHATSAPP_LEAD"],
+          },
+        });
       }
 
-      // 2. Find or Create Conversation
-      // 2. Find or Create Conversation
-      // SENIOR FIX: Legacy Data Support
-      // Search for clean phone OR full JID to prevent duplicate conversations
-      let conversation = await prisma.conversation.findFirst({
-        where: {
-          companyId: companyId,
-          OR: [{ channelId: phone }, { channelId: `${phone}@s.whatsapp.net` }],
+      // 3. GET OR CREATE USER (Atomic Upsert)
+      const userEmail = `${phone}@whatsapp.user`;
+      const dummyPassword = await bcrypt.hash(phone, 10);
+
+      // PREPARE UPDATE DATA: Protect Name on Outbound
+      const userUpdateData: any = { phone };
+      if (!isOutbound) {
+        userUpdateData.name = displayName;
+      }
+
+      let user = await prisma.user.upsert({
+        where: { email: userEmail },
+        update: userUpdateData,
+        create: {
+          companyId,
+          email: userEmail,
+          name: displayName,
+          phone: phone,
+          role: UserRole.USER,
+          password: dummyPassword,
         },
-        orderBy: { updatedAt: "desc" },
       });
 
-      // Data Normalization: If found with dirty/legacy ID, clean it!
-      if (conversation && conversation.channelId !== phone) {
-        console.log(
-          `🧹 [MessageProcessor] Migrating Legacy Conversation ID: ${conversation.id}`
-        );
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { channelId: phone },
-        });
-        conversation.channelId = phone;
-      }
+      // 4. FIND OR CREATE CONVERSATION
+      let conversation = await prisma.conversation.findFirst({
+        where: { companyId, channelId: phone },
+      });
 
       if (!conversation) {
-        // Create NEW Conversation
-        let assignedToId = null;
-        try {
-          const agents = await prisma.user.findMany({
-            where: {
+        // CREATE NEW CONVERSATION & TICKET
+        await prisma.$transaction(async (tx) => {
+          conversation = await tx.conversation.create({
+            data: {
               companyId,
-              role: { in: ["AGENT", "ADMIN"] },
-              email: { not: { startsWith: "bot_" } },
+              channelId: phone,
+              subject: displayName,
+              status: "OPEN",
+              participants: { connect: [{ id: user!.id }] },
             },
-            select: { id: true },
           });
-          if (agents.length > 0) {
-            const randomIndex = Math.floor(Math.random() * agents.length);
-            assignedToId = agents[randomIndex].id;
-          }
-        } catch (e) {
-          // Ignore assignment error
-        }
 
-        conversation = await prisma.conversation.create({
-          data: {
-            companyId,
-            channelId: phone, // Store ONLY the phone number
-            assignedToId,
-            status: "OPEN",
-            subject: displayName, // Set conversation title to Phone/Name
-          },
-        });
-
-        // 🔥 CRITICAL FIX: Create corresponding TICKET for persistence
-        // This ensures data survives page reloads (frontend loads tickets, not conversations)
-        try {
-          // Get next ticket number
-          const lastTicket = await prisma.ticket.findFirst({
+          // Create Ticket
+          const lastTicket = await tx.ticket.findFirst({
             where: { companyId },
             orderBy: { ticketNumber: "desc" },
-            select: { ticketNumber: true },
           });
-          const nextTicketNumber = (lastTicket?.ticketNumber || 0) + 1;
+          const nextNum = (lastTicket?.ticketNumber || 0) + 1;
 
-          await prisma.ticket.create({
+          await tx.ticket.create({
             data: {
-              subject: displayName, // Use resolved name/phone as subject
-              description: `WhatsApp conversation with ${displayName}`,
-              ticketNumber: nextTicketNumber,
-              priority: "MEDIUM",
-              status: "OPEN",
               companyId,
-              createdById: customerUser.id, // Link to customer user
-              conversationId: conversation.id, // Link to conversation
-              assignedToId: assignedToId, // Assign to same agent
+              ticketNumber: nextNum,
+              subject: displayName,
+              description: "Chat iniciado en WhatsApp",
+              status: "OPEN",
+              priority: "MEDIUM",
+              createdById: user!.id,
+              conversationId: conversation.id,
             },
           });
-          console.log(
-            `✅ [MessageProcessor] Created TICKET #${nextTicketNumber} for conversation ${conversation.id}`
-          );
-        } catch (ticketError) {
-          console.error(
-            "[MessageProcessor] ⚠️ Failed to create ticket (non-critical):",
-            ticketError
-          );
-          // Continue even if ticket creation fails
-        }
+        });
       } else {
-        // Ensure subject is updated if we have a better name
-        if (conversation.subject !== displayName) {
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: { subject: displayName },
-          });
-          conversation.subject = displayName;
+        // 4b. UPDATE CONVERSATION METADATA (Only for Inbound)
+        if (!isOutbound) {
+          const currentSubjectIsGeneric =
+            conversation.subject === phone ||
+            INVALID_NAMES_REGEX.test(conversation.subject);
+          if (
+            cleanContactName &&
+            conversation.subject !== cleanContactName &&
+            currentSubjectIsGeneric
+          ) {
+            await prisma.conversation.update({
+              where: { id: conversation!.id },
+              data: { subject: cleanContactName },
+            });
+          }
+          if (conversation.status !== "OPEN") {
+            await prisma.conversation.update({
+              where: { id: conversation!.id },
+              data: { status: "OPEN" },
+            });
+          }
         }
       }
 
-      // 3. Create Message
+      if (!conversation)
+        throw new Error("Conversation creation failed silently");
+
+      // 5. DETERMINE SENDER ID
+      let senderId = user.id;
+      if (isOutbound) {
+        const admin = await prisma.user.findFirst({
+          where: { companyId, role: { in: [UserRole.ADMIN, UserRole.MASTER] } },
+        });
+        if (admin) senderId = admin.id;
+      }
+
+      // 6. SAVE MESSAGE (With Deduplication for Outbound)
+      if (isOutbound) {
+        const recentMessage = await prisma.message.findFirst({
+          where: {
+            conversationId: conversation.id,
+            direction: MessageDirection.OUTBOUND,
+            createdAt: { gt: new Date(Date.now() - 10000) }, // Last 10 seconds
+            content: text,
+          },
+        });
+
+        if (recentMessage) {
+          console.log(
+            `[MsgProcessor] 🛑 Skipping Duplicate Outbound Message (ID: ${recentMessage.id})`
+          );
+          return;
+        }
+      }
+
       const newMessage = await prisma.message.create({
         data: {
           conversationId: conversation.id,
-          senderId: dbSenderId,
-          channel: "WHATSAPP",
-          direction: isOutbound ? "OUTBOUND" : "INBOUND",
-          content: text || "",
-          createdAt: new Date(),
+          channel: Channel.WHATSAPP,
+          direction: isOutbound
+            ? MessageDirection.OUTBOUND
+            : MessageDirection.INBOUND,
+          content: text,
+          senderId: senderId,
           metadata: hasMedia ? { media } : undefined,
         },
-        include: { sender: true }, // Include sender for Real-Time UI
+        include: { sender: true },
       });
 
-      // 4. Update Conversation Stats
-      // Keep only valid fields
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          status: isOutbound ? conversation.status : "OPEN",
-          subject: displayName, // Update title if name changed
-        },
-      });
-
-      // 5. Emit Socket Events
-      const io = gateway.getIO();
-      if (io) {
-        console.log(
-          `[MessageProcessor] 📡 EMITTING SOCKET EVENT to Room ID: [${conversation.id}]`
-        );
-        // Emit to conversation room (for chat window)
-        io.to(conversation.id).emit("conversation.new_message", newMessage);
-
-        // Mock unread count for frontend if not in DB
-        // For inbound messages, we want to ensure the badge shows at least '1'
-        let currentUnread = (conversation as any).unreadCount || 0;
-        if (!isOutbound) {
-          currentUnread = currentUnread > 0 ? currentUnread + 1 : 1;
-        }
-
-        // CONSTRUCT PAYLOAD EXPLICITLY TO AVOID POLLUTION
-        const socketPayload = {
-          ...conversation,
-          subject: displayName, // Ensure subject is carried over
-          lastMessagePreview: text.substring(0, 50),
-          lastMessageAt: new Date(),
-          unreadCount: currentUnread,
-          contact: {
-            id: crmContact?.id || conversation.channelId,
-            name: displayName,
-            phone: conversation.channelId, // This is the clean phone (e.g. 57300...)
-            channelId: conversation.channelId,
-            companyId: companyId,
-            avatarUrl:
-              crmContact?.avatarUrl ||
-              `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                displayName
-              )}`,
-          },
-        };
-
-        console.log(
-          "📦 [MessageProcessor] FULL SOCKET PAYLOAD:",
-          JSON.stringify(socketPayload, null, 2)
-        );
-
-        // Emit to company room (for dashboard list update)
-        io.to(`company:${companyId}`).emit(
-          "conversation.updated",
-          socketPayload
-        );
-      } else {
-        console.warn(
-          "[MessageProcessor] ⚠️ Socket Gateway not ready. Skipping event emission."
-        );
-      }
-    } catch (err) {
-      console.error(
-        "[MessageProcessor] 🛑 CRITICAL ERROR in _processMessage:",
-        err
+      // 7. EMIT REAL-TIME EVENTS
+      this._emitSocketEvents(
+        conversation,
+        newMessage,
+        displayName,
+        companyId,
+        isOutbound,
+        user.id
       );
-      // Log stack trace for better debugging
-      if (err instanceof Error) {
-        console.error(err.stack);
-      }
+    } catch (error) {
+      console.error(`[MsgProcessor] 🛑 Fatal Error:`, error);
     }
+  },
+
+  /**
+   * 📡 SOCKET EMITTER
+   */
+  _emitSocketEvents(
+    conversation: any,
+    message: any,
+    displayName: string,
+    companyId: string,
+    isOutbound: boolean,
+    contactId: string
+  ) {
+    const io = gateway.getIO();
+    if (!io) return;
+
+    // 1. Emit to Chat Room (Specific Conversation)
+    io.to(conversation.id).emit("conversation.new_message", message);
+
+    // 2. Emit to Dashboard (List Update)
+    const dashboardPayload = {
+      id: conversation.id,
+      channel: "whatsapp",
+      subject: displayName,
+      lastMessage: message.content,
+      lastMessageAt: message.createdAt,
+      unreadCount: !isOutbound ? (conversation.unreadCount || 0) + 1 : 0,
+      contact: {
+        id: contactId,
+        name: displayName,
+        phone: conversation.channelId,
+        avatarUrl: null,
+      },
+    };
+
+    io.to(`company:${companyId}`).emit(
+      "conversation.updated",
+      dashboardPayload
+    );
   },
 };

@@ -358,8 +358,6 @@ export const replyToConversation = catchAsync(
       );
     }
 
-    console.log(`[Reply] ✅ Resolved target phone: ${targetPhone}`);
-
     const messageContent =
       content ||
       (attachment
@@ -368,65 +366,43 @@ export const replyToConversation = catchAsync(
           : `📎 Archivo: ${attachment.name || "Adjunto"}`
         : "");
 
-    const message = await prisma.message.create({
-      data: {
-        content: messageContent,
-        channel,
-        direction: "OUTBOUND",
-        conversationId: conversation.id,
-        senderId: req.user.id,
-        metadata: attachment ? { attachment } : undefined,
-      },
-    });
+    console.log(`[Reply] ✅ Resolved target phone: ${targetPhone}`);
 
-    // Send to WhatsApp if channel matches
+    // 🚀 CENTRALIZED SENDING (Service Handles DB + Socket)
+    let message;
     if (channel === "WHATSAPP") {
       try {
-        const sent = await whatsappService.sendMessage(
+        message = await whatsappService.sendMessage(
           targetPhone,
           messageContent,
           {
             companyId: req.companyId,
+            conversationId: conversation.id,
+            senderId: req.user.id,
             media: attachment,
           }
         );
-
-        if (!sent) {
-          console.warn(
-            `[Reply] Message might not have been sent to ${targetPhone}`
-          );
-        }
       } catch (error) {
         console.error("[Reply] Failed to send WhatsApp message:", error);
+        throw new AppError("Failed to send message via WhatsApp provider", 502);
       }
+    } else {
+      // Fallback for other channels (not implemented fully yet, but keep logic safe)
+      message = await prisma.message.create({
+        data: {
+          content: messageContent,
+          channel: channel as any,
+          direction: "OUTBOUND",
+          conversationId: conversation.id,
+          senderId: req.user.id,
+        },
+        include: { sender: true },
+      });
     }
-
-    // Emit Socket Event for Outgoing Message
-    const io = gateway.getIO();
-
-    if (!io) {
-      console.error("❌ [Reply] CRITICAL: Socket.io instance is NULL!");
-    }
-
-    const socketPayload = {
-      ...message,
-      ticketId: conversation.id, // Ensure this matches what frontend expects for 'activeContact.id'
-      senderName: req.user.name || "Agente",
-      senderType: "AGENT",
-      attachment: attachment,
-    };
-
-    console.log("🚀 [Reply] Emitting socket 'message' event:", {
-      ticketId: socketPayload.ticketId,
-      phone: targetPhone,
-      content: socketPayload.content.substring(0, 30),
-    });
-
-    io?.emit("message", socketPayload);
 
     res.status(201).json({
       status: "success",
-      data: { message: socketPayload },
+      data: { message },
     });
   }
 );

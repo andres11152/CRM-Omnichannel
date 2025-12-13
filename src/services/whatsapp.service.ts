@@ -290,6 +290,11 @@ export class WhatsAppService extends EventEmitter {
    */
   private async handleIncomingMessage(msg: any, sessionId: string) {
     try {
+      // 🛑 IGNORAR ESTADOS DE WHATSAPP (Broadcasts)
+      if (msg.key.remoteJid === "status@broadcast") {
+        return;
+      }
+
       // ✅ SMART JID SELECTION: Fix for LID/Ghost numbers
       // Prioritize remoteJidAlt (real phone) -> participant -> remoteJid
       // This ensures we get the usable phone number instead of the Technical LID
@@ -300,13 +305,11 @@ export class WhatsAppService extends EventEmitter {
 
       console.log("🎯 SELECTED JID TO PROCESS:", jidToProcess);
 
-      if (!jidToProcess || jidToProcess === "status@broadcast") {
-        if (jidToProcess !== "status@broadcast") {
-          console.warn(
-            "[WhatsApp Debug] ⚠️ Skipping processing because JID could not be resolved or is invalid:",
-            msg.key
-          );
-        }
+      if (!jidToProcess) {
+        console.warn(
+          "[WhatsApp Debug] ⚠️ Skipping processing because JID is invalid:",
+          msg.key
+        );
         return;
       }
 
@@ -486,44 +489,39 @@ export class WhatsAppService extends EventEmitter {
   /**
    * Send Outbound Message
    */
+  /**
+   * Send Outbound Message (SaaS Quality)
+   * 1. Validates
+   * 2. Sends via Baileys
+   * 3. Persists to DB
+   * 4. Emits Real-time Event
+   */
   public async sendMessage(
     to: string,
     text: string,
-    options: { companyId: string; channelId?: string; media?: any }
-  ): Promise<boolean> {
-    const { companyId, channelId, media } = options;
-
-    // 🚨 TRAP FOR GHOST NUMBER
-    if (to.includes("45908") || to.includes("9089")) {
-      console.error("🚨 GHOST NUMBER DETECTED! 🚨");
-      console.error("Payload received:", to);
-      console.trace("Stack Trace for Ghost Number:"); // This will tell us WHICH file called this function
-      throw new Error(
-        "CRITICAL: Attempted to send to the ghost placeholder number."
-      );
+    options: {
+      companyId: string;
+      conversationId: string; // REQUIRED for persistence
+      senderId: string; // REQUIRED for persistence
+      channelId?: string;
+      media?: any;
     }
+  ): Promise<any> {
+    const { companyId, channelId, conversationId, senderId, media } = options;
 
-    // 1. Validation for Malformed Numbers (LIDs, Technical IDs, etc)
+    // 1. Validation
     const cleanPhone = to.replace(/[^\d]/g, "");
 
     // Valid MSISDN is 7-15 digits. Long numbers (like LIDs ~18-20 digits) crash Baileys encryption session silently
     if (cleanPhone.length > 15 || cleanPhone.length < 7) {
-      console.error(
+      Logger.error(
         `[WhatsApp] 🛑 BLOCKED INVALID PHONE: ${cleanPhone} (Length: ${cleanPhone.length})`
       );
-      throw new Error(
-        "CRITICAL: Cannot send to invalid number format. Phone number must be 7-15 digits."
-      );
-    }
-
-    // Explicit Debug Log
-    Logger.info(`[WhatsApp] Sending message to: ${cleanPhone}`);
-
-    const validation = phoneNumberSchema.safeParse(cleanPhone);
-    if (!validation.success) {
-      Logger.warn(`[WhatsApp] Schema Invalid phone number: ${cleanPhone}`);
       throw new Error("Invalid phone number format");
     }
+
+    const validation = phoneNumberSchema.safeParse(cleanPhone);
+    if (!validation.success) throw new Error("Invalid phone number format");
 
     // 2. Find Correct Session
     let sock: WASocket | undefined;
@@ -538,7 +536,6 @@ export class WhatsAppService extends EventEmitter {
       if (session) sock = this.sessions.get(session.sessionId);
     }
 
-    // Fallback: Use any connected session
     if (!sock) {
       const sessions = await prisma.whatsAppSession.findMany({
         where: { companyId, status: "CONNECTED" },
@@ -553,14 +550,14 @@ export class WhatsAppService extends EventEmitter {
 
     if (!sock) {
       Logger.error(`[WhatsApp] No active session for company ${companyId}`);
-      return false;
+      throw new Error("No active WhatsApp session found");
     }
 
     const jid = `${cleanPhone}@s.whatsapp.net`;
 
+    // 3. SEND via Baileys
     try {
       if (media) {
-        // Full Media Sending Logic
         if (media.type === "image") {
           await sock.sendMessage(jid, {
             image: { url: media.url },
@@ -583,16 +580,53 @@ export class WhatsAppService extends EventEmitter {
             mimetype: media.mimetype,
             ptt: !!media.isPrivate,
           });
-        } else {
-          await sock.sendMessage(jid, { text });
         }
       } else {
         await sock.sendMessage(jid, { text });
       }
-      return true;
+
+      Logger.info(`[WhatsApp] ✅ Sent to ${cleanPhone}`);
+
+      // 4. PERSIST to DB (Crucial Step)
+      const message = await prisma.message.create({
+        data: {
+          content: text || (media ? `[${media.type.toUpperCase()}]` : ""),
+          channel: "WHATSAPP",
+          direction: "OUTBOUND",
+          conversationId,
+          senderId, // The Agent who sent it
+          metadata: media ? { media } : undefined,
+        },
+        include: { sender: true },
+      });
+
+      // 5. EMIT Real-Time Event
+      const io = gateway.getIO();
+      if (io) {
+        // Emit to Chat Room
+        // Payload matches ChatInterface expects
+        const socketPayload = {
+          ...message,
+          senderType: "AGENT",
+          ticketId: conversationId, // Legacy compat
+        };
+
+        io.to(conversationId).emit("conversation.new_message", socketPayload);
+        io.to(conversationId).emit("message", socketPayload); // Double emit for safety
+
+        // Update Dashboard List
+        io.to(`company:${companyId}`).emit("conversation.updated", {
+          id: conversationId,
+          lastMessage: text,
+          lastMessageAt: new Date(),
+          unreadCount: 0, // Outbound resets unread? No, just keeps 0
+        });
+      }
+
+      return message;
     } catch (err) {
       Logger.error(`[WhatsApp] Send failed to ${jid}`, err);
-      return false;
+      throw err;
     }
   }
 }

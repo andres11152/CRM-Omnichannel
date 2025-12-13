@@ -54,9 +54,11 @@ import companyRouter from "@/routes/companyRoutes";
 import { workflowEngine } from "@/services/workflowEngine";
 
 // HANDLE UNCAUGHT EXCEPTIONS (Sync Errors)
+// HANDLE UNCAUGHT EXCEPTIONS (Sync Errors)
 (process as any).on("uncaughtException", (err: Error) => {
-  Logger.error("UNCAUGHT EXCEPTION! 💥 Shutting down...");
-  Logger.error(err); // Usar el logger y loguear el objeto completo
+  console.error("UNCAUGHT EXCEPTION! 💥 Shutting down...");
+  console.error(err); // Force raw console output for stack trace
+  if (err.stack) console.error(err.stack);
   process.exit(1); // Salir después de loguear
 });
 

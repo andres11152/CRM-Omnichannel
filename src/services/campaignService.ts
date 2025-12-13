@@ -90,21 +90,36 @@ export const campaignService = {
             senderName: "Campaign Bot",
           });
 
-          // Send via WhatsApp actually
-          // Important: messageProcessor saves to DB, but does it SEND?
-          // Checking messageProcessor code...
-          // messageProcessor logic:
-          // 1. Finds/Creates User
-          // 2. Finds/Creates Conversation
-          // 3. Creates Message in DB
-          // 4. Emits Socket
-          // 5. Triggers AI (if inbound)
+          // After messageProcessor creates the conversation, find it
+          const conversation = await prisma.conversation.findFirst({
+            where: { companyId, channelId: contact.phone },
+          });
 
-          // It does NOT call whatsappService.sendMessage for OUTBOUND messages initiated by API.
-          // It assumes "isOutbound" means "I read this from the phone".
+          // Get or create a system user for campaigns
+          let systemUser = await prisma.user.findFirst({
+            where: { email: "system@campaign.bot", companyId },
+          });
 
-          // So we MUST send it explicitly here.
-          await whatsappService.sendMessage(remoteJid, content, { companyId });
+          if (!systemUser && conversation) {
+            systemUser = await prisma.user.create({
+              data: {
+                email: "system@campaign.bot",
+                companyId,
+                name: "Campaign Bot",
+                role: "AGENT",
+                password: "dummy",
+              },
+            });
+          }
+
+          // Send via WhatsApp if we have the required data
+          if (conversation && systemUser) {
+            await whatsappService.sendMessage(contact.phone, content, {
+              companyId,
+              conversationId: conversation.id,
+              senderId: systemUser.id,
+            });
+          }
 
           stats.sent++;
 

@@ -111,6 +111,8 @@ export const createConversation = catchAsync(
       try {
         await whatsappService.sendMessage(cleanPhone, message, {
           companyId: req.companyId,
+          conversationId: conversation.id,
+          senderId: req.user.id,
         });
       } catch (e) {
         console.error("Failed to send initial WhatsApp message", e);

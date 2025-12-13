@@ -21,6 +21,8 @@ interface IncomingMessagePayload {
     mimetype?: string;
     caption?: string;
   };
+  profilePicUrl?: string; // WhatsApp Profile Picture URL
+  about?: string; // WhatsApp Status/About
 }
 
 /**
@@ -157,6 +159,10 @@ export const messageProcessor = {
       const userUpdateData: any = { phone };
       if (!isOutbound) {
         userUpdateData.name = displayName;
+        // Update profile info if available
+        if (payload.profilePicUrl)
+          userUpdateData.profilePicUrl = payload.profilePicUrl;
+        if (payload.about) userUpdateData.about = payload.about;
       }
 
       let user = await prisma.user.upsert({
@@ -169,6 +175,8 @@ export const messageProcessor = {
           phone: phone,
           role: UserRole.USER,
           password: dummyPassword,
+          profilePicUrl: payload.profilePicUrl,
+          about: payload.about,
         },
       });
 
@@ -287,7 +295,8 @@ export const messageProcessor = {
         displayName,
         companyId,
         isOutbound,
-        user.id
+        user.id,
+        user // Pass full user object for profile info
       );
     } catch (error) {
       console.error(`[MsgProcessor] 🛑 Fatal Error:`, error);
@@ -303,7 +312,8 @@ export const messageProcessor = {
     displayName: string,
     companyId: string,
     isOutbound: boolean,
-    contactId: string
+    contactId: string,
+    user: any // Add user parameter for profile info
   ) {
     const io = gateway.getIO();
     if (!io) return;
@@ -318,12 +328,14 @@ export const messageProcessor = {
       subject: displayName,
       lastMessage: message.content,
       lastMessageAt: message.createdAt,
-      unreadCount: !isOutbound ? (conversation.unreadCount || 0) + 1 : 0,
+      unreadCount: !isOutbound ? (conversation.unreadCount || 0) + 1 : 0, // Frontend will ignore this and calculate locally
       contact: {
         id: contactId,
         name: displayName,
         phone: conversation.channelId,
         avatarUrl: null,
+        profilePicUrl: user?.profilePicUrl,
+        about: user?.about,
       },
     };
 

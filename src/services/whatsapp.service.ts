@@ -129,10 +129,23 @@ export class WhatsAppService extends EventEmitter {
         if (qr) {
           Logger.info(`[WhatsApp] QR Generated for ${sessionId}`);
 
-          await prisma.whatsAppSession.update({
-            where: { sessionId },
-            data: { qrCode: qr, status: "SCANNING" },
-          });
+          try {
+            await prisma.whatsAppSession.upsert({
+              where: { sessionId },
+              update: { qrCode: qr, status: "SCANNING" },
+              create: {
+                sessionId,
+                companyId: "unknown",
+                status: "SCANNING",
+                qrCode: qr,
+              },
+            });
+          } catch (err) {
+            Logger.warn(
+              `[WhatsApp] Failed to update QR for ${sessionId}:`,
+              err
+            );
+          }
 
           io?.emit("qr.updated", { sessionId, qr });
           io?.emit("session.status", { sessionId, status: "SCANNING" });
@@ -146,14 +159,31 @@ export class WhatsAppService extends EventEmitter {
           const user = sock.user;
           const phone = user?.id?.split(":")[0];
 
-          await prisma.whatsAppSession.update({
-            where: { sessionId },
-            data: {
-              status: "CONNECTED",
-              phone: phone || undefined,
-              qrCode: null,
-            },
-          });
+          try {
+            const session = await prisma.whatsAppSession.findUnique({
+              where: { sessionId },
+            });
+
+            if (session) {
+              await prisma.whatsAppSession.update({
+                where: { sessionId },
+                data: {
+                  status: "CONNECTED",
+                  phone: phone || undefined,
+                  qrCode: null,
+                },
+              });
+            } else {
+              Logger.warn(
+                `[WhatsApp] Session ${sessionId} no longer exists in DB. Skipping update.`
+              );
+            }
+          } catch (err) {
+            Logger.error(
+              `[WhatsApp] Failed to update session ${sessionId} on connect:`,
+              err
+            );
+          }
 
           io?.emit("session.status", {
             sessionId,
@@ -323,6 +353,27 @@ export class WhatsAppService extends EventEmitter {
 
       const remoteJid = jidToProcess;
 
+      // 🖼️ FETCH PROFILE INFO (Only for Inbound/Customer)
+      let profilePicUrl: string | undefined;
+      let about: string | undefined;
+
+      if (!isOutbound) {
+        try {
+          const sock = this.sessions.get(sessionId);
+          if (sock) {
+            profilePicUrl = await sock
+              .profilePictureUrl(remoteJid, "image")
+              .catch(() => undefined);
+            const statusData = await sock
+              .fetchStatus(remoteJid)
+              .catch(() => undefined);
+            about = statusData?.status;
+          }
+        } catch (e) {
+          // Ignore profile fetch errors
+        }
+      }
+
       // Extract basic content
       let text =
         msg.message?.conversation ||
@@ -410,6 +461,8 @@ export class WhatsAppService extends EventEmitter {
         contactName: msg.pushName,
         hasMedia: !!mediaInfo,
         media: mediaInfo,
+        profilePicUrl,
+        about,
       });
     } catch (err) {
       Logger.error("Error handling message", err);

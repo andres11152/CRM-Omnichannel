@@ -58,6 +58,7 @@ export const handleIncomingWebhook = async (req: any, res: any) => {
       content: data.messageBody,
       channel: Channel.WHATSAPP, // Asumimos WhatsApp para Meta
       direction: MessageDirection.INBOUND,
+      status: "SENT",
       senderId: "user_placeholder", // TODO: Lógica para encontrar o crear usuario
       metadata: null,
     };

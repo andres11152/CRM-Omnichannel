@@ -51,9 +51,30 @@ import companyRouter from "@/routes/companyRoutes";
 import analyticsRouter from "@/routes/analyticsRoutes";
 
 process.on("uncaughtException", (err: Error) => {
-  Logger.error("UNCAUGHT EXCEPTION! 💥 Shutting down...");
+  Logger.error("UNCAUGHT EXCEPTION! 💥");
   Logger.error(err);
-  process.exit(1);
+
+  // Don't exit for known non-critical errors
+  const errorMessage = err.message?.toLowerCase() || "";
+  const isCritical =
+    errorMessage.includes("listen eaddrinuse") || // Port already in use
+    errorMessage.includes("cannot start") ||
+    (errorMessage.includes("database") && !errorMessage.includes("session"));
+
+  if (isCritical) {
+    Logger.error("Critical error detected. Shutting down...");
+    process.exit(1);
+  } else {
+    Logger.warn("Non-critical error. Server will continue running.");
+  }
+});
+
+process.on("unhandledRejection", (reason: any) => {
+  Logger.error("UNHANDLED REJECTION! 🔥");
+  Logger.error(reason);
+
+  // Log but don't exit - let the server continue
+  Logger.warn("Promise rejection handled. Server continues.");
 });
 
 const app = express();

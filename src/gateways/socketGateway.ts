@@ -1,107 +1,54 @@
 import { Server, Socket } from "socket.io";
-import { Logger } from "@/utils/logger";
+import { createClient } from "redis";
+import { createAdapter } from "@socket.io/redis-adapter";
 
 /**
- * SOCKET GATEWAY SINGLETON (Clustered)
- * This class manages the Real-Time connection layer.
- * 🛡️ PRODUCTION READY: Auto-detects Redis for scaling, falls back to Memory for local dev.
+ * SOCKET GATEWAY SINGLETON
+ * Supports Redis Adapter for production scalability
  */
 class WebSocketGateway {
   private io: Server | null = null;
-  private redisPubClient: any = null;
-  private redisSubClient: any = null;
-  private isRedisActive: boolean = false;
+  private redisConnected: boolean = false;
 
-  /**
-   * Initialize the Socket.io Server
-   */
   public async initialize(httpServer: any) {
-    Logger.info("[Gateway] Initializing Socket.io...");
+    console.log("[Gateway] 🔧 Initializing Socket.io...");
 
-    let adapter: any = undefined;
-
-    // 1. Setup Redis Adapter if REDIS_URL is present
-    if (false && process.env.REDIS_URL) {
-      try {
-        Logger.info("[Gateway] REDIS_URL detected, attempting connection...");
-        const { createClient } = await import("redis");
-        const { createAdapter } = await import("@socket.io/redis-adapter");
-
-        const pubClient = createClient({ url: process.env.REDIS_URL });
-        const subClient = pubClient.duplicate();
-
-        pubClient.on("error", (err) =>
-          Logger.error("[Gateway] Redis Pub Error:", err)
-        );
-        subClient.on("error", (err) =>
-          Logger.error("[Gateway] Redis Sub Error:", err)
-        );
-
-        // Timeout wrapper for Redis connection
-        const connectWithTimeout = (client: any) => {
-          return Promise.race([
-            client.connect(),
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(new Error("Redis connection timeout")),
-                3000
-              )
-            ),
-          ]);
-        };
-
-        await Promise.all([
-          connectWithTimeout(pubClient),
-          connectWithTimeout(subClient),
-        ]);
-
-        this.redisPubClient = pubClient;
-        this.redisSubClient = subClient;
-        this.isRedisActive = true;
-
-        adapter = createAdapter(pubClient, subClient);
-        Logger.info(
-          "[Gateway] ✅ Redis Adapter Configured & Connected (Production Mode)"
-        );
-      } catch (error) {
-        Logger.error(
-          "[Gateway] ❌ Failed to connect to Redis. Falling back to Memory Mode.",
-          error
-        );
-        this.isRedisActive = false;
-        // Proceed without adapter (Memory Mode)
-      }
-    } else {
-      Logger.warn(
-        "[Gateway] REDIS_URL not found. Running in Memory Mode (Local Dev)."
-      );
-    }
-
-    // 2. Create IO Server
     this.io = new Server(httpServer, {
       cors: {
-        origin: [
-          "http://localhost:5173",
-          "http://localhost:5174",
-          "http://localhost:3000",
-          "https://reply.software",
-          "https://www.reply.software",
-        ],
+        origin: "*", // Restricted in production via ENV if needed
         methods: ["GET", "POST"],
         credentials: true,
       },
       transports: ["polling", "websocket"],
       pingTimeout: 20000,
       pingInterval: 25000,
-      adapter: adapter, // Will be undefined in Memory Mode (default)
     });
 
-    Logger.info(
-      `[Gateway] WebSocket Server Initialized (${
-        this.isRedisActive ? "REDIS" : "MEMORY"
-      } Mode)`
-    );
+    // REDIS ADAPTER LOGIC
+    const redisUrl = process.env.REDIS_URL;
+    if (redisUrl) {
+      console.log(`[Gateway] 🔌 Connecting to Redis at ${redisUrl}...`);
+      try {
+        const pubClient = createClient({ url: redisUrl });
+        const subClient = pubClient.duplicate();
+
+        await Promise.all([pubClient.connect(), subClient.connect()]);
+
+        this.io.adapter(createAdapter(pubClient, subClient));
+        this.redisConnected = true;
+        console.log("[Gateway] ✅ Redis Adapter Configured Successfully");
+      } catch (err) {
+        console.error(
+          "[Gateway] ❌ Redis Connection Failed. Using Memory Adapter.",
+          err
+        );
+      }
+    } else {
+      console.log("[Gateway] ⚠️ No REDIS_URL found. Using Memory Adapter.");
+    }
+
     this.handleConnections();
+    console.log("[Gateway] ✅ WebSocket fully initialized");
   }
 
   private handleConnections() {
@@ -109,43 +56,22 @@ class WebSocketGateway {
 
     this.io.on("connection", (socket: Socket) => {
       const agentId = socket.handshake.query.agentId as string;
+      socket.join(`agent:${agentId || "anonymous"}`);
 
-      if (agentId) {
-        // Logger.info(`[Gateway] Agent connected: ${agentId}`); // Reduce noise
-        socket.join(`agent:${agentId}`);
+      socket.on("join", (room: string) => {
+        if (room) socket.join(room);
+      });
 
-        socket.on("agent_status_change", (status: string) => {
-          Logger.info(`[Gateway] Agent ${agentId} is now ${status}`);
-        });
+      socket.on("join_room", (data: { conversationId: string }) => {
+        if (data.conversationId) {
+          socket.join(data.conversationId);
+          console.log(
+            `[Gateway] 🔌 Client joined room: ${data.conversationId}`
+          );
+        }
+      });
 
-        // Allow subscribing to rooms (Companies, Conversations)
-        socket.on("join", (room: string) => {
-          if (room) {
-            socket.join(room);
-            Logger.info(`[Gateway] Socket ${socket.id} joined room: ${room}`);
-          }
-        });
-
-        // ✅ Handle join_room event for conversation-specific rooms
-        socket.on("join_room", (data: { conversationId: string }) => {
-          if (data.conversationId) {
-            socket.join(data.conversationId);
-            Logger.info(
-              `[Gateway] 🚪 Socket ${socket.id} joined conversation: ${data.conversationId}`
-            );
-          }
-        });
-
-        socket.on("disconnect", () => {
-          // Logger.info(`[Gateway] Agent disconnected: ${agentId}`);
-        });
-      } else {
-        // Anonymous connection (logging but allowing)
-        // Logger.warn(`[Gateway] Anonymous connection: ${socket.id}`);
-        socket.on("disconnect", () => {
-          // Silent disconnect
-        });
-      }
+      socket.on("disconnect", () => {});
     });
   }
 
@@ -154,7 +80,7 @@ class WebSocketGateway {
   }
 
   public isRedisConnected(): boolean {
-    return this.isRedisActive;
+    return this.redisConnected;
   }
 }
 

@@ -8,32 +8,116 @@ import { AuthenticatedRequest } from "@/types/types";
 
 // Map Prisma Ticket to Frontend Ticket (with Contact)
 const mapTicketToFrontend = (ticket: any) => {
+  // Extract phone from email with BROAD heuristics
+  let derivedPhone = ticket.createdBy?.phone;
+
+  // 1. Try Email Parsing (Aggressive)
+  if (!derivedPhone && ticket.createdBy?.email) {
+    const match = ticket.createdBy.email.match(/\d{7,15}/);
+    if (match) {
+      derivedPhone = match[0];
+    }
+  }
+
+  // 2. Try Description (Aggressive)
+  if (!derivedPhone && ticket.description) {
+    const match = ticket.description.match(/\d{7,15}/);
+    if (match) {
+      derivedPhone = match[0];
+      // Keep this specific log as it indicates data repair
+      console.log(
+        `[TicketController] 🔧 Salvaged phone ${derivedPhone} from description`
+      );
+    }
+  }
+
+  // 3. Try Subject (Existing but broadened)
+  if (!derivedPhone && ticket.subject) {
+    const match = ticket.subject.match(/\d{7,15}/);
+    if (match) {
+      derivedPhone = match[0];
+      console.log(
+        `[TicketController] 🔧 Salvaged phone ${derivedPhone} from subject`
+      );
+    }
+  }
+
+  // 🔥 CRITICAL: Sanitize name - NEVER return "Unknown"
+  let displayName = ticket.createdBy?.name || "";
+
+  // Normalize checking
+  const checkName = displayName.toLowerCase();
+  const isInvalidName =
+    !displayName ||
+    checkName.includes("unknown") ||
+    checkName.includes("sin nombre") ||
+    displayName.trim() === "";
+
+  if (isInvalidName) {
+    // Use phone as fallback
+    displayName = derivedPhone || "Usuario WhatsApp";
+  }
+
+  // Determine Fallback Phone for missing user cases
+  let fallbackPhone = ticket.conversation?.channelId || "";
+
+  if (!fallbackPhone && ticket.description) {
+    const match = ticket.description.match(/\d{7,15}/);
+    if (match) fallbackPhone = match[0];
+  }
+  if (!fallbackPhone && ticket.subject) {
+    const match = ticket.subject.match(/\d{7,15}/);
+    if (match) fallbackPhone = match[0];
+  }
+
   return {
     ...ticket,
     contact: ticket.createdBy
       ? {
           id: ticket.createdBy.id,
-          name: ticket.createdBy.name,
+          name: displayName,
           email: ticket.createdBy.email,
+          phone: derivedPhone || ticket.conversation?.channelId,
+          channelId:
+            ticket.createdBy.channelId ||
+            derivedPhone ||
+            ticket.conversation?.channelId,
           companyId: ticket.companyId,
-          // Default/Mock fields for Contact interface compliance
-          avatarUrl: `https://ui-avatars.com/api/?name=${ticket.createdBy.name}`,
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            displayName
+          )}`,
           lastMessage: "",
           lastMessageTime: new Date(),
           unreadCount: 0,
           tags: ticket.conversation?.tags || [],
-          channel: "WhatsApp", // Default
+          channel: "WhatsApp",
           assignedMode: "human",
           status: ticket.status,
         }
-      : null,
+      : {
+          // Fallback if createdBy is null - WITH HEURISTICS
+          id: "missing-user",
+          name:
+            displayName !== "Usuario WhatsApp" && displayName !== ""
+              ? displayName
+              : fallbackPhone || "Usuario WhatsApp",
+          email: "",
+          phone: fallbackPhone,
+          channelId: fallbackPhone,
+          companyId: ticket.companyId,
+          avatarUrl: "",
+          lastMessage: "",
+          lastMessageTime: new Date(),
+          unreadCount: 0,
+          tags: [],
+          channel: "WhatsApp" as any,
+          assignedMode: "human" as any,
+          status: ticket.status,
+        },
     conversationId: ticket.conversationId,
   };
 };
 
-/**
- * CREATE TICKET
- */
 export const createTicket = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { subject, description, priority, queueId, assignedToId, status } =

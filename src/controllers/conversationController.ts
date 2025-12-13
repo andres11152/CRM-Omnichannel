@@ -222,6 +222,8 @@ export const getConversation = catchAsync(
     }
 
     // Transform messages to extract attachment from metadata for frontend compatibility
+    // RELAXED VALIDATION: We explicitly return the conversation data even if the phone number (channelId)
+    // is corrupted (e.g. LID), so that the UI can load and the user can DELETE the ticket.
     const conversationWithTransformed = {
       ...conversation,
       messages: conversation.messages.map((msg: any) => ({
@@ -246,7 +248,7 @@ export const replyToConversation = catchAsync(
     if (!req.user || !req.companyId) {
       throw new AppError("Not authorized", 401);
     }
-    const { content, channel, attachment } = req.body;
+    const { content, channel, attachment, phone: bodyPhone } = req.body;
 
     let conversation = await prisma.conversation.findUnique({
       where: { id: req.params.id },
@@ -269,14 +271,13 @@ export const replyToConversation = catchAsync(
           });
         } else {
           // Create new conversation for this ticket
-
           conversation = await prisma.conversation.create({
             data: {
               companyId: ticket.companyId,
               subject: ticket.subject,
               status: "OPEN",
               participants: { connect: [{ id: ticket.createdById }] }, // Add ticket creator as participant
-              // Link back to ticket? No, ticket links to conversation.
+              channelId: ticket.createdBy.email.split("@")[0], // Attempt to infer channel ID from user email
             },
             include: { participants: true },
           });
@@ -300,14 +301,64 @@ export const replyToConversation = catchAsync(
       throw new AppError("No conversation or ticket found with that ID", 404);
     }
 
-    // Find the customer (USER role)
-    const customer = conversation.participants.find((p) => p.role === "USER");
+    // Determine Recipient Phone Number
+    // Priority 1: Explicitly passed in body
+    let targetPhone = bodyPhone;
 
-    if (!customer || !customer.email) {
-      console.warn(
-        `[Reply] No customer found for conversation ${conversation.id}`
+    // Priority 2: Use Conversation's Channel ID (Primary source of truth for WA)
+    if (!targetPhone) {
+      if (conversation.channelId && /^\d+$/.test(conversation.channelId)) {
+        targetPhone = conversation.channelId;
+      }
+      // Priority 3: Check Ticket Creator (if it was a ticket)
+      else {
+        // If this conversation is linked to a ticket, maybe the ticket has contact info?
+        const linkedTicket = await prisma.ticket.findFirst({
+          where: { conversationId: conversation.id },
+          include: { createdBy: true },
+        });
+
+        // If the creator looks like a phone number (legacy setup)
+        if (linkedTicket?.createdBy?.email?.includes("@whatsapp.user")) {
+          const potentialPhone = linkedTicket.createdBy.email.split("@")[0];
+          if (/^\d+$/.test(potentialPhone)) {
+            targetPhone = potentialPhone;
+          }
+        }
+      }
+    }
+
+    // Validation
+    if (!targetPhone) {
+      console.error(
+        `[ReplyController] ❌ FAILED to resolve phone number for ConvID: ${conversation.id}`
+      );
+      throw new AppError(
+        "CRITICAL: Cannot determine recipient phone number from Database. Conversation ChannelID is missing or invalid.",
+        400
       );
     }
+
+    // Clean phone
+    targetPhone = targetPhone.replace(/[^\d]/g, "");
+
+    // Final Gate Check
+    if (targetPhone.length < 5) {
+      throw new AppError("Resolved phone number is too short/invalid", 400);
+    }
+
+    // 🛑 SAFETY VALVE FOR GHOST NUMBERS (LID ARTIFACTS)
+    if (targetPhone.includes("45908") || targetPhone.length > 15) {
+      console.error(
+        `[ReplyController] 🚨 BLOCKED GHOST NUMBER: ${targetPhone}`
+      );
+      throw new AppError(
+        "Data Corruption: Database contains a LID instead of a Phone Number. Please contact support.",
+        500
+      );
+    }
+
+    console.log(`[Reply] ✅ Resolved target phone: ${targetPhone}`);
 
     const messageContent =
       content ||
@@ -329,16 +380,22 @@ export const replyToConversation = catchAsync(
     });
 
     // Send to WhatsApp if channel matches
-    const shouldSendToWhatsapp =
-      channel === "WHATSAPP" && !!customer && !!customer.email;
-
-    if (shouldSendToWhatsapp && customer && customer.email) {
-      const phone = customer.email.split("@")[0];
+    if (channel === "WHATSAPP") {
       try {
-        await whatsappService.sendMessage(phone, messageContent, {
-          companyId: req.companyId,
-          media: attachment,
-        });
+        const sent = await whatsappService.sendMessage(
+          targetPhone,
+          messageContent,
+          {
+            companyId: req.companyId,
+            media: attachment,
+          }
+        );
+
+        if (!sent) {
+          console.warn(
+            `[Reply] Message might not have been sent to ${targetPhone}`
+          );
+        }
       } catch (error) {
         console.error("[Reply] Failed to send WhatsApp message:", error);
       }
@@ -349,13 +406,11 @@ export const replyToConversation = catchAsync(
 
     if (!io) {
       console.error("❌ [Reply] CRITICAL: Socket.io instance is NULL!");
-    } else {
-      console.log("✅ [Reply] Socket.io is ready, emitting message...");
     }
 
     const socketPayload = {
       ...message,
-      ticketId: conversation.id,
+      ticketId: conversation.id, // Ensure this matches what frontend expects for 'activeContact.id'
       senderName: req.user.name || "Agente",
       senderType: "AGENT",
       attachment: attachment,
@@ -363,18 +418,16 @@ export const replyToConversation = catchAsync(
 
     console.log("🚀 [Reply] Emitting socket 'message' event:", {
       ticketId: socketPayload.ticketId,
-      content: socketPayload.content.substring(0, 50),
-      hasAttachment: !!socketPayload.attachment,
+      phone: targetPhone,
+      content: socketPayload.content.substring(0, 30),
     });
 
     io?.emit("message", socketPayload);
-    console.log("✅ [Reply] Socket message emitted successfully");
 
     res.status(201).json({
       status: "success",
       data: { message: socketPayload },
     });
-    console.log("✅ [Reply] HTTP Response sent to frontend");
   }
 );
 

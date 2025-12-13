@@ -2,155 +2,149 @@
 import makeWASocket, {
   DisconnectReason,
   WASocket,
+  fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
-import { PrismaClient, WhatsAppCredential } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { EventEmitter } from "events";
 import path from "path";
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, writeFile, rm } from "fs/promises";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
+import { Logger } from "@/utils/logger";
+import { useRedisAuthState } from "./baileysRedisAuth";
+import { gateway } from "@/gateways/socketGateway";
+import redisClient from "@/config/redis";
+import { phoneNumberSchema } from "@/utils/validators";
 
 const prisma = new PrismaClient();
 
 /**
- * Helper to resolve a phone number from a possible LID.
- * For inbound messages we try to extract the real JID from the message metadata.
- * For outbound messages we try to fetch a stored mapping from WhatsAppCredential.
+ * WhatsApp Service Singleton
+ * Manages all Baileys instances, lifecycle, and external communication.
  */
-async function resolvePhoneFromLid(
-  lid: string,
-  context: { remoteJid?: string; msg?: any; usedSessionId?: string }
-): Promise<string | null> {
-  // 1️⃣ Try to resolve from inbound message metadata (msg)
-  if (context.msg) {
-    const { msg } = context;
-    // participant field may already contain the real JID
-    if (
-      msg.key?.participant &&
-      msg.key.participant.includes("@s.whatsapp.net")
-    ) {
-      return msg.key.participant;
-    }
-    // Some messages include a notify field with the phone number
-    if (msg.notify) {
-      const match = String(msg.notify).match(/\d{10,15}/);
-      if (match) {
-        return `${match[0]}@s.whatsapp.net`;
-      }
-    }
-    // Fallback: search the whole message for a Colombian number pattern (example)
-    const phoneMatch = JSON.stringify(msg).match(/573\d{9}/);
-    if (phoneMatch) {
-      return `${phoneMatch[0]}@s.whatsapp.net`;
-    }
+export class WhatsAppService extends EventEmitter {
+  private sessions: Map<string, WASocket> = new Map();
+  // Store retry counts to prevent infinite loops on specific errors (Self-Healing)
+  private retryCounts: Map<string, number> = new Map();
+  private MAX_RETRIES = 5;
+
+  constructor() {
+    super();
   }
 
-  // 2️⃣ Try to resolve from stored credential mapping (outbound)
-  if (context.usedSessionId) {
-    try {
-      const credential = await prisma.whatsAppCredential.findUnique({
-        where: {
-          sessionId_key: {
-            sessionId: context.usedSessionId,
-            key: `lid-mapping-${lid}`,
-          },
-        },
-      });
-      if (credential && credential.value) {
-        const data = JSON.parse(credential.value as string);
-        if (data.pn) {
-          return `${data.pn}@s.whatsapp.net`;
-        }
+  /**
+   * Initializes all sessions that are marked as ACTIVE/CONNECTED in DB.
+   * Called on server startup.
+   */
+  public async initialize() {
+    console.log("[WhatsApp] 🔧 Initializing all sessions...");
+    // Try to connect to Redis if available, but don't block if it fails
+    if (redisClient && !redisClient.isOpen) {
+      try {
+        await redisClient.connect();
+      } catch (err) {
+        console.warn("[WhatsApp] Redis unavailable, using file-based auth");
       }
-    } catch (e) {
-      console.error(
-        "[WhatsApp] Error fetching LID mapping from credentials",
-        e
+    }
+    await this.initializeAllSessions();
+    console.log("[WhatsApp] ✅ Initialization complete");
+  }
+
+  private async initializeAllSessions() {
+    // Only fetch sessions that shouldn't be dead
+    const sessions = await prisma.whatsAppSession.findMany({
+      where: { status: { not: "DISCONNECTED" } },
+    });
+    console.log(`[WhatsApp] Found ${sessions.length} active session(s) in DB`);
+    for (const s of sessions) {
+      console.log(`[WhatsApp] Initializing session: ${s.sessionId}`);
+      this.initializeSession(s.sessionId).catch((e) =>
+        console.error(`[WhatsApp] Failed to resume session ${s.sessionId}:`, e)
       );
     }
   }
 
-  // If everything fails, return null – caller will fallback to original value
-  return null;
-}
+  // Lock mechanism to prevent race conditions during init
+  private initializingSessions: Set<string> = new Set();
 
-export class WhatsAppService extends EventEmitter {
-  private sessions: Map<string, WASocket> = new Map();
-  private processedMessageIds: Set<string> = new Set();
-  private recentOutboundIds: Set<string> = new Set();
-  private qrCodes: Map<string, string> = new Map();
-
-  constructor() {
-    super();
-    // Don't auto-initialize in constructor - wait for explicit initialize() call
-  }
-
-  /** Public method to initialize all sessions - called from server.ts */
-  public async initialize() {
-    console.log("[WhatsApp] Initializing all sessions...");
-    await this.initializeAllSessions();
-  }
-
-  /** Create a new WhatsApp session */
-  public async createSession(companyId: string) {
-    const sessionId = `session_${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(7)}`;
-
-    const session = await prisma.whatsAppSession.create({
-      data: {
-        sessionId,
-        companyId,
-        status: "SCANNING",
-      },
-    });
-
-    await this.initializeSession(sessionId);
-
-    return session;
-  }
-
-  /** Initialise all stored sessions on service start */
-  private async initializeAllSessions() {
-    const sessions = await prisma.whatsAppSession.findMany({
-      where: { status: "CONNECTED" },
-    });
-    for (const s of sessions) {
-      await this.initializeSession(s.sessionId);
-    }
-  }
-
-  /** Initialise a single session (creates socket, auth state, listeners) - Public for reconnection */
+  /**
+   * Starts a specific session.
+   * Handles authentication, connection logic, and event listeners.
+   */
   public async initializeSession(sessionId: string) {
+    if (this.initializingSessions.has(sessionId)) {
+      Logger.warn(
+        `[WhatsApp] Session ${sessionId} is already initializing. Skipping race condition.`
+      );
+      return;
+    }
+    this.initializingSessions.add(sessionId);
+
     try {
-      const { usePrismaAuthState } = await import("./baileysAuth");
-      const { state, saveCreds } = await usePrismaAuthState(sessionId);
+      Logger.info(`[WhatsApp] Starting session: ${sessionId}`);
+
+      // 🛑 CRITICAL: CLEANUP OLD SESSION TO PREVENT EVENT STORMING
+      const existingSock = this.sessions.get(sessionId);
+      if (existingSock) {
+        Logger.warn(
+          `[WhatsApp] ♻️ Cleaning up existing socket for ${sessionId} before restart`
+        );
+        try {
+          existingSock.ev.removeAllListeners("connection.update");
+          existingSock.ev.removeAllListeners("creds.update");
+          existingSock.ev.removeAllListeners("messages.upsert");
+          existingSock.end(undefined);
+        } catch (e) {
+          Logger.warn(`[WhatsApp] Error closing old socket: ${e}`);
+        }
+        this.sessions.delete(sessionId);
+      }
+
+      const { state, saveCreds } = await useRedisAuthState(sessionId);
+      const { version } = await fetchLatestBaileysVersion();
 
       const sock = makeWASocket({
+        version,
         auth: state,
-        printQRInTerminal: true,
+        printQRInTerminal: false, // We use socket.io for rendering
         connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 10000,
+        emitOwnEvents: false,
+        retryRequestDelayMs: 250,
+        markOnlineOnConnect: true,
+        // Emulate a standard browser to avoid suspicious activity flags
+        browser: ["Reply CRM", "Chrome", "10.0.0"],
       });
+
       this.sessions.set(sessionId, sock);
 
+      // --- EVENTS ---
+
+      // 1. Credentials Update (Persist to Redis)
       sock.ev.on("creds.update", saveCreds);
+
+      // 2. Connection Update (The Core Logic)
       sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect, qr } = update;
-        const { gateway } = await import("@/gateways/socketGateway");
+        const io = gateway.getIO();
 
+        // Handle QR Code Generation
         if (qr) {
-          // Persist QR in DB so polling can pick it up if socket fails
+          Logger.info(`[WhatsApp] QR Generated for ${sessionId}`);
+
           await prisma.whatsAppSession.update({
             where: { sessionId },
             data: { qrCode: qr, status: "SCANNING" },
           });
 
-          gateway.getIO()?.emit("qr.updated", { sessionId, qr });
+          io?.emit("qr.updated", { sessionId, qr });
+          io?.emit("session.status", { sessionId, status: "SCANNING" });
         }
 
+        // Handle Connection Success
         if (connection === "open") {
-          console.log(`[WhatsApp] Session ${sessionId} CONNECTED`);
+          Logger.info(`[WhatsApp] ✅ Session ${sessionId} CONNECTED`);
+          this.retryCounts.delete(sessionId); // Reset retries on success
 
-          // Update DB
           const user = sock.user;
           const phone = user?.id?.split(":")[0];
 
@@ -160,210 +154,186 @@ export class WhatsAppService extends EventEmitter {
               status: "CONNECTED",
               phone: phone || undefined,
               qrCode: null,
-            }, // Clear QR
+            },
           });
 
-          gateway.getIO()?.emit("session.status", {
+          io?.emit("session.status", {
             sessionId,
             status: "CONNECTED",
             phone,
           });
         }
 
+        // Handle Connection Close/Failure
         if (connection === "close") {
           const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+          const errorMsg = (lastDisconnect?.error as any)?.message || "";
+
+          // CRITICAL FIX: Detect QR Timeout (408) or explicit timeout error
+          const isTimeout =
+            statusCode === 408 || errorMsg.includes("QR refs attempts ended");
+
+          if (isTimeout) {
+            Logger.warn(
+              `[WhatsApp] 🛑 QR Code expired or process timed out for ${sessionId}. Stopping loop.`
+            );
+            await this.handleSessionFailure(sessionId);
+            // DO NOT RECONNECT AUTOMATICALLY
+            return;
+          }
+
+          // Normal Reconnection Logic
           const shouldReconnect =
-            statusCode !== DisconnectReason.loggedOut && statusCode !== 401;
+            statusCode !== DisconnectReason.loggedOut &&
+            statusCode !== 401 &&
+            statusCode !== 403;
+
+          Logger.warn(
+            `[WhatsApp] ❌ Connection closed for ${sessionId}. Code: ${statusCode}. Reconnect: ${shouldReconnect}`
+          );
+
+          // Remove listeners immediately
+          sock.ev.removeAllListeners("connection.update");
+          sock.ev.removeAllListeners("messages.upsert");
 
           if (shouldReconnect) {
-            console.log(
-              `[WhatsApp] Connection closed for ${sessionId} (Status: ${statusCode}). Reconnecting...`
-            );
-            // Delay reconnection slightly to avoid loops
-            setTimeout(() => this.initializeSession(sessionId), 5000);
-          } else {
-            console.log(
-              `[WhatsApp] Session ${sessionId} logged out or invalid (Status: ${statusCode}). Cleaning up...`
-            );
-            this.sessions.delete(sessionId);
-
-            await prisma.whatsAppSession.update({
-              where: { sessionId },
-              data: { status: "DISCONNECTED", qrCode: null },
-            });
-
-            // Clean up credentials to prevent future "Failed to upload pre-keys" or loops
-            try {
-              await prisma.whatsAppCredential.deleteMany({
-                where: { sessionId },
-              });
-            } catch (e) {
-              console.error("[WhatsApp] Error cleanup credentials:", e);
+            const retries = this.retryCounts.get(sessionId) || 0;
+            if (retries < this.MAX_RETRIES) {
+              this.retryCounts.set(sessionId, retries + 1);
+              const delay = Math.min(retries * 2000, 10000) || 1000;
+              setTimeout(() => this.initializeSession(sessionId), delay);
+            } else {
+              Logger.error(
+                `[WhatsApp] Max retries reached for ${sessionId}. Marking as DISCONNECTED.`
+              );
+              await this.handleSessionFailure(sessionId);
             }
-
-            gateway
-              .getIO()
-              ?.emit("session.status", { sessionId, status: "DISCONNECTED" });
+          } else {
+            // Fatal Error
+            Logger.warn(
+              `[WhatsApp] Session ${sessionId} logged out or invalid. Cleaning up.`
+            );
+            await this.handleSessionFailure(sessionId);
+            await this.clearSessionData(sessionId);
           }
         }
       });
 
-      // 🔍 DEBUG: Monitor ALL Baileys events
-      console.log(
-        "🎯 [DEBUG] Registering event listeners for session:",
-        sessionId
-      );
-      const monitorEvents = [
-        "messages.upsert",
-        "messages.update",
-        "message-receipt.update",
-      ];
-      monitorEvents.forEach((eventName) => {
-        sock.ev.on(eventName as any, (data: any) => {
-          console.log(`🔥 [DEBUG] Event "${eventName}" received`);
-        });
-      });
-
-      sock.ev.on("messages.upsert", async (msgEvent) => {
-        console.log("🔔 [DEBUG] messages.upsert EVENT FIRED", {
-          type: msgEvent.type,
-          count: msgEvent.messages?.length,
-        });
-        if (msgEvent.type !== "notify" || !msgEvent.messages) {
-          console.log("⚠️ [DEBUG] Skipping - type:", msgEvent.type);
-          return;
-        }
-        for (const msg of msgEvent.messages) {
-          console.log("📨 [DEBUG] Processing message:", {
-            id: msg.key?.id,
-            from: msg.key?.remoteJid,
-          });
-          await this.handleIncomingMessage(msg, sessionId);
+      // 3. Message Handling
+      sock.ev.on("messages.upsert", async (m) => {
+        if (m.type === "notify" || m.type === "append") {
+          for (const msg of m.messages) {
+            if (!msg.message) continue;
+            await this.handleIncomingMessage(msg, sessionId);
+          }
         }
       });
     } catch (error) {
-      console.error(
-        `[WhatsApp] Failed to initialize session ${sessionId}:`,
+      Logger.error(
+        `[WhatsApp] Fatal error initializing session ${sessionId}`,
         error
       );
-      // Mark as disconnected so user knows to retry
-      await prisma.whatsAppSession.update({
-        where: { sessionId },
-        data: { status: "DISCONNECTED" },
-      });
-      // Allow retry trigger from UI
-      const { gateway } = await import("@/gateways/socketGateway");
-      gateway.getIO()?.emit("session.status", {
-        sessionId,
-        status: "DISCONNECTED",
-        error: String(error),
-      });
+      this.handleSessionFailure(sessionId);
+    } finally {
+      this.initializingSessions.delete(sessionId);
     }
   }
 
-  /** Process an incoming WhatsApp message */
+  // --- Helpers ---
+
+  private async handleSessionFailure(sessionId: string) {
+    try {
+      await prisma.whatsAppSession.update({
+        where: { sessionId },
+        data: { status: "DISCONNECTED", qrCode: null },
+      });
+    } catch (e) {
+      // Ignore if record already deleted
+    }
+    this.sessions.delete(sessionId);
+    gateway
+      .getIO()
+      ?.emit("session.status", { sessionId, status: "DISCONNECTED" });
+  }
+
+  private async clearSessionData(sessionId: string) {
+    const REDIS_KEY = `wa:auth:${sessionId}`;
+    if (redisClient?.isOpen) {
+      try {
+        await redisClient.del(REDIS_KEY);
+      } catch (err) {
+        Logger.warn("[WhatsApp] Failed to clear Redis data (non-critical)");
+      }
+    }
+    // await prisma.whatsAppSession.delete... // Optional
+  }
+
+  /**
+   * Process Incoming Message
+   */
   private async handleIncomingMessage(msg: any, sessionId: string) {
     try {
-      console.log("✅ [DEBUG] handleIncomingMessage STARTED");
-      const messageId = msg.key?.id;
-      if (!messageId) {
-        console.log("❌ [DEBUG] No messageId, returning");
-        return;
-      }
-      // Deduplicate quickly
-      if (this.processedMessageIds.has(messageId)) {
-        console.log("⚠️ [DEBUG] Duplicate message skipped:", messageId);
-        return;
-      }
-      this.processedMessageIds.add(messageId);
-      setTimeout(
-        () => this.processedMessageIds.delete(messageId),
-        5 * 60 * 1000
-      );
+      // ✅ SMART JID SELECTION: Fix for LID/Ghost numbers
+      // Prioritize remoteJidAlt (real phone) -> participant -> remoteJid
+      // This ensures we get the usable phone number instead of the Technical LID
+      let jidToProcess =
+        (msg.key as any).remoteJidAlt ||
+        msg.key?.participant ||
+        msg.key?.remoteJid;
 
-      const remoteJid = msg.key?.remoteJid;
-      if (!remoteJid) {
-        console.log("❌ [DEBUG] No remoteJid, returning");
-        return;
-      }
-      if (remoteJid === "status@broadcast") {
-        console.log("⚠️ [DEBUG] Status broadcast ignored");
-        return;
-      }
+      console.log("🎯 SELECTED JID TO PROCESS:", jidToProcess);
 
-      console.log("📥 [DEBUG] Processing message from:", remoteJid);
+      if (!jidToProcess || jidToProcess === "status@broadcast") return;
 
-      // ✅ CRITICAL: Detect if message is from YOU (sent from your mobile)
-      // In WhatsApp, msg.key.fromMe = true means YOU sent it
+      const remoteJid = jidToProcess;
+
       const isOutbound = msg.key?.fromMe === true;
-      console.log("📊 [DEBUG] Message direction:", {
-        fromMe: msg.key?.fromMe,
-        isOutbound,
-        remoteJid,
-        explanation: isOutbound
-          ? "YOU sent this message from your mobile"
-          : "Contact sent you this message",
-      });
 
       // Extract basic content
-      let text = "";
+      let text =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        "";
       let mediaType = "";
       let mimeType = "";
-      let mediaBuffer: Buffer | null = null;
 
-      if (msg.message?.conversation) {
-        text = msg.message.conversation;
-      } else if (msg.message?.extendedTextMessage?.text) {
-        text = msg.message.extendedTextMessage.text;
-      } else if (msg.message?.imageMessage) {
-        text = msg.message.imageMessage.caption || "";
+      if (msg.message?.imageMessage) {
         mediaType = "image";
-        mimeType = msg.message.imageMessage.mimetype || "image/jpeg";
+        mimeType = msg.message.imageMessage.mimetype;
+        text = msg.message.imageMessage.caption || text;
       } else if (msg.message?.videoMessage) {
-        text = msg.message.videoMessage.caption || "";
         mediaType = "video";
-        mimeType = msg.message.videoMessage.mimetype || "video/mp4";
+        mimeType = msg.message.videoMessage.mimetype;
+        text = msg.message.videoMessage.caption || text;
       } else if (msg.message?.documentMessage) {
         mediaType = "document";
-        mimeType = msg.message.documentMessage.mimetype || "application/pdf";
+        mimeType = msg.message.documentMessage.mimetype;
+        text = msg.message.documentMessage.caption || text;
       } else if (msg.message?.audioMessage) {
         mediaType = "audio";
-        mimeType = msg.message.audioMessage.mimetype || "audio/mp4";
+        mimeType = msg.message.audioMessage.mimetype;
       }
 
-      if (!text && !mediaType) {
-        console.log("❌ [DEBUG] No text and no media, returning");
-        return;
-      }
+      if (!text && !mediaType) return; // Ignore protocol messages
 
-      console.log("📝 [DEBUG] Message content:", {
-        text: text.substring(0, 50),
-        mediaType,
-      });
-
-      // Load session record for company context
+      // Resolve Session Record
       const sessionRecord = await prisma.whatsAppSession.findUnique({
         where: { sessionId },
       });
-      if (!sessionRecord) {
-        console.error("❌ [DEBUG] Session record not found for", sessionId);
-        return;
-      }
+      if (!sessionRecord) return;
 
-      console.log(
-        "✅ [DEBUG] Session found, companyId:",
-        sessionRecord.companyId
-      );
-
-      // Media handling (download and store locally)
-      let mediaInfo: any = undefined;
+      let mediaInfo = undefined;
+      // Handle Media Download
       if (mediaType) {
         try {
-          mediaBuffer = (await downloadMediaMessage(msg, "buffer", {} as any, {
-            logger: console as any,
-            reuploadRequest: sessionRecord.id as any,
-          })) as Buffer;
-          if (mediaBuffer) {
+          const buffer = (await downloadMediaMessage(
+            msg,
+            "buffer",
+            {},
+            { logger: console as any, reuploadRequest: sessionRecord.id as any }
+          )) as Buffer;
+
+          if (buffer) {
             const uploadDir = path.join(
               process.cwd(),
               "public",
@@ -371,13 +341,16 @@ export class WhatsAppService extends EventEmitter {
               sessionRecord.companyId
             );
             await mkdir(uploadDir, { recursive: true });
-            const ext = mimeType.split("/")[1]?.split(";")[0] || "bin";
+
+            const ext = mimeType?.split("/")[1]?.split(";")[0] || "bin";
             const filename = `${Date.now()}_${Math.random()
               .toString(36)
               .substring(7)}.${ext}`;
             const filePath = path.join(uploadDir, filename);
-            await writeFile(filePath, mediaBuffer);
+
+            await writeFile(filePath, buffer);
             const publicUrl = `/uploads/${sessionRecord.companyId}/${filename}`;
+
             mediaInfo = {
               url: publicUrl,
               type: mediaType,
@@ -388,62 +361,131 @@ export class WhatsAppService extends EventEmitter {
             if (!text) text = `[${mediaType.toUpperCase()}]`;
           }
         } catch (e) {
-          console.error(`[WhatsApp] Error downloading media:`, e);
+          Logger.error("Failed to download media", e);
         }
       }
 
-      // Resolve possible LID to real phone number
-      let actualPhone = remoteJid;
-      if (remoteJid.includes("@lid")) {
-        const resolved = await resolvePhoneFromLid(remoteJid.split("@")[0], {
-          msg,
-        });
-        if (resolved) actualPhone = resolved;
-      }
-
-      // Pass to message processor (CRM side)
-      console.log("🚀 [DEBUG] Calling messageProcessor.process...");
+      // Delegate to Message Processor
       const { messageProcessor } = await import("./messageProcessor.service");
       await messageProcessor.process({
         companyId: sessionRecord.companyId,
         sessionId,
-        remoteJid: actualPhone,
-        text,
-        isOutbound, // ✅ Now correctly detects if YOU sent this from your phone
-        contactName: msg.pushName || undefined,
-        senderName: undefined,
+        remoteJid,
+        text: text || `[${mediaType.toUpperCase()}]`,
+        isOutbound,
+        contactName: msg.pushName,
         hasMedia: !!mediaInfo,
         media: mediaInfo,
       });
-      console.log("✅ [DEBUG] messageProcessor.process COMPLETED");
     } catch (err) {
-      console.error(`[WhatsApp] Error processing incoming message:`, err);
+      Logger.error("Error handling message", err);
     }
   }
 
-  /** Send a message (outbound) */
+  // --- PUBLIC ADMINISTRATIVE METHODS (Restored) ---
+
+  /**
+   * List all sessions for a company with real-time status
+   */
+  public async listSessions(companyId: string) {
+    const sessions = await prisma.whatsAppSession.findMany({
+      where: { companyId },
+    });
+
+    return sessions.map((s) => ({
+      ...s,
+      isConnected: this.sessions.has(s.sessionId) && s.status === "CONNECTED",
+    }));
+  }
+
+  /**
+   * Create (or re-initialize) a session manually
+   */
+  public async createSession(companyId: string, sessionId?: string) {
+    const id = sessionId || `session_${companyId}_${Date.now()}`;
+
+    // Create/Upsert DB Record
+    await prisma.whatsAppSession.upsert({
+      where: { sessionId: id },
+      update: { status: "DISCONNECTED", companyId },
+      create: { sessionId: id, companyId, status: "DISCONNECTED" },
+    });
+
+    // Start
+    this.initializeSession(id);
+    return id;
+  }
+
+  /**
+   * Delete and Disconnect a session
+   */
+  public async deleteSession(sessionId: string) {
+    const sock = this.sessions.get(sessionId);
+    if (sock) {
+      try {
+        sock.end(undefined);
+        this.sessions.delete(sessionId);
+      } catch (e) {
+        Logger.error(`[WhatsApp] Error disconnecting session ${sessionId}`, e);
+      }
+    }
+
+    await this.handleSessionFailure(sessionId);
+    await this.clearSessionData(sessionId);
+
+    try {
+      await prisma.whatsAppSession.delete({ where: { sessionId } });
+    } catch (e) {
+      // Ignore if already deleted
+    }
+
+    return true;
+  }
+
+  /**
+   * Send Outbound Message
+   */
   public async sendMessage(
     to: string,
     text: string,
-    options: {
-      companyId: string;
-      channelId?: string;
-      media?: {
-        url: string;
-        type: "image" | "video" | "document" | "audio";
-        caption?: string;
-        mimetype?: string;
-        isVoiceNote?: boolean;
-      };
-    }
+    options: { companyId: string; channelId?: string; media?: any }
   ): Promise<boolean> {
     const { companyId, channelId, media } = options;
 
-    // Find appropriate socket
-    let sock: WASocket | undefined;
-    let usedSessionId: string | undefined;
+    // 🚨 TRAP FOR GHOST NUMBER
+    if (to.includes("45908") || to.includes("9089")) {
+      console.error("🚨 GHOST NUMBER DETECTED! 🚨");
+      console.error("Payload received:", to);
+      console.trace("Stack Trace for Ghost Number:"); // This will tell us WHICH file called this function
+      throw new Error(
+        "CRITICAL: Attempted to send to the ghost placeholder number."
+      );
+    }
 
-    // 1. Try to find session by channelId (if provided and valid)
+    // 1. Validation for Malformed Numbers (LIDs, Technical IDs, etc)
+    const cleanPhone = to.replace(/[^\d]/g, "");
+
+    // Valid MSISDN is 7-15 digits. Long numbers (like LIDs ~18-20 digits) crash Baileys encryption session silently
+    if (cleanPhone.length > 15 || cleanPhone.length < 7) {
+      console.error(
+        `[WhatsApp] 🛑 BLOCKED INVALID PHONE: ${cleanPhone} (Length: ${cleanPhone.length})`
+      );
+      throw new Error(
+        "CRITICAL: Cannot send to invalid number format. Phone number must be 7-15 digits."
+      );
+    }
+
+    // Explicit Debug Log
+    Logger.info(`[WhatsApp] Sending message to: ${cleanPhone}`);
+
+    const validation = phoneNumberSchema.safeParse(cleanPhone);
+    if (!validation.success) {
+      Logger.warn(`[WhatsApp] Schema Invalid phone number: ${cleanPhone}`);
+      throw new Error("Invalid phone number format");
+    }
+
+    // 2. Find Correct Session
+    let sock: WASocket | undefined;
     if (channelId) {
       const session = await prisma.whatsAppSession.findFirst({
         where: {
@@ -452,216 +494,65 @@ export class WhatsAppService extends EventEmitter {
           status: "CONNECTED",
         },
       });
-      if (session && this.sessions.has(session.sessionId)) {
-        sock = this.sessions.get(session.sessionId);
-        usedSessionId = session.sessionId;
-      }
+      if (session) sock = this.sessions.get(session.sessionId);
     }
 
-    // 2. Fallback: Use ANY connected session for this company
+    // Fallback: Use any connected session
     if (!sock) {
       const sessions = await prisma.whatsAppSession.findMany({
         where: { companyId, status: "CONNECTED" },
       });
-
       for (const s of sessions) {
         if (this.sessions.has(s.sessionId)) {
           sock = this.sessions.get(s.sessionId);
-          usedSessionId = s.sessionId;
-          break; // Use first available
+          break;
         }
       }
     }
 
-    if (!sock || !usedSessionId) {
-      console.error(
-        `[WhatsApp] No active sessions available for company ${companyId}`
-      );
-      // Try to re-initialize sessions for this company as a Hail Mary
-      await this.initializeAllSessions();
+    if (!sock) {
+      Logger.error(`[WhatsApp] No active session for company ${companyId}`);
       return false;
     }
 
-    // Resolve LID if needed
-    let resolvedPhone = to;
-    const cleanTo = to.replace(/[^\d]/g, "");
-    if (cleanTo.length > 0) {
-      const resolved = await resolvePhoneFromLid(cleanTo, {
-        usedSessionId,
-      });
-      if (resolved) resolvedPhone = resolved.replace("@s.whatsapp.net", ""); // keep plain number
-    }
-
-    const jid = resolvedPhone.includes("@")
-      ? resolvedPhone
-      : `${resolvedPhone}@s.whatsapp.net`;
+    const jid = `${cleanPhone}@s.whatsapp.net`;
 
     try {
       if (media) {
-        // 🛠️ SENIOR FIX: Handle Base64 Data URIs properly
-        // Baileys is flaky with data URIs. We MUST save it to disk first.
-        if (media.url.startsWith("data:")) {
-          try {
-            // Robust parsing using split instead of regex (regex fails on complex mimes like 'audio/webm;codecs=opus')
-            const commaIndex = media.url.indexOf(",");
-            if (commaIndex !== -1) {
-              const metadata = media.url.substring(5, commaIndex); // e.g. "audio/webm;codecs=opus;base64"
-              const base64Data = media.url.substring(commaIndex + 1);
-
-              // Extract clean mime type (remove ;base64)
-              const base64TagIndex = metadata.indexOf(";base64");
-              const fileType =
-                base64TagIndex !== -1
-                  ? metadata.substring(0, base64TagIndex)
-                  : metadata;
-
-              const buffer = Buffer.from(base64Data, "base64");
-
-              // Create uploads dir if not exists
-              const uploadDir = path.join(
-                process.cwd(),
-                "public",
-                "uploads",
-                "outbound"
-              );
-              await mkdir(uploadDir, { recursive: true });
-
-              // Generate filename based on type
-              // fileType might be 'audio/webm;codecs=opus', we need just extension
-              const cleanMime = fileType.split(";")[0]; // audio/webm
-              let ext = cleanMime.split("/")[1] || "bin";
-              if (ext === "plain") ext = "txt";
-
-              const filename = `sent_${Date.now()}_${Math.random()
-                .toString(36)
-                .substring(7)}.${ext}`;
-              const filePath = path.join(uploadDir, filename);
-
-              await writeFile(filePath, buffer);
-
-              // Update URL to point to the local file
-              media.url = filePath;
-              // Also update mimetype if we detected it from the data URI
-              if (!media.mimetype) media.mimetype = fileType;
-            }
-          } catch (err) {
-            console.error("[WhatsApp] Failed to process Base64 media:", err);
-            // Fallback to original URL (might fail but worth a try)
-          }
-        }
-
+        // Full Media Sending Logic
         if (media.type === "image") {
-          const resp = await sock.sendMessage(jid, {
+          await sock.sendMessage(jid, {
             image: { url: media.url },
-            caption: text || media.caption,
+            caption: text,
           });
-          if (resp?.key?.id) this.recentOutboundIds.add(resp.key.id);
         } else if (media.type === "video") {
-          const resp = await sock.sendMessage(jid, {
+          await sock.sendMessage(jid, {
             video: { url: media.url },
-            caption: text || media.caption,
+            caption: text,
           });
-          if (resp?.key?.id) this.recentOutboundIds.add(resp.key.id);
-        } else if (media.type === "audio") {
-          // Smart mimetype & path detection for WhatsApp compatibility
-          const isWebm =
-            media.url.endsWith(".webm") ||
-            (media.mimetype && media.mimetype.includes("webm"));
-
-          // 1. Resolve Path: Smart handling for Local vs Remote
-          let audioSource: { url: string } = { url: media.url };
-          const LOCAL_BASE_URL = process.env.APP_URL || "http://localhost:4000";
-
-          if (media.url.startsWith(LOCAL_BASE_URL)) {
-            // Optimize: Read directly from disk if it's our own file
-            // path.join(cwd, 'public', '/uploads/...') handles the slashes
-            const relativePath = media.url.replace(LOCAL_BASE_URL, "");
-            audioSource = {
-              url: path.join(process.cwd(), "public", relativePath),
-            };
-          } else if (
-            !media.url.startsWith("http") &&
-            !path.isAbsolute(media.url)
-          ) {
-            // Fallback for old relative paths
-            audioSource = {
-              url: path.join(process.cwd(), "public", media.url),
-            };
-          }
-
-          // 2. Playback Safety: WebM cannot be sent as PTT reliably
-          const sendAsPtt = !isWebm && (media.isVoiceNote ?? false);
-
-          const mime =
-            media.mimetype && !media.mimetype.includes("webm")
-              ? media.mimetype
-              : isWebm
-              ? media.mimetype || "audio/webm"
-              : "audio/ogg; codecs=opus";
-
-          const resp = await sock.sendMessage(jid, {
-            audio: audioSource,
-            ptt: sendAsPtt,
-            mimetype: mime,
-          });
-          if (resp?.key?.id) this.recentOutboundIds.add(resp.key.id);
-        } else {
-          const resp = await sock.sendMessage(jid, {
+        } else if (media.type === "document") {
+          await sock.sendMessage(jid, {
             document: { url: media.url },
-            caption: text || media.caption,
-            mimetype: media.mimetype || undefined,
+            mimetype: media.mimetype,
+            fileName: media.name || "file",
           });
-          if (resp?.key?.id) this.recentOutboundIds.add(resp.key.id);
+        } else if (media.type === "audio") {
+          await sock.sendMessage(jid, {
+            audio: { url: media.url },
+            mimetype: media.mimetype,
+            ptt: !!media.isPrivate,
+          });
+        } else {
+          await sock.sendMessage(jid, { text });
         }
-        // Cleanup recent IDs after 30s
-        this.recentOutboundIds.forEach((id) => {
-          setTimeout(() => this.recentOutboundIds.delete(id), 30000);
-        });
       } else {
-        const resp = await sock.sendMessage(jid, { text });
-        if (resp?.key?.id) this.recentOutboundIds.add(resp.key.id);
-        setTimeout(() => this.recentOutboundIds.delete(resp.key.id!), 30000);
+        await sock.sendMessage(jid, { text });
       }
       return true;
-    } catch (e) {
-      console.error(`[WhatsApp] Send failed:`, e);
+    } catch (err) {
+      Logger.error(`[WhatsApp] Send failed to ${jid}`, err);
       return false;
     }
-  }
-
-  // ----- Session management helpers (delete, status, list) -----
-  public async deleteSession(sessionId: string) {
-    try {
-      const sock = this.sessions.get(sessionId);
-      if (sock) {
-        try {
-          await sock.logout();
-        } catch (e) {
-          console.warn(`[WhatsApp] Logout error (ignored)`, e);
-        }
-        this.sessions.delete(sessionId);
-      }
-      this.qrCodes?.delete?.(sessionId);
-
-      await prisma.whatsAppCredential.deleteMany({ where: { sessionId } });
-      await prisma.whatsAppSession.delete({ where: { sessionId } });
-    } catch (error) {
-      console.error(`[WhatsApp] Error deleting session ${sessionId}:`, error);
-      // Don't throw - prevent server crashes
-    }
-  }
-
-  public async getSessionStatus(sessionId: string) {
-    return await prisma.whatsAppSession.findUnique({ where: { sessionId } });
-  }
-
-  public async listSessions(companyId: string) {
-    return await prisma.whatsAppSession.findMany({ where: { companyId } });
-  }
-
-  // Sync old messages (simplified placeholder)
-  public async syncMessages(companyId: string, fromDate: Date) {
-    // Implementation would iterate over stored conversations and pull missing messages.
   }
 }
 

@@ -221,9 +221,26 @@ export class WhatsAppService extends EventEmitter {
 
       // 3. Message Handling
       sock.ev.on("messages.upsert", async (m) => {
+        Logger.info(
+          `[WhatsApp Debug] 📨 messages.upsert received. Type: ${m.type}. Count: ${m.messages.length}`
+        );
+
+        // Log the raw structure of the first message to see what we are dealing with
+        if (m.messages.length > 0) {
+          console.log(
+            "[WhatsApp Debug] Raw Message Structure:",
+            JSON.stringify(m.messages[0], null, 2)
+          );
+        }
+
         if (m.type === "notify" || m.type === "append") {
           for (const msg of m.messages) {
-            if (!msg.message) continue;
+            if (!msg.message) {
+              Logger.warn(
+                "[WhatsApp Debug] Message has no content (msg.message is undefined). Skipping."
+              );
+              continue;
+            }
             await this.handleIncomingMessage(msg, sessionId);
           }
         }
@@ -283,7 +300,15 @@ export class WhatsAppService extends EventEmitter {
 
       console.log("🎯 SELECTED JID TO PROCESS:", jidToProcess);
 
-      if (!jidToProcess || jidToProcess === "status@broadcast") return;
+      if (!jidToProcess || jidToProcess === "status@broadcast") {
+        if (jidToProcess !== "status@broadcast") {
+          console.warn(
+            "[WhatsApp Debug] ⚠️ Skipping processing because JID could not be resolved or is invalid:",
+            msg.key
+          );
+        }
+        return;
+      }
 
       const remoteJid = jidToProcess;
 

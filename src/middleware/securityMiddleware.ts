@@ -25,7 +25,8 @@ export const securityMiddleware = (app: Express) => {
     envOrigins.push(frontendUrl);
   }
 
-  const allowedOrigins = [...defaultOrigins, ...envOrigins];
+  // Use a Set to automatically handle duplicates from default and env sources
+  const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
 
   console.log("[CORS] Allowed origins:", allowedOrigins);
 
@@ -42,10 +43,12 @@ export const securityMiddleware = (app: Express) => {
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.warn(
-          `[CORS] Warning: Origin ${origin} not in allowed list (but accepted temporarily)`
-        );
-        callback(null, true);
+        // For production, you should block requests from unknown origins
+        if (process.env.NODE_ENV === "production") {
+          callback(new Error(`Origin ${origin} not allowed by CORS`));
+        } else {
+          callback(null, true); // Allow in development for easier testing
+        }
       }
     },
     credentials: true,
@@ -61,7 +64,4 @@ export const securityMiddleware = (app: Express) => {
 
   // Configure CORS middleware
   app.use(cors(corsOptions));
-
-  // Explicitly handle Preflight
-  app.options("*", cors(corsOptions));
 };

@@ -15,7 +15,14 @@ class WebSocketGateway {
 
     this.io = new Server(httpServer, {
       cors: {
-        origin: "*", // Restricted in production via ENV if needed
+        origin: [
+          "http://localhost:5173",
+          "http://localhost:5174",
+          "https://reply.software",
+          "https://www.reply.software",
+          "https://crm-omnichannel.onrender.com",
+          process.env.FRONTEND_URL || "http://localhost:5173",
+        ],
         methods: ["GET", "POST"],
         credentials: true,
       },

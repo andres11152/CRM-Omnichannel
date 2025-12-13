@@ -71,11 +71,14 @@ const httpServer = createServer(app);
 app.set("trust proxy", 1);
 
 // --- SECURITY & PARSING ---
+// Aplicamos Helmet y CORS PRIMERO.
+securityMiddleware(app);
+
+// Luego el parsing
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-// Aplicamos Helmet y CORS. El Rate Limiting se aplicará por ruta.
+// El Rate Limiting se aplicará por ruta.
 // Es crucial que securityMiddleware NO aplique un rate-limiter global.
-securityMiddleware(app);
 
 // --- STATIC FILE SERVING FOR LOCAL MEDIA ---
 import path from "path";

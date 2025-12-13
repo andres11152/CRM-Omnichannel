@@ -30,29 +30,38 @@ export const securityMiddleware = (app: Express) => {
   console.log("[CORS] Allowed origins:", allowedOrigins);
 
   // Configure CORS middleware
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, Postman, etc.)
-        if (!origin) return callback(null, true);
+  const corsOptions = {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void
+    ) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
 
-        // Check if origin is in allowed list
-        if (allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          console.warn(`[CORS] Blocked origin: ${origin}`);
-          callback(null, true); // Still allow but log warning (change to false to block)
-        }
-      },
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-      allowedHeaders: [
-        "Origin",
-        "X-Requested-With",
-        "Content-Type",
-        "Accept",
-        "Authorization",
-      ],
-    })
-  );
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(
+          `[CORS] Warning: Origin ${origin} not in allowed list (but accepted temporarily)`
+        );
+        callback(null, true);
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+    ],
+  };
+
+  // Configure CORS middleware
+  app.use(cors(corsOptions));
+
+  // Explicitly handle Preflight
+  app.options("*", cors(corsOptions));
 };

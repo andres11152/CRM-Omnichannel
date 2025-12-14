@@ -808,7 +808,7 @@ export class WhatsAppService extends EventEmitter {
    * PUBLIC: Get session for a company
    * Used by queue worker to check session readiness
    */
-  public getSession(companyId: string): any {
+  public getSessionSocket(companyId: string): any {
     for (const [sessionId, sock] of this.sessions.entries()) {
       if (sessionId.includes(companyId)) {
         return sock;

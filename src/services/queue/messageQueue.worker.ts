@@ -3,7 +3,7 @@ import { MessageJob, messageQueueService } from "./messageQueue.service";
 import { WhatsAppService } from "../whatsapp.service";
 import { prisma } from "../../config/database";
 import { Logger } from "../../utils/logger";
-import { socketGateway } from "../../gateway/socket.gateway";
+import { gateway } from "../../gateways/socketGateway";
 
 /**
  * MESSAGE QUEUE WORKER
@@ -103,9 +103,9 @@ class MessageQueueWorker {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWait) {
-      const sock = this.whatsappService.getSession(companyId);
+      const sock = this.whatsappService.getSessionSocket(companyId);
 
-      if (sock && sock.ws?.readyState === sock.ws?.OPEN) {
+      if (sock && (sock as any).ws?.readyState === (sock as any).ws?.OPEN) {
         Logger.info(`[Worker] Session ready for ${companyId}`);
         return;
       }

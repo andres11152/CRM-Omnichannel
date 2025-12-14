@@ -16,6 +16,7 @@ import { Logger } from "@/utils/logger";
 import { securityMiddleware } from "@/middleware/securityMiddleware";
 import { apiLimiter, authLimiter } from "@/middleware/rateLimitMiddleware";
 import { connectRedis } from "@/config/redis";
+import { prisma } from "@/config/database";
 import { registerCompany } from "@/controllers/onboardingController";
 import authRouter from "@/routes/authRoutes";
 import userRouter from "@/routes/userRoutes";
@@ -197,7 +198,7 @@ if (require.main === module) {
 
         // Start workers for all active companies
         const companies = await prisma.company.findMany({
-          where: { active: true },
+          where: { isActive: true },
         });
         console.log(`[Server] Found ${companies.length} active companies`);
 

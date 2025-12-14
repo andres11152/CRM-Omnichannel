@@ -21,41 +21,50 @@ export const createConversation = catchAsync(
     // Clean phone number (remove non-digits)
     const cleanPhone = phone.replace(/[^\d]/g, "");
 
-    // 1. Check if user exists (Customer) - use same format as WhatsApp service
+    // 1. Find or Create user (Customer) - Smart name handling
     const email = `${cleanPhone}@whatsapp.user`;
-    let customer = await prisma.user.findFirst({
-      where: {
+
+    // Check if user exists to preserve real WhatsApp name
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+
+    const customer = await prisma.user.upsert({
+      where: { email },
+      update: {
+        // Only update if current name is generic
+        ...(name &&
+          existingUser &&
+          (existingUser.name === cleanPhone ||
+            existingUser.name === "Usuario WhatsApp" ||
+            !existingUser.name) && { name }),
+      },
+      create: {
         email,
+        name: name || cleanPhone,
+        password: "$2a$10$DummyHashForCustomerUser123456",
+        role: "USER",
         companyId: req.companyId,
+        phone: cleanPhone,
       },
     });
 
-    if (!customer) {
-      // Create new customer user with proper name
-      customer = await prisma.user.create({
-        data: {
-          email,
-          name: name || cleanPhone, // Use provided name or phone as fallback
-          password: "$2a$10$DummyHashForCustomerUser123456", // Dummy hash
-          role: "USER",
-          companyId: req.companyId,
-        },
-      });
-    }
-
-    // 2. Check if conversation already exists for this phone/channelId
+    // 2. Check if conversation already exists with this PHONE NUMBER
+    // 🔑 Search by phone, not user.id (prevents duplicates)
     let conversation = await prisma.conversation.findFirst({
       where: {
         companyId: req.companyId,
-        channelId: cleanPhone,
+        OR: [
+          { channelId: cleanPhone },
+          { participants: { some: { phone: cleanPhone } } },
+          { participants: { some: { email: `${cleanPhone}@whatsapp.user` } } },
+        ],
         status: "OPEN",
       },
       include: { participants: true, messages: true },
+      orderBy: { createdAt: "desc" },
     });
 
     if (conversation) {
       // Conversation already exists, return it
-
       res.status(200).json({
         status: "success",
         data: { conversation },
@@ -67,7 +76,7 @@ export const createConversation = catchAsync(
     conversation = await prisma.conversation.create({
       data: {
         companyId: req.companyId,
-        subject: name || cleanPhone,
+        subject: customer.name, // Use real WhatsApp name from DB
         status: "OPEN",
         participants: {
           connect: [{ id: customer.id }, { id: req.user.id }],
@@ -96,18 +105,8 @@ export const createConversation = catchAsync(
     });
 
     // 5. Send Message if provided
+    // ✅ whatsappService.sendMessage handles BOTH sending AND persisting
     if (message) {
-      await prisma.message.create({
-        data: {
-          content: message,
-          channel: "WHATSAPP",
-          direction: "OUTBOUND",
-          conversationId: conversation.id,
-          senderId: req.user.id,
-        },
-      });
-
-      // Send to WhatsApp
       try {
         await whatsappService.sendMessage(cleanPhone, message, {
           companyId: req.companyId,
@@ -252,6 +251,16 @@ export const replyToConversation = catchAsync(
     }
     const { content, channel, attachment, phone: bodyPhone } = req.body;
 
+    // 🔍 CRITICAL DEBUG: Log ALL requests, especially with attachments
+    console.log("🎯 [Reply] Request received:", {
+      conversationId: req.params.id,
+      content: content || "[empty]",
+      channel,
+      hasAttachment: !!attachment,
+      attachmentType: attachment?.type,
+      phone: bodyPhone,
+    });
+
     let conversation = await prisma.conversation.findUnique({
       where: { id: req.params.id },
       include: { participants: true },
@@ -374,6 +383,15 @@ export const replyToConversation = catchAsync(
     let message;
     if (channel === "WHATSAPP") {
       try {
+        console.log(
+          "🚀 [Reply] Calling whatsappService.sendMessage with attachment:",
+          {
+            type: attachment?.type,
+            hasUrl: !!attachment?.url,
+            urlLength: attachment?.url?.length,
+          }
+        );
+
         message = await whatsappService.sendMessage(
           targetPhone,
           messageContent,
@@ -384,9 +402,15 @@ export const replyToConversation = catchAsync(
             media: attachment,
           }
         );
-      } catch (error) {
-        console.error("[Reply] Failed to send WhatsApp message:", error);
-        throw new AppError("Failed to send message via WhatsApp provider", 502);
+      } catch (error: any) {
+        console.error("❌ [Reply] Failed to send WhatsApp message:");
+        console.error("Error message:", error?.message);
+        console.error("Error stack:", error?.stack);
+        console.error("Full error:", JSON.stringify(error, null, 2));
+        throw new AppError(
+          `Failed to send message via WhatsApp: ${error?.message}`,
+          502
+        );
       }
     } else {
       // Fallback for other channels (not implemented fully yet, but keep logic safe)

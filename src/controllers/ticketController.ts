@@ -83,9 +83,13 @@ const mapTicketToFrontend = (ticket: any) => {
             derivedPhone ||
             ticket.conversation?.channelId,
           companyId: ticket.companyId,
-          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            displayName
-          )}`,
+          avatarUrl:
+            ticket.createdBy.profilePicUrl ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+              displayName
+            )}`,
+          profilePicUrl: ticket.createdBy.profilePicUrl,
+          about: ticket.createdBy.about,
           lastMessage: "",
           lastMessageTime: new Date(),
           unreadCount: 0,

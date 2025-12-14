@@ -187,6 +187,52 @@ if (require.main === module) {
 
       console.log("[Server] Workflow Engine initialized");
 
+      // ✅ Initialize Message Queue Workers
+      console.log("[Server] 🚀 Initializing Message Queue Workers...");
+      try {
+        const { getMessageQueueWorker } = await import(
+          "./services/queue/messageQueue.worker"
+        );
+        const messageWorker = getMessageQueueWorker(whatsappService);
+
+        // Start workers for all active companies
+        const companies = await prisma.company.findMany({
+          where: { active: true },
+        });
+        console.log(`[Server] Found ${companies.length} active companies`);
+
+        for (const company of companies) {
+          console.log(
+            `[Server] Starting worker for: ${company.name} (${company.id})`
+          );
+          await messageWorker.startWorker(company.id);
+          Logger.info(`[Server] 👷 Worker started for: ${company.name}`);
+        }
+        console.log(
+          `[Server] ✅ ${companies.length} message queue workers initialized`
+        );
+
+        // Graceful shutdown handler
+        process.on("SIGTERM", async () => {
+          console.log(
+            "[Server] 🛑 SIGTERM received, shutting down gracefully..."
+          );
+          await messageWorker.shutdown();
+          const { messageQueueService } = await import(
+            "./services/queue/messageQueue.service"
+          );
+          await messageQueueService.shutdown();
+          process.exit(0);
+        });
+      } catch (workerError: any) {
+        Logger.error("[Server] ❌ Failed to initialize workers:");
+        Logger.error(workerError);
+        if (workerError.stack) {
+          Logger.error("Stack trace:", workerError.stack);
+        }
+        console.log("[Server] ⚠️  Continuing without queue workers...");
+      }
+
       httpServer.listen(Number(PORT), () => {
         console.log(
           `✅ ¡ÉXITO! CRM SaaS Backend corriendo en el puerto ${PORT}`

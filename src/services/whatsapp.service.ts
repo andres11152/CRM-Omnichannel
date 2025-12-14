@@ -130,16 +130,20 @@ export class WhatsAppService extends EventEmitter {
           Logger.info(`[WhatsApp] QR Generated for ${sessionId}`);
 
           try {
-            await prisma.whatsAppSession.upsert({
+            const existingSession = await prisma.whatsAppSession.findUnique({
               where: { sessionId },
-              update: { qrCode: qr, status: "SCANNING" },
-              create: {
-                sessionId,
-                companyId: "unknown",
-                status: "SCANNING",
-                qrCode: qr,
-              },
             });
+
+            if (existingSession) {
+              await prisma.whatsAppSession.update({
+                where: { sessionId },
+                data: { qrCode: qr, status: "SCANNING" },
+              });
+            } else {
+              Logger.warn(
+                `[WhatsApp] Session ${sessionId} deleted. Skipping QR update.`
+              );
+            }
           } catch (err) {
             Logger.warn(
               `[WhatsApp] Failed to update QR for ${sessionId}:`,
@@ -568,6 +572,14 @@ export class WhatsAppService extends EventEmitter {
   ): Promise<any> {
     const { companyId, channelId, conversationId, senderId, media } = options;
 
+    // 🔍 CRITICAL DEBUG
+    console.log("🎯 [WhatsApp.sendMessage] Received params:", {
+      to,
+      hasMedia: !!media,
+      mediaType: media?.type,
+      mediaUrlLength: media?.url?.length,
+    });
+
     // 1. Validation
     const cleanPhone = to.replace(/[^\d]/g, "");
 
@@ -581,6 +593,36 @@ export class WhatsAppService extends EventEmitter {
 
     const validation = phoneNumberSchema.safeParse(cleanPhone);
     if (!validation.success) throw new Error("Invalid phone number format");
+
+    // ✅ QUEUE SYSTEM: Route media to queue, text goes direct
+    // TODO: Re-enable after debugging worker initialization issue
+    // if (media && media.url) {
+    //   Logger.info(`[WhatsApp] 📥 Enqueuing media message to queue`);
+    //   const { messageQueueService } = await import(
+    //     "./queue/messageQueue.service"
+    //   );
+    //
+    //   const jobId = await messageQueueService.enqueue({
+    //     companyId,
+    //     conversationId,
+    //     senderId,
+    //     to: cleanPhone,
+    //     text,
+    //     media,
+    //   });
+    //
+    //   Logger.info(`[WhatsApp] ✅ Message enqueued with job ID: ${jobId}`);
+    //
+    //   // Return placeholder while queue processes
+    //   return {
+    //     id: `queued_${jobId}`,
+    //     status: "QUEUED",
+    //     jobId,
+    //   };
+    // }
+
+    // ALL messages (text + media) sent immediately
+    Logger.info(`[WhatsApp] 📤 Sending message immediately`);
 
     // 2. Find Correct Session
     let sock: WASocket | undefined;
@@ -642,32 +684,75 @@ export class WhatsAppService extends EventEmitter {
       throw new Error("No active WhatsApp session found");
     }
 
+    // Baileys handles connection state internally, no need to wait
+
     const jid = `${cleanPhone}@s.whatsapp.net`;
 
     // 3. SEND via Baileys
     try {
       if (media) {
+        Logger.info(
+          `[WhatsApp] 🎬 Processing media: type=${media.type}, mimetype=${media.mimetype}`
+        );
+
+        // ✅ ARCHITECTURE: S3 for storage, Buffer for WhatsApp
+        let mediaBuffer: Buffer | { url: string };
+        let s3Url = media.url;
+
+        // 1. If base64, convert and upload to S3
+        if (media.url.startsWith("data:")) {
+          Logger.info(`[WhatsApp] 🔄 Converting base64 to Buffer...`);
+          const base64Data = media.url.split(",")[1];
+          mediaBuffer = Buffer.from(base64Data, "base64");
+
+          try {
+            const { storageService } = await import("./storageService");
+            const result = await storageService.uploadFile(
+              mediaBuffer,
+              media.name || `${media.type}-${Date.now()}.webm`,
+              media.mimetype || "application/octet-stream",
+              false
+            );
+            s3Url = result.url; // Signed URL
+            media.url = s3Url; // Update for DB persistence
+            Logger.info(
+              `[WhatsApp] 📤 ${media.type.toUpperCase()} uploaded to S3: ${
+                result.key
+              }`
+            );
+          } catch (err) {
+            Logger.error("[WhatsApp] Failed to upload media to S3:", err);
+            throw new Error("Failed to upload media");
+          }
+        } else if (media.url.startsWith("http")) {
+          // If URL, let Baileys download it
+          mediaBuffer = { url: media.url };
+        } else {
+          throw new Error("Invalid media URL format");
+        }
+
+        // 2. Send to WhatsApp using appropriate method
         if (media.type === "image") {
           await sock.sendMessage(jid, {
-            image: { url: media.url },
+            image: mediaBuffer,
             caption: text,
           });
         } else if (media.type === "video") {
           await sock.sendMessage(jid, {
-            video: { url: media.url },
+            video: mediaBuffer,
             caption: text,
           });
         } else if (media.type === "document") {
           await sock.sendMessage(jid, {
-            document: { url: media.url },
+            document: mediaBuffer,
             mimetype: media.mimetype,
             fileName: media.name || "file",
           });
         } else if (media.type === "audio") {
           await sock.sendMessage(jid, {
-            audio: { url: media.url },
-            mimetype: media.mimetype,
-            ptt: !!media.isPrivate,
+            audio: mediaBuffer,
+            mimetype: media.mimetype || "audio/ogg; codecs=opus",
+            ptt: !!media.isVoiceNote,
           });
         }
       } else {
@@ -717,6 +802,38 @@ export class WhatsAppService extends EventEmitter {
       Logger.error(`[WhatsApp] Send or Persistence failed to ${jid}`, err);
       throw err; // ✅ Force Error Propagation
     }
+  }
+
+  /**
+   * PUBLIC: Get session for a company
+   * Used by queue worker to check session readiness
+   */
+  public getSession(companyId: string): any {
+    for (const [sessionId, sock] of this.sessions.entries()) {
+      if (sessionId.includes(companyId)) {
+        return sock;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * PUBLIC: Send message directly (bypassing queue)
+   * Used by queue worker after media is uploaded
+   */
+  public async sendMessageDirect(
+    to: string,
+    text: string,
+    options: {
+      companyId: string;
+      conversationId: string;
+      senderId: string;
+      channelId?: string;
+      media?: any;
+    }
+  ): Promise<any> {
+    // This calls the current sendMessage implementation
+    return this.sendMessage(to, text, options);
   }
 }
 

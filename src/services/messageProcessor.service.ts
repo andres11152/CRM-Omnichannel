@@ -181,8 +181,20 @@ export const messageProcessor = {
       });
 
       // 4. FIND OR CREATE CONVERSATION
+      // 🔑 DEFINITIVE FIX: Search by PHONE NUMBER, not user.id
+      // Same contact can have multiple user records (different JIDs)
       let conversation = await prisma.conversation.findFirst({
-        where: { companyId, channelId: phone },
+        where: {
+          companyId,
+          OR: [
+            { channelId: phone },
+            { participants: { some: { phone: phone } } },
+            { participants: { some: { email: `${phone}@whatsapp.user` } } },
+          ],
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
       });
 
       if (!conversation) {
@@ -219,7 +231,19 @@ export const messageProcessor = {
           });
         });
       } else {
-        // 4b. UPDATE CONVERSATION METADATA (Only for Inbound)
+        // 4b. UPDATE CONVERSATION METADATA
+        // 🔄 Update channelId if it changed (phone vs LID format)
+        if (conversation.channelId !== phone) {
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { channelId: phone },
+          });
+          console.log(
+            `[MsgProcessor] 🔄 Updated channelId: ${conversation.channelId} → ${phone}`
+          );
+        }
+
+        // Update subject only for inbound with valid names
         if (!isOutbound) {
           const currentSubjectIsGeneric =
             conversation.subject === phone ||

@@ -44,10 +44,16 @@ export const useRedisAuthState = async (
       if (data) {
         return JSON.parse(data, BufferJSON.reviver);
       }
+      return null;
     } catch (error) {
-      console.error(`[RedisAuth] Error reading ${field}:`, error);
+      // CRITICAL: Propagate error on infrastructure failure
+      // If we return null here, Baileys will create a NEW session, overwriting the old one!
+      console.error(
+        `[RedisAuth] 💥 CRITICAL REDIS ERROR reading ${field}:`,
+        error
+      );
+      throw error;
     }
-    return null;
   };
 
   // 2. Helper to write JSON to Redis

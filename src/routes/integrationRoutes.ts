@@ -186,6 +186,6 @@ router.delete(
   }
 );
 
-// router.post("/whatsapp/sync", integrationController.syncMessages); // Deprecated
+router.post("/whatsapp/sync", integrationController.syncMessages);
 
 export default router;

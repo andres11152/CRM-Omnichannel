@@ -36,8 +36,28 @@ class WebSocketGateway {
     if (redisUrl) {
       console.log(`[Gateway] 🔌 Connecting to Redis at ${redisUrl}...`);
       try {
-        const pubClient = createClient({ url: redisUrl });
+        const pubClient = createClient({
+          url: redisUrl,
+          pingInterval: 10000, // 💓 Keep connection alive
+          socket: {
+            connectTimeout: 50000,
+            tls: redisUrl.startsWith("rediss://"),
+            rejectUnauthorized: false
+          },
+        });
         const subClient = pubClient.duplicate();
+
+        // 🛡️ CRITICAL: Prevent crash on Redis errors & Silence Noise
+        const errorHandler = (err: any) => {
+          if (
+            err.message?.includes("ECONNRESET") ||
+            err.message?.includes("ETIMEDOUT")
+          )
+            return;
+          console.error("[Gateway] Redis Error:", err.message);
+        };
+        pubClient.on("error", errorHandler);
+        subClient.on("error", errorHandler);
 
         await Promise.all([pubClient.connect(), subClient.connect()]);
 

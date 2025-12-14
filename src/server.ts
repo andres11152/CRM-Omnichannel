@@ -52,6 +52,15 @@ import companyRouter from "@/routes/companyRoutes";
 import analyticsRouter from "@/routes/analyticsRoutes";
 
 process.on("uncaughtException", (err: Error) => {
+  // Ignorar errores de red triviales que Node a veces no atrapa
+  if (
+    err.message?.includes("ECONNRESET") ||
+    err.message?.includes("ETIMEDOUT") ||
+    err.message?.includes("EPIPE")
+  ) {
+    return;
+  }
+
   Logger.error("UNCAUGHT EXCEPTION! 💥");
   Logger.error(err);
 
@@ -71,6 +80,16 @@ process.on("uncaughtException", (err: Error) => {
 });
 
 process.on("unhandledRejection", (reason: any) => {
+  // Silence network noise in promises
+  const msg = reason?.message || String(reason);
+  if (
+    msg.includes("ECONNRESET") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("Socket closed")
+  ) {
+    return;
+  }
+
   Logger.error("UNHANDLED REJECTION! 🔥");
   Logger.error(reason);
 
@@ -157,18 +176,7 @@ app.use((req, res, next) => {
 
 app.use(globalErrorHandler);
 
-(process as any).on("unhandledRejection", (reason: any) => {
-  Logger.error("UNHANDLED REJECTION! 💥 Shutting down...");
-  if (reason instanceof Error) {
-    Logger.error(reason);
-  } else {
-    Logger.error(new Error(`Promise rejected with non-error value: ${reason}`));
-  }
-
-  httpServer.close(() => {
-    process.exit(1);
-  });
-});
+// (Redundant handler removed)
 
 const PORT = process.env.PORT || 4000;
 

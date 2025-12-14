@@ -55,21 +55,61 @@ class MessageQueueService {
    */
   public getQueue(companyId: string): Queue<MessageJob> {
     if (!this.queues.has(companyId)) {
-      const queue = new Bull<MessageJob>(`whatsapp-messages:${companyId}`, {
-        redis: this.redisConfig,
-        defaultJobOptions: {
-          attempts: 3, // Retry 3 times
-          backoff: {
-            type: "exponential",
-            delay: 2000, // Start with 2s, then 4s, then 8s
-          },
-          removeOnComplete: 100, // Keep last 100 completed jobs
-          removeOnFail: 500, // Keep last 500 failed jobs for debugging
+      const redisUrl = process.env.REDIS_URL;
+      const redisAdvancedOpts = {
+        maxRetriesPerRequest: null, // 🔥 CRITICAL for Bull reliability
+        enableReadyCheck: false,
+        connectTimeout: 30000, // Tolerant timeout
+        retryStrategy: (times: number) => Math.min(times * 50, 2000),
+      };
+
+      const defaultJobOptions: any = {
+        attempts: 10, // Increased retries
+        backoff: {
+          type: "exponential",
+          delay: 1000,
         },
-      });
+        removeOnComplete: 100,
+        removeOnFail: 1000,
+      };
+
+      let queue: Queue<MessageJob>;
+
+      if (redisUrl) {
+        // Use URL + Options Merge
+        queue = new Bull<MessageJob>(
+          `whatsapp-messages:${companyId}`,
+          redisUrl,
+          {
+            redis: redisAdvancedOpts,
+            defaultJobOptions,
+          }
+        );
+      } else {
+        // Fallback Config
+        const redisConfig: any = {
+          host: process.env.REDIS_HOST || "localhost",
+          port: parseInt(process.env.REDIS_PORT || "6379"),
+          password: process.env.REDIS_PASSWORD,
+        };
+        queue = new Bull<MessageJob>(`whatsapp-messages:${companyId}`, {
+          redis: { ...redisConfig, ...redisAdvancedOpts },
+          defaultJobOptions,
+        });
+      }
 
       // Event listeners for monitoring
       queue.on("error", (error) => {
+        // 🤫 SILENCE KNOWN NETWORK NOISE
+        if (
+          error.message?.includes("ECONNRESET") ||
+          error.message?.includes("ETIMEDOUT") ||
+          error.message?.includes("Socket closed unexpectedly") ||
+          error.message?.includes("read E")
+        ) {
+          // Bull/Redis auto-reconnects. No action needed.
+          return;
+        }
         Logger.error(`[Queue:${companyId}] Error:`, error);
       });
 

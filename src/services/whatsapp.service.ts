@@ -1,9 +1,13 @@
 // src/services/whatsapp.service.ts
 import { prisma } from "@/config/prisma";
+import fs from "fs";
+import path from "path";
 import makeWASocket, {
   DisconnectReason,
   WASocket,
   fetchLatestBaileysVersion,
+  makeInMemoryStore,
+  jidNormalizedUser,
 } from "@whiskeysockets/baileys";
 import { EventEmitter } from "events";
 import path from "path";
@@ -21,6 +25,7 @@ import { phoneNumberSchema } from "@/utils/validators";
  */
 export class WhatsAppService extends EventEmitter {
   private sessions: Map<string, WASocket> = new Map();
+  private stores: Map<string, any> = new Map(); // Store history per session
   // Store retry counts to prevent infinite loops on specific errors (Self-Healing)
   private retryCounts: Map<string, number> = new Map();
   private MAX_RETRIES = 5;
@@ -97,7 +102,24 @@ export class WhatsAppService extends EventEmitter {
         this.sessions.delete(sessionId);
       }
 
-      const { state, saveCreds } = await useRedisAuthState(sessionId);
+      // 🔄 RETRY LOGIC: Infrastructure Resilience
+      // Attempt to load auth state 3 times (Redis blips)
+      let authState;
+      let loadRetries = 0;
+      while (!authState && loadRetries < 3) {
+        try {
+          authState = await useRedisAuthState(sessionId);
+        } catch (err: any) {
+          loadRetries++;
+          Logger.warn(
+            `[WhatsApp] 🛑 Auth Load Failed (Attempt ${loadRetries}/3): ${err.message}`
+          );
+          if (loadRetries >= 3) throw err; // Propagate after max retries
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
+
+      const { state, saveCreds } = authState!;
       const { version } = await fetchLatestBaileysVersion();
 
       const sock = makeWASocket({
@@ -112,6 +134,114 @@ export class WhatsAppService extends EventEmitter {
         // Emulate a standard browser to avoid suspicious activity flags
         browser: ["Reply CRM", "Chrome", "10.0.0"],
       });
+
+      // 🧠 Custom Lightweight Store (Fallback for dependency issues)
+      // 🧠 Persistent Simple Store (JSON based)
+      // Fixes "Empty Store on Restart" issue
+      const storePath = path.join(
+        process.cwd(),
+        "wadata",
+        `store_${sessionId}.json`
+      );
+      // Ensure dir exists
+      if (!fs.existsSync(path.join(process.cwd(), "wadata"))) {
+        fs.mkdirSync(path.join(process.cwd(), "wadata"), { recursive: true });
+      }
+
+      const store = {
+        chats: {
+          data: {} as Record<string, any>,
+          all: function () {
+            return Object.values(this.data);
+          },
+        },
+        messages: {} as Record<string, { array: any[] }>,
+
+        // Load from disk
+        load: () => {
+          if (fs.existsSync(storePath)) {
+            try {
+              const data = JSON.parse(fs.readFileSync(storePath, "utf-8"));
+              store.chats.data = data.chats || {};
+              store.messages = data.messages || {};
+              Logger.info(
+                `[Store] 📂 Loaded ${
+                  Object.keys(store.messages).length
+                } chats from disk.`
+              );
+            } catch (e) {
+              Logger.error(`[Store] Failed to load store from disk`, e);
+            }
+          }
+        },
+
+        // Save to disk (Throttled could be better, but direct for now to ensure consistency)
+        save: () => {
+          try {
+            const data = { chats: store.chats.data, messages: store.messages };
+            // Write sync to prevent race conditions in this MVP
+            fs.writeFileSync(storePath, JSON.stringify(data, null, 2));
+          } catch (e) {
+            // Ignore intermittent save errors
+          }
+        },
+
+        bind: (ev: any) => {
+          // 1. Capture Upserts
+          ev.on("messages.upsert", (upsert: any) => {
+            if (upsert.messages.length > 0)
+              Logger.info(`[Store] 📥 Upsert: ${upsert.messages.length} msgs`);
+
+            let changed = false;
+            for (const msg of upsert.messages) {
+              const jid = msg.key.remoteJid;
+              if (!jid) continue;
+
+              if (!store.messages[jid]) store.messages[jid] = { array: [] };
+              if (!store.chats.data[jid]) store.chats.data[jid] = { id: jid };
+
+              const arr = store.messages[jid].array;
+              // Dedupe
+              if (!arr.some((m: any) => m.key.id === msg.key.id)) {
+                arr.push(msg);
+                changed = true;
+                // Limit to last 1000 per chat to save disk space
+                if (arr.length > 1000)
+                  store.messages[jid].array = arr.slice(-1000);
+              }
+            }
+            if (changed) store.save();
+          });
+
+          // 2. Capture History
+          ev.on("messaging-history.set", (data: any) => {
+            Logger.info(`[Store] 📚 History Set Received`);
+            let changed = false;
+            if (data.chats) {
+              data.chats.forEach((c: any) => (store.chats.data[c.id] = c));
+              changed = true;
+            }
+            if (data.messages) {
+              for (const item of data.messages) {
+                const msg = item;
+                const jid = msg.key?.remoteJid;
+                if (jid) {
+                  if (!store.messages[jid]) store.messages[jid] = { array: [] };
+                  store.messages[jid].array.push(msg);
+                  changed = true;
+                }
+              }
+            }
+            if (changed) store.save();
+          });
+        },
+      };
+
+      // Load initial data
+      store.load();
+
+      store.bind(sock.ev);
+      this.stores.set(sessionId, store);
 
       this.sessions.set(sessionId, sock);
 
@@ -277,12 +407,28 @@ export class WhatsAppService extends EventEmitter {
           }
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       Logger.error(
         `[WhatsApp] Fatal error initializing session ${sessionId}`,
         error
       );
-      this.handleSessionFailure(sessionId);
+
+      // 🧠 INTELLIGENT FAILURE HANDLING
+      // If error is related to connection/infrastructure, reschedule instead of killing
+      const isInfraError =
+        error.message?.includes("Redis") ||
+        error.message?.includes("Socket closed") ||
+        error.message?.includes("ECONNRESET");
+
+      if (isInfraError) {
+        Logger.warn(
+          `[WhatsApp] ⏳ Infrastructure error detected for ${sessionId}. Scheduling retry in 10s...`
+        );
+        setTimeout(() => this.initializeSession(sessionId), 10000);
+      } else {
+        // Only kill session for actual logic/auth failures
+        this.handleSessionFailure(sessionId);
+      }
     } finally {
       this.initializingSessions.delete(sessionId);
     }
@@ -329,16 +475,27 @@ export class WhatsAppService extends EventEmitter {
 
       const isOutbound = msg.key?.fromMe === true;
 
-      // ✅ SMART JID SELECTION (Mirror Mode Support)
+      // 🚫 SKIP OUTBOUND MESSAGES (Already saved in sendMessage())
+      // When we send a message, WhatsApp confirms it with fromMe=true
+      // We don't want to process it again and duplicate it in the UI
+      if (isOutbound) {
+        // ✅ ALLOW SYNC: Messages sent from phone should arrive here.
+        // MessageProcessor handle deduplication for messages sent via CRM.
+        console.log(
+          `[WhatsApp] 📤 Outbound message detected (Phone Sync). Processing...`
+        );
+      }
+
+      // ✅ SMART JID SELECTION (CRITICAL FIX FOR SYNC)
       let jidToProcess = null;
 
       if (isOutbound) {
-        // If sending FROM phone (Mirror), the remoteJid is the Recipient (The Customer)
+        // 📤 OUTBOUND (Phone Sync): The contact is the RECIPIENT (`remoteJid`)
+        // We must ignore `participant` because that is US (the agent).
         jidToProcess = msg.key?.remoteJid;
-        console.log(`[WhatsApp] 🪞 Mirror Mode: Outbound to ${jidToProcess}`);
       } else {
-        // If receiving (Inbound), we want the Sender (The Customer)
-        // Prioritize remoteJidAlt (real phone) -> participant -> remoteJid
+        // 📥 INBOUND (Customer): The contact is the SENDER.
+        // In groups/LID mode, sender is in `participant` or `remoteJidAlt`.
         jidToProcess =
           (msg.key as any).remoteJidAlt ||
           msg.key?.participant ||
@@ -568,9 +725,11 @@ export class WhatsAppService extends EventEmitter {
       senderId: string; // REQUIRED for persistence
       channelId?: string;
       media?: any;
+      metadata?: any; // ✅ NEW: Support for AI metadata
     }
   ): Promise<any> {
-    const { companyId, channelId, conversationId, senderId, media } = options;
+    const { companyId, channelId, conversationId, senderId, media, metadata } =
+      options;
 
     // 🔍 CRITICAL DEBUG
     console.log("🎯 [WhatsApp.sendMessage] Received params:", {
@@ -626,6 +785,8 @@ export class WhatsAppService extends EventEmitter {
 
     // 2. Find Correct Session
     let sock: WASocket | undefined;
+    let currentSessionId: string | undefined;
+
     if (channelId) {
       const session = await prisma.whatsAppSession.findFirst({
         where: {
@@ -634,7 +795,10 @@ export class WhatsAppService extends EventEmitter {
           status: "CONNECTED",
         },
       });
-      if (session) sock = this.sessions.get(session.sessionId);
+      if (session) {
+        sock = this.sessions.get(session.sessionId);
+        currentSessionId = session.sessionId;
+      }
     }
 
     if (!sock) {
@@ -646,6 +810,7 @@ export class WhatsAppService extends EventEmitter {
       for (const s of sessions) {
         if (this.sessions.has(s.sessionId)) {
           sock = this.sessions.get(s.sessionId);
+          currentSessionId = s.sessionId;
           break;
         }
       }
@@ -672,6 +837,7 @@ export class WhatsAppService extends EventEmitter {
 
         if (this.sessions.has(victim.sessionId)) {
           sock = this.sessions.get(victim.sessionId);
+          currentSessionId = victim.sessionId;
           Logger.info(
             `[WhatsApp] 🚑 Revival successful for ${victim.sessionId}`
           );
@@ -770,25 +936,44 @@ export class WhatsAppService extends EventEmitter {
           status: "SENT", // ✅ Explicit Status
           conversationId,
           senderId,
-          metadata: media ? { media } : undefined,
+          metadata: media ? { ...metadata, media } : metadata,
         },
         include: { sender: true },
       });
 
-      // 5. EMIT Real-Time Event
+      // 5. NO EMIT SOCKET FOR AGENT MESSAGES
+      // Frontend already receives the message in HTTP response
+      // Emitting here would cause duplication in the UI
+      // Socket events are ONLY for INBOUND messages from customers
+
+      // COMENTADO PARA EVITAR DUPLICACIÓN:
+      // const io = gateway.getIO();
+      // if (io) {
+      //   const socketPayload = {
+      //     ...message,
+      //     senderType: "AGENT",
+      //     ticketId: conversationId,
+      //   };
+      //   io.to(conversationId).emit("conversation.new_message", socketPayload);
+      //   io.to(conversationId).emit("message", socketPayload);
+      //   io.to(`company:${companyId}`).emit("conversation.updated", {
+      //     id: conversationId,
+      //     lastMessage: text,
+      //     lastMessageAt: new Date(),
+      //     unreadCount: 0,
+      //   });
+      // }
+
+      // 5. EMIT Real-Time Event (Restored)
       const io = gateway.getIO();
       if (io) {
-        // ... (Emission logic remains same)
         const socketPayload = {
           ...message,
           senderType: "AGENT",
           ticketId: conversationId,
         };
-
         io.to(conversationId).emit("conversation.new_message", socketPayload);
         io.to(conversationId).emit("message", socketPayload);
-
-        // Update Dashboard List
         io.to(`company:${companyId}`).emit("conversation.updated", {
           id: conversationId,
           lastMessage: text,
@@ -797,9 +982,32 @@ export class WhatsAppService extends EventEmitter {
         });
       }
 
+      Logger.info(`[WhatsApp] ✅ Message saved, emitted and returned`);
+
       return message; // ✅ Return DB Object
-    } catch (err) {
+    } catch (err: any) {
       Logger.error(`[WhatsApp] Send or Persistence failed to ${jid}`, err);
+
+      // 🚑 SELF-HEALING: If session is broken, attempt to fix it for next time
+      const isSessionError =
+        err.message?.includes("SessionError") ||
+        err.message?.includes("Socket closed") ||
+        err.message?.includes("No sessions") ||
+        err.message?.includes("Connection Closed");
+
+      // @ts-ignore
+      if (isSessionError && currentSessionId) {
+        Logger.warn(
+          // @ts-ignore
+          `[WhatsApp] 🚑 Detecting broken session ${currentSessionId}. Triggering re-initialization.`
+        );
+        // Don't await, let it happen in background
+        // @ts-ignore
+        this.sessions.delete(currentSessionId); // Clear bad reference immediately
+        // @ts-ignore
+        this.initializeSession(currentSessionId).catch((e) => console.error(e));
+      }
+
       throw err; // ✅ Force Error Propagation
     }
   }
@@ -834,6 +1042,178 @@ export class WhatsAppService extends EventEmitter {
   ): Promise<any> {
     // This calls the current sendMessage implementation
     return this.sendMessage(to, text, options);
+  }
+  /**
+   * 🔄 SYNC OLD MESSAGES (From Memory Store)
+   * Fetches up to 50 messages per chat from the Baileys RAM Cache.
+   * Note: This only works for messages received since the bot was started/synced.
+   */
+  public async syncMessages(companyId: string, fromDate: Date) {
+    Logger.info(
+      `[Sync] Starting sync for ${companyId} since ${fromDate.toISOString()}`
+    );
+
+    const sessions = await prisma.whatsAppSession.findMany({
+      where: { companyId },
+    });
+
+    // Prioritize CONNECTED, then SCANNING, then others
+    let session = sessions.find((s) => s.status === "CONNECTED") || sessions[0];
+
+    if (!session) {
+      throw new Error("No WhatsApp session found. Please link a device first.");
+    }
+
+    // 🚑 SELF-HEALING: Auto-Reconnect if Disconnected
+    if (session.status !== "CONNECTED") {
+      Logger.warn(
+        `[Sync] Session ${session.sessionId} is ${session.status}. Attempting AUTO-RECONNECT...`
+      );
+
+      try {
+        await this.initializeSession(session.sessionId);
+
+        // Wait up to 45s for connection (Baileys history sync timeout is 20s, so we need more)
+        let attempts = 0;
+        while (attempts < 45) {
+          await new Promise((r) => setTimeout(r, 1000));
+          const freshSession = await prisma.whatsAppSession.findUnique({
+            where: { sessionId: session.sessionId },
+          });
+          if (freshSession?.status === "CONNECTED") {
+            Logger.info(
+              `[Sync] ✅ Auto-reconnect successful for ${session.sessionId}`
+            );
+            session = freshSession; // Update reference
+
+            // 🕒 Wait extra 10s for History Sync (Store population)
+            // Baileys buffers messages during 'AwaitingInitialSync'. When it goes 'Online', it flushes them.
+            Logger.info(`[Sync] Waiting 10s for WhatsApp History Flush...`);
+            await new Promise((r) => setTimeout(r, 10000));
+            break;
+          }
+          attempts++;
+        }
+
+        if (session.status !== "CONNECTED") {
+          throw new Error(
+            "Auto-reconnect failed. Please reconnect manually via Dashboard."
+          );
+        }
+      } catch (e: any) {
+        Logger.error(`[Sync] Auto-healing failed:`, e);
+        throw new Error(
+          `Session is disconnected and auto-reconnect failed: ${e.message}`
+        );
+      }
+    }
+
+    const store = this.stores.get(session.sessionId);
+    if (!store) {
+      Logger.warn(
+        `[Sync] Store not found for ${session.sessionId}. Force-initializing store...`
+      );
+      // Fallback: If store handling failed during init
+      return {
+        chats: 0,
+        messages: 0,
+        warning:
+          "Message cache unavailable even after connect. Try again in 1 minute.",
+      };
+    }
+
+    const { messageProcessor } = await import("./messageProcessor.service");
+    let importedCount = 0;
+    let chatsCount = 0;
+
+    // Get all chats from store
+    // Check if store.chats is accessible (it should be KeyedDB)
+    const chats = store.chats.all ? store.chats.all() : [];
+    chatsCount = chats.length;
+    Logger.info(`[Sync] Found ${chatsCount} chats in RAM store.`);
+
+    for (const chat of chats) {
+      const jid = chat.id;
+      // Access messages from store (KeyedDB)
+      // @ts-ignore
+      const messagesKeyedDB = store.messages[jid];
+      const messages = messagesKeyedDB ? messagesKeyedDB.array : [];
+
+      // Filter by Date
+      const eligible = messages.filter((m: any) => {
+        if (!m.messageTimestamp) return false;
+        const rawTs =
+          typeof m.messageTimestamp === "number"
+            ? m.messageTimestamp
+            : m.messageTimestamp.low;
+        const ts = rawTs * 1000;
+        return ts >= fromDate.getTime();
+      });
+
+      if (messages.length > 0) {
+        Logger.info(
+          `[Sync] Chat ${jid.slice(0, 15)}...: ${
+            messages.length
+          } msgs total. Eligible: ${
+            eligible.length
+          } (Filter: ${fromDate.toISOString()})`
+        );
+      }
+
+      // Get last 50, chronological
+      // Baileys array is usually chronological? Or we should sort?
+      // Assuming safely sorted, take last 50.
+      const toImport = eligible.slice(-50);
+
+      for (const msg of toImport) {
+        try {
+          const isOutbound = msg.key.fromMe || false;
+
+          // Basic text extraction (Reuse simplified logic)
+          let text =
+            msg.message?.conversation ||
+            msg.message?.extendedTextMessage?.text ||
+            "";
+
+          let mediaType = "";
+          if (msg.message?.imageMessage) {
+            mediaType = "image";
+            text = msg.message.imageMessage.caption || text || "[IMAGE]";
+          } else if (msg.message?.audioMessage) {
+            mediaType = "audio";
+            text = "[AUDIO]";
+          } else if (msg.message?.videoMessage) {
+            mediaType = "video";
+            text = msg.message.videoMessage.caption || text || "[VIDEO]";
+          } else if (msg.message?.documentMessage) {
+            mediaType = "document";
+            text = msg.message.documentMessage.caption || text || "[DOCUMENT]";
+          }
+
+          if (!text && !mediaType) continue;
+
+          // We pass it to processor.
+          // Note: We cannot easily download media here retrospectively without a lot of overhead.
+          // syncing text history is the primary goal. Media might show as placeholder.
+
+          await messageProcessor.process({
+            companyId,
+            sessionId: session.sessionId,
+            remoteJid: jid,
+            text: text,
+            isOutbound,
+            contactName: msg.pushName,
+            // Skip heavy media download for sync
+          });
+          importedCount++;
+        } catch (e) {
+          console.warn(`[Sync] Failed to process message ${msg.key.id}:`, e);
+        }
+      }
+    }
+
+    Logger.info(`[Sync] Completed. Imported ${importedCount} messages.`);
+    return { chats: chatsCount, messages: importedCount };
   }
 }
 

@@ -357,6 +357,25 @@ export const updateTicket = catchAsync(
       }
     }
 
+    // 🔥 CRÍTICO: Si el ticket tiene conversación, sincronizar el queueId
+    // Esto permite que el AI assistant responda cuando se transfiere un ticket
+    if (updatedTicket.conversationId && updateData.queueId !== undefined) {
+      try {
+        await prisma.conversation.update({
+          where: { id: updatedTicket.conversationId },
+          data: { queueId: updateData.queueId },
+        });
+        console.log(
+          `[TicketController] ✓ Synced conversation queueId: ${updateData.queueId}`
+        );
+      } catch (error) {
+        console.error(
+          "[TicketController] Failed to sync conversation queueId:",
+          error
+        );
+      }
+    }
+
     res.status(200).json({
       status: "success",
       data: { ticket: mapTicketToFrontend(updatedTicket) },

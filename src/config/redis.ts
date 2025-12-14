@@ -8,26 +8,32 @@ const redisUrl = process.env.REDIS_URL;
 if (redisUrl) {
   redisClient = createClient({
     url: redisUrl,
+    pingInterval: 10000, // 🔥 Send PING every 10s to keep connection alive (Application Layer)
     socket: {
+      connectTimeout: 50000, // 50s timeout
+      tls: redisUrl.startsWith("rediss://"),
+      rejectUnauthorized: false,
       reconnectStrategy: (retries) => {
-        if (retries > 5) {
-          Logger.warn("[Redis] Max retries reached, disabling Redis.");
-          // return new Error("Max retries reached"); // Don't throw, just stop
-          return false;
-        }
-        return Math.min(retries * 100, 2000);
+        const delay = Math.min(retries * 500, 5000);
+        return delay;
       },
-      connectTimeout: 5000, // 5s timeout
     },
+    // Prevent crashing on command failure, just fail the command
+    disableOfflineQueue: false,
   });
 
   redisClient.on("error", (err) => {
-    // Suppress common connection refused errors to avoid log spam
-    if (err.message?.includes("ECONNREFUSED")) {
-      // console.warn("[Redis] Connection refused. Is Redis running?");
-    } else {
-      Logger.error("[Redis] Client Error", err);
+    // 🤫 SILENCE KNOWN NETWORK NOISE
+    if (
+      err.message?.includes("ECONNRESET") ||
+      err.message?.includes("ETIMEDOUT") ||
+      err.message?.includes("Socket closed unexpectedly")
+    ) {
+      // These are routine network blips. Auto-reconnect handles them.
+      // Only log if you really want to debug network stability.
+      return;
     }
+    Logger.error("[Redis] Client Error", err);
   });
 }
 

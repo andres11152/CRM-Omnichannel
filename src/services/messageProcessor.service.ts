@@ -138,8 +138,9 @@ export const messageProcessor = {
           // Keep existing robust name
           displayName = contact.name;
         }
-      } else if (!isOutbound) {
-        // CREATE NEW CONTACT (Only on Inbound)
+      } else {
+        // CREATE NEW CONTACT (Outbound or Inbound)
+        // If we write to a new number, we MUST create the contact so the chat exists.
         console.log(`[MsgProcessor] 👤 Creating Contact: ${displayName}`);
         contact = await prisma.contact.create({
           data: {
@@ -200,6 +201,34 @@ export const messageProcessor = {
       if (!conversation) {
         // CREATE NEW CONVERSATION & TICKET
         await prisma.$transaction(async (tx) => {
+          // 🎯 SMART QUEUE ASSIGNMENT
+          // Priority: 1) Queues with AI, 2) Oldest active queue
+          const assignedQueue = await tx.queue.findFirst({
+            where: {
+              companyId,
+              isActive: true,
+            },
+            include: {
+              aiAssistant: true,
+            },
+            orderBy: [
+              { aiAssistantId: { sort: "desc", nulls: "last" } }, // AI queues first
+              { createdAt: "asc" }, // Then oldest
+            ],
+          });
+
+          const queueId = assignedQueue?.id || null;
+
+          if (assignedQueue) {
+            console.log(
+              `[MsgProcessor] 🎯 Assigned to: "${assignedQueue.name}" (AI: ${
+                assignedQueue.aiAssistant ? "YES" : "NO"
+              })`
+            );
+          } else {
+            console.log(`[MsgProcessor] ⚠️ No active queue found`);
+          }
+
           conversation = await tx.conversation.create({
             data: {
               companyId,
@@ -207,6 +236,7 @@ export const messageProcessor = {
               subject: displayName,
               status: "OPEN",
               participants: { connect: [{ id: user!.id }] },
+              queueId: queueId, // 🔥 CONFIGURABLE ASSIGNMENT!
             },
           });
 
@@ -227,6 +257,7 @@ export const messageProcessor = {
               priority: "MEDIUM",
               createdById: user!.id,
               conversationId: conversation.id,
+              queueId: queueId, // Assign ticket to same queue
             },
           });
         });
@@ -279,23 +310,26 @@ export const messageProcessor = {
         if (admin) senderId = admin.id;
       }
 
-      // 6. SAVE MESSAGE (With Deduplication for Outbound)
-      if (isOutbound) {
-        const recentMessage = await prisma.message.findFirst({
-          where: {
-            conversationId: conversation.id,
-            direction: MessageDirection.OUTBOUND,
-            createdAt: { gt: new Date(Date.now() - 10000) }, // Last 10 seconds
-            content: text,
-          },
-        });
+      // 6. SAVE MESSAGE (With Deduplication for ALL messages)
+      // Check for duplicate messages in the last 10 seconds
+      const recentMessage = await prisma.message.findFirst({
+        where: {
+          conversationId: conversation.id,
+          direction: isOutbound
+            ? MessageDirection.OUTBOUND
+            : MessageDirection.INBOUND,
+          createdAt: { gt: new Date(Date.now() - 10000) }, // Last 10 seconds
+          content: text,
+        },
+      });
 
-        if (recentMessage) {
-          console.log(
-            `[MsgProcessor] 🛑 Skipping Duplicate Outbound Message (ID: ${recentMessage.id})`
-          );
-          return;
-        }
+      if (recentMessage) {
+        console.log(
+          `[MsgProcessor] 🛑 Skipping Duplicate ${
+            isOutbound ? "Outbound" : "Inbound"
+          } Message (ID: ${recentMessage.id})`
+        );
+        return;
       }
 
       const newMessage = await prisma.message.create({
@@ -322,8 +356,160 @@ export const messageProcessor = {
         user.id,
         user // Pass full user object for profile info
       );
+
+      // 8. 🤖 AI AUTO-RESPONSE (Non-blocking)
+      if (!isOutbound) {
+        console.log(
+          `[AI] Checking auto-response for conversation ${conversation.id}`
+        );
+        setImmediate(() => {
+          this._handleAIAutoResponse(
+            conversation.id,
+            newMessage.id,
+            text,
+            companyId
+          ).catch((err) => {
+            console.error(`[AI] Auto-response failed:`, err);
+          });
+        });
+      }
     } catch (error) {
       console.error(`[MsgProcessor] 🛑 Fatal Error:`, error);
+    }
+  },
+
+  /**
+   * 🤖 AI AUTO-RESPONSE HANDLER
+   * Generates and sends AI responses for conversations with AI assistants
+   * @param conversationId - ID of the conversation
+   * @param inboundMessageId - ID of the message to respond to (prevents loops)
+   * @param userMessage - Content of the user's message
+   * @param companyId - Company ID for security
+   */
+  async _handleAIAutoResponse(
+    conversationId: string,
+    inboundMessageId: string,
+    userMessage: string,
+    companyId: string
+  ) {
+    try {
+      // 1. Get conversation with queue and AI assistant info
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        include: {
+          queue: {
+            include: {
+              aiAssistant: true,
+            },
+          },
+          messages: {
+            where: {
+              // Exclude the message we're responding to and any newer ones
+              id: { not: inboundMessageId },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            include: { sender: true },
+          },
+        },
+      });
+
+      if (!conversation) {
+        console.warn(`[AI] Conversation ${conversationId} not found`);
+        return;
+      }
+
+      // 2. Check if conversation has AI assistant assigned via queue
+      if (!conversation.queueId) {
+        console.log(
+          `[AI] Conversation ${conversationId} has no queue assigned. Skipping AI.`
+        );
+        return;
+      }
+
+      if (!conversation.queue?.aiAssistant) {
+        console.log(
+          `[AI] Queue "${conversation.queue?.name}" has no AI assistant. Skipping.`
+        );
+        return;
+      }
+
+      const aiAssistant = conversation.queue.aiAssistant;
+
+      console.log(
+        `[AI] ✓ Triggering AI: ${aiAssistant.name} (Queue: ${conversation.queue.name})`
+      );
+
+      // 3. Format conversation history for AI context
+      const history = conversation.messages
+        .slice()
+        .reverse()
+        .map((msg) => ({
+          role: (msg.direction === "INBOUND" ? "user" : "model") as
+            | "user"
+            | "model",
+          parts: msg.content,
+        }));
+
+      // 4. Generate AI response
+      const { generateAIResponse } = await import("./aiResponseService");
+      const aiResponseText = await generateAIResponse(
+        companyId,
+        aiAssistant.id,
+        userMessage,
+        history
+      );
+
+      if (!aiResponseText) {
+        console.warn(
+          `[AI] No response generated for conversation ${conversationId}`
+        );
+        return;
+      }
+
+      console.log(`[AI] ✓ Response generated (${aiResponseText.length} chars)`);
+
+      // 5. Get or create bot user for this AI assistant
+      const botEmail = `ai_${aiAssistant.id}@reply.bot`;
+      let botUser = await prisma.user.findUnique({
+        where: { email: botEmail },
+      });
+
+      if (!botUser) {
+        botUser = await prisma.user.create({
+          data: {
+            email: botEmail,
+            name: aiAssistant.name,
+            password: await bcrypt.hash(aiAssistant.id, 10),
+            role: "AGENT",
+            companyId,
+          },
+        });
+        console.log(`[AI] Created bot user: ${aiAssistant.name}`);
+      }
+
+      // 6. Send via WhatsApp (Handles persistence and socket emission)
+      // We delegate everything to sendMessage to avoid duplication in DB/Socket
+      const { whatsappService } = await import("./whatsapp.service");
+      await whatsappService.sendMessage(
+        conversation.channelId,
+        aiResponseText,
+        {
+          companyId,
+          conversationId,
+          senderId: botUser.id,
+          metadata: {
+            aiGenerated: true,
+            aiAssistantId: aiAssistant.id,
+            aiAssistantName: aiAssistant.name,
+          },
+        }
+      );
+
+      console.log(`[AI] ✅ Response delegated to WhatsApp Service`);
+    } catch (error) {
+      console.error(`[AI] Fatal error in auto-response:`, error);
+      // Don't throw - let message processing continue
     }
   },
 

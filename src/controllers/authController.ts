@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { prisma } from "@/config/prisma";
@@ -144,5 +145,53 @@ export const login = catchAsync(
         user,
       },
     });
+  }
+);
+
+export const updatePassword = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // 1. Get user from collection
+    const user = await prisma.user.findUnique({ where: { id: req.user?.id } });
+    if (!user) return next(new AppError("User not found", 404));
+
+    // 2. Check if current password is correct
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return next(
+        new AppError("Por favor provee todos los campos requeridos.", 400)
+      );
+    }
+
+    if (!(await bcrypt.compare(currentPassword, user.password))) {
+      return next(new AppError("Tu contraseña actual es incorrecta.", 401));
+    }
+
+    if (newPassword !== confirmPassword) {
+      return next(
+        new AppError("Las confirmación de contraseña no coincide.", 400)
+      );
+    }
+
+    // 3. Update password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    // 4. Log user in, send JWT
+    const token = signToken({
+      id: user.id,
+      role: user.role,
+      companyId: user.companyId,
+    });
+
+    res
+      .status(200)
+      .json({
+        status: "success",
+        token,
+        message: "Contraseña actualizada correctamente.",
+      });
   }
 );

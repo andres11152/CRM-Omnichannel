@@ -115,3 +115,93 @@ export const deleteFlow = catchAsync(
     }
   }
 );
+
+/**
+ * GET /api/flows/:id
+ * Obtiene un flujo específico por ID
+ */
+export const getFlowById = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const companyId = req.companyId || req.user?.companyId;
+
+    const flow = await prisma.workflow.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!flow) {
+      return next(new AppError("Flow not found", 404));
+    }
+
+    res.status(200).json(flow);
+  }
+);
+
+/**
+ * PATCH /api/flows/:id/toggle
+ * Activa/Desactiva un flujo
+ */
+export const toggleFlow = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const companyId = req.companyId || req.user?.companyId;
+
+    const flow = await prisma.workflow.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!flow) {
+      return next(new AppError("Flow not found", 404));
+    }
+
+    try {
+      const updated = await prisma.workflow.update({
+        where: { id },
+        data: { isActive: !flow.isActive },
+      });
+
+      res.status(200).json(updated);
+    } catch (error) {
+      console.error("Error toggling flow:", error);
+      return next(new AppError("Failed to toggle flow", 500));
+    }
+  }
+);
+
+/**
+ * POST /api/flows/:id/duplicate
+ * Duplica un flujo existente
+ */
+export const duplicateFlow = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const companyId = req.companyId || req.user?.companyId;
+
+    const original = await prisma.workflow.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!original) {
+      return next(new AppError("Flow not found", 404));
+    }
+
+    try {
+      const duplicate = await prisma.workflow.create({
+        data: {
+          companyId,
+          name: `${original.name} (Copia)`,
+          triggerType: original.triggerType,
+          triggerConfig: original.triggerConfig,
+          nodes: original.nodes,
+          edges: original.edges,
+          isActive: false,
+        },
+      });
+
+      res.status(201).json(duplicate);
+    } catch (error) {
+      console.error("Error duplicating flow:", error);
+      return next(new AppError("Failed to duplicate flow", 500));
+    }
+  }
+);

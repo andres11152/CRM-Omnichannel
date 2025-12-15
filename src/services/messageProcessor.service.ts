@@ -96,6 +96,7 @@ export const messageProcessor = {
     try {
       const {
         companyId,
+        sessionId,
         remoteJid: phone,
         text,
         isOutbound,
@@ -201,33 +202,47 @@ export const messageProcessor = {
       if (!conversation) {
         // CREATE NEW CONVERSATION & TICKET
         await prisma.$transaction(async (tx) => {
-          // 🎯 SMART QUEUE ASSIGNMENT
-          // Priority: 1) Queues with AI, 2) Oldest active queue
-          const assignedQueue = await tx.queue.findFirst({
-            where: {
-              companyId,
-              isActive: true,
-            },
-            include: {
-              aiAssistant: true,
-            },
-            orderBy: [
-              { aiAssistantId: { sort: "desc", nulls: "last" } }, // AI queues first
-              { createdAt: "asc" }, // Then oldest
-            ],
-          });
+          // 🎯 QUEUE ASSIGNMENT LOGIC (Configurable > Smart > Fallback)
+          let queueId: string | null = null;
+          let queueNameForLog = "None";
 
-          const queueId = assignedQueue?.id || null;
-
-          if (assignedQueue) {
-            console.log(
-              `[MsgProcessor] 🎯 Assigned to: "${assignedQueue.name}" (AI: ${
-                assignedQueue.aiAssistant ? "YES" : "NO"
-              })`
-            );
-          } else {
-            console.log(`[MsgProcessor] ⚠️ No active queue found`);
+          // 1. Check Session Default Config
+          if (sessionId) {
+            const sessionConfig = await prisma.whatsAppSession.findUnique({
+              where: { sessionId },
+            });
+            // 🛡️ Type Assertion: Prisma Client might be stale in Dev environment
+            const config = sessionConfig as any;
+            if (config?.defaultQueueId) {
+              queueId = config.defaultQueueId;
+              queueNameForLog = "Default from Config";
+            }
           }
+
+          // 2. Smart Fallback (AI or Round Robin)
+          if (!queueId) {
+            const assignedQueue = await tx.queue.findFirst({
+              where: {
+                companyId,
+                isActive: true,
+              },
+              include: {
+                aiAssistant: true,
+              },
+              orderBy: [
+                { aiAssistantId: { sort: "desc", nulls: "last" } }, // AI queues first
+                { createdAt: "asc" }, // Then oldest
+              ],
+            });
+            if (assignedQueue) {
+              queueId = assignedQueue.id;
+              queueNameForLog = `${assignedQueue.name} (Smart Assign)`;
+            }
+          }
+
+          console.log(
+            `[MsgProcessor] 🎯 Assigned to Queue: "${queueNameForLog}"`
+          );
 
           conversation = await tx.conversation.create({
             data: {

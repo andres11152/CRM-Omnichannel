@@ -14,5 +14,6 @@ router.post(
 );
 router.get("/sessions", whatsappController.getSessions);
 router.delete("/sessions/:sessionId", whatsappController.deleteSession);
+router.patch("/sessions/:sessionId", whatsappController.updateSession);
 
 export default router;

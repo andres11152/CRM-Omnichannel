@@ -59,6 +59,7 @@
     "module-alias": "^2.2.3",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.11",
+    "openai": "^6.10.0",
     "prisma": "^5.22.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",

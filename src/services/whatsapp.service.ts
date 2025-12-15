@@ -2,16 +2,14 @@
 import { prisma } from "@/config/prisma";
 import fs from "fs";
 import path from "path";
+import { mkdir, writeFile, rm } from "fs/promises";
 import makeWASocket, {
   DisconnectReason,
   WASocket,
   fetchLatestBaileysVersion,
-  makeInMemoryStore,
   jidNormalizedUser,
 } from "@whiskeysockets/baileys";
 import { EventEmitter } from "events";
-import path from "path";
-import { mkdir, writeFile, rm } from "fs/promises";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
 import { Logger } from "@/utils/logger";
 import { useRedisAuthState } from "./baileysRedisAuth";
@@ -135,20 +133,13 @@ export class WhatsAppService extends EventEmitter {
         browser: ["Reply CRM", "Chrome", "10.0.0"],
       });
 
-      // 🧠 Custom Lightweight Store (Fallback for dependency issues)
-      // 🧠 Persistent Simple Store (JSON based)
-      // Fixes "Empty Store on Restart" issue
-      const storePath = path.join(
-        process.cwd(),
-        "wadata",
-        `store_${sessionId}.json`
-      );
-      // Ensure dir exists
-      if (!fs.existsSync(path.join(process.cwd(), "wadata"))) {
-        fs.mkdirSync(path.join(process.cwd(), "wadata"), { recursive: true });
-      }
+      // 🧠 Redis-Backed Store (Scalable, Robust, & Cloud-Ready)
+      // Stores ephemeral message history in Redis. No local files.
+      // TTL: 24h to auto-clean old sessions.
+      const storeKey = `wa:store:${sessionId}`;
 
       const store = {
+        saveTimer: null as any,
         chats: {
           data: {} as Record<string, any>,
           all: function () {
@@ -157,33 +148,40 @@ export class WhatsAppService extends EventEmitter {
         },
         messages: {} as Record<string, { array: any[] }>,
 
-        // Load from disk
-        load: () => {
-          if (fs.existsSync(storePath)) {
-            try {
-              const data = JSON.parse(fs.readFileSync(storePath, "utf-8"));
+        // Load from Redis (Async Rehydration)
+        load: async () => {
+          try {
+            const raw = await redisClient.get(storeKey);
+            if (raw) {
+              const data = JSON.parse(raw);
               store.chats.data = data.chats || {};
               store.messages = data.messages || {};
               Logger.info(
-                `[Store] 📂 Loaded ${
+                `[Store] 🧠 Rehydrated from Redis: ${
                   Object.keys(store.messages).length
-                } chats from disk.`
+                } active chats.`
               );
-            } catch (e) {
-              Logger.error(`[Store] Failed to load store from disk`, e);
             }
+          } catch (e) {
+            Logger.warn(`[Store] Redis rehydration skipped (fresh session).`);
           }
         },
 
-        // Save to disk (Throttled could be better, but direct for now to ensure consistency)
+        // Save to Redis (Debounced 2s + 24h TTL)
         save: () => {
-          try {
-            const data = { chats: store.chats.data, messages: store.messages };
-            // Write sync to prevent race conditions in this MVP
-            fs.writeFileSync(storePath, JSON.stringify(data, null, 2));
-          } catch (e) {
-            // Ignore intermittent save errors
-          }
+          if (store.saveTimer) clearTimeout(store.saveTimer);
+          store.saveTimer = setTimeout(() => {
+            const payload = JSON.stringify({
+              chats: store.chats.data,
+              messages: store.messages,
+            });
+            // 86400s = 24 Hours Retention
+            redisClient
+              .set(storeKey, payload, { EX: 86400 })
+              .catch((err) => Logger.error(`[Store] Redis Save Failed`, err));
+
+            store.saveTimer = null;
+          }, 2000);
         },
 
         bind: (ev: any) => {
@@ -205,9 +203,9 @@ export class WhatsAppService extends EventEmitter {
               if (!arr.some((m: any) => m.key.id === msg.key.id)) {
                 arr.push(msg);
                 changed = true;
-                // Limit to last 1000 per chat to save disk space
-                if (arr.length > 1000)
-                  store.messages[jid].array = arr.slice(-1000);
+                // Limit to last 500 in RAM/Redis to be safe
+                if (arr.length > 500)
+                  store.messages[jid].array = arr.slice(-500);
               }
             }
             if (changed) store.save();
@@ -237,8 +235,8 @@ export class WhatsAppService extends EventEmitter {
         },
       };
 
-      // Load initial data
-      store.load();
+      // Load initial data (Await for Redis)
+      await store.load();
 
       store.bind(sock.ev);
       this.stores.set(sessionId, store);
@@ -383,26 +381,22 @@ export class WhatsAppService extends EventEmitter {
 
       // 3. Message Handling
       sock.ev.on("messages.upsert", async (m) => {
-        Logger.info(
-          `[WhatsApp Debug] 📨 messages.upsert received. Type: ${m.type}. Count: ${m.messages.length}`
-        );
-
-        // Log the raw structure of the first message to see what we are dealing with
-        if (m.messages.length > 0) {
-          console.log(
-            "[WhatsApp Debug] Raw Message Structure:",
-            JSON.stringify(m.messages[0], null, 2)
-          );
-        }
-
         if (m.type === "notify" || m.type === "append") {
           for (const msg of m.messages) {
+            // 🤫 Ignore Protocol Messages (Label updates, etc) to keep logs clean
+            if (msg.message?.protocolMessage) continue;
+
             if (!msg.message) {
-              Logger.warn(
-                "[WhatsApp Debug] Message has no content (msg.message is undefined). Skipping."
-              );
               continue;
             }
+
+            // Log only relevant messages
+            if (m.messages.length === 1) {
+              Logger.info(
+                `[WhatsApp Debug] 📨 Processing: ${msg.key.remoteJid}`
+              );
+            }
+
             await this.handleIncomingMessage(msg, sessionId);
           }
         }
@@ -522,9 +516,43 @@ export class WhatsAppService extends EventEmitter {
         try {
           const sock = this.sessions.get(sessionId);
           if (sock) {
-            profilePicUrl = await sock
+            const externalUrl = await sock
               .profilePictureUrl(remoteJid, "image")
               .catch(() => undefined);
+
+            // 📥 DOWNLOAD & PERSIST PROFILE PIC
+            if (externalUrl) {
+              try {
+                const res = await fetch(externalUrl);
+                if (res.ok) {
+                  const buffer = Buffer.from(await res.arrayBuffer());
+                  // Helper to ensure directory exists (reusing existing imports if possible, else assuming fs/promises is available as per line 581)
+                  const profilesDir = path.join(
+                    process.cwd(),
+                    "public",
+                    "uploads",
+                    "profiles"
+                  );
+                  await mkdir(profilesDir, { recursive: true });
+
+                  // Clean JID & Timestamp
+                  const cleanJid = remoteJid.replace(/\D/g, "");
+                  const filename = `${cleanJid}_${Date.now()}.jpg`;
+                  await writeFile(path.join(profilesDir, filename), buffer);
+
+                  // Set Local URL
+                  profilePicUrl = `/uploads/profiles/${filename}`;
+                  // console.log(`[WhatsApp] 👤 Profile Pic Downloaded: ${profilePicUrl}`);
+                } else {
+                  profilePicUrl = externalUrl;
+                }
+              } catch (e) {
+                console.error("[WhatsApp] Failed to download profile pic", e);
+                profilePicUrl = externalUrl; // Fallback
+              }
+            } else {
+              profilePicUrl = undefined;
+            }
             const statusData = await sock
               .fetchStatus(remoteJid)
               .catch(() => undefined);
@@ -619,7 +647,9 @@ export class WhatsAppService extends EventEmitter {
         remoteJid,
         text: text || `[${mediaType.toUpperCase()}]`,
         isOutbound,
-        contactName: msg.pushName,
+        // 🛑 FIX: For outbound, pushName is US (the sender).
+        // We must NOT use it as the contact name.
+        contactName: isOutbound ? undefined : msg.pushName,
         hasMedia: !!mediaInfo,
         media: mediaInfo,
         profilePicUrl,
@@ -1165,50 +1195,56 @@ export class WhatsAppService extends EventEmitter {
       // Assuming safely sorted, take last 50.
       const toImport = eligible.slice(-50);
 
-      for (const msg of toImport) {
-        try {
-          const isOutbound = msg.key.fromMe || false;
+      // 🚀 Optimize: Process messages in parallel batches
+      const batchSize = 10;
+      for (let i = 0; i < toImport.length; i += batchSize) {
+        const batch = toImport.slice(i, i + batchSize);
+        await Promise.all(
+          batch.map(async (msg: any) => {
+            try {
+              const isOutbound = msg.key.fromMe || false;
 
-          // Basic text extraction (Reuse simplified logic)
-          let text =
-            msg.message?.conversation ||
-            msg.message?.extendedTextMessage?.text ||
-            "";
+              // Basic text extraction
+              let text =
+                msg.message?.conversation ||
+                msg.message?.extendedTextMessage?.text ||
+                "";
+              let mediaType = "";
 
-          let mediaType = "";
-          if (msg.message?.imageMessage) {
-            mediaType = "image";
-            text = msg.message.imageMessage.caption || text || "[IMAGE]";
-          } else if (msg.message?.audioMessage) {
-            mediaType = "audio";
-            text = "[AUDIO]";
-          } else if (msg.message?.videoMessage) {
-            mediaType = "video";
-            text = msg.message.videoMessage.caption || text || "[VIDEO]";
-          } else if (msg.message?.documentMessage) {
-            mediaType = "document";
-            text = msg.message.documentMessage.caption || text || "[DOCUMENT]";
-          }
+              if (msg.message?.imageMessage) {
+                mediaType = "image";
+                text = msg.message.imageMessage.caption || text || "[IMAGE]";
+              } else if (msg.message?.audioMessage) {
+                mediaType = "audio";
+                text = "[AUDIO]";
+              } else if (msg.message?.videoMessage) {
+                mediaType = "video";
+                text = msg.message.videoMessage.caption || text || "[VIDEO]";
+              } else if (msg.message?.documentMessage) {
+                mediaType = "document";
+                text =
+                  msg.message.documentMessage.caption || text || "[DOCUMENT]";
+              }
 
-          if (!text && !mediaType) continue;
+              if (!text && !mediaType) return;
 
-          // We pass it to processor.
-          // Note: We cannot easily download media here retrospectively without a lot of overhead.
-          // syncing text history is the primary goal. Media might show as placeholder.
-
-          await messageProcessor.process({
-            companyId,
-            sessionId: session.sessionId,
-            remoteJid: jid,
-            text: text,
-            isOutbound,
-            contactName: msg.pushName,
-            // Skip heavy media download for sync
-          });
-          importedCount++;
-        } catch (e) {
-          console.warn(`[Sync] Failed to process message ${msg.key.id}:`, e);
-        }
+              // Note: Skip heavy media download for sync speed
+              await messageProcessor.process({
+                companyId,
+                sessionId: session.sessionId,
+                remoteJid: jid,
+                text: text,
+                isOutbound,
+                contactName: msg.pushName,
+              });
+              importedCount++;
+            } catch (e: any) {
+              Logger.warn(
+                `[Sync] Failed to process message ${msg.key.id}: ${e.message}`
+              );
+            }
+          })
+        );
       }
     }
 

@@ -68,3 +68,29 @@ export const deleteSession = catchAsync(
     });
   }
 );
+
+export const updateSession = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { sessionId } = req.params;
+    const { defaultQueueId } = req.body;
+
+    // Verify ownership
+    const session = await prisma.whatsAppSession.findFirst({
+      where: { sessionId, companyId: req.companyId },
+    });
+
+    if (!session) {
+      throw new AppError("Session not found", 404);
+    }
+
+    const updated = await prisma.whatsAppSession.update({
+      where: { sessionId },
+      data: { defaultQueueId } as any,
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: { session: updated },
+    });
+  }
+);

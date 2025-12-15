@@ -137,14 +137,18 @@ export const getSalesStats = catchAsync(
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // 1. Fetch Deals
+    // 1. Fetch Deals with Stage relation
     const deals = await prisma.deal.findMany({
       where: { companyId },
       select: {
         value: true,
-        stage: true,
         probability: true,
         updatedAt: true,
+        stage: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
@@ -165,7 +169,9 @@ export const getSalesStats = catchAsync(
             },
             assignedDeals: {
               where: {
-                stage: "WON",
+                stage: {
+                  name: "Ganado",
+                },
               },
             },
           },
@@ -187,18 +193,20 @@ export const getSalesStats = catchAsync(
     let wonValue = 0;
 
     deals.forEach((deal) => {
-      // Pipeline Value (All open deals)
-      if (deal.stage !== "WON" && deal.stage !== "LOST") {
+      const stageName = deal.stage?.name || "";
+
+      // Pipeline Value (All open deals - exclude won/lost)
+      if (stageName !== "Ganado" && stageName !== "Perdido") {
         pipelineValue += deal.value;
         forecastValue += deal.value * (deal.probability / 100);
       }
 
       // Won/Lost Stats (Monthly)
       if (deal.updatedAt >= startOfMonth) {
-        if (deal.stage === "WON") {
+        if (stageName === "Ganado") {
           wonCount++;
           wonValue += deal.value;
-        } else if (deal.stage === "LOST") {
+        } else if (stageName === "Perdido") {
           lostCount++;
         }
       }

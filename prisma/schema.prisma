@@ -61,6 +61,9 @@ model Conversation {
 
   queueId String?
   queue   Queue?  @relation(fields: [queueId], references: [id])
+  
+  // Chatbot Flow Sessions
+  flowSessions ContactFlowSession[]
 
   // === PERFORMANCE INDEXES ===
   // For: Get all conversations by company (most common query)
@@ -163,6 +166,14 @@ model Company {
   aiConfig         AIConfig?
   aiAssistants     AIAssistant[]
   quickReplies     QuickReply[]
+  pipelines        Pipeline[] // CRM Pipelines
+  
+  // Chatbot Flows
+  flows            Flow[]
+  flowSessions     ContactFlowSession[]
+  
+  // Multimedia Library
+  mediaAssets      MediaAsset[]
 
   // Relación con Stripe y Planes
   planId               String?
@@ -214,6 +225,12 @@ model User {
   assignedActivities Activity[] @relation("AssignedActivities")
   createdActivities  Activity[] @relation("CreatedActivities")
   participatingActivities Activity[] @relation("ActivityParticipants")
+  
+  // Chatbot Flows
+  createdFlows Flow[]
+  
+  // Multimedia Library
+  uploadedMediaAssets MediaAsset[]
 
   // Google Calendar Integration
   googleCalendarToken        String? // Access token
@@ -275,6 +292,11 @@ model WhatsAppSession {
   phone     String?
   status    String   @default("DISCONNECTED") // CONNECTED, DISCONNECTED, SCANNING
   qrCode    String? // Base64 QR for frontend display
+  
+  // Custom Default Queue for this Session
+  defaultQueueId String?
+  defaultQueue   Queue?  @relation(fields: [defaultQueueId], references: [id])
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -463,6 +485,7 @@ model Queue {
   aiAssistant   AIAssistant? @relation(fields: [aiAssistantId], references: [id])
 
   conversations Conversation[]
+  defaultForSessions WhatsAppSession[]
 
   // === PERFORMANCE INDEXES ===
   // For: Get queues by company (common query)
@@ -592,19 +615,54 @@ model Contact {
   account    Account?   @relation(fields: [accountId], references: [id])
   deals      Deal[]
   activities Activity[]
+  
+  // Chatbot Flow Sessions
+  flowSessions ContactFlowSession[]
 
   @@map("contacts")
 }
 
 // --- CRM Models ---
 
-enum DealStage {
-  NEW
-  QUALIFIED
-  PROPOSAL
-  NEGOTIATION
-  WON
-  LOST
+// Pipeline model for dynamic, tenant-specific sales pipelines
+model Pipeline {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  name       String
+  isDefault  Boolean  @default(false)
+  
+  stages     Stage[]
+  deals      Deal[]
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Ensure each company can have only one default pipeline
+  @@unique([companyId, isDefault])
+  @@index([companyId, isDefault])
+  @@map("pipelines")
+}
+
+// Stage model for dynamic pipeline stages
+model Stage {
+  id         String   @id @default(cuid())
+  pipelineId String
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  
+  name       String
+  order      Float    @default(0) // Float for flexible drag-and-drop reordering
+  color      String?  @default("#6B7280") // Hex color for UI customization
+  
+  deals      Deal[]
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@unique([pipelineId, order])
+  @@index([pipelineId, order])
+  @@map("stages")
 }
 
 enum ActivityType {
@@ -646,7 +704,16 @@ model Deal {
   title             String
   value             Float     @default(0)
   currency          String    @default("USD")
-  stage             DealStage @default(NEW)
+  
+  // Dynamic Pipeline & Stage relationships
+  pipelineId String
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  
+  stageId    String
+  stage      Stage    @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  
+  order      Float    @default(0) // Position within the stage for Kanban ordering
+  
   probability       Int       @default(10) // 0-100%
   expectedCloseDate DateTime?
 
@@ -664,8 +731,10 @@ model Deal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([companyId])
-  @@index([stage])
+  // Performance indexes for multi-tenant queries
+  @@index([companyId, pipelineId, stageId])
+  @@index([stageId, order]) // For Kanban board ordering
+  @@index([assignedToId, stageId])
   @@map("deals")
 }
 
@@ -747,4 +816,176 @@ model Media {
   @@index([uploadedById])
   @@index([createdAt])
   @@map("media")
+}
+
+// ============================================
+// CHATBOT FLOWS (Automation Engine)
+// ============================================
+
+enum FlowTriggerType {
+  KEYWORD      // Mensaje contiene palabra clave
+  NEW_CONTACT  // Nuevo contacto creado
+  DEAL_STAGE   // Deal cambia de etapa
+  TIME_DELAY   // Después de X horas/días
+  MANUAL       // Activado manualmente por agente
+}
+
+enum FlowNodeType {
+  START          // Nodo inicial
+  SEND_MESSAGE   // Enviar mensaje de texto
+  SEND_IMAGE     // Enviar imagen
+  SEND_VIDEO     // Enviar video
+  SEND_AUDIO     // Enviar audio
+  SEND_DOCUMENT  // Enviar documento
+  ASK_DATA       // Solicitar datos al usuario (input)
+  CONDITION      // Evaluar condición y ramificar
+  AI_AGENT       // Consultar OpenAI/Gemini
+  CREATE_DEAL    // Crear deal en el CRM
+  UPDATE_CONTACT // Actualizar campos del contacto
+  ASSIGN_AGENT   // Asignar conversación a agente
+  AI_HANDOFF     // Transferir a agente humano
+  DELAY          // Esperar X tiempo
+  END            // Fin del flujo
+}
+
+enum FlowStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+model Flow {
+  id        String     @id @default(cuid())
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  status      FlowStatus @default(DRAFT)
+
+  // Flow Structure (JSON from React Flow)
+  nodes Json // Array of nodes with {id, type, data, position}
+  edges Json // Array of edges with {id, source, target, sourceHandle?, targetHandle?}
+
+  // Trigger Configuration
+  triggerType FlowTriggerType
+  triggerData Json? // Extra config (keywords, delay time, etc.)
+
+  // Settings
+  isActive Boolean @default(false)
+  priority Int     @default(0) // Higher priority flows execute first
+
+  // Stats
+  executionCount Int @default(0) // Cuántas veces se ha ejecutado
+  completionRate Float @default(0) // % de usuarios que completan el flujo
+
+  // Relations
+  sessions ContactFlowSession[]
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, isActive])
+  @@index([triggerType])
+  @@map("flows")
+}
+
+// Contact Flow Session (Estado de ejecución por contacto)
+model ContactFlowSession {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  flowId String
+  flow   Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  // Current State
+  currentNodeId String? // En qué nodo está actualmente (null = terminó)
+  isActive      Boolean @default(true)
+  isPaused      Boolean @default(false)
+
+  // Variables (respuestas del usuario, datos capturados)
+  variables Json @default("{}") // { "nombre": "Juan", "email": "juan@example.com" }
+
+  // Execution History
+  visitedNodes String[] @default([]) // IDs de nodos visitados (para debugging)
+  
+  // Timestamps
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  pausedAt    DateTime?
+  lastStepAt  DateTime  @default(now()) // Última vez que se ejecutó un nodo
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contactId, flowId, isActive])
+  @@index([companyId, isActive])
+  @@index([flowId, isActive])
+  @@index([contactId, isActive])
+  @@map("contact_flow_sessions")
+}
+
+// ========================================
+// MULTIMEDIA LIBRARY
+// ========================================
+
+enum MediaAssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+model MediaAsset {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // File metadata
+  filename     String // "video-bienvenida.mp4"
+  originalName String // Nombre original al subir
+  mimeType     String // "video/mp4", "image/jpeg"
+  fileSize     Int // Bytes
+  type         MediaAssetType
+
+  // URLs (Cloudinary/S3)
+  fileUrl      String // URL del archivo original
+  thumbnailUrl String? // Thumbnail/preview (solo para video/imagen)
+
+  // Cloudinary metadata
+  cloudinaryPublicId String? // Para poder eliminar de Cloudinary
+
+  // Organización
+  category    String? // "Marketing", "Soporte", "Ventas"
+  description String?
+  tags        String[] @default([]) // ["onboarding", "promoción"]
+
+  // Metadata adicional (para imágenes/videos)
+  width    Int? // Pixels
+  height   Int? // Pixels
+  duration Int? // Segundos (para videos/audios)
+
+  // Auditoría
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([companyId, type])
+  @@index([companyId, category])
+  @@index([uploadedById])
+  @@map("media_assets")
 }

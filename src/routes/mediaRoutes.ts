@@ -7,9 +7,13 @@ import {
   getMediaById,
   deleteMedia,
   updateMedia,
+  getMediaContent,
 } from "../controllers/mediaController";
 
 const router = express.Router();
+
+// Public Proxy Route for Media Content (Bypass Auth for <img> tags)
+router.get("/:id/content", getMediaContent);
 
 // Multer configuration for file upload
 const upload = multer({

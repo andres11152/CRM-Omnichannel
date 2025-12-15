@@ -42,19 +42,27 @@ class WebSocketGateway {
           socket: {
             connectTimeout: 50000,
             tls: redisUrl.startsWith("rediss://"),
-            rejectUnauthorized: false
+            rejectUnauthorized: false,
           },
         });
         const subClient = pubClient.duplicate();
 
         // 🛡️ CRITICAL: Prevent crash on Redis errors & Silence Noise
+        // 🛡️ CRITICAL: Prevent crash on Redis errors & Silence Noise
         const errorHandler = (err: any) => {
+          const msg = err.message || "";
           if (
-            err.message?.includes("ECONNRESET") ||
-            err.message?.includes("ETIMEDOUT")
-          )
-            return;
-          console.error("[Gateway] Redis Error:", err.message);
+            msg.includes("ECONNRESET") ||
+            msg.includes("ETIMEDOUT") ||
+            msg.includes("Socket closed") ||
+            msg.includes("ENOTFOUND") ||
+            msg.includes("ECONNABORTED") ||
+            msg.includes("getaddrinfo") ||
+            msg.includes("Connection timeout")
+          ) {
+            return; // 🤫 Shh... it's just the internet blinking.
+          }
+          console.error("[Gateway] Redis Error:", msg);
         };
         pubClient.on("error", errorHandler);
         subClient.on("error", errorHandler);

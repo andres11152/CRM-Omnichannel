@@ -3,6 +3,7 @@ import { prisma } from "@/config/prisma"; // Importar el cliente real de Prisma
 import bcrypt from "bcryptjs";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
+import { cacheService } from "@/services/cacheService";
 
 /**
  * SaaS ONBOARDING CONTROLLER
@@ -52,6 +53,9 @@ export const registerCompany = catchAsync(
     console.log(
       `[Onboarding] ✅ Successfully created company: ${result.company.id}`
     );
+
+    // Invalidate Admin Cache so the new company appears in the dashboard immediately
+    await cacheService.delete("admin:companies:all");
 
     // 3. Return success data (Do not return passwords or sensitive info)
     res.status(201).json({

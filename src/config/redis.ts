@@ -24,13 +24,17 @@ if (redisUrl) {
 
   redisClient.on("error", (err) => {
     // 🤫 SILENCE KNOWN NETWORK NOISE
+    const msg = err.message || "";
     if (
-      err.message?.includes("ECONNRESET") ||
-      err.message?.includes("ETIMEDOUT") ||
-      err.message?.includes("Socket closed unexpectedly")
+      msg.includes("ECONNRESET") ||
+      msg.includes("ETIMEDOUT") ||
+      msg.includes("Socket closed") ||
+      msg.includes("ENOTFOUND") || // DNS Error (Network Down)
+      msg.includes("ECONNABORTED") || // Connection Dropped
+      msg.includes("getaddrinfo") ||
+      msg.includes("Connection timeout")
     ) {
-      // These are routine network blips. Auto-reconnect handles them.
-      // Only log if you really want to debug network stability.
+      // These are routine network blips or outages. Auto-reconnect handles them.
       return;
     }
     Logger.error("[Redis] Client Error", err);

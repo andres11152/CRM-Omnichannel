@@ -229,6 +229,7 @@ export const contactController = {
     const deals = await prisma.deal.findMany({
       where: { contactId: id, companyId },
       orderBy: { createdAt: "desc" },
+      include: { stage: true },
     });
 
     // B. Activities (Direct link)
@@ -281,7 +282,7 @@ export const contactController = {
         id: d.id,
         date: d.createdAt,
         title: `Oportunidad: ${d.title}`,
-        subtitle: `${d.value} ${d.currency} - ${d.stage}`,
+        subtitle: `${d.value} ${d.currency} - ${d.stage?.name || "Sin etapa"}`,
         icon: "💰",
         color: "green",
       })),

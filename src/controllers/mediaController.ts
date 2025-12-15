@@ -7,7 +7,9 @@ import {
   validateFileType,
   validateFileSize,
   getSignedUrl,
+  getFileStream,
 } from "../services/uploadService";
+import { Request } from "express";
 
 /**
  * Upload media file
@@ -122,6 +124,21 @@ export const uploadMedia = async (req: AuthenticatedRequest, res: Response) => {
     });
     log("[Upload] Database save successful");
 
+    // ✅ Generate signed URL for S3 files (valid for 1 hour)
+    if (media.url.includes("s3.amazonaws.com")) {
+      try {
+        const signedUrl = await getSignedUrl(media.key);
+        (media as any).url = signedUrl;
+      } catch (error) {
+        console.error("[Upload] Error generating signed URL:", error);
+        // Fallback to proxy URL
+        const proxyUrl = `${
+          process.env.APP_URL || "http://localhost:4000"
+        }/api/media/${media.id}/content`;
+        (media as any).url = proxyUrl;
+      }
+    }
+
     res.status(201).json({
       status: "success",
       data: { media },
@@ -197,12 +214,25 @@ export const getMedia = async (req: AuthenticatedRequest, res: Response) => {
       prisma.media.count({ where }),
     ]);
 
-    // Generate signed URLs for S3 files
+    // ✅ Generate signed URLs for S3 files (valid for 1 hour)
     const mediaWithSignedUrls = await Promise.all(
       media.map(async (m) => {
         if (m.url.includes("s3.amazonaws.com")) {
-          const signedUrl = await getSignedUrl(m.key);
-          return { ...m, url: signedUrl };
+          try {
+            // Generate signed URL directly from S3
+            const signedUrl = await getSignedUrl(m.key);
+            return { ...m, url: signedUrl };
+          } catch (error) {
+            console.error(
+              `[getMedia] Error generating signed URL for ${m.id}:`,
+              error
+            );
+            // Fallback to proxy URL if signed URL fails
+            const proxyUrl = `${
+              process.env.APP_URL || "http://localhost:4000"
+            }/api/media/${m.id}/content`;
+            return { ...m, url: proxyUrl };
+          }
         }
         return m;
       })
@@ -253,10 +283,19 @@ export const getMediaById = async (
       return res.status(404).json({ message: "Archivo no encontrado" });
     }
 
-    // Generate signed URL if S3
+    // ✅ Generate signed URL for S3 files
     if (media.url.includes("s3.amazonaws.com")) {
-      const signedUrl = await getSignedUrl(media.key);
-      (media as any).url = signedUrl;
+      try {
+        const signedUrl = await getSignedUrl(media.key);
+        (media as any).url = signedUrl;
+      } catch (error) {
+        console.error(`[getMediaById] Error generating signed URL:`, error);
+        // Fallback to proxy URL
+        const proxyUrl = `${
+          process.env.APP_URL || "http://localhost:4000"
+        }/api/media/${media.id}/content`;
+        (media as any).url = proxyUrl;
+      }
     }
 
     res.status(200).json({
@@ -354,5 +393,46 @@ export const updateMedia = async (req: AuthenticatedRequest, res: Response) => {
     res
       .status(500)
       .json({ message: "Error al actualizar archivo", error: String(error) });
+  }
+};
+
+/**
+ * Stream media content (Proxy for S3/Local)
+ * GET /api/media/:id/content
+ */
+export const getMediaContent = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`[Proxy] Request for media ID: ${id}`);
+
+    // Validate UUID format to prevent DB errors
+    if (!id || id.length < 10) return res.status(400).send("Invalid ID");
+
+    const media = await prisma.media.findUnique({ where: { id } });
+
+    if (!media) {
+      return res.status(404).send("File not found");
+    }
+
+    const stream = (await getFileStream(media.key)) as any;
+
+    if (!stream) {
+      return res.status(404).send("File not found in storage");
+    }
+
+    res.setHeader("Content-Type", media.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+
+    if (typeof stream.pipe === "function") {
+      stream.pipe(res);
+    } else if (stream.transformToByteArray) {
+      const bytes = await stream.transformToByteArray();
+      res.end(Buffer.from(bytes));
+    } else {
+      res.status(500).send("Stream not supported");
+    }
+  } catch (error) {
+    console.error("Error streaming media:", error);
+    res.status(500).send("Error streaming file");
   }
 };

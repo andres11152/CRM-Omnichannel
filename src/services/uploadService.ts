@@ -215,6 +215,27 @@ export const getSignedUrl = async (key: string): Promise<string> => {
 };
 
 /**
+ * Get file stream from S3 or local storage
+ */
+export const getFileStream = async (key: string): Promise<any> => {
+  if (USE_S3 && s3Client) {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+    const response = await s3Client.send(command);
+    return response.Body;
+  } else {
+    // Local path logic
+    // Key is full path in local mode as per uploadFile implementation
+    if (fs.existsSync(key)) {
+      return fs.createReadStream(key);
+    }
+    return null;
+  }
+};
+
+/**
  * Validate file type
  */
 export const validateFileType = (

@@ -71,7 +71,9 @@ export const adminService = {
         slug: data.slug,
         planId: data.planId,
         status: data.status,
-        subscriptionEndsAt: data.subscriptionEndsAt ? new Date(data.subscriptionEndsAt) : data.subscriptionEndsAt,
+        subscriptionEndsAt: data.subscriptionEndsAt
+          ? new Date(data.subscriptionEndsAt)
+          : data.subscriptionEndsAt,
         isActive: data.status
           ? data.status === "ACTIVE" || data.status === "TRIAL"
           : undefined,
@@ -99,7 +101,20 @@ export const adminService = {
         // Especificamos explícitamente los campos a actualizar
         name: plan.name,
         price: plan.price,
-        config: plan.config as Prisma.InputJsonValue, // Usamos una aserción de tipo para el campo JSON
+        config: plan.config as Prisma.InputJsonValue,
+        // Map quotas from config to columns (Adapter Pattern)
+        storageLimitGb: (plan.config as any)?.storage_limit_gb
+          ? Number((plan.config as any).storage_limit_gb)
+          : null,
+        maxContacts: (plan.config as any)?.max_contacts
+          ? Number((plan.config as any).max_contacts)
+          : null,
+        maxCompanies: (plan.config as any)?.max_companies
+          ? Number((plan.config as any).max_companies)
+          : null,
+        maxWorkflows: (plan.config as any)?.max_workflows
+          ? Number((plan.config as any).max_workflows)
+          : null,
       },
       create: {
         // Construimos el objeto de creación solo con los campos necesarios
@@ -107,6 +122,18 @@ export const adminService = {
         name: plan.name,
         price: plan.price,
         config: plan.config as Prisma.InputJsonValue,
+        storageLimitGb: (plan.config as any)?.storage_limit_gb
+          ? Number((plan.config as any).storage_limit_gb)
+          : null,
+        maxContacts: (plan.config as any)?.max_contacts
+          ? Number((plan.config as any).max_contacts)
+          : null,
+        maxCompanies: (plan.config as any)?.max_companies
+          ? Number((plan.config as any).max_companies)
+          : null,
+        maxWorkflows: (plan.config as any)?.max_workflows
+          ? Number((plan.config as any).max_workflows)
+          : null,
       },
     });
   },

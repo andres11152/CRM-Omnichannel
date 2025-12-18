@@ -9,6 +9,7 @@ import {
   getSignedUrl,
   getFileStream,
 } from "../services/uploadService";
+import { planLimitsService } from "../services/planLimitsService";
 import { Request } from "express";
 
 /**
@@ -71,6 +72,19 @@ export const uploadMedia = async (req: AuthenticatedRequest, res: Response) => {
     if (!sizeValidation.isValid) {
       log(`[Upload] Error: Invalid file size - ${sizeValidation.error}`);
       return res.status(400).json({ message: sizeValidation.error });
+    }
+
+    // 🔴 ENFORCE STORAGE LIMIT
+    const canUpload = await planLimitsService.canCreateResource(
+      companyId,
+      "storage",
+      file.size
+    );
+    if (!canUpload) {
+      log(`[Upload] Error: Storage limit reached`);
+      return res.status(403).json({
+        message: "Espacio de almacenamiento insuficiente. Actualiza tu plan.",
+      });
     }
 
     // Upload file

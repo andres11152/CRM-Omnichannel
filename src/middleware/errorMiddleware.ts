@@ -28,13 +28,14 @@ const sendErrorProd = (err: AppError, res: Response) => {
 const handlePrismaError = (err: Prisma.PrismaClientKnownRequestError) => {
   // P2025: Record to delete does not exist.
   if (err.code === "P2025") {
-    return new AppError(`Recurso no encontrado. ${err.meta?.cause || ""}`, 404);
+    return new AppError(`Recurso no encontrado.`, 404);
   }
-  // Añade aquí otros códigos de error de Prisma que quieras manejar.
-  return new AppError(
-    `Error de base de datos (${err.code}): ${err.message}`,
-    500
-  );
+
+  // Log the real detailed error internally
+  Logger.error(`[Prisma Error ${err.code}]`, err);
+
+  // Return a generic error to the client
+  return new AppError("Error interno de base de datos.", 500);
 };
 
 export const globalErrorHandler = (
@@ -59,7 +60,7 @@ export const globalErrorHandler = (
 
   // Silence operational errors (4xx) from spamming the logs
   if (!error.isOperational || error.statusCode >= 500) {
-    console.error("[GLOBAL ERROR HANDLER] 💥", err);
+    Logger.error("[GLOBAL ERROR HANDLER] 💥", err);
   }
 
   process.env.NODE_ENV === "development"

@@ -8,14 +8,14 @@ const redisUrl = process.env.REDIS_URL;
 if (redisUrl) {
   redisClient = createClient({
     url: redisUrl,
-    pingInterval: 10000, // 🔥 Send PING every 10s to keep connection alive (Application Layer)
+    pingInterval: 1000, // 🔥 Send PING every 1s (CRITICAL for Render External URL)
     socket: {
       connectTimeout: 50000, // 50s timeout
-      tls: redisUrl.startsWith("rediss://"),
-      rejectUnauthorized: false,
+      tls: redisUrl.startsWith("rediss://"), // Auto-detect TLS
+      rejectUnauthorized: false, // Required for self-signed certs
       reconnectStrategy: (retries) => {
-        const delay = Math.min(retries * 500, 5000);
-        return delay;
+        // Aggressive reconnect for local dev stability
+        return Math.min(retries * 50, 2000);
       },
     },
     // Prevent crashing on command failure, just fail the command

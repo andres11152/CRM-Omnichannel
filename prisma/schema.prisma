@@ -324,6 +324,13 @@ model Plan {
   name      String
   price     Float
   config    Json // { max_users: number; max_queues: number; }
+  
+  // Quotas (Strict Limits)
+  storageLimitGb Float?   // GB allowed. Null = Unlimited
+  maxContacts    Int?     // Max contacts. Null = Unlimited
+  maxCompanies   Int?     // Max sub-companies/accounts. Null = Unlimited
+  maxWorkflows   Int?     // Max active workflows. Null = Unlimited
+  
   companies Company[]
 
   @@map("plans")

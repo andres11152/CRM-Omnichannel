@@ -142,7 +142,16 @@ export const login = catchAsync(
       status: "success",
       token,
       data: {
-        user,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          companyId: user.companyId,
+          company: user.company,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
       },
     });
   }
@@ -186,12 +195,10 @@ export const updatePassword = catchAsync(
       companyId: user.companyId,
     });
 
-    res
-      .status(200)
-      .json({
-        status: "success",
-        token,
-        message: "Contraseña actualizada correctamente.",
-      });
+    res.status(200).json({
+      status: "success",
+      token,
+      message: "Contraseña actualizada correctamente.",
+    });
   }
 );

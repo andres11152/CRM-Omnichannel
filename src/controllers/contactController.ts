@@ -3,6 +3,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { prisma } from "@/config/prisma";
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
+import { planLimitsService } from "@/services/planLimitsService";
 
 export const contactController = {
   // Create or Update a contact based on ID, phone or email
@@ -70,6 +71,17 @@ export const contactController = {
       });
     } else {
       // Create new
+      const canCreate = await planLimitsService.canCreateResource(
+        companyId,
+        "contacts"
+      );
+      if (!canCreate) {
+        throw new AppError(
+          "Has alcanzado el límite de contactos de tu plan actual",
+          HTTP_STATUS.FORBIDDEN
+        );
+      }
+
       contact = await prisma.contact.create({
         data: {
           companyId,
@@ -332,8 +344,11 @@ export const contactController = {
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     res.status(HTTP_STATUS.OK).json({
-      contact: targetContact,
-      timeline,
+      status: "success",
+      data: {
+        contact: targetContact,
+        timeline,
+      },
     });
   }),
 };

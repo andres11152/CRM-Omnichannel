@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { prisma } from "@/config/prisma";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
+import { planLimitsService } from "@/services/planLimitsService";
 
 export const getDashboardStats = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -17,10 +18,7 @@ export const getDashboardStats = catchAsync(
         prisma.ticket.findMany({
           where: {
             companyId,
-            // Only show tickets with valid conversations
-            conversation: {
-              isNot: null,
-            },
+            conversation: { isNot: null },
           },
           orderBy: { updatedAt: "desc" },
           take: 5,
@@ -83,31 +81,281 @@ export const getDashboardStats = catchAsync(
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       .slice(0, 5);
 
-    // 3. Fetch Metrics
-    const [activeTicketsCount, totalMessagesCount] = await Promise.all([
+    // 3. Fetch Basic Metrics (REALISTIC CRM DATA)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const [
+      activeTicketsCount,
+      todayMessagesCount,
+      activeConversationsCount,
+      recentMessages,
+    ] = await Promise.all([
+      // Active Tickets (Open, In Progress, Pending)
       prisma.ticket.count({
         where: {
           companyId,
           status: { notIn: ["RESOLVED", "CLOSED"] },
-          // Only count tickets with valid conversations
-          conversation: {
-            isNot: null,
-          },
+          conversation: { isNot: null },
         },
       }),
+      // Messages sent TODAY (realistic daily activity)
       prisma.message.count({
         where: {
           conversation: { companyId },
+          createdAt: { gte: today },
         },
+      }),
+      // Active conversations (last 7 days)
+      prisma.conversation.count({
+        where: {
+          companyId,
+          updatedAt: { gte: sevenDaysAgo },
+        },
+      }),
+      // Recent messages for response time calculation
+      prisma.message.findMany({
+        where: {
+          conversation: { companyId },
+          createdAt: { gte: sevenDaysAgo },
+        },
+        select: {
+          createdAt: true,
+          direction: true,
+          conversationId: true,
+        },
+        orderBy: { createdAt: "asc" },
+        take: 200, // Sample for performance
       }),
     ]);
 
-    // 4. Prepare Plan Data
-    const planConfig = company?.plan?.config as any;
+    // Calculate AI Resolution Rate
+    const resolvedByAI = await prisma.ticket.count({
+      where: {
+        companyId,
+        status: { in: ["RESOLVED", "CLOSED"] },
+        assignedToId: null, // Not assigned = resolved by AI
+        updatedAt: { gte: sevenDaysAgo },
+      },
+    });
+
+    const totalResolved = await prisma.ticket.count({
+      where: {
+        companyId,
+        status: { in: ["RESOLVED", "CLOSED"] },
+        updatedAt: { gte: sevenDaysAgo },
+      },
+    });
+
+    const aiResolutionRate =
+      totalResolved > 0 ? Math.round((resolvedByAI / totalResolved) * 100) : 0;
+
+    // Calculate Average Response Time (simplified)
+    let avgResponseMs = 0;
+    if (recentMessages.length > 1) {
+      const conversationMap = new Map<
+        string,
+        { lastIncoming?: Date; lastOutgoing?: Date }
+      >();
+
+      recentMessages.forEach((msg) => {
+        if (!conversationMap.has(msg.conversationId)) {
+          conversationMap.set(msg.conversationId, {});
+        }
+        const conv = conversationMap.get(msg.conversationId)!;
+
+        if (msg.direction === "INCOMING") {
+          conv.lastIncoming = msg.createdAt;
+        } else if (msg.direction === "OUTGOING" && conv.lastIncoming) {
+          const responseTime =
+            msg.createdAt.getTime() - conv.lastIncoming.getTime();
+          avgResponseMs = (avgResponseMs + responseTime) / 2;
+        }
+      });
+    }
+
+    const avgResponseTime =
+      avgResponseMs > 0
+        ? avgResponseMs < 60000
+          ? `${Math.round(avgResponseMs / 1000)}s`
+          : `${Math.round(avgResponseMs / 60000)}m`
+        : "0s";
+
+    // 4. SALES FUNNEL DATA (Real Stage Data)
+    const defaultPipeline = await prisma.pipeline.findFirst({
+      where: { companyId, isDefault: true },
+      include: { stages: { orderBy: { order: "asc" } } },
+    });
+
+    let salesFunnel: any[] = [];
+    if (defaultPipeline) {
+      const dealsByStage = await prisma.deal.groupBy({
+        by: ["stageId"],
+        where: { pipelineId: defaultPipeline.id },
+        _count: { id: true },
+        _sum: { value: true },
+      });
+
+      salesFunnel = defaultPipeline.stages.map((stage) => {
+        const stats = dealsByStage.find((d) => d.stageId === stage.id);
+        return {
+          name: stage.name,
+          count: stats?._count.id || 0,
+          value: stats?._sum.value || 0,
+          color: stage.color ? `bg-[${stage.color}]` : "bg-slate-500",
+        };
+      });
+    }
+
+    // 5. TOP AGENTS (Real Performance Data)
+    const topAgentsQuery = await prisma.user.findMany({
+      where: { companyId, role: { in: ["AGENT", "ADMIN"] } },
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            assignedDeals: { where: { stage: { name: "Ganado" } } },
+            assignedConversations: { where: { status: "RESOLVED" } },
+          },
+        },
+      },
+      take: 5,
+    });
+
+    const topAgents = topAgentsQuery
+      .map((agent) => ({
+        name: agent.name,
+        sales: agent._count.assignedDeals,
+        // Simple score algorithm: 10 pts per sale, 5 pts per resolved chat
+        score:
+          agent._count.assignedDeals * 10 +
+          agent._count.assignedConversations * 5,
+        responseTime: "0m", // Real data requires complex query on messages table, defaulting to 0m to avoid mocks.
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          agent.name
+        )}&background=random`,
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    // 6. CHANNEL DISTRIBUTION
+    // Note: Grouping by Message channel as Conversation model does not have a channel field in the current schema.
+    // This represents "Activity Volume" by channel.
+    const channelStats = await prisma.message.groupBy({
+      by: ["channel"],
+      where: { conversation: { companyId } },
+      _count: { id: true },
+    });
+
+    const totalActivity = channelStats.reduce(
+      (acc, curr) => acc + curr._count.id,
+      0
+    );
+
+    // Map Prisma Enums to Friendly Names/Colors
+    // Frontend expects: name, count, percentage, color (tailwind), icon (class)
+    const channelDistribution = channelStats
+      .map((stat) => {
+        let name = stat.channel as string;
+        let color = "bg-gray-500";
+        let iconClass = "fas fa-globe";
+        let gradient = "from-gray-400 to-gray-600";
+
+        switch (stat.channel) {
+          case "WHATSAPP":
+            name = "WhatsApp Business";
+            color = "bg-green-500";
+            gradient = "from-green-400 to-green-600";
+            iconClass = "fab fa-whatsapp";
+            break;
+          case "INSTAGRAM_DM":
+            name = "Instagram DM";
+            color = "bg-pink-500";
+            gradient = "from-pink-500 to-purple-600";
+            iconClass = "fab fa-instagram";
+            break;
+          case "EMAIL":
+            name = "Correo";
+            color = "bg-blue-500";
+            gradient = "from-blue-400 to-indigo-600";
+            iconClass = "fas fa-envelope";
+            break;
+          case "WEB_CHAT":
+            name = "Live Chat";
+            color = "bg-indigo-500";
+            gradient = "from-indigo-400 to-indigo-600";
+            iconClass = "fas fa-comments";
+            break;
+        }
+
+        return {
+          channel: stat.channel,
+          name,
+          count: stat._count.id,
+          percentage:
+            totalActivity > 0
+              ? Math.round((stat._count.id / totalActivity) * 100)
+              : 0,
+          color,
+          gradient,
+          iconClass,
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+
+    // 7. Prepare Plan Data (Detailed Scope using Service)
+    const limits = await planLimitsService.getPlanLimits(companyId);
+    const usage = await planLimitsService.getCurrentUsage(companyId);
+
+    // Helper to format limit for UI (-1 -> Infinity handled by frontend, but here we pass value)
+    const getLimit = (val: number | undefined) =>
+      val === undefined || val === null ? -1 : val;
+
+    const storageUsedGb = usage.storage_bytes / (1024 * 1024 * 1024);
+
     const planData = {
       name: company?.plan?.name || "Sin Plan",
-      agentLimit: planConfig?.max_users || 5, // Default to 5 if no config
-      usedAgents: userCount,
+      usage: [
+        {
+          label: "Almacenamiento",
+          used: parseFloat(storageUsedGb.toFixed(2)),
+          limit: getLimit(limits?.storage_limit_gb),
+          unit: "GB",
+        },
+        {
+          label: "Contactos",
+          used: usage.contacts,
+          limit: getLimit(limits?.max_contacts),
+          unit: "personas",
+        },
+        {
+          label: "Empresas",
+          used: usage.companies,
+          limit: getLimit(limits?.max_companies),
+          unit: "empresas",
+        },
+        {
+          label: "Workflows",
+          used: usage.workflows,
+          limit: getLimit(limits?.max_workflows),
+          unit: "flujos",
+        },
+        // Legacy/Other useful stats
+        {
+          label: "Usuarios / Agentes",
+          used: usage.users,
+          limit: getLimit(limits?.max_users),
+          unit: "usuarios",
+        },
+        {
+          label: "Conexiones WhatsApp",
+          used: usage.whatsapp_sessions,
+          limit: getLimit(limits?.max_whatsapp_sessions),
+          unit: "sesiones",
+        },
+      ],
     };
 
     res.status(200).json({
@@ -117,10 +365,15 @@ export const getDashboardStats = catchAsync(
         plan: planData,
         metrics: {
           activeTickets: activeTicketsCount,
-          totalMessages: totalMessagesCount,
-          aiResolution: "0%", // Placeholder
-          avgResponseTime: "0s", // Placeholder
+          totalMessages: todayMessagesCount, // TODAY's messages, not all-time
+          activeConversations: activeConversationsCount, // NEW: Active chats
+          aiResolution: `${aiResolutionRate}%`, // Real calculation
+          avgResponseTime: avgResponseTime, // Real calculation
         },
+        // NEW REAL DATA
+        salesFunnel,
+        topAgents,
+        channelDistribution,
       },
     });
   }

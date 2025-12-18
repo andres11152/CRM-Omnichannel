@@ -1,3 +1,5 @@
+import { planLimitsService } from "@/services/planLimitsService"; // Added Import
+
 import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
@@ -12,6 +14,23 @@ export const createFlow = catchAsync(
 
     if (!companyId) {
       return next(new AppError("Company ID missing", 400));
+    }
+
+    // 🔴 ENFORCE WORKFLOW LIMIT (Only for active flows)
+    const initActive = isActive !== undefined ? isActive : true;
+    if (initActive) {
+      const canCreate = await planLimitsService.canCreateResource(
+        companyId,
+        "workflows"
+      );
+      if (!canCreate) {
+        return next(
+          new AppError(
+            "Has alcanzado el límite de workflows activos de tu plan",
+            403
+          )
+        );
+      }
     }
 
     try {
@@ -155,6 +174,22 @@ export const toggleFlow = catchAsync(
     }
 
     try {
+      // 🔴 ENFORCE LIMIT WHEN ACTIVATING
+      if (!flow.isActive) {
+        const canActivate = await planLimitsService.canCreateResource(
+          companyId,
+          "workflows"
+        );
+        if (!canActivate) {
+          return next(
+            new AppError(
+              "Has alcanzado el límite de workflows activos de tu plan",
+              403
+            )
+          );
+        }
+      }
+
       const updated = await prisma.workflow.update({
         where: { id },
         data: { isActive: !flow.isActive },

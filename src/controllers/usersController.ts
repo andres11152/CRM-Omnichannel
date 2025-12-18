@@ -130,7 +130,7 @@ export const getUser = catchAsync(
 export const updateUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const { email, name, preferences, queueIds } = req.body;
+    const { email, name, preferences, queueIds, profilePicUrl } = req.body;
 
     // Un usuario solo puede editar su propio perfil (a menos que sea admin)
     const companyId = (req as any).companyId;
@@ -157,13 +157,26 @@ export const updateUser = catchAsync(
       );
     }
 
+    // Obtener el usuario actual para hacer merge de preferences
+    const currentUser = await prisma.user.findUnique({ where: { id } });
+
+    let mergedPreferences = preferences;
+    if (currentUser?.preferences && typeof preferences === "object") {
+      const currentPrefs = currentUser.preferences as Record<string, any>;
+      mergedPreferences = {
+        ...currentPrefs,
+        ...preferences,
+      };
+    }
+
     // Prisma ignora los campos 'undefined', por lo que solo actualiza lo que se envía.
     const updatedUser = await prisma.user.update({
       where: { id },
       data: {
         email,
         name,
-        preferences,
+        preferences: preferences ? mergedPreferences : undefined, // Use merged preferences
+        profilePicUrl,
         queues: queueIds
           ? {
               set: queueIds.map((qId: string) => ({ id: qId })),

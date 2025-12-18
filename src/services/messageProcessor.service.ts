@@ -23,6 +23,7 @@ interface IncomingMessagePayload {
   };
   profilePicUrl?: string; // WhatsApp Profile Picture URL
   about?: string; // WhatsApp Status/About
+  originalLid?: string; // Original, unresolved LID used for merging legacy contacts
 }
 
 /**
@@ -45,14 +46,25 @@ const normalizeJid = (jid: string): string | null => {
   // 2. Keep only digits
   clean = clean.replace(/\D/g, "");
 
-  // 3. Filter Technical/Ghost LIDs (critical for Baileys)
-  if (
-    clean.length > 15 ||
-    clean.startsWith("459") ||
-    clean.startsWith("252") ||
-    clean.length < 7
-  ) {
-    console.warn(`[JID Normalizer] 👻 Blocking Ghost/LID Number: ${clean}`);
+  // 3. 🛡️ SENIOR DEV CHANGE: BLOCK UNRESOLVED LIDs
+  // LIDs are typically 15-20 digits. Real phone numbers are 7-14 digits.
+  // If we receive a LID here, it means whatsapp.service.ts failed to resolve it.
+  // We MUST NOT create ghost contacts with LID numbers.
+  if (clean.length > 14) {
+    console.error(
+      `[normalizeJid] 🛑 REJECTED UNRESOLVED LID: ${clean} (${clean.length} digits)`
+    );
+    console.error(
+      `[normalizeJid] 💡 This LID should have been resolved in whatsapp.service.ts`
+    );
+    return null; // STOP PROCESSING
+  }
+
+  // 4. Basic phone number validation (minimum 7 digits)
+  if (clean.length < 7) {
+    console.warn(
+      `[normalizeJid] ⚠️ Rejected too short number: ${clean} (${clean.length} digits)`
+    );
     return null;
   }
 
@@ -79,10 +91,25 @@ export const messageProcessor = {
    * Handles concurrency locally. For SaaS Scale, move this to BullMQ.
    */
   async process(payload: IncomingMessagePayload) {
-    const { remoteJid, companyId } = payload;
+    const { remoteJid, companyId, originalLid } = payload;
 
     const phone = normalizeJid(remoteJid);
-    if (!phone) return; // Skip invalid JIDs silently
+
+    if (!phone) {
+      // 🚨 CRITICAL ERROR: LID was not resolved
+      console.error(
+        `[MsgProcessor] 🛑 BLOCKING MESSAGE - Unresolved LID detected!`
+      );
+      console.error(`[MsgProcessor] 🔍 Remote JID: ${remoteJid}`);
+      console.error(`[MsgProcessor] 🔍 Original LID: ${originalLid || "N/A"}`);
+      console.error(
+        `[MsgProcessor] 💡 ACTION REQUIRED: Fix LID resolution in whatsapp.service.ts`
+      );
+      console.error(
+        `[MsgProcessor] 💡 The message was NOT saved to prevent ghost contacts.`
+      );
+      return; // Skip invalid JIDs to prevent ghost contacts
+    }
 
     const sanitizedPayload = { ...payload, remoteJid: phone };
     await this._processSafe(sanitizedPayload);
@@ -111,10 +138,14 @@ export const messageProcessor = {
       );
 
       // 1. DETERMINE DISPLAY NAME (The "Truth")
+      // Logic: If we have a real name, prefix it with "~" to indicate it's a WhatsApp public name
       const rawContactName = payload.contactName || payload.senderName;
       const cleanContactName = sanitizeName(rawContactName, phone);
 
-      let displayName = cleanContactName || phone;
+      let displayName = phone;
+      if (cleanContactName) {
+        displayName = `~${cleanContactName}`;
+      }
 
       // 2. GET OR CREATE CONTACT (Atomic-ish)
       let contact = await prisma.contact.findFirst({
@@ -123,34 +154,72 @@ export const messageProcessor = {
 
       if (contact) {
         // UPDATE EXISTING: Only if we have a BETTER name and !isOutbound
+        // "Better" means replacing the phone number with a real name (prefixed or not)
         const currentNameIsGeneric =
           contact.name === phone || INVALID_NAMES_REGEX.test(contact.name);
 
         if (!isOutbound && cleanContactName && currentNameIsGeneric) {
           console.log(
-            `[MsgProcessor] ♻️ Upgrading Name: ${contact.name} -> ${cleanContactName}`
+            `[MsgProcessor] ♻️ Upgrading Name: ${contact.name} -> ${displayName}`
           );
           contact = await prisma.contact.update({
             where: { id: contact.id },
-            data: { name: cleanContactName },
+            data: { name: displayName },
           });
-          displayName = cleanContactName;
-        } else {
-          // Keep existing robust name
-          displayName = contact.name;
         }
       } else {
-        // CREATE NEW CONTACT (Outbound or Inbound)
-        // If we write to a new number, we MUST create the contact so the chat exists.
-        console.log(`[MsgProcessor] 👤 Creating Contact: ${displayName}`);
-        contact = await prisma.contact.create({
-          data: {
-            companyId,
-            phone,
-            name: displayName,
-            tags: ["WHATSAPP_LEAD"],
-          },
-        });
+        // MERGE STRATEGY: Check if we have a legacy contact with the LID
+        let legacyContact = null;
+        if (payload.originalLid) {
+          legacyContact = await prisma.contact.findFirst({
+            where: { companyId, phone: payload.originalLid },
+          });
+        }
+
+        if (legacyContact) {
+          console.log(
+            `[MsgProcessor] 🔄 Merging Legacy LID Contact: ${payload.originalLid} -> ${phone}`
+          );
+          contact = await prisma.contact.update({
+            where: { id: legacyContact.id },
+            data: {
+              phone: phone, // Upgrade Identity
+              // Update name only if new one is better/generic logic handled previously, but here we can just set it if provided
+              ...(displayName && { name: displayName }),
+            },
+          });
+        } else {
+          // CREATE NEW CONTACT (Outbound or Inbound)
+          // We now allow LIDs as contacts if `whatsapp.service` passed them (Identity Aware).
+          console.log(`[MsgProcessor] 👤 Creating Contact: ${displayName}`);
+          contact = await prisma.contact.create({
+            data: {
+              companyId,
+              phone,
+              name: displayName,
+              tags: ["WHATSAPP_LEAD"],
+            },
+          });
+        }
+      }
+
+      // 2.5 LEARN AND PERSIST: Save LID to Contact Metadata if known (Critical for Persistent Resolution)
+      if (contact && payload.originalLid) {
+        const currentCustomFields = (contact.customFields as any) || {};
+        if (currentCustomFields.lid !== payload.originalLid) {
+          console.log(
+            `[MsgProcessor] 💾 Persisting LID mapping: ${payload.originalLid} -> ${contact.phone}`
+          );
+          await prisma.contact.update({
+            where: { id: contact.id },
+            data: {
+              customFields: {
+                ...currentCustomFields,
+                lid: payload.originalLid,
+              },
+            },
+          });
+        }
       }
 
       // 3. GET OR CREATE USER (Atomic Upsert)
@@ -184,14 +253,26 @@ export const messageProcessor = {
 
       // 4. FIND OR CREATE CONVERSATION
       // 🔑 DEFINITIVE FIX: Search by PHONE NUMBER, not user.id
-      // Same contact can have multiple user records (different JIDs)
+      // SENIOR FIX: Robust lookup handling International (57300...) vs Local (300...) Discrepancies
+      const searchPhones = [phone];
+      // If phone is international (e.g. 12 digits), also search for local part (last 10)
+      if (phone.length > 10) {
+        searchPhones.push(phone.slice(-10));
+      }
+
       let conversation = await prisma.conversation.findFirst({
         where: {
           companyId,
           OR: [
-            { channelId: phone },
-            { participants: { some: { phone: phone } } },
-            { participants: { some: { email: `${phone}@whatsapp.user` } } },
+            { channelId: { in: searchPhones } },
+            { participants: { some: { phone: { in: searchPhones } } } },
+            {
+              participants: {
+                some: {
+                  email: { in: searchPhones.map((p) => `${p}@whatsapp.user`) },
+                },
+              },
+            },
           ],
         },
         orderBy: {

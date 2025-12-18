@@ -9,7 +9,7 @@ import { workflowEngine } from "../../services/workflowEngine";
 export const getDeals = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const companyId = req.user?.companyId;
-    const { pipelineId, stageId, accountId } = req.query;
+    const { pipelineId, stageId, accountId, contactId } = req.query;
 
     if (!companyId) {
       return next(new AppError("Company ID is missing", 400));
@@ -19,6 +19,7 @@ export const getDeals = catchAsync(
     if (pipelineId) where.pipelineId = pipelineId as string;
     if (stageId) where.stageId = stageId as string;
     if (accountId) where.accountId = accountId as string;
+    if (contactId) where.contactId = contactId as string;
 
     const deals = await prisma.deal.findMany({
       where,

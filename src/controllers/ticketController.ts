@@ -70,6 +70,11 @@ const mapTicketToFrontend = (ticket: any) => {
     if (match) fallbackPhone = match[0];
   }
 
+  // Get real last message if available
+  const lastMsg = ticket.conversation?.messages?.[0];
+  const lastMessageContent = lastMsg?.content || "";
+  const lastMessageTime = lastMsg?.createdAt || ticket.createdAt; // Fallback to ticket creation
+
   return {
     ...ticket,
     contact: ticket.createdBy
@@ -90,9 +95,9 @@ const mapTicketToFrontend = (ticket: any) => {
             )}`,
           profilePicUrl: ticket.createdBy.profilePicUrl,
           about: ticket.createdBy.about,
-          lastMessage: "",
-          lastMessageTime: new Date(),
-          unreadCount: 0,
+          lastMessage: lastMessageContent,
+          lastMessageTime: lastMessageTime,
+          unreadCount: 0, // Pending: Implement real unread count logic
           tags: ticket.conversation?.tags || [],
           channel: "WhatsApp",
           assignedMode: "human",
@@ -110,8 +115,8 @@ const mapTicketToFrontend = (ticket: any) => {
           channelId: fallbackPhone,
           companyId: ticket.companyId,
           avatarUrl: "",
-          lastMessage: "",
-          lastMessageTime: new Date(),
+          lastMessage: lastMessageContent,
+          lastMessageTime: lastMessageTime,
           unreadCount: 0,
           tags: [],
           channel: "WhatsApp" as any,
@@ -119,6 +124,8 @@ const mapTicketToFrontend = (ticket: any) => {
           status: ticket.status,
         },
     conversationId: ticket.conversationId,
+    lastMessage: lastMessageContent,
+    lastMessageAt: lastMessageTime,
   };
 };
 
@@ -214,7 +221,14 @@ export const getAllTickets = catchAsync(
         createdBy: true,
         assignedTo: true,
         queue: true,
-        conversation: true,
+        conversation: {
+          include: {
+            messages: {
+              take: 1,
+              orderBy: { createdAt: "desc" },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -243,7 +257,14 @@ export const getTicketById = catchAsync(
         createdBy: true,
         assignedTo: true,
         queue: true,
-        conversation: true,
+        conversation: {
+          include: {
+            messages: {
+              take: 1,
+              orderBy: { createdAt: "desc" },
+            },
+          },
+        },
       },
     });
 
@@ -333,7 +354,14 @@ export const updateTicket = catchAsync(
           createdBy: true,
           assignedTo: true,
           queue: true,
-          conversation: true,
+          conversation: {
+            include: {
+              messages: {
+                take: 1,
+                orderBy: { createdAt: "desc" },
+              },
+            },
+          },
         },
       });
     } catch (error: any) {

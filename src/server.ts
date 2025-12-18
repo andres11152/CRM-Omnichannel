@@ -17,7 +17,7 @@ import { securityMiddleware } from "@/middleware/securityMiddleware";
 import { apiLimiter, authLimiter } from "@/middleware/rateLimitMiddleware";
 import { connectRedis } from "@/config/redis";
 import { prisma } from "@/config/database";
-import { registerCompany } from "@/controllers/onboardingController";
+import onboardingRouter from "@/routes/onboardingRoutes";
 import authRouter from "@/routes/authRoutes";
 import userRouter from "@/routes/userRoutes";
 import postRouter from "@/routes/postRoutes";
@@ -131,7 +131,15 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.post("/api/onboarding", authLimiter, registerCompany);
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "success",
+    message: "API Service is healthy.",
+  });
+});
+
+// Mounted with authLimiter to prevent spam
+app.use("/api/onboarding", authLimiter, onboardingRouter);
 app.get("/webhook", verifyWebhook);
 app.post("/webhook", handleIncomingWebhook);
 app.use("/api/auth", authLimiter, authRouter);

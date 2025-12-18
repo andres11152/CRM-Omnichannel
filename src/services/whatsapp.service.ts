@@ -136,7 +136,7 @@ export class WhatsAppService extends EventEmitter {
       // 🧠 Redis-Backed Store (Scalable, Robust, & Cloud-Ready)
       // Stores ephemeral message history in Redis. No local files.
       // TTL: 24h to auto-clean old sessions.
-      const storeKey = `wa:store:${sessionId}`;
+      const storeKey = `wa:store:v2:${sessionId}`;
 
       const store = {
         saveTimer: null as any,
@@ -145,6 +145,130 @@ export class WhatsAppService extends EventEmitter {
           all: function () {
             return Object.values(this.data);
           },
+        },
+        contacts: {} as Record<string, any>, // 📇 CONTACTS STORE
+        resolveLid: async function (lid: string) {
+          if (!lid) return null;
+
+          // Normalize for comparison (strip suffixes)
+          const target = lid.replace(/@.*$/, "");
+
+          // REVERSE LOOKUP: Find the contact object where the 'lid' property matches our target
+          // This is critical because the store is indexed by Phone Number, so we must search values.
+          const contact = Object.values(this.contacts || {}).find(
+            (c: any) => c.lid === lid || c.lid === target || c.id === lid
+          );
+
+          if (contact) {
+            const resolved = (contact as any).id;
+            const cleanResolved = resolved
+              .replace(/@.*$/, "")
+              .replace(/\D/g, "");
+
+            // ✅ VALIDATION: Don't return self-mappings or LID-to-LID
+            // Rule 1: Resolved must be different from input
+            if (cleanResolved === target) {
+              console.warn(
+                `[ResolveLid] ⚠️ Ignored self-mapping in memory: ${target}`
+              );
+              return null;
+            }
+
+            // Rule 2: Resolved must be a REAL phone (< 15 chars)
+            if (cleanResolved.length > 14) {
+              console.warn(
+                `[ResolveLid] ⚠️ Resolved to another LID: ${cleanResolved}`
+              );
+              return null;
+            }
+
+            return resolved;
+          }
+
+          // 3. DB Fallback (Persistent - Multi-Source Lookup)
+          try {
+            // We need companyId context.
+            // Since we are inside initializeSession, we have access to 'sessionId'.
+            const session = await prisma.whatsAppSession.findUnique({
+              where: { sessionId },
+              select: { companyId: true },
+            });
+
+            if (session) {
+              // 🔍 STRATEGY 1: Look in Contact customFields (Primary)
+              const dbContact = await prisma.contact.findFirst({
+                where: {
+                  companyId: session.companyId,
+                  OR: [
+                    // Future-proof: Check metadata/customFields if we start storing LID there
+                    { customFields: { path: ["lid"], equals: lid } },
+                    { customFields: { path: ["lid"], equals: target } },
+                  ],
+                },
+              });
+
+              if (dbContact && dbContact.phone) {
+                const cleanPhone = dbContact.phone.replace(/\D/g, "");
+
+                // ✅ VALIDATION: Same rules for DB results
+                if (cleanPhone === target || cleanPhone.length > 14) {
+                  console.warn(
+                    `[ResolveLid] ⚠️ DB returned invalid mapping from Contact: ${cleanPhone}`
+                  );
+                  return null;
+                }
+
+                console.log(
+                  `[ResolveLid] ✅ Resolved from Contact DB: ${target} -> ${cleanPhone}`
+                );
+                return dbContact.phone;
+              }
+
+              // 🔍 STRATEGY 2: Look in Conversations (Fallback)
+              // Sometimes we have conversations with LIDs where channelId could be the real phone
+              const conversation = await prisma.conversation.findFirst({
+                where: {
+                  companyId: session.companyId,
+                  OR: [
+                    // The conversation might have been created with the LID initially
+                    { channelId: { contains: target.substring(0, 10) } }, // Partial match
+                  ],
+                },
+                include: {
+                  participants: {
+                    take: 1,
+                    where: {
+                      email: { contains: "@whatsapp.user" },
+                    },
+                  },
+                },
+              });
+
+              if (conversation && conversation.participants[0]?.phone) {
+                const cleanPhone = conversation.participants[0].phone.replace(
+                  /\D/g,
+                  ""
+                );
+
+                // ✅ VALIDATION
+                if (cleanPhone === target || cleanPhone.length > 14) {
+                  console.warn(
+                    `[ResolveLid] ⚠️ DB returned invalid mapping from Conversation: ${cleanPhone}`
+                  );
+                  return null;
+                }
+
+                console.log(
+                  `[ResolveLid] ✅ Resolved from Conversation DB: ${target} -> ${cleanPhone}`
+                );
+                return conversation.participants[0].phone;
+              }
+            }
+          } catch (e) {
+            console.warn("[ResolveLid] DB Lookup failed", e);
+          }
+
+          return null;
         },
         messages: {} as Record<string, { array: any[] }>,
 
@@ -155,6 +279,7 @@ export class WhatsAppService extends EventEmitter {
             if (raw) {
               const data = JSON.parse(raw);
               store.chats.data = data.chats || {};
+              store.contacts = data.contacts || {};
               store.messages = data.messages || {};
               Logger.info(
                 `[Store] 🧠 Rehydrated from Redis: ${
@@ -174,6 +299,7 @@ export class WhatsAppService extends EventEmitter {
             const payload = JSON.stringify({
               chats: store.chats.data,
               messages: store.messages,
+              contacts: store.contacts,
             });
             // 86400s = 24 Hours Retention
             redisClient
@@ -211,10 +337,79 @@ export class WhatsAppService extends EventEmitter {
             if (changed) store.save();
           });
 
-          // 2. Capture History
+          // 2. Capture Contacts Upsert (Sync) + AUTO-LEARN LID MAPPINGS
+          ev.on("contacts.upsert", async (contacts: any[]) => {
+            contacts.forEach((c) => {
+              store.contacts[c.id] = { ...(store.contacts[c.id] || {}), ...c };
+
+              // 🧠 AUTO-LEARNING: If Baileys gives us both LID and Phone, persist it to DB
+              if (c.lid && c.id && c.id !== c.lid) {
+                // Fire-and-forget DB update (don't await to avoid blocking)
+                (async () => {
+                  try {
+                    const phoneJid = c.id.split("@")[0].split(":")[0];
+                    const lidJid = c.lid.replace(/@.*$/, "");
+
+                    // Get company context from session
+                    const session = await prisma.whatsAppSession.findUnique({
+                      where: { sessionId },
+                      select: { companyId: true },
+                    });
+
+                    if (!session) return;
+
+                    // Find contact by phone in the DB
+                    const dbContact = await prisma.contact.findFirst({
+                      where: {
+                        phone: phoneJid,
+                        companyId: session.companyId,
+                      },
+                    });
+
+                    if (dbContact) {
+                      const currentFields =
+                        (dbContact.customFields as any) || {};
+                      if (currentFields.lid !== c.lid) {
+                        console.log(
+                          `[Auto-Learn] 💾 Discovered LID mapping: ${phoneJid} <-> ${lidJid}`
+                        );
+                        await prisma.contact.update({
+                          where: { id: dbContact.id },
+                          data: {
+                            customFields: {
+                              ...currentFields,
+                              lid: c.lid,
+                            },
+                          },
+                        });
+                      }
+                    }
+                  } catch (e) {
+                    console.warn(
+                      "[Auto-Learn] Failed to persist LID mapping",
+                      e
+                    );
+                  }
+                })();
+              }
+            });
+            store.save();
+          });
+
+          // 3. Capture History
           ev.on("messaging-history.set", (data: any) => {
             Logger.info(`[Store] 📚 History Set Received`);
             let changed = false;
+            // 📇 Capture Contacts
+            if (data.contacts) {
+              data.contacts.forEach((c: any) => {
+                store.contacts[c.id] = {
+                  ...(store.contacts[c.id] || {}),
+                  ...c,
+                };
+              });
+              changed = true;
+            }
             if (data.chats) {
               data.chats.forEach((c: any) => (store.chats.data[c.id] = c));
               changed = true;
@@ -235,13 +430,15 @@ export class WhatsAppService extends EventEmitter {
         },
       };
 
-      // Load initial data (Await for Redis)
-      await store.load();
-
+      // 🏁 FIX: Bind Events IMMEDIATELY before awaiting async I/O
+      // This prevents missing the 'messaging-history.set' event which fires very fast
       store.bind(sock.ev);
       this.stores.set(sessionId, store);
 
       this.sessions.set(sessionId, sock);
+
+      // Load initial data (Async - non-blocking for events, but good to have)
+      store.load().catch((e) => console.error("Failed to load store", e));
 
       // --- EVENTS ---
 
@@ -325,6 +522,7 @@ export class WhatsAppService extends EventEmitter {
         }
 
         // Handle Connection Close/Failure
+        // Handle Connection Close/Failure
         if (connection === "close") {
           const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
           const errorMsg = (lastDisconnect?.error as any)?.message || "";
@@ -340,6 +538,17 @@ export class WhatsAppService extends EventEmitter {
             await this.handleSessionFailure(sessionId);
             // DO NOT RECONNECT AUTOMATICALLY
             return;
+          }
+
+          // Special Handling for Conflict (440) to break loops
+          const isConflict = statusCode === 440;
+          if (isConflict) {
+            Logger.warn(
+              `[WhatsApp] ⚔️ Conflict detected (440) for ${sessionId}. Clearing corrupt session data...`
+            );
+            // 🛑 CRITICAL: Stop saving credentials immediately to prevent race conditions
+            sock.ev.removeAllListeners("creds.update");
+            await this.clearSessionData(sessionId);
           }
 
           // Normal Reconnection Logic
@@ -360,7 +569,10 @@ export class WhatsAppService extends EventEmitter {
             const retries = this.retryCounts.get(sessionId) || 0;
             if (retries < this.MAX_RETRIES) {
               this.retryCounts.set(sessionId, retries + 1);
-              const delay = Math.min(retries * 2000, 10000) || 1000;
+              // If conflict, force at least 5s delay. Else standard backoff.
+              const baseDelay = Math.min(retries * 2000, 10000) || 1000;
+              const delay = isConflict ? 5000 : baseDelay;
+
               setTimeout(() => this.initializeSession(sessionId), delay);
             } else {
               Logger.error(
@@ -430,6 +642,95 @@ export class WhatsAppService extends EventEmitter {
 
   // --- Helpers ---
 
+  /**
+   * 🧠 AGGRESSIVE LID PERSISTENCE
+   * Fire-and-forget method to save LID mapping to DB
+   */
+  private async persistLidMapping(
+    sessionId: string,
+    phone: string,
+    lid: string
+  ): Promise<void> {
+    try {
+      // Normalize inputs
+      const cleanPhone = phone.replace(/[^\d]/g, "");
+      const cleanLid = lid.replace(/@.*$/, "");
+
+      // ✅ VALIDATION: Block Self-Mapping and Invalid Phones
+      // Rule 1: Phone must NOT equal LID
+      if (cleanPhone === cleanLid) {
+        console.warn(
+          `[PersistLID] ⚠️ Ignored self-mapping: ${cleanPhone} === ${cleanLid}`
+        );
+        return;
+      }
+
+      // Rule 2: Phone must be a REAL phone number (< 15 chars)
+      // LIDs are typically 15-20 digits, real phones are 7-14
+      if (cleanPhone.length > 14) {
+        console.warn(
+          `[PersistLID] ⚠️ Ignored invalid mapping: ${cleanPhone} is not a valid real phone (too long)`
+        );
+        return;
+      }
+
+      // Rule 3: Phone must NOT be another LID
+      if (lid.includes("@lid") && phone.includes("@lid")) {
+        console.warn(
+          `[PersistLID] ⚠️ Ignored LID-to-LID mapping: ${cleanPhone} -> ${cleanLid}`
+        );
+        return;
+      }
+
+      // Get company context
+      const session = await prisma.whatsAppSession.findUnique({
+        where: { sessionId },
+        select: { companyId: true },
+      });
+
+      if (!session) return;
+
+      // Find contact
+      const contact = await prisma.contact.findFirst({
+        where: {
+          companyId: session.companyId,
+          phone: cleanPhone,
+        },
+      });
+
+      if (contact) {
+        const currentFields = (contact.customFields as any) || {};
+
+        // 🛡️ AUTO-CORRECTION: Overwrite bad mappings (LID=LID)
+        const needsUpdate =
+          currentFields.lid !== cleanLid || // New mapping
+          currentFields.lid === cleanPhone; // Bad self-mapping detected
+
+        if (needsUpdate) {
+          console.log(
+            `[PersistLID] 💾 Saving mapping: ${cleanPhone} <-> ${cleanLid}${
+              currentFields.lid === cleanPhone
+                ? " (Auto-Correcting bad data)"
+                : ""
+            }`
+          );
+          await prisma.contact.update({
+            where: { id: contact.id },
+            data: {
+              customFields: {
+                ...currentFields,
+                lid: cleanLid,
+              },
+            },
+          });
+        }
+      }
+    } catch (e) {
+      // Non-blocking: just log the error
+      console.warn("[PersistLID] Failed to save mapping", e);
+    }
+  }
+
   private async handleSessionFailure(sessionId: string) {
     try {
       await prisma.whatsAppSession.update({
@@ -467,38 +768,241 @@ export class WhatsAppService extends EventEmitter {
         return;
       }
 
-      const isOutbound = msg.key?.fromMe === true;
+      // ---------------------------------------------------------
+      // 🎯 FINAL ROUTING FIX: ALWAYS TRUST REMOTE JID
+      // ---------------------------------------------------------
 
-      // 🚫 SKIP OUTBOUND MESSAGES (Already saved in sendMessage())
-      // When we send a message, WhatsApp confirms it with fromMe=true
-      // We don't want to process it again and duplicate it in the UI
-      if (isOutbound) {
-        // ✅ ALLOW SYNC: Messages sent from phone should arrive here.
-        // MessageProcessor handle deduplication for messages sent via CRM.
+      // 1. Determine the raw ID
+      const isOutbound = msg.key?.fromMe === true;
+      let targetJid = msg.key.remoteJid;
+
+      // 2. FOR OUTGOING MESSAGES (Phone Sync):
+      if (msg.key.fromMe) {
+        // CRITICAL: The remoteJid IS the recipient (The Client).
+        // We must NEVER use 'participant' or 'author' here for 1:1 chats,
+        // because that points to the Agent's own LID.
+        targetJid = msg.key.remoteJid;
+      }
+
+      // 3. SANITIZATION (Strip suffixes)
+      // Ensure we get the pure number: '57300...@s.whatsapp.net' -> '57300...'
+      if (targetJid) {
+        targetJid = targetJid.split("@")[0].split(":")[0]; // Safe split mostly
+      }
+
+      // 3.5 🧠 SMART EXTRACTION: Look for Real Phone in Message Metadata
+      // This is critical for LID messages where the real phone is hidden in metadata
+      let foundRealPhone: string | null = null;
+      const currentRemoteJid = msg.key.remoteJid;
+
+      // 🔍 DEBUG: Log the entire message structure for LID messages
+      const isLidMessage =
+        currentRemoteJid &&
+        (currentRemoteJid.includes("@lid") || targetJid.length > 14);
+
+      if (isLidMessage) {
         console.log(
-          `[WhatsApp] 📤 Outbound message detected (Phone Sync). Processing...`
+          `[SmartExtract] 🔍 DEBUG - Analyzing LID message: ${currentRemoteJid}`
+        );
+        console.log(
+          `[SmartExtract] 🔍 msg.key:`,
+          JSON.stringify(msg.key, null, 2)
+        );
+        console.log(`[SmartExtract] 🔍 msg.participant:`, msg.participant);
+        console.log(
+          `[SmartExtract] 🔍 msg.messageStubParameters:`,
+          msg.messageStubParameters
+        );
+        console.log(`[SmartExtract] 🔍 msg.pushName:`, msg.pushName);
+        console.log(
+          `[SmartExtract] 🔍 msg.verifiedBizName:`,
+          msg.verifiedBizName
         );
       }
 
-      // ✅ SMART JID SELECTION (CRITICAL FIX FOR SYNC)
-      let jidToProcess = null;
+      // Only extract if current JID is a LID
+      if (isLidMessage) {
+        // 🎯 Check 0: msg.key.remoteJidAlt (CRITICAL - Baileys LID Messages)
+        // This is where Baileys stores the real phone for messages with addressingMode: 'lid'
+        if (
+          msg.key.remoteJidAlt &&
+          msg.key.remoteJidAlt.includes("@s.whatsapp.net") &&
+          !msg.key.remoteJidAlt.includes("@lid")
+        ) {
+          foundRealPhone = msg.key.remoteJidAlt;
+          console.log(
+            `[SmartExtract] ✅ Found Real Phone in key.remoteJidAlt: ${foundRealPhone}`
+          );
+        }
 
-      if (isOutbound) {
-        // 📤 OUTBOUND (Phone Sync): The contact is the RECIPIENT (`remoteJid`)
-        // We must ignore `participant` because that is US (the agent).
-        jidToProcess = msg.key?.remoteJid;
-      } else {
-        // 📥 INBOUND (Customer): The contact is the SENDER.
-        // In groups/LID mode, sender is in `participant` or `remoteJidAlt`.
-        jidToProcess =
-          (msg.key as any).remoteJidAlt ||
-          msg.key?.participant ||
-          msg.key?.remoteJid;
+        // Check 1: msg.key.participant (Most common place for real phone)
+        if (
+          !foundRealPhone &&
+          msg.key.participant &&
+          msg.key.participant.includes("@s.whatsapp.net")
+        ) {
+          foundRealPhone = msg.key.participant;
+          console.log(
+            `[SmartExtract] ✅ Found Real Phone in key.participant: ${foundRealPhone}`
+          );
+        }
+
+        // Check 2: msg.participant (Alternative location)
+        if (
+          !foundRealPhone &&
+          msg.participant &&
+          msg.participant.includes("@s.whatsapp.net")
+        ) {
+          foundRealPhone = msg.participant;
+          console.log(
+            `[SmartExtract] ✅ Found Real Phone in participant: ${foundRealPhone}`
+          );
+        }
+
+        // Check 3: msg.messageStubParameters (Array that sometimes has the real JID)
+        if (
+          !foundRealPhone &&
+          msg.messageStubParameters &&
+          Array.isArray(msg.messageStubParameters)
+        ) {
+          for (const param of msg.messageStubParameters) {
+            if (
+              param &&
+              typeof param === "string" &&
+              param.includes("@s.whatsapp.net")
+            ) {
+              foundRealPhone = param;
+              console.log(
+                `[SmartExtract] ✅ Found Real Phone in messageStubParameters: ${foundRealPhone}`
+              );
+              break;
+            }
+          }
+        }
+
+        // Check 4: Check contacts store for this LID
+        if (!foundRealPhone) {
+          const store = this.stores.get(sessionId);
+          if (store && store.contacts) {
+            const cleanLid = currentRemoteJid.replace(/@.*$/, "");
+            const contact = Object.values(store.contacts).find(
+              (c: any) => c.lid === currentRemoteJid || c.lid === cleanLid
+            );
+
+            if (contact && (contact as any).id) {
+              const contactId = (contact as any).id;
+              if (
+                contactId.includes("@s.whatsapp.net") &&
+                !contactId.includes("@lid")
+              ) {
+                foundRealPhone = contactId;
+                console.log(
+                  `[SmartExtract] ✅ Found Real Phone in contacts store: ${foundRealPhone}`
+                );
+              }
+            }
+          }
+        }
+
+        // If we found a real phone, force the swap and persist
+        if (foundRealPhone) {
+          const cleanRealPhone = foundRealPhone.split("@")[0].split(":")[0];
+          console.log(
+            `[SmartExtract] 🔀 FORCING Swap: ${currentRemoteJid} -> ${cleanRealPhone}`
+          );
+
+          // Update targetJid to the real phone
+          targetJid = cleanRealPhone;
+
+          // 🧠 SYNC NAME: If we have a pushName, update the contact name
+          if (msg.pushName && msg.pushName.trim()) {
+            (async () => {
+              try {
+                const session = await prisma.whatsAppSession.findUnique({
+                  where: { sessionId },
+                  select: { companyId: true },
+                });
+
+                if (session) {
+                  const contact = await prisma.contact.findFirst({
+                    where: {
+                      companyId: session.companyId,
+                      phone: cleanRealPhone,
+                    },
+                  });
+
+                  if (contact) {
+                    // Only update if current name is generic (the phone number itself)
+                    if (
+                      contact.name === cleanRealPhone ||
+                      contact.name === `${cleanRealPhone}`
+                    ) {
+                      await prisma.contact.update({
+                        where: { id: contact.id },
+                        data: { name: msg.pushName },
+                      });
+                      console.log(
+                        `[SmartExtract] 👤 Updated contact name: ${cleanRealPhone} -> ${msg.pushName}`
+                      );
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn("[SmartExtract] Failed to update name", e);
+              }
+            })();
+          }
+
+          // Persist this discovery immediately (fire-and-forget)
+          this.persistLidMapping(
+            sessionId,
+            cleanRealPhone,
+            currentRemoteJid
+          ).catch(() => {});
+        }
       }
 
-      console.log("🎯 SELECTED JID TO PROCESS:", jidToProcess);
+      // 4. LID RESOLUTION & NORMALIZATION (Split-Brain Prevention)
+      // ⚠️ SKIP if Smart Extraction already found the real phone
+      // Check for LID using robust logic (Suffix OR Length)
+      const isLid =
+        msg.key.remoteJid.includes("@lid") ||
+        (targetJid && targetJid.length > 14);
 
-      if (!jidToProcess) {
+      if (targetJid && isLid && !foundRealPhone) {
+        const store = this.stores.get(sessionId);
+        if (store) {
+          let resolved = await store.resolveLid(msg.key.remoteJid);
+
+          if (resolved) {
+            const cleanResolved = resolved.split("@")[0].split(":")[0];
+            console.log(
+              `[Normalization] 🔀 Redirecting Traffic: ${targetJid} -> ${cleanResolved}`
+            );
+            targetJid = cleanResolved;
+            // Note: We don't overwrite msg.key.remoteJid here to preserve it for 'originalLid' in merge logic
+
+            // 🧠 AGGRESSIVE PERSISTENCE: Save this mapping immediately
+            this.persistLidMapping(
+              sessionId,
+              cleanResolved,
+              msg.key.remoteJid
+            ).catch(() => {});
+          } else {
+            console.warn(
+              `[Resolution] ⚠️ Could not resolve LID: ${targetJid}. Passing LID to processor (Fallback).`
+            );
+            // Permissive Fallback: Keep targetJid as LID
+          }
+        }
+      }
+
+      // 5. LOG FOR DEBUGGING
+      console.log(
+        `[Fix] Routing Message to: ${targetJid} (Was fromMe: ${msg.key.fromMe})`
+      );
+
+      if (!targetJid) {
         console.warn(
           "[WhatsApp Debug] ⚠️ Skipping processing because JID is invalid:",
           msg.key
@@ -506,19 +1010,41 @@ export class WhatsAppService extends EventEmitter {
         return;
       }
 
-      const remoteJid = jidToProcess;
+      const remoteJid = targetJid;
+
+      console.log(
+        `[handleIncomingMessage] 📍 Step 1: Starting profile fetch for ${remoteJid}`
+      );
 
       // 🖼️ FETCH PROFILE INFO (Only for Inbound/Customer)
       let profilePicUrl: string | undefined;
       let about: string | undefined;
 
+      // 🛡️ TIMEOUT HELPER: Prevents Baileys operations from blocking indefinitely
+      const withTimeout = <T>(
+        promise: Promise<T>,
+        timeoutMs: number
+      ): Promise<T | undefined> => {
+        return Promise.race([
+          promise,
+          new Promise<undefined>((resolve) =>
+            setTimeout(() => resolve(undefined), timeoutMs)
+          ),
+        ]);
+      };
+
       if (!isOutbound) {
         try {
+          console.log(
+            `[handleIncomingMessage] 📍 Step 2: Fetching profile for inbound message`
+          );
           const sock = this.sessions.get(sessionId);
           if (sock) {
-            const externalUrl = await sock
-              .profilePictureUrl(remoteJid, "image")
-              .catch(() => undefined);
+            // ⏱️ CRITICAL FIX: Add 2s timeout to prevent hanging
+            const externalUrl = await withTimeout(
+              sock.profilePictureUrl(remoteJid, "image").catch(() => undefined),
+              2000 // 2 second timeout
+            );
 
             // 📥 DOWNLOAD & PERSIST PROFILE PIC
             if (externalUrl) {
@@ -526,7 +1052,6 @@ export class WhatsAppService extends EventEmitter {
                 const res = await fetch(externalUrl);
                 if (res.ok) {
                   const buffer = Buffer.from(await res.arrayBuffer());
-                  // Helper to ensure directory exists (reusing existing imports if possible, else assuming fs/promises is available as per line 581)
                   const profilesDir = path.join(
                     process.cwd(),
                     "public",
@@ -542,7 +1067,6 @@ export class WhatsAppService extends EventEmitter {
 
                   // Set Local URL
                   profilePicUrl = `/uploads/profiles/${filename}`;
-                  // console.log(`[WhatsApp] 👤 Profile Pic Downloaded: ${profilePicUrl}`);
                 } else {
                   profilePicUrl = externalUrl;
                 }
@@ -553,15 +1077,26 @@ export class WhatsAppService extends EventEmitter {
             } else {
               profilePicUrl = undefined;
             }
-            const statusData = await sock
-              .fetchStatus(remoteJid)
-              .catch(() => undefined);
+
+            // ⏱️ CRITICAL FIX: Add 2s timeout to fetchStatus
+            const statusData = await withTimeout(
+              sock.fetchStatus(remoteJid).catch(() => undefined),
+              2000 // 2 second timeout
+            );
             about = statusData?.status;
           }
+          console.log(
+            `[handleIncomingMessage] 📍 Step 3: Profile fetch completed`
+          );
         } catch (e) {
-          // Ignore profile fetch errors
+          console.error("[handleIncomingMessage] ⚠️ Profile fetch error:", e);
+          // Ignore profile fetch errors - don't block message processing
         }
       }
+
+      console.log(
+        `[handleIncomingMessage] 📍 Step 4: Extracting message content`
+      );
 
       // Extract basic content
       let text =
@@ -588,7 +1123,16 @@ export class WhatsAppService extends EventEmitter {
         mimeType = msg.message.audioMessage.mimetype;
       }
 
-      if (!text && !mediaType) return; // Ignore protocol messages
+      // 🔍 DEBUG: Log message content before filtering
+      if (!text && !mediaType) {
+        console.warn(
+          `[handleIncomingMessage] ⚠️ Skipping message - No text or media`
+        );
+        console.warn(`[handleIncomingMessage] 🔍 remoteJid: ${remoteJid}`);
+        console.warn(`[handleIncomingMessage] 🔍 msg.message:`, msg.message);
+        console.warn(`[handleIncomingMessage] 🔍 msg.key.id:`, msg.key.id);
+        return; // Ignore protocol messages
+      }
 
       // Resolve Session Record
       const sessionRecord = await prisma.whatsAppSession.findUnique({
@@ -639,6 +1183,30 @@ export class WhatsAppService extends EventEmitter {
         }
       }
 
+      // 🧠 SMART NAME RESOLUTION (Outbound & Inbound)
+      let finalContactName = msg.pushName;
+      if (isOutbound) {
+        // Try to get name from store since pushName is undefined for self
+        const store = this.stores.get(sessionId);
+        // Try fetching by JID or LID
+        const contact =
+          store?.contacts[remoteJid] || store?.contacts[msg.key.remoteJid];
+        finalContactName =
+          contact?.name || contact?.notify || contact?.verifiedName;
+      }
+
+      console.log(
+        `[handleIncomingMessage] 📍 Step 5: Delegating to messageProcessor`
+      );
+      console.log(`[handleIncomingMessage] 🔍 Payload:`, {
+        companyId: sessionRecord.companyId,
+        sessionId,
+        remoteJid,
+        text: text || `[${mediaType.toUpperCase()}]`,
+        isOutbound,
+        hasMedia: !!mediaInfo,
+      });
+
       // Delegate to Message Processor
       const { messageProcessor } = await import("./messageProcessor.service");
       await messageProcessor.process({
@@ -647,15 +1215,20 @@ export class WhatsAppService extends EventEmitter {
         remoteJid,
         text: text || `[${mediaType.toUpperCase()}]`,
         isOutbound,
-        // 🛑 FIX: For outbound, pushName is US (the sender).
-        // We must NOT use it as the contact name.
-        contactName: isOutbound ? undefined : msg.pushName,
+        contactName: finalContactName, // Use resolved name
         hasMedia: !!mediaInfo,
         media: mediaInfo,
         profilePicUrl,
         about,
+        originalLid: isLid ? msg.key.remoteJid : undefined, // 🧬 PASS LID FOR MERGE
       });
-    } catch (err) {
+
+      console.log(
+        `[handleIncomingMessage] ✅ Message processing completed successfully`
+      );
+    } catch (err: any) {
+      console.error("❌ [handleIncomingMessage] FATAL ERROR:", err);
+      console.error("❌ Stack:", err?.stack);
       Logger.error("Error handling message", err);
     }
   }
@@ -769,19 +1342,11 @@ export class WhatsAppService extends EventEmitter {
       mediaUrlLength: media?.url?.length,
     });
 
-    // 1. Validation
+    // 1. Validation (REMOVED STRICT CHECKS TO ALLOW LIDs)
+    // We now allow "Permissive Fallback" so we can reply to contacts even if they are LIDs (15+ digits).
     const cleanPhone = to.replace(/[^\d]/g, "");
 
-    // Valid MSISDN is 7-15 digits. Long numbers (like LIDs ~18-20 digits) crash Baileys encryption session silently
-    if (cleanPhone.length > 15 || cleanPhone.length < 7) {
-      Logger.error(
-        `[WhatsApp] 🛑 BLOCKED INVALID PHONE: ${cleanPhone} (Length: ${cleanPhone.length})`
-      );
-      throw new Error("Invalid phone number format");
-    }
-
-    const validation = phoneNumberSchema.safeParse(cleanPhone);
-    if (!validation.success) throw new Error("Invalid phone number format");
+    // Previous validation block removed to support LIDs.
 
     // ✅ QUEUE SYSTEM: Route media to queue, text goes direct
     // TODO: Re-enable after debugging worker initialization issue
@@ -882,7 +1447,8 @@ export class WhatsAppService extends EventEmitter {
 
     // Baileys handles connection state internally, no need to wait
 
-    const jid = `${cleanPhone}@s.whatsapp.net`;
+    // Use provided JID if it has a domain (e.g. @lid), otherwise assume phone number
+    const jid = to.includes("@") ? to : `${cleanPhone}@s.whatsapp.net`;
 
     // 3. SEND via Baileys
     try {
@@ -956,6 +1522,34 @@ export class WhatsAppService extends EventEmitter {
       }
 
       Logger.info(`[WhatsApp] ✅ Sent to ${cleanPhone}`);
+
+      // 🧠 AGGRESSIVE PERSISTENCE: Check if this contact has a LID in store and persist it
+      try {
+        const store = this.stores.get(currentSessionId);
+        if (store && store.contacts) {
+          // Try to find the contact by JID variations
+          const possibleJids = [
+            `${cleanPhone}@s.whatsapp.net`,
+            `${cleanPhone}@lid`,
+            jid,
+          ];
+
+          for (const tryJid of possibleJids) {
+            const contact = store.contacts[tryJid];
+            if (contact && contact.lid) {
+              // Found a LID! Persist it
+              this.persistLidMapping(
+                currentSessionId,
+                cleanPhone,
+                contact.lid
+              ).catch(() => {});
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        // Non-blocking
+      }
 
       // 4. PERSIST to DB (Crucial Step: STATUS SENT)
       const message = await prisma.message.create({

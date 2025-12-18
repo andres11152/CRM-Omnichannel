@@ -350,24 +350,18 @@ export const replyToConversation = catchAsync(
       );
     }
 
-    // Clean phone
-    targetPhone = targetPhone.replace(/[^\d]/g, "");
+    // Clean phone (Allow full JIDs if passed, otherwise strip non-digits)
+    targetPhone = targetPhone.includes("@")
+      ? targetPhone
+      : targetPhone.replace(/[^\d]/g, "");
 
     // Final Gate Check
     if (targetPhone.length < 5) {
       throw new AppError("Resolved phone number is too short/invalid", 400);
     }
 
-    // 🛑 SAFETY VALVE FOR GHOST NUMBERS (LID ARTIFACTS)
-    if (targetPhone.includes("45908") || targetPhone.length > 15) {
-      console.error(
-        `[ReplyController] 🚨 BLOCKED GHOST NUMBER: ${targetPhone}`
-      );
-      throw new AppError(
-        "Data Corruption: Database contains a LID instead of a Phone Number. Please contact support.",
-        500
-      );
-    }
+    // REMOVED "GHOST NUMBER" BLOCKING logic here to allow LIDs.
+    // LIDs are now valid destinations (`whatsapp.service` handles routing).
 
     const messageContent =
       content ||

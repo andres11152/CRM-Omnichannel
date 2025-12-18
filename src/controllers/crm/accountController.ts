@@ -3,6 +3,7 @@ import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
 import { prisma } from "../../config/prisma";
+import { planLimitsService } from "../../services/planLimitsService";
 
 // Get all accounts for a company
 export const getAccounts = catchAsync(
@@ -69,6 +70,20 @@ export const createAccount = catchAsync(
 
     if (!companyId) {
       return next(new AppError("Company ID is missing", 400));
+    }
+
+    // 🔴 ENFORCE COMPANIES/ACCOUNTS LIMIT
+    const canCreate = await planLimitsService.canCreateResource(
+      companyId,
+      "companies"
+    );
+    if (!canCreate) {
+      return next(
+        new AppError(
+          "Has alcanzado el límite de empresas/cuentas de tu plan",
+          403
+        )
+      );
     }
 
     const account = await prisma.account.create({

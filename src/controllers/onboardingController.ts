@@ -11,7 +11,7 @@ import { cacheService } from "@/services/cacheService";
  */
 export const registerCompany = catchAsync(
   async (req: Request, res: Response) => {
-    const { companyName, adminEmail, adminPassword, plan } = req.body;
+    const { companyName, adminEmail, adminPassword, plan, slug } = req.body;
 
     if (!companyName || !adminEmail || !adminPassword) {
       throw new AppError(
@@ -22,6 +22,25 @@ export const registerCompany = catchAsync(
 
     console.log(`[Onboarding] Starting registration for ${companyName}...`);
 
+    // Ensure default plan exists if 'free' is requested
+    const planId = plan || "free";
+    if (planId === "free") {
+      await prisma.plan.upsert({
+        where: { id: "free" },
+        update: {},
+        create: {
+          id: "free",
+          name: "Free Plan",
+          price: 0,
+          config: {
+            max_users: 2,
+            max_queues: 1,
+            storage_limit_gb: 1,
+          },
+        },
+      });
+    }
+
     // ATOMIC TRANSACTION
     // If User creation fails, Company creation is rolled back.
     const result = await prisma.$transaction(async (tx: any) => {
@@ -29,7 +48,8 @@ export const registerCompany = catchAsync(
       const newCompany = await tx.company.create({
         data: {
           name: companyName,
-          planId: plan || "free", // Default to a free plan if not specified
+          slug: slug, // Use provided slug
+          planId: planId,
         },
       });
 

@@ -27,8 +27,26 @@ const sendErrorProd = (err: AppError, res: Response) => {
 
 const handlePrismaError = (err: Prisma.PrismaClientKnownRequestError) => {
   // P2025: Record to delete does not exist.
+  // P2025: Record to delete does not exist.
   if (err.code === "P2025") {
     return new AppError(`Recurso no encontrado.`, 404);
+  }
+
+  // P2002: Unique constraint violation
+  if (err.code === "P2002") {
+    const target = (err.meta?.target as string[]) || "campo";
+    return new AppError(
+      `El valor de '${target}' ya está en uso. Por favor elija otro.`,
+      400
+    );
+  }
+
+  // P2003: Foreign key constraint violation
+  if (err.code === "P2003") {
+    return new AppError(
+      `Operación inválida: registro relacionado no encontrado o impedimento de integridad.`,
+      400
+    );
   }
 
   // Log the real detailed error internally

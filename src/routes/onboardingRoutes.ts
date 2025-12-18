@@ -32,6 +32,7 @@ const onboardingSchema = z.object({
     // Optional: enforce special char
     // .regex(/[^A-Za-z0-9]/, { message: "La contraseña debe contener al menos un caracter especial." }),
     plan: z.string().optional().default("free"),
+    slug: z.string().optional(),
   }),
 });
 

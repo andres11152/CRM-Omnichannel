@@ -166,9 +166,9 @@ export const getDashboardStats = catchAsync(
         }
         const conv = conversationMap.get(msg.conversationId)!;
 
-        if (msg.direction === "INCOMING") {
+        if (msg.direction === "INBOUND") {
           conv.lastIncoming = msg.createdAt;
-        } else if (msg.direction === "OUTGOING" && conv.lastIncoming) {
+        } else if (msg.direction === "OUTBOUND" && conv.lastIncoming) {
           const responseTime =
             msg.createdAt.getTime() - conv.lastIncoming.getTime();
           avgResponseMs = (avgResponseMs + responseTime) / 2;

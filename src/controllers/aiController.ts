@@ -162,12 +162,57 @@ export const testAI = catchAsync(
     );
 
     if (!response) {
-      return res
-        .status(500)
-        .json({
-          status: "error",
-          message: "AI generation failed. Check server logs.",
-        });
+      return res.status(500).json({
+        status: "error",
+        message: "AI generation failed. Check server logs.",
+      });
+    }
+
+    res.status(200).json({ status: "success", response });
+  }
+);
+
+export const copilotAction = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { action, text, context } = req.body;
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId) return next(new AppError("Company ID missing", 400));
+
+    const { generateRawAIResponse } = await import(
+      "@/services/aiResponseService"
+    );
+
+    let systemPrompt = "";
+    let userMessage = "";
+
+    if (action === "summarize") {
+      systemPrompt =
+        "Eres un experto en CRM. Resume la siguiente transcripción de chat en bullet points breves. Identifica el motivo del contacto, la resolución y tareas pendientes si las hay. Idioma: Español.";
+      userMessage = context || text;
+    } else if (action === "formal") {
+      systemPrompt =
+        "Actúa como un editor profesional. Reescribe el siguiente mensaje para que sea formal, amable y corporativo, listo para enviar a un cliente. No cambies el sentido. Solo devuelve el texto reescrito. Idioma: Español.";
+      userMessage = text;
+    } else if (action === "suggest") {
+      systemPrompt =
+        "Eres un agente de soporte de clase mundial. Basado en el contexto de la conversación, sugiere la mejor respuesta siguiente. Que sea empática, resolutiva y breve. Solo el texto de respuesta. Idioma: Español.";
+      userMessage = context;
+    } else {
+      return next(new AppError("Invalid action", 400));
+    }
+
+    const response = await generateRawAIResponse(
+      companyId,
+      systemPrompt,
+      userMessage
+    );
+
+    if (response === null) {
+      return res.status(503).json({
+        status: "error",
+        message:
+          "IA no disponible. Verifica que la API Key de Gemini esté configurada en Ajustes.",
+      });
     }
 
     res.status(200).json({ status: "success", response });

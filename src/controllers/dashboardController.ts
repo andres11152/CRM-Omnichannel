@@ -358,6 +358,45 @@ export const getDashboardStats = catchAsync(
       ],
     };
 
+    // 8. ⚡ DISTRIBUCIÓN DE CARGA ACTIVA POR AGENTE (REAL DATA)
+    const agentWorkloadRaw = await prisma.user.findMany({
+      where: {
+        companyId,
+        role: { in: ["AGENT", "ADMIN"] },
+      },
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            assignedTickets: {
+              where: {
+                status: { in: ["OPEN", "IN_PROGRESS"] }, // ✅ CORREGIDO: Solo estados válidos
+              },
+            },
+            assignedConversations: {
+              where: {
+                status: "IN_PROGRESS",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const agentWorkload = agentWorkloadRaw
+      .filter(
+        (
+          agent: any // ✅ Type assertion necesaria para _count
+        ) =>
+          agent._count.assignedTickets + agent._count.assignedConversations > 0
+      ) // Solo agentes con carga
+      .map((agent: any) => ({
+        name: agent.name,
+        pending: agent._count.assignedTickets, // Tickets pendientes/sin asignar
+        inProgress: agent._count.assignedConversations, // Conversaciones en progreso
+      }));
+
     res.status(200).json({
       status: "success",
       data: {
@@ -374,6 +413,7 @@ export const getDashboardStats = catchAsync(
         salesFunnel,
         topAgents,
         channelDistribution,
+        agentWorkload, // ⚡ NUEVO: Carga por agente
       },
     });
   }

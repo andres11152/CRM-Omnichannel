@@ -6,6 +6,7 @@ import {
   deleteUser,
   createUser,
 } from "@/controllers/usersController";
+import { getAgentMetrics } from "@/controllers/agentMetricsController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
 import { checkPlanLimit } from "@/middleware/planLimitsMiddleware";
@@ -15,6 +16,9 @@ const router = Router();
 
 // Todas las rutas de aquí para abajo están protegidas
 router.use(protect);
+
+// Métricas de agentes (NUEVO)
+router.get("/metrics", getAgentMetrics);
 
 router.route("/").get(getUsers).post(checkPlanLimit("users"), createUser);
 

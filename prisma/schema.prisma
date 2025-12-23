@@ -402,6 +402,14 @@ enum TicketStatus {
   CLOSED
 }
 
+enum TicketResolutionType {
+  SALE
+  SUPPORT
+  ADMIN
+  OTHER
+  SPAM
+}
+
 enum TicketPriority {
   LOW
   MEDIUM
@@ -416,6 +424,11 @@ model Ticket {
   description  String
   status       TicketStatus   @default(OPEN)
   priority     TicketPriority @default(MEDIUM)
+  
+  // Resolution fields
+  resolutionType  TicketResolutionType?
+  resolutionNotes String?
+
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   resolvedAt   DateTime?

@@ -27,6 +27,8 @@ export class WhatsAppService extends EventEmitter {
   // Store retry counts to prevent infinite loops on specific errors (Self-Healing)
   private retryCounts: Map<string, number> = new Map();
   private MAX_RETRIES = 5;
+  // ⚡ Heartbeat timers to keep sessions alive
+  private heartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
     super();
@@ -124,13 +126,27 @@ export class WhatsAppService extends EventEmitter {
         version,
         auth: state,
         printQRInTerminal: false, // We use socket.io for rendering
-        connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 10000,
+        connectTimeoutMs: 60000, // 60 segundos para establecer conexión inicial
+        keepAliveIntervalMs: 30000, // ⚡ CRÍTICO: Ping cada 30s para mantener conexión viva
+        defaultQueryTimeoutMs: 60000, // 60s para queries a WhatsApp
         emitOwnEvents: false,
         retryRequestDelayMs: 250,
-        markOnlineOnConnect: true,
+        markOnlineOnConnect: false, // ⚡ CRÍTICO: No marcar online automáticamente para evitar 440
+        syncFullHistory: false, // No sincronizar todo el historial (reduce carga)
+        shouldIgnoreJid: (jid) => jid === "status@broadcast", // Ignorar estados de WhatsApp
         // Emulate a standard browser to avoid suspicious activity flags
         browser: ["Reply CRM", "Chrome", "10.0.0"],
+        // ⚡ CONFIGURACIÓN ADICIONAL PARA ESTABILIDAD
+        getMessage: async (key) => {
+          // Provide message retrieval for better connection stability
+          const store = this.stores.get(sessionId);
+          if (store?.messages[key.remoteJid!]) {
+            return store.messages[key.remoteJid!].array.find(
+              (msg: any) => msg.key.id === key.id
+            );
+          }
+          return undefined;
+        },
       });
 
       // 🧠 Redis-Backed Store (Scalable, Robust, & Cloud-Ready)
@@ -519,6 +535,9 @@ export class WhatsAppService extends EventEmitter {
             status: "CONNECTED",
             phone,
           });
+
+          // ⚡ INICIAR HEARTBEAT para mantener conexión viva
+          this.startHeartbeat(sessionId, sock);
         }
 
         // Handle Connection Close/Failure
@@ -540,15 +559,22 @@ export class WhatsAppService extends EventEmitter {
             return;
           }
 
-          // Special Handling for Conflict (440) to break loops
+          // Special Handling for Conflict (440) - PRESERVAR SESIÓN
           const isConflict = statusCode === 440;
           if (isConflict) {
             Logger.warn(
-              `[WhatsApp] ⚔️ Conflict detected (440) for ${sessionId}. Clearing corrupt session data...`
+              `[WhatsApp] ⚔️ Conflict detected (440) for ${sessionId}. Another device is connected. Waiting before retry...`
             );
-            // 🛑 CRITICAL: Stop saving credentials immediately to prevent race conditions
+            // ⚡ NO BORRAR CREDENCIALES - Solo detener listeners temporalmente
+            // El conflicto usualmente se resuelve solo cuando el otro dispositivo se desconecta
             sock.ev.removeAllListeners("creds.update");
-            await this.clearSessionData(sessionId);
+            sock.ev.removeAllListeners("connection.update");
+            sock.ev.removeAllListeners("messages.upsert");
+
+            // Esperar 30s y reintentar (NO incrementar retries para conflictos)
+            Logger.info(`[WhatsApp] ⏳ Will retry connection in 30 seconds...`);
+            setTimeout(() => this.initializeSession(sessionId), 30000);
+            return; // Salir temprano sin marcar como failed
           }
 
           // Normal Reconnection Logic
@@ -560,6 +586,9 @@ export class WhatsAppService extends EventEmitter {
           Logger.warn(
             `[WhatsApp] ❌ Connection closed for ${sessionId}. Code: ${statusCode}. Reconnect: ${shouldReconnect}`
           );
+
+          // ⚡ DETENER HEARTBEAT
+          this.stopHeartbeat(sessionId);
 
           // Remove listeners immediately
           sock.ev.removeAllListeners("connection.update");
@@ -732,6 +761,9 @@ export class WhatsAppService extends EventEmitter {
   }
 
   private async handleSessionFailure(sessionId: string) {
+    // ⚡ Detener heartbeat primero
+    this.stopHeartbeat(sessionId);
+
     try {
       await prisma.whatsAppSession.update({
         where: { sessionId },
@@ -756,6 +788,61 @@ export class WhatsAppService extends EventEmitter {
       }
     }
     // await prisma.whatsAppSession.delete... // Optional
+  }
+
+  /**
+   * ⚡ HEARTBEAT: Mantiene la sesión activa mediante consultas periódicas
+   * Previene que WhatsApp desconecte la sesión por inactividad
+   */
+  private startHeartbeat(sessionId: string, sock: WASocket) {
+    // Limpiar cualquier heartbeat existente primero
+    this.stopHeartbeat(sessionId);
+
+    Logger.info(`[WhatsApp] 💓 Starting heartbeat for ${sessionId}`);
+
+    // Realizar ping cada 5 minutos (300,000 ms)
+    const heartbeat = setInterval(async () => {
+      try {
+        // Verificar si la sesión aún existe
+        if (!this.sessions.has(sessionId)) {
+          Logger.warn(
+            `[WhatsApp] Session ${sessionId} no longer exists. Stopping heartbeat.`
+          );
+          this.stopHeartbeat(sessionId);
+          return;
+        }
+
+        // Consultar el estado de presencia para mantener la conexión activa
+        // Esto es una operación ligera que mantiene el websocket vivo
+        const jid = sock.user?.id;
+        if (jid) {
+          await sock.presenceSubscribe(jid).catch(() => {
+            // Ignorar errores silenciosamente, el heartbeat es "best effort"
+          });
+        }
+
+        Logger.debug(`[WhatsApp] 💓 Heartbeat ping sent for ${sessionId}`);
+      } catch (error) {
+        // No hacer nada, el heartbeat es "best effort"
+        Logger.debug(
+          `[WhatsApp] Heartbeat ping failed for ${sessionId}, will retry`
+        );
+      }
+    }, 300000); // 5 minutos
+
+    this.heartbeatTimers.set(sessionId, heartbeat);
+  }
+
+  /**
+   * ⚡ Detiene el heartbeat de una sesión
+   */
+  private stopHeartbeat(sessionId: string) {
+    const timer = this.heartbeatTimers.get(sessionId);
+    if (timer) {
+      clearInterval(timer);
+      this.heartbeatTimers.delete(sessionId);
+      Logger.info(`[WhatsApp] 💔 Heartbeat stopped for ${sessionId}`);
+    }
   }
 
   /**

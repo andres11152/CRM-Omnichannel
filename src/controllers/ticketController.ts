@@ -323,6 +323,8 @@ export const updateTicket = catchAsync(
       "queueId",
       "assignedToId",
       "resolvedAt",
+      "resolutionType",
+      "resolutionNotes",
     ];
     const updateData: any = {};
 

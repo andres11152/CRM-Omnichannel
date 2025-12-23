@@ -7,6 +7,7 @@ import {
   updateAssistant,
   deleteAssistant,
   testAI,
+  copilotAction,
 } from "@/controllers/aiController";
 import { protect } from "@/middleware/authMiddleware";
 import { checkPlanLimit } from "@/middleware/planLimitsMiddleware";
@@ -27,5 +28,8 @@ router.delete("/assistants/:id", deleteAssistant);
 
 // Test
 router.post("/test", testAI);
+
+// Copilot
+router.post("/copilot", copilotAction);
 
 export default router;

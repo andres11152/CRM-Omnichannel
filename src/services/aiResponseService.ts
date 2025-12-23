@@ -118,3 +118,42 @@ export const generateAIResponse = async (
     return null;
   }
 };
+
+export const generateRawAIResponse = async (
+  companyId: string,
+  systemPrompt: string,
+  userMessage: string,
+  modelName: string = "gemini-2.5-flash"
+): Promise<string | null> => {
+  try {
+    const config = await prisma.aIConfig.findUnique({ where: { companyId } });
+    if (!config?.geminiKey) {
+      console.warn("[AI] No Gemini Key found for company", companyId);
+      return null;
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent`;
+    const contents = [
+      {
+        role: "user",
+        parts: [{ text: `System: ${systemPrompt}\n\nUser: ${userMessage}` }],
+      },
+    ];
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": config.geminiKey,
+      },
+      body: JSON.stringify({ contents }),
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch (error) {
+    console.error("[AI] Raw generation error:", error);
+    return null;
+  }
+};

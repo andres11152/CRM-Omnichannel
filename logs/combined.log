@@ -2875,3 +2875,11 @@
 {"level":"warn","message":"[WhatsApp] ⚔️ Conflict detected (440) for session_cmjreu5ba0003qhvcw62fors0_1767028058282. Another device is connected. Waiting before retry...","timestamp":"2025-12-30T04:09:07.436Z"}
 {"level":"info","message":"[WhatsApp] ⏳ Will retry connection in 30 seconds...","timestamp":"2025-12-30T04:09:07.437Z"}
 {"level":"error","message":"UNCAUGHT EXCEPTION! 💥","timestamp":"2025-12-30T04:09:08.684Z"}
+{"level":"info","message":"[WhatsApp] Starting session: session_cmjreu5ba0003qhvcw62fors0_1767028058282","timestamp":"2025-12-30T04:09:37.460Z"}
+{"level":"warn","message":"[WhatsApp] ♻️ Cleaning up existing socket for session_cmjreu5ba0003qhvcw62fors0_1767028058282 before restart","timestamp":"2025-12-30T04:09:37.461Z"}
+{"level":"info","message":"[Store] 🧠 Rehydrated from Redis: 5 active chats.","timestamp":"2025-12-30T04:09:48.495Z"}
+{"level":"info","message":"[WhatsApp] ✅ Session session_cmjreu5ba0003qhvcw62fors0_1767028058282 CONNECTED","timestamp":"2025-12-30T04:09:48.891Z"}
+{"level":"info","message":"[WhatsApp] 💔 Heartbeat stopped for session_cmjreu5ba0003qhvcw62fors0_1767028058282","timestamp":"2025-12-30T04:09:49.684Z"}
+{"level":"info","message":"[WhatsApp] 💓 Starting heartbeat for session_cmjreu5ba0003qhvcw62fors0_1767028058282","timestamp":"2025-12-30T04:09:49.684Z"}
+{"level":"debug","message":"[WhatsApp] 💓 Heartbeat ping sent for session_cmjreu5ba0003qhvcw62fors0_1767028058282","timestamp":"2025-12-30T04:14:49.695Z"}
+{"level":"debug","message":"[WhatsApp] 💓 Heartbeat ping sent for session_cmjreu5ba0003qhvcw62fors0_1767028058282","timestamp":"2025-12-30T04:19:49.709Z"}

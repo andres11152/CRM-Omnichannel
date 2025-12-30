@@ -1,4 +1,4 @@
-# Etapa 1: Construcción de la aplicación
+﻿# Etapa 1: Construcción de la aplicación
 FROM node:18-alpine AS builder
 
 # Establecer el directorio de trabajo dentro del contenedor
@@ -12,7 +12,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Instalar dependencias de producción y desarrollo
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copiar el resto del código fuente de la aplicación
 COPY . .
@@ -33,7 +33,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
 
 # Ejecutar npm install para generar los binarios necesarios (como 'prisma') en node_modules/.bin
-RUN npm install --omit=dev
+RUN npm install --omit=dev --legacy-peer-deps
 
 # Copiar el código compilado (JavaScript) y el schema de Prisma
 COPY --from=builder /app/dist ./dist
@@ -43,4 +43,4 @@ COPY --from=builder /app/prisma ./prisma
 EXPOSE 4000
 
 # Comando para ejecutar las migraciones y arrancar la aplicación
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node --max-old-space-size=2048 --expose-gc dist/server.js"]

@@ -22,6 +22,7 @@ export interface Webhook {
 
 // Authenticated request type for controllers that require `req.user`
 import { Request } from "express";
+
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
@@ -31,8 +32,4 @@ export interface AuthenticatedRequest extends Request {
     companyId?: string;
   };
   companyId?: string;
-  file?: Express.Multer.File;
-  files?:
-    | Express.Multer.File[]
-    | { [fieldname: string]: Express.Multer.File[] };
 }

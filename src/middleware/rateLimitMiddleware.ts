@@ -1,6 +1,15 @@
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 import { Request, Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
+
+// Custom key generator for IP-based rate limiting
+const getClientIp = (req: Request): string => {
+  return (
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
+    req.socket.remoteAddress ||
+    "unknown"
+  );
+};
 
 // Clave personalizada para identificar a los usuarios: por ID de usuario si está autenticado, o por IP si no.
 // USAMOS UNA FUNCIÓN DEFENSIVA QUE YA NO DEPENDE DE ipKeyGenerator
@@ -12,8 +21,8 @@ const keyGenerator = (req: Request, res: Response): string => {
     return userId;
   }
 
-  // 2. Fallback usando el helper nativo que maneja IPv6 correctamente
-  return ipKeyGenerator(req as any, res as any);
+  // 2. Fallback a IP
+  return getClientIp(req);
 };
 
 /**
@@ -40,7 +49,7 @@ export const apiLimiter = rateLimit({
 export const webhookLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   limit: 3000, // 50 req/sec - Necesario para ráfagas de mensajes
-  keyGenerator: (req, res) => ipKeyGenerator(req as any, res as any),
+  keyGenerator: getClientIp,
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: "error", message: "Webhook rate limit exceeded" },
@@ -59,8 +68,7 @@ export const authLimiter = rateLimit({
   // cumplimos con la recomendación de seguridad de la librería.
   // Usamos `as any` para forzar la compatibilidad de tipos, resolviendo el conflicto
   // entre el `req` de rate-limit y el que espera `ipKeyGenerator`.
-  keyGenerator: (req: Request, res: Response) =>
-    ipKeyGenerator(req as any, res as any),
+  keyGenerator: getClientIp,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

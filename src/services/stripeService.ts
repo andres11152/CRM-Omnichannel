@@ -10,7 +10,7 @@ import { Logger } from "@/utils/logger";
 
 // Initialize Stripe with Secret Key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_mock_key", {
-  apiVersion: "2023-10-16", // Ensure API version stability
+  apiVersion: "2025-02-24.acacia", // Latest API version
 });
 
 export const stripeService = {

@@ -1,5 +1,6 @@
 ﻿# Etapa 1: Construcción de la aplicación
-FROM node:18-alpine AS builder
+# Etapa 1: Construcción de la aplicación
+FROM node:20-alpine AS builder
 
 # Establecer el directorio de trabajo dentro del contenedor
 WORKDIR /app
@@ -21,7 +22,7 @@ COPY . .
 RUN npm run build
 
 # Etapa 2: Creación de la imagen final optimizada
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -31,13 +32,13 @@ RUN apk add --no-cache openssl git
 # Copiar solo las dependencias de producción desde la etapa de construcción
 COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
+COPY --from=builder /app/prisma ./prisma
 
 # Ejecutar npm install para generar los binarios necesarios (como 'prisma') en node_modules/.bin
 RUN npm install --omit=dev --legacy-peer-deps
 
-# Copiar el código compilado (JavaScript) y el schema de Prisma
+# Copiar el código compilado (JavaScript)
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
 
 # Exponer el puerto en el que corre la aplicación
 EXPOSE 4000

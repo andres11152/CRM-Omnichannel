@@ -44,4 +44,4 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 4000
 
 # Comando para ejecutar las migraciones y arrancar la aplicación
-CMD ["sh", "-c", "npx prisma migrate deploy && node --max-old-space-size=2048 --expose-gc dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node --max-old-space-size=2048 --expose-gc -r module-alias/register dist/server.js"]

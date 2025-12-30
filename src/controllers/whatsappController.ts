@@ -94,3 +94,35 @@ export const updateSession = catchAsync(
     });
   }
 );
+
+export const reconnectSession = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { sessionId } = req.params;
+
+    // Verify ownership
+    const session = await prisma.whatsAppSession.findFirst({
+      where: { sessionId, companyId: req.companyId },
+    });
+
+    if (!session) {
+      throw new AppError("Session not found", 404);
+    }
+
+    // Force initialization
+    console.log(
+      `[WhatsAppController] Manual reconnect requested for ${sessionId}`
+    );
+
+    // We don't await this to keep the API responsive, but we do trigger it
+    whatsappService
+      .initializeSession(sessionId)
+      .catch((e) =>
+        console.error(`[WhatsAppController] Manual reconnect failed `, e)
+      );
+
+    res.status(200).json({
+      status: "success",
+      message: "Reconnection process started",
+    });
+  }
+);

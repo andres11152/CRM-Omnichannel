@@ -5,6 +5,7 @@ import { createAdapter } from "@socket.io/redis-adapter";
 /**
  * SOCKET GATEWAY SINGLETON
  * Supports Redis Adapter for production scalability
+ * 🛡️ MEMORY LEAK FIX: Proper cleanup on disconnect
  */
 class WebSocketGateway {
   private io: Server | null = null;
@@ -41,13 +42,15 @@ class WebSocketGateway {
           pingInterval: 10000, // 💓 Keep connection alive
           socket: {
             connectTimeout: 50000,
+            keepAlive: 30000, // 🔧 Keep TCP alive every 30s
+            noDelay: true,
+            reconnectStrategy: (retries) => Math.min(retries * 100, 3000),
             tls: redisUrl.startsWith("rediss://"),
             rejectUnauthorized: false,
           },
         });
         const subClient = pubClient.duplicate();
 
-        // 🛡️ CRITICAL: Prevent crash on Redis errors & Silence Noise
         // 🛡️ CRITICAL: Prevent crash on Redis errors & Silence Noise
         const errorHandler = (err: any) => {
           const msg = err.message || "";
@@ -91,22 +94,54 @@ class WebSocketGateway {
 
     this.io.on("connection", (socket: Socket) => {
       const agentId = socket.handshake.query.agentId as string;
-      socket.join(`agent:${agentId || "anonymous"}`);
+      const agentRoom = `agent:${agentId || "anonymous"}`;
+
+      // 🛡️ MEMORY LEAK FIX: Track joined rooms to prevent duplicates
+      const joinedRooms = new Set<string>([agentRoom]);
+      socket.join(agentRoom);
 
       socket.on("join", (room: string) => {
-        if (room) socket.join(room);
+        if (room && !joinedRooms.has(room)) {
+          socket.join(room);
+          joinedRooms.add(room);
+        }
       });
 
       socket.on("join_room", (data: { conversationId: string }) => {
         if (data.conversationId) {
+          // 🛡️ MEMORY LEAK FIX: Prevent duplicate room joins
+          if (joinedRooms.has(data.conversationId)) {
+            console.log(
+              `[Gateway] ⚠️ Already in room: ${data.conversationId}, skipping duplicate join`
+            );
+            return;
+          }
+
           socket.join(data.conversationId);
+          joinedRooms.add(data.conversationId);
           console.log(
             `[Gateway] 🔌 Client joined room: ${data.conversationId}`
           );
         }
       });
 
-      socket.on("disconnect", () => {});
+      socket.on("disconnect", (reason: string) => {
+        // 🛡️ MEMORY LEAK FIX: Proper cleanup on disconnect
+        console.log(
+          `[Gateway] 🔌 Client disconnecting (${reason}), cleaning ${joinedRooms.size} rooms`
+        );
+
+        // Leave all rooms explicitly
+        for (const room of joinedRooms) {
+          socket.leave(room);
+        }
+        joinedRooms.clear();
+
+        // Remove all event listeners to prevent memory leaks
+        socket.removeAllListeners("join");
+        socket.removeAllListeners("join_room");
+        socket.removeAllListeners("disconnect");
+      });
     });
   }
 

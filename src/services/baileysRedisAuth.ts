@@ -109,8 +109,12 @@ export const useRedisAuthState = async (
           await Promise.all(
             ids.map(async (id) => {
               const value = await readData(`${type}:${id}`);
-              if (type === "app-state-sync-key" && value) {
-                value.keyData = Buffer.from(value.keyData, "base64");
+              if (type === "app-state-sync-key" && value && value.keyData) {
+                // BufferJSON.reviver should have already converted this to Buffer
+                // But just in case it didn't (legacy data), check before wrapping
+                if (!Buffer.isBuffer(value.keyData)) {
+                  value.keyData = Buffer.from(value.keyData, "base64");
+                }
               }
               if (value) {
                 data[id] = value;

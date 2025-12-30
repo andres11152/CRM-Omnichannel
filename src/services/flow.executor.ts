@@ -15,6 +15,11 @@
 import { prisma } from "../config/prisma";
 import { Logger } from "../utils/logger";
 import OpenAI from "openai";
+import { getErrorMessage } from "../utils/errorHelpers";
+
+// 🛡️ TIMEOUT CONFIGURATION
+const NODE_TIMEOUT_MS = 30000; // 30 seconds per node
+const AI_TIMEOUT_MS = 45000; // 45 seconds for AI operations
 
 // Interfaces para tipos de nodos
 interface FlowNode {
@@ -120,8 +125,8 @@ export class FlowExecutorService {
         return null;
       }
 
-      // PASO 4: Ejecutar lógica según el tipo de nodo
-      const result = await this.executeNode(
+      // PASO 4: Ejecutar lógica según el tipo de nodo CON TIMEOUT
+      const result = await this.executeNodeWithTimeout(
         currentNode,
         session,
         message,
@@ -131,9 +136,68 @@ export class FlowExecutorService {
       );
 
       return result;
-    } catch (error) {
-      Logger.error("[FlowExecutor] Error processing message:", error);
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
+      Logger.error("[FlowExecutor] Error processing message:", errorMsg);
       return null;
+    }
+  }
+
+  /**
+   * 🛡️ TIMEOUT PROTECTION WRAPPER
+   *
+   * Executes a node with timeout protection to prevent hanging flows.
+   * If a node takes longer than NODE_TIMEOUT_MS, it will be forcefully terminated.
+   */
+  private async executeNodeWithTimeout(
+    node: FlowNode,
+    session: any,
+    userMessage: string,
+    flowStructure: FlowStructure,
+    companyId: string,
+    conversationId: string
+  ): Promise<any | null> {
+    const timeout = node.type === "AI_AGENT" ? AI_TIMEOUT_MS : NODE_TIMEOUT_MS;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            `Node ${node.id} (${node.type}) execution timeout after ${timeout}ms`
+          )
+        );
+      }, timeout);
+    });
+
+    try {
+      const result = await Promise.race([
+        this.executeNode(
+          node,
+          session,
+          userMessage,
+          flowStructure,
+          companyId,
+          conversationId
+        ),
+        timeoutPromise,
+      ]);
+
+      return result;
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
+
+      if (errorMsg.includes("timeout")) {
+        Logger.error(
+          `[FlowExecutor] 🚨 TIMEOUT: Node ${node.id} (${node.type}) took longer than ${timeout}ms`
+        );
+
+        // End session on timeout to prevent stuck flows
+        await this.endSession(session.id);
+
+        return "Lo siento, el proceso está tardando más de lo esperado. Por favor, contacta con soporte.";
+      }
+
+      throw error; // Re-throw non-timeout errors
     }
   }
 
@@ -617,16 +681,22 @@ export class FlowExecutorService {
         `[FlowExecutor] AI Agent "${agent.name}" responded successfully`
       );
       return aiResponse;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
+      const errorObj = error instanceof Error ? error : new Error(errorMsg);
+
       Logger.error(
         `[FlowExecutor] OpenAI error with agent ${agent.name}:`,
-        error
+        errorMsg
       );
 
       // Mensaje de error amigable según el tipo de error
-      if (error.code === "insufficient_quota") {
+      if ("code" in errorObj && errorObj.code === "insufficient_quota") {
         return "El servicio de IA ha alcanzado su límite. Por favor intenta más tarde.";
-      } else if (error.code === "rate_limit_exceeded") {
+      } else if (
+        "code" in errorObj &&
+        errorObj.code === "rate_limit_exceeded"
+      ) {
         return "Demasiadas solicitudes. Por favor espera un momento e intenta de nuevo.";
       } else {
         return "Lo siento, hubo un error al procesar tu solicitud. Nuestro equipo ha sido notificado.";
@@ -689,9 +759,14 @@ export class FlowExecutorService {
       await this.moveToNextNode(session.id, node.id, flowStructure);
 
       return node.data.confirmation || null;
-    } catch (error) {
-      Logger.error("[FlowExecutor] Error creating deal:", error);
-      return null;
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
+      Logger.error("[FlowExecutor] Error creating deal:", errorMsg);
+
+      // Move to next node even if deal creation fails
+      await this.moveToNextNode(session.id, node.id, flowStructure);
+
+      return "Hubo un problema al crear el deal. Continuaremos con el proceso.";
     }
   }
 

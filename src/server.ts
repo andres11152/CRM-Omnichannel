@@ -2,6 +2,30 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+// 🔍 VERIFY HEAP SIZE AT STARTUP
+const heapStats = process.memoryUsage();
+const heapSizeMB = Math.round(heapStats.heapTotal / 1024 / 1024);
+console.log(`[HEAP] 🧠 Total Heap Size: ${heapSizeMB}MB`);
+console.log(`[HEAP] 🎯 Expected: 4096MB (4GB)`);
+if (heapSizeMB < 500) {
+  console.error(
+    `[HEAP] ⚠️  WARNING: Heap is TINY (${heapSizeMB}MB)! Node flags may not be working.`
+  );
+  console.error(
+    `[HEAP] 💡 Ensure: node --max-old-space-size=4096 is in effect`
+  );
+}
+
+// 🛡️ MEMORY LEAK FIX: Force garbage collection every 2 minutes
+if (global.gc) {
+  setInterval(() => {
+    global.gc();
+    console.log("[GC] Forced garbage collection");
+  }, 2 * 60 * 1000);
+} else {
+  console.warn("[GC] Run with --expose-gc flag to enable forced GC");
+}
+
 import express from "express";
 import { createServer } from "http";
 import path from "path";
@@ -52,13 +76,25 @@ import usageRouter from "@/routes/usageRoutes";
 import googleAuthRouter from "@/routes/googleAuthRoutes";
 import companyRouter from "@/routes/companyRoutes";
 import analyticsRouter from "@/routes/analyticsRoutes";
+import productRouter from "@/routes/productRoutes";
+import emailRouter from "@/routes/emailRoutes";
+import healthRouter from "@/routes/healthRoutes";
+import { initScheduler } from "@/services/scheduler.service";
+import {
+  requestTimeout,
+  slowRequestLogger,
+} from "@/middleware/timeoutMiddleware";
+import { memoryMonitor } from "@/utils/resourceManager";
 
 process.on("uncaughtException", (err: Error) => {
   // Ignorar errores de red triviales que Node a veces no atrapa
   if (
     err.message?.includes("ECONNRESET") ||
     err.message?.includes("ETIMEDOUT") ||
-    err.message?.includes("EPIPE")
+    err.message?.includes("EPIPE") ||
+    err.message?.includes("Connection timeout") ||
+    err.message?.includes("ENOTFOUND") ||
+    err.message?.includes("getaddrinfo")
   ) {
     return;
   }
@@ -87,7 +123,10 @@ process.on("unhandledRejection", (reason: any) => {
   if (
     msg.includes("ECONNRESET") ||
     msg.includes("ETIMEDOUT") ||
-    msg.includes("Socket closed")
+    msg.includes("Socket closed") ||
+    msg.includes("Connection timeout") ||
+    msg.includes("ENOTFOUND") ||
+    msg.includes("getaddrinfo")
   ) {
     return;
   }
@@ -112,6 +151,12 @@ app.use(
   express.static(path.join(process.cwd(), "public", "uploads"))
 );
 
+// 🛡️ CRITICAL: Request timeout protection
+app.use(requestTimeout({ timeout: 30000 })); // 30 seconds
+
+// 🛡️ Performance monitoring
+app.use(slowRequestLogger(2000)); // Log requests >2s
+
 app.use((req, res, next) => {
   next();
 });
@@ -124,19 +169,8 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "success",
-    message: "API Service is healthy.",
-  });
-});
-
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "success",
-    message: "API Service is healthy.",
-  });
-});
+// 🛡️ Professional health check endpoints
+app.use("/health", healthRouter);
 
 // Mounted with authLimiter to prevent spam
 app.use("/api/onboarding", authLimiter, onboardingRouter);
@@ -176,6 +210,8 @@ app.use("/api/google", apiLimiter, googleAuthRouter);
 app.use("/api/usage", apiLimiter, protect, usageRouter);
 app.use("/api/company", apiLimiter, protect, companyRouter);
 app.use("/api/analytics", apiLimiter, protect, analyticsRouter);
+app.use("/api/products", apiLimiter, protect, productRouter);
+app.use("/api/emails", apiLimiter, emailRouter); // Email module
 
 app.use((req, res, next) => {
   next(
@@ -206,7 +242,42 @@ if (require.main === module) {
       await gateway.initialize(httpServer);
       console.log("[Server] ✅ Gateway initialized successfully");
 
+      // 🛡️ Start memory monitoring
+      memoryMonitor.start(60000); // Check every minute
+      Logger.info("[Server] 🛡️ Memory monitor started");
+
+      // 🚨 AUTO-RESTART: DISABLED (heap size issue - flags not applying)
+      // The auto-restart was causing crash loops because heap size is tiny (51-135MB)
+      // even though we pass --max-old-space-size=4096
+      // V8 needs to grow heap dynamically under pressure, not restart constantly
+      /*
+      setInterval(() => {
+        const memUsage = process.memoryUsage();
+        const usage = (memUsage.heapUsed / memUsage.heapTotal) * 100;
+
+        if (usage > 95) {
+          console.error(
+            `[AUTO-RESTART] 🚨 Memory at ${usage.toFixed(1)}% (${(
+              memUsage.heapUsed /
+              1024 /
+              1024
+            ).toFixed(0)}MB), restarting...`
+          );
+          console.error(
+            "[AUTO-RESTART] Temporary solution - investigating root cause"
+          );
+          process.exit(1); // ts-node-dev will restart
+        }
+      }, 30000); // Check every 30 seconds
+      */
+      Logger.info(
+        "[Server] ⚠️  Auto-restart DISABLED - allowing heap to grow naturally"
+      );
+
       console.log("[Server] Workflow Engine initialized");
+
+      console.log("[Server] 🔧 Initializing Scheduler...");
+      initScheduler();
 
       // ✅ Initialize Message Queue Workers
       console.log("[Server] 🚀 Initializing Message Queue Workers...");
@@ -246,10 +317,25 @@ if (require.main === module) {
           process.exit(0);
         });
       } catch (workerError: any) {
-        Logger.error("[Server] ❌ Failed to initialize workers:");
-        Logger.error(workerError);
-        if (workerError.stack) {
-          Logger.error("Stack trace:", workerError.stack);
+        const msg = workerError?.message || String(workerError);
+
+        // Handle predictable Redis errors gracefully
+        if (
+          msg.includes("Connection timeout") ||
+          msg.includes("ENOTFOUND") ||
+          msg.includes("getaddrinfo") ||
+          msg.includes("ETIMEDOUT") ||
+          String(msg).toLowerCase().includes("error") // Catch generic errors
+        ) {
+          Logger.warn(
+            `[Server] ⚠️ Redis connection failed for Workers. Running without Message Queues. (Reason: ${msg})`
+          );
+        } else {
+          Logger.error("[Server] ❌ Failed to initialize workers:");
+          Logger.error(workerError);
+          if (workerError.stack) {
+            Logger.error("Stack trace:", workerError.stack);
+          }
         }
         console.log("[Server] ⚠️  Continuing without queue workers...");
       }

@@ -229,7 +229,8 @@ export const getConversation = catchAsync(
       ...conversation,
       messages: conversation.messages.map((msg: any) => ({
         ...msg,
-        attachment: msg.metadata?.attachment || undefined,
+        attachment:
+          msg.metadata?.media || msg.metadata?.attachment || undefined,
       })),
     };
 
@@ -375,7 +376,29 @@ export const replyToConversation = catchAsync(
 
     // 🚀 CENTRALIZED SENDING (Service Handles DB + Socket)
     let message;
-    if (channel === "WHATSAPP") {
+    const isScheduled = req.body.scheduledAt;
+
+    if (isScheduled) {
+      // --- SCHEDULED MESSAGE FLOW ---
+      console.log(`[Reply] 🕒 Scheduling message for ${req.body.scheduledAt}`);
+
+      message = await prisma.message.create({
+        data: {
+          content: messageContent,
+          channel: channel as any,
+          direction: "OUTBOUND",
+          conversationId: conversation.id,
+          senderId: req.user.id,
+          status: "SCHEDULED",
+          metadata: {
+            scheduledAt: req.body.scheduledAt,
+            attachment: attachment || undefined,
+          },
+        },
+        include: { sender: true },
+      });
+    } else if (channel === "WHATSAPP") {
+      // --- IMMEDIATE SEND FLOW ---
       try {
         console.log(
           "🚀 [Reply] Calling whatsappService.sendMessage with attachment:",

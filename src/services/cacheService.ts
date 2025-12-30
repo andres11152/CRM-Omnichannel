@@ -18,9 +18,23 @@ class CacheService {
     }
 
     try {
-      this.client = createClient({ url: process.env.REDIS_URL });
+      this.client = createClient({
+        url: process.env.REDIS_URL,
+        socket: {
+          family: 4,
+          tls: process.env.REDIS_URL?.startsWith("rediss://"),
+          rejectUnauthorized: false,
+        },
+      });
 
       this.client.on("error", (err) => {
+        const msg = err.message || "";
+        if (
+          msg.includes("ECONNRESET") ||
+          msg.includes("Connection timeout") ||
+          msg.includes("ENOTFOUND")
+        )
+          return;
         Logger.error("[Cache] Redis Client Error:", err);
       });
 

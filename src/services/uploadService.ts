@@ -16,6 +16,8 @@ import path from "path";
 import crypto from "crypto";
 import mime from "mime-types";
 import sharp from "sharp";
+import { getErrorMessage } from "../utils/errorHelpers";
+import { AppError } from "../utils/AppError";
 
 export interface UploadResult {
   url: string;
@@ -24,6 +26,14 @@ export interface UploadResult {
   size: number;
   mimeType: string;
 }
+
+// 🛡️ FILE SIZE LIMITS (Prevent OOM)
+const MAX_FILE_SIZE = {
+  IMAGE: 10 * 1024 * 1024, // 10MB
+  AUDIO: 25 * 1024 * 1024, // 25MB
+  VIDEO: 100 * 1024 * 1024, // 100MB
+  DOCUMENT: 50 * 1024 * 1024, // 50MB
+} as const;
 
 /**
  * Compress image using sharp
@@ -64,8 +74,9 @@ const compressImage = async (
 
     // For other formats (gif, etc.), return original
     return buffer;
-  } catch (error) {
-    console.error("Error compressing image:", error);
+  } catch (error: unknown) {
+    const errorMsg = getErrorMessage(error);
+    console.error("Error compressing image:", errorMsg);
     // Return original buffer if compression fails
     return buffer;
   }
@@ -93,6 +104,22 @@ export const uploadFile = async (
     type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
   }
 ): Promise<UploadResult> => {
+  // 🛡️ CRITICAL: Validate file size BEFORE processing
+  const maxSize = MAX_FILE_SIZE[options.type];
+  if (file.size > maxSize) {
+    const maxSizeMB = Math.round(maxSize / (1024 * 1024));
+    const fileSizeMB = Math.round(file.size / (1024 * 1024));
+    throw new AppError(
+      `File too large: ${fileSizeMB}MB. Maximum allowed: ${maxSizeMB}MB for ${options.type}`,
+      413 // Payload Too Large
+    );
+  }
+
+  // 🛡️ Validate buffer exists
+  if (!file.buffer || file.buffer.length === 0) {
+    throw new AppError("File buffer is empty", 400);
+  }
+
   const timestamp = Date.now();
   const randomString = crypto.randomBytes(8).toString("hex");
   const fileExtension = path.extname(file.originalname);
@@ -135,10 +162,11 @@ export const uploadFile = async (
         size: fileSize,
         mimeType: file.mimetype,
       };
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
       console.error(
         "[UploadService] S3 upload failed, falling back to local storage:",
-        error
+        errorMsg
       );
       // Fallback to local storage logic below
     }

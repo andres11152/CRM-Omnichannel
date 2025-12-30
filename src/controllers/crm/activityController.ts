@@ -8,33 +8,83 @@ import { GoogleCalendarService } from "../../services/googleCalendarService";
 const resolveContactId = async (id: string, companyId: string) => {
   if (!id) return undefined;
 
-  // 1. Check if it's already a Contact
-  const contact = await prisma.contact.findUnique({ where: { id } });
-  if (contact) return id;
+  // 1. Check if it's already a Contact (by ID)
+  // We wrap this in a try-catch because if ID is invalid format for database driver, it might throw
+  try {
+    const contact = await prisma.contact.findUnique({ where: { id } });
+    if (contact) return id;
+  } catch (e) {
+    // Ignore error if ID format is invalid (e.g. too long for column, though CUID is string)
+  }
 
-  // 2. Check if it's a User
-  const user = await prisma.user.findUnique({ where: { id } });
-  if (user) {
-    // Find or Create Contact for this User
-    let linkedContact = await prisma.contact.findFirst({
+  // 2. Check if it looks like a phone number (JID or raw number)
+  // This is crucial for when the frontend passes a JID (e.g. from a fresh socket message)
+  // instead of a resolved CUID.
+  const cleanPhone = id.replace("@c.us", "").replace("@g.us", "");
+  // If it's digits and length is reasonable for a phone OR it had the suffix
+  if (/^\d{7,20}$/.test(cleanPhone) || id.includes("@c.us")) {
+    const contactByPhone = await prisma.contact.findFirst({
       where: {
         companyId,
-        OR: [{ email: user.email }, { phone: user.email.replace("@c.us", "") }],
+        phone: cleanPhone,
       },
     });
+    if (contactByPhone) return contactByPhone.id;
+  }
 
-    if (!linkedContact) {
-      linkedContact = await prisma.contact.create({
-        data: {
+  // 3. Check if it's a Conversation ID (Very common case)
+  // Frontend often passes Conversation ID instead of Contact ID by mistake
+  try {
+    const convo = await prisma.conversation.findUnique({ where: { id } });
+    if (convo && convo.channelId) {
+      // The channelId usually contains the phone number (e.g. "57300...")
+      // We can use it to find the contact
+      const convoPhone = convo.channelId
+        .replace("@c.us", "")
+        .replace("@g.us", "");
+      const contactByConvo = await prisma.contact.findFirst({
+        where: {
           companyId,
-          name: user.name || "Usuario Chat",
-          email: user.email.includes("@") ? user.email : null,
-          phone: !user.email.includes("@") ? user.email : null,
-          tags: ["Auto-creado desde Notas"],
+          phone: convoPhone,
         },
       });
+      if (contactByConvo) return contactByConvo.id;
     }
-    return linkedContact.id;
+  } catch (e) {
+    // Ignore
+  }
+
+  // 4. Check if it's a User (Internal Team Member)
+  // Sometimes we map users to contacts for self-assinged tasks
+  try {
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (user) {
+      // Find or Create Contact for this User
+      let linkedContact = await prisma.contact.findFirst({
+        where: {
+          companyId,
+          OR: [
+            { email: user.email },
+            { phone: user.email.replace("@c.us", "") },
+          ],
+        },
+      });
+
+      if (!linkedContact) {
+        linkedContact = await prisma.contact.create({
+          data: {
+            companyId,
+            name: user.name || "Usuario Chat",
+            email: user.email.includes("@") ? user.email : null,
+            phone: !user.email.includes("@") ? user.email : null,
+            tags: ["Auto-creado desde Notas"],
+          },
+        });
+      }
+      return linkedContact.id;
+    }
+  } catch (e) {
+    // Ignore
   }
 
   return undefined;
@@ -102,6 +152,19 @@ export const createActivity = catchAsync(
       return next(new AppError("Company ID or User ID is missing", 400));
     }
 
+    // Resolve contact ID
+    let finalContactId: string | undefined = undefined;
+    if (contactId && contactId !== "") {
+      console.log(
+        `[DEBUG] createActivity - Resolving contactId: ${contactId} for company: ${companyId}`
+      );
+      const resolved = await resolveContactId(contactId, companyId);
+      finalContactId = resolved || contactId;
+      console.log(
+        `[DEBUG] createActivity - Resolved: ${resolved}, Final: ${finalContactId}`
+      );
+    }
+
     const activity = await prisma.activity.create({
       data: {
         companyId,
@@ -113,10 +176,7 @@ export const createActivity = catchAsync(
         dueDate: dueDate ? new Date(dueDate) : null,
         accountId: accountId && accountId !== "" ? accountId : undefined,
         dealId: dealId && dealId !== "" ? dealId : undefined,
-        contactId:
-          contactId && contactId !== ""
-            ? await resolveContactId(contactId, companyId)
-            : undefined,
+        contactId: finalContactId,
         assignedToId:
           assignedToId && assignedToId !== "" ? assignedToId : undefined,
         participants:

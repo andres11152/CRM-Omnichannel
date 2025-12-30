@@ -82,18 +82,55 @@ export const contactController = {
         );
       }
 
-      contact = await prisma.contact.create({
-        data: {
-          companyId,
-          name: name || "New Contact",
-          email, // Can be null
-          phone,
-          tags: tags || [],
-          notes,
-          customFields: customFields || {},
-          avatarUrl,
-        },
-      });
+      try {
+        contact = await prisma.contact.create({
+          data: {
+            companyId,
+            name: name || "New Contact",
+            email, // Can be null
+            phone,
+            tags: tags || [],
+            notes,
+            customFields: customFields || {},
+            avatarUrl,
+          },
+        });
+      } catch (err: any) {
+        // Handle Unique Constraint Violation (Race condition or missed check)
+        if (err.code === "P2002") {
+          console.log(
+            "[ContactController] Race condition detected on create, updating existing contact instead."
+          );
+          // Find the conflicting record
+          const conflict = await prisma.contact.findFirst({
+            where: {
+              companyId,
+              OR: [phone ? { phone } : {}, email ? { email } : {}].filter(
+                (c) => Object.keys(c).length > 0
+              ),
+            },
+          });
+
+          if (conflict) {
+            contact = await prisma.contact.update({
+              where: { id: conflict.id },
+              data: {
+                name: name || undefined,
+                email: email,
+                phone: phone || undefined,
+                tags: tags || undefined,
+                notes: notes || undefined,
+                customFields: customFields || undefined,
+                avatarUrl: avatarUrl || undefined,
+              },
+            });
+          } else {
+            throw err; // Only throw if we genuinely can't find the conflict rationale
+          }
+        } else {
+          throw err;
+        }
+      }
     }
 
     const updatedContact = contact;

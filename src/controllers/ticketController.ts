@@ -3,6 +3,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { prisma } from "@/config/prisma";
 import { AuthenticatedRequest } from "@/types/types";
+import { gateway } from "@/gateways/socketGateway";
 
 // --- HELPERS ---
 
@@ -201,8 +202,6 @@ export const getAllTickets = catchAsync(
     const { status, priority, queueId, assignedToId } = req.query;
 
     if (!companyId) {
-      // If MASTER, might want to see all? Or require companyId param?
-      // For now, return empty if no company context
       return res
         .status(200)
         .json({ status: "success", results: 0, data: { tickets: [] } });
@@ -233,12 +232,44 @@ export const getAllTickets = catchAsync(
       orderBy: { createdAt: "desc" },
     });
 
-    const mappedTickets = tickets.map(mapTicketToFrontend);
+    // 1. Initial Mapping (Derives Phones)
+    const baseMappedTickets = tickets.map(mapTicketToFrontend);
+
+    // 2. Collect Phones to fetch CRM Data
+    const phonesToFetch = new Set<string>();
+    baseMappedTickets.forEach((t) => {
+      if (t.contact.phone) phonesToFetch.add(t.contact.phone);
+    });
+
+    let crmContactMap = new Map<string, string>();
+    if (phonesToFetch.size > 0) {
+      const contacts = await prisma.contact.findMany({
+        where: {
+          companyId,
+          phone: { in: Array.from(phonesToFetch) },
+        },
+        select: { id: true, phone: true },
+      });
+      contacts.forEach((c) => {
+        if (c.phone) crmContactMap.set(c.phone, c.id);
+      });
+    }
+
+    // 3. Enrich with realContactId
+    const finalTickets = baseMappedTickets.map((t) => ({
+      ...t,
+      contact: {
+        ...t.contact,
+        realContactId: t.contact.phone
+          ? crmContactMap.get(t.contact.phone)
+          : undefined,
+      },
+    }));
 
     res.status(200).json({
       status: "success",
       results: tickets.length,
-      data: { tickets: mappedTickets },
+      data: { tickets: finalTickets },
     });
   }
 );
@@ -272,16 +303,41 @@ export const getTicketById = catchAsync(
       return next(new AppError("Ticket not found", 404));
     }
 
-    // Security check: Ensure ticket belongs to user's company
+    // Security check
     if (companyId && ticket.companyId !== companyId) {
       return next(
         new AppError("You do not have permission to view this ticket", 403)
       );
     }
 
+    // 1. Initial Mapping
+    const mappedTicket = mapTicketToFrontend(ticket);
+
+    // 2. Fetch CRM Contact Info
+    let realContactId: string | undefined = undefined;
+    if (mappedTicket.contact.phone && companyId) {
+      const crmContact = await prisma.contact.findFirst({
+        where: {
+          companyId,
+          phone: mappedTicket.contact.phone,
+        },
+        select: { id: true },
+      });
+      if (crmContact) realContactId = crmContact.id;
+    }
+
+    // 3. Enrich
+    const finalTicket = {
+      ...mappedTicket,
+      contact: {
+        ...mappedTicket.contact,
+        realContactId,
+      },
+    };
+
     res.status(200).json({
       status: "success",
-      data: { ticket: mapTicketToFrontend(ticket) },
+      data: { ticket: finalTicket },
     });
   }
 );
@@ -387,7 +443,7 @@ export const updateTicket = catchAsync(
       }
     }
 
-    // 🔥 CRÍTICO: Si el ticket tiene conversación, sincronizar el queueId
+    // 🔥 CRITICAL: Si el ticket tiene conversación, sincronizar el queueId
     // Esto permite que el AI assistant responda cuando se transfiere un ticket
     if (updatedTicket.conversationId && updateData.queueId !== undefined) {
       try {
@@ -404,6 +460,30 @@ export const updateTicket = catchAsync(
           error
         );
       }
+    }
+
+    // 🚀 EMIT EVENT FOR FRONTEND UPDATE
+    // This fixes the bug where the badge doesn't update immediately
+    try {
+      const io = gateway.getIO();
+      const payload = {
+        id: updatedTicket.conversationId, // Match frontend "conversation.updated" expectation
+        ticketId: updatedTicket.id,
+        contact: {
+          queueName: updatedTicket.queue?.name,
+          assignedAgentName: updatedTicket.assignedTo?.name,
+          assignedAgentId: updatedTicket.assignedToId,
+        },
+      };
+
+      if (updatedTicket.companyId) {
+        io.to(`company:${updatedTicket.companyId}`).emit(
+          "conversation.updated",
+          payload
+        );
+      }
+    } catch (e) {
+      console.error("[TicketController] Socket emit failed:", e);
     }
 
     res.status(200).json({

@@ -69,11 +69,13 @@ export const globalErrorHandler = (
   } else if (err instanceof AppError) {
     error = err;
   } else {
-    error = new AppError(
-      err.message || "Algo salió muy mal.",
-      err.statusCode || 500
-    );
-    error.stack = err.stack;
+    // 🛡️ SENIOR SAFETY: Handle cases where the error is not an instance of Error or AppError
+    const message =
+      err?.message || (typeof err === "string" ? err : "Algo salió muy mal.");
+    const statusCode = err?.statusCode || 500;
+
+    error = new AppError(message, statusCode);
+    error.stack = err?.stack || new Error().stack;
   }
 
   // Silence operational errors (4xx) from spamming the logs

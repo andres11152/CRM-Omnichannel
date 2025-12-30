@@ -1,6 +1,7 @@
 import { google, calendar_v3 } from "googleapis";
 import { prisma } from "../config/prisma";
 import { Logger } from "../utils/logger";
+import { getErrorMessage } from "../utils/errorHelpers";
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -126,13 +127,14 @@ export class GoogleCalendarService {
       }
 
       return response.data.id || null;
-    } catch (error: any) {
-      Logger.error(`[GoogleCalendar] Failed to create event:`, error.message);
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error);
+      Logger.error(`[GoogleCalendar] Failed to create event:`, msg);
 
       // If token is invalid, clear it from DB
       if (
-        error.message?.includes("invalid_grant") ||
-        error.message?.includes("Token has been expired")
+        msg.includes("invalid_grant") ||
+        msg.includes("Token has been expired")
       ) {
         await prisma.user.update({
           where: { id: userId },
@@ -184,8 +186,11 @@ export class GoogleCalendarService {
       });
 
       Logger.info(`[GoogleCalendar] Event deleted: ${eventId}`);
-    } catch (error: any) {
-      Logger.error(`[GoogleCalendar] Failed to delete event:`, error.message);
+    } catch (error: unknown) {
+      Logger.error(
+        `[GoogleCalendar] Failed to delete event:`,
+        getErrorMessage(error)
+      );
     }
   }
 
@@ -249,8 +254,11 @@ export class GoogleCalendarService {
       });
 
       Logger.info(`[GoogleCalendar] Event updated: ${eventId}`);
-    } catch (error: any) {
-      Logger.error(`[GoogleCalendar] Failed to update event:`, error.message);
+    } catch (error: unknown) {
+      Logger.error(
+        `[GoogleCalendar] Failed to update event:`,
+        getErrorMessage(error)
+      );
     }
   }
 }

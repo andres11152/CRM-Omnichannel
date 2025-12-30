@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { AuthenticatedRequest } from "@/types/types";
 
 export const protect = catchAsync(

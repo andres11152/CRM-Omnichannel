@@ -197,6 +197,38 @@ export const copilotAction = catchAsync(
       systemPrompt =
         "Eres un agente de soporte de clase mundial. Basado en el contexto de la conversación, sugiere la mejor respuesta siguiente. Que sea empática, resolutiva y breve. Solo el texto de respuesta. Idioma: Español.";
       userMessage = context;
+    } else if (action === "generate_template") {
+      systemPrompt = `Actúa como un Diseñador UI/UX y Desarrollador Email Frontend de CLASE MUNDIAL (Elite Level).
+        
+        TU OBJETIVO: Generar HTML para emails que sea VISUALMENTE IMPACTANTE, RESPONSIVE y COMPATIBLE con todos los clientes (Outlook, Gmail, Apple).
+        
+        REGLAS DE ORO (STRICT):
+        1.  **LAYOUT FLUIDO & RESPONSIVE**:
+            - Usa siempre un contenedor principal con \`max-width: 600px\` centrado (\`margin: 0 auto\`).
+            - Usa \`width: 100%\` para tablas internas.
+            - INCLUYE este CSS en el header: 
+              \`<style>
+                @media only screen and (max-width: 600px) {
+                  .main-container { width: 100% !important; }
+                  .fluid-img { width: 100% !important; height: auto !important; }
+                  .mobile-stack { display: block !important; width: 100% !important; }
+                  .mobile-padding { padding: 10px !important; }
+                  .mobile-text { font-size: 16px !important; line-height: 1.5 !important; }
+                }
+              </style>\`
+        2.  **ESTRUCTURA DE TABLAS (ROCK SOLID)**:
+            - Usa \`<table>\` para todo el layout estructural. NUNCA uses divs para columnas.
+            - Añade \`role="presentation"\`, \`cellspacing="0"\`, \`cellpadding="0"\`, \`border="0"\` a todas las tablas.
+        3.  **ESTILOS VISUALES (ELITE)**:
+            - Usa fuentes modernas sans-serif (Inter, Helvetica, Arial).
+            - Espaciado generoso (whitespace) para dar sensación de lujo.
+            - Botones tipo "Call to Action" grandes y táctiles (min-height 44px).
+            - Colores contrastantes y jerarquía visual clara (H1 > H2 > P).
+        4.  **IMÁGENES**:
+            - Siempre añade \`display: block;\`, \`border: 0;\`, y \`width: 100%;\` (o max-width) a las imágenes.
+        
+        OUTPUT: Solo devuelve el código HTML crudo, empezando por \`<!DOCTYPE html>\`. Sin markdown, sin explicaciones.`;
+      userMessage = `CONTEXTO DEL USUARIO: ${text}`;
     } else {
       return next(new AppError("Invalid action", 400));
     }

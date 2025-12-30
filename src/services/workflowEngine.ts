@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import { prisma } from "@/config/prisma";
 import { Logger } from "@/utils/logger";
+import { emailService } from "./email/email.service";
 
 class WorkflowEngine extends EventEmitter {
   constructor() {
@@ -83,7 +84,7 @@ class WorkflowEngine extends EventEmitter {
     );
 
     // Create Execution Log
-    const execution = await (prisma as any).workflowExecution.create({
+    const execution = await prisma.workflowExecution.create({
       data: {
         workflowId: workflow.id,
         status: "PENDING",
@@ -91,9 +92,11 @@ class WorkflowEngine extends EventEmitter {
     });
 
     try {
-      const nodes = workflow.nodes as any[];
-      if (!nodes || nodes.length === 0) {
-        Logger.warn(`[WorkflowEngine] Workflow ${workflow.id} has no nodes`);
+      const nodes = workflow.nodes as any;
+      if (!Array.isArray(nodes) || nodes.length === 0) {
+        Logger.warn(
+          `[WorkflowEngine] Workflow ${workflow.id} has no valid nodes`
+        );
         return;
       }
 
@@ -113,22 +116,75 @@ class WorkflowEngine extends EventEmitter {
       // Simple sequential execution for MVP
       for (const node of nodes) {
         if (node.type === "action_email") {
-          const recipient = node.data?.options?.[0] || "Cliente";
-          const subject = node.data?.options?.[1] || "Sin Asunto";
-          const body = node.data?.content || "";
+          const recipientOption = node.data?.options?.[0]; // "Cliente" or specific email
+          const subject =
+            node.data?.options?.[1] ||
+            node.data?.params?.subject ||
+            "Sin Asunto";
+          const body = node.data?.content || node.data?.params?.body || "";
 
-          Logger.info(
-            `[WorkflowEngine] Action: Sending Email to ${recipient} | Subject: ${subject}`
-          );
+          // 1. Resolve Recipient Email & Contact
+          let targetEmail = "";
+          let targetContactId: string | undefined = undefined;
 
-          // Log email as an Activity in the CRM
+          if (recipientOption === "Cliente" || !recipientOption) {
+            // Fetch Deal to get Contact
+            const deal = await prisma.deal.findUnique({
+              where: { id: payload.dealId },
+              include: { contact: true },
+            });
+            if (deal?.contact?.email) {
+              targetEmail = deal.contact.email;
+              targetContactId = deal.contact.id;
+            } else {
+              Logger.warn(
+                `[WorkflowEngine] No email/contact found for Deal ${payload.dealId}`
+              );
+              continue; // Skip execution
+            }
+          } else if (recipientOption.includes("@")) {
+            targetEmail = recipientOption;
+            // Optionally try to find contact by email to link history
+            const contact = await prisma.contact.findFirst({
+              where: { email: targetEmail, companyId: workflow.companyId },
+            });
+            if (contact) targetContactId = contact.id;
+          }
+
+          if (targetEmail) {
+            Logger.info(
+              `[WorkflowEngine] Action: Sending Real Email to ${targetEmail} | Subject: ${subject}`
+            );
+
+            // 2. Send Real Email via SMTP
+            await emailService
+              .sendEmail({
+                companyId: workflow.companyId,
+                to: [targetEmail],
+                subject: subject,
+                bodyHtml: body.replace(/\n/g, "<br>"),
+                bodyText: body,
+                contactId: targetContactId,
+                from:
+                  process.env.DEFAULT_SENDER_EMAIL || "automation@reply.com",
+              })
+              .catch((err) => {
+                Logger.error(
+                  `[WorkflowEngine] Failed to send email via SMTP`,
+                  err
+                );
+                throw err; // Re-throw to fail workflow step
+              });
+          }
+
+          // 3. Log email as an Activity in the CRM
           await prisma.activity
             .create({
               data: {
                 companyId: workflow.companyId,
                 type: "EMAIL",
-                subject: `📧 Email Enviado: ${subject}`,
-                description: `Destinatario: ${recipient}\n\n${body}`,
+                subject: `📧 Email Automático: ${subject}`,
+                description: `Destinatario: ${targetEmail}\n\n${body}`,
                 dealId: payload.dealId,
                 status: "COMPLETED",
                 createdById: systemUser.id,
@@ -162,13 +218,13 @@ class WorkflowEngine extends EventEmitter {
         }
       }
 
-      await (prisma as any).workflowExecution.update({
+      await prisma.workflowExecution.update({
         where: { id: execution.id },
         data: { status: "SUCCESS", completedAt: new Date() },
       });
     } catch (error: any) {
       Logger.error(`[WorkflowEngine] Execution Failed: ${error.message}`);
-      await (prisma as any).workflowExecution.update({
+      await prisma.workflowExecution.update({
         where: { id: execution.id },
         data: {
           status: "FAILED",

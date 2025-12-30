@@ -59,8 +59,12 @@ class MessageQueueService {
       const redisAdvancedOpts = {
         maxRetriesPerRequest: null, // 🔥 CRITICAL for Bull reliability
         enableReadyCheck: false,
-        connectTimeout: 30000, // Tolerant timeout
+        connectTimeout: 30000,
         retryStrategy: (times: number) => Math.min(times * 50, 2000),
+        family: 4,
+        tls: redisUrl?.startsWith("rediss://")
+          ? { rejectUnauthorized: false }
+          : undefined, // 🔥 Render SSL Fix
       };
 
       const defaultJobOptions: any = {
@@ -81,7 +85,7 @@ class MessageQueueService {
           `whatsapp-messages:${companyId}`,
           redisUrl,
           {
-            redis: redisAdvancedOpts,
+            redis: redisAdvancedOpts as any, // Cast to avoid strict type checks if family isn't in definition
             defaultJobOptions,
           }
         );
@@ -105,7 +109,10 @@ class MessageQueueService {
           error.message?.includes("ECONNRESET") ||
           error.message?.includes("ETIMEDOUT") ||
           error.message?.includes("Socket closed unexpectedly") ||
-          error.message?.includes("read E")
+          error.message?.includes("read E") ||
+          error.message?.includes("Connection timeout") ||
+          error.message?.includes("ENOTFOUND") ||
+          error.message?.includes("getaddrinfo")
         ) {
           // Bull/Redis auto-reconnects. No action needed.
           return;

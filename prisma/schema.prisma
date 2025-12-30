@@ -146,6 +146,16 @@ model Company {
   // JSON Settings (Business Hours, Auto-Replies, etc.)
   settings         Json?         @default("{}")
 
+  // SMTP Configuration (Multi-Tenant Email)
+  emailProvider      String   @default("SMTP") // SMTP, SENDGRID, AWS_SES
+  smtpHost           String?
+  smtpPort           Int?
+  smtpUser           String?
+  smtpPassword       String?  // Encrypted
+  smtpSecure         Boolean  @default(true)
+  defaultSenderEmail String?
+  defaultSenderName  String?
+
   // Relaciones
   users            User[]
   tickets          Ticket[]
@@ -167,6 +177,7 @@ model Company {
   aiAssistants     AIAssistant[]
   quickReplies     QuickReply[]
   pipelines        Pipeline[] // CRM Pipelines
+  products         Product[] // Product Catalog
   
   // Chatbot Flows
   flows            Flow[]
@@ -174,6 +185,9 @@ model Company {
   
   // Multimedia Library
   mediaAssets      MediaAsset[]
+  
+  // Email Module
+  emails           Email[]
 
   // Relación con Stripe y Planes
   planId               String?
@@ -235,6 +249,10 @@ model User {
   // Google Calendar Integration
   googleCalendarToken        String? // Access token
   googleCalendarRefreshToken String? // Refresh token for long-term access
+  
+  // Password Reset
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
 
   // === PERFORMANCE INDEXES ===
   // For: Get users by company and role (very common)
@@ -445,6 +463,9 @@ model Ticket {
 
   conversationId String?
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  
+  // Email timeline
+  emails         Email[]
 
   // === PERFORMANCE INDEXES ===
   // For: Get tickets by company and status (dashboard query)
@@ -636,6 +657,9 @@ model Contact {
   deals      Deal[]
   activities Activity[]
   
+  // Email timeline
+  emails     Email[]
+  
   // Chatbot Flow Sessions
   flowSessions ContactFlowSession[]
 
@@ -797,6 +821,44 @@ model Activity {
 }
 
 // Media Library
+
+// --- Product Catalog Models ---
+
+enum ProductType {
+  Physical
+  Service
+  Digital
+}
+
+enum ProductStatus {
+  active
+  draft
+  archived
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  companyId   String
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  name        String
+  sku         String?
+  price       Float
+  currency    String        @default("USD")
+  stock       Int           @default(0)
+  category    String
+  type        ProductType   @default(Physical)
+  description String?
+  imageUrl    String?
+  status      ProductStatus @default(active)
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([companyId, status])
+  @@map("products")
+}
+
 enum MediaType {
   IMAGE
   AUDIO
@@ -1008,4 +1070,83 @@ model MediaAsset {
   @@index([companyId, category])
   @@index([uploadedById])
   @@map("media_assets")
+}
+
+// ========================================
+// EMAIL MODULE
+// ========================================
+
+enum EmailStatus {
+  QUEUED      // En cola para envío
+  SENT        // Enviado exitosamente
+  DELIVERED   // Confirmado entregado (webhook)
+  OPENED      // Email abierto (tracking pixel)
+  CLICKED     // Link clickeado
+  BOUNCED     // Rebotado (email inválido)
+  FAILED      // Fallo al enviar
+  SPAM        // Marcado como spam
+}
+
+enum EmailType {
+  INBOUND     // Email recibido
+  OUTBOUND    // Email enviado
+}
+
+model Email {
+  id        String      @id @default(cuid())
+  
+  // Company isolation (multi-tenancy)
+  companyId String
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  // Provider message ID (para tracking de webhooks)
+  messageId String?     @unique // SendGrid/SES message ID
+  
+  // Email metadata
+  subject   String
+  bodyHtml  String      @db.Text // HTML body
+  bodyText  String?     @db.Text // Plain text fallback
+  
+  // Sender/Receiver
+  from      String      // email@example.com
+  to        String[]    // Array de destinatarios
+  cc        String[]    @default([])
+  bcc       String[]    @default([])
+  replyTo   String?
+  
+  // Status tracking
+  status    EmailStatus @default(QUEUED)
+  type      EmailType
+  
+  // Relations
+  contactId String?
+  contact   Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  
+  ticketId  String?
+  ticket    Ticket?     @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  
+  // Attachments (JSON array of Media IDs or URLs)
+  attachments Json?     // [{ filename: 'doc.pdf', url: 's3://...' }]
+  
+  // Tracking metadata
+  openedAt  DateTime?   // Cuando se abrió
+  clickedAt DateTime?   // Cuando se hizo click
+  
+  // Error handling
+  errorMessage String?
+  retryCount   Int       @default(0)
+  
+  // Timestamps
+  sentAt    DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  
+  // Indexes for performance
+  @@index([companyId, createdAt(sort: Desc)])  // Timeline queries
+  @@index([contactId, createdAt(sort: Desc)])  // Contact timeline
+  @@index([ticketId, createdAt(sort: Desc)])   // Ticket timeline
+  @@index([status])                             // Status filtering
+  @@index([messageId])                          // Webhook lookups
+  
+  @@map("emails")
 }

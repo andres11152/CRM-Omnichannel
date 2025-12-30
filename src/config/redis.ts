@@ -10,12 +10,13 @@ if (redisUrl) {
     url: redisUrl,
     pingInterval: 1000, // 🔥 Send PING every 1s (CRITICAL for Render External URL)
     socket: {
-      connectTimeout: 50000, // 50s timeout
+      connectTimeout: 60000, // 60s timeout
+      family: 4, // 🔥 Force IPv4 (Fixes Node 17+ / Windows DNS issues)
       tls: redisUrl.startsWith("rediss://"), // Auto-detect TLS
       rejectUnauthorized: false, // Required for self-signed certs
       reconnectStrategy: (retries) => {
         // Aggressive reconnect for local dev stability
-        return Math.min(retries * 50, 2000);
+        return Math.min(retries * 100, 3000);
       },
     },
     // Prevent crashing on command failure, just fail the command

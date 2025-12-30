@@ -2,6 +2,9 @@ import { prisma } from "@/config/prisma";
 import { gateway } from "@/gateways/socketGateway";
 import { Prisma, MessageDirection, Channel, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { retryWithBackoff } from "@/utils/resilience";
+import { getErrorMessage } from "@/utils/errorHelpers";
+import { Logger } from "@/utils/logger";
 
 /**
  * 🛡️ TYPE DEFINITIONS (Strict & Scalable)
@@ -116,10 +119,52 @@ export const messageProcessor = {
   },
 
   /**
+   * 🔒 MUTEX FOR CONVERSATION CREATION
+   * Prevents race conditions when multiple messages arrive instantly for a new chat.
+   */
+  _creationLocks: new Map<string, Promise<void>>(),
+
+  async _runWithLock(key: string, task: () => Promise<void>) {
+    // Wait for existing lock
+    while (this._creationLocks.has(key)) {
+      try {
+        await this._creationLocks.get(key);
+      } catch (e) {
+        // Ignore errors from previous tasks, just wait for them to finish
+      }
+    }
+
+    // Create new lock
+    let resolveLock: () => void;
+    const lockPromise = new Promise<void>((resolve) => {
+      resolveLock = resolve;
+    });
+
+    this._creationLocks.set(key, lockPromise);
+
+    try {
+      await task();
+    } finally {
+      this._creationLocks.delete(key);
+      resolveLock!();
+    }
+  },
+
+  /**
    * 🔒 CORE LOGIC
    * Uses Transactions and Atomic operations where possible.
    */
   async _processSafe(payload: IncomingMessagePayload) {
+    const { companyId, remoteJid: phone } = payload;
+    const lockKey = `conv:${companyId}:${phone}`;
+
+    // Wrap the ENTIRE critical path in a lock for this specific phone number
+    await this._runWithLock(lockKey, async () => {
+      await this._processSafeInternal(payload);
+    });
+  },
+
+  async _processSafeInternal(payload: IncomingMessagePayload) {
     try {
       const {
         companyId,
@@ -469,8 +514,20 @@ export const messageProcessor = {
           });
         });
       }
-    } catch (error) {
-      console.error(`[MsgProcessor] 🛑 Fatal Error:`, error);
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
+      console.error(`[MsgProcessor] 🛑 Fatal Error:`, errorMsg);
+
+      // 🛡️ CRITICAL: Don't let message processing errors crash the entire service
+      // Log to monitoring system if available
+      Logger.error("[MsgProcessor] Message processing failed", {
+        error: errorMsg,
+        payload: {
+          companyId: payload.companyId,
+          phone: payload.remoteJid,
+          isOutbound: payload.isOutbound,
+        },
+      });
     }
   },
 

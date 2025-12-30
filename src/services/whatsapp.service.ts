@@ -15,7 +15,22 @@ import { Logger } from "@/utils/logger";
 import { useRedisAuthState } from "./baileysRedisAuth";
 import { gateway } from "@/gateways/socketGateway";
 import redisClient from "@/config/redis";
-import { phoneNumberSchema } from "@/utils/validators";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
+import { tmpdir } from "os";
+import { readFile, unlink, writeFile as fsWriteFile } from "fs/promises";
+import { getErrorMessage } from "@/utils/errorHelpers";
+import { resourceManager } from "@/utils/resourceManager";
+
+// 🎬 Configure FFMPEG with Static Binary
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+  console.log(`[WhatsApp] 🎵 FFMPEG initialized at: ${ffmpegPath}`);
+} else {
+  console.warn(
+    "[WhatsApp] ⚠️ FFMPEG static binary not found! Voice notes may fail."
+  );
+}
 
 /**
  * WhatsApp Service Singleton
@@ -329,6 +344,7 @@ export class WhatsAppService extends EventEmitter {
         bind: (ev: any) => {
           // 1. Capture Upserts
           ev.on("messages.upsert", (upsert: any) => {
+            if (!upsert?.messages || !Array.isArray(upsert.messages)) return;
             if (upsert.messages.length > 0)
               Logger.info(`[Store] 📥 Upsert: ${upsert.messages.length} msgs`);
 
@@ -355,6 +371,7 @@ export class WhatsAppService extends EventEmitter {
 
           // 2. Capture Contacts Upsert (Sync) + AUTO-LEARN LID MAPPINGS
           ev.on("contacts.upsert", async (contacts: any[]) => {
+            if (!contacts || !Array.isArray(contacts)) return;
             contacts.forEach((c) => {
               store.contacts[c.id] = { ...(store.contacts[c.id] || {}), ...c };
 
@@ -550,6 +567,18 @@ export class WhatsAppService extends EventEmitter {
           const isTimeout =
             statusCode === 408 || errorMsg.includes("QR refs attempts ended");
 
+          // 💀 FATAL SYNC ERROR: "failed to find key" (Session is corrupted)
+          if (errorMsg.includes("failed to find key")) {
+            Logger.error(
+              `[WhatsApp] 💥 CRITICAL: Session ${sessionId} sync data corrupted ("failed to find key"). Wiping session to force fresh start.`
+            );
+            await this.handleSessionFailure(sessionId);
+            await this.clearSessionData(sessionId);
+            // Don't auto-reconnect logic below, just exit.
+            // A fresh QR will be generated on next manual init or if logic allows.
+            return;
+          }
+
           if (isTimeout) {
             Logger.warn(
               `[WhatsApp] 🛑 QR Code expired or process timed out for ${sessionId}. Stopping loop.`
@@ -642,26 +671,52 @@ export class WhatsAppService extends EventEmitter {
           }
         }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
       Logger.error(
         `[WhatsApp] Fatal error initializing session ${sessionId}`,
-        error
+        errorMsg
       );
 
+      // 🛡️ PREVENT RETRY STORMS
+      const retryCount = this.retryCounts.get(sessionId) || 0;
+
+      if (retryCount >= this.MAX_RETRIES) {
+        Logger.error(
+          `[WhatsApp] 🚨 Max retries (${this.MAX_RETRIES}) reached for ${sessionId}. Giving up.`
+        );
+        this.retryCounts.delete(sessionId);
+        this.handleSessionFailure(sessionId);
+        return;
+      }
+
       // 🧠 INTELLIGENT FAILURE HANDLING
-      // If error is related to connection/infrastructure, reschedule instead of killing
       const isInfraError =
-        error.message?.includes("Redis") ||
-        error.message?.includes("Socket closed") ||
-        error.message?.includes("ECONNRESET");
+        errorMsg.includes("Redis") ||
+        errorMsg.includes("Socket closed") ||
+        errorMsg.includes("ECONNRESET") ||
+        errorMsg.includes("timeout");
 
       if (isInfraError) {
+        this.retryCounts.set(sessionId, retryCount + 1);
+        const delay = Math.min(10000 * Math.pow(2, retryCount), 60000); // Max 60s
+
         Logger.warn(
-          `[WhatsApp] ⏳ Infrastructure error detected for ${sessionId}. Scheduling retry in 10s...`
+          `[WhatsApp] ⏳ Infrastructure error for ${sessionId}. Retry ${
+            retryCount + 1
+          }/${this.MAX_RETRIES} in ${delay}ms`
         );
-        setTimeout(() => this.initializeSession(sessionId), 10000);
+
+        // 🛡️ Use resourceManager for cleanup
+        resourceManager.setTimeout(() => {
+          this.initializeSession(sessionId);
+        }, delay);
       } else {
-        // Only kill session for actual logic/auth failures
+        // Logic/auth failures - don't retry
+        Logger.error(
+          `[WhatsApp] Non-retryable error for ${sessionId}: ${errorMsg}`
+        );
+        this.retryCounts.delete(sessionId);
         this.handleSessionFailure(sessionId);
       }
     } finally {
@@ -1208,6 +1263,23 @@ export class WhatsAppService extends EventEmitter {
       } else if (msg.message?.audioMessage) {
         mediaType = "audio";
         mimeType = msg.message.audioMessage.mimetype;
+      } else if (msg.message?.stickerMessage) {
+        mediaType = "sticker";
+        mimeType = msg.message.stickerMessage.mimetype || "image/webp";
+      } else if (msg.message?.locationMessage) {
+        mediaType = "location";
+        mimeType = "application/json"; // Logical type
+        text = "📍 Ubicación compartida";
+      } else if (msg.message?.contactMessage) {
+        mediaType = "contact";
+        mimeType = "text/vcard";
+        text = `👤 Contacto: ${msg.message.contactMessage.displayName}`;
+      } else if (msg.message?.contactsArrayMessage) {
+        mediaType = "contact_list";
+        mimeType = "text/vcard";
+        text = `👤 ${
+          msg.message.contactsArrayMessage.contacts?.length || 0
+        } Contactos compartidos`;
       }
 
       // 🔍 DEBUG: Log message content before filtering
@@ -1229,44 +1301,79 @@ export class WhatsAppService extends EventEmitter {
 
       let mediaInfo = undefined;
       // Handle Media Download
+      // Handle Media Processing
       if (mediaType) {
-        try {
-          const buffer = (await downloadMediaMessage(
-            msg,
-            "buffer",
-            {},
-            { logger: console as any, reuploadRequest: sessionRecord.id as any }
-          )) as Buffer;
+        // A. FILE-BASED MEDIA (Download required)
+        if (
+          ["image", "video", "audio", "document", "sticker"].includes(mediaType)
+        ) {
+          try {
+            const buffer = (await downloadMediaMessage(
+              msg,
+              "buffer",
+              {},
+              {
+                logger: console as any,
+                reuploadRequest: sessionRecord.id as any,
+              }
+            )) as Buffer;
 
-          if (buffer) {
-            const uploadDir = path.join(
-              process.cwd(),
-              "public",
-              "uploads",
-              sessionRecord.companyId
-            );
-            await mkdir(uploadDir, { recursive: true });
+            if (buffer) {
+              const uploadDir = path.join(
+                process.cwd(),
+                "public",
+                "uploads",
+                sessionRecord.companyId
+              );
+              await mkdir(uploadDir, { recursive: true });
 
-            const ext = mimeType?.split("/")[1]?.split(";")[0] || "bin";
-            const filename = `${Date.now()}_${Math.random()
-              .toString(36)
-              .substring(7)}.${ext}`;
-            const filePath = path.join(uploadDir, filename);
+              const ext = mimeType?.split("/")[1]?.split(";")[0] || "bin";
+              const filename = `${Date.now()}_${Math.random()
+                .toString(36)
+                .substring(7)}.${ext}`;
+              const filePath = path.join(uploadDir, filename);
 
-            await writeFile(filePath, buffer);
-            const publicUrl = `/uploads/${sessionRecord.companyId}/${filename}`;
+              await writeFile(filePath, buffer);
+              const publicUrl = `/uploads/${sessionRecord.companyId}/${filename}`;
 
-            mediaInfo = {
-              url: publicUrl,
-              type: mediaType,
-              mimetype: mimeType,
-              caption: text,
-            };
+              mediaInfo = {
+                url: publicUrl,
+                type: mediaType,
+                mimetype: mimeType,
+                caption: text,
+              };
 
-            if (!text) text = `[${mediaType.toUpperCase()}]`;
+              if (!text) text = `[${mediaType.toUpperCase()}]`;
+            }
+          } catch (e) {
+            Logger.error(`Failed to download media (${mediaType})`, e);
           }
-        } catch (e) {
-          Logger.error("Failed to download media", e);
+        }
+        // B. STRUCTURED MEDIA (No download, just data extraction)
+        else if (mediaType === "location") {
+          const loc = msg.message?.locationMessage;
+          mediaInfo = {
+            type: "location",
+            latitude: loc?.degreesLatitude,
+            longitude: loc?.degreesLongitude,
+            name: loc?.name,
+            address: loc?.address,
+            url: loc?.url, // Sometimes contains Google Maps URL
+          };
+        } else if (mediaType === "contact") {
+          mediaInfo = {
+            type: "contact",
+            displayName: msg.message?.contactMessage?.displayName,
+            vcard: msg.message?.contactMessage?.vcard,
+          };
+        } else if (mediaType === "contact_list") {
+          mediaInfo = {
+            type: "contact_list",
+            contacts: msg.message?.contactsArrayMessage?.contacts?.map((c) => ({
+              displayName: c.displayName,
+              vcard: c.vcard,
+            })),
+          };
         }
       }
 
@@ -1406,6 +1513,54 @@ export class WhatsAppService extends EventEmitter {
    * 3. Persists to DB
    * 4. Emits Real-time Event
    */
+
+  /**
+   * 🎵 Converts any audio buffer to WhatsApp-compatible OGG Opus (PTT)
+   * This ensures the green waveform appears on mobile devices.
+   */
+  private async convertAudioToOgg(inputBuffer: Buffer): Promise<Buffer> {
+    return new Promise(async (resolve, reject) => {
+      const id = Date.now() + Math.random().toString(36).substr(2, 5);
+      const inputPath = path.join(tmpdir(), `input_${id}.webm`); // Assume WebM input
+      const outputPath = path.join(tmpdir(), `output_${id}.ogg`);
+
+      try {
+        // 1. Write Input File
+        await fsWriteFile(inputPath, inputBuffer);
+
+        // 2. Transcode
+        ffmpeg(inputPath)
+          .toFormat("ogg")
+          .audioCodec("libopus")
+          .audioBitrate("64k") // WhatsApp Spec
+          .audioChannels(1) // Mono forced required for PTT waveform
+          .on("end", async () => {
+            // 3. Read Output
+            try {
+              const outputBuffer = await readFile(outputPath);
+              resolve(outputBuffer);
+            } catch (e) {
+              reject(e);
+            } finally {
+              // 4. Cleanup
+              await unlink(inputPath).catch(() => {});
+              await unlink(outputPath).catch(() => {});
+            }
+          })
+          .on("error", async (err) => {
+            console.error("[FFMPEG] Conversion Error:", err);
+            // Cleanup
+            await unlink(inputPath).catch(() => {});
+            await unlink(outputPath).catch(() => {});
+            reject(err);
+          })
+          .save(outputPath);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   public async sendMessage(
     to: string,
     text: string,
@@ -1539,9 +1694,11 @@ export class WhatsAppService extends EventEmitter {
 
     // 3. SEND via Baileys
     try {
-      if (media) {
+      if (media && media.url) {
         Logger.info(
-          `[WhatsApp] 🎬 Processing media: type=${media.type}, mimetype=${media.mimetype}`
+          `[WhatsApp] 🎬 Processing media: type=${
+            media.type
+          }, url=${media.url?.substring(0, 50)}...`
         );
 
         // ✅ ARCHITECTURE: S3 for storage, Buffer for WhatsApp
@@ -1598,11 +1755,55 @@ export class WhatsAppService extends EventEmitter {
             fileName: media.name || "file",
           });
         } else if (media.type === "audio") {
+          // 🛠️ TRANSCODING ENABLED (FFMPEG)
+          // Since we installed FFMPEG, we can now convert WebM -> OGG Opus
+          // to support native Voice Notes on iOS/Android.
+
+          let finalBuffer = mediaBuffer as Buffer;
+          let finalMime = media.mimetype;
+          const isPtt = !!media.isVoiceNote;
+
+          // Attempt conversion if it's a Buffer and PTT
+          if (isPtt && Buffer.isBuffer(finalBuffer) && ffmpegPath) {
+            try {
+              Logger.info(`[WhatsApp] 🎵 Converting Voice Note to OGG Opus...`);
+              finalBuffer = await this.convertAudioToOgg(finalBuffer);
+              finalMime = "audio/ogg; codecs=opus";
+              Logger.info(
+                `[WhatsApp] ✅ Conversion success! New Size: ${finalBuffer.length}`
+              );
+            } catch (e) {
+              Logger.warn(
+                `[WhatsApp] ⚠️ Audio conversion failed, fallback to original: ${e}`
+              );
+            }
+          }
+
+          // 🌊 WAVEFORM GENERATION & DURATION
+          // WhatsApp requires specific metadata to render the player correctly.
+          // 1. Waveform: Array of 64 bytes representing amplitude (0-255). High contrast needed.
+          const waveform = isPtt
+            ? new Uint8Array(64).map(() => Math.floor(Math.random() * 256))
+            : undefined;
+
+          // 2. Duration (Seconds): Critical for the UI to show the time bar.
+          // Estimate based on Opus 64kbps bitrate: Size (bytes) * 8 bits / 64000 bps
+          const estimatedSeconds = isPtt
+            ? Math.ceil((finalBuffer.length * 8) / 64000)
+            : undefined;
+
+          Logger.info(
+            `[WhatsApp] 🎙️ PTT Metadata: Duration ~${estimatedSeconds}s, Waveform generated.`
+          );
+
+          // Send as proper PTT (Voice Note)
           await sock.sendMessage(jid, {
-            audio: mediaBuffer,
-            mimetype: media.mimetype || "audio/ogg; codecs=opus",
-            ptt: !!media.isVoiceNote,
-          });
+            audio: finalBuffer,
+            mimetype: finalMime || "audio/mp4",
+            ptt: isPtt,
+            waveform: waveform,
+            seconds: estimatedSeconds,
+          } as any);
         }
       } else {
         await sock.sendMessage(jid, { text });

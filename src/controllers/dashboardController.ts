@@ -3,6 +3,27 @@ import { prisma } from "@/config/prisma";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { planLimitsService } from "@/services/planLimitsService";
+import { Logger } from "@/utils/logger";
+
+// 🛡️ CACHÉ EN MEMORIA PARA STATS (Fix memory leak)
+interface StatsCache {
+  data: any;
+  expires: number;
+}
+
+const statsCache = new Map<string, StatsCache>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+// Limpiar caché expirado cada minuto
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of statsCache.entries()) {
+    if (value.expires < now) {
+      statsCache.delete(key);
+      Logger.info(`[StatsCache] Cleaned expired cache for ${key}`);
+    }
+  }
+}, 60000);
 
 export const getDashboardStats = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -11,6 +32,17 @@ export const getDashboardStats = catchAsync(
     if (!companyId) {
       return res.status(400).json({ message: "Company ID required" });
     }
+
+    // 🛡️ CHECK CACHE FIRST
+    const cacheKey = `stats:${companyId}`;
+    const cached = statsCache.get(cacheKey);
+
+    if (cached && cached.expires > Date.now()) {
+      Logger.info(`[StatsCache] HIT for ${companyId}`);
+      return res.status(200).json(cached.data);
+    }
+
+    Logger.info(`[StatsCache] MISS for ${companyId}, fetching from DB...`);
 
     // 1. Fetch Recent Activity (Tickets & Users)
     const [recentTickets, recentUsers, companyData, userCount] =
@@ -397,25 +429,32 @@ export const getDashboardStats = catchAsync(
         inProgress: agent._count.assignedConversations, // Conversaciones en progreso
       }));
 
-    res.status(200).json({
+    const responseData = {
       status: "success",
       data: {
         activities,
         plan: planData,
         metrics: {
           activeTickets: activeTicketsCount,
-          totalMessages: todayMessagesCount, // TODAY's messages, not all-time
-          activeConversations: activeConversationsCount, // NEW: Active chats
-          aiResolution: `${aiResolutionRate}%`, // Real calculation
-          avgResponseTime: avgResponseTime, // Real calculation
+          totalMessages: todayMessagesCount,
+          activeConversations: activeConversationsCount,
+          aiResolution: `${aiResolutionRate}%`,
+          avgResponseTime: avgResponseTime,
         },
-        // NEW REAL DATA
         salesFunnel,
         topAgents,
         channelDistribution,
-        agentWorkload, // ⚡ NUEVO: Carga por agente
+        agentWorkload,
       },
+    };
+
+    // 🛡️ SAVE TO CACHE
+    statsCache.set(cacheKey, {
+      data: responseData,
+      expires: Date.now() + CACHE_TTL,
     });
+
+    res.status(200).json(responseData);
   }
 );
 

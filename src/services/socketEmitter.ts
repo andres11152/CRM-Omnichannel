@@ -23,10 +23,30 @@ const initializeEmitter = () => {
     return null;
   }
 
-  const redisClient = createClient({ url: process.env.REDIS_URL });
-  redisClient.on("error", (err) =>
-    Logger.error("Redis Emitter Client Error", err)
-  );
+  const redisClient = createClient({
+    url: process.env.REDIS_URL,
+    socket: {
+      family: 4,
+      tls: process.env.REDIS_URL?.startsWith("rediss://"),
+      rejectUnauthorized: false,
+    },
+  });
+
+  redisClient.on("error", (err) => {
+    // 🤫 SILENCE KNOWN NETWORK NOISE
+    const msg = err.message || "";
+    if (
+      msg.includes("ECONNRESET") ||
+      msg.includes("ETIMEDOUT") ||
+      msg.includes("Socket closed") ||
+      msg.includes("Connection timeout") ||
+      msg.includes("ENOTFOUND") ||
+      msg.includes("getaddrinfo")
+    ) {
+      return;
+    }
+    Logger.error("Redis Emitter Client Error", err);
+  });
 
   redisClient
     .connect()

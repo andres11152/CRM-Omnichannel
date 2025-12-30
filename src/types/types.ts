@@ -32,4 +32,6 @@ export interface AuthenticatedRequest extends Request {
     companyId?: string;
   };
   companyId?: string;
+  file?: any;
+  files?: any;
 }

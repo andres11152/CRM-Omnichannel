@@ -23,7 +23,7 @@ export interface Webhook {
 // Authenticated request type for controllers that require `req.user`
 import { Request } from "express";
 
-export type AuthenticatedRequest = Request & {
+export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     email?: string;
@@ -32,4 +32,4 @@ export type AuthenticatedRequest = Request & {
     companyId?: string;
   };
   companyId?: string;
-};
+}

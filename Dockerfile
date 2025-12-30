@@ -25,8 +25,8 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Instalar OpenSSL también en la etapa final para los comandos de Prisma en tiempo de ejecución
-RUN apk add --no-cache openssl
+# Instalar OpenSSL y Git también en la etapa final
+RUN apk add --no-cache openssl git
 
 # Copiar solo las dependencias de producción desde la etapa de construcción
 COPY --from=builder /app/node_modules ./node_modules

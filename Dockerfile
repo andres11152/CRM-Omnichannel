@@ -4,8 +4,8 @@ FROM node:18-alpine AS builder
 # Establecer el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Instalar OpenSSL, que es una dependencia de Prisma en Alpine Linux
-RUN apk add --no-cache openssl
+# Instalar OpenSSL y Git (necesario para algunas dependencias)
+RUN apk add --no-cache openssl git
 
 # Copiar los archivos de dependencias y el schema de Prisma
 COPY package*.json ./

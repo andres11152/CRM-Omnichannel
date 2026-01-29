@@ -1,4 +1,3 @@
-
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly status: string;
@@ -8,14 +7,10 @@ export class AppError extends Error {
     super(message);
 
     this.statusCode = statusCode;
-    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
-    
-    // Operational errors are known issues (e.g., Input validation, Plan limit reached).
-    // Programming errors (bugs) are not operational.
+    this.status = `${statusCode}`.startsWith("4") ? "fail" : "error";
     this.isOperational = true;
 
-    if ((Error as any).captureStackTrace) {
-      (Error as any).captureStackTrace(this, this.constructor);
-    }
+    // Capture stack trace but exclude constructor call
+    Error.captureStackTrace(this, this.constructor);
   }
 }

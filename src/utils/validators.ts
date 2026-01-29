@@ -82,7 +82,9 @@ export function safeJsonParse<T = any>(input: unknown): T | null {
   try {
     return JSON.parse(input) as T;
   } catch (error) {
-    Logger.warn("[Validator] Failed to parse JSON:", input.slice(0, 100));
+    Logger.warn("[Validator] Failed to parse JSON:", {
+      snippet: String(input).slice(0, 100),
+    });
     return null;
   }
 }

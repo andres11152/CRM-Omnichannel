@@ -62,14 +62,8 @@ export interface Webhook {
   secretKey: string;
 }
 
-// Request type used in controllers after authentication middleware
-import { Request } from "express";
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    email?: string;
-    role?: string;
-    companyId?: string;
-  };
-  companyId?: string | null;
-}
+// Re-export shared types
+// AuthenticatedRequest is defined in ./types.ts with proper generics
+export * from "./types";
+export * from "./email.types";
+export * from "./queue.types";

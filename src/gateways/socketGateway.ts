@@ -1,28 +1,68 @@
-import { Server, Socket } from "socket.io";
+import { Server } from "socket.io";
+import { Server as HttpServer } from "http";
 import { createClient } from "redis";
 import { createAdapter } from "@socket.io/redis-adapter";
+import jwt, { JwtPayload } from "jsonwebtoken";
+import { Logger } from "@/utils/logger";
+
+/**
+ * STRICT TYPES DEFINITIONS
+ */
+interface TokenPayload extends JwtPayload {
+  id: string;
+  role: string;
+  companyId?: string; // JWT usually drops nulls, so optional string is better
+}
+
+interface SocketData {
+  user: {
+    id: string;
+    role: string;
+    companyId: string | null;
+  };
+}
+
+// Enforcing strict event signatures.
+// Ideally, all events should be named here.
+interface ServerToClientEvents {
+  [event: string]: (...args: unknown[]) => void;
+}
+
+interface ClientToServerEvents {
+  join: (room: string) => void;
+  join_room: (data: { conversationId: string }) => void;
+  "conversation:typing": (data: { to: string; status: string }) => void;
+}
+
+interface InterServerEvents {
+  ping: () => void; // Keep-alive internal event example, or empty
+}
 
 /**
  * SOCKET GATEWAY SINGLETON
- * Supports Redis Adapter for production scalability
- * 🛡️ MEMORY LEAK FIX: Proper cleanup on disconnect
+ * Supports Redis Adapter for production scaling.
+ * Implements strict Authentication & JWT Validation.
  */
 class WebSocketGateway {
-  private io: Server | null = null;
+  private io: Server<
+    ClientToServerEvents,
+    ServerToClientEvents,
+    InterServerEvents,
+    SocketData
+  > | null = null;
   private redisConnected: boolean = false;
 
-  public async initialize(httpServer: any) {
-    console.log("[Gateway] 🔧 Initializing Socket.io...");
+  public async initialize(httpServer: HttpServer) {
+    Logger.info("[Gateway] 🔧 Initializing Socket.io...");
 
     this.io = new Server(httpServer, {
       cors: {
         origin: [
-          "http://localhost:5173",
+          process.env.FRONTEND_URL || "http://localhost:5173",
           "http://localhost:5174",
           "https://reply.software",
           "https://www.reply.software",
           "https://crm-omnichannel.onrender.com",
-          process.env.FRONTEND_URL || "http://localhost:5173",
         ],
         methods: ["GET", "POST"],
         credentials: true,
@@ -32,121 +72,179 @@ class WebSocketGateway {
       pingInterval: 25000,
     });
 
-    // REDIS ADAPTER LOGIC
+    await this.setupRedis();
+    this.setupMiddleware();
+    this.handleConnections();
+
+    Logger.info("[Gateway] ✅ WebSocket fully initialized");
+  }
+
+  private async setupRedis() {
     const redisUrl = process.env.REDIS_URL;
-    if (redisUrl) {
-      console.log(`[Gateway] 🔌 Connecting to Redis at ${redisUrl}...`);
-      try {
-        const pubClient = createClient({
-          url: redisUrl,
-          pingInterval: 10000, // 💓 Keep connection alive
-          socket: {
-            connectTimeout: 50000,
-            keepAlive: 30000, // 🔧 Keep TCP alive every 30s
-            noDelay: true,
-            reconnectStrategy: (retries) => Math.min(retries * 100, 3000),
-            tls: redisUrl.startsWith("rediss://"),
-            rejectUnauthorized: false,
-          },
-        });
-        const subClient = pubClient.duplicate();
-
-        // 🛡️ CRITICAL: Prevent crash on Redis errors & Silence Noise
-        const errorHandler = (err: any) => {
-          const msg = err.message || "";
-          if (
-            msg.includes("ECONNRESET") ||
-            msg.includes("ETIMEDOUT") ||
-            msg.includes("Socket closed") ||
-            msg.includes("ENOTFOUND") ||
-            msg.includes("ECONNABORTED") ||
-            msg.includes("getaddrinfo") ||
-            msg.includes("Connection timeout")
-          ) {
-            return; // 🤫 Shh... it's just the internet blinking.
-          }
-          console.error("[Gateway] Redis Error:", msg);
-        };
-        pubClient.on("error", errorHandler);
-        subClient.on("error", errorHandler);
-
-        await Promise.all([pubClient.connect(), subClient.connect()]);
-
-        this.io.adapter(createAdapter(pubClient, subClient));
-        this.redisConnected = true;
-        console.log("[Gateway] ✅ Redis Adapter Configured Successfully");
-      } catch (err) {
-        console.error(
-          "[Gateway] ❌ Redis Connection Failed. Using Memory Adapter.",
-          err
-        );
-      }
-    } else {
-      console.log("[Gateway] ⚠️ No REDIS_URL found. Using Memory Adapter.");
+    if (!redisUrl) {
+      Logger.warn("[Gateway] ⚠️ No REDIS_URL found. Using Memory Adapter.");
+      return;
     }
 
-    this.handleConnections();
-    console.log("[Gateway] ✅ WebSocket fully initialized");
+    Logger.info(`[Gateway] 🔌 Connecting to Redis...`);
+    try {
+      const pubClient = createClient({
+        url: redisUrl,
+        pingInterval: 10000,
+        socket: {
+          connectTimeout: 60000,
+          keepAlive: 60000,
+          noDelay: true,
+          reconnectStrategy: (retries: number) => Math.min(retries * 100, 3000),
+          tls: redisUrl.startsWith("rediss://"),
+          rejectUnauthorized: false,
+        },
+      });
+      const subClient = pubClient.duplicate();
+
+      const errorHandler = (err: unknown) => {
+        let msg = "Unknown Redis Error";
+        if (err instanceof Error) {
+          msg = err.message;
+        } else if (typeof err === "string") {
+          msg = err;
+        }
+
+        // Filter known fleeting errors
+        if (
+          msg.includes("ECONNRESET") ||
+          msg.includes("ETIMEDOUT") ||
+          msg.includes("Socket closed")
+        ) {
+          return;
+        }
+        Logger.error(`[Gateway] Redis Error: ${msg}`);
+      };
+
+      pubClient.on("error", errorHandler);
+      subClient.on("error", errorHandler);
+
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+
+      if (this.io) {
+        this.io.adapter(createAdapter(pubClient, subClient));
+        this.redisConnected = true;
+        Logger.info("[Gateway] ✅ Redis Adapter Configured Successfully");
+      }
+    } catch (err) {
+      Logger.error(
+        "[Gateway] ❌ Redis Connection Failed. Using Memory Adapter.",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
+  private setupMiddleware() {
+    if (!this.io) return;
+
+    // 🛡️ AUTHENTICATION MIDDLEWARE
+    this.io.use((socket, next) => {
+      const token =
+        socket.handshake.auth?.token || socket.handshake.query?.token;
+
+      if (!token || Array.isArray(token)) {
+        return next(new Error("Authentication error: No token provided"));
+      }
+
+      try {
+        const secret = process.env.JWT_SECRET;
+        if (!secret) throw new Error("JWT_SECRET missing");
+
+        // Strict Typing for JWT verification
+        const decoded = jwt.verify(token as string, secret) as TokenPayload;
+
+        // Populate socket data with strict types
+        socket.data.user = {
+          id: decoded.id,
+          role: decoded.role || "USER",
+          companyId: decoded.companyId || null,
+        };
+
+        Logger.debug(
+          `[Gateway] User ${decoded.id} authenticated (Company: ${decoded.companyId})`,
+        );
+
+        next();
+      } catch {
+        Logger.warn(`[Gateway] Auth failed for socket ${socket.id}`);
+        next(new Error("Authentication error: Invalid token"));
+      }
+    });
   }
 
   private handleConnections() {
     if (!this.io) return;
 
-    this.io.on("connection", (socket: Socket) => {
-      const agentId = socket.handshake.query.agentId as string;
-      const agentRoom = `agent:${agentId || "anonymous"}`;
+    this.io.on("connection", (socket) => {
+      const user = socket.data.user;
 
-      // 🛡️ MEMORY LEAK FIX: Track joined rooms to prevent duplicates
-      const joinedRooms = new Set<string>([agentRoom]);
-      socket.join(agentRoom);
+      if (!user) {
+        socket.disconnect();
+        return;
+      }
+
+      // Auto-join personal agent room
+      const userRoom = `agent:${user.id}`;
+      socket.join(userRoom);
+
+      // Auto-join company room if present
+      if (user.companyId) {
+        const companyRoom = `company:${user.companyId}`;
+        socket.join(companyRoom);
+        Logger.debug(
+          `[Gateway] ${user.id} auto-joined company room: ${companyRoom}`,
+        );
+      }
+
+      Logger.debug(
+        `[Gateway] Client connected: ${user.id} (Role: ${user.role})`,
+      );
 
       socket.on("join", (room: string) => {
-        if (room && !joinedRooms.has(room)) {
+        if (room) {
           socket.join(room);
-          joinedRooms.add(room);
+          Logger.debug(`[Gateway] ${user.id} joined room: ${room}`);
         }
       });
 
-      socket.on("join_room", (data: { conversationId: string }) => {
-        if (data.conversationId) {
-          // 🛡️ MEMORY LEAK FIX: Prevent duplicate room joins
-          if (joinedRooms.has(data.conversationId)) {
-            console.log(
-              `[Gateway] ⚠️ Already in room: ${data.conversationId}, skipping duplicate join`
-            );
-            return;
-          }
-
+      socket.on("join_room", (data) => {
+        if (data?.conversationId) {
           socket.join(data.conversationId);
-          joinedRooms.add(data.conversationId);
-          console.log(
-            `[Gateway] 🔌 Client joined room: ${data.conversationId}`
+          Logger.debug(
+            `[Gateway] ${user.id} joined conv: ${data.conversationId}`,
           );
         }
       });
 
-      socket.on("disconnect", (reason: string) => {
-        // 🛡️ MEMORY LEAK FIX: Proper cleanup on disconnect
-        console.log(
-          `[Gateway] 🔌 Client disconnecting (${reason}), cleaning ${joinedRooms.size} rooms`
-        );
-
-        // Leave all rooms explicitly
-        for (const room of joinedRooms) {
-          socket.leave(room);
-        }
-        joinedRooms.clear();
-
-        // Remove all event listeners to prevent memory leaks
-        socket.removeAllListeners("join");
-        socket.removeAllListeners("join_room");
-        socket.removeAllListeners("disconnect");
+      socket.on("disconnect", (reason) => {
+        Logger.debug(`[Gateway] Client disconnected: ${user.id} (${reason})`);
       });
     });
   }
 
   public getIO() {
     return this.io;
+  }
+
+  // Safe emit method using Generics if possible, or unknown
+  public emitToCompany(companyId: string, event: string, data: unknown): void {
+    if (!this.io) {
+      Logger.warn("[Gateway] Cannot emit: Socket.io not initialized");
+      return;
+    }
+    const room = `company:${companyId}`;
+    this.io.to(room).emit(event, data);
+  }
+
+  public emitToUser(userId: string, event: string, data: unknown): void {
+    if (!this.io) return;
+    const room = `agent:${userId}`;
+    this.io.to(room).emit(event, data);
   }
 
   public isRedisConnected(): boolean {

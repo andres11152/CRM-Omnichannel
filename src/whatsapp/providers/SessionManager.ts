@@ -1,0 +1,555 @@
+import { ISessionManager } from "../core/interfaces/ISessionManager";
+import { IAuthProvider } from "../core/interfaces/IAuthProvider";
+import { SessionConfig, SessionStatus } from "../core/types/whatsapp.types";
+import { EventBus } from "../core/events/EventBus";
+import { WhatsAppEventType } from "../core/events/WhatsAppEvents";
+import makeWASocket, {
+  WASocket,
+  DisconnectReason,
+  Browsers,
+  fetchLatestBaileysVersion,
+  isJidBroadcast,
+  proto,
+} from "@whiskeysockets/baileys";
+import { prisma } from "@/config/database";
+import TenantContextManager from "@/config/tenantContext";
+import pino from "pino";
+
+// Optimized logger for memory efficiency
+const logger = pino({
+  level: process.env.LOG_LEVEL || "info",
+  timestamp: pino.stdTimeFunctions.isoTime,
+});
+
+export class SessionManager implements ISessionManager {
+  private sessions: Map<string, WASocket> = new Map();
+  // Store retry timeouts to clear them on destroy
+  private retryTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  // ⚡ Heartbeat timers to keep sessions alive
+  private heartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
+  private sessionMetadata: Map<
+    string,
+    { companyId: string; status: SessionStatus["status"] }
+  > = new Map();
+  private eventBus: EventBus;
+
+  constructor(private authProvider: IAuthProvider) {
+    this.eventBus = EventBus.getInstance();
+  }
+
+  /**
+   * 🛡️ SESSION HEALER: Intercepts internal Baileys errors to detect corruption.
+   * If a "Bad MAC" or fatal crypto error occurs, it nukes the session automatically.
+   */
+  private createSessionLogger(sessionId: string) {
+    const baseLogger = pino({ level: "error" }); // Capture errors only
+
+    // Proxy to intercept log calls (THE 100-YEAR FIX)
+    return new Proxy(baseLogger, {
+      get: (target, prop, receiver) => {
+        const original = Reflect.get(target, prop, receiver);
+        if (typeof original === "function" && prop === "error") {
+          return (...args: unknown[]) => {
+            const msg = args
+              .map((a) =>
+                typeof a === "string"
+                  ? a
+                  : a instanceof Error
+                    ? `${a.message} ${a.stack}`
+                    : typeof a === "object"
+                      ? JSON.stringify(a) // Check object content too
+                      : "",
+              )
+              .join(" ");
+
+            // 🚨 DETECT CORRUPTION SIGNATURES
+            if (
+              msg.includes("Bad MAC") ||
+              msg.includes("Decryption failed") ||
+              msg.includes("Session error")
+            ) {
+              logger.error(
+                `[SessionGuard] 🚨 CORRUPTION DETECTED in Session ${sessionId}: "${msg.substring(
+                  0,
+                  100,
+                )}..."`,
+              );
+              logger.error(
+                `[SessionGuard] 🧨 TRIGGERING EMERGENCY SESSION RESET...`,
+              );
+
+              // 🛑 EMERGENCY NUKE
+              // Run async without awaiting to avoid blocking the logger
+              this.terminateSession(sessionId, true)
+                .then(() =>
+                  logger.info(
+                    `[SessionGuard] ✅ Session ${sessionId} successfully nuked.`,
+                  ),
+                )
+                .catch((e) =>
+                  logger.error(
+                    `[SessionGuard] ❌ Failed to nuke session: ${e.message}`,
+                  ),
+                );
+            }
+
+            // Call original logger
+            original.apply(target, args);
+          };
+        }
+        return original;
+      },
+    });
+  }
+
+  /**
+   * Initialize a new WhatsApp session with memory leak protection
+   */
+  async initializeSession(config: SessionConfig): Promise<WASocket> {
+    const { sessionId, companyId } = config;
+
+    // 1. CLEANUP: If session exists, destroy it first to update/reconnect properly
+    if (this.sessions.has(sessionId)) {
+      logger.info(
+        `[SessionManager] Cleaning up existing session ${sessionId} before re-init`,
+      );
+      await this.terminateSession(sessionId, false); // False = keep auth data
+    }
+
+    // 2. Cancel any pending reconnect timers
+    if (this.retryTimeouts.has(sessionId)) {
+      clearTimeout(this.retryTimeouts.get(sessionId));
+      this.retryTimeouts.delete(sessionId);
+    }
+
+    logger.info(`[SessionManager] Initializing session: ${sessionId}`);
+    this.sessionMetadata.set(sessionId, { companyId, status: "CONNECTING" });
+
+    // 3. Load auth state
+    const { state, saveCreds } = await this.authProvider.loadState(sessionId);
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+
+    logger.info(
+      `[SessionManager] Using WA v${version.join(".")}, isLatest: ${isLatest}`,
+    );
+
+    // 4. Create Socket
+    const sock = makeWASocket({
+      version,
+      auth: state,
+      printQRInTerminal: false,
+      // 🛡️ INJECT HEALER LOGGER
+      logger: this.createSessionLogger(sessionId) as pino.Logger,
+      browser: Browsers.ubuntu("Reply CRM"),
+      generateHighQualityLinkPreview: true,
+      syncFullHistory: false, // Performance optimization
+      shouldIgnoreJid: (jid) => isJidBroadcast(jid), // Ignore status updates
+      // Optimized message retrieval (only minimal fields)
+      getMessage: async (key) => {
+        if (!key.id) return undefined;
+        try {
+          // 🛡️ SYSTEM MODE: Background fetch for Baileys retry mechanism
+          const msg = await TenantContextManager.runAsSystem(async () =>
+            prisma.message.findFirst({
+              where: { whatsappMessageId: key.id }, // Corrected field: whatsappMessageId
+              select: { metadata: true },
+            }),
+          );
+          return msg?.metadata ? (msg.metadata as proto.IMessage) : undefined;
+        } catch {
+          return undefined;
+        }
+      },
+    });
+
+    // 5. MEMORY SAFETY: Bind listeners globally but clean them on close
+    this.bindEvents(sock, sessionId, companyId, saveCreds);
+
+    this.sessions.set(sessionId, sock);
+    return sock;
+  }
+
+  private bindEvents(
+    sock: WASocket,
+    sessionId: string,
+    companyId: string,
+    saveCreds: () => Promise<void>,
+  ) {
+    // Credential updates
+    sock.ev.on("creds.update", saveCreds);
+
+    // Connection updates - The critical part
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      // QR Code handling
+      if (qr) {
+        this.eventBus.publish({
+          type: WhatsAppEventType.SESSION_QR_CODE,
+          sessionId,
+          companyId,
+          timestamp: new Date(),
+          data: { qr },
+        });
+
+        // 🛡️ SYSTEM MODE: Socket callback has no tenant context
+        await TenantContextManager.runAsSystem(async () =>
+          prisma.whatsAppSession.upsert({
+            where: { sessionId },
+            update: { qrCode: qr, status: "SCANNING" },
+            create: {
+              sessionId,
+              companyId,
+              status: "SCANNING",
+              qrCode: qr,
+            },
+          }),
+        ).catch((err) => logger.error(`[DB Error] Update QR: ${err.message}`));
+      }
+
+      // Connection state handling
+      if (connection === "open") {
+        // Extract phone from JID (e.g., "573001234567:15@s.whatsapp.net" -> "573001234567")
+        let phoneNumber = null;
+        if (sock.user?.id) {
+          phoneNumber = sock.user.id.split(":")[0].split("@")[0];
+        }
+
+        logger.info(
+          `[SessionManager] Session ${sessionId} CONNECTED ✅ Phone: ${phoneNumber || "Unknown"}`,
+        );
+        this.sessionMetadata.set(sessionId, {
+          companyId,
+          status: "CONNECTED",
+        });
+
+        // Clear QR code on success AND save phone number
+        // 🛡️ SYSTEM MODE: Socket callback has no tenant context
+        await TenantContextManager.runAsSystem(async () =>
+          prisma.whatsAppSession.update({
+            where: { sessionId },
+            data: {
+              qrCode: null,
+              status: "CONNECTED",
+              phone: phoneNumber, // ✅ Save Phone Number
+            },
+          }),
+        );
+
+        this.eventBus.publish({
+          type: WhatsAppEventType.SESSION_CONNECTED,
+          sessionId,
+          companyId,
+          timestamp: new Date(),
+          data: { phone: phoneNumber || undefined },
+        });
+
+        // ⚡ INICIAR HEARTBEAT para mantener conexión viva
+        this.startHeartbeat(sessionId, sock);
+      }
+
+      if (connection === "close") {
+        const boomError = lastDisconnect?.error as {
+          output?: { statusCode: number };
+          message?: string;
+        };
+
+        const resetConnection =
+          boomError?.output?.statusCode !== DisconnectReason.loggedOut;
+        const errorMsg = boomError?.message || "Unknown";
+
+        logger.warn(
+          `[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg}. Reconnect: ${resetConnection}`,
+        );
+
+        // CLEANUP LISTENERS IMMEDIATELY
+        sock.ev.removeAllListeners("connection.update");
+        sock.ev.removeAllListeners("creds.update");
+        sock.ev.removeAllListeners("messages.upsert");
+
+        // ⚡ DETENER HEARTBEAT
+        this.stopHeartbeat(sessionId);
+
+        if (resetConnection) {
+          this.sessionMetadata.set(sessionId, {
+            companyId,
+            status: "DISCONNECTED",
+          });
+
+          // Exponential backoff or simple delay
+          const timeout = setTimeout(() => {
+            this.reconnectSession(sessionId).catch((e) =>
+              logger.error(`Reconnect failed: ${e}`),
+            );
+          }, 5000); // 5s delay
+
+          this.retryTimeouts.set(sessionId, timeout);
+        } else {
+          // Logged out permanently
+          await this.terminateSession(sessionId, true);
+        }
+
+        this.eventBus.publish({
+          type: WhatsAppEventType.SESSION_DISCONNECTED,
+          sessionId,
+          companyId,
+          timestamp: new Date(),
+          data: { reason: errorMsg, isReconnecting: resetConnection },
+        });
+      }
+    });
+
+    // 📨 MESSAGE LISTENER (The missing link!)
+    sock.ev.on("messages.upsert", async (m) => {
+      // Only process notify or append messages
+      if (m.type === "notify" || m.type === "append") {
+        for (const msg of m.messages) {
+          if (!msg.message) continue;
+
+          this.eventBus.publish({
+            type: WhatsAppEventType.MESSAGE_RECEIVED,
+            sessionId,
+            companyId,
+            timestamp: new Date(),
+            data: { message: msg },
+          });
+        }
+      }
+    });
+
+    // 📈 MESSAGE STATUS UPDATES (Sent -> Delivered -> Read)
+    sock.ev.on("messages.update", async (updates) => {
+      for (const update of updates) {
+        if (!update.key?.id) continue;
+
+        this.eventBus.publish({
+          type: WhatsAppEventType.MESSAGE_UPDATE,
+          sessionId,
+          companyId,
+          timestamp: new Date(),
+          data: {
+            messageId: update.key.id,
+            update: update,
+          },
+        });
+      }
+    });
+
+    // 🟢 PRESENCE UPDATES (Typing indicators)
+    sock.ev.on("presence.update", (data) => {
+      this.eventBus.publish({
+        type: WhatsAppEventType.PRESENCE_UPDATE,
+        sessionId,
+        companyId,
+        timestamp: new Date(),
+        data,
+      });
+    });
+  }
+
+  getSession(sessionId: string): WASocket | undefined {
+    return this.sessions.get(sessionId);
+  }
+
+  async terminateSession(
+    sessionId: string,
+    clearAuth: boolean = false,
+  ): Promise<void> {
+    logger.info(
+      `[SessionManager] Terminating session ${sessionId}. ClearAuth: ${clearAuth}`,
+    );
+
+    // 0. Stop Heartbeat
+    this.stopHeartbeat(sessionId);
+
+    const sock = this.sessions.get(sessionId);
+
+    // 1. Cancel pending retries
+    if (this.retryTimeouts.has(sessionId)) {
+      clearTimeout(this.retryTimeouts.get(sessionId));
+      this.retryTimeouts.delete(sessionId);
+    }
+
+    if (sock) {
+      // 2. Force close socket
+      try {
+        sock.end(new Error("Session Terminated"));
+      } catch {
+        // Ignore close errors
+      }
+
+      // 3. Remove ALL listeners to prevent leaks
+      sock.ev.removeAllListeners("connection.update");
+      sock.ev.removeAllListeners("creds.update");
+      sock.ev.removeAllListeners("messages.upsert"); // If bound elsewhere
+
+      this.sessions.delete(sessionId);
+    }
+
+    this.sessionMetadata.delete(sessionId);
+
+    if (clearAuth) {
+      await this.authProvider.clearCredentials(sessionId);
+      // 🛡️ SYSTEM MODE: Session management operation
+      await TenantContextManager.runAsSystem(async () =>
+        prisma.whatsAppSession
+          .update({
+            where: { sessionId },
+            data: { status: "DISCONNECTED", qrCode: null },
+          })
+          .catch(() => {}),
+      );
+    }
+  }
+
+  public async reconnectSession(sessionId: string): Promise<void> {
+    const meta = this.sessionMetadata.get(sessionId);
+    // Only reconnect if we have metadata (meaning we intend to keep it alive)
+    if (!meta) {
+      // Fallback: fetch from DB
+      // 🛡️ SYSTEM MODE: Reconnection logic needs to query session
+      const session = await TenantContextManager.runAsSystem(async () =>
+        prisma.whatsAppSession.findUnique({
+          where: { sessionId },
+        }),
+      );
+      if (session) {
+        await this.initializeSession({
+          sessionId,
+          companyId: session.companyId,
+          authDir: "",
+        });
+        return;
+      }
+      logger.error(
+        `[SessionManager] Cannot reconnect ${sessionId}, metadata lost.`,
+      );
+      return;
+    }
+
+    logger.info(`[SessionManager] Attempting Reconnect for ${sessionId}`);
+    await this.initializeSession({
+      sessionId,
+      companyId: meta.companyId,
+      authDir: "", // Handled by AuthProvider
+    });
+  }
+
+  getSessionStatus(sessionId: string): SessionStatus {
+    const meta = this.sessionMetadata.get(sessionId);
+    return {
+      sessionId,
+      status: meta?.status || "DISCONNECTED",
+    };
+  }
+
+  listSessions(companyId: string): SessionStatus[] {
+    const list: SessionStatus[] = [];
+    this.sessionMetadata.forEach((meta, sessionId) => {
+      if (meta.companyId === companyId) {
+        list.push({
+          sessionId,
+          status: meta.status,
+        });
+      }
+    });
+    return list;
+  }
+
+  /**
+   * ⚡ HEARTBEAT: Keeps session active by querying presence periodically.
+   * Prevents WhatsApp from closing the connection due to inactivity.
+   */
+  private startHeartbeat(sessionId: string, sock: WASocket) {
+    this.stopHeartbeat(sessionId);
+    // Ping every 5 minutes
+    const timer = setInterval(async () => {
+      try {
+        if (!this.sessions.has(sessionId)) {
+          this.stopHeartbeat(sessionId);
+          return;
+        }
+        // Lightweight activity check
+        if (sock.user?.id) {
+          await sock.presenceSubscribe(sock.user.id).catch(() => {});
+        }
+      } catch {
+        // Ignore heartbeat errors
+      }
+    }, 300000);
+
+    this.heartbeatTimers.set(sessionId, timer);
+  }
+
+  private stopHeartbeat(sessionId: string) {
+    const timer = this.heartbeatTimers.get(sessionId);
+    if (timer) {
+      clearInterval(timer);
+      this.heartbeatTimers.delete(sessionId);
+    }
+  }
+
+  /**
+   * 🚀 MEMORY-FIRST SESSION LOOKUP (Latency Optimization for Bulk Messaging)
+   * Returns an active WASocket for a companyId by checking in-memory first.
+   * Falls back to DB only if memory lookup fails.
+   *
+   * @param companyId - The company ID to find a session for
+   * @returns Promise<{ sessionId: string; socket: WASocket } | null>
+   */
+  async findActiveSessionForCompany(
+    companyId: string,
+  ): Promise<{ sessionId: string; socket: WASocket } | null> {
+    // 1. MEMORY-FIRST: Check in-memory sessions Map (O(n) but tiny N)
+    for (const [sessionId, socket] of this.sessions.entries()) {
+      const meta = this.sessionMetadata.get(sessionId);
+      if (meta?.companyId === companyId && meta.status === "CONNECTED") {
+        logger.debug(
+          { sessionId, companyId },
+          "[SessionManager] Memory-hit: found active session",
+        );
+        return { sessionId, socket };
+      }
+    }
+
+    // 2. FALLBACK: Query DB (cold start or session not in memory)
+    const dbSession = await TenantContextManager.runAsSystem(async () =>
+      prisma.whatsAppSession.findFirst({
+        where: { companyId, status: "CONNECTED" },
+      }),
+    );
+
+    if (dbSession) {
+      // Session exists in DB but not in memory - try to get socket
+      const socket = this.sessions.get(dbSession.sessionId);
+      if (socket) {
+        logger.info(
+          { sessionId: dbSession.sessionId, companyId },
+          "[SessionManager] DB-hit: session found and socket exists",
+        );
+        return { sessionId: dbSession.sessionId, socket };
+      }
+      // Socket not in memory (server restart edge case)
+      logger.warn(
+        { sessionId: dbSession.sessionId },
+        "[SessionManager] DB-hit but socket missing - requires reconnect",
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * 🛡️ Check if a company has an active session in memory (no DB hit)
+   * Useful for quick checks without waiting for DB response.
+   */
+  hasActiveSessionInMemory(companyId: string): boolean {
+    for (const [sessionId] of this.sessions.entries()) {
+      const meta = this.sessionMetadata.get(sessionId);
+      if (meta?.companyId === companyId && meta.status === "CONNECTED") {
+        return true;
+      }
+    }
+    return false;
+  }
+}

@@ -2,8 +2,9 @@ import { Response, NextFunction } from "express";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
-import { prisma } from "../../config/prisma";
+import { prisma } from "../../config/database";
 import { GoogleCalendarService } from "../../services/googleCalendarService";
+import { mentionService } from "../../services/mentionService";
 
 const resolveContactId = async (id: string, companyId: string) => {
   if (!id) return undefined;
@@ -118,6 +119,7 @@ export const getActivities = catchAsync(
         createdBy: { select: { name: true, email: true } },
         assignedTo: { select: { name: true, email: true } },
         participants: { select: { id: true, name: true, email: true } },
+        mentions: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -165,6 +167,40 @@ export const createActivity = catchAsync(
       );
     }
 
+    // 💬 STEP 1: Process @Mentions in description (if it's a NOTE)
+    let mentionedUserIds: string[] = [];
+    let contactNameForContext: string | undefined;
+
+    if (description && type === "NOTE") {
+      try {
+        const mentionData = await mentionService.processText(
+          description,
+          companyId
+        );
+        mentionedUserIds = mentionData.mentionedUserIds;
+
+        console.log(
+          `[MentionDetect] Found ${mentionedUserIds.length} mentions in note`
+        );
+      } catch (error) {
+        // FAULT TOLERANCE: Log but don't fail the entire operation
+        console.error("[MentionDetect] Error processing mentions:", error);
+      }
+    }
+
+    // Get contact name for notification context
+    if (finalContactId) {
+      try {
+        const contact = await prisma.contact.findUnique({
+          where: { id: finalContactId },
+          select: { name: true },
+        });
+        contactNameForContext = contact?.name || undefined;
+      } catch (e) {
+        // Ignore
+      }
+    }
+
     const activity = await prisma.activity.create({
       data: {
         companyId,
@@ -184,6 +220,11 @@ export const createActivity = catchAsync(
           Array.isArray(participantIds) &&
           participantIds.length > 0
             ? { connect: participantIds.map((id: string) => ({ id })) }
+            : undefined,
+        // 💬 STEP 2: Connect mentioned users
+        mentions:
+          mentionedUserIds.length > 0
+            ? { connect: mentionedUserIds.map((id) => ({ id })) }
             : undefined,
       },
     });
@@ -219,6 +260,19 @@ export const createActivity = catchAsync(
       } catch (err) {
         console.error("[ActivityController] Google Calendar sync failed:", err);
       }
+    }
+
+    // 💬 STEP 3: Send notifications to mentioned users (Async, non-blocking)
+    if (mentionedUserIds.length > 0) {
+      mentionService
+        .notifyMentionedUsers(mentionedUserIds, activity.id, userId, {
+          type: type || "note",
+          subject,
+          contactName: contactNameForContext,
+        })
+        .catch((err) =>
+          console.error("[MentionNotify] Failed to notify users:", err)
+        );
     }
 
     res.status(201).json({

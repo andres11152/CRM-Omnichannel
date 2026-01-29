@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { stripeService } from "@/services/stripeService";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 

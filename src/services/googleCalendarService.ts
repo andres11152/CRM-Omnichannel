@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from "googleapis";
-import { prisma } from "../config/prisma";
+import { prisma } from "../config/database";
 import { Logger } from "../utils/logger";
 import { getErrorMessage } from "../utils/errorHelpers";
 

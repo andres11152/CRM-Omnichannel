@@ -1,17 +1,132 @@
-import { prisma } from "@/config/prisma";
+import fs from "fs";
+import path from "path";
+import { Readable } from "stream";
+import { prisma } from "@/config/database";
+import { USE_S3, s3Client, BUCKET_NAME } from "@/config/s3";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { AIHistoryMessage } from "@/interfaces/AIInterfaces";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: pdf-parse might lack types in strict mode
+import pdfParse from "pdf-parse";
+
+// 🧠 HELPERS: S3 Support
+const streamToBuffer = async (stream: Readable): Promise<Buffer> => {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+  });
+};
+
+// 🧠 HELPERS: Text Extraction
+const extractTextFromPDF = async (dataBuffer: Buffer): Promise<string> => {
+  try {
+    const data = await pdfParse(dataBuffer);
+    return data.text;
+  } catch (error) {
+    console.error(`[RAG] Error parsing PDF buffer:`, error);
+    return "";
+  }
+};
+
+// 🧠 RAG: Fetch & Process Knowledge Base
+const getKnowledgeBaseContext = async (companyId: string): Promise<string> => {
+  try {
+    // 1. Fetch relevant documents
+    const documents = await prisma.media.findMany({
+      where: {
+        companyId,
+        type: "DOCUMENT",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    if (documents.length === 0) return "";
+
+    let context = "--- START OF KNOWLEDGE BASE ---\n";
+
+    for (const doc of documents) {
+      let fileBuffer: Buffer | null = null;
+      const ext = path.extname(doc.filename || doc.key || "").toLowerCase();
+
+      try {
+        if (USE_S3 && s3Client && doc.key) {
+          const command = new GetObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: doc.key,
+          });
+          const response = await s3Client.send(command);
+          if (response.Body) {
+            // Safe cast to Readable for Node env
+            fileBuffer = await streamToBuffer(response.Body as Readable);
+          }
+        } else {
+          // Local fallback
+          const localUploadsDir = path.join(process.cwd(), "public", "uploads");
+          let filePath = "";
+
+          if (doc.key) {
+            const p1 = path.join(localUploadsDir, doc.key);
+            if (fs.existsSync(p1)) filePath = p1;
+          }
+
+          if (!filePath && doc.filename) {
+            const p2 = path.join(
+              localUploadsDir,
+              companyId,
+              "document",
+              doc.filename,
+            );
+            if (fs.existsSync(p2)) filePath = p2;
+          }
+
+          if (filePath && fs.existsSync(filePath)) {
+            fileBuffer = fs.readFileSync(filePath);
+          }
+        }
+
+        if (fileBuffer) {
+          let content = "";
+          if (ext === ".pdf") {
+            content = await extractTextFromPDF(fileBuffer);
+          } else if (ext === ".txt" || ext === ".md") {
+            content = fileBuffer.toString("utf-8");
+          }
+
+          if (content) {
+            const cleanContent = content.replace(/\s+/g, " ").trim();
+            context += `Source: ${doc.originalName}\nContent: ${cleanContent.substring(0, 20000)}...\n\n`;
+          }
+        }
+      } catch (err) {
+        console.error(
+          `[RAG] Failed to process document ${doc.originalName}:`,
+          err,
+        );
+      }
+    }
+
+    context += "--- END OF KNOWLEDGE BASE ---\n";
+    return context;
+  } catch (error) {
+    console.error("[RAG] Failed to build context:", error);
+    return "";
+  }
+};
 
 export const generateAIResponse = async (
   companyId: string,
   assistantId: string,
   userMessage: string,
-  history: { role: "user" | "model"; parts: string }[] = []
+  history: AIHistoryMessage[] = [],
 ): Promise<string | null> => {
   try {
     // 1. Get Config (API Key)
     const config = await prisma.aIConfig.findUnique({ where: { companyId } });
     if (!config?.geminiKey) {
-      console.warn("[AI] No Gemini Key found for company", companyId);
-      return null;
+      return null; // Silent fail if no key
     }
 
     // 2. Get Assistant (System Prompt)
@@ -19,67 +134,49 @@ export const generateAIResponse = async (
       where: { id: assistantId },
     });
     if (!assistant) {
-      console.warn("[AI] Assistant not found", assistantId);
       return null;
     }
 
+    // 🔍 RAG INJECTION
+    const knowledgeContext = await getKnowledgeBaseContext(companyId);
+    let systemInstruction =
+      assistant.systemPrompt || "You are a helpful assistant.";
+
+    if (knowledgeContext) {
+      systemInstruction += `\n\n${knowledgeContext}\n\nIMPORTANT: Use the Knowledge Base above to answer matching questions. If the answer is found in the Knowledge Base, use it. If not, fallback to general knowledge but mention you are not sure.`;
+    }
+
     // 3. Call Gemini API
-    // Use gemini-2.5-flash as default (free tier)
-    let model = assistant.modelName || "gemini-2.5-flash";
+    let model = (assistant.modelName || "gemini-2.5-flash")
+      .toLowerCase()
+      .trim();
 
-    // Normalize and validate model name
-    model = model.toLowerCase().trim();
-
-    // Map old 1.5 models to new 2.5
-    if (model.includes("1.5") || model === "gemini-pro") {
+    // Model normalization logic
+    if (model.includes("1.5") || model === "gemini-pro")
       model = "gemini-2.5-flash";
-      console.log(`[AI] Redirected old model to gemini-2.5-flash`);
-    }
-
-    // Map pro models to flash (pro requires payment)
-    if (model.includes("pro") && !model.includes("2.5")) {
+    if (model.includes("pro") && !model.includes("2.5"))
       model = "gemini-2.5-flash";
-      console.log(`[AI] Redirected pro model to gemini-2.5-flash (free tier)`);
-    }
 
-    // Ensure we have a valid free-tier model
     const validModels = [
       "gemini-2.5-flash",
       "gemini-2.5-flash-preview-09-2025",
     ];
+    if (!validModels.includes(model)) model = "gemini-2.5-flash";
 
-    if (!validModels.includes(model)) {
-      console.warn(`[AI] Unknown model "${model}", using gemini-2.5-flash`);
-      model = "gemini-2.5-flash";
-    }
-
-    console.log(`[AI] Final model: ${model}`);
     const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent`;
 
-    // Construct prompt with system instruction as first user message (or system role if supported, but user is safer for v1beta)
-    // Note: Gemini Pro works best with alternating user/model.
     const contents = [
       {
         role: "user",
-        parts: [
-          {
-            text: `System Instruction: ${
-              assistant.systemPrompt || "You are a helpful assistant."
-            }`,
-          },
-        ],
+        parts: [{ text: `System Instruction: ${systemInstruction}` }],
       },
       {
-        role: "model",
-        parts: [{ text: "Understood. I will follow these instructions." }],
+        role: "model", // Pre-fill acknowledgment to enforce system prompt behavior
+        parts: [{ text: "Understood." }],
       },
       ...history.map((h) => ({ role: h.role, parts: [{ text: h.parts }] })),
       { role: "user", parts: [{ text: userMessage }] },
     ];
-
-    console.log(`[AI] Calling Gemini API...`);
-    console.log(`[AI] URL: ${url}`);
-    console.log(`[AI] Contents count: ${contents.length}`);
 
     const response = await fetch(url, {
       method: "POST",
@@ -92,27 +189,12 @@ export const generateAIResponse = async (
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("[AI] Gemini API Error:");
-      console.error("[AI] Status:", response.status);
-      console.error("[AI] Response:", err);
-      console.error("[AI] Model used:", model);
-      console.error(
-        "[AI] API Key (first 10 chars):",
-        config.geminiKey?.substring(0, 10)
-      );
+      console.error(`[AI] Gemini API Error ${response.status}: ${err}`);
       return null;
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (text) {
-      console.log(`[AI] ✓ Response generated successfully`);
-    } else {
-      console.warn(`[AI] No text in response:`, JSON.stringify(data));
-    }
-
-    return text || null;
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (error) {
     console.error("[AI] Error generating response:", error);
     return null;
@@ -123,14 +205,11 @@ export const generateRawAIResponse = async (
   companyId: string,
   systemPrompt: string,
   userMessage: string,
-  modelName: string = "gemini-2.5-flash"
+  modelName: string = "gemini-2.5-flash",
 ): Promise<string | null> => {
   try {
     const config = await prisma.aIConfig.findUnique({ where: { companyId } });
-    if (!config?.geminiKey) {
-      console.warn("[AI] No Gemini Key found for company", companyId);
-      return null;
-    }
+    if (!config?.geminiKey) return null;
 
     const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent`;
     const contents = [

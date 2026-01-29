@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
-import { prisma } from "../../config/prisma";
+import { prisma } from "../../config/database";
 import { planLimitsService } from "../../services/planLimitsService";
 
 // Get all accounts for a company

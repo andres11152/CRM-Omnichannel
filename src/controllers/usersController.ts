@@ -1,246 +1,207 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/prisma";
 import { AuthenticatedRequest } from "@/types/types";
-import bcrypt from "bcryptjs";
+import { userService } from "@/services/userService";
 
 /**
- * GET USERS CONTROLLER
- * Obtiene una lista de todos los usuarios de la base de datos.
+ * ==========================================
+ * USER CONTROLLER
+ * ==========================================
+ *
+ * Responsabilidades:
+ * - Extraer datos de la Request (body, params, query, user)
+ * - Validar input básico (validación de negocio está en Service)
+ * - Llamar al Service correspondiente
+ * - Formatear y enviar Response
+ * - Delegar errores al middleware de error handling
+ *
+ * NO debe contener:
+ * - Queries Prisma directas
+ * - Lógica de negocio
+ * - Transformaciones de datos complejas
+ */
+
+// ==================== GET USERS ====================
+
+/**
+ * GET /api/users
+ * Lista todos los usuarios con filtros opcionales
  */
 export const getUsers = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // 1. Extraer parámetros de la request
     const { role } = req.query;
     const companyId = req.companyId || req.user?.companyId;
 
-    const where: any = {};
-
-    // Filter by Company (Multi-tenancy)
-    if (companyId) {
-      where.companyId = companyId;
-    }
-
-    // Filter by Role if provided
-    if (role) {
-      where.role = role;
-    }
-
-    const users = await prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        companyId: true,
-        createdAt: true,
-
-        queues: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        // Exclude password
-      },
+    // 2. Llamar al servicio
+    const users = await userService.findUsers({
+      companyId,
+      role: role as string,
     });
 
+    // 3. Enviar response
     res.status(200).json({
       status: "success",
       results: users.length,
       data: { users },
     });
-  }
+  },
 );
 
-/**
- * CREATE USER CONTROLLER (Admin only)
- * Crea un nuevo usuario vinculado a la compañía del admin.
- */
+// ==================== CREATE USER ====================
 
+/**
+ * POST /api/users
+ * Crea un nuevo usuario (Solo ADMIN/MASTER)
+ */
 export const createUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    console.log("[Users] createUser called", req.body);
-    const { name, email, password, role } = req.body;
+    // 1. Extraer datos de la request
+    const { name, email, password, role, maxConcurrency, skills } = req.body;
     const companyId = req.companyId || req.user?.companyId;
+    const currentUserRole = req.user?.role;
 
+    // 2. Validación básica de input
     if (!companyId) {
       return next(
-        new AppError("No se pudo determinar la compañía del usuario.", 400)
+        new AppError("No se pudo determinar la compañía del usuario.", 400),
       );
     }
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return next(new AppError("El email ya está registrado.", 400));
+    if (!name || !email || !password) {
+      return next(
+        new AppError("Nombre, email y contraseña son requeridos.", 400),
+      );
     }
 
-    console.log("[Users] Hashing password...");
-    const hashedPassword = await bcrypt.hash(password, 12);
-    console.log("[Users] Creating user in DB...");
-
-    const newUser = await prisma.user.create({
-      data: {
+    // 3. Llamar al servicio (delegamos validación de roles y creación)
+    const newUser = await userService.createUser(
+      {
         name,
         email,
-        password: hashedPassword,
+        password,
+        role,
         companyId,
-        role: role || "AGENT",
+        maxConcurrency,
+        skills,
       },
-    });
+      currentUserRole || "USER",
+    );
 
-    // Remove password from output
-    const { password: _, ...userWithoutPassword } = newUser;
-
+    // 4. Enviar response
     res.status(201).json({
       status: "success",
-      data: { user: userWithoutPassword },
+      data: { user: newUser },
     });
-  }
+  },
 );
 
+// ==================== GET USER BY ID ====================
+
 /**
- * GET USER BY ID CONTROLLER
- * Obtiene un solo usuario por su ID.
+ * GET /api/users/:id
+ * Obtiene un usuario específico por ID
  */
 export const getUser = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // 1. Extraer ID de params
     const { id } = req.params;
-    const user = await prisma.user.findUnique({
-      where: { id },
-    });
 
-    if (!user) {
-      return next(new AppError("No se encontró un usuario con ese ID", 404));
-    }
+    // 2. Llamar al servicio (maneja error 404 internamente)
+    const user = await userService.findUserById(id);
 
+    // 3. Enviar response
     res.status(200).json({
       status: "success",
       data: { user },
     });
-  }
+  },
 );
 
+// ==================== UPDATE USER ====================
+
 /**
- * UPDATE USER CONTROLLER
- * Actualiza los datos de un usuario por su ID.
+ * PATCH /api/users/:id
+ * Actualiza un usuario existente
  */
 export const updateUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // 1. Extraer datos de la request
     const { id } = req.params;
-    const { email, name, preferences, queueIds, profilePicUrl } = req.body;
+    const {
+      email,
+      name,
+      phone,
+      about,
+      preferences,
+      queueIds,
+      profilePicUrl,
+      role,
+      maxConcurrency,
+      skills,
+    } = req.body;
 
-    // Un usuario solo puede editar su propio perfil (a menos que sea admin)
-    const companyId = (req as any).companyId;
+    const currentUserId = req.user?.id || "";
+    const currentUserRole = req.user?.role || "USER";
+    const companyId = req.companyId || req.user?.companyId || "";
 
-    // Permitir si es el mismo usuario
-    const isSelf = id === req.user?.id;
-    // Permitir si es ADMIN de la misma compañía y el objetivo es un AGENT
-    let isAdminEditingAgent = false;
-
-    if (req.user?.role === "ADMIN" && companyId && !isSelf) {
-      const targetUser = await prisma.user.findUnique({ where: { id } });
-      if (
-        targetUser &&
-        targetUser.companyId === companyId &&
-        targetUser.role === "AGENT"
-      ) {
-        isAdminEditingAgent = true;
-      }
-    }
-
-    if (!isSelf && !isAdminEditingAgent) {
-      return next(
-        new AppError("No tienes permiso para editar este perfil.", 403)
-      );
-    }
-
-    // Obtener el usuario actual para hacer merge de preferences
-    const currentUser = await prisma.user.findUnique({ where: { id } });
-
-    let mergedPreferences = preferences;
-    if (currentUser?.preferences && typeof preferences === "object") {
-      const currentPrefs = currentUser.preferences as Record<string, any>;
-      mergedPreferences = {
-        ...currentPrefs,
-        ...preferences,
-      };
-    }
-
-    // Prisma ignora los campos 'undefined', por lo que solo actualiza lo que se envía.
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: {
+    // 2. Llamar al servicio (maneja validaciones de permisos)
+    const updatedUser = await userService.updateUser(
+      {
+        id,
         email,
         name,
-        preferences: preferences ? mergedPreferences : undefined, // Use merged preferences
+        phone,
+        about,
+        preferences,
+        queueIds,
         profilePicUrl,
-        queues: queueIds
-          ? {
-              set: queueIds.map((qId: string) => ({ id: qId })),
-            }
-          : undefined,
+        role,
+        maxConcurrency,
+        skills,
       },
-      include: {
-        queues: true,
-      },
-    });
+      currentUserId,
+      currentUserRole,
+      companyId,
+    );
 
+    // 3. Enviar response
     res.status(200).json({
       status: "success",
       data: { user: updatedUser },
     });
-  }
+  },
 );
 
+// ==================== DELETE USER ====================
+
 /**
- * DELETE USER CONTROLLER
- * Elimina un usuario por su ID.
+ * DELETE /api/users/:id
+ * Elimina un usuario (con validaciones de seguridad)
  */
 export const deleteUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // 1. Extraer datos de la request
     const { id } = req.params;
+    const currentUserRole = req.user?.role || "USER";
+    const companyId = req.companyId || req.user?.companyId;
 
-    // Lógica de negocio: Permitir a ADMIN eliminar AGENT de su misma compañía
-    const companyId = (req as any).companyId;
-    if (req.user?.role === "ADMIN" && companyId) {
-      const targetUser = await prisma.user.findUnique({ where: { id } });
-
-      if (!targetUser) {
-        return next(new AppError("Usuario no encontrado", 404));
-      }
-
-      if (targetUser.companyId !== companyId) {
-        return next(
-          new AppError(
-            "No tienes permiso para eliminar usuarios de otra compañía.",
-            403
-          )
-        );
-      }
-
-      // Opcional: Impedir eliminar otros ADMINs
-      if (targetUser.role !== "AGENT") {
-        return next(
-          new AppError("Solo puedes eliminar cuentas de Agentes.", 403)
-        );
-      }
-
-      await prisma.user.delete({ where: { id } });
-      return res.status(204).send();
-    }
-
-    // Fallback para otros casos (o si el usuario intenta borrarse a sí mismo, que también podríamos permitir)
-    if (id !== req.user?.id) {
+    // 2. Validación básica
+    if (!companyId && currentUserRole === "ADMIN") {
       return next(
-        new AppError("No tienes permiso para eliminar usuarios.", 403)
+        new AppError("No se pudo determinar la compañía del usuario.", 400),
       );
     }
 
-    // Auto-eliminación (si se desea permitir)
-    await prisma.user.delete({ where: { id } });
+    // 3. Llamar al servicio (maneja todas las validaciones de seguridad)
+    await userService.deleteUser({
+      userId: id,
+      currentUserRole,
+      companyId: companyId || "",
+    });
+
+    // 4. Enviar response (204 No Content)
     res.status(204).send();
-  }
+  },
 );

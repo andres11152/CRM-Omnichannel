@@ -8,15 +8,20 @@ const redisUrl = process.env.REDIS_URL;
 if (redisUrl) {
   redisClient = createClient({
     url: redisUrl,
-    pingInterval: 1000, // 🔥 Send PING every 1s (CRITICAL for Render External URL)
+    pingInterval: 5000, // 🔥 Send PING every 5s (prevents cloud idle disconnections)
     socket: {
       connectTimeout: 60000, // 60s timeout
-      family: 4, // 🔥 Force IPv4 (Fixes Node 17+ / Windows DNS issues)
       tls: redisUrl.startsWith("rediss://"), // Auto-detect TLS
       rejectUnauthorized: false, // Required for self-signed certs
+      keepAlive: 10000, // 🔥 TCP keepAlive every 10s (CRITICAL for cloud providers)
+      noDelay: true, // Disable Nagle's algorithm for faster response
       reconnectStrategy: (retries) => {
-        // Aggressive reconnect for local dev stability
-        return Math.min(retries * 100, 3000);
+        // Exponential backoff: 100ms, 200ms, 400ms... max 5s
+        const delay = Math.min(retries * 100, 5000);
+        Logger.info(
+          `[Redis] Reconnecting in ${delay}ms (attempt ${retries})...`,
+        );
+        return delay;
       },
     },
     // Prevent crashing on command failure, just fail the command
@@ -24,28 +29,43 @@ if (redisUrl) {
   });
 
   redisClient.on("error", (err) => {
-    // 🤫 SILENCE KNOWN NETWORK NOISE
+    // 🤫 SILENCE KNOWN NETWORK NOISE (Expected in cloud environments)
     const msg = err.message || "";
-    if (
-      msg.includes("ECONNRESET") ||
-      msg.includes("ETIMEDOUT") ||
-      msg.includes("Socket closed") ||
-      msg.includes("ENOTFOUND") || // DNS Error (Network Down)
-      msg.includes("ECONNABORTED") || // Connection Dropped
-      msg.includes("getaddrinfo") ||
-      msg.includes("Connection timeout")
-    ) {
-      // These are routine network blips or outages. Auto-reconnect handles them.
+    const silentErrors = [
+      "ECONNRESET",
+      "ETIMEDOUT",
+      "Socket closed",
+      "ENOTFOUND",
+      "ECONNABORTED",
+      "getaddrinfo",
+      "Connection timeout",
+      "socket hang up",
+      "ECONNREFUSED",
+      "EPIPE",
+      "read ECONNRESET",
+      "write ECONNRESET",
+    ];
+
+    if (silentErrors.some((e) => msg.includes(e))) {
+      // These are routine network blips. Auto-reconnect handles them silently.
       return;
     }
     Logger.error("[Redis] Client Error", err);
+  });
+
+  redisClient.on("reconnecting", () => {
+    Logger.warn("[Redis] Reconnecting...");
+  });
+
+  redisClient.on("ready", () => {
+    Logger.info("[Redis] ✅ Connection ready");
   });
 }
 
 export const connectRedis = async () => {
   if (!redisClient) {
     Logger.warn(
-      "[Redis] REDIS_URL not set. Running in Fallback Mode (Memory/File)."
+      "[Redis] REDIS_URL not set. Running in Fallback Mode (Memory/File).",
     );
     return;
   }

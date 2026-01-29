@@ -2,7 +2,7 @@ import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 
 /**
  * GET /api/users/metrics

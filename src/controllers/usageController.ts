@@ -40,7 +40,8 @@ export const getUsageStats = catchAsync(
       if (limit === -1) {
         percentages[key] = 0; // Unlimited
       } else if (limit) {
-        percentages[key] = Math.round((current / limit) * 100);
+        // Ensure strictly typed arithmetic
+        percentages[key] = Math.round((Number(current) / Number(limit)) * 100);
       }
     });
 
@@ -51,5 +52,5 @@ export const getUsageStats = catchAsync(
       usage,
       percentages,
     });
-  }
+  },
 );

@@ -1,47 +1,77 @@
-﻿# Etapa 1: Construcción de la aplicación
-# Etapa 1: Construcción de la aplicación
-FROM node:20-alpine AS builder
+﻿# 🐳 PRODUCTION DOCKERFILE
+# Node.js 20 LTS with memory optimization
+FROM node:20-alpine AS base
 
-# Establecer el directorio de trabajo dentro del contenedor
+# Install dependencies for native modules
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
+    pixman-dev
+
+# Set working directory
 WORKDIR /app
 
-# Instalar OpenSSL y Git (necesario para algunas dependencias)
-RUN apk add --no-cache openssl git
-
-# Copiar los archivos de dependencias y el schema de Prisma
+# Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar dependencias de producción y desarrollo
-RUN npm install --legacy-peer-deps
+# Install dependencies
+RUN npm ci --only=production && npm cache clean --force
 
-# Copiar el resto del código fuente de la aplicación
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Copy application code
 COPY . .
 
-# Compilar el código de TypeScript a JavaScript
+# Build TypeScript
 RUN npm run build
 
-# Etapa 2: Creación de la imagen final optimizada
-FROM node:20-alpine
+# Production stage
+FROM node:20-alpine AS production
+
+# Install only runtime dependencies
+RUN apk add --no-cache \
+    cairo \
+    jpeg \
+    pango \
+    giflib \
+    pixman \
+    dumb-init
 
 WORKDIR /app
 
-# Instalar OpenSSL y Git también en la etapa final
-RUN apk add --no-cache openssl git
+# Copy built application
+COPY --from=base /app/dist ./dist
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/prisma ./prisma
+COPY --from=base /app/package*.json ./
 
-# Copiar solo las dependencias de producción desde la etapa de construcción
-COPY --from=builder /app/node_modules ./node_modules
-COPY package*.json ./
-COPY --from=builder /app/prisma ./prisma
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app
 
-# Ejecutar npm install para generar los binarios necesarios (como 'prisma') en node_modules/.bin
-RUN npm install --omit=dev --legacy-peer-deps
+# Switch to non-root user
+USER nodejs
 
-# Copiar el código compilado (JavaScript)
-COPY --from=builder /app/dist ./dist
-
-# Exponer el puerto en el que corre la aplicación
+# Expose port
 EXPOSE 4000
 
-# Comando para ejecutar las migraciones y arrancar la aplicación
-CMD ["sh", "-c", "npx prisma migrate deploy && node --max-old-space-size=2048 --expose-gc -r module-alias/register dist/server.js"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# 🔥 CRITICAL: Memory flags for Node.js
+ENV NODE_OPTIONS="--max-old-space-size=4096 --max-semi-space-size=128 --expose-gc"
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start application
+CMD ["node", "dist/server.js"]

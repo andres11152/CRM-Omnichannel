@@ -13,13 +13,23 @@ export interface IEmailProvider {
   /**
    * Parse incoming webhook from provider
    */
-  parseWebhook(body: any, headers: any): WebhookEvent | null;
+  parseWebhook(body: unknown, headers: unknown): WebhookEvent | null;
 
   /**
    * Verify webhook signature (security)
    */
-  verifyWebhookSignature(body: any, signature: string): boolean;
+  verifyWebhookSignature(body: unknown, signature: string): boolean;
 }
+
+export interface NodemailerConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+}
+
+export type ProviderConfig = NodemailerConfig | Record<string, unknown>;
 
 export interface SendEmailParams {
   from: string;
@@ -69,7 +79,7 @@ export interface WebhookEvent {
   messageId: string;
   eventType: WebhookEventType;
   timestamp: Date;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 // ===================================
@@ -103,7 +113,7 @@ export interface TimelineActivity {
   ticketId?: string;
 
   // Provider-specific metadata
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 // ===================================

@@ -13,14 +13,7 @@ async function main() {
     create: {
       name: "Reply CRM Admin",
       slug: "reply-admin",
-      industry: "SOFTWARE",
       phone: "+1234567890",
-      email: "admin@replycrm.com",
-      website: "https://reply.software",
-      address: "San Francisco, CA",
-      city: "San Francisco",
-      state: "CA",
-      country: "USA",
       timezone: "America/Los_Angeles",
       settings: {
         whatsappEnabled: true,
@@ -42,14 +35,13 @@ async function main() {
       email: "admin@replycrm.com",
       name: "Super Admin",
       password: hashedPassword,
-      role: "SUPER_ADMIN",
+      role: "MASTER",
       companyId: superAdminCompany.id,
-      isActive: true,
     },
   });
 
   console.log(
-    `✅ Created super admin: ${superAdmin.email} / password: admin123`
+    `✅ Created super admin: ${superAdmin.email} / password: admin123`,
   );
 
   // 3. CREATE DEMO COMPANY
@@ -59,14 +51,7 @@ async function main() {
     create: {
       name: "Demo Company",
       slug: "demo-company",
-      industry: "RETAIL",
       phone: "+1234567891",
-      email: "demo@replycrm.com",
-      website: "https://democompany.com",
-      address: "123 Demo Street",
-      city: "New York",
-      state: "NY",
-      country: "USA",
       timezone: "America/New_York",
       settings: {
         whatsappEnabled: true,
@@ -90,7 +75,6 @@ async function main() {
       password: demoDemoHashedPassword,
       role: "ADMIN",
       companyId: demoCompany.id,
-      isActive: true,
     },
   });
 
@@ -108,18 +92,17 @@ async function main() {
       password: agentPassword,
       role: "AGENT",
       companyId: demoCompany.id,
-      isActive: true,
     },
   });
 
   console.log(`✅ Created demo agent: ${agent.email} / password: agent123`);
 
-  // 6. CREATE DEMO PIPELINE
+  // 6. CREATE DEMO PIPELINE (Default only)
   const pipeline = await prisma.pipeline.upsert({
     where: {
-      companyId_name: {
+      companyId_isDefault: {
         companyId: demoCompany.id,
-        name: "Sales Pipeline",
+        isDefault: true,
       },
     },
     update: {},
@@ -144,9 +127,9 @@ async function main() {
   for (const stageData of stages) {
     await prisma.stage.upsert({
       where: {
-        pipelineId_name: {
+        pipelineId_order: {
           pipelineId: pipeline.id,
-          name: stageData.name,
+          order: stageData.order,
         },
       },
       update: {},
@@ -160,21 +143,22 @@ async function main() {
   console.log(`✅ Created ${stages.length} stages`);
 
   // 8. CREATE DEMO QUEUE
-  const queue = await prisma.queue.upsert({
+  let queue = await prisma.queue.findFirst({
     where: {
-      companyId_name: {
-        companyId: demoCompany.id,
-        name: "General Support",
-      },
-    },
-    update: {},
-    create: {
-      name: "General Support",
-      description: "Default support queue",
       companyId: demoCompany.id,
-      isDefault: true,
+      name: "General Support",
     },
   });
+
+  if (!queue) {
+    queue = await prisma.queue.create({
+      data: {
+        name: "General Support",
+        description: "Default support queue",
+        companyId: demoCompany.id,
+      },
+    });
+  }
 
   console.log(`✅ Created queue: ${queue.name}`);
 
@@ -199,19 +183,6 @@ async function main() {
   console.log(`✅ Created contact: ${contact.name}`);
 
   console.log("\n🎉 Database seeded successfully!\n");
-  console.log("=".repeat(50));
-  console.log("LOGIN CREDENTIALS:");
-  console.log("=".repeat(50));
-  console.log("\n👤 Super Admin:");
-  console.log("   Email: admin@replycrm.com");
-  console.log("   Password: admin123");
-  console.log("\n👤 Demo Admin:");
-  console.log("   Email: demo@replycrm.com");
-  console.log("   Password: demo123");
-  console.log("\n👤 Demo Agent:");
-  console.log("   Email: agent@replycrm.com");
-  console.log("   Password: agent123");
-  console.log("\n" + "=".repeat(50) + "\n");
 }
 
 main()

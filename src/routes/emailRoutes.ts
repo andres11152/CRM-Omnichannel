@@ -7,7 +7,7 @@ import {
   getTimeline,
   getTimelineStats,
   testEmailConnection,
-} from "../controllers/email.controller";
+} from "../controllers/emailController";
 import { protect } from "../middleware/authMiddleware";
 
 const router = express.Router();

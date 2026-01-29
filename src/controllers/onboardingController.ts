@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { prisma } from "@/config/prisma"; // Importar el cliente real de Prisma
+import { prisma } from "@/config/database"; // Importar el cliente real de Prisma
 import bcrypt from "bcryptjs";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";

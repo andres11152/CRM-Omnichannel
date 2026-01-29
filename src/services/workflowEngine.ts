@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { Logger } from "@/utils/logger";
 import { emailService } from "./email/email.service";
 

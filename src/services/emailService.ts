@@ -24,13 +24,27 @@ export class EmailService {
       );
     }
 
+    // 🛡️ SECURITY: Decrypt password if encrypted
+    let smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
+    if (smtpPass) {
+      // Lazy load decryption to avoid circular deps or init issues
+      // Note: real implementation might import at top if safe
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { decrypt } = require("@/utils/encryption");
+        smtpPass = decrypt(smtpPass);
+      } catch (e) {
+        // Ignore if util not found/fails, assume plaintext
+      }
+    }
+
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS || process.env.SMTP_PASSWORD, // Support both
+        pass: smtpPass,
       },
     });
   }

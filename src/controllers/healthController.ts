@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import redisClient from "@/config/redis";
 
 /**

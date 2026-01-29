@@ -1,5 +1,6 @@
 import Bull, { Queue, Job } from "bull";
 import { Logger } from "../../utils/logger";
+import { SendMessageOptions } from "../../whatsapp/core/types/whatsapp.types";
 
 /**
  * ENTERPRISE MESSAGE QUEUE SERVICE
@@ -13,19 +14,23 @@ import { Logger } from "../../utils/logger";
  * - Progress tracking
  */
 
-export interface MessageJob {
+// Extend/Align with SendMessageOptions but stricter for Queue
+export interface MessageJob extends SendMessageOptions {
   companyId: string;
   conversationId: string;
   senderId: string;
   to: string;
   text: string;
-  media?: {
-    type: string;
-    url: string;
-    mimetype?: string;
-    name?: string;
-    isVoiceNote?: boolean;
-  };
+  // Media is inherited from SendMessageOptions but strictly typed here if needed
+  // options.media matches our new MediaPayload
+}
+
+export interface JobStatusResponse {
+  status: string | "not_found";
+  progress?: number;
+  data?: MessageJob;
+  failedReason?: string;
+  finishedOn?: number; // timestamp
 }
 
 class MessageQueueService {
@@ -67,7 +72,7 @@ class MessageQueueService {
           : undefined, // 🔥 Render SSL Fix
       };
 
-      const defaultJobOptions: any = {
+      const defaultJobOptions: Bull.JobOptions = {
         attempts: 10, // Increased retries
         backoff: {
           type: "exponential",
@@ -85,13 +90,13 @@ class MessageQueueService {
           `whatsapp-messages:${companyId}`,
           redisUrl,
           {
-            redis: redisAdvancedOpts as any, // Cast to avoid strict type checks if family isn't in definition
+            redis: redisAdvancedOpts as Bull.QueueOptions["redis"],
             defaultJobOptions,
-          }
+          },
         );
       } else {
         // Fallback Config
-        const redisConfig: any = {
+        const redisConfig: Bull.QueueOptions["redis"] = {
           host: process.env.REDIS_HOST || "localhost",
           port: parseInt(process.env.REDIS_PORT || "6379"),
           password: process.env.REDIS_PASSWORD,
@@ -150,7 +155,7 @@ class MessageQueueService {
     Logger.info(
       `[Queue:${jobData.companyId}] 📥 Enqueued job ${job.id} (${
         jobData.media?.type || "text"
-      })`
+      })`,
     );
 
     return job.id.toString();
@@ -159,7 +164,10 @@ class MessageQueueService {
   /**
    * Get job status for tracking
    */
-  async getJobStatus(companyId: string, jobId: string): Promise<any> {
+  async getJobStatus(
+    companyId: string,
+    jobId: string,
+  ): Promise<JobStatusResponse> {
     const queue = this.getQueue(companyId);
     const job = await queue.getJob(jobId);
 

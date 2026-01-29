@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { google } from "googleapis";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { signToken } from "./authController"; // Import token signer

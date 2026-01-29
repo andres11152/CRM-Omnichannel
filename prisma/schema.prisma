@@ -61,33 +61,47 @@ model Conversation {
 
   queueId String?
   queue   Queue?  @relation(fields: [queueId], references: [id])
-  
+
+  // Relación con Contacto (Cliente)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
   // Chatbot Flow Sessions
   flowSessions ContactFlowSession[]
 
-  // === PERFORMANCE INDEXES ===
-  // For: Get all conversations by company (most common query)
-  @@index([companyId, updatedAt(sort: Desc)])
-  
-  // For: Get conversations by status per company
-  @@index([companyId, status, updatedAt(sort: Desc)])
-  
-  // For: Get assigned conversations by agent
-  @@index([assignedToId, status, updatedAt(sort: Desc)])
-  
-  // For: Get conversations by queue
-  @@index([queueId, status, updatedAt(sort: Desc)])
+  // === HIGH-PERFORMANCE COMPOSITE INDEXES ===
 
+  // 🛡️ DATA INTEGRITY
+  // Ensure ONE conversation per phone number per company
+  @@unique([companyId, channelId], name: "conversation_unique_channel")
+  // 1. Agent Dashboard: "My Open Conversations" (Most frequent query)
+  // Index Scan -> Instant results
+  @@index([companyId, assignedToId, status, updatedAt(sort: Desc)])
+  // 2. Supervisor View: "All Active Conversations"
+  @@index([companyId, status, updatedAt(sort: Desc)])
+  // 3. Queue Management: "Unassigned Queue Items"
+  @@index([companyId, queueId, status, updatedAt(sort: Desc)])
+  // 4. Cursor Pagination (Essential for infinite scroll)
+  @@index([companyId, updatedAt(sort: Desc), id(sort: Asc)])
+  // 5. Channel Lookup (Prevent duplicates)
+  @@index([companyId, channelId])
   @@map("conversations")
 }
 
 model Message {
-  id        String           @id @default(cuid())
+  id String @id @default(cuid())
+
+  // 🔥 PERFORMANCE: Denormalized companyId
+  // Allows querying message stats WITHOUT joining Conversation table
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: NoAction)
+
   content   String
   channel   Channel
   direction MessageDirection
   status    String           @default("SENT") // SENT, DELIVERED, READ, FAILED
   createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -98,14 +112,68 @@ model Message {
 
   metadata Json? // For attachments, etc.
 
-  // === PERFORMANCE INDEXES ===
-  // For: Get messages by conversation (most critical query)
-  @@index([conversationId, createdAt(sort: Desc)])
-  
-  // For: Get messages by sender
-  @@index([senderId, createdAt(sort: Desc)])
+  // 🛡️ DATA INTEGRITY: Prevent duplicate processing of same WhatsApp message
+  whatsappMessageId String? @unique
 
+  // === ANALYTICS & HISTORY INDEXES ===
+
+  // 1. Chat History Load: "Get last 50 messages for this chat"
+  @@index([conversationId, createdAt(sort: Desc)])
+  // 2. Global Analytics: "Messages per day per company" (No JOIN needed!)
+  @@index([companyId, createdAt(sort: Desc)])
+  // 3. Status Filtering: "Available Limit / Failed Messages"
+  @@index([companyId, status, createdAt(sort: Desc)])
+  // 4. Sender History
+  @@index([senderId, createdAt(sort: Desc)])
   @@map("messages")
+}
+
+// ... (User sections skipped, no changes needed there)
+
+model Contact {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name          String
+  email         String?
+  phone         String?
+  avatarUrl     String?
+  tags          String[]
+  notes         String?
+  customFields  Json?
+  profilePicUrl String?
+  about         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 🗑️ SOFT DELETE
+  deletedAt DateTime?
+  deletedBy String?
+
+  // CRM Relations
+  accountId  String?
+  account    Account?   @relation(fields: [accountId], references: [id])
+  deals      Deal[]
+  activities Activity[]
+
+  emails        Email[]
+  flowSessions  ContactFlowSession[]
+  conversations Conversation[]
+
+  // === SEARCH OPTIMIZATION ===
+
+  // 🛡️ INTEGRITY
+  @@unique([companyId, phone])
+  // 1. Fast Phone Lookup (WhatsApp Webhook critical path)
+  @@index([companyId, phone])
+  // 2. Fast Email Lookup
+  @@index([companyId, email])
+  // 3. Recent Contacts View (Dashboard)
+  // Partial index logic for deletedAt is handled by query
+  @@index([companyId, updatedAt(sort: Desc)])
+  // 4. Name Autocomplete (Prefix search)
+  @@index([companyId, name])
+  @@map("contacts")
 }
 
 // --- Modelos de Autenticación y SaaS Multi-Tenant ---
@@ -113,6 +181,7 @@ model Message {
 enum UserRole {
   USER
   AGENT
+  SUPERVISOR
   ADMIN
   MASTER
 }
@@ -138,21 +207,21 @@ model Company {
   subscriptionEndsAt DateTime?
 
   // Enhanced Profile Fields
-  address          String?
-  phone            String?
-  website          String?
-  timezone         String        @default("UTC")
-  
+  address  String?
+  phone    String?
+  website  String?
+  timezone String  @default("UTC")
+
   // JSON Settings (Business Hours, Auto-Replies, etc.)
-  settings         Json?         @default("{}")
+  settings Json? @default("{}")
 
   // SMTP Configuration (Multi-Tenant Email)
-  emailProvider      String   @default("SMTP") // SMTP, SENDGRID, AWS_SES
+  emailProvider      String  @default("SMTP") // SMTP, SENDGRID, AWS_SES
   smtpHost           String?
   smtpPort           Int?
   smtpUser           String?
-  smtpPassword       String?  // Encrypted
-  smtpSecure         Boolean  @default(true)
+  smtpPassword       String? // Encrypted
+  smtpSecure         Boolean @default(true)
   defaultSenderEmail String?
   defaultSenderName  String?
 
@@ -178,16 +247,20 @@ model Company {
   quickReplies     QuickReply[]
   pipelines        Pipeline[] // CRM Pipelines
   products         Product[] // Product Catalog
-  
+
   // Chatbot Flows
-  flows            Flow[]
-  flowSessions     ContactFlowSession[]
-  
+  flows        Flow[]
+  flowSessions ContactFlowSession[]
+
   // Multimedia Library
-  mediaAssets      MediaAsset[]
-  
+  mediaAssets MediaAsset[]
+
   // Email Module
-  emails           Email[]
+  emails Email[]
+
+  // Billing & Trial Management
+  trialEndsAt   DateTime?
+  planExpiresAt DateTime?
 
   // Relación con Stripe y Planes
   planId               String?
@@ -195,21 +268,36 @@ model Company {
   stripeCustomerId     String? @unique
   stripeSubscriptionId String? @unique
 
+  // Push Notifications
+  pushSubscriptions PushSubscription[]
+
+  // RBAC - Custom Roles
+  roles   Role[]
+  Message Message[]
+
   @@map("companies")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  phone     String?  // Added for WhatsApp Integration support
-  password  String
-  role      UserRole @default(AGENT)
-  preferences Json?
+  id       String   @id @default(cuid())
+  email    String   @unique
+  name     String?
+  phone    String? // Added for WhatsApp Integration support
+  password String
+  role     UserRole @default(AGENT)
+
+  // WFM Fields
+  maxConcurrency Int      @default(3)
+  skills         String[]
+
+  // Security
+  isOwner Boolean @default(false)
+
+  preferences   Json?
   profilePicUrl String? // WhatsApp Profile Pic
   about         String? // WhatsApp Status/About info
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relación con Compañía (Tenant)
   companyId String?
@@ -235,66 +323,76 @@ model User {
   uploadedMedia Media[]
 
   // CRM Relations
-  assignedDeals      Deal[]     @relation("AssignedDeals")
-  assignedActivities Activity[] @relation("AssignedActivities")
-  createdActivities  Activity[] @relation("CreatedActivities")
+  assignedDeals           Deal[]     @relation("AssignedDeals")
+  assignedActivities      Activity[] @relation("AssignedActivities")
+  createdActivities       Activity[] @relation("CreatedActivities")
   participatingActivities Activity[] @relation("ActivityParticipants")
-  
+  mentionedInActivities   Activity[] @relation("ActivityMentions")
+
   // Chatbot Flows
   createdFlows Flow[]
-  
+
+  // Campaigns
+  createdCampaigns Campaign[]
+
   // Multimedia Library
   uploadedMediaAssets MediaAsset[]
 
   // Google Calendar Integration
   googleCalendarToken        String? // Access token
   googleCalendarRefreshToken String? // Refresh token for long-term access
-  
+
   // Password Reset
   resetPasswordToken   String?
   resetPasswordExpires DateTime?
 
+  // Push Notifications
+  pushSubscriptions PushSubscription[]
+
+  // In-app Notifications
+  notifications Notification[]
+
+  // RBAC - Custom Role
+  customRoleId String?
+  customRole   Role?   @relation("UserRole", fields: [customRoleId], references: [id], onDelete: SetNull)
+
+  // For: Email lookup is already covered by @unique
+
   // === PERFORMANCE INDEXES ===
   // For: Get users by company and role (very common)
   @@index([companyId, role, createdAt(sort: Desc)])
-  
-  // For: Email lookup is already covered by @unique
-  
   @@map("users")
 }
 
-model TestModel {
-  id String @id @default(cuid())
-}
 
 model Workflow {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  isActive    Boolean  @default(true)
-  
-  triggerType   String   @default("KEYWORD") // KEYWORD, EVENT
-  triggerConfig Json?    // { keyword: "hola" } or { event: "DEAL_UPDATE" }
+  isActive    Boolean @default(true)
 
-  nodes       Json?
-  edges       Json?
+  triggerType   String @default("KEYWORD") // KEYWORD, EVENT
+  triggerConfig Json? // { keyword: "hola" } or { event: "DEAL_UPDATE" }
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  nodes Json?
+  edges Json?
 
-  executions  WorkflowExecution[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  executions WorkflowExecution[]
 
   @@map("workflows")
 }
 
 model WorkflowExecution {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   workflowId  String
-  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   status      String
-  startedAt   DateTime @default(now())
+  startedAt   DateTime  @default(now())
   completedAt DateTime?
   logs        Json?
   error       String?
@@ -303,25 +401,27 @@ model WorkflowExecution {
 }
 
 model WhatsAppSession {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sessionId String   @unique // Folder name for auth creds
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sessionId String  @unique // Folder name for auth creds
   phone     String?
-  status    String   @default("DISCONNECTED") // CONNECTED, DISCONNECTED, SCANNING
+  status    String  @default("DISCONNECTED") // CONNECTED, DISCONNECTED, SCANNING
   qrCode    String? // Base64 QR for frontend display
-  
+
+  // Notification tracking
+  notifiedAt DateTime? // Last time we notified about disconnection
+
   // Custom Default Queue for this Session
   defaultQueueId String?
   defaultQueue   Queue?  @relation(fields: [defaultQueueId], references: [id])
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // === PERFORMANCE INDEXES ===
   // For: Get sessions by company and status
   @@index([companyId, status, createdAt(sort: Desc)])
-
   @@map("whatsapp_sessions")
 }
 
@@ -338,17 +438,17 @@ model WhatsAppCredential {
 }
 
 model Plan {
-  id        String    @id @unique
-  name      String
-  price     Float
-  config    Json // { max_users: number; max_queues: number; }
-  
+  id     String @id @unique
+  name   String
+  price  Float
+  config Json // { max_users: number; max_queues: number; }
+
   // Quotas (Strict Limits)
-  storageLimitGb Float?   // GB allowed. Null = Unlimited
-  maxContacts    Int?     // Max contacts. Null = Unlimited
-  maxCompanies   Int?     // Max sub-companies/accounts. Null = Unlimited
-  maxWorkflows   Int?     // Max active workflows. Null = Unlimited
-  
+  storageLimitGb Float? // GB allowed. Null = Unlimited
+  maxContacts    Int? // Max contacts. Null = Unlimited
+  maxCompanies   Int? // Max sub-companies/accounts. Null = Unlimited
+  maxWorkflows   Int? // Max active workflows. Null = Unlimited
+
   companies Company[]
 
   @@map("plans")
@@ -437,19 +537,23 @@ enum TicketPriority {
 
 model Ticket {
   id           String         @id @default(cuid())
-  ticketNumber Int            // Sequential number per company (e.g. 1, 2, 3...)
+  ticketNumber Int // Sequential number per company (e.g. 1, 2, 3...)
   subject      String
   description  String
   status       TicketStatus   @default(OPEN)
   priority     TicketPriority @default(MEDIUM)
-  
+
   // Resolution fields
   resolutionType  TicketResolutionType?
   resolutionNotes String?
 
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  resolvedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  // 🗑️ SOFT DELETE (GDPR Compliance)
+  deletedAt DateTime?
+  deletedBy String? // User ID who deleted this ticket
 
   companyId    String
   company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -463,23 +567,21 @@ model Ticket {
 
   conversationId String?
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
-  
+
   // Email timeline
-  emails         Email[]
+  emails Email[]
 
   // === PERFORMANCE INDEXES ===
   // For: Get tickets by company and status (dashboard query)
   @@index([companyId, status, createdAt(sort: Desc)])
-  
+  // For: Soft delete filtering (critical for GDPR compliance)
+  @@index([companyId, deletedAt])
   // For: Get tickets by assignee
   @@index([assignedToId, status, createdAt(sort: Desc)])
-  
   // For: Get tickets by queue
   @@index([queueId, status, createdAt(sort: Desc)])
-  
   // For: Get tickets by priority for sorting
   @@index([companyId, priority, status, createdAt(sort: Desc)])
-
   @@map("tickets")
 }
 
@@ -520,32 +622,30 @@ model Queue {
 
   tickets Ticket[]
   agents  User[]   @relation("QueueAgents")
-  
+
   // AI Relation
   aiAssistantId String?
   aiAssistant   AIAssistant? @relation(fields: [aiAssistantId], references: [id])
 
-  conversations Conversation[]
+  conversations      Conversation[]
   defaultForSessions WhatsAppSession[]
 
   // === PERFORMANCE INDEXES ===
   // For: Get queues by company (common query)
   @@index([companyId, isActive, createdAt(sort: Desc)])
-  
   // For: Get queues by department
   @@index([departmentId, isActive])
-
   @@map("queues")
 }
 
 model AIConfig {
-  id        String   @id @default(cuid())
-  companyId String   @unique
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   openaiKey String?
   geminiKey String?
-  
+
   isActive  Boolean  @default(true)
   updatedAt DateTime @updatedAt
 
@@ -553,22 +653,22 @@ model AIConfig {
 }
 
 model AIAssistant {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
-  name        String
-  description String?
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name          String
+  description   String?
   modelProvider String // "OPENAI" | "GEMINI"
   modelName     String // "gpt-4o", "gemini-1.5-pro"
-  
-  systemPrompt  String // @db.Text is implicit in Prisma for String usually, but good to note
-  temperature   Float  @default(0.7)
-  
-  queues      Queue[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  systemPrompt String // @db.Text is implicit in Prisma for String usually, but good to note
+  temperature  Float  @default(0.7)
+
+  queues Queue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("ai_assistants")
 }
@@ -586,9 +686,20 @@ model Campaign {
   status         String   @default("draft")
   config         Json?
   stats          Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
 
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 🗑️ SOFT DELETE (GDPR Compliance)
+  deletedAt DateTime?
+  deletedBy String? // User ID who deleted this campaign
+
+  // === PERFORMANCE INDEXES ===
+  // For: Soft delete filtering
+  @@index([companyId, deletedAt])
   @@map("campaigns")
 }
 
@@ -635,54 +746,23 @@ model QuickReply {
   @@map("quick_replies")
 }
 
-model Contact {
-  id           String   @id @default(cuid())
-  companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name         String
-  email        String?
-  phone        String?
-  avatarUrl    String?
-  tags         String[]
-  notes        String?
-  customFields Json?
-  profilePicUrl String? // WhatsApp Profile Pic
-  about         String? // WhatsApp Status/About info
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // CRM Relations
-  accountId  String?
-  account    Account?   @relation(fields: [accountId], references: [id])
-  deals      Deal[]
-  activities Activity[]
-  
-  // Email timeline
-  emails     Email[]
-  
-  // Chatbot Flow Sessions
-  flowSessions ContactFlowSession[]
-
-  @@map("contacts")
-}
-
 // --- CRM Models ---
 
 // Pipeline model for dynamic, tenant-specific sales pipelines
 model Pipeline {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
-  name       String
-  isDefault  Boolean  @default(false)
-  
-  stages     Stage[]
-  deals      Deal[]
-  
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name      String
+  isDefault Boolean @default(false)
+
+  stages Stage[]
+  deals  Deal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Ensure each company can have only one default pipeline
   @@unique([companyId, isDefault])
   @@index([companyId, isDefault])
@@ -694,16 +774,16 @@ model Stage {
   id         String   @id @default(cuid())
   pipelineId String
   pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  
-  name       String
-  order      Float    @default(0) // Float for flexible drag-and-drop reordering
-  color      String?  @default("#6B7280") // Hex color for UI customization
-  
-  deals      Deal[]
-  
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  
+
+  name  String
+  order Float   @default(0) // Float for flexible drag-and-drop reordering
+  color String? @default("#6B7280") // Hex color for UI customization
+
+  deals Deal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([pipelineId, order])
   @@index([pipelineId, order])
   @@map("stages")
@@ -745,19 +825,19 @@ model Deal {
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  title             String
-  value             Float     @default(0)
-  currency          String    @default("USD")
-  
+  title    String
+  value    Float  @default(0)
+  currency String @default("USD")
+
   // Dynamic Pipeline & Stage relationships
   pipelineId String
   pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
-  
-  stageId    String
-  stage      Stage    @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  
-  order      Float    @default(0) // Position within the stage for Kanban ordering
-  
+
+  stageId String
+  stage   Stage  @relation(fields: [stageId], references: [id], onDelete: Restrict)
+
+  order Float @default(0) // Position within the stage for Kanban ordering
+
   probability       Int       @default(10) // 0-100%
   expectedCloseDate DateTime?
 
@@ -775,10 +855,16 @@ model Deal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // 🗑️ SOFT DELETE (GDPR Compliance)
+  deletedAt DateTime?
+  deletedBy String? // User ID who deleted this deal
+
   // Performance indexes for multi-tenant queries
   @@index([companyId, pipelineId, stageId])
   @@index([stageId, order]) // For Kanban board ordering
   @@index([assignedToId, stageId])
+  // For: Soft delete filtering
+  @@index([companyId, deletedAt])
   @@map("deals")
 }
 
@@ -813,6 +899,9 @@ model Activity {
 
   participants User[] @relation("ActivityParticipants")
 
+  // 💬 @Mentions Support (for Internal Notes collaboration)
+  mentions User[] @relation("ActivityMentions")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -837,10 +926,10 @@ enum ProductStatus {
 }
 
 model Product {
-  id          String        @id @default(cuid())
-  companyId   String
-  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   name        String
   sku         String?
   price       Float
@@ -851,9 +940,9 @@ model Product {
   description String?
   imageUrl    String?
   status      ProductStatus @default(active)
-  
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([companyId, status])
   @@map("products")
@@ -905,29 +994,29 @@ model Media {
 // ============================================
 
 enum FlowTriggerType {
-  KEYWORD      // Mensaje contiene palabra clave
-  NEW_CONTACT  // Nuevo contacto creado
-  DEAL_STAGE   // Deal cambia de etapa
-  TIME_DELAY   // Después de X horas/días
-  MANUAL       // Activado manualmente por agente
+  KEYWORD // Mensaje contiene palabra clave
+  NEW_CONTACT // Nuevo contacto creado
+  DEAL_STAGE // Deal cambia de etapa
+  TIME_DELAY // Después de X horas/días
+  MANUAL // Activado manualmente por agente
 }
 
 enum FlowNodeType {
-  START          // Nodo inicial
-  SEND_MESSAGE   // Enviar mensaje de texto
-  SEND_IMAGE     // Enviar imagen
-  SEND_VIDEO     // Enviar video
-  SEND_AUDIO     // Enviar audio
-  SEND_DOCUMENT  // Enviar documento
-  ASK_DATA       // Solicitar datos al usuario (input)
-  CONDITION      // Evaluar condición y ramificar
-  AI_AGENT       // Consultar OpenAI/Gemini
-  CREATE_DEAL    // Crear deal en el CRM
+  START // Nodo inicial
+  SEND_MESSAGE // Enviar mensaje de texto
+  SEND_IMAGE // Enviar imagen
+  SEND_VIDEO // Enviar video
+  SEND_AUDIO // Enviar audio
+  SEND_DOCUMENT // Enviar documento
+  ASK_DATA // Solicitar datos al usuario (input)
+  CONDITION // Evaluar condición y ramificar
+  AI_AGENT // Consultar OpenAI/Gemini
+  CREATE_DEAL // Crear deal en el CRM
   UPDATE_CONTACT // Actualizar campos del contacto
-  ASSIGN_AGENT   // Asignar conversación a agente
-  AI_HANDOFF     // Transferir a agente humano
-  DELAY          // Esperar X tiempo
-  END            // Fin del flujo
+  ASSIGN_AGENT // Asignar conversación a agente
+  AI_HANDOFF // Transferir a agente humano
+  DELAY // Esperar X tiempo
+  END // Fin del flujo
 }
 
 enum FlowStatus {
@@ -938,9 +1027,9 @@ enum FlowStatus {
 }
 
 model Flow {
-  id        String     @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   name        String
   description String?
@@ -959,7 +1048,7 @@ model Flow {
   priority Int     @default(0) // Higher priority flows execute first
 
   // Stats
-  executionCount Int @default(0) // Cuántas veces se ha ejecutado
+  executionCount Int   @default(0) // Cuántas veces se ha ejecutado
   completionRate Float @default(0) // % de usuarios que completan el flujo
 
   // Relations
@@ -1002,7 +1091,7 @@ model ContactFlowSession {
 
   // Execution History
   visitedNodes String[] @default([]) // IDs de nodos visitados (para debugging)
-  
+
   // Timestamps
   startedAt   DateTime  @default(now())
   completedAt DateTime?
@@ -1077,76 +1166,244 @@ model MediaAsset {
 // ========================================
 
 enum EmailStatus {
-  QUEUED      // En cola para envío
-  SENT        // Enviado exitosamente
-  DELIVERED   // Confirmado entregado (webhook)
-  OPENED      // Email abierto (tracking pixel)
-  CLICKED     // Link clickeado
-  BOUNCED     // Rebotado (email inválido)
-  FAILED      // Fallo al enviar
-  SPAM        // Marcado como spam
+  QUEUED // En cola para envío
+  SENT // Enviado exitosamente
+  DELIVERED // Confirmado entregado (webhook)
+  OPENED // Email abierto (tracking pixel)
+  CLICKED // Link clickeado
+  BOUNCED // Rebotado (email inválido)
+  FAILED // Fallo al enviar
+  SPAM // Marcado como spam
 }
 
 enum EmailType {
-  INBOUND     // Email recibido
-  OUTBOUND    // Email enviado
+  INBOUND // Email recibido
+  OUTBOUND // Email enviado
 }
 
 model Email {
-  id        String      @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Company isolation (multi-tenancy)
   companyId String
-  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   // Provider message ID (para tracking de webhooks)
-  messageId String?     @unique // SendGrid/SES message ID
-  
+  messageId String? @unique // SendGrid/SES message ID
+
   // Email metadata
-  subject   String
-  bodyHtml  String      @db.Text // HTML body
-  bodyText  String?     @db.Text // Plain text fallback
-  
+  subject  String
+  bodyHtml String  @db.Text // HTML body
+  bodyText String? @db.Text // Plain text fallback
+
   // Sender/Receiver
-  from      String      // email@example.com
-  to        String[]    // Array de destinatarios
-  cc        String[]    @default([])
-  bcc       String[]    @default([])
-  replyTo   String?
-  
+  from    String // email@example.com
+  to      String[] // Array de destinatarios
+  cc      String[] @default([])
+  bcc     String[] @default([])
+  replyTo String?
+
   // Status tracking
-  status    EmailStatus @default(QUEUED)
-  type      EmailType
-  
+  status EmailStatus @default(QUEUED)
+  type   EmailType
+
   // Relations
   contactId String?
-  contact   Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  
-  ticketId  String?
-  ticket    Ticket?     @relation(fields: [ticketId], references: [id], onDelete: SetNull)
-  
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
   // Attachments (JSON array of Media IDs or URLs)
-  attachments Json?     // [{ filename: 'doc.pdf', url: 's3://...' }]
-  
+  attachments Json? // [{ filename: 'doc.pdf', url: 's3://...' }]
+
   // Tracking metadata
-  openedAt  DateTime?   // Cuando se abrió
-  clickedAt DateTime?   // Cuando se hizo click
-  
+  openedAt  DateTime? // Cuando se abrió
+  clickedAt DateTime? // Cuando se hizo click
+
   // Error handling
   errorMessage String?
-  retryCount   Int       @default(0)
-  
+  retryCount   Int     @default(0)
+
   // Timestamps
   sentAt    DateTime?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
   // Indexes for performance
-  @@index([companyId, createdAt(sort: Desc)])  // Timeline queries
-  @@index([contactId, createdAt(sort: Desc)])  // Contact timeline
-  @@index([ticketId, createdAt(sort: Desc)])   // Ticket timeline
-  @@index([status])                             // Status filtering
-  @@index([messageId])                          // Webhook lookups
-  
+  @@index([companyId, createdAt(sort: Desc)]) // Timeline queries
+  @@index([contactId, createdAt(sort: Desc)]) // Contact timeline
+  @@index([ticketId, createdAt(sort: Desc)]) // Ticket timeline
+  @@index([status]) // Status filtering
+  @@index([messageId]) // Webhook lookups
   @@map("emails")
+}
+
+// ============================================
+// PUSH NOTIFICATIONS
+// ============================================
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  endpoint  String   @db.Text // Can be very long
+  p256dh    String // Public key for push encryption
+  auth      String // Auth secret for push encryption
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+  @@index([companyId])
+  @@map("push_subscriptions")
+}
+
+// ============================================
+// RBAC - ROLE-BASED ACCESS CONTROL
+// ============================================
+
+// Permission Categories
+enum PermissionModule {
+  CONVERSATIONS // Gestión de conversaciones
+  TICKETS // Gestión de tickets
+  CONTACTS // Gestión de contactos
+  DEALS // Gestión de deals/ventas
+  ACTIVITIES // Gestión de actividades
+  CAMPAIGNS // Campañas de marketing
+  REPORTS // Reportes y analítica
+  SETTINGS // Configuración
+  TEAM // Gestión de equipo
+  INTEGRATIONS // Integraciones
+  MEDIA // Biblioteca multimedia
+  FLOWS // Chatbot flows
+  PRODUCTS // Catálogo de productos
+  QUEUES // Gestión de colas
+}
+
+enum PermissionAction {
+  VIEW // Ver/Leer
+  CREATE // Crear
+  EDIT // Editar
+  DELETE // Eliminar
+  ASSIGN // Asignar
+  EXPORT // Exportar
+  IMPORT // Importar
+  MANAGE // Gestión completa
+}
+
+// Role model for custom roles
+model Role {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name        String // "Agente de Ventas", "Supervisor", "Soporte L1"
+  description String?
+  isSystem    Boolean @default(false) // true for MASTER, ADMIN, AGENT (non-editable)
+  isActive    Boolean @default(true)
+
+  // Base role (for inheritance)
+  baseRole UserRole @default(AGENT) // MASTER, ADMIN, AGENT
+
+  // Relations
+  permissions RolePermission[]
+  users       User[]           @relation("UserRole")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+  @@map("roles")
+}
+
+// Permission model
+model Permission {
+  id String @id @default(cuid())
+
+  module      PermissionModule
+  action      PermissionAction
+  resource    String // Specific resource like "own_tickets", "all_tickets", "team_tickets"
+  description String?
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([module, action, resource])
+  @@index([module])
+  @@map("permissions")
+}
+
+// Junction table for Role-Permission (many-to-many)
+model RolePermission {
+  id String @id @default(cuid())
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  // Optional: Conditions (JSON for advanced rules)
+  conditions Json? // { "department": "sales", "priority": "high" }
+
+  createdAt DateTime @default(now())
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model AuditLog {
+  id        String  @id @default(cuid())
+  companyId String
+  userId    String? // Nullable strictly for system actions or external webhooks
+  action    String // CREATE, UPDATE, DELETE, LOGIN, EXPORT
+  entity    String // Contact, Campaign, Ticket
+  entityId  String
+  details   Json? // { diff: { old: ..., new: ... }, meta: ... }
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([companyId, entity, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+// 🔔 NOTIFICATIONS MODEL
+// In-app notifications for mentions, assignments, etc.
+model Notification {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    String // "mention", "assignment", "ticket_update", etc.
+  title   String
+  message String
+
+  read Boolean @default(false)
+
+  // Optional: Link to related resource
+  link String? // e.g. "/tickets/123" or "/contacts/abc"
+
+  // Optional: Metadata (JSON)
+  metadata Json? // { activityId, createdBy, etc. }
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }

@@ -6,7 +6,7 @@ import {
   proto,
   SignalDataTypeMap,
 } from "@whiskeysockets/baileys";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 
 export const usePrismaAuthState = async (
   sessionId: string

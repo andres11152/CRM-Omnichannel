@@ -1,9 +1,11 @@
+import { Request, Response, NextFunction, RequestHandler } from "express";
 
-import { Request, Response, NextFunction } from 'express';
-
-// Wraps an async function and automatically passes any error to NextFunction
-export const catchAsync = (fn: Function) => {
+/**
+ * Wraps async route handlers to catch errors automatically.
+ * Eliminates repetitive try-catch blocks in controllers.
+ */
+export const catchAsync = (fn: RequestHandler) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    fn(req, res, next).catch(next);
+    Promise.resolve(fn(req, res, next)).catch(next);
   };
 };

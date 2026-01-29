@@ -1,5 +1,6 @@
 import express from "express";
-import { whatsappService } from "@/services/whatsapp.service";
+// ♻️ REFACTOR: Unified Service
+import { whatsappService } from "@/whatsapp";
 import { AuthenticatedRequest } from "@/types/types";
 import { protect } from "@/middleware/authMiddleware";
 import * as integrationController from "@/controllers/integrationController";
@@ -67,7 +68,7 @@ router.get(
     } catch (error) {
       res.status(500).json({ message: "Failed to get session status" });
     }
-  }
+  },
 );
 
 router.get(
@@ -92,7 +93,7 @@ router.get(
     } catch (error) {
       res.status(500).json({ message: "Failed to get session status" });
     }
-  }
+  },
 );
 
 router.post(
@@ -109,14 +110,17 @@ router.post(
       // Check if session exists
       const sessions = await whatsappService.listSessions(companyId);
       let existingSession = sessions[0];
-      let sessionId = existingSession?.sessionId;
+      let sessionId: string;
 
       if (!existingSession) {
-        sessionId = await whatsappService.createSession(companyId);
-        // Fetch it back to have the object if needed, or just proceed with ID
+        const result = await whatsappService.createSession(companyId);
+        sessionId = result.sessionId; // ✅ Fixed to match new API
       } else if (existingSession.status === "DISCONNECTED") {
-        // Re-initialize if disconnected
-        await whatsappService.initializeSession(existingSession.sessionId);
+        // Re-initialize if disconnected using reconnectSession
+        await whatsappService.reconnectSession(existingSession.sessionId);
+        sessionId = existingSession.sessionId;
+      } else {
+        sessionId = existingSession.sessionId;
       }
 
       // Poll for QR code for up to 30 seconds
@@ -160,7 +164,7 @@ router.post(
       console.error("Init session error:", error);
       res.status(500).json({ message: "Failed to init session" });
     }
-  }
+  },
 );
 
 router.delete(
@@ -183,7 +187,7 @@ router.delete(
     } catch (error) {
       res.status(500).json({ message: "Failed to logout" });
     }
-  }
+  },
 );
 
 router.post("/whatsapp/sync", integrationController.syncMessages);

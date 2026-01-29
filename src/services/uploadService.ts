@@ -14,7 +14,7 @@ import {
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import mime from "mime-types";
+
 import sharp from "sharp";
 import { getErrorMessage } from "../utils/errorHelpers";
 import { AppError } from "../utils/AppError";
@@ -40,7 +40,7 @@ const MAX_FILE_SIZE = {
  */
 const compressImage = async (
   buffer: Buffer,
-  mimeType: string
+  mimeType: string,
 ): Promise<Buffer> => {
   try {
     let sharpInstance = sharp(buffer);
@@ -94,6 +94,9 @@ export interface MulterFile {
   buffer: Buffer;
 }
 
+import { MediaType } from "@prisma/client";
+import { Readable } from "stream";
+
 /**
  * Upload file to S3 or local storage
  */
@@ -101,104 +104,128 @@ export const uploadFile = async (
   file: MulterFile,
   options: {
     companyId: string;
-    type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
-  }
+    type: MediaType;
+  },
 ): Promise<UploadResult> => {
-  // 🛡️ CRITICAL: Validate file size BEFORE processing
-  const maxSize = MAX_FILE_SIZE[options.type];
-  if (file.size > maxSize) {
-    const maxSizeMB = Math.round(maxSize / (1024 * 1024));
-    const fileSizeMB = Math.round(file.size / (1024 * 1024));
-    throw new AppError(
-      `File too large: ${fileSizeMB}MB. Maximum allowed: ${maxSizeMB}MB for ${options.type}`,
-      413 // Payload Too Large
-    );
-  }
-
-  // 🛡️ Validate buffer exists
-  if (!file.buffer || file.buffer.length === 0) {
-    throw new AppError("File buffer is empty", 400);
-  }
-
-  const timestamp = Date.now();
-  const randomString = crypto.randomBytes(8).toString("hex");
-  const fileExtension = path.extname(file.originalname);
-  const filename = `${timestamp}-${randomString}${fileExtension}`;
-  const key = `${options.companyId}/${options.type.toLowerCase()}/${filename}`;
-
-  // Compress images before upload
-  let fileBuffer = file.buffer;
-  let fileSize = file.size;
-
-  if (options.type === "IMAGE") {
-    fileBuffer = await compressImage(file.buffer, file.mimetype);
-    fileSize = fileBuffer.length;
-  }
-
-  console.log(`[UploadService] USE_S3: ${USE_S3}`);
-  console.log(`[UploadService] s3Client exists: ${!!s3Client}`);
-
-  if (USE_S3 && s3Client) {
-    try {
-      console.log("[UploadService] Attempting S3 upload...");
-      // Upload to S3
-      const command = new PutObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-        Body: fileBuffer,
-        ContentType: file.mimetype,
-        ACL: "private", // Explicitly private
-      });
-
-      await s3Client.send(command);
-      console.log("[UploadService] S3 upload successful");
-
-      const url = `https://${BUCKET_NAME}.s3.amazonaws.com/${key}`;
-
-      return {
-        url,
-        key,
-        filename,
-        size: fileSize,
-        mimeType: file.mimetype,
-      };
-    } catch (error: unknown) {
-      const errorMsg = getErrorMessage(error);
-      console.error(
-        "[UploadService] S3 upload failed, falling back to local storage:",
-        errorMsg
+  try {
+    // 🛡️ CRITICAL: Validate file size BEFORE processing
+    const maxSize = MAX_FILE_SIZE[options.type];
+    if (file.size > maxSize) {
+      const maxSizeMB = Math.round(maxSize / (1024 * 1024));
+      const fileSizeMB = Math.round(file.size / (1024 * 1024));
+      throw new AppError(
+        `File too large: ${fileSizeMB}MB. Maximum allowed: ${maxSizeMB}MB for ${options.type}`,
+        413, // Payload Too Large
       );
-      // Fallback to local storage logic below
     }
+
+    // 🛡️ Validate buffer exists
+    if (!file.buffer || file.buffer.length === 0) {
+      throw new AppError("File buffer is empty", 400);
+    }
+
+    const timestamp = Date.now();
+    const randomString = crypto.randomBytes(8).toString("hex");
+    const fileExtension = path.extname(file.originalname);
+    const filename = `${timestamp}-${randomString}${fileExtension}`;
+    const key = `${options.companyId}/${options.type.toLowerCase()}/${filename}`;
+
+    // Compress images before upload
+    let fileBuffer = file.buffer;
+    let fileSize = file.size;
+
+    if (options.type === "IMAGE") {
+      fileBuffer = await compressImage(file.buffer, file.mimetype);
+      fileSize = fileBuffer.length;
+    }
+
+    console.info(`[UploadService] Uploading file. USE_S3: ${USE_S3}`);
+
+    if (USE_S3 && s3Client) {
+      try {
+        console.info("[UploadService] Attempting S3 upload...");
+        const command = new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          Body: fileBuffer,
+          ContentType: file.mimetype,
+          ACL: "private",
+        });
+
+        await s3Client.send(command);
+        console.info("[UploadService] S3 upload successful");
+
+        const url = `https://${BUCKET_NAME}.s3.amazonaws.com/${key}`;
+
+        return {
+          url,
+          key,
+          filename,
+          size: fileSize,
+          mimeType: file.mimetype,
+        };
+      } catch (error: unknown) {
+        const errorMsg = getErrorMessage(error);
+        console.error(
+          "[UploadService] S3 upload failed, falling back to local storage:",
+          errorMsg,
+        );
+      }
+    }
+
+    console.info("[UploadService] Using local storage...");
+    // Fallback to local storage
+    const uploadDir = path.join(
+      LOCAL_UPLOAD_DIR,
+      options.companyId,
+      options.type.toLowerCase(),
+    );
+
+    console.info(`[UploadService] Local upload dir: ${uploadDir}`);
+
+    // Ensure directory exists
+    if (!fs.existsSync(uploadDir)) {
+      try {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      } catch (err: unknown) {
+        const errMsg = getErrorMessage(err);
+        console.error(
+          `[UploadService] Failed to create directory: ${uploadDir}`,
+          errMsg,
+        );
+        throw new AppError(`Failed to create upload directory: ${errMsg}`, 500);
+      }
+    }
+
+    const localPath = path.join(uploadDir, filename);
+    try {
+      fs.writeFileSync(localPath, fileBuffer);
+    } catch (err: unknown) {
+      const errMsg = getErrorMessage(err);
+      console.error(
+        `[UploadService] Failed to write file: ${localPath}`,
+        errMsg,
+      );
+      throw new AppError(`Failed to save file locally: ${errMsg}`, 500);
+    }
+
+    const url = `${LOCAL_BASE_URL}/uploads/${
+      options.companyId
+    }/${options.type.toLowerCase()}/${filename}`;
+
+    return {
+      url,
+      key: localPath,
+      filename,
+      size: fileSize,
+      mimeType: file.mimetype,
+    };
+  } catch (error: unknown) {
+    const errorMsg = getErrorMessage(error);
+    console.error(`[UploadService] Fatal Upload Error:`, errorMsg);
+    if (error instanceof AppError) throw error;
+    throw new AppError(`Upload failed: ${errorMsg}`, 500);
   }
-
-  console.log("[UploadService] Using local storage...");
-  // Fallback to local storage
-  const uploadDir = path.join(
-    LOCAL_UPLOAD_DIR,
-    options.companyId,
-    options.type.toLowerCase()
-  );
-
-  // Ensure directory exists
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-
-  const localPath = path.join(uploadDir, filename);
-  fs.writeFileSync(localPath, fileBuffer);
-
-  const url = `${LOCAL_BASE_URL}/uploads/${
-    options.companyId
-  }/${options.type.toLowerCase()}/${filename}`;
-
-  return {
-    url,
-    key: localPath,
-    filename,
-    size: fileSize,
-    mimeType: file.mimetype,
-  };
 };
 
 /**
@@ -233,7 +260,7 @@ export const getSignedUrl = async (key: string): Promise<string> => {
       });
       // URL valid for 1 hour
       return await awsGetSignedUrl(s3Client, command, { expiresIn: 3600 });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error generating signed URL:", error);
       return "";
     }
@@ -245,14 +272,14 @@ export const getSignedUrl = async (key: string): Promise<string> => {
 /**
  * Get file stream from S3 or local storage
  */
-export const getFileStream = async (key: string): Promise<any> => {
+export const getFileStream = async (key: string): Promise<Readable> => {
   if (USE_S3 && s3Client) {
     const command = new GetObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
     });
     const response = await s3Client.send(command);
-    return response.Body;
+    return response.Body as Readable;
   } else {
     // Local path logic
     // Key is full path in local mode as per uploadFile implementation
@@ -267,7 +294,7 @@ export const getFileStream = async (key: string): Promise<any> => {
  * Validate file type
  */
 export const validateFileType = (
-  file: MulterFile
+  file: MulterFile,
 ): {
   isValid: boolean;
   type?: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
@@ -353,7 +380,7 @@ export const validateFileType = (
  */
 export const validateFileSize = (
   file: MulterFile,
-  type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT"
+  type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT",
 ): { isValid: boolean; error?: string } => {
   const sizeLimits = {
     IMAGE: 10 * 1024 * 1024, // 10MB

@@ -10,6 +10,8 @@ import { Logger } from "../utils/logger";
 import fs from "fs";
 import path from "path";
 import { Buffer } from "buffer";
+import { Readable } from "stream";
+import { Upload } from "@aws-sdk/lib-storage"; // Better for streaming
 
 // INTERFACE: The Contract
 export interface IStorageService {
@@ -17,8 +19,16 @@ export interface IStorageService {
     buffer: Buffer,
     filename: string,
     mimeType: string,
-    isPrivate?: boolean
+    isPrivate?: boolean,
   ): Promise<UploadResult>;
+
+  uploadStream(
+    stream: Readable,
+    filename: string,
+    mimeType: string,
+    isPrivate?: boolean,
+  ): Promise<UploadResult>;
+
   getSignedUrl(key: string, expiresInSeconds?: number): Promise<string>;
   deleteFile(key: string): Promise<void>;
 }
@@ -46,7 +56,7 @@ class S3StorageService implements IStorageService {
     buffer: Buffer,
     filename: string,
     mimeType: string,
-    isPrivate: boolean = false
+    isPrivate: boolean = false,
   ): Promise<UploadResult> {
     const key = `uploads/${Date.now()}_${filename}`;
 
@@ -60,33 +70,64 @@ class S3StorageService implements IStorageService {
 
     try {
       await this.client.send(command);
-
-      // ✅ PRODUCTION BEST PRACTICE: Use Signed URLs for private media
-      // Files remain private, URLs expire in 24h
-      let url: string;
-
-      if (
-        mimeType.startsWith("audio/") ||
-        mimeType.startsWith("video/") ||
-        mimeType.startsWith("image/")
-      ) {
-        // Generate signed URL (valid for 24 hours)
-        url = await this.getSignedUrl(key, 86400);
-      } else {
-        // Direct URL for other files
-        url = `https://${this.bucket}.s3.amazonaws.com/${key}`;
-      }
-
-      return { url, key, provider: "s3" };
+      return this.generateResult(key, mimeType);
     } catch (error) {
       Logger.error("S3 Upload Failed", error);
       throw error;
     }
   }
 
+  async uploadStream(
+    stream: Readable,
+    filename: string,
+    mimeType: string,
+    isPrivate: boolean = false,
+  ): Promise<UploadResult> {
+    const key = `uploads/${Date.now()}_${filename}`;
+
+    try {
+      // Use @aws-sdk/lib-storage Upload for robust streaming (multipart)
+      const upload = new Upload({
+        client: this.client,
+        params: {
+          Bucket: this.bucket,
+          Key: key,
+          Body: stream,
+          ContentType: mimeType,
+        },
+      });
+
+      await upload.done();
+      return this.generateResult(key, mimeType);
+    } catch (error) {
+      Logger.error("S3 Stream Upload Failed", error);
+      throw error;
+    }
+  }
+
+  private async generateResult(
+    key: string,
+    mimeType: string,
+  ): Promise<UploadResult> {
+    let url: string;
+    if (
+      mimeType.startsWith("audio/") ||
+      mimeType.startsWith("video/") ||
+      mimeType.startsWith("image/")
+    ) {
+      // Generate signed URL (valid for 24 hours) as default
+      // Or if public is wanted, use public URL.
+      // Assuming secure by default
+      url = await this.getSignedUrl(key, 86400);
+    } else {
+      url = `https://${this.bucket}.s3.amazonaws.com/${key}`;
+    }
+    return { url, key, provider: "s3" };
+  }
+
   async getSignedUrl(
     key: string,
-    expiresInSeconds: number = 900
+    expiresInSeconds: number = 900,
   ): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
@@ -98,7 +139,7 @@ class S3StorageService implements IStorageService {
 
   async deleteFile(key: string): Promise<void> {
     await this.client.send(
-      new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
   }
 }
@@ -108,7 +149,7 @@ class S3StorageService implements IStorageService {
  * For development when no Internet or AWS Keys are available.
  */
 class LocalStorageService implements IStorageService {
-  private uploadDir = path.resolve("uploads");
+  private uploadDir = path.resolve("public", "uploads"); // Root uploads dir
 
   constructor() {
     if (!fs.existsSync(this.uploadDir)) {
@@ -119,7 +160,7 @@ class LocalStorageService implements IStorageService {
   async uploadFile(
     buffer: Buffer,
     filename: string,
-    mimeType: string
+    mimeType: string,
   ): Promise<UploadResult> {
     const key = `${Date.now()}_${filename}`;
     const filePath = path.join(this.uploadDir, key);
@@ -131,8 +172,29 @@ class LocalStorageService implements IStorageService {
     return { url: `${baseUrl}/uploads/${key}`, key, provider: "local" };
   }
 
+  async uploadStream(
+    stream: Readable,
+    filename: string,
+    mimeType: string,
+  ): Promise<UploadResult> {
+    const key = `${Date.now()}_${filename}`;
+    const filePath = path.join(this.uploadDir, key);
+    const writeStream = fs.createWriteStream(filePath);
+
+    return new Promise((resolve, reject) => {
+      stream.pipe(writeStream);
+      writeStream.on("finish", () => {
+        const baseUrl = process.env.BACKEND_URL || "http://localhost:4000";
+        resolve({ url: `${baseUrl}/uploads/${key}`, key, provider: "local" });
+      });
+      writeStream.on("error", reject);
+      stream.on("error", reject);
+    });
+  }
+
   async getSignedUrl(key: string): Promise<string> {
-    return `/uploads/${key}`; // Local doesn't support signing really
+    const baseUrl = process.env.BACKEND_URL || "http://localhost:4000";
+    return `${baseUrl}/uploads/${key}`; // Local doesn't support signing
   }
 
   async deleteFile(key: string): Promise<void> {

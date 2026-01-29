@@ -1,133 +1,69 @@
 import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { AuthenticatedRequest } from "@/types/types";
 import { gateway } from "@/gateways/socketGateway";
+import { webhookDispatcher } from "@/services/webhookDispatcher";
+import {
+  toTicketDTO,
+  TicketWithRelations,
+  TicketDTO,
+} from "../dtos/ticket.dto";
 
 // --- HELPERS ---
+// (Legacy mapTicketToFrontend removed in favor of toTicketDTO)
 
-// Map Prisma Ticket to Frontend Ticket (with Contact)
-const mapTicketToFrontend = (ticket: any) => {
-  // Extract phone from email with BROAD heuristics
-  let derivedPhone = ticket.createdBy?.phone;
+/**
+ * Helper to enrich TicketDTOs with CRM Contact Data
+ * This keeps the controller clean and focuses on business integration logic
+ */
+const enrichWithCrmData = async (
+  dtos: TicketDTO[],
+  companyId: string,
+): Promise<TicketDTO[]> => {
+  const phonesToFetch = new Set<string>();
+  dtos.forEach((t) => {
+    if (t.contact.phone) phonesToFetch.add(t.contact.phone);
+  });
 
-  // 1. Try Email Parsing (Aggressive)
-  if (!derivedPhone && ticket.createdBy?.email) {
-    const match = ticket.createdBy.email.match(/\d{7,15}/);
-    if (match) {
-      derivedPhone = match[0];
-    }
-  }
+  if (phonesToFetch.size === 0) return dtos;
 
-  // 2. Try Description (Aggressive)
-  if (!derivedPhone && ticket.description) {
-    const match = ticket.description.match(/\d{7,15}/);
-    if (match) {
-      derivedPhone = match[0];
-      // Keep this specific log as it indicates data repair
-      console.log(
-        `[TicketController] 🔧 Salvaged phone ${derivedPhone} from description`
-      );
-    }
-  }
+  const contacts = await prisma.contact.findMany({
+    where: {
+      companyId,
+      phone: { in: Array.from(phonesToFetch) },
+    },
+    select: { id: true, phone: true, name: true, avatarUrl: true },
+  });
 
-  // 3. Try Subject (Existing but broadened)
-  if (!derivedPhone && ticket.subject) {
-    const match = ticket.subject.match(/\d{7,15}/);
-    if (match) {
-      derivedPhone = match[0];
-      console.log(
-        `[TicketController] 🔧 Salvaged phone ${derivedPhone} from subject`
-      );
-    }
-  }
+  const crmMap = new Map<string, (typeof contacts)[0]>();
+  contacts.forEach((c) => {
+    if (c.phone) crmMap.set(c.phone, c);
+  });
 
-  // 🔥 CRITICAL: Sanitize name - NEVER return "Unknown"
-  let displayName = ticket.createdBy?.name || "";
+  return dtos.map((dto) => {
+    const crmData = dto.contact.phone
+      ? crmMap.get(dto.contact.phone)
+      : undefined;
 
-  // Normalize checking
-  const checkName = displayName.toLowerCase();
-  const isInvalidName =
-    !displayName ||
-    checkName.includes("unknown") ||
-    checkName.includes("sin nombre") ||
-    displayName.trim() === "";
-
-  if (isInvalidName) {
-    // Use phone as fallback
-    displayName = derivedPhone || "Usuario WhatsApp";
-  }
-
-  // Determine Fallback Phone for missing user cases
-  let fallbackPhone = ticket.conversation?.channelId || "";
-
-  if (!fallbackPhone && ticket.description) {
-    const match = ticket.description.match(/\d{7,15}/);
-    if (match) fallbackPhone = match[0];
-  }
-  if (!fallbackPhone && ticket.subject) {
-    const match = ticket.subject.match(/\d{7,15}/);
-    if (match) fallbackPhone = match[0];
-  }
-
-  // Get real last message if available
-  const lastMsg = ticket.conversation?.messages?.[0];
-  const lastMessageContent = lastMsg?.content || "";
-  const lastMessageTime = lastMsg?.createdAt || ticket.createdAt; // Fallback to ticket creation
-
-  return {
-    ...ticket,
-    contact: ticket.createdBy
-      ? {
-          id: ticket.createdBy.id,
-          name: displayName,
-          email: ticket.createdBy.email,
-          phone: derivedPhone || ticket.conversation?.channelId,
-          channelId:
-            ticket.createdBy.channelId ||
-            derivedPhone ||
-            ticket.conversation?.channelId,
-          companyId: ticket.companyId,
-          avatarUrl:
-            ticket.createdBy.profilePicUrl ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(
-              displayName
-            )}`,
-          profilePicUrl: ticket.createdBy.profilePicUrl,
-          about: ticket.createdBy.about,
-          lastMessage: lastMessageContent,
-          lastMessageTime: lastMessageTime,
-          unreadCount: 0, // Pending: Implement real unread count logic
-          tags: ticket.conversation?.tags || [],
-          channel: "WhatsApp",
-          assignedMode: "human",
-          status: ticket.status,
-        }
-      : {
-          // Fallback if createdBy is null - WITH HEURISTICS
-          id: "missing-user",
+    if (crmData) {
+      // 🛡️ CRM Data takes precedence
+      return {
+        ...dto,
+        contact: {
+          ...dto.contact,
+          realContactId: crmData.id,
           name:
-            displayName !== "Usuario WhatsApp" && displayName !== ""
-              ? displayName
-              : fallbackPhone || "Usuario WhatsApp",
-          email: "",
-          phone: fallbackPhone,
-          channelId: fallbackPhone,
-          companyId: ticket.companyId,
-          avatarUrl: "",
-          lastMessage: lastMessageContent,
-          lastMessageTime: lastMessageTime,
-          unreadCount: 0,
-          tags: [],
-          channel: "WhatsApp" as any,
-          assignedMode: "human" as any,
-          status: ticket.status,
+            crmData.name && crmData.name !== dto.contact.phone
+              ? crmData.name
+              : dto.contact.name,
+          avatarUrl: crmData.avatarUrl || dto.contact.avatarUrl,
         },
-    conversationId: ticket.conversationId,
-    lastMessage: lastMessageContent,
-    lastMessageAt: lastMessageTime,
-  };
+      };
+    }
+    return dto;
+  });
 };
 
 export const createTicket = catchAsync(
@@ -175,9 +111,8 @@ export const createTicket = catchAsync(
       // We can run this in background or await it.
       // For responsiveness, let's await it but catch errors so we don't fail the request.
       try {
-        const { assignTicketToAgent } = await import(
-          "@/services/autoAssignmentService"
-        );
+        const { assignTicketToAgent } =
+          await import("@/services/autoAssignmentService");
         await assignTicketToAgent(newTicket.id, newTicket.queueId);
         // We might want to re-fetch the ticket to return the assigned agent
         // But for now, returning the initial state is fine, frontend will see update via socket or refresh.
@@ -186,11 +121,19 @@ export const createTicket = catchAsync(
       }
     }
 
+    // 🕸️ WEBHOOK DISPATCH
+    // We send payload as we return it
+    const ticketDTO = toTicketDTO(newTicket as unknown as TicketWithRelations);
+
+    webhookDispatcher
+      .dispatch(companyId, "ticket.created", ticketDTO)
+      .catch((err) => console.error("Webhook trigger failed", err));
+
     res.status(201).json({
       status: "success",
-      data: { ticket: mapTicketToFrontend(newTicket) },
+      data: { ticket: ticketDTO },
     });
-  }
+  },
 );
 
 /**
@@ -200,6 +143,13 @@ export const getAllTickets = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const companyId = req.companyId || req.user?.companyId;
     const { status, priority, queueId, assignedToId } = req.query;
+
+    console.log("[Tickets] 🔍 GET Params:", {
+      status,
+      assignedToIdQuery: assignedToId,
+      reqUserId: req.user?.id,
+      companyId,
+    });
 
     if (!companyId) {
       return res
@@ -232,46 +182,24 @@ export const getAllTickets = catchAsync(
       orderBy: { createdAt: "desc" },
     });
 
-    // 1. Initial Mapping (Derives Phones)
-    const baseMappedTickets = tickets.map(mapTicketToFrontend);
+    console.log(
+      `[Tickets] 🔍 Found ${tickets.length} tickets for Company ${companyId}`,
+    );
 
-    // 2. Collect Phones to fetch CRM Data
-    const phonesToFetch = new Set<string>();
-    baseMappedTickets.forEach((t) => {
-      if (t.contact.phone) phonesToFetch.add(t.contact.phone);
-    });
+    // 1. Initial Mapping to DTO
+    const baseDtos = tickets.map((t) =>
+      toTicketDTO(t as unknown as TicketWithRelations),
+    );
 
-    let crmContactMap = new Map<string, string>();
-    if (phonesToFetch.size > 0) {
-      const contacts = await prisma.contact.findMany({
-        where: {
-          companyId,
-          phone: { in: Array.from(phonesToFetch) },
-        },
-        select: { id: true, phone: true },
-      });
-      contacts.forEach((c) => {
-        if (c.phone) crmContactMap.set(c.phone, c.id);
-      });
-    }
-
-    // 3. Enrich with realContactId
-    const finalTickets = baseMappedTickets.map((t) => ({
-      ...t,
-      contact: {
-        ...t.contact,
-        realContactId: t.contact.phone
-          ? crmContactMap.get(t.contact.phone)
-          : undefined,
-      },
-    }));
+    // 2. Enrich with CRM Data (Uses efficient batch fetching helper)
+    const finalTickets = await enrichWithCrmData(baseDtos, companyId);
 
     res.status(200).json({
       status: "success",
-      results: tickets.length,
+      results: finalTickets.length,
       data: { tickets: finalTickets },
     });
-  }
+  },
 );
 
 /**
@@ -306,40 +234,24 @@ export const getTicketById = catchAsync(
     // Security check
     if (companyId && ticket.companyId !== companyId) {
       return next(
-        new AppError("You do not have permission to view this ticket", 403)
+        new AppError("You do not have permission to view this ticket", 403),
       );
     }
 
     // 1. Initial Mapping
-    const mappedTicket = mapTicketToFrontend(ticket);
+    const baseDto = toTicketDTO(ticket as unknown as TicketWithRelations);
 
-    // 2. Fetch CRM Contact Info
-    let realContactId: string | undefined = undefined;
-    if (mappedTicket.contact.phone && companyId) {
-      const crmContact = await prisma.contact.findFirst({
-        where: {
-          companyId,
-          phone: mappedTicket.contact.phone,
-        },
-        select: { id: true },
-      });
-      if (crmContact) realContactId = crmContact.id;
-    }
-
-    // 3. Enrich
-    const finalTicket = {
-      ...mappedTicket,
-      contact: {
-        ...mappedTicket.contact,
-        realContactId,
-      },
-    };
+    // 2. Enrich with CRM Data
+    // Note: If companyId is missing (unlikely due to auth middleware), enrichment is skipped safely
+    const [finalTicket] = companyId
+      ? await enrichWithCrmData([baseDto], companyId)
+      : [baseDto];
 
     res.status(200).json({
       status: "success",
       data: { ticket: finalTicket },
     });
-  }
+  },
 );
 
 /**
@@ -400,7 +312,7 @@ export const updateTicket = catchAsync(
     console.log("[TicketController] Raw Data:", JSON.stringify(data));
     console.log(
       "[TicketController] Filtered Update Data:",
-      JSON.stringify(updateData)
+      JSON.stringify(updateData),
     );
 
     let updatedTicket;
@@ -434,9 +346,8 @@ export const updateTicket = catchAsync(
     // Auto-assignment trigger if moved to a queue and unassigned
     if (data.queueId && updatedTicket.queueId && !updatedTicket.assignedToId) {
       try {
-        const { assignTicketToAgent } = await import(
-          "@/services/autoAssignmentService"
-        );
+        const { assignTicketToAgent } =
+          await import("@/services/autoAssignmentService");
         await assignTicketToAgent(updatedTicket.id, updatedTicket.queueId);
       } catch (error) {
         console.error("Auto-assignment failed:", error);
@@ -452,12 +363,12 @@ export const updateTicket = catchAsync(
           data: { queueId: updateData.queueId },
         });
         console.log(
-          `[TicketController] ✓ Synced conversation queueId: ${updateData.queueId}`
+          `[TicketController] ✓ Synced conversation queueId: ${updateData.queueId}`,
         );
       } catch (error) {
         console.error(
           "[TicketController] Failed to sync conversation queueId:",
-          error
+          error,
         );
       }
     }
@@ -479,7 +390,7 @@ export const updateTicket = catchAsync(
       if (updatedTicket.companyId) {
         io.to(`company:${updatedTicket.companyId}`).emit(
           "conversation.updated",
-          payload
+          payload,
         );
       }
     } catch (e) {
@@ -488,9 +399,11 @@ export const updateTicket = catchAsync(
 
     res.status(200).json({
       status: "success",
-      data: { ticket: mapTicketToFrontend(updatedTicket) },
+      data: {
+        ticket: toTicketDTO(updatedTicket as unknown as TicketWithRelations),
+      },
     });
-  }
+  },
 );
 
 /**
@@ -501,6 +414,13 @@ export const deleteTicket = catchAsync(
     const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
 
+    console.log(
+      `[TicketController] 🚨 DELETE request received for ticket: ${id}`,
+    );
+    console.log(
+      `[TicketController] 👤 Requested by User: ${req.user?.id} (${req.user?.name})`,
+    );
+
     const ticket = await prisma.ticket.findUnique({ where: { id } });
     if (!ticket) {
       return next(new AppError("Ticket not found", 404));
@@ -509,8 +429,15 @@ export const deleteTicket = catchAsync(
       return next(new AppError("Permission denied", 403));
     }
 
-    await prisma.ticket.delete({ where: { id } });
+    const deletedTicket = await prisma.ticket.delete({ where: { id } });
+
+    // 🚀 EMIT EVENT
+    try {
+      gateway.emitToCompany(companyId, "ticket.deleted", { ticketId: id });
+    } catch (e) {
+      console.error("[TicketController] Socket emit failed:", e);
+    }
 
     res.status(204).send();
-  }
+  },
 );

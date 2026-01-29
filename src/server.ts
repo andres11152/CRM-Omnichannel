@@ -1,30 +1,40 @@
-// import 'module-alias/register';
+// 🔍 INITIALIZE TRACING FIRST (before any other imports)
+import "./utils/tracing";
+
 import dotenv from "dotenv";
 dotenv.config();
 
-// 🔍 VERIFY HEAP SIZE AT STARTUP
-const heapStats = process.memoryUsage();
-const heapSizeMB = Math.round(heapStats.heapTotal / 1024 / 1024);
-console.log(`[HEAP] 🧠 Total Heap Size: ${heapSizeMB}MB`);
-console.log(`[HEAP] 🎯 Expected: 4096MB (4GB)`);
-if (heapSizeMB < 500) {
-  console.error(
-    `[HEAP] ⚠️  WARNING: Heap is TINY (${heapSizeMB}MB)! Node flags may not be working.`
-  );
-  console.error(
-    `[HEAP] 💡 Ensure: node --max-old-space-size=4096 is in effect`
-  );
+import { Logger } from "@/utils/logger";
+import { connectDB } from "./config/database";
+
+// 🛡️ VALIDATE ENVIRONMENT VARIABLES (FAIL FAST)
+// This MUST happen before any other imports that depend on env vars
+import { initEnv } from "./config/env";
+try {
+  initEnv();
+} catch {
+  // Error already logged by initEnv, just exit
+  process.exit(1);
 }
 
-// 🛡️ MEMORY LEAK FIX: Force garbage collection every 2 minutes
-if (global.gc) {
-  setInterval(() => {
-    global.gc();
-    console.log("[GC] Forced garbage collection");
-  }, 2 * 60 * 1000);
+// 🔍 VERIFY HEAP SIZE AT STARTUP
+import v8 from "v8";
+const heapStats = v8.getHeapStatistics();
+const heapLimitMB = Math.round(heapStats.heap_size_limit / 1024 / 1024);
+Logger.info(`[HEAP] 🧠 Max Heap Limit: ${heapLimitMB}MB`);
+
+if (heapLimitMB < 3000) {
+  // Check against ~3GB (allow some overhead variance from 4096)
+  Logger.warn(`[HEAP] ⚠️  WARNING: Max Heap Limit is low (${heapLimitMB}MB).`);
+  Logger.warn(
+    `[HEAP] 💡 Recommendation: Run with --max-old-space-size=4096 for better performance.`,
+  );
 } else {
-  console.warn("[GC] Run with --expose-gc flag to enable forced GC");
+  Logger.info(`[HEAP] ✅ Memory configuration looks good.`);
 }
+
+// 🛡️ PROFESSIONAL MEMORY MANAGEMENT
+// Replaced global.gc() with proper Memory Manager (see bootstrap/MemoryManager.ts)
 
 import express from "express";
 import { createServer } from "http";
@@ -36,9 +46,8 @@ import {
 import { gateway } from "@/gateways/socketGateway";
 import { globalErrorHandler } from "@/middleware/errorMiddleware";
 import { AppError } from "@/utils/AppError";
-import { Logger } from "@/utils/logger";
 import { securityMiddleware } from "@/middleware/securityMiddleware";
-import { apiLimiter, authLimiter } from "@/middleware/rateLimitMiddleware";
+import { apiLimiter } from "@/middleware/rateLimitMiddleware";
 import { connectRedis } from "@/config/redis";
 import { prisma } from "@/config/database";
 import onboardingRouter from "@/routes/onboardingRoutes";
@@ -57,7 +66,9 @@ import webhookRouter from "@/routes/webhookRoutes";
 import integrationRouter from "@/routes/integrationRoutes";
 import { protect } from "@/middleware/authMiddleware";
 import { superAdminGuard } from "@/middleware/superAdminMiddleware";
-import { whatsappService } from "@/services/whatsapp.service";
+import { whatsappService } from "@/whatsapp";
+import { EventBus } from "@/whatsapp/core/events/EventBus";
+import { WhatsAppEventType } from "@/whatsapp/core/events/WhatsAppEvents";
 import whatsappRouter from "@/routes/whatsappRoutes";
 import templateRouter from "@/routes/templateRoutes";
 import { contactRouter } from "@/routes/contactRoutes";
@@ -78,13 +89,31 @@ import companyRouter from "@/routes/companyRoutes";
 import analyticsRouter from "@/routes/analyticsRoutes";
 import productRouter from "@/routes/productRoutes";
 import emailRouter from "@/routes/emailRoutes";
-import healthRouter from "@/routes/healthRoutes";
-import { initScheduler } from "@/services/scheduler.service";
+
+import pushNotificationsRoutes from "@/routes/pushNotifications";
+import rolesRouter from "@/routes/roles";
+import devRouter from "@/routes/devRoutes";
+import searchRouter from "@/routes/searchRoutes";
+import notificationsRouter from "@/routes/notificationsRoutes";
+import { initScheduler } from "@/services/schedulerService";
 import {
   requestTimeout,
   slowRequestLogger,
 } from "@/middleware/timeoutMiddleware";
 import { memoryMonitor } from "@/utils/resourceManager";
+import { getCsrfTokenHandler } from "@/middleware/csrfMiddleware";
+import { handleImpersonation } from "@/middleware/impersonationMiddleware";
+import {
+  userRateLimiter,
+  authRateLimiter as advancedAuthLimiter,
+  adminRateLimiter,
+} from "@/middleware/advancedRateLimiter";
+import { metricsHandler, metricsMiddleware } from "@/utils/metrics";
+import {
+  healthCheckHandler,
+  livenessProbe,
+  readinessProbe,
+} from "@/utils/healthCheck";
 
 process.on("uncaughtException", (err: Error) => {
   // Ignorar errores de red triviales que Node a veces no atrapa
@@ -96,11 +125,11 @@ process.on("uncaughtException", (err: Error) => {
     err.message?.includes("ENOTFOUND") ||
     err.message?.includes("getaddrinfo")
   ) {
+    Logger.warn(`[Network] ⚠️ Network glitch detected: ${err.message}`);
     return;
   }
 
-  Logger.error("UNCAUGHT EXCEPTION! 💥");
-  Logger.error(err);
+  Logger.error("UNCAUGHT EXCEPTION! 💥", err);
 
   // Don't exit for known non-critical errors
   const errorMessage = err.message?.toLowerCase() || "";
@@ -117,9 +146,15 @@ process.on("uncaughtException", (err: Error) => {
   }
 });
 
-process.on("unhandledRejection", (reason: any) => {
+process.on("unhandledRejection", (reason: unknown) => {
   // Silence network noise in promises
-  const msg = reason?.message || String(reason);
+  let msg = "Unknown Error";
+  if (reason instanceof Error) {
+    msg = reason.message;
+  } else {
+    msg = String(reason);
+  }
+
   if (
     msg.includes("ECONNRESET") ||
     msg.includes("ETIMEDOUT") ||
@@ -128,11 +163,11 @@ process.on("unhandledRejection", (reason: any) => {
     msg.includes("ENOTFOUND") ||
     msg.includes("getaddrinfo")
   ) {
+    Logger.warn(`[Network] ⚠️ Promise network glitch: ${msg}`);
     return;
   }
 
-  Logger.error("UNHANDLED REJECTION! 🔥");
-  Logger.error(reason);
+  Logger.error("UNHANDLED REJECTION! 🔥", reason);
 
   // Log but don't exit - let the server continue
   Logger.warn("Promise rejection handled. Server continues.");
@@ -148,7 +183,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 app.use(
   "/uploads",
-  express.static(path.join(process.cwd(), "public", "uploads"))
+  express.static(path.join(process.cwd(), "public", "uploads")),
 );
 
 // 🛡️ CRITICAL: Request timeout protection
@@ -157,9 +192,15 @@ app.use(requestTimeout({ timeout: 30000 })); // 30 seconds
 // 🛡️ Performance monitoring
 app.use(slowRequestLogger(2000)); // Log requests >2s
 
-app.use((req, res, next) => {
-  next();
-});
+// 📊 OBSERVABILITY: Structured HTTP logging
+import { httpLogger } from "@/middleware/httpLogger";
+app.use(httpLogger);
+
+// 🛡️ SECURITY: Handle impersonation tokens from header (not URL)
+app.use(handleImpersonation);
+
+// 📊 METRICS: Track all HTTP requests
+app.use(metricsMiddleware);
 
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -170,17 +211,27 @@ app.get("/", (req, res) => {
 });
 
 // 🛡️ Professional health check endpoints
-app.use("/health", healthRouter);
+app.get("/health", healthCheckHandler);
+app.get("/health/liveness", livenessProbe);
+app.get("/health/readiness", readinessProbe);
 
-// Mounted with authLimiter to prevent spam
-app.use("/api/onboarding", authLimiter, onboardingRouter);
+// 📊 Prometheus metrics endpoint
+app.get("/metrics", metricsHandler);
+
+// 🛡️ SECURITY: CSRF Token endpoint (must be authenticated)
+app.get("/api/csrf-token", protect, getCsrfTokenHandler);
+
+// Mounted with ADVANCED auth rate limiter (per-user)
+app.use("/api/onboarding", advancedAuthLimiter, onboardingRouter);
 app.get("/webhook", verifyWebhook);
 app.post("/webhook", handleIncomingWebhook);
-app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/auth", advancedAuthLimiter, authRouter);
 
-app.use("/api/admin", protect, superAdminGuard, adminRouter);
+// 🛡️ SECURITY: Admin routes with strict rate limiting
+app.use("/api/admin", protect, superAdminGuard, adminRateLimiter, adminRouter);
 
-app.use("/api/users", apiLimiter, protect, userRouter);
+// 🛡️ SECURITY: User-specific rate limiting on all protected routes
+app.use("/api/users", userRateLimiter, protect, userRouter);
 app.use("/api/posts", apiLimiter, protect, postRouter);
 app.use("/api/replies", apiLimiter, protect, replyRouter);
 app.use("/api/tickets", apiLimiter, protect, ticketRouter);
@@ -212,13 +263,28 @@ app.use("/api/company", apiLimiter, protect, companyRouter);
 app.use("/api/analytics", apiLimiter, protect, analyticsRouter);
 app.use("/api/products", apiLimiter, protect, productRouter);
 app.use("/api/emails", apiLimiter, emailRouter); // Email module
+app.use(
+  "/api/push-notifications",
+  apiLimiter,
+  protect,
+  pushNotificationsRoutes,
+);
+app.use("/api/roles", apiLimiter, protect, rolesRouter);
+app.use("/api/search", apiLimiter, protect, searchRouter);
+app.use("/api/notifications", apiLimiter, protect, notificationsRouter);
+
+// 🛠️ DEV TOOLS (Non-Production Only)
+if (process.env.NODE_ENV !== "production") {
+  app.use("/api/dev", devRouter);
+  Logger.info("[Server] 🧪 Dev Routes enabled at /api/dev");
+}
 
 app.use((req, res, next) => {
   next(
     new AppError(
       `No se encontró la ruta '${req.originalUrl}' en este servidor`,
-      404
-    )
+      404,
+    ),
   );
 });
 
@@ -234,90 +300,187 @@ if (require.main === module) {
       // Connect to Redis first (non-blocking failure)
       await connectRedis();
 
-      console.log("[Server] 🔧 Initializing WhatsApp service...");
-      await whatsappService.initialize();
-      console.log("[Server] ✅ WhatsApp service initialized successfully");
+      Logger.info("[Server] 🔧 Connecting to Database...");
+      await connectDB();
+      Logger.info("[Server] ✅ Database connected successfully");
 
-      console.log("[Server] 🔧 Initializing Gateway...");
+      Logger.info("[Server] ✅ Database connected successfully");
+
+      Logger.info("[Server] 🔧 Initializing Gateway...");
       await gateway.initialize(httpServer);
-      console.log("[Server] ✅ Gateway initialized successfully");
+      Logger.info("[Server] ✅ Gateway initialized successfully");
+
+      // BRIDGE: WhatsApp Events -> Socket Gateway
+      Logger.info("[Server] 🌉 Bridging WhatsApp events to Socket Gateway...");
+      const eventBus = EventBus.getInstance();
+
+      eventBus.subscribe(WhatsAppEventType.SESSION_CONNECTED, (event) => {
+        gateway.emitToCompany(event.companyId, "session.status", {
+          sessionId: event.sessionId,
+          status: "CONNECTED",
+          phone: event.data.phone, // ✅ Correctly typed access
+          timestamp: event.timestamp,
+        });
+      });
+
+      eventBus.subscribe(WhatsAppEventType.SESSION_DISCONNECTED, (event) => {
+        // 🛡️ 100-YEAR FIX: Smart Status Handling
+        // Don't scare the user with "Disconnected" if we are just autoreconnecting
+        const isReconnecting = event.data?.isReconnecting;
+        const status = isReconnecting ? "CONNECTING" : "DISCONNECTED";
+
+        gateway.emitToCompany(event.companyId, "session.status", {
+          sessionId: event.sessionId,
+          status: status,
+          reason: event.data?.reason,
+          timestamp: event.timestamp,
+        });
+
+        if (isReconnecting) {
+          Logger.info(
+            `[Server] 🔄 Session ${event.sessionId} reconnecting... (UI: CONNECTING)`,
+          );
+        }
+      });
+
+      eventBus.subscribe(WhatsAppEventType.SESSION_QR_CODE, (event) => {
+        gateway.emitToCompany(event.companyId, "qr.updated", {
+          sessionId: event.sessionId,
+          qr: event.data?.qr,
+          timestamp: event.timestamp,
+        });
+      });
+
+      // 🔥 CRITICAL: Propagate incoming messages to frontend in REAL-TIME
+      eventBus.subscribe(WhatsAppEventType.MESSAGE_RECEIVED, (event) => {
+        Logger.debug(
+          `[Server] 📨 Propagating message to company ${event.companyId}`,
+        );
+        gateway.emitToCompany(event.companyId, "message.received", {
+          message: event.data.message,
+          timestamp: event.timestamp,
+        });
+      });
+
+      // 🟢 PRESENCE UPDATES (Typing indicators)
+      eventBus.subscribe(WhatsAppEventType.PRESENCE_UPDATE, (event) => {
+        // Debounce log or reduce noise
+        // Logger.debug(`[Server] 🟢 Presence update for ${event.companyId}`);
+        gateway.emitToCompany(event.companyId, "presence.update", {
+          id: event.data.id,
+          presences: event.data.presences,
+        });
+      });
+
+      Logger.info("[Server] ✅ Event Bridge established");
+
+      // 🛡️ 100-YEAR FIX: Sync Status on Connect
+      // Ensures frontend gets the current status immediately, even if it connected AFTER the event fired.
+      const io = gateway.getIO();
+      if (io) {
+        io.on("connection", async (socket) => {
+          const user = socket.data.user;
+          if (user && user.companyId) {
+            Logger.debug(
+              `[Server] 🔄 Syncing session status for ${user.id} (Company: ${user.companyId})`,
+            );
+            // Fetch status from Service (Memory First)
+            const sessions = await whatsappService.listSessions(user.companyId);
+
+            Logger.debug(
+              `[Server] Syncing ${sessions.length} sessions for company ${user.companyId}`,
+            );
+
+            // Emit status for each session
+            sessions.forEach((session) => {
+              socket.emit("session.status", {
+                sessionId: session.sessionId,
+                status: session.status,
+                timestamp: new Date(),
+              });
+            });
+
+            // ⌨️ TYPING INDICATOR HANDLER (Frontend -> WhatsApp)
+            socket.on("conversation:typing", (payload: any) => {
+              // Payload: { to: string (phone), status: "composing" | "paused" }
+              if (payload?.to && payload?.status) {
+                // Fire & Forget for performance
+                whatsappService
+                  .sendPresenceUpdate(
+                    payload.to,
+                    payload.status,
+                    user.companyId!,
+                  )
+                  .catch((err) =>
+                    Logger.warn(`[Typing] Failed: ${err.message}`),
+                  );
+              }
+            });
+          }
+        });
+      }
+
+      Logger.info("[Server] 🔧 Initializing WhatsApp service...");
+      await whatsappService.initialize();
+      Logger.info("[Server] ✅ WhatsApp service initialized successfully");
 
       // 🛡️ Start memory monitoring
       memoryMonitor.start(60000); // Check every minute
       Logger.info("[Server] 🛡️ Memory monitor started");
 
-      // 🚨 AUTO-RESTART: DISABLED (heap size issue - flags not applying)
-      // The auto-restart was causing crash loops because heap size is tiny (51-135MB)
-      // even though we pass --max-old-space-size=4096
-      // V8 needs to grow heap dynamically under pressure, not restart constantly
-      /*
-      setInterval(() => {
-        const memUsage = process.memoryUsage();
-        const usage = (memUsage.heapUsed / memUsage.heapTotal) * 100;
-
-        if (usage > 95) {
-          console.error(
-            `[AUTO-RESTART] 🚨 Memory at ${usage.toFixed(1)}% (${(
-              memUsage.heapUsed /
-              1024 /
-              1024
-            ).toFixed(0)}MB), restarting...`
-          );
-          console.error(
-            "[AUTO-RESTART] Temporary solution - investigating root cause"
-          );
-          process.exit(1); // ts-node-dev will restart
-        }
-      }, 30000); // Check every 30 seconds
-      */
+      // 🚨 AUTO-RESTART: Managed by PM2/Docker (KISS Principle)
+      // V8 needs to grow heap dynamically under pressure
       Logger.info(
-        "[Server] ⚠️  Auto-restart DISABLED - allowing heap to grow naturally"
+        "[Server] ⚠️  Auto-restart DISABLED - allowing heap to grow naturally",
       );
 
-      console.log("[Server] Workflow Engine initialized");
+      Logger.info("[Server] Workflow Engine initialized");
 
-      console.log("[Server] 🔧 Initializing Scheduler...");
+      Logger.info("[Server] 🔧 Initializing Scheduler...");
       initScheduler();
 
       // ✅ Initialize Message Queue Workers
-      console.log("[Server] 🚀 Initializing Message Queue Workers...");
+      Logger.info("[Server] 🚀 Initializing Message Queue Workers...");
       try {
-        const { getMessageQueueWorker } = await import(
-          "./services/queue/messageQueue.worker"
-        );
+        const { getMessageQueueWorker } =
+          await import("./services/queue/messageQueue.worker");
+        // Get singleton instance with whatsappService
         const messageWorker = getMessageQueueWorker(whatsappService);
 
         // Start workers for all active companies
         const companies = await prisma.company.findMany({
           where: { isActive: true },
         });
-        console.log(`[Server] Found ${companies.length} active companies`);
+        Logger.info(`[Server] Found ${companies.length} active companies`);
 
         for (const company of companies) {
-          console.log(
-            `[Server] Starting worker for: ${company.name} (${company.id})`
+          Logger.info(
+            `[Server] Starting worker for: ${company.name} (${company.id})`,
           );
+          // Start the unified 3-concurrent worker
           await messageWorker.startWorker(company.id);
           Logger.info(`[Server] 👷 Worker started for: ${company.name}`);
         }
-        console.log(
-          `[Server] ✅ ${companies.length} message queue workers initialized`
+        Logger.info(
+          `[Server] ✅ ${companies.length} message queue workers initialized`,
         );
 
         // Graceful shutdown handler
         process.on("SIGTERM", async () => {
-          console.log(
-            "[Server] 🛑 SIGTERM received, shutting down gracefully..."
+          Logger.info(
+            "[Server] 🛑 SIGTERM received, shutting down gracefully...",
           );
           await messageWorker.shutdown();
-          const { messageQueueService } = await import(
-            "./services/queue/messageQueue.service"
-          );
+          const { messageQueueService } =
+            await import("./services/queue/messageQueue.service");
           await messageQueueService.shutdown();
           process.exit(0);
         });
-      } catch (workerError: any) {
-        const msg = workerError?.message || String(workerError);
+      } catch (workerError: unknown) {
+        const msg =
+          workerError instanceof Error
+            ? workerError.message
+            : String(workerError);
 
         // Handle predictable Redis errors gracefully
         if (
@@ -328,21 +491,18 @@ if (require.main === module) {
           String(msg).toLowerCase().includes("error") // Catch generic errors
         ) {
           Logger.warn(
-            `[Server] ⚠️ Redis connection failed for Workers. Running without Message Queues. (Reason: ${msg})`
+            `[Server] ⚠️ Redis connection failed for Workers. Running without Message Queues. (Reason: ${msg})`,
           );
         } else {
           Logger.error("[Server] ❌ Failed to initialize workers:");
-          Logger.error(workerError);
-          if (workerError.stack) {
-            Logger.error("Stack trace:", workerError.stack);
-          }
+          Logger.error(workerError as string);
         }
-        console.log("[Server] ⚠️  Continuing without queue workers...");
+        Logger.info("[Server] ⚠️  Continuing without queue workers...");
       }
 
       httpServer.listen(Number(PORT), () => {
-        console.log(
-          `✅ ¡ÉXITO! CRM SaaS Backend corriendo en el puerto ${PORT}`
+        Logger.info(
+          `✅ ¡ÉXITO! CRM SaaS Backend corriendo en el puerto ${PORT}`,
         );
       });
     } catch (err) {
@@ -354,5 +514,19 @@ if (require.main === module) {
 
   startServer();
 }
+
+// 🛡️ GRACEFUL SHUTDOWN
+const gracefulShutdown = () => {
+  Logger.info("🛑 SIGTERM/SIGINT received. Shutting down gracefully...");
+  httpServer.close(async () => {
+    Logger.info("🔌 HTTP server closed");
+    await prisma.$disconnect();
+    Logger.info("💾 Database disconnected");
+    process.exit(0);
+  });
+};
+
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
 
 export { app, httpServer };

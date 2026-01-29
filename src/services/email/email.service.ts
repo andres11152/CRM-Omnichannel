@@ -1,4 +1,4 @@
-import { prisma } from "../../config/prisma";
+import { prisma } from "../../config/database";
 import { EmailStatus, EmailType } from "@prisma/client";
 import {
   CreateEmailDTO,

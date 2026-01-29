@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 

@@ -1,77 +1,76 @@
-/**
- * Logging Configuration
- * Controls verbosity of console logs across the application
- */
+import { Logger as MainLogger } from "@/utils/logger";
+import { isDevelopment } from "@/config/env";
 
+/**
+ * ⚙️ LOGGING CONFIGURATION
+ * Defines granular logging controls for specific sub-systems.
+ *
+ * Checks allow strictly disabling noisy modules even if global log level is debug.
+ */
 export const LogConfig = {
-  // Set to 'production' to reduce logs, 'development' for verbose
+  // Global environment check
   environment: process.env.NODE_ENV || "development",
 
   // Enable/disable specific log categories
   prisma: {
-    enabled: false, // Disable Prisma query logs by default
-    logLevel: ["error", "warn"], // Only show errors and warnings
+    enabled: false,
+    logLevel: ["error", "warn"],
   },
 
-  whatsapp: {
-    enabled: true, // Keep WhatsApp logs for debugging
-  },
-
-  auth: {
-    enabled: true, // Keep auth logs for security
-  },
-
-  messageProcessor: {
-    enabled: true, // Keep message processor logs
-  },
-
-  gateway: {
-    enabled: true, // Keep Socket.IO logs
-  },
+  whatsapp: { enabled: true },
+  auth: { enabled: true },
+  messageProcessor: { enabled: true },
+  gateway: { enabled: true },
 };
 
 /**
- * Logger utility - use this instead of console.log
+ * ⚠️ DEPRECATED LEGACY LOGGER ADAPTER
+ *
+ * This adapter forwards logs to the main enterprise Winston logger (@/utils/logger).
+ * New code should import { Logger } from "@/utils/logger" directly and use:
+ * Logger.info("Message", { module: "WhatsApp", ...context });
+ *
+ * @deprecated Use "@/utils/logger" instead.
  */
 export const Logger = {
-  whatsapp: (message: string, ...args: any[]) => {
+  whatsapp: (message: string, ...args: unknown[]) => {
     if (LogConfig.whatsapp.enabled) {
-      console.log(`[WhatsApp] ${message}`, ...args);
+      MainLogger.info(`[WhatsApp] ${message}`, { data: args });
     }
   },
 
-  auth: (message: string, ...args: any[]) => {
+  auth: (message: string, ...args: unknown[]) => {
     if (LogConfig.auth.enabled) {
-      console.log(`[Auth] ${message}`, ...args);
+      MainLogger.info(`[Auth] ${message}`, { data: args });
     }
   },
 
-  messageProcessor: (message: string, ...args: any[]) => {
+  messageProcessor: (message: string, ...args: unknown[]) => {
     if (LogConfig.messageProcessor.enabled) {
-      console.log(`[MessageProcessor] ${message}`, ...args);
+      MainLogger.info(`[MessageProcessor] ${message}`, { data: args });
     }
   },
 
-  gateway: (message: string, ...args: any[]) => {
+  gateway: (message: string, ...args: unknown[]) => {
     if (LogConfig.gateway.enabled) {
-      console.log(`[Gateway] ${message}`, ...args);
+      MainLogger.info(`[Gateway] ${message}`, { data: args });
     }
   },
 
   // Always log errors
-  error: (message: string, error?: any) => {
-    console.error(`[ERROR] ${message}`, error || "");
+  error: (message: string, error?: unknown) => {
+    MainLogger.error(`[ERROR] ${message}`, error);
   },
 
   // Always log warnings
-  warn: (message: string, ...args: any[]) => {
-    console.warn(`[WARN] ${message}`, ...args);
+  warn: (message: string, ...args: unknown[]) => {
+    MainLogger.warn(`[WARN] ${message}`, { data: args });
   },
 
-  // General info (only in development)
-  info: (message: string, ...args: any[]) => {
-    if (LogConfig.environment === "development") {
-      console.log(`[INFO] ${message}`, ...args);
+  // General info (only in development or if verbose)
+  info: (message: string, ...args: unknown[]) => {
+    if (isDevelopment()) {
+      MainLogger.info(`[INFO] ${message}`, { data: args });
     }
   },
 };

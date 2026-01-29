@@ -1,4 +1,4 @@
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { Logger } from "./logger";
 import { getErrorMessage } from "./errorHelpers";
 
@@ -113,7 +113,9 @@ export async function idempotentTransaction<T>(
     `;
   } catch (error) {
     // Non-critical - log but don't fail
-    Logger.warn("[Idempotent] Failed to cache result:", getErrorMessage(error));
+    Logger.warn("[Idempotent] Failed to cache result:", {
+      error: getErrorMessage(error),
+    });
   }
 
   return result;

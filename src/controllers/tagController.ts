@@ -1,7 +1,7 @@
 import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { AuthenticatedRequest } from "@/types/types";
 
 export const createTag = catchAsync(

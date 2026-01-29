@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
-import { prisma } from "../../config/prisma";
+import { prisma } from "../../config/database";
 import { workflowEngine } from "../../services/workflowEngine";
 
 // Get all deals for a company (grouped by pipeline or filtered)

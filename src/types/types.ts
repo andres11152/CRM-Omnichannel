@@ -23,15 +23,12 @@ export interface Webhook {
 // Authenticated request type for controllers that require `req.user`
 import { Request } from "express";
 
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    email?: string;
-    name?: string | null;
-    role?: string;
-    companyId?: string;
-  };
+export interface AuthenticatedRequest<
+  P = import("express-serve-static-core").ParamsDictionary,
+  ResBody = any,
+  ReqBody = Record<string, any>,
+  ReqQuery = import("express-serve-static-core").Query,
+> extends Request<P, ResBody, ReqBody, ReqQuery> {
+  user: NonNullable<Request["user"]>;
   companyId?: string;
-  file?: any;
-  files?: any;
 }

@@ -78,3 +78,30 @@ export const SocketEmitter = {
     }
   },
 };
+
+/**
+ * 💬 Emit @Mention Notification to specific user
+ * Sends real-time notification when user is mentioned in a note
+ */
+export const emitMentionNotification = (
+  userId: string,
+  data: {
+    type: string;
+    title: string;
+    message: string;
+    activityId: string;
+    createdBy: string;
+    timestamp: string;
+  }
+) => {
+  const io = emitter || initializeEmitter();
+  if (io) {
+    // Emit to user's personal room
+    io.to(`user:${userId}`).emit("mention_notification", data);
+
+    // Also emit to agent room if applicable
+    io.to(`agent:${userId}`).emit("mention_notification", data);
+
+    Logger.info(`[SocketEmitter] Sent mention notification to user ${userId}`);
+  }
+};

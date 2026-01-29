@@ -23,8 +23,25 @@ const router = Router();
 
 // Nota: La protección (protect, superAdminGuard) se aplica en server.ts antes de usar este router.
 
+import {
+  getFinancialAnalytics,
+  getGlobalActivity,
+  getTenantHealth,
+} from "@/controllers/analyticsController";
+import {
+  getTransactions,
+  retryTransaction,
+} from "@/controllers/billingController";
+
 router.get("/system-status", getSystemStatus);
 router.get("/dashboard-stats", getDashboardStats);
+router.get("/analytics/financials", getFinancialAnalytics);
+router.get("/analytics/activity", getGlobalActivity);
+router.get("/analytics/tenant-health", getTenantHealth);
+
+// Billing Ops
+router.get("/billing/transactions", getTransactions);
+router.post("/billing/retry", retryTransaction);
 router.get("/companies", listCompanies);
 router.post("/companies", validate(createCompanySchema), createCompany);
 router.put("/companies/:companyId", updateCompany);

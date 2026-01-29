@@ -1,5 +1,5 @@
 import { Response, NextFunction } from "express";
-import { prisma } from "@/config/prisma";
+import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { AppError } from "@/utils/AppError";
@@ -25,7 +25,7 @@ export const getAIConfig = catchAsync(
     }
 
     res.status(200).json(config || {});
-  }
+  },
 );
 
 export const updateAIConfig = catchAsync(
@@ -50,7 +50,7 @@ export const updateAIConfig = catchAsync(
     });
 
     res.status(200).json({ status: "success", message: "AI Config updated" });
-  }
+  },
 );
 
 // --- AI ASSISTANTS (PERSONAS) ---
@@ -68,7 +68,7 @@ export const getAssistants = catchAsync(
     });
 
     res.status(200).json(assistants);
-  }
+  },
 );
 
 export const createAssistant = catchAsync(
@@ -81,24 +81,39 @@ export const createAssistant = catchAsync(
       systemPrompt,
       temperature,
     } = req.body;
-    const companyId = req.companyId || req.user?.companyId;
+    // 🛡️ ENFORCE TENANT CONTEXT (Double-check for stability)
+    await import("@/config/tenantContext").then(
+      ({ default: TenantContextManager }) => {
+        // Validar companyId otra vez por seguridad
+        const ctxCompanyId = req.companyId || req.user?.companyId;
+        if (!ctxCompanyId) throw new AppError("Company ID missing", 400);
 
-    if (!companyId) return next(new AppError("Company ID missing", 400));
+        return TenantContextManager.run(
+          {
+            companyId: ctxCompanyId,
+            userId: req.user?.id || "unknown",
+            requestId:
+              (req.headers["x-request-id"] as string) || "create-assistant",
+          },
+          async () => {
+            const assistant = await prisma.aIAssistant.create({
+              data: {
+                companyId: ctxCompanyId,
+                name,
+                description,
+                modelProvider,
+                modelName,
+                systemPrompt,
+                temperature: temperature || 0.7,
+              },
+            });
 
-    const assistant = await prisma.aIAssistant.create({
-      data: {
-        companyId,
-        name,
-        description,
-        modelProvider,
-        modelName,
-        systemPrompt,
-        temperature: temperature || 0.7,
+            res.status(201).json(assistant);
+          },
+        );
       },
-    });
-
-    res.status(201).json(assistant);
-  }
+    );
+  },
 );
 
 export const updateAssistant = catchAsync(
@@ -126,7 +141,7 @@ export const updateAssistant = catchAsync(
     });
 
     res.status(200).json(assistant);
-  }
+  },
 );
 
 export const deleteAssistant = catchAsync(
@@ -142,7 +157,7 @@ export const deleteAssistant = catchAsync(
     await prisma.aIAssistant.delete({ where: { id } });
 
     res.status(204).send();
-  }
+  },
 );
 
 export const testAI = catchAsync(
@@ -158,7 +173,7 @@ export const testAI = catchAsync(
       companyId,
       assistantId,
       message || "Hello",
-      []
+      [],
     );
 
     if (!response) {
@@ -169,7 +184,7 @@ export const testAI = catchAsync(
     }
 
     res.status(200).json({ status: "success", response });
-  }
+  },
 );
 
 export const copilotAction = catchAsync(
@@ -178,9 +193,8 @@ export const copilotAction = catchAsync(
     const companyId = req.companyId || req.user?.companyId;
     if (!companyId) return next(new AppError("Company ID missing", 400));
 
-    const { generateRawAIResponse } = await import(
-      "@/services/aiResponseService"
-    );
+    const { generateRawAIResponse } =
+      await import("@/services/aiResponseService");
 
     let systemPrompt = "";
     let userMessage = "";
@@ -236,7 +250,7 @@ export const copilotAction = catchAsync(
     const response = await generateRawAIResponse(
       companyId,
       systemPrompt,
-      userMessage
+      userMessage,
     );
 
     if (response === null) {
@@ -248,5 +262,5 @@ export const copilotAction = catchAsync(
     }
 
     res.status(200).json({ status: "success", response });
-  }
+  },
 );

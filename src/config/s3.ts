@@ -25,7 +25,10 @@ export const s3Client =
 export const BUCKET_NAME = process.env.S3_BUCKET_NAME || "reply-media";
 export const USE_S3 = !!s3Client;
 
+import path from "path";
+
 // Local storage configuration (fallback)
 export const LOCAL_UPLOAD_DIR =
-  process.env.LOCAL_UPLOAD_PATH || "./public/uploads";
+  process.env.LOCAL_UPLOAD_PATH ||
+  path.join(process.cwd(), "public", "uploads");
 export const LOCAL_BASE_URL = process.env.APP_URL || "http://localhost:4000";

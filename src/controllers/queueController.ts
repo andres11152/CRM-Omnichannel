@@ -1,15 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "@/config/prisma";
+import { AuthenticatedRequest } from "@/types";
+import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    companyId: string;
-  };
-  companyId?: string;
-}
 
 export const createQueue = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -41,7 +34,7 @@ export const createQueue = catchAsync(
     });
 
     res.status(201).json(queue);
-  }
+  },
 );
 
 export const getQueues = catchAsync(
@@ -65,7 +58,7 @@ export const getQueues = catchAsync(
     });
 
     res.status(200).json(queues);
-  }
+  },
 );
 
 export const updateQueue = catchAsync(
@@ -104,7 +97,7 @@ export const updateQueue = catchAsync(
     });
 
     res.status(200).json(updatedQueue);
-  }
+  },
 );
 
 export const deleteQueue = catchAsync(
@@ -123,5 +116,5 @@ export const deleteQueue = catchAsync(
     await prisma.queue.delete({ where: { id } });
 
     res.status(204).send();
-  }
+  },
 );

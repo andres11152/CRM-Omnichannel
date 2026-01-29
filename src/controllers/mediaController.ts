@@ -1,452 +1,169 @@
-import { Response } from "express";
-import { AuthenticatedRequest } from "../types/types";
-import { prisma } from "../config/prisma";
-import {
-  uploadFile,
-  deleteFile,
-  validateFileType,
-  validateFileSize,
-  getSignedUrl,
-  getFileStream,
-} from "../services/uploadService";
-import { planLimitsService } from "../services/planLimitsService";
-import { Request } from "express";
+import { Request, Response } from "express";
+import { mediaService } from "@/services/mediaService";
+import { catchAsync } from "@/utils/catchAsync";
+import { AppError } from "@/utils/AppError";
+import { HTTP_STATUS } from "@/constants/httpStatus";
+import Logger from "@/utils/logger"; // Assuming generalized Logger
 
 /**
- * Upload media file
- * POST /api/media/upload
+ * 🎨 MEDIA CONTROLLER
+ * Decoupled controller handling media via MediaService
  */
-import fs from "fs";
-import path from "path";
 
-export const uploadMedia = async (req: AuthenticatedRequest, res: Response) => {
-  const logFile = path.join(process.cwd(), "debug_upload.log");
-  const log = (msg: string) => {
-    try {
-      fs.appendFileSync(logFile, `${new Date().toISOString()} - ${msg}\n`);
-    } catch (e) {
-      console.error("Error writing to log file:", e);
+export const mediaController = {
+  /**
+   * Upload File
+   */
+  uploadMedia: catchAsync(async (req: Request, res: Response) => {
+    Logger.info("[MediaController] Upload request received");
+
+    if (!req.file) {
+      throw new AppError(
+        "No se ha enviado ningún archivo",
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
-  };
 
-  try {
-    log("[Upload] Starting upload...");
-    log(`[Upload] req.user: ${JSON.stringify(req.user)}`);
-    log(`[Upload] req.companyId: ${req.companyId}`);
-    log(`[Upload] req.file: ${req.file ? "File present" : "No file"}`);
-
-    const file = req.file;
     const { category, description, tags } = req.body;
-    const companyId = req.user?.companyId || req.companyId;
+    const companyId = req.user?.companyId;
     const userId = req.user?.id;
 
-    log(`[Upload] Extracted companyId: ${companyId}`);
-    log(`[Upload] Extracted userId: ${userId}`);
-
-    if (!companyId) {
-      log("[Upload] Error: Company ID is missing!");
-      return res.status(400).json({ message: "Company ID is missing" });
+    if (!companyId || !userId) {
+      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
     }
 
-    if (!userId) {
-      log("[Upload] Error: User ID is missing!");
-      return res.status(401).json({ message: "User ID is missing" });
-    }
-
-    if (!file) {
-      log("[Upload] Error: No file provided!");
-      return res
-        .status(400)
-        .json({ message: "No se ha enviado ningún archivo" });
-    }
-
-    // Validate file type
-    const typeValidation = validateFileType(file);
-    if (!typeValidation.isValid) {
-      log(`[Upload] Error: Invalid file type - ${typeValidation.error}`);
-      return res.status(400).json({ message: typeValidation.error });
-    }
-
-    // Validate file size
-    const sizeValidation = validateFileSize(file, typeValidation.type!);
-    if (!sizeValidation.isValid) {
-      log(`[Upload] Error: Invalid file size - ${sizeValidation.error}`);
-      return res.status(400).json({ message: sizeValidation.error });
-    }
-
-    // 🔴 ENFORCE STORAGE LIMIT
-    const canUpload = await planLimitsService.canCreateResource(
+    const media = await mediaService.upload({
+      file: req.file,
       companyId,
-      "storage",
-      file.size
-    );
-    if (!canUpload) {
-      log(`[Upload] Error: Storage limit reached`);
-      return res.status(403).json({
-        message: "Espacio de almacenamiento insuficiente. Actualiza tu plan.",
-      });
-    }
-
-    // Upload file
-    log("[Upload] Calling uploadFile service...");
-    const uploadResult = await uploadFile(file, {
-      companyId,
-      type: typeValidation.type!,
+      userId,
+      category,
+      description,
+      tags,
     });
-    log(`[Upload] Upload successful: ${JSON.stringify(uploadResult)}`);
 
-    // Parse tags if provided
-    let tagArray: string[] = [];
-    if (tags) {
-      try {
-        if (Array.isArray(tags)) {
-          tagArray = tags;
-        } else {
-          tagArray = JSON.parse(tags);
-        }
-      } catch (e) {
-        tagArray = typeof tags === "string" ? [tags] : [];
-      }
-    }
+    Logger.info(`[MediaController] Upload success: ${media.id}`);
 
-    // Save to database
-    log("[Upload] Saving to database...");
-    const media = await prisma.media.create({
-      data: {
-        companyId,
-        filename: uploadResult.filename,
-        originalName: file.originalname,
-        mimeType: uploadResult.mimeType,
-        size: uploadResult.size,
-        url: uploadResult.url,
-        key: uploadResult.key,
-        type: typeValidation.type as any,
-        category: category || null,
-        tags: tagArray,
-        description: description || null,
-        uploadedById: userId,
-      },
-      include: {
-        uploadedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-    log("[Upload] Database save successful");
-
-    // ✅ Generate signed URL for S3 files (valid for 1 hour)
-    if (media.url.includes("s3.amazonaws.com")) {
-      try {
-        const signedUrl = await getSignedUrl(media.key);
-        (media as any).url = signedUrl;
-      } catch (error) {
-        console.error("[Upload] Error generating signed URL:", error);
-        // Fallback to proxy URL
-        const proxyUrl = `${
-          process.env.APP_URL || "http://localhost:4000"
-        }/api/media/${media.id}/content`;
-        (media as any).url = proxyUrl;
-      }
-    }
-
-    res.status(201).json({
+    res.status(HTTP_STATUS.CREATED).json({
       status: "success",
       data: { media },
     });
-  } catch (error) {
-    log(`[Upload] ERROR: ${error}`);
-    if (error instanceof Error) {
-      log(`[Upload] Stack: ${error.stack}`);
-    }
+  }),
 
-    console.error("[Upload] ERROR uploading media:");
-    console.error(error);
-
-    res.status(500).json({
-      message: "Error al subir el archivo",
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-  }
-};
-
-/**
- * Get all media for company
- * GET /api/media
- */
-export const getMedia = async (req: AuthenticatedRequest, res: Response) => {
-  try {
+  /**
+   * Get Media List
+   */
+  getMedia: catchAsync(async (req: Request, res: Response) => {
     const companyId = req.user?.companyId;
-    const { type, category, search, page = 1, limit = 20 } = req.query;
+    if (!companyId)
+      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
 
-    if (!companyId) {
-      return res.status(400).json({ message: "Company ID is missing" });
-    }
+    const { page = 1, limit = 20, search, type, category } = req.query;
 
-    const where: any = { companyId };
+    const result = await mediaService.list(companyId, {
+      page: Number(page),
+      limit: Number(limit),
+      search: search as string,
+      type: type as string,
+      category: category as string,
+    });
 
-    if (type) {
-      where.type = type;
-    }
-
-    if (category) {
-      where.category = category;
-    }
-
-    if (search) {
-      where.OR = [
-        { originalName: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-        { tags: { has: search } },
-      ];
-    }
-
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.max(1, Number(limit));
-    const skip = (pageNum - 1) * limitNum;
-
-    const [media, total] = await Promise.all([
-      prisma.media.findMany({
-        where,
-        include: {
-          uploadedBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: limitNum,
-      }),
-      prisma.media.count({ where }),
-    ]);
-
-    // ✅ Generate signed URLs for S3 files (valid for 1 hour)
-    const mediaWithSignedUrls = await Promise.all(
-      media.map(async (m) => {
-        if (m.url.includes("s3.amazonaws.com")) {
-          try {
-            // Generate signed URL directly from S3
-            const signedUrl = await getSignedUrl(m.key);
-            return { ...m, url: signedUrl };
-          } catch (error) {
-            console.error(
-              `[getMedia] Error generating signed URL for ${m.id}:`,
-              error
-            );
-            // Fallback to proxy URL if signed URL fails
-            const proxyUrl = `${
-              process.env.APP_URL || "http://localhost:4000"
-            }/api/media/${m.id}/content`;
-            return { ...m, url: proxyUrl };
-          }
-        }
-        return m;
-      })
-    );
-
-    res.status(200).json({
+    res.json({
       status: "success",
-      results: media.length,
-      total,
-      page: pageNum,
-      totalPages: Math.ceil(total / limitNum),
-      data: { media: mediaWithSignedUrls },
+      results: result.data.length,
+      total: result.meta.total,
+      page: result.meta.page,
+      totalPages: result.meta.pages,
+      data: { media: result.data },
     });
-  } catch (error) {
-    console.error("Error fetching media:", error);
-    res
-      .status(500)
-      .json({ message: "Error al obtener archivos", error: String(error) });
-  }
-};
+  }),
 
-/**
- * Get single media by ID
- * GET /api/media/:id
- */
-export const getMediaById = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
-    const { id } = req.params;
+  /**
+   * Get Single Media
+   */
+  getMediaById: catchAsync(async (req: Request, res: Response) => {
     const companyId = req.user?.companyId;
+    const { id } = req.params;
 
-    const media = await prisma.media.findFirst({
-      where: { id, companyId },
-      include: {
-        uploadedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
+    if (!companyId)
+      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
 
-    if (!media) {
-      return res.status(404).json({ message: "Archivo no encontrado" });
-    }
+    const media = await mediaService.get(companyId, id);
 
-    // ✅ Generate signed URL for S3 files
-    if (media.url.includes("s3.amazonaws.com")) {
-      try {
-        const signedUrl = await getSignedUrl(media.key);
-        (media as any).url = signedUrl;
-      } catch (error) {
-        console.error(`[getMediaById] Error generating signed URL:`, error);
-        // Fallback to proxy URL
-        const proxyUrl = `${
-          process.env.APP_URL || "http://localhost:4000"
-        }/api/media/${media.id}/content`;
-        (media as any).url = proxyUrl;
-      }
-    }
-
-    res.status(200).json({
+    res.json({
       status: "success",
       data: { media },
     });
-  } catch (error) {
-    console.error("Error fetching media:", error);
-    res
-      .status(500)
-      .json({ message: "Error al obtener archivo", error: String(error) });
-  }
-};
+  }),
 
-/**
- * Delete media
- * DELETE /api/media/:id
- */
-export const deleteMedia = async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { id } = req.params;
+  /**
+   * Delete Media
+   */
+  deleteMedia: catchAsync(async (req: Request, res: Response) => {
     const companyId = req.user?.companyId;
+    const { id } = req.params;
 
-    const media = await prisma.media.findFirst({
-      where: { id, companyId },
-    });
+    if (!companyId)
+      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
 
-    if (!media) {
-      return res.status(404).json({ message: "Archivo no encontrado" });
-    }
+    await mediaService.delete(companyId, id);
 
-    // Delete file from storage
-    await deleteFile(media.key);
-
-    // Delete from database
-    await prisma.media.delete({
-      where: { id },
-    });
-
-    res.status(200).json({
+    res.json({
       status: "success",
       message: "Archivo eliminado correctamente",
     });
-  } catch (error) {
-    console.error("Error deleting media:", error);
-    res
-      .status(500)
-      .json({ message: "Error al eliminar archivo", error: String(error) });
-  }
-};
+  }),
 
-/**
- * Update media metadata
- * PATCH /api/media/:id
- */
-export const updateMedia = async (req: AuthenticatedRequest, res: Response) => {
-  try {
+  /**
+   * Update Media
+   */
+  updateMedia: catchAsync(async (req: Request, res: Response) => {
+    const companyId = req.user?.companyId;
     const { id } = req.params;
     const { category, description, tags } = req.body;
-    const companyId = req.user?.companyId;
 
-    const media = await prisma.media.findFirst({
-      where: { id, companyId },
+    if (!companyId)
+      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
+
+    const media = await mediaService.update(companyId, id, {
+      category,
+      description,
+      tags,
     });
 
-    if (!media) {
-      return res.status(404).json({ message: "Archivo no encontrado" });
-    }
-
-    const updated = await prisma.media.update({
-      where: { id },
-      data: {
-        category: category !== undefined ? category : media.category,
-        description:
-          description !== undefined ? description : media.description,
-        tags: tags !== undefined ? tags : media.tags,
-      },
-      include: {
-        uploadedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    res.status(200).json({
+    res.json({
       status: "success",
-      data: { media: updated },
+      data: { media },
     });
-  } catch (error) {
-    console.error("Error updating media:", error);
-    res
-      .status(500)
-      .json({ message: "Error al actualizar archivo", error: String(error) });
-  }
-};
+  }),
 
-/**
- * Stream media content (Proxy for S3/Local)
- * GET /api/media/:id/content
- */
-export const getMediaContent = async (req: Request, res: Response) => {
-  try {
+  /**
+   * Stream Content (Proxy)
+   */
+  getMediaContent: catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
-    console.log(`[Proxy] Request for media ID: ${id}`);
 
-    // Validate UUID format to prevent DB errors
-    if (!id || id.length < 10) return res.status(400).send("Invalid ID");
-
-    const media = await prisma.media.findUnique({ where: { id } });
-
-    if (!media) {
-      return res.status(404).send("File not found");
-    }
-
-    const stream = (await getFileStream(media.key)) as any;
+    const { stream, mimeType } = await mediaService.getStream(id);
 
     if (!stream) {
-      return res.status(404).send("File not found in storage");
+      throw new AppError("File stream unavailable", HTTP_STATUS.NOT_FOUND);
     }
 
-    res.setHeader("Content-Type", media.mimeType);
+    res.setHeader("Content-Type", mimeType);
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
 
     if (typeof stream.pipe === "function") {
       stream.pipe(res);
-    } else if (stream.transformToByteArray) {
-      const bytes = await stream.transformToByteArray();
-      res.end(Buffer.from(bytes));
     } else {
-      res.status(500).send("Stream not supported");
+      // Fallback
+      res.end(stream);
     }
-  } catch (error) {
-    console.error("Error streaming media:", error);
-    res.status(500).send("Error streaming file");
-  }
+  }),
 };
+
+// Exports compatibility
+export const uploadMedia = mediaController.uploadMedia;
+export const getMedia = mediaController.getMedia;
+export const getMediaById = mediaController.getMediaById;
+export const deleteMedia = mediaController.deleteMedia;
+export const updateMedia = mediaController.updateMedia;
+export const getMediaContent = mediaController.getMediaContent;

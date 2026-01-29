@@ -1,5 +1,5 @@
 // THIS IS BACKEND CODE (Node.js)
-
+import { Logger } from "@/utils/logger";
 import { gateway } from "@/gateways/socketGateway"; // Import the socket gateway
 import { metaMediaService } from "@/services/metaMediaService";
 import { queueProducer } from "@/services/queueProducer";
@@ -20,7 +20,7 @@ export const verifyWebhook = (req: any, res: any) => {
 
   if (mode && token) {
     if (mode === "subscribe" && token === META_VERIFY_TOKEN) {
-      console.log("[Meta] Webhook Verified! 🟢");
+      Logger.info("[Meta] Webhook Verified! 🟢");
       res.status(200).send(challenge);
     } else {
       res.sendStatus(403);
@@ -46,8 +46,8 @@ export const handleIncomingWebhook = async (req: any, res: any) => {
     }
 
     const data = parsedData.data;
-    console.log(
-      `[Meta] 📩 Received message from ${data.phoneNumber} (Type: ${data.type})`
+    Logger.info(
+      `[Meta] 📩 Received message from ${data.phoneNumber} (Type: ${data.type})`,
     );
 
     // 2. CONSTRUCT MESSAGE OBJECT
@@ -59,8 +59,10 @@ export const handleIncomingWebhook = async (req: any, res: any) => {
       channel: Channel.WHATSAPP, // Asumimos WhatsApp para Meta
       direction: MessageDirection.INBOUND,
       status: "SENT",
-      senderId: "user_placeholder", // TODO: Lógica para encontrar o crear usuario
+      senderId: "user_placeholder",
       metadata: null,
+      companyId: "comp_123", // Added missing field
+      whatsappMessageId: data.messageId, // Added missing field
     };
 
     // TODO: Guardar `messageToSave` en la base de datos con `prisma.message.create`
@@ -68,7 +70,7 @@ export const handleIncomingWebhook = async (req: any, res: any) => {
 
     // 3. TRIGGER OUTGOING WEBHOOKS (Developer API)
     // Notify external customer systems that a message arrived
-    webhookDispatcher.trigger("comp_123", "message.received", messageToSave);
+    webhookDispatcher.dispatch("comp_123", "message.received", messageToSave);
 
     // 4. ASYNC AI PROCESSING
     // Instead of calling AI directly, we push to queue for scalability
@@ -92,7 +94,7 @@ export const handleIncomingWebhook = async (req: any, res: any) => {
 
     res.sendStatus(200);
   } catch (error) {
-    console.error("[Meta] Error processing webhook:", error);
+    Logger.error("[Meta] Error processing webhook:", error);
     res.sendStatus(500);
   }
 };
@@ -129,7 +131,7 @@ const processMetaJSON = async (body: any) => {
         try {
           const s3Result = await metaMediaService.processMedia(
             mediaObj.id,
-            companyId
+            companyId,
           );
 
           attachment = {
@@ -140,7 +142,7 @@ const processMetaJSON = async (body: any) => {
             mimeType: mediaObj.mime_type,
           };
         } catch (e) {
-          console.error("Error processing media:", e);
+          Logger.error("Error processing media:", e);
           content = `[ERROR DOWNLOADING ${type}]`;
         }
       }
@@ -176,7 +178,7 @@ export const sendWhatsAppMessage = async (to: string, messageBody: string) => {
   });
 
   // Trigger webhook event for sent message
-  webhookDispatcher.trigger("comp_123", "message.sent", {
+  webhookDispatcher.dispatch("comp_123", "message.sent", {
     to,
     text: messageBody,
     timestamp: new Date(),

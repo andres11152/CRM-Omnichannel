@@ -1,9 +1,17 @@
 import { Job } from "bull";
 import { MessageJob, messageQueueService } from "./messageQueue.service";
-import { WhatsAppService } from "../whatsapp.service";
-import { prisma } from "../../config/database";
+import { WhatsAppService } from "@/whatsapp/WhatsAppService";
 import { Logger } from "../../utils/logger";
-import { gateway } from "../../gateways/socketGateway";
+import {
+  MessagePayload,
+  MediaPayload,
+} from "@/whatsapp/core/types/whatsapp.types";
+
+interface WorkerResult {
+  success: boolean;
+  messageId: string;
+  sentAt: Date;
+}
 
 /**
  * MESSAGE QUEUE WORKER
@@ -12,9 +20,7 @@ import { gateway } from "../../gateways/socketGateway";
  * Features:
  * - Waits for WhatsApp session to be ready
  * - Uploads media to S3
- * - Sends via Baileys
- * - Persists to database
- * - Emits socket events
+ * - Sends via WhatsAppService
  * - Reports progress
  */
 
@@ -36,7 +42,7 @@ class MessageQueueWorker {
       return;
     }
 
-    const queue = (messageQueueService as any).getQueue(companyId);
+    const queue = messageQueueService.getQueue(companyId);
 
     // Process jobs with concurrency of 3
     queue.process(3, async (job: Job<MessageJob>) => {
@@ -50,14 +56,14 @@ class MessageQueueWorker {
   /**
    * Process a single message job
    */
-  private async processMessage(job: Job<MessageJob>): Promise<any> {
+  private async processMessage(job: Job<MessageJob>): Promise<WorkerResult> {
     const { companyId, conversationId, senderId, to, text, media } = job.data;
 
     try {
       // 1. Report progress: Waiting for session
       await job.progress(10);
       Logger.info(
-        `[Worker] Processing job ${job.id}: ${to} (${media?.type || "text"})`
+        `[Worker] Processing job ${job.id}: ${to} (${media?.type || "text"})`,
       );
 
       // 2. Wait for WhatsApp session to be ready
@@ -72,23 +78,27 @@ class MessageQueueWorker {
         await job.progress(60);
       }
 
-      // 4. Send via WhatsApp (using the DIRECT Baileys call, bypassing queue)
+      // 4. Send via WhatsApp Service V2
       await job.progress(70);
-      const result = await this.whatsappService.sendMessageDirect(to, text, {
-        companyId,
-        conversationId,
-        senderId,
-        media: uploadedMedia,
-      });
+      const result: MessagePayload = await this.whatsappService.sendMessage(
+        to,
+        text,
+        {
+          companyId,
+          conversationId,
+          senderId,
+          media: uploadedMedia,
+        },
+      );
 
       await job.progress(100);
 
       return {
         success: true,
-        messageId: result.id,
+        messageId: result.messageId,
         sentAt: new Date(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       Logger.error(`[Worker] Job ${job.id} failed:`, error);
       throw error; // Bull will retry automatically
     }
@@ -103,9 +113,10 @@ class MessageQueueWorker {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWait) {
-      const sock = this.whatsappService.getSessionSocket(companyId);
+      const isConnected =
+        await this.whatsappService.isCompanyConnected(companyId);
 
-      if (sock && (sock as any).ws?.readyState === (sock as any).ws?.OPEN) {
+      if (isConnected) {
         Logger.info(`[Worker] Session ready for ${companyId}`);
         return;
       }
@@ -121,19 +132,25 @@ class MessageQueueWorker {
    * Upload media to S3
    */
   private async uploadMediaToS3(
-    media: MessageJob["media"]
-  ): Promise<MessageJob["media"]> {
+    media: MediaPayload, // Use strictly typed MediaPayload
+  ): Promise<MediaPayload> {
     if (!media) return media;
 
     const { storageService } = await import("../storageService");
+
+    // Check if it's already a URL (not data URI)
+    if (!media.url.startsWith("data:")) {
+      return media;
+    }
+
     const base64Data = media.url.split(",")[1];
     const buffer = Buffer.from(base64Data, "base64");
 
     const result = await storageService.uploadFile(
       buffer,
-      media.name || `${media.type}-${Date.now()}.webm`,
+      media.filename || `${media.type}-${Date.now()}.webm`,
       media.mimetype || "application/octet-stream",
-      false
+      false,
     );
 
     Logger.info(`[Worker] 📤 Media uploaded to S3: ${result.key}`);
@@ -165,7 +182,7 @@ class MessageQueueWorker {
 let workerInstance: MessageQueueWorker;
 
 export function getMessageQueueWorker(
-  whatsappService: WhatsAppService
+  whatsappService: WhatsAppService,
 ): MessageQueueWorker {
   if (!workerInstance) {
     workerInstance = new MessageQueueWorker(whatsappService);

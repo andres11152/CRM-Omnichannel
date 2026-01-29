@@ -91,6 +91,20 @@ class CacheService {
   }
 
   /**
+   * Delete multiple keys efficiently
+   */
+  async deleteMany(keys: string[]): Promise<void> {
+    if (!this.client || !this.isConnected || keys.length === 0) return;
+
+    try {
+      await this.client.del(keys); // Redis DEL supports variadic arguments
+      Logger.info(`[Cache] Deleted ${keys.length} keys`);
+    } catch (error) {
+      Logger.error(`[Cache] Error deleting ${keys.length} keys:`, error);
+    }
+  }
+
+  /**
    * Delete all keys matching pattern
    */
   async deletePattern(pattern: string): Promise<void> {

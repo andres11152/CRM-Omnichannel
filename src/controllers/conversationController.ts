@@ -2,35 +2,41 @@ import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { prisma } from "@/config/prisma";
-import { whatsappService } from "@/services/whatsapp.service";
+import { prisma } from "@/config/database";
+import { whatsappService } from "@/whatsapp";
 import { gateway } from "@/gateways/socketGateway";
+import { Logger } from "@/utils/logger";
+import { Channel, Prisma } from "@prisma/client";
+
+// 🛡️ 100-YEAR FIX: Use Prisma generated types for perfect sync with Schema
+type ConversationWithRelations = Prisma.ConversationGetPayload<{
+  include: {
+    participants: true;
+    assignedTo: true;
+    messages: true;
+  };
+}>;
+
+// 🛡️ Type Guard for Channel enum
+function isValidChannel(channel: unknown): channel is Channel {
+  return Object.values(Channel).includes(channel as Channel);
+}
 
 export const createConversation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { phone, name, message } = req.body;
 
-    if (!phone) {
-      throw new AppError("Phone number is required", 400);
-    }
+    if (!phone) throw new AppError("Phone number is required", 400);
+    if (!req.companyId || !req.user) throw new AppError("Not authorized", 401);
 
-    if (!req.companyId || !req.user) {
-      throw new AppError("Not authorized", 401);
-    }
-
-    // Clean phone number (remove non-digits)
     const cleanPhone = phone.replace(/[^\d]/g, "");
-
-    // 1. Find or Create user (Customer) - Smart name handling
     const email = `${cleanPhone}@whatsapp.user`;
 
-    // Check if user exists to preserve real WhatsApp name
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
     const customer = await prisma.user.upsert({
       where: { email },
       update: {
-        // Only update if current name is generic
         ...(name &&
           existingUser &&
           (existingUser.name === cleanPhone ||
@@ -47,8 +53,6 @@ export const createConversation = catchAsync(
       },
     });
 
-    // 2. Check if conversation already exists with this PHONE NUMBER
-    // 🔑 Search by phone, not user.id (prevents duplicates)
     let conversation = await prisma.conversation.findFirst({
       where: {
         companyId: req.companyId,
@@ -64,19 +68,16 @@ export const createConversation = catchAsync(
     });
 
     if (conversation) {
-      // Conversation already exists, return it
-      res.status(200).json({
+      return res.status(200).json({
         status: "success",
         data: { conversation },
       });
-      return;
     }
 
-    // 3. Create new Conversation if it doesn't exist
     conversation = await prisma.conversation.create({
       data: {
         companyId: req.companyId,
-        subject: customer.name, // Use real WhatsApp name from DB
+        subject: customer.name,
         status: "OPEN",
         participants: {
           connect: [{ id: customer.id }, { id: req.user.id }],
@@ -86,10 +87,10 @@ export const createConversation = catchAsync(
       include: { participants: true, messages: true },
     });
 
-    // 4. Create Ticket (only for new conversations)
     const ticketCount = await prisma.ticket.count({
       where: { companyId: req.companyId },
     });
+
     await prisma.ticket.create({
       data: {
         ticketNumber: ticketCount + 1,
@@ -104,8 +105,6 @@ export const createConversation = catchAsync(
       },
     });
 
-    // 5. Send Message if provided
-    // ✅ whatsappService.sendMessage handles BOTH sending AND persisting
     if (message) {
       try {
         await whatsappService.sendMessage(cleanPhone, message, {
@@ -114,19 +113,34 @@ export const createConversation = catchAsync(
           senderId: req.user.id,
         });
       } catch (e) {
-        console.error("Failed to send initial WhatsApp message", e);
+        Logger.error(
+          "[Conversation] Failed to send initial WhatsApp message",
+          e,
+        );
+        const failedMsg = await prisma.message.create({
+          data: {
+            content: message,
+            companyId: req.companyId,
+            conversationId: conversation.id,
+            senderId: req.user.id,
+            channel: "WHATSAPP",
+            direction: "OUTBOUND",
+            status: "FAILED",
+          },
+          include: { sender: true },
+        });
+
+        gateway.emitToCompany(req.companyId, "message:new", {
+          conversationId: conversation.id,
+          message: failedMsg,
+        });
       }
     }
 
-    // 5. Add to CRM Contacts if requested
     const { addToContacts } = req.body;
     if (addToContacts) {
-      // Check if contact exists by phone
       const existingContact = await prisma.contact.findFirst({
-        where: {
-          companyId: req.companyId,
-          phone: phone,
-        },
+        where: { companyId: req.companyId, phone: phone },
       });
 
       if (!existingContact) {
@@ -145,38 +159,72 @@ export const createConversation = catchAsync(
       status: "success",
       data: { conversation },
     });
-  }
+  },
 );
 
 export const listConversations = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.companyId) {
-      throw new AppError("Not authorized", 401);
-    }
+    if (!req.companyId) throw new AppError("Not authorized", 401);
     const conversations = await prisma.conversation.findMany({
       where: { companyId: req.companyId },
-      include: { participants: true, assignedTo: true, messages: true },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        participants: true,
+        assignedTo: true,
+        messages: { orderBy: { createdAt: "asc" } },
+      },
     });
+    const mappedConversations = conversations.map((conv) => {
+      // Logic from SocketEventEmitter to identify customer
+      const customer = conv.participants.find(
+        (p) => p.role === "USER" || p.phone === conv.channelId,
+      );
+
+      const contactName = customer?.name || conv.subject || "Usuario";
+      const contactPhone = customer?.phone || conv.channelId || "";
+
+      const lastMsg = conv.messages[conv.messages.length - 1];
+      const unreadCount = conv.messages.filter(
+        (m) => m.direction === "INBOUND" && m.status !== "READ",
+      ).length;
+
+      return {
+        id: conv.id,
+        ticketId: conv.id,
+        contactName,
+        contactPhone,
+        lastMessage: lastMsg?.content || "Nueva conversación",
+        lastMessageTime: lastMsg?.createdAt || conv.updatedAt,
+        unreadCount, // Calculated (or use stored field if exists)
+        status: conv.status.toLowerCase(),
+        assignedTo: conv.assignedTo?.name,
+        channel: "whatsapp", // Hardcoded for now or derive from channelId
+        tags: [], // Tags stored separately, fetch if needed
+        participants: conv.participants,
+      };
+    });
+
     res.status(200).json({
       status: "success",
-      results: conversations.length,
-      data: { conversations },
+      results: mappedConversations.length,
+      data: { conversations: mappedConversations },
     });
-  }
+  },
 );
 
 export const getConversation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.companyId) {
-      throw new AppError("Not authorized", 401);
-    }
+    if (!req.companyId) throw new AppError("Not authorized", 401);
     let conversation = await prisma.conversation.findUnique({
       where: { id: req.params.id },
-      include: { participants: true, assignedTo: true, messages: true },
+      include: {
+        participants: true,
+        assignedTo: true,
+        messages: { orderBy: { createdAt: "asc" } },
+      },
     });
 
     if (!conversation) {
-      // Check if it's a Ticket ID
       const ticket = await prisma.ticket.findUnique({
         where: { id: req.params.id },
         include: { createdBy: true },
@@ -189,10 +237,8 @@ export const getConversation = catchAsync(
             include: { participants: true, assignedTo: true, messages: true },
           });
         } else {
-          // Create new conversation
-          console.log(
-            "[GetConv] Creating new conversation for ticket",
-            ticket.id
+          Logger.info(
+            `[Conversation] Creating new conversation for ticket ${ticket.id}`,
           );
           conversation = await prisma.conversation.create({
             data: {
@@ -209,11 +255,14 @@ export const getConversation = catchAsync(
             data: { conversationId: conversation.id },
           });
 
-          // Re-fetch
           conversation = (await prisma.conversation.findUnique({
             where: { id: conversation.id },
-            include: { participants: true, assignedTo: true, messages: true },
-          })) as any;
+            include: {
+              participants: true,
+              assignedTo: true,
+              messages: { orderBy: { createdAt: "asc" } },
+            },
+          })) as ConversationWithRelations | null;
         }
       }
     }
@@ -222,15 +271,14 @@ export const getConversation = catchAsync(
       throw new AppError("No conversation found with that ID", 404);
     }
 
-    // Transform messages to extract attachment from metadata for frontend compatibility
-    // RELAXED VALIDATION: We explicitly return the conversation data even if the phone number (channelId)
-    // is corrupted (e.g. LID), so that the UI can load and the user can DELETE the ticket.
     const conversationWithTransformed = {
       ...conversation,
-      messages: conversation.messages.map((msg: any) => ({
+      messages: conversation.messages.map((msg) => ({
         ...msg,
         attachment:
-          msg.metadata?.media || msg.metadata?.attachment || undefined,
+          (msg.metadata as Record<string, unknown>)?.media ||
+          (msg.metadata as Record<string, unknown>)?.attachment ||
+          undefined,
       })),
     };
 
@@ -238,36 +286,25 @@ export const getConversation = catchAsync(
       status: "success",
       data: { conversation: conversationWithTransformed },
     });
-  }
+  },
 );
-
-// ...
-
-// ...
 
 export const replyToConversation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user || !req.companyId) {
-      throw new AppError("Not authorized", 401);
-    }
-    const { content, channel, attachment, phone: bodyPhone } = req.body;
-
-    // 🔍 CRITICAL DEBUG: Log ALL requests, especially with attachments
-    console.log("🎯 [Reply] Request received:", {
-      conversationId: req.params.id,
-      content: content || "[empty]",
+    if (!req.user || !req.companyId) throw new AppError("Not authorized", 401);
+    const {
+      content,
       channel,
-      hasAttachment: !!attachment,
-      attachmentType: attachment?.type,
+      attachment,
       phone: bodyPhone,
-    });
+      metadata,
+    } = req.body;
 
     let conversation = await prisma.conversation.findUnique({
       where: { id: req.params.id },
       include: { participants: true },
     });
 
-    // If no conversation found, check if it's a Ticket ID
     if (!conversation) {
       const ticket = await prisma.ticket.findUnique({
         where: { id: req.params.id },
@@ -275,94 +312,68 @@ export const replyToConversation = catchAsync(
       });
 
       if (ticket) {
-        // Check if ticket already has a conversation linked
         if (ticket.conversationId) {
           conversation = await prisma.conversation.findUnique({
             where: { id: ticket.conversationId },
             include: { participants: true },
           });
         } else {
-          // Create new conversation for this ticket
           conversation = await prisma.conversation.create({
             data: {
               companyId: ticket.companyId,
               subject: ticket.subject,
               status: "OPEN",
-              participants: { connect: [{ id: ticket.createdById }] }, // Add ticket creator as participant
-              channelId: ticket.createdBy.email.split("@")[0], // Attempt to infer channel ID from user email
+              participants: { connect: [{ id: ticket.createdById }] },
+              channelId: ticket.createdBy.email.split("@")[0],
             },
             include: { participants: true },
           });
 
-          // Link ticket to conversation
           await prisma.ticket.update({
             where: { id: ticket.id },
             data: { conversationId: conversation.id },
           });
 
-          // Re-fetch with participants to match type
-          conversation = (await prisma.conversation.findUnique({
+          conversation = await prisma.conversation.findUnique({
             where: { id: conversation.id },
             include: { participants: true },
-          })) as any;
+          });
         }
       }
     }
 
     if (!conversation || conversation.companyId !== req.companyId) {
-      throw new AppError("No conversation or ticket found with that ID", 404);
+      throw new AppError("No conversation found with that ID", 404);
     }
 
-    // Determine Recipient Phone Number
-    // Priority 1: Explicitly passed in body
     let targetPhone = bodyPhone;
-
-    // Priority 2: Use Conversation's Channel ID (Primary source of truth for WA)
     if (!targetPhone) {
       if (conversation.channelId && /^\d+$/.test(conversation.channelId)) {
         targetPhone = conversation.channelId;
-      }
-      // Priority 3: Check Ticket Creator (if it was a ticket)
-      else {
-        // If this conversation is linked to a ticket, maybe the ticket has contact info?
+      } else {
         const linkedTicket = await prisma.ticket.findFirst({
           where: { conversationId: conversation.id },
           include: { createdBy: true },
         });
 
-        // If the creator looks like a phone number (legacy setup)
         if (linkedTicket?.createdBy?.email?.includes("@whatsapp.user")) {
           const potentialPhone = linkedTicket.createdBy.email.split("@")[0];
-          if (/^\d+$/.test(potentialPhone)) {
-            targetPhone = potentialPhone;
-          }
+          if (/^\d+$/.test(potentialPhone)) targetPhone = potentialPhone;
         }
       }
     }
 
-    // Validation
     if (!targetPhone) {
-      console.error(
-        `[ReplyController] ❌ FAILED to resolve phone number for ConvID: ${conversation.id}`
+      Logger.error(
+        `[Conversation] Failed to resolve phone for ConvID: ${conversation.id}`,
       );
-      throw new AppError(
-        "CRITICAL: Cannot determine recipient phone number from Database. Conversation ChannelID is missing or invalid.",
-        400
-      );
+      throw new AppError("Cannot determine recipient phone number", 400);
     }
 
-    // Clean phone (Allow full JIDs if passed, otherwise strip non-digits)
     targetPhone = targetPhone.includes("@")
       ? targetPhone
       : targetPhone.replace(/[^\d]/g, "");
-
-    // Final Gate Check
-    if (targetPhone.length < 5) {
-      throw new AppError("Resolved phone number is too short/invalid", 400);
-    }
-
-    // REMOVED "GHOST NUMBER" BLOCKING logic here to allow LIDs.
-    // LIDs are now valid destinations (`whatsapp.service` handles routing).
+    if (targetPhone.length < 5) throw new AppError("Invalid phone number", 400);
 
     const messageContent =
       content ||
@@ -372,25 +383,20 @@ export const replyToConversation = catchAsync(
           : `📎 Archivo: ${attachment.name || "Adjunto"}`
         : "");
 
-    console.log(`[Reply] ✅ Resolved target phone: ${targetPhone}`);
-
-    // 🚀 CENTRALIZED SENDING (Service Handles DB + Socket)
     let message;
     const isScheduled = req.body.scheduledAt;
 
     if (isScheduled) {
-      // --- SCHEDULED MESSAGE FLOW ---
-      console.log(`[Reply] 🕒 Scheduling message for ${req.body.scheduledAt}`);
-
       message = await prisma.message.create({
         data: {
           content: messageContent,
-          channel: channel as any,
+          channel: isValidChannel(channel) ? channel : Channel.WHATSAPP,
           direction: "OUTBOUND",
           conversationId: conversation.id,
           senderId: req.user.id,
           status: "SCHEDULED",
           metadata: {
+            ...(metadata as Record<string, unknown>), // Preserve tempId
             scheduledAt: req.body.scheduledAt,
             attachment: attachment || undefined,
           },
@@ -398,17 +404,7 @@ export const replyToConversation = catchAsync(
         include: { sender: true },
       });
     } else if (channel === "WHATSAPP") {
-      // --- IMMEDIATE SEND FLOW ---
       try {
-        console.log(
-          "🚀 [Reply] Calling whatsappService.sendMessage with attachment:",
-          {
-            type: attachment?.type,
-            hasUrl: !!attachment?.url,
-            urlLength: attachment?.url?.length,
-          }
-        );
-
         message = await whatsappService.sendMessage(
           targetPhone,
           messageContent,
@@ -417,27 +413,29 @@ export const replyToConversation = catchAsync(
             conversationId: conversation.id,
             senderId: req.user.id,
             media: attachment,
-          }
+            metadata: metadata, // 🎯 100-YEAR FIX: Preserve tempId for deduplication
+          },
         );
-      } catch (error: any) {
-        console.error("❌ [Reply] Failed to send WhatsApp message:");
-        console.error("Error message:", error?.message);
-        console.error("Error stack:", error?.stack);
-        console.error("Full error:", JSON.stringify(error, null, 2));
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        Logger.error("[Conversation] Failed to send WhatsApp message", {
+          error: errorMessage,
+        });
         throw new AppError(
-          `Failed to send message via WhatsApp: ${error?.message}`,
-          502
+          `Failed to send message via WhatsApp: ${errorMessage}`,
+          502,
         );
       }
     } else {
-      // Fallback for other channels (not implemented fully yet, but keep logic safe)
       message = await prisma.message.create({
         data: {
           content: messageContent,
-          channel: channel as any,
+          channel: isValidChannel(channel) ? channel : Channel.WEB_CHAT,
           direction: "OUTBOUND",
           conversationId: conversation.id,
           senderId: req.user.id,
+          metadata: metadata as Prisma.InputJsonValue, // 🎯 100-YEAR FIX: Preserve tempId
         },
         include: { sender: true },
       });
@@ -447,16 +445,13 @@ export const replyToConversation = catchAsync(
       status: "success",
       data: { message },
     });
-  }
+  },
 );
 
 export const updateTags = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { tags } = req.body;
-
-    if (!Array.isArray(tags)) {
-      throw new AppError("Tags must be an array", 400);
-    }
+    if (!Array.isArray(tags)) throw new AppError("Tags must be an array", 400);
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: req.params.id },
@@ -466,16 +461,13 @@ export const updateTags = catchAsync(
       throw new AppError("Conversation not found", 404);
     }
 
-    // Use raw query to update array column since Prisma might not sync schema yet
     await prisma.$executeRaw`
-        UPDATE conversations 
-        SET tags = ${tags}
-        WHERE id = ${req.params.id}
+        UPDATE conversations SET tags = ${tags} WHERE id = ${req.params.id}
     `;
 
     res.status(200).json({
       status: "success",
       data: { tags },
     });
-  }
+  },
 );

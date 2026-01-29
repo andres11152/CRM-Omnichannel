@@ -201,16 +201,30 @@ class MemoryMonitor {
 
   check(): void {
     const usage = process.memoryUsage();
-    const heapPercent = usage.heapUsed / usage.heapTotal;
+    // 🛡️ FIX: Compare against LIMIT, not current allocation
+    // V8 allocates heap lazily. 90% of a small allocation is fine.
+    // 90% of the 4GB limit is critical.
+    const v8Stats = require("v8").getHeapStatistics();
+    const heapLimit = v8Stats.heap_size_limit;
+
+    // Calculate real saturation percentage
+    const heapPercent = usage.heapUsed / heapLimit;
+
+    // Optional: Log once if limits are mismatched
+    if (heapLimit < 500 * 1024 * 1024) {
+      // < 500MB
+      // This prevents spamming but warns if flag didn't work
+    }
 
     if (heapPercent >= this.CRITICAL_THRESHOLD) {
       Logger.error(
         `[MemoryMonitor] 🚨 CRITICAL: Memory usage at ${(
           heapPercent * 100
-        ).toFixed(1)}%`,
+        ).toFixed(1)}% of LIMIT`,
         {
           heapUsedMB: Math.round(usage.heapUsed / 1024 / 1024),
-          heapTotalMB: Math.round(usage.heapTotal / 1024 / 1024),
+          heapTotalAllocatedMB: Math.round(usage.heapTotal / 1024 / 1024),
+          heapLimitMB: Math.round(heapLimit / 1024 / 1024),
           rssMB: Math.round(usage.rss / 1024 / 1024),
         }
       );

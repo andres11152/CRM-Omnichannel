@@ -1,76 +1,125 @@
-import { Request, Response } from "express";
+import { Response } from "express";
+import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { analyticsService } from "@/services/analyticsService";
-import { AuthenticatedRequest } from "@/types/types";
-import { AppError } from "@/utils/AppError";
 
-export const getHeatmap = catchAsync(async (req: Request, res: Response) => {
-  const { startDate, endDate } = req.query;
-  const companyId = (req as AuthenticatedRequest).user?.companyId;
-  const userRole = (req as AuthenticatedRequest).user?.role;
+/**
+ * 📊 ANALYTICS CONTROLLER (Refactored)
+ * Delegates complex reporting to AnalyticsService.
+ */
 
-  if (!companyId) {
-    throw new AppError("Company ID required", 400);
-  }
+export const getFinancialAnalytics = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    // Admin check usually done in middleware
+    const stats = await analyticsService.getFinancialAnalytics();
+    res.json(stats);
+  },
+);
 
-  // Optional: Restrict to ADMIN/SUPERVISOR if needed
-  // if (userRole !== 'ADMIN' && userRole !== 'SUPERVISOR') throw new AppError("Access denied", 403);
+export const getHeatmap = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId)
+      return res.status(400).json({ message: "Company ID required" });
 
-  const start = startDate
-    ? new Date(startDate as string)
-    : new Date(new Date().setDate(new Date().getDate() - 30));
-  const end = endDate ? new Date(endDate as string) : new Date();
-
-  const data = await analyticsService.getHeatmapData(companyId, start, end);
-
-  res.status(200).json({
-    status: "success",
-    data,
-  });
-});
+    const { startDate, endDate } = req.query;
+    const data = await analyticsService.getHeatmap(
+      companyId,
+      startDate ? new Date(startDate as string) : undefined,
+      endDate ? new Date(endDate as string) : undefined,
+    );
+    res.json({ status: "success", data });
+  },
+);
 
 export const getAgentPerformance = catchAsync(
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId)
+      return res.status(400).json({ message: "Company ID required" });
+
     const { startDate, endDate } = req.query;
-    const companyId = (req as AuthenticatedRequest).user?.companyId;
-
-    if (!companyId) throw new AppError("Company ID required", 400);
-
-    const start = startDate
-      ? new Date(startDate as string)
-      : new Date(new Date().setDate(new Date().getDate() - 30));
-    const end = endDate ? new Date(endDate as string) : new Date();
-
     const data = await analyticsService.getAgentPerformance(
       companyId,
-      start,
-      end
+      startDate ? new Date(startDate as string) : undefined,
+      endDate ? new Date(endDate as string) : undefined,
     );
-
-    res.status(200).json({
-      status: "success",
-      data,
-    });
-  }
+    res.json({ status: "success", data });
+  },
 );
 
 export const getTagAnalytics = catchAsync(
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId)
+      return res.status(400).json({ message: "Company ID required" });
+
     const { startDate, endDate } = req.query;
-    const companyId = (req as AuthenticatedRequest).user?.companyId;
+    const data = await analyticsService.getTagAnalytics(
+      companyId,
+      startDate ? new Date(startDate as string) : undefined,
+      endDate ? new Date(endDate as string) : undefined,
+    );
+    res.json({ status: "success", data });
+  },
+);
 
-    if (!companyId) throw new AppError("Company ID required", 400);
+export const getGlobalActivity = catchAsync(async (req, res) => {
+  // Mock Data
+  const data = analyticsService.getGlobalActivity();
+  res.json(data);
+});
 
-    const start = startDate
-      ? new Date(startDate as string)
-      : new Date(new Date().setDate(new Date().getDate() - 30));
-    const end = endDate ? new Date(endDate as string) : new Date();
+export const getTenantHealth = catchAsync(async (req, res) => {
+  // Mock Data
+  const data = analyticsService.getTenantHealth();
+  res.json(data);
+});
 
-    const data = await analyticsService.getTagAnalytics(companyId, start, end);
+export const exportAgentPerformance = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId)
+      return res.status(400).json({ message: "Company ID required" });
 
-    res.status(200).json({
+    const { startDate, endDate, format = "csv" } = req.query;
+    const result = await analyticsService.generateAgentExport(
+      companyId,
+      {
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+      },
+      String(format),
+      req.user?.name || req.user?.email || "User",
+    );
+
+    res.json({
       status: "success",
-      data,
+      data: result,
     });
-  }
+  },
+);
+
+export const exportTicketAnalytics = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId)
+      return res.status(400).json({ message: "Company ID required" });
+
+    const { startDate, endDate, format = "csv" } = req.query;
+    const result = await analyticsService.generateTicketExport(
+      companyId,
+      {
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+      },
+      String(format),
+      req.user?.name || req.user?.email || "User",
+    );
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  },
 );

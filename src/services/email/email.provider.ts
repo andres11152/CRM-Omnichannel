@@ -1,9 +1,10 @@
 import {
   IEmailProvider,
+  NodemailerConfig,
+  ProviderConfig,
   SendEmailParams,
   SendEmailResult,
   WebhookEvent,
-  WebhookEventType,
 } from "../../types/email.types";
 
 /**
@@ -12,8 +13,8 @@ import {
  */
 export abstract class BaseEmailProvider implements IEmailProvider {
   abstract sendEmail(params: SendEmailParams): Promise<SendEmailResult>;
-  abstract parseWebhook(body: any, headers: any): WebhookEvent | null;
-  abstract verifyWebhookSignature(body: any, signature: string): boolean;
+  abstract parseWebhook(body: unknown, headers: unknown): WebhookEvent | null;
+  abstract verifyWebhookSignature(body: unknown, signature: string): boolean;
 }
 
 // ===================================
@@ -26,42 +27,51 @@ import { Logger } from "../../utils/logger";
 export class NodemailerProvider extends BaseEmailProvider {
   private transporter: Transporter;
 
-  constructor(config?: {
-    host: string;
-    port: number;
-    secure: boolean;
-    user: string;
-    pass: string;
-  }) {
+  constructor(config?: NodemailerConfig) {
     super();
 
     if (config) {
       // Multi-Tenant Mode
+      const isSecure = config.secure ?? config.port === 465;
       this.transporter = nodemailer.createTransport({
         host: config.host,
         port: config.port,
-        secure: config.secure,
+        secure: isSecure,
         auth: {
           user: config.user,
           pass: config.pass,
         },
+        tls: {
+          rejectUnauthorized: false, // Helps with self-signed certs in dev, but use with caution
+        },
       });
-      Logger.info(
-        "[NodemailerProvider] Initialized with Tenant SMTP:",
-        config.host
-      );
+      Logger.info("[NodemailerProvider] Initialized with Tenant SMTP:", {
+        host: config.host,
+        port: config.port,
+        secure: isSecure,
+      });
     } else {
       // Global / System Mode (Fallback)
+      const host = process.env.SMTP_HOST || "smtp.gmail.com";
+      const port = parseInt(process.env.SMTP_PORT || "587");
+      // Robust Boolean Check: "true" string or port 465
+      const isSecure = process.env.SMTP_SECURE === "true" || port === 465;
+
       this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || "smtp.gmail.com",
-        port: parseInt(process.env.SMTP_PORT || "587"),
-        secure: process.env.SMTP_SECURE === "true",
+        host,
+        port,
+        secure: isSecure,
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASSWORD,
         },
+        tls: {
+          rejectUnauthorized: process.env.NODE_ENV === "production",
+        },
       });
-      Logger.info("[NodemailerProvider] Initialized with System Global SMTP");
+      Logger.info(
+        `[NodemailerProvider] Initialized Global SMTP (${host}:${port}, secure:${isSecure})`,
+      );
     }
   }
 
@@ -92,23 +102,25 @@ export class NodemailerProvider extends BaseEmailProvider {
         success: true,
         messageId: info.messageId,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       Logger.error("[NodemailerProvider] Send failed:", error);
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }
 
-  parseWebhook(body: any, headers: any): WebhookEvent | null {
+  parseWebhook(_body: unknown, _headers: unknown): WebhookEvent | null {
     // Nodemailer doesn't have webhooks by default
     // This would be implemented if using a service like SendGrid/Mailgun
     Logger.warn("[NodemailerProvider] Webhook parsing not supported");
     return null;
   }
 
-  verifyWebhookSignature(body: any, signature: string): boolean {
+  verifyWebhookSignature(_body: unknown, _signature: string): boolean {
     // Not applicable for Nodemailer
     return true;
   }
@@ -129,18 +141,18 @@ export class SendGridProvider extends BaseEmailProvider {
     }
   }
 
-  async sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+  async sendEmail(_params: SendEmailParams): Promise<SendEmailResult> {
     // TODO: Implement SendGrid
     throw new Error("SendGridProvider not implemented yet");
   }
 
-  parseWebhook(body: any, headers: any): WebhookEvent | null {
+  parseWebhook(_body: unknown, _headers: unknown): WebhookEvent | null {
     // TODO: Implement SendGrid webhook parsing
     // Example: https://docs.sendgrid.com/for-developers/tracking-events/event
     return null;
   }
 
-  verifyWebhookSignature(body: any, signature: string): boolean {
+  verifyWebhookSignature(_body: unknown, _signature: string): boolean {
     // TODO: Implement SendGrid signature verification
     return false;
   }
@@ -156,17 +168,17 @@ export class AWSSESProvider extends BaseEmailProvider {
     // TODO: Initialize AWS SDK
   }
 
-  async sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+  async sendEmail(_params: SendEmailParams): Promise<SendEmailResult> {
     // TODO: Implement AWS SES
     throw new Error("AWSSESProvider not implemented yet");
   }
 
-  parseWebhook(body: any, headers: any): WebhookEvent | null {
+  parseWebhook(_body: unknown, _headers: unknown): WebhookEvent | null {
     // TODO: Implement SNS webhook parsing
     return null;
   }
 
-  verifyWebhookSignature(body: any, signature: string): boolean {
+  verifyWebhookSignature(_body: unknown, _signature: string): boolean {
     // TODO: Implement SNS signature verification
     return false;
   }
@@ -181,23 +193,23 @@ export type EmailProviderType = "nodemailer" | "sendgrid" | "ses";
 export class EmailProviderFactory {
   static createProvider(
     type?: EmailProviderType,
-    config?: any
+    config?: ProviderConfig,
   ): IEmailProvider {
     const providerType =
       type || (process.env.EMAIL_PROVIDER as EmailProviderType) || "nodemailer";
 
     switch (providerType) {
       case "nodemailer":
-        return new NodemailerProvider(config);
+        return new NodemailerProvider(config as NodemailerConfig); // Type assertion safe here
       case "sendgrid":
         return new SendGridProvider();
       case "ses":
         return new AWSSESProvider();
       default:
         Logger.warn(
-          `[EmailProviderFactory] Unknown provider: ${providerType}, falling back to Nodemailer`
+          `[EmailProviderFactory] Unknown provider: ${providerType}, falling back to Nodemailer`,
         );
-        return new NodemailerProvider(config);
+        return new NodemailerProvider(config as NodemailerConfig);
     }
   }
 }

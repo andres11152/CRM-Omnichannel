@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { whatsappService } from "@/services/whatsapp.service";
+// ♻️ REFACTOR: Unified Service
+import { whatsappService } from "@/whatsapp";
 import { AuthenticatedRequest } from "@/types/types";
 
 export const syncMessages = async (req: Request, res: Response) => {
@@ -19,7 +20,7 @@ export const syncMessages = async (req: Request, res: Response) => {
     // Trigger synchronization
     const result = await whatsappService.syncMessages(
       companyId,
-      new Date(fromDate)
+      new Date(fromDate),
     );
     res.json({
       message: "Sync started successfully",

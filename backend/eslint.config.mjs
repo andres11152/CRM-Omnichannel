@@ -1,0 +1,27 @@
+import globals from "globals";
+import pluginJs from "@eslint/js";
+import tseslint from "typescript-eslint";
+
+/** @type {import('eslint').Linter.Config[]} */
+export default [
+  { files: ["**/*.{js,mjs,cjs,ts}"] },
+  { languageOptions: { globals: globals.node } },
+  pluginJs.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    rules: {
+      // 🛡️ STRICT QUALITY GATES
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_" },
+      ],
+      "no-console": ["warn", { allow: ["info", "warn", "error"] }],
+      "prefer-const": "error",
+      "@typescript-eslint/ban-ts-comment": "warn",
+    },
+  },
+  {
+    ignores: ["dist/", "node_modules/", "coverage/", "prisma/seed.ts"],
+  },
+];

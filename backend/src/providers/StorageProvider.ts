@@ -1,0 +1,73 @@
+import { Readable } from "stream";
+import { MediaType } from "@prisma/client";
+import {
+  uploadFile,
+  deleteFile,
+  getSignedUrl,
+  getFileStream,
+} from "@/services/uploadService";
+
+/**
+ * ☁️ STORAGE PROVIDER INTERFACE
+ * Agnostic contract for file storage (Local, S3, GCS)
+ */
+
+export interface StorageUploadResult {
+  key: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  filename: string;
+}
+
+export interface IStorageProvider {
+  upload(
+    file: Express.Multer.File,
+    context: { companyId: string; type: MediaType },
+  ): Promise<StorageUploadResult>;
+
+  delete(key: string): Promise<void>;
+  getSignedUrl(key: string): Promise<string>;
+  getStream(key: string): Promise<Readable>;
+}
+
+/**
+ * 🔌 ADAPTER IMPLEMENTATION
+ * Wraps existing uploadService logic into a clean provider class.
+ */
+export class DefaultStorageProvider implements IStorageProvider {
+  async upload(
+    file: Express.Multer.File,
+    context: { companyId: string; type: MediaType },
+  ): Promise<StorageUploadResult> {
+    // Now type-safe as uploadService uses MediaType
+    const result = await uploadFile(file, context);
+
+    return {
+      key: result.key,
+      url: result.url,
+      mimeType: result.mimeType,
+      size: result.size,
+      filename: result.filename,
+    };
+  }
+
+  async delete(key: string): Promise<void> {
+    await deleteFile(key);
+  }
+
+  async getSignedUrl(key: string): Promise<string> {
+    try {
+      return await getSignedUrl(key);
+    } catch {
+      return key;
+    }
+  }
+
+  async getStream(key: string): Promise<Readable> {
+    const stream = await getFileStream(key);
+    return stream as unknown as Readable;
+  }
+}
+
+export const storageProvider = new DefaultStorageProvider();

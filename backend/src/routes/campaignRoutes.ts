@@ -1,0 +1,62 @@
+import express from "express";
+import {
+  createCampaign,
+  getCampaigns,
+  getCampaign,
+  updateCampaign,
+  deleteCampaign,
+  launchCampaign,
+} from "@/controllers/campaignController";
+import { protect } from "@/middleware/authMiddleware";
+import { validate } from "@/middleware/validationMiddleware";
+import {
+  CreateCampaignSchema,
+  UpdateCampaignSchema,
+  GetCampaignsSchema,
+  DeleteCampaignSchema,
+} from "@/schemas/campaign.schema";
+
+import { auditLog } from "@/middleware/auditMiddleware";
+
+const router = express.Router();
+
+router.use(protect);
+
+/**
+ * 📢 CAMPAIGN ROUTES
+ * All routes include Zod validation for security and data integrity
+ */
+
+// GET /campaigns?status=draft&channel=WHATSAPP
+// POST /campaigns
+router.route("/").get(validate(GetCampaignsSchema), getCampaigns).post(
+  validate(CreateCampaignSchema),
+  auditLog("Campaign"), // Log Creation
+  createCampaign
+);
+
+// GET /campaigns/:id
+// PATCH /campaigns/:id
+// DELETE /campaigns/:id
+router
+  .route("/:id")
+  .get(getCampaign)
+  .patch(
+    validate(UpdateCampaignSchema),
+    auditLog("Campaign"), // Log Updates
+    updateCampaign
+  )
+  .delete(
+    validate(DeleteCampaignSchema),
+    auditLog("Campaign"), // Log Deletion
+    deleteCampaign
+  );
+
+// POST /campaigns/:id/launch
+// Launch campaign execution in background
+router.route("/:id/launch").post(
+  auditLog("Campaign", (req) => req.params.id), // Log Launch as UPDATE/ACTION
+  launchCampaign
+);
+
+export default router;

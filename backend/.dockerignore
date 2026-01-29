@@ -1,0 +1,6 @@
+# Ignorar dependencias de Node en el host
+node_modules
+
+# Ignorar logs y archivos de entorno local
+*.log
+.env

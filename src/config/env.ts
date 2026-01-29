@@ -28,7 +28,10 @@ const EnvSchema = z.object({
   DATABASE_URL: z
     .string()
     .url()
-    .startsWith("postgresql://", "Must start with postgresql://")
+    .refine(
+      (url) => url.startsWith("postgresql://") || url.startsWith("postgres://"),
+      "Database URL must start with postgresql:// or postgres://",
+    )
     .describe("PostgreSQL connection string"),
 
   // ==================== SECURITY ====================

@@ -10,16 +10,16 @@
     "test": "jest",
     "lint": "eslint src/**",
     "lint:strict": "eslint src/** --max-warnings=0",
-    "prisma:dev": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy",
-    "prisma:generate": "prisma generate",
-    "prisma:studio": "prisma studio",
-    "postinstall": "prisma generate",
+    "prisma:dev": "npx prisma migrate dev",
+    "prisma:deploy": "npx prisma migrate deploy",
+    "prisma:generate": "npx prisma generate",
+    "prisma:studio": "npx prisma studio",
+    "postinstall": "npx prisma generate",
     "prepare": "husky"
   },
   "prisma": {
     "schema": "prisma/schema.prisma",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "npx ts-node prisma/seed.ts"
   },
   "_moduleAliases": {
     "@": "dist"
@@ -84,7 +84,8 @@
     "web-push": "^3.6.7",
     "winston": "^3.19.0",
     "xlsx": "^0.18.5",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "prisma": "^5.22.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.16.0",
@@ -110,7 +111,6 @@
     "jest": "^29.7.0",
     "lint-staged": "^16.2.7",
     "nodemon": "^3.1.11",
-    "prisma": "^5.22.0",
     "rimraf": "^6.0.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",

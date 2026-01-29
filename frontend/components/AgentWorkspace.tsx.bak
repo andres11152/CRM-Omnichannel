@@ -1,0 +1,817 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
+import { 
+    Inbox, 
+    Layers, 
+    Menu, 
+    ChevronLeft, 
+    ChevronRight, 
+    Radio, 
+    User as UserIcon, 
+    Clock, 
+    MessageSquare, 
+    Phone, 
+    CheckCircle2,
+    AlertCircle,
+    MessageCircle,
+    LayoutDashboard,
+    PanelLeftClose,
+    PanelLeftOpen
+} from 'lucide-react';
+import { Ticket, Contact, AIConfig, User, Tag } from '../types';
+import { getTickets, updateTicket } from '../services/ticketService';
+import { ContactList } from './ContactList';
+import { ChatInterface } from './ChatInterface';
+import { NewChatModal } from './NewChatModal';
+import { SyncMessagesModal } from './SyncMessagesModal';
+import { API_BASE_URL, BASE_URL } from '../services/apiConfig';
+
+import { socketService } from '../services/socketService';
+
+interface Props {
+    aiConfig: AIConfig;
+    user?: User | null;
+}
+
+export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
+    const [tickets, setTickets] = useState<Ticket[]>([]);
+    const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'my_chats' | 'queue'>('my_chats');
+    const [loading, setLoading] = useState(true);
+    const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+    const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+    const [allTags, setAllTags] = useState<Tag[]>([]);
+
+    const [filterUnread, setFilterUnread] = useState(false);
+    const [sortOrder, setSortOrder] = useState<'date_desc' | 'date_asc'>('date_desc');
+    const [viewMode, setViewMode] = useState<'compact' | 'comfortable'>('comfortable');
+
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [socketConnected, setSocketConnected] = useState(false);
+
+    // Shared Helper for Name Resolution
+    const resolveContactName = (contact: Contact, fallbackSubject?: string) => {
+        let name = contact.name;
+        
+        // ULTIMATE SANITIZATION
+        const normalized = (name || '').toLowerCase();
+        const isInvalid = !name || 
+                         normalized.includes('unknown') || 
+                         normalized.includes('sin nombre') ||
+                         normalized.includes('Usuario Whatsapp') ||
+                         normalized.includes('Usuario de Whatsapp') ||
+                         normalized.trim() === '';
+        
+        if (isInvalid) {
+             let phone = contact.phone ? String(contact.phone) : ""; // Force String
+             
+             // Try channelId
+             if (!phone && contact?.channelId) {
+                const raw = String(contact.channelId).replace('@s.whatsapp.net', '').replace(/\D/g, '');
+                if (raw.length > 6) phone = raw;
+             }
+             // Try email
+             if (!phone && contact?.email) {
+                const raw = String(contact.email).split('@')[0].replace(/\D/g, '');
+                if (raw.length > 6) phone = raw;
+             }
+
+             // Try ID (JID often in ID)
+             if (!phone && contact?.id) {
+                 const raw = String(contact.id).replace('@s.whatsapp.net', '').replace(/\D/g, '');
+                 if (raw.length > 6) phone = raw;
+             }
+
+             if (phone && phone.trim() !== "") return phone;
+
+             // Try Subject as last resort
+             if (fallbackSubject && 
+                 !fallbackSubject.toLowerCase().includes('unknown') && 
+                 fallbackSubject.trim() !== '') {
+                 return fallbackSubject;
+             }
+             
+             return "Usuario WhatsApp";
+        }
+        return name || "Usuario WhatsApp";
+    };
+
+    // âœ… FIX: Use a Ref to track activeTicketId without triggering useEffect re-runs
+    const activeTicketIdRef = useRef(activeTicketId);
+
+    // Keep activeTicketIdRef in sync with state
+    useEffect(() => {
+        activeTicketIdRef.current = activeTicketId;
+    }, [activeTicketId]);
+
+    // âœ… FIX: Debounced refresh to avoid overwriting optimistic updates immediately with stale data
+    const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    
+    const triggerBackgroundRefresh = () => {
+        if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = setTimeout(() => {
+            console.log('[AgentWorkspace] ”„ Triggering background refresh...');
+            fetchData(true); // Silent refresh
+        }, 2000); // Wait 2 seconds before refreshing
+    };
+
+    // ”” HANDLE CONTACT SELECTION (Reset Unread Count)
+    const handleSelectContact = (ticketId: string) => {
+        console.log('[AgentWorkspace] “– Opening chat:', ticketId);
+        
+        // Reset unread count for this ticket
+        setTickets(prev => prev.map(ticket => 
+            ticket.id === ticketId || ticket.conversationId === ticketId
+                ? { ...ticket, unreadCount: 0 }
+                : ticket
+        ));
+        
+        // Set as active
+        setActiveTicketId(ticketId);
+    };
+
+    // Fetch Data
+    const fetchData = (isBackground = false) => {
+        if (!isBackground) setLoading(true);
+        
+        getTickets().then(allTickets => {
+            setTickets(prevLocalTickets => {
+                // Smart Merge Strategy: Protect high-quality local data
+                return allTickets.map(serverTicket => {
+                    // 1. Proactively Sanitize Server Ticket Name
+                    let cleanName = resolveContactName(serverTicket.contact, serverTicket.subject);
+                    
+                    // 2. Check Local State for better name (Match by ID or ConversationID)
+                    const localTicket = prevLocalTickets.find(t => 
+                        t.id === serverTicket.id || 
+                        t.conversationId === serverTicket.conversationId ||
+                        t.id === serverTicket.conversationId
+                    );
+                    
+                    const localName = localTicket?.contact?.name;
+                    
+                    // Specific Logic: If Server says "Sin Nombre" or "Usuario WhatsApp" but Local has a Real Name, keep Local
+                    const isServerFallback = cleanName === 'Sin Nombre' || cleanName === 'Usuario WhatsApp';
+                    const isLocalGood = localName && localName !== 'Sin Nombre' && localName !== 'Usuario WhatsApp';
+
+                    if (isLocalGood && isServerFallback) {
+                        cleanName = localName;
+                    }
+
+                    // Mutate server ticket contact - PRESERVE ALL FIELDS
+                    return {
+                        ...serverTicket,
+                        contact: {
+                            ...serverTicket.contact, // âœ… Keep ALL fields from server
+                            name: cleanName,
+                            phone: serverTicket.contact.phone || localTicket?.contact?.phone,
+                            // âœ… Explicitly preserve profile info
+                            profilePicUrl: (serverTicket.contact.profilePicUrl?.startsWith('/') ? `${BASE_URL}${serverTicket.contact.profilePicUrl}` : serverTicket.contact.profilePicUrl) || localTicket?.contact?.profilePicUrl,
+                            about: serverTicket.contact.about || localTicket?.contact?.about,
+                        }
+                    };
+                });
+            });
+            
+            if (!isBackground) setLoading(false);
+        }).catch(err => {
+            console.error("Error fetching tickets", err);
+            if (!isBackground) setLoading(false);
+        });
+    };
+
+    // âœ… Socket & Lifecycle Effect
+    useEffect(() => {
+        console.log('[AgentWorkspace] âœ… Services Initialized');
+        fetchData();
+        
+        // Connect Socket
+        socketService.connect();
+
+        // Initial check
+        if (socketService.isConnected) {
+             setSocketConnected(true);
+        }
+
+        // Join company room
+        if (user?.companyId) {
+            socketService.emit('join_room', { conversationId: `company:${user.companyId}` });
+        }
+
+        const onConnect = () => {
+            setSocketConnected(true);
+            if (user?.companyId) {
+                socketService.emit('join_room', { conversationId: `company:${user.companyId}` });
+            }
+        };
+
+        const onDisconnect = () => {
+            setSocketConnected(false);
+        };
+
+        socketService.on('connect', onConnect);
+        socketService.on('disconnect', onDisconnect); 
+
+        // ”” NOTIFICATION SOUND (Base64 for reliability)
+        const playNotificationSound = () => {
+             try {
+                const audio = new Audio("https://cdn.freesound.org/previews/536/536108_11585250-lq.mp3"); // Subtle 'Pop' sound
+                audio.volume = 0.5;
+                audio.play().catch(e => console.warn("Audio play blocked", e));
+             } catch (e) {
+                console.error("Audio error", e);
+             }
+        };
+
+        const handleConversationUpdated = (payload: any) => {
+            setTickets(prev => {
+                const ticketIndex = prev.findIndex(t => t.conversationId === payload.id);
+                
+                let resolvedName;
+                
+                if (ticketIndex === -1) {
+                    // NEW TICKET
+                    const tempContact = { 
+                        ...payload.contact, 
+                        phone: payload.contact?.phone || payload.channelId 
+                    };
+                    resolvedName = resolveContactName(tempContact, payload.subject);
+                } else {
+                    // EXISTING TICKET
+                    const existingTicket = prev[ticketIndex];
+                    if (payload.contact) {
+                        const tempContact = { 
+                            ...payload.contact, 
+                            phone: payload.contact?.phone || payload.channelId 
+                        };
+                        resolvedName = resolveContactName(tempContact, payload.subject || existingTicket.subject);
+                    } else {
+                        resolvedName = existingTicket.contact?.name;
+                    }
+                }
+
+                // ”Š PLAY SOUND if Inbound & Message Content exists
+                const isOutbound = payload.senderType === 'AGENT' || payload.direction === 'OUTBOUND'; // Check payload flags
+                if (!isOutbound && (payload.lastMessage || payload.lastMessagePreview)) {
+                    playNotificationSound();
+                }
+
+                if (ticketIndex === -1) {
+                     // †• OPTIMISTIC APPEND
+                     // Extract last message content (handle both string and object)
+                     let newTicketLastMessage = 'Nuevo mensaje';
+                     if (typeof payload.lastMessage === 'string') {
+                         newTicketLastMessage = payload.lastMessage;
+                     } else if (payload.lastMessage?.content) {
+                         newTicketLastMessage = payload.lastMessage.content;
+                     } else if (payload.lastMessagePreview) {
+                         newTicketLastMessage = payload.lastMessagePreview;
+                     }
+
+                     const newTicket: any = {
+                         id: payload.id, 
+                         conversationId: payload.id,
+                         contact: {
+                             id: payload.contact?.id || payload.id,
+                             name: resolvedName,
+                             phone: payload.channelId || "",
+                             channelId: payload.contact?.channelId || payload.id, 
+                             avatarUrl: payload.contact?.avatarUrl,
+                             profilePicUrl: payload.contact?.profilePicUrl?.startsWith('/') ? `${BASE_URL}${payload.contact.profilePicUrl}` : payload.contact?.profilePicUrl,
+                             about: payload.contact?.about
+                         },
+                         status: 'OPEN', 
+                         channel: 'whatsapp',
+                         lastMessage: newTicketLastMessage,
+                         lastMessageAt: payload.lastMessageAt || new Date(),
+                         unreadCount: 1, // Start with 1 unread
+                         tags: [],
+                         assignedAgentId: null 
+                     };
+                     
+                     triggerBackgroundRefresh();
+                     return [newTicket, ...prev];
+                }
+
+                // Update Existing Ticket
+                const updatedTickets = [...prev];
+                const ticket = updatedTickets[ticketIndex];
+                const currentActiveId = activeTicketIdRef.current;
+                
+                // ”¢ UNREAD COUNT LOGIC (Fixed Accumulation)
+                const isCurrentChatActive = currentActiveId === ticket.id;
+                const currentCount = Number(ticket.unreadCount) || 0;
+                
+                // If this chat is active, reset to 0. Otherwise, INCREMENT by 1 for each new message event
+                const newUnreadCount = isCurrentChatActive ? 0 : currentCount + 1;
+
+                // “ LAST MESSAGE LOGIC (Always update if payload has content)
+                // Backend can send lastMessage as string OR as {content: string}
+                let incomingMessage = '';
+                if (typeof payload.lastMessage === 'string') {
+                    incomingMessage = payload.lastMessage;
+                } else if (payload.lastMessage?.content) {
+                    incomingMessage = payload.lastMessage.content;
+                } else if (payload.lastMessagePreview) {
+                    incomingMessage = payload.lastMessagePreview;
+                } else if (payload.content) {
+                    incomingMessage = payload.content;
+                }
+                
+                const updatedLastMessage = incomingMessage || ticket.lastMessage;
+
+                updatedTickets[ticketIndex] = {
+                    ...ticket,
+                    lastMessage: updatedLastMessage,
+                    lastMessageAt: payload.lastMessageAt || new Date(),
+                    unreadCount: newUnreadCount,
+                    contact: {
+                        ...ticket.contact, 
+                        ...(payload.contact || {}),
+                        name: resolvedName,
+                        profilePicUrl: (payload.contact?.profilePicUrl?.startsWith('/') ? `${BASE_URL}${payload.contact.profilePicUrl}` : payload.contact?.profilePicUrl) || ticket.contact?.profilePicUrl,
+                        about: payload.contact?.about || ticket.contact?.about
+                    }
+                };
+
+                updatedTickets.sort((a, b) => 
+                    new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+                );
+                
+                return updatedTickets;
+            });
+        };
+
+
+
+        console.log('[AgentWorkspace] “¡ Registering conversation.updated listener');
+        socketService.on('conversation.updated', handleConversationUpdated);
+        
+        // Listener for Ticket Deletion
+        const handleTicketDeleted = (data: { ticketId: string }) => {
+             console.log('[AgentWorkspace] —‘ï¸  Ticket deleted:', data.ticketId);
+             setTickets(prev => prev.filter(t => t.id !== data.ticketId));
+             if (activeTicketIdRef.current === data.ticketId) {
+                 setActiveTicketId(null);
+             }
+        };
+        socketService.on('ticket_deleted', handleTicketDeleted);
+
+        console.log('[AgentWorkspace] âœ… Listeners registered');
+
+        // Load Tags
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE_URL}/tags`, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(data => Array.isArray(data) ? setAllTags(data) : setAllTags([]))
+            .catch(err => console.error("Error loading tags", err));
+
+        return () => {
+            console.log('[AgentWorkspace] ›‘ Unmounting - Removing Listeners');
+            socketService.off('conversation.updated', handleConversationUpdated);
+            socketService.off('ticket_deleted', handleTicketDeleted);
+        };
+    }, [user?.companyId]); // Depend on user.companyId to rejoin room if it loads late
+
+    // ·ï¸ TAB TITLE MANAGEMENT (Must be Top Level Hook)
+    useEffect(() => {
+        const totalUnread = tickets.reduce((acc, t) => acc + (t.unreadCount || 0), 0);
+        if (totalUnread > 0) {
+            document.title = `(${totalUnread}) Reply CRM`;
+        } else {
+            document.title = "Reply CRM";
+        }
+    }, [tickets]);
+    const handleDeleteTicket = async (ticketId: string) => {
+        console.log('[AgentWorkspace] —‘ï¸  Deleting ticket:', ticketId);
+        
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.message || 'Error al eliminar ticket');
+            }
+
+            console.log('[AgentWorkspace] âœ… Ticket deleted successfully');
+            
+            // Remove ticket from state
+            setTickets(prev => prev.filter(t => t.id !== ticketId));
+            
+            // If it was the active ticket, clear selection
+            if (activeTicketId === ticketId) {
+                setActiveTicketId(null);
+            }
+
+            toast.success('Ticket eliminado correctamente');
+        } catch (error: any) {
+            console.error('[AgentWorkspace] âŒ Error deleting ticket:', error);
+            toast.error(error.message || 'Error al eliminar el ticket');
+        }
+    };
+
+    // Filter Logic
+    // My Chats: OPEN or IN_PROGRESS and assigned to me (handled by backend or implicit)
+    const myTickets = tickets.filter(t => t.status === 'OPEN' || t.status === 'IN_PROGRESS');
+    
+    // Queue: OPEN but unassigned (no PENDING status exists in enum)
+    const queueTickets = tickets.filter(t => t.status === 'OPEN' && !t.assignedAgentId);
+    
+    let displayedTickets = activeTab === 'my_chats' ? myTickets : queueTickets;
+
+    // Apply Filters
+    if (filterUnread) {
+        displayedTickets = displayedTickets.filter(t => t.unreadCount > 0);
+    }
+
+    // Apply Sort
+    displayedTickets.sort((a, b) => {
+        const dateA = new Date(a.lastMessageAt).getTime();
+        const dateB = new Date(b.lastMessageAt).getTime();
+        return sortOrder === 'date_desc' ? dateB - dateA : dateA - dateB;
+    });
+
+    // Convert to Contact format for the List Component
+    // Convert to Contact format for the List Component
+    // Convert to Contact format for the List Component
+    const contacts: Contact[] = displayedTickets.map(t => {
+        const displayName = resolveContactName(t.contact, t.subject); // Use Subject as Fallback!
+
+        return {
+            ...t.contact,
+            name: displayName, // Apply sanitized name
+            id: t.id, // Use Ticket ID for selection logic to work
+            realContactId: t.contact.id, // Preserve original Contact ID
+            lastMessage: t.lastMessage,
+            lastMessageTime: t.lastMessageAt,
+            unreadCount: t.unreadCount,
+            tags: t.tags,
+            channel: t.channel,
+            status: t.status,
+            assignedMode: t.queueId === 'ai' ? 'bot' : 'human',
+            queueName: (t.contact as any).queueName || t.queue?.name,
+            assignedAgentName: (t.contact as any).assignedAgentName || t.assignedTo?.name
+        };
+    });
+
+    const activeTicket = tickets.find(t => t.id === activeTicketId);
+    
+    const activeContact = activeTicket ? {
+        ...activeTicket.contact,
+        name: resolveContactName(activeTicket.contact, activeTicket.subject), // Apply same sanitization logic
+        id: activeTicket.conversationId || activeTicket.id, // Use conversationId if available
+        // SMART PHONE RESOLUTION
+        phone: activeTicket.contact.phone 
+            || (activeTicket.contact.channelId && /^\d+$/.test(activeTicket.contact.channelId) ? activeTicket.contact.channelId : "")
+            || (activeTicket.conversationId && /^\d+$/.test(activeTicket.conversationId) ? activeTicket.conversationId : ""),
+        
+        channelId: activeTicket.contact.channelId,
+        avatarUrl: activeTicket.contact.avatarUrl,
+        status: activeTicket.status,
+        assignedMode: activeTicket.queueId === 'ai' ? 'bot' : 'human' as any,
+        queueName: activeTicket.queue?.name,
+        assignedAgentName: activeTicket.assignedTo?.name
+    } : null;
+
+    if (activeContact) {
+        // Debug Socket Room ID
+        // console.log(`[AgentWorkspace] ” Active Contact ID for Socket: ${activeContact.id} (TicketID: ${activeTicket.id}, ConvID: ${activeTicket.conversationId})`);
+    }
+
+    // Actions
+    const handlePickTicket = async () => {
+        if (!activeTicketId || !user) return;
+        
+        const ticketToUpdate = tickets.find(t => t.id === activeTicketId);
+        if (!ticketToUpdate) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            
+            // 1. Assign ticket to current agent
+            const assignRes = await fetch(`${API_BASE_URL}/tickets/${activeTicketId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ 
+                    status: 'OPEN',
+                    assignedAgentId: user.id
+                })
+            });
+
+            if (!assignRes.ok) {
+                throw new Error('Error al asignar ticket');
+            }
+
+            // 2. Send system notification to chat
+            const conversationId = ticketToUpdate.conversationId || ticketToUpdate.id;
+            await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    content: `™‹â€â™‚ï¸ El agente *${user.name}* se ha unido al chat`,
+                    senderType: 'SYSTEM',
+                    direction: 'OUTBOUND'
+                })
+            });
+
+            // 3. Optimistic UI Update
+            setTickets(prev => prev.map(t => 
+                t.id === activeTicketId 
+                    ? { ...t, status: 'OPEN' as const, assignedAgentId: user.id, assignedTo: user }
+                    : t
+            ));
+
+            // 4. Switch to My Chats view
+            setActiveTab('my_chats');
+            
+            toast.success(`Ticket asignado. Â¡Puedes comenzar a chatear!`);
+        } catch (error: any) {
+            console.error("Failed to pick ticket", error);
+            toast.error(error.message || "Error al atender ticket");
+            fetchData(); // Revert on error
+        }
+    };
+
+    const handleNewChat = () => {
+        setIsNewChatModalOpen(true);
+    };
+
+    const handleCreateChatSubmit = async (phone: string, name: string, message: string, addToContacts: boolean) => {
+        setIsNewChatModalOpen(false);
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/conversations`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ phone, name, message, addToContacts })
+            });
+
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.message || 'Error al crear chat');
+            }
+
+            // Refresh tickets/chats
+            fetchData();
+            
+        } catch (error: any) {
+            console.error("Error creating chat", error);
+            toast.error(error.message || 'Error al iniciar chat');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSyncSubmit = async (dateStr: string) => {
+        setIsSyncModalOpen(false);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/integrations/whatsapp/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ fromDate: dateStr })
+            });
+            const data = await res.json();
+            toast.success(data.message || "SincronizaciÃ³n iniciada");
+        } catch (e) {
+            toast.error("Error al iniciar sincronizaciÃ³n");
+        }
+    };
+
+    const isRestricted = user?.companyStatus === 'INACTIVE' || user?.companyStatus === 'CANCELED';
+
+    return (
+        <div className="h-full flex flex-col bg-gray-50 dark:bg-[#0b141a]">
+            {/* Header */}
+            <div className="px-3 py-2 md:px-6 md:py-3 bg-white dark:bg-[#202c33] border-b border-gray-200 dark:border-gray-700 flex justify-between items-center flex-shrink-0 gap-2">
+                 <div className="flex items-center gap-2 md:gap-3">
+                    <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        <LayoutDashboard className={`w-5 h-5 ${socketConnected ? 'text-green-500' : 'text-red-500'}`} />
+                        <span className="hidden sm:inline">Panel de Agente</span>
+                    </h2>
+                    {user && (
+                        <span className="hidden md:inline-block text-sm text-gray-500 dark:text-gray-400 border-l border-gray-300 dark:border-gray-600 pl-3">
+                            Hola, <span className="font-semibold text-gray-700 dark:text-gray-200">{user.name}</span>
+                        </span>
+                    )}
+                 </div>
+                 
+                 {/* 🆕 CENTER: Dynamic Actions Portal */}
+                 <div id="header-actions-portal" className="flex-1 flex justify-center items-center px-1 min-w-0"></div>
+
+                 <div className="flex gap-2 items-center flex-shrink-0">
+                    <button
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        className="hidden md:block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        title={isSidebarOpen ? "Ocultar lista de chats" : "Mostrar lista de chats"}
+                    >
+                        {isSidebarOpen ? (
+                            <PanelLeftClose className="w-5 h-5" />
+                        ) : (
+                            <PanelLeftOpen className="w-5 h-5" />
+                        )}
+                    </button>
+                    <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                        <button 
+                            onClick={() => { setActiveTab('my_chats'); setActiveTicketId(null); }}
+                            className={`px-2 md:px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 md:gap-2 ${activeTab === 'my_chats' ? 'bg-white dark:bg-[#202c33] shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                        >
+                            <span className="hidden sm:inline">📥 Mis Chats</span>
+                            <Inbox className="sm:hidden w-5 h-5" /> 
+                            <span className="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 px-1.5 rounded-full text-[10px]">{myTickets.length}</span>
+                        </button>
+                        <button 
+                            onClick={() => { setActiveTab('queue'); setActiveTicketId(null); }}
+                            className={`px-2 md:px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 md:gap-2 ${activeTab === 'queue' ? 'bg-white dark:bg-[#202c33] shadow text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                        >
+                            <span className="hidden sm:inline">⏳ Colas</span>
+                            <Layers className="sm:hidden w-5 h-5" /> 
+                            <span className="bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 px-1.5 rounded-full text-[10px]">{queueTickets.length}</span>
+                        </button>
+                    </div>
+                 </div>
+            </div>
+            
+            <div className="flex-1 flex overflow-hidden relative">
+                <div className={`
+                    border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111b21] flex flex-col flex-shrink-0 z-20
+                    ${isSidebarOpen 
+                        ? `w-full md:w-72 ${activeTicketId ? 'hidden md:flex' : 'flex'}` 
+                        : 'hidden'
+                    }
+                `}>
+                    {loading ? (
+                        <div className="p-8 text-center text-gray-500 text-sm">Cargando tickets...</div>
+                    ) : (
+                        <ContactList 
+                            contacts={contacts} 
+                            activeContactId={activeTicketId || ''} 
+                            onSelectContact={handleSelectContact}
+                            userRole={user?.role}
+                            onDeleteContact={handleDeleteTicket}
+                            onNewChat={isRestricted ? undefined : handleNewChat}
+
+                            // Menu Props
+                            filterUnread={filterUnread}
+                            onToggleFilterUnread={() => setFilterUnread(!filterUnread)}
+                            sortOrder={sortOrder}
+                            onChangeSortOrder={setSortOrder}
+                            viewMode={viewMode}
+                            onChangeViewMode={setViewMode}
+                            
+                            allTags={allTags}
+                        />
+                    )}
+                </div>
+
+                {/* Main: Chat Interface or Queue Preview */}
+                <div className={`flex-1 bg-[#e5ddd5] dark:bg-[#0b141a] relative flex flex-col min-w-0 ${!activeTicketId ? 'hidden md:flex' : 'flex'}`}>
+                    {activeTicket ? (
+                        activeTab === 'my_chats' ? (
+                            // ACTIVE CHAT VIEW
+                            <ChatInterface 
+                                activeContact={activeContact!} 
+                                aiConfig={aiConfig} 
+                                readOnly={isRestricted}
+                                onBack={() => setActiveTicketId(null)}
+                            />
+                        ) : (
+                            // QUEUE PREVIEW VIEW (Pick Ticket) - Improved Design
+                            <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0b141a] dark:via-[#111b21] dark:to-[#0b141a]">
+                                <div className="bg-white dark:bg-[#202c33] p-6 sm:p-8 rounded-3xl shadow-2xl max-w-lg w-full border-2 border-gray-100 dark:border-gray-700 space-y-6">
+                                    {/* Header with Avatar */}
+                                    <div className="text-center pb-6 border-b border-gray-200 dark:border-gray-700">
+                                        <div className="relative inline-block">
+                                            {activeTicket.contact.profilePicUrl || activeTicket.contact.avatarUrl ? (
+                                                <img 
+                                                    src={activeTicket.contact.profilePicUrl || activeTicket.contact.avatarUrl} 
+                                                    alt={activeTicket.contact.name} 
+                                                    className="w-24 h-24 rounded-full mx-auto border-4 border-white dark:border-gray-600 shadow-lg object-cover" 
+                                                />
+                                            ) : (
+                                                <div className="w-24 h-24 rounded-full mx-auto border-4 border-white dark:border-gray-600 shadow-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                                    <span className="text-white text-3xl font-bold">
+                                                        {activeTicket.contact.name.charAt(0).toUpperCase()}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <div className="absolute bottom-0 right-0 w-6 h-6 bg-orange-500 rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center">
+                                                <Clock className="w-3 h-3 text-white" />
+                                            </div>
+                                                <span className="text-xs">â³</span>
+                                            </div>
+                                        </div>
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-4">{activeTicket.contact.name}</h3>
+                                        <div className="flex items-center justify-center gap-2 mt-2">
+                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                                <MessageCircle className="w-3 h-3" />
+                                                {activeTicket.channel?.toUpperCase() || 'WHATSAPP'}
+                                            </span>
+                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                                                <Clock className="w-3 h-3" />
+                                                EN COLA
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Message Preview */}
+                                    <div className="space-y-3">
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                                <MessageSquare className="w-4 h-4" />
+                                                Último Mensaje
+                                            </p>
+                                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-[#111b21] dark:to-[#1a2730] p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                                <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed line-clamp-3">
+                                                    {activeTicket.lastMessage || 'Sin mensaje previo...'}
+                                                </p>
+                                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                                                    {new Date(activeTicket.lastMessageAt).toLocaleString('es-ES', { 
+                                                        day: 'numeric', 
+                                                        month: 'short', 
+                                                        hour: '2-digit', 
+                                                        minute: '2-digit' 
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Quick Info */}
+                                        {activeTicket.contact.phone && (
+                                            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                                                <Phone className="w-4 h-4" />
+                                                <span className="font-mono">{activeTicket.contact.phone}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* CTA Button */}
+                                    {isRestricted ? (
+                                        <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-bold text-center border border-red-200 dark:border-red-800 flex items-center justify-center gap-2">
+                                            <AlertCircle className="w-6 h-6" />
+                                            Acción no disponible en modo restringido
+                                        </div>
+                                    ) : (
+                                        <button 
+                                        <button 
+                                            onClick={handlePickTicket}
+                                            className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg transform transition-all hover:scale-105 hover:shadow-xl active:scale-95 flex items-center justify-center gap-3 group"
+                                        >
+                                            <CheckCircle2 className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+                                            <span className="text-lg">TOMAR TICKET</span>
+                                        </button>
+                                            <svg className="w-6 h-6 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                            <span className="text-lg">™‹â€â™‚ï¸ TOMAR TICKET</span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 p-10 text-center">
+                            <MessageCircle className="w-24 h-24 mb-4 opacity-20" />
+                            <p className="text-lg font-medium">Selecciona un ticket de la lista</p>
+                            <p className="text-sm mt-2 max-w-xs">
+                                {activeTab === 'queue' 
+                                    ? 'Revisa los tickets pendientes y asÃ­gnatelos para comenzar a chatear.' 
+                                    : 'Gestiona tus conversaciones activas y responde a los clientes.'}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+            <NewChatModal 
+                isOpen={isNewChatModalOpen}
+                onClose={() => setIsNewChatModalOpen(false)}
+                onSubmit={handleCreateChatSubmit}
+            />
+            <SyncMessagesModal 
+                isOpen={isSyncModalOpen}
+                onClose={() => setIsSyncModalOpen(false)}
+                onSubmit={handleSyncSubmit}
+            />
+        </div>
+    );
+};
+
+
+

@@ -1,0 +1,153 @@
+.push-notification-settings {
+  max-width: 600px;
+}
+
+.setting-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.setting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-badge.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.inactive {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.setting-description {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.permission-status {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+.permission-granted {
+  color: #28a745;
+}
+
+.permission-denied {
+  color: #dc3545;
+}
+
+.permission-default {
+  color: #ffc107;
+}
+
+.alert {
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.alert-warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+}
+
+.alert ol {
+  margin: 12px 0 0 20px;
+}
+
+.setting-actions {
+  margin: 20px 0;
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #545b62;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.notification-info {
+  margin-top: 24px;
+  padding: 16px;
+  background: #e7f3ff;
+  border-radius: 4px;
+}
+
+.notification-info h4 {
+  margin: 0 0 12px 0;
+  color: #0056b3;
+}
+
+.notification-info ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.notification-info li {
+  margin: 8px 0;
+  color: #333;
+}

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reply Software - Español</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              reply: {
+                green: {
+                  DEFAULT: "#007B65", // Light Mode Primary
+                  dark: "#1ABC9C", // Dark Mode Primary
+                },
+                blue: {
+                  DEFAULT: "#0047AB", // Light Mode Secondary
+                  dark: "#4A90E2", // Dark Mode Secondary
+                },
+                accent: {
+                  DEFAULT: "#7FFF00", // Vibrant Accent
+                },
+                bg: {
+                  DEFAULT: "#F8F8F8", // Light Background
+                  dark: "#121212", // Dark Background
+                },
+                panel: {
+                  DEFAULT: "#FFFFFF", // Light Card/Panel
+                  dark: "#1E1E1E", // Dark Card/Panel
+                },
+                text: {
+                  DEFAULT: "#212121", // Light Text
+                  dark: "#E0E0E0", // Dark Text
+                },
+                border: {
+                  DEFAULT: "#E0E0E0",
+                  dark: "#333333",
+                },
+                error: {
+                  DEFAULT: "#D32F2F",
+                  dark: "#EF5350",
+                },
+              },
+            },
+            keyframes: {
+              fadeIn: {
+                "0%": { opacity: "0" },
+                "100%": { opacity: "1" },
+              },
+              fadeInUp: {
+                "0%": { opacity: "0", transform: "translateY(20px)" },
+                "100%": { opacity: "1", transform: "translateY(0)" },
+              },
+              scaleIn: {
+                "0%": { opacity: "0", transform: "scale(0.95)" },
+                "100%": { opacity: "1", transform: "scale(1)" },
+              },
+              slideUp: {
+                "0%": {
+                  opacity: "0",
+                  transform: "translateY(100%)",
+                },
+                "100%": {
+                  opacity: "1",
+                  transform: "translateY(0)",
+                },
+              },
+              pulseSlow: {
+                "0%, 100%": { opacity: "1" },
+                "50%": { opacity: "0.5" },
+              },
+            },
+            animation: {
+              "fade-in": "fadeIn 0.5s ease-out",
+              "fade-in-up": "fadeInUp 0.6s ease-out",
+              "scale-in": "scaleIn 0.3s ease-out",
+              "slide-up": "slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+              "pulse-slow":
+                "pulseSlow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+            },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      /* Custom scrollbar for chat */
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      /* Dark mode scrollbar */
+      .dark ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .dark ::-webkit-scrollbar-track {
+        background: #121212;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #333333;
+        border-radius: 4px;
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+
+      /* Flow Builder Animations */
+      @keyframes flowAnimation {
+        from {
+          stroke-dashoffset: 20;
+        }
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      .animate-flow-line {
+        animation: flowAnimation 1s linear infinite;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "react/": "https://aistudiocdn.com/react@^19.2.0/",
+          "react": "https://aistudiocdn.com/react@^19.2.0",
+          "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+          "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+          "socket.io": "https://aistudiocdn.com/socket.io@^4.8.1",
+          "express": "https://aistudiocdn.com/express@^5.1.0",
+          "http": "https://aistudiocdn.com/http@^0.0.1-security",
+          "winston": "https://aistudiocdn.com/winston@^3.18.3",
+          "redis": "https://aistudiocdn.com/redis@^5.9.0",
+          "@socket.io/redis-adapter": "https://aistudiocdn.com/@socket.io/redis-adapter@^8.3.0",
+          "@socket.io/redis-emitter": "https://aistudiocdn.com/@socket.io/redis-emitter@^5.1.0",
+          "fs": "https://aistudiocdn.com/fs@^0.0.1-security",
+          "path": "https://aistudiocdn.com/path@^0.12.7",
+          "buffer": "https://aistudiocdn.com/buffer@^6.0.3",
+          "@aws-sdk/client-s3": "https://aistudiocdn.com/@aws-sdk/client-s3@^3.933.0",
+          "@aws-sdk/s3-request-presigner": "https://aistudiocdn.com/@aws-sdk/s3-request-presigner@^3.933.0",
+          "crypto": "https://aistudiocdn.com/crypto@^1.0.1",
+          "stripe": "https://aistudiocdn.com/stripe@^14.10.0",
+          "vite": "https://aistudiocdn.com/vite@^7.2.2",
+          "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+          "@google/generative-ai": "https://aistudiocdn.com/@google/generative-ai@^0.24.1"
+        }
+      }
+    </script>
+    <link rel="stylesheet" href="/index.css" />
+  </head>
+  <body
+    class="bg-reply-bg text-reply-text dark:bg-reply-bg-dark dark:text-reply-text-dark antialiased transition-colors duration-200"
+  >
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

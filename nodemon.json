@@ -1,9 +1,0 @@
-{
-  "watch": ["src"],
-  "ext": "ts,json",
-  "ignore": ["src/**/*.spec.ts", "node_modules"],
-  "exec": "node --expose-gc --max-old-space-size=4096 -r ts-node/register/transpile-only -r tsconfig-paths/register src/server.ts",
-  "env": {
-    "NODE_ENV": "development"
-  }
-}

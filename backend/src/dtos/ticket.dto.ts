@@ -1,4 +1,5 @@
 import { Ticket, User, Queue, Conversation, Message } from "@prisma/client";
+import { WhatsAppIdUtils } from "../whatsapp/utils/WhatsAppIdUtils";
 
 export interface TicketDTO {
   id: string;
@@ -33,6 +34,15 @@ export interface TicketDTO {
   lastMessageAt: Date;
   channel: string;
   tags: string[];
+
+  // 🏢 GROUP CHAT SUPPORT (Enterprise CRM Feature)
+  isGroup: boolean;
+  groupMetadata?: {
+    groupName?: string;
+    description?: string;
+    participantCount?: number;
+    groupPicUrl?: string | null;
+  } | null;
 }
 
 export interface TicketContactDTO {
@@ -48,6 +58,9 @@ export interface TicketContactDTO {
   channelId: string; // Raw channel ID (JID)
   unreadCount: number; // Usually 0 for tickets unless computed
   status: string;
+
+  // 🏢 GROUP CHAT SUPPORT
+  isGroup?: boolean;
 }
 
 // Type that includes everything needed for mapping
@@ -63,44 +76,36 @@ export type TicketWithRelations = Ticket & {
 };
 
 /**
- * 🧠 UTILITY: JID Normalizer
- * Moved from controller to DTO for reuse
- */
-const extractFromJid = (jid: string | null | undefined): string | null => {
-  if (!jid) return null;
-  // Remove suffixes and clean
-  const clean = String(jid).replace(/@.*/, "").split(":")[0].replace(/\D/g, "");
-
-  // 🛡️ SECURITY: Reject known bad patterns
-  if (clean.startsWith("000")) return null; // DB Internal IDs
-  if (clean.startsWith("40000")) return null; // Observed Bad ID
-
-  // Relaxed validation (7-15 digits)
-  return clean.length >= 7 && clean.length <= 15 ? `+${clean}` : null;
-};
-
-/**
  * DTO MAPPER
  * Transforms Prisma structure into clean TicketDTO
+ *
+ * 🛡️ 100-YEAR FIX: Uses WhatsAppIdUtils for proper phone extraction and LID rejection
  */
 export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
-  // --- PHONE RESOLUTION STRATEGY ---
-  let derivedPhone: string | null = null;
+  // 🔍 CONVERSATION TYPE DETECTION
+  // Access isGroup from conversation (will be available after Prisma migration)
+  const conversation = ticket.conversation as
+    | (Conversation & {
+        messages?: Message[];
+        isGroup?: boolean;
+        groupMetadata?: {
+          groupName?: string;
+          description?: string;
+          participantCount?: number;
+          groupPicUrl?: string | null;
+        } | null;
+      })
+    | null;
 
-  // 1. Try Contact Phone
-  if (ticket.createdBy?.phone) {
-    derivedPhone = extractFromJid(ticket.createdBy.phone);
-  }
+  const isGroup = conversation?.isGroup ?? false;
+  const groupMetadata = conversation?.groupMetadata ?? null;
 
-  // 2. Fallback: Conversation Channel ID
-  if (!derivedPhone && ticket.conversation?.channelId) {
-    derivedPhone = extractFromJid(ticket.conversation.channelId);
-  }
-
-  // 3. Last Attempt: Contact Channel ID (Legacy)
-  if (!derivedPhone && (ticket.createdBy as any)?.channelId) {
-    derivedPhone = extractFromJid((ticket.createdBy as any).channelId);
-  }
+  // --- PHONE RESOLUTION STRATEGY (Using WhatsAppIdUtils) ---
+  const derivedPhone = WhatsAppIdUtils.extractDisplayPhone(
+    ticket.createdBy?.phone,
+    conversation?.channelId,
+    null, // No secondary channel fallback needed
+  );
 
   // --- NAME RESOLUTION ---
   let displayName = ticket.createdBy?.name || "";
@@ -111,12 +116,15 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     checkName.includes("sin nombre") ||
     displayName.trim() === "";
 
-  if (isInvalidName) {
+  // For groups, prioritize group name from metadata
+  if (isGroup && groupMetadata?.groupName) {
+    displayName = `📢 ${groupMetadata.groupName}`;
+  } else if (isInvalidName) {
     displayName = derivedPhone || "Usuario WhatsApp";
   }
 
   // --- LAST MESSAGE ---
-  const lastMsg = ticket.conversation?.messages?.[0];
+  const lastMsg = conversation?.messages?.[0];
   const lastMessageContent = lastMsg?.content || "";
   const lastMessageTime = lastMsg?.createdAt || ticket.createdAt;
 
@@ -126,16 +134,20 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     name: displayName,
     email: ticket.createdBy?.email || "",
     phone: derivedPhone || "",
-    channelId: ticket.conversation?.channelId || "", // Safe default
+    channelId: conversation?.channelId || "", // Safe default
     companyId: ticket.companyId,
     avatarUrl:
+      (isGroup && groupMetadata?.groupPicUrl) ||
       ticket.createdBy?.profilePicUrl ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}`,
-    profilePicUrl: ticket.createdBy?.profilePicUrl,
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=${isGroup ? "22c55e" : "random"}`,
+    profilePicUrl: isGroup
+      ? groupMetadata?.groupPicUrl
+      : ticket.createdBy?.profilePicUrl,
     about: ticket.createdBy?.about,
     unreadCount: 0,
     status: ticket.status,
     realContactId: undefined, // Enriched later by controller if needed
+    isGroup, // 🏢 Pass group flag to frontend
   };
 
   return {
@@ -171,6 +183,17 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     lastMessage: lastMessageContent,
     lastMessageAt: lastMessageTime,
     channel: "WhatsApp",
-    tags: ticket.conversation?.tags || [],
+    tags: conversation?.tags || [],
+
+    // 🏢 GROUP CHAT SUPPORT
+    isGroup,
+    groupMetadata: groupMetadata
+      ? {
+          groupName: groupMetadata.groupName,
+          description: groupMetadata.description,
+          participantCount: groupMetadata.participantCount,
+          groupPicUrl: groupMetadata.groupPicUrl,
+        }
+      : null,
   };
 };

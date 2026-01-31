@@ -271,22 +271,58 @@ export const getSignedUrl = async (key: string): Promise<string> => {
 
 /**
  * Get file stream from S3 or local storage
+ * AWS SDK v3 requires special handling for streams
  */
 export const getFileStream = async (key: string): Promise<Readable> => {
   if (USE_S3 && s3Client) {
-    const command = new GetObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: key,
-    });
-    const response = await s3Client.send(command);
-    return response.Body as Readable;
+    try {
+      const command = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+      });
+      const response = await s3Client.send(command);
+
+      if (!response.Body) {
+        throw new AppError(`File not found in S3: ${key}`, 404);
+      }
+
+      // AWS SDK v3 returns a special stream type
+      // We need to convert it to a Node.js Readable stream
+      const sdkStream = response.Body;
+
+      // If it's already a Readable stream, return it
+      if (sdkStream instanceof Readable) {
+        return sdkStream;
+      }
+
+      // If it has transformToWebStream method (AWS SDK v3), convert it
+      if (
+        typeof (
+          sdkStream as { transformToByteArray?: () => Promise<Uint8Array> }
+        ).transformToByteArray === "function"
+      ) {
+        const bytes = await (
+          sdkStream as { transformToByteArray: () => Promise<Uint8Array> }
+        ).transformToByteArray();
+        const readable = new Readable();
+        readable.push(Buffer.from(bytes));
+        readable.push(null);
+        return readable;
+      }
+
+      // Fallback: try to use it as-is (may work for some stream types)
+      return sdkStream as unknown as Readable;
+    } catch (error) {
+      console.error(`[getFileStream] S3 error for key ${key}:`, error);
+      throw new AppError(`Failed to get file from S3: ${key}`, 500);
+    }
   } else {
     // Local path logic
     // Key is full path in local mode as per uploadFile implementation
     if (fs.existsSync(key)) {
       return fs.createReadStream(key);
     }
-    return null;
+    throw new AppError(`File not found locally: ${key}`, 404);
   }
 };
 

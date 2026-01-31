@@ -3,126 +3,276 @@ import {
   AuthenticationState,
   BufferJSON,
   initAuthCreds,
-  proto,
   SignalDataTypeMap,
   AuthenticationCreds,
+  SignalKeyStore,
 } from "@whiskeysockets/baileys";
 import { prisma } from "@/config/database";
+import redisClient from "@/config/redis";
+import { encrypt, decrypt } from "@/utils/cryptoUtils";
+import { Logger } from "@/utils/logger";
+
+const REDIS_PREFIX = "wa:sess:";
+const REDIS_TTL = 60 * 60 * 24; // 24 hours
 
 export class DatabaseAuthProvider implements IAuthProvider {
   async loadState(sessionId: string): Promise<{
     state: AuthenticationState;
     saveCreds: () => Promise<void>;
   }> {
-    const savedCreds = await this.loadCredsFromDB(sessionId);
+    const creds = await this.loadCreds(sessionId);
 
-    const state: AuthenticationState = {
-      creds: savedCreds || initAuthCreds(),
-      keys: {
-        get: async (type, ids) => {
-          const data: Record<string, SignalDataTypeMap[typeof type]> = {};
+    const keys: SignalKeyStore = {
+      get: async (type, ids) => {
+        const data: { [id: string]: SignalDataTypeMap[typeof type] } = {};
+        const fullKeys = ids.map((id) => `${type}-${id}`);
+        const missingKeys: string[] = [];
 
-          for (const id of ids) {
-            const key = `${type}-${id}`;
-            const credential = await prisma.whatsAppCredential.findUnique({
-              where: { sessionId_key: { sessionId, key } },
+        // 1. Try Redis first (Batch Get)
+        if (redisClient?.isOpen) {
+          try {
+            const redisKeys = fullKeys.map(
+              (k) => `${REDIS_PREFIX}${sessionId}:${k}`,
+            );
+            const cachedValues = await redisClient.mGet(redisKeys);
+
+            cachedValues.forEach((val, i) => {
+              if (val) {
+                const id = ids[i];
+                try {
+                  // Cached value is Encrypted -> Decrypt -> Parse
+                  const decrypted = decrypt(val);
+                  if (decrypted) {
+                    data[id] = JSON.parse(decrypted, BufferJSON.reviver);
+                  }
+                } catch {
+                  Logger.warn(
+                    `[AuthProvider] Cache parse error for ${fullKeys[i]}`,
+                  );
+                }
+              } else {
+                missingKeys.push(fullKeys[i]);
+              }
             });
+          } catch (err) {
+            Logger.warn("[AuthProvider] Redis MGET failed:", err);
+            missingKeys.push(...fullKeys); // Fallback to DB for all
+          }
+        } else {
+          missingKeys.push(...fullKeys);
+        }
 
-            if (credential?.value) {
+        // 2. Fetch missing keys from DB (Batch Query)
+        if (missingKeys.length > 0) {
+          const dbCredentials = await prisma.whatsAppCredential.findMany({
+            where: {
+              sessionId,
+              key: { in: missingKeys },
+            },
+          });
+
+          for (const cred of dbCredentials) {
+            // cred.key format: "type-id" -> extract id
+            const id = cred.key.replace(`${type}-`, "");
+            if (cred.value) {
               try {
-                data[id] = JSON.parse(credential.value, BufferJSON.reviver);
+                // DB value is Encrypted -> Decrypt -> Parse
+                // Fallback: If decrypt returns null (legacy data), try parsing raw
+                let rawJson = decrypt(cred.value);
+                if (!rawJson) {
+                  // Try legacy raw JSON (migration path)
+                  rawJson = cred.value;
+                }
+
+                const parsed = JSON.parse(rawJson, BufferJSON.reviver);
+                data[id] = parsed;
+
+                // 3. Populate Cache (Read-Through)
+                if (redisClient?.isOpen) {
+                  await redisClient.set(
+                    `${REDIS_PREFIX}${sessionId}:${cred.key}`,
+                    cred.value, // Cache encrypted value directly
+                    { EX: REDIS_TTL },
+                  );
+                }
               } catch (e) {
-                console.error(`[AuthProvider] Failed to parse ${key}:`, e);
+                Logger.error(
+                  `[AuthProvider] DB Parse error for ${cred.key}:`,
+                  e,
+                );
               }
             }
           }
+        }
 
-          return data;
-        },
+        return data;
+      },
 
-        set: async (data) => {
-          const operations = [];
+      set: async (data) => {
+        const ops: Promise<unknown>[] = [];
+        const redisMulti = redisClient?.isOpen ? redisClient.multi() : null;
+        const dbData: { sessionId: string; key: string; value: string }[] = [];
 
-          for (const category of Object.keys(data)) {
-            for (const id of Object.keys(data[category])) {
-              const value = data[category][id];
-              const key = `${category}-${id}`;
+        for (const category of Object.keys(data)) {
+          for (const id of Object.keys(data[category])) {
+            const value = data[category][id];
+            const key = `${category}-${id}`;
+            const json = JSON.stringify(value, BufferJSON.replacer);
+            const encrypted = encrypt(json);
 
-              operations.push(
-                prisma.whatsAppCredential.upsert({
-                  where: { sessionId_key: { sessionId, key } },
-                  create: {
-                    sessionId,
-                    key,
-                    value: JSON.stringify(value, BufferJSON.replacer),
-                  },
-                  update: {
-                    value: JSON.stringify(value, BufferJSON.replacer),
-                  },
-                }),
-              );
+            // Prepare DB Upsert Data
+            dbData.push({ sessionId, key, value: encrypted });
+
+            if (redisMulti) {
+              redisMulti.set(`${REDIS_PREFIX}${sessionId}:${key}`, encrypted, {
+                EX: REDIS_TTL,
+              });
             }
           }
+        }
 
-          try {
-            await prisma.$transaction(operations);
-          } catch (error) {
-            console.error(
-              `[AuthProvider] ❌ Failed to save keys for ${sessionId}:`,
-              error,
-            );
-          }
-        },
+        // Execute Redis Pipeline
+        if (redisMulti) {
+          ops.push(
+            redisMulti.exec().catch((e) => Logger.warn("Redis set failed", e)),
+          );
+        }
+
+        // Execute DB Transaction
+        const dbOps = dbData.map((d) =>
+          prisma.whatsAppCredential.upsert({
+            where: { sessionId_key: { sessionId, key: d.key } },
+            create: d,
+            update: { value: d.value },
+          }),
+        );
+
+        ops.push(
+          prisma
+            .$transaction(dbOps)
+            .catch((e) =>
+              Logger.error(
+                `[AuthProvider] DB Transaction failed for ${sessionId}`,
+                e,
+              ),
+            ),
+        );
+
+        await Promise.all(ops);
       },
     };
 
-    const saveCreds = async () => {
-      await this.saveCredentials(sessionId, state.creds);
+    const state: AuthenticationState = {
+      creds: creds || initAuthCreds(),
+      keys,
     };
 
-    return { state, saveCreds };
+    return {
+      state,
+      saveCreds: async () => {
+        await this.saveCredentials(sessionId, state.creds);
+      },
+    };
   }
 
-  async saveCredentials(
+  private async loadCreds(
+    sessionId: string,
+  ): Promise<AuthenticationCreds | null> {
+    const key = "creds";
+
+    // 1. Try Redis
+    if (redisClient?.isOpen) {
+      try {
+        const cached = await redisClient.get(
+          `${REDIS_PREFIX}${sessionId}:${key}`,
+        );
+        if (cached) {
+          const decrypted = decrypt(cached);
+          if (decrypted) {
+            return JSON.parse(decrypted, BufferJSON.reviver);
+          }
+        }
+      } catch (e) {
+        Logger.warn("[AuthProvider] Redis get creds failed", e);
+      }
+    }
+
+    // 2. Try DB
+    const cred = await prisma.whatsAppCredential.findUnique({
+      where: { sessionId_key: { sessionId, key } },
+    });
+
+    if (!cred || !cred.value) return null;
+
+    try {
+      let rawJson = decrypt(cred.value);
+      if (!rawJson) rawJson = cred.value; // Legacy fallback
+
+      const parsed = JSON.parse(rawJson, BufferJSON.reviver);
+
+      // Backfill Cache
+      if (redisClient?.isOpen) {
+        redisClient.set(`${REDIS_PREFIX}${sessionId}:${key}`, cred.value, {
+          EX: REDIS_TTL,
+        });
+      }
+
+      return parsed;
+    } catch (e) {
+      Logger.error(`[AuthProvider] Failed to parse creds for ${sessionId}`, e);
+      return null;
+    }
+  }
+
+  public async saveCredentials(
     sessionId: string,
     creds: AuthenticationCreds,
   ): Promise<void> {
-    await prisma.whatsAppCredential.upsert({
-      where: { sessionId_key: { sessionId, key: "creds" } },
-      create: {
-        sessionId,
-        key: "creds",
-        value: JSON.stringify(creds, BufferJSON.replacer),
-      },
-      update: {
-        value: JSON.stringify(creds, BufferJSON.replacer),
-      },
-    });
+    const key = "creds";
+    const json = JSON.stringify(creds, BufferJSON.replacer);
+    const encrypted = encrypt(json);
+
+    const ops: Promise<unknown>[] = [];
+
+    // Redis
+    if (redisClient?.isOpen) {
+      ops.push(
+        redisClient
+          .set(`${REDIS_PREFIX}${sessionId}:${key}`, encrypted, {
+            EX: REDIS_TTL,
+          })
+          .catch((e) => Logger.warn("Redis save creds failed", e)),
+      );
+    }
+
+    // DB
+    ops.push(
+      prisma.whatsAppCredential.upsert({
+        where: { sessionId_key: { sessionId, key } },
+        create: { sessionId, key, value: encrypted },
+        update: { value: encrypted },
+      }),
+    );
+
+    await Promise.all(ops);
   }
 
   async clearCredentials(sessionId: string): Promise<void> {
-    await prisma.whatsAppCredential.deleteMany({
-      where: { sessionId },
-    });
-  }
+    const ops: Promise<unknown>[] = [];
 
-  private async loadCredsFromDB(
-    sessionId: string,
-  ): Promise<AuthenticationCreds | null> {
-    const credential = await prisma.whatsAppCredential.findUnique({
-      where: { sessionId_key: { sessionId, key: "creds" } },
-    });
-
-    if (!credential) return null;
-
-    try {
-      return JSON.parse(credential.value, BufferJSON.reviver);
-    } catch (e) {
-      console.error(
-        `[AuthProvider] Failed to parse creds for ${sessionId}:`,
-        e,
+    if (redisClient?.isOpen) {
+      // Pattern delete is expensive in Redis, but necessary for cleanup
+      // Ideally we maintain a set of keys per session, but for now scan/keys is acceptable for infrequent deletion
+      ops.push(
+        (async () => {
+          const keys = await redisClient.keys(`${REDIS_PREFIX}${sessionId}:*`);
+          if (keys.length > 0) await redisClient.del(keys);
+        })().catch((e) => Logger.warn("Redis clear failed", e)),
       );
-      return null;
     }
+
+    ops.push(prisma.whatsAppCredential.deleteMany({ where: { sessionId } }));
+
+    await Promise.all(ops);
   }
 }

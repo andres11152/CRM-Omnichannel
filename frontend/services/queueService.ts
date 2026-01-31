@@ -18,7 +18,13 @@ export interface UpdateQueueDTO extends Partial<CreateQueueDTO> {
  * Fetch all available agents (for assignment logic)
  */
 export const getAgents = async (): Promise<Agent[]> => {
-  const res = await api.get("/users?role=AGENT");
+  // 🛡️ 100-YEAR FIX: Explicitly request ONLY staff roles.
+  // This prevents Contacts/Customers from appearing in transfer lists.
+  const res = await api.get("/users", {
+    params: {
+      roles: "AGENT,SUPERVISOR,ADMIN,MASTER",
+    },
+  });
   return res.data.data?.users || [];
 };
 

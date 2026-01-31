@@ -145,6 +145,8 @@ export interface Contact {
   channelId?: string;
   profilePicUrl?: string; // WhatsApp Profile Picture URL
   about?: string; // WhatsApp Status/About
+  // 🏢 GROUP CHAT SUPPORT
+  isGroup?: boolean;
 }
 
 // NEW: Represents the conversation/case
@@ -177,6 +179,8 @@ export interface TicketContact {
   status?: string;
   queueName?: string;
   assignedAgentName?: string;
+  // 🏢 GROUP CHAT SUPPORT
+  isGroup?: boolean;
 }
 
 export interface Ticket {
@@ -213,6 +217,15 @@ export interface Ticket {
   // Legacy fields for compatibility (can be optional)
   queueId?: string | null;
   assignedToId?: string | null;
+
+  // 🏢 GROUP CHAT SUPPORT (Enterprise CRM Feature)
+  isGroup?: boolean;
+  groupMetadata?: {
+    groupName?: string;
+    description?: string;
+    participantCount?: number;
+    groupPicUrl?: string | null;
+  } | null;
 }
 
 export interface Agent {
@@ -227,6 +240,7 @@ export interface Agent {
   avatar: string;
   department: "Sales" | "Support" | string;
   queues?: { id: string; name: string }[];
+  lastSeen?: Date | string;
 }
 
 export interface QueueJob {

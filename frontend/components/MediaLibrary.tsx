@@ -7,6 +7,7 @@ import {
   Media,
 } from "../services/mediaService";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { MediaCategory } from "../constants/mediaCategories";
 
 interface MediaLibraryProps {
   onSelect?: (media: Media) => void;
@@ -31,6 +32,20 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
     loadMedia();
   }, [filter, search]);
 
+  // DEBUG: Log media data when loaded
+  useEffect(() => {
+    if (media.length > 0) {
+      console.info(
+        "[MediaLibrary] Media loaded:",
+        media.map((m) => ({
+          id: m.id,
+          type: m.type,
+          url: m.url.substring(0, 50),
+        })),
+      );
+    }
+  }, [media]);
+
   const loadMedia = async () => {
     try {
       setLoading(true);
@@ -53,7 +68,10 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
     for (const file of fileArray) {
       try {
         setUploading(true);
-        const newMedia = await uploadMedia({ file });
+        const newMedia = await uploadMedia({
+          file,
+          category: MediaCategory.MEDIA_LIBRARY, // Mark as library media
+        });
         setMedia([newMedia, ...media]);
         toast.success(`Archivo ${file.name} subido correctamente`);
       } catch (error: any) {
@@ -143,10 +161,39 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
     }
   };
 
-  // Helper for broken images
+  // Helper for broken images - with debug logging
   const addDefaultSrc = (ev: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const originalSrc = ev.currentTarget.src;
+    console.error("[MediaLibrary] Image failed to load:", originalSrc);
     ev.currentTarget.src =
-      "https://ui-avatars.com/api/?name=File&background=random";
+      "https://ui-avatars.com/api/?name=Error&background=ef4444&color=fff";
+  };
+
+  // Helper to get file extension from URL or mimeType
+  const getFileExtension = (item: Media): string => {
+    // For proxy URLs, use mimeType to determine extension
+    if (item.url.includes("/content")) {
+      const mimeMap: Record<string, string> = {
+        "image/jpeg": "JPG",
+        "image/jpg": "JPG",
+        "image/png": "PNG",
+        "image/gif": "GIF",
+        "image/webp": "WEBP",
+        "audio/ogg": "OGG",
+        "audio/mpeg": "MP3",
+        "audio/wav": "WAV",
+        "video/mp4": "MP4",
+        "video/webm": "WEBM",
+        "application/pdf": "PDF",
+      };
+      return (
+        mimeMap[item.mimeType] ||
+        item.mimeType.split("/")[1]?.toUpperCase() ||
+        "FILE"
+      );
+    }
+    // For direct URLs, extract from filename
+    return item.originalName.split(".").pop()?.toUpperCase() || "FILE";
   };
 
   return (
@@ -433,7 +480,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
                       {formatFileSize(item.size)}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded uppercase">
-                      {item.url.split(".").pop()?.slice(0, 4)}
+                      {getFileExtension(item)}
                     </span>
                   </div>
                 </div>

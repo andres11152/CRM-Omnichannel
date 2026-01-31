@@ -17,6 +17,8 @@ import {
 import { prisma } from "@/config/database";
 import { TenantContextManager } from "@/config/tenantContext";
 import pino from "pino";
+// 🚧 BullMQ queue disabled - Redis allkeys-lru incompatible
+// import { whatsappQueue } from "./queue/WhatsAppQueue";
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -322,16 +324,20 @@ export class WhatsAppService {
   }
 
   /**
-   * 🚀 SEND MESSAGE (Memory-First Optimized)
-   * Uses in-memory session lookup to avoid DB query per message.
-   * Critical for bulk messaging performance.
+   * 🚀 SEND MESSAGE (Direct Execution - 100-Year Fix)
+   *
+   * IMPORTANT: BullMQ queue was removed because Redis allkeys-lru eviction
+   * policy causes jobs to be deleted before processing. For direct chat
+   * interactions, synchronous execution is appropriate.
+   *
+   * For future bulk campaigns, use a dedicated Redis with noeviction policy.
    */
   async sendMessage(
     to: string,
     content: string,
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
-    // 1. MEMORY-FIRST: Try to find active session without DB hit
+    // 1. Memory-First Session Lookup
     const activeSession = await this.sessionManager.findActiveSessionForCompany(
       options.companyId,
     );
@@ -342,15 +348,45 @@ export class WhatsAppService {
       );
     }
 
-    // 2. Enforce rate limits
+    // 2. Rate Limit Check
     await this.rateLimitService.enforceLimit(activeSession.sessionId);
 
-    // 3. Dispatch message
+    // 3. Execute Send Directly (No Queue - Redis allkeys-lru incompatible)
     if (options.media) {
       return this.messageHandler.sendMedia(to, options.media, options);
     }
-
     return this.messageHandler.sendMessage(to, content, options);
+  }
+
+  /**
+   * 🤖 WORKER INTERFACE: Execute the actual send (Bypassing Queue)
+   */
+  async executeQueuedMessage(
+    sessionId: string,
+    to: string,
+    content: string,
+    options: SendMessageOptions,
+  ) {
+    // 2. Enforce rate limits (Late Binding Check)
+    await this.rateLimitService.enforceLimit(sessionId);
+
+    // 3. Dispatch
+    if (options.media) {
+      return this.messageHandler.sendMedia(to, options.media, options);
+    }
+    return this.messageHandler.sendMessage(to, content, options);
+  }
+
+  /**
+   * 🎭 WORKER INTERFACE: Simulate Human Typing
+   */
+  async simulateTyping(sessionId: string, to: string) {
+    const sock = this.sessionManager.getSession(sessionId);
+    if (sock) {
+      // 🛡️ 100-YEAR FIX: Baileys requires full JID format
+      const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
+      await sock.sendPresenceUpdate("composing", jid);
+    }
   }
 
   /**

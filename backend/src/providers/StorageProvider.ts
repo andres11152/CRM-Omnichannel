@@ -65,8 +65,7 @@ export class DefaultStorageProvider implements IStorageProvider {
   }
 
   async getStream(key: string): Promise<Readable> {
-    const stream = await getFileStream(key);
-    return stream as unknown as Readable;
+    return await getFileStream(key);
   }
 }
 

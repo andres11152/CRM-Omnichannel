@@ -4,6 +4,43 @@ import { Ticket, User, Channel } from "../../types";
 import { resolveContactName } from "../utils/contactUtils";
 import { BASE_URL } from "../../services/apiConfig";
 
+// 🏢 100-Year Solution: Strict typing for socket payloads
+// Using flexible types for socket data that will be validated before use
+interface SocketContactData {
+  id?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  channelId?: string;
+  avatarUrl?: string;
+  profilePicUrl?: string | null;
+  about?: string | null;
+  status?: string;
+  isGroup?: boolean;
+}
+
+interface ConversationUpdatePayload {
+  id: string;
+  subject?: string;
+  channelId?: string;
+  lastMessage?: string | { content: string };
+  lastMessagePreview?: string;
+  content?: string;
+  lastMessageAt?: string;
+  senderType?: "USER" | "AGENT" | "BOT";
+  direction?: "INBOUND" | "OUTBOUND";
+  contact?: SocketContactData;
+  assignedToId?: string; // 🟢 Added this field from backend emission
+}
+
+// 🏢 100-Year Solution: Payload for ticket.assigned event
+interface TicketAssignedPayload {
+  ticket: Ticket;
+  message: string;
+  assignedBy: string;
+  timestamp: string;
+}
+
 interface UseAgentWorkspaceSocketsProps {
   user: User | undefined | null;
   setTickets: React.Dispatch<React.SetStateAction<Ticket[]>>;
@@ -48,19 +85,36 @@ export const useAgentWorkspaceSockets = ({
       setSocketConnected(true);
     }
 
-    // Join company room
-    if (user?.companyId) {
+    // Join Rooms Logic
+    if (user) {
+      // 1. Always join personal agent room (for direct assignments)
+      // Backend Gateway auto-joins this, but we reinforce it here
       socketService.emit("join_room", {
-        conversationId: `company:${user.companyId}`,
+        conversationId: `agent:${user.id}`,
       });
+
+      // 2. Join company room ONLY if Admin/Supervisor (for global view)
+      // Agents are restricted to their own room to prevent ghost tickets
+      if (["ADMIN", "SUPERVISOR", "MASTER"].includes(user.role)) {
+        socketService.emit("join_room", {
+          conversationId: `company:${user.companyId}`,
+        });
+      }
     }
 
     const onConnect = () => {
       setSocketConnected(true);
-      if (user?.companyId) {
+      if (user) {
+        // Re-join on reconnect
         socketService.emit("join_room", {
-          conversationId: `company:${user.companyId}`,
+          conversationId: `agent:${user.id}`,
         });
+
+        if (["ADMIN", "SUPERVISOR", "MASTER"].includes(user.role)) {
+          socketService.emit("join_room", {
+            conversationId: `company:${user.companyId}`,
+          });
+        }
       }
     };
 
@@ -71,7 +125,7 @@ export const useAgentWorkspaceSockets = ({
     socketService.on("connect", onConnect);
     socketService.on("disconnect", onDisconnect);
 
-    const handleConversationUpdated = (payload: any) => {
+    const handleConversationUpdated = (payload: ConversationUpdatePayload) => {
       setTickets((prev) => {
         // 🛡️ Robust Search: Find by ConvID OR ID (handling ghost tickets)
         const ticketIndex = prev.findIndex(
@@ -157,7 +211,7 @@ export const useAgentWorkspaceSockets = ({
             createdAt: new Date().toISOString(),
             unreadCount: 1,
             tags: [],
-            assignedToId: undefined, // Fix property name
+            assignedToId: payload.assignedToId || undefined, // 🟢 Correctly set assignment from payload
             queueId: null,
 
             // Fix strict Ticket interface requirements
@@ -184,24 +238,38 @@ export const useAgentWorkspaceSockets = ({
 
         const newUnreadCount = isCurrentChatActive ? 0 : currentCount + 1;
 
-        // 📝 LAST MESSAGE LOGIC
-        let incomingMessage = "";
-        if (typeof payload.lastMessage === "string") {
+        // 📝 LAST MESSAGE LOGIC ROBUST FIX
+        let incomingMessage = ticket.lastMessage;
+
+        // Debug payload structure
+        console.log(
+          "[AgentWorkspace] 📨 Socket Payload:",
+          JSON.stringify(payload, null, 2),
+        );
+
+        if (payload.content) {
+          incomingMessage = payload.content;
+        } else if (typeof payload.lastMessage === "string") {
           incomingMessage = payload.lastMessage;
         } else if (payload.lastMessage?.content) {
           incomingMessage = payload.lastMessage.content;
         } else if (payload.lastMessagePreview) {
           incomingMessage = payload.lastMessagePreview;
-        } else if (payload.content) {
-          incomingMessage = payload.content;
         }
 
-        const updatedLastMessage = incomingMessage || ticket.lastMessage;
+        // 🛡️ Ensure Valid Date
+        let newDate = ticket.lastMessageAt;
+        if (payload.lastMessageAt) {
+          newDate = payload.lastMessageAt;
+        } else {
+          // If no date provided but we have new content, use Now
+          newDate = new Date().toISOString();
+        }
 
         updatedTickets[ticketIndex] = {
           ...ticket,
-          lastMessage: updatedLastMessage,
-          lastMessageAt: payload.lastMessageAt || new Date().toISOString(),
+          lastMessage: incomingMessage,
+          lastMessageAt: newDate,
           unreadCount: newUnreadCount,
           contact: {
             ...ticket.contact,
@@ -241,12 +309,120 @@ export const useAgentWorkspaceSockets = ({
     };
     socketService.on("ticket_deleted", handleTicketDeleted);
 
+    // 🔄 TICKET TRANSFER/UPDATE LISTENER
+    // This handles when a ticket is reassigned to another agent
+    const handleTicketUpdated = (data: {
+      ticket: Ticket;
+      changedFields: string[];
+    }) => {
+      console.log(
+        "[AgentWorkspace] 🔄 Ticket updated:",
+        data.ticket.id,
+        data.changedFields,
+      );
+
+      setTickets((prev) => {
+        const ticketIndex = prev.findIndex((t) => t.id === data.ticket.id);
+
+        if (ticketIndex === -1) {
+          // Ticket not in our list - this could be a new assignment TO us
+          // Check if it's assigned to current user
+          if (data.ticket.assignedToId === user?.id) {
+            console.log(
+              "[AgentWorkspace] ✨ New ticket assigned to me:",
+              data.ticket.id,
+            );
+            return [data.ticket, ...prev];
+          }
+          return prev;
+        }
+
+        // Ticket exists - update it with new data (including new assignedToId)
+        // The filtering logic in myTickets will handle removing it from view if no longer assigned to us
+        const updatedTickets = [...prev];
+        updatedTickets[ticketIndex] = {
+          ...updatedTickets[ticketIndex],
+          ...data.ticket,
+          // Preserve local state
+          contact: {
+            ...updatedTickets[ticketIndex].contact,
+            ...data.ticket.contact,
+          },
+        };
+
+        console.log(
+          "[AgentWorkspace] ✅ Ticket updated, assignedToId:",
+          data.ticket.assignedToId,
+        );
+        return updatedTickets;
+      });
+    };
+    socketService.on("ticket.updated", handleTicketUpdated);
+
+    // 🏢 ENTERPRISE: Ticket Assigned Listener (for agents receiving new assignments)
+    const handleTicketAssigned = (data: TicketAssignedPayload) => {
+      console.log(
+        "[AgentWorkspace] 🎯 Ticket assigned to me:",
+        data.ticket.id,
+        "by",
+        data.assignedBy,
+      );
+
+      // Play notification sound
+      playNotificationSound();
+
+      // 🛡️ SECURITY & UX: Enrich ticket before adding to state
+      // Ensure it has the correct assignment ID so it passes the 'My Chats' filter
+      const enrichedTicket = { ...data.ticket };
+
+      if (
+        user &&
+        (!enrichedTicket.assignedToId ||
+          enrichedTicket.assignedToId !== user.id)
+      ) {
+        // If I received this event, it MUST be for me (room security).
+        console.warn(
+          "[AgentWorkspace] ⚠️ Fixing missing/mismatched assignedToId on incoming ticket",
+        );
+        enrichedTicket.assignedToId = user?.id; // Fallback to current user
+      }
+
+      // Ensure it pops to top
+      if (!enrichedTicket.lastMessageAt) {
+        enrichedTicket.lastMessageAt = new Date().toISOString();
+      }
+
+      // Force status to something active if it was closed
+      if (
+        enrichedTicket.status === "CLOSED" ||
+        enrichedTicket.status === "RESOLVED"
+      ) {
+        enrichedTicket.status = "IN_PROGRESS";
+      }
+
+      // Add ticket to list if not already present
+      setTickets((prev) => {
+        const exists = prev.some((t) => t.id === enrichedTicket.id);
+        if (exists) {
+          // Update existing ticket
+          return prev.map((t) =>
+            t.id === enrichedTicket.id ? { ...t, ...enrichedTicket } : t,
+          );
+        }
+        // Add new ticket to the top
+        return [enrichedTicket, ...prev];
+      });
+    };
+    socketService.on("ticket.assigned", handleTicketAssigned);
+
     console.log("[AgentWorkspace] ✅ Listeners registered");
 
     return () => {
       console.log("[AgentWorkspace] 🛑 Unmounting - Removing Listeners");
       socketService.off("conversation.updated", handleConversationUpdated);
       socketService.off("ticket_deleted", handleTicketDeleted);
+      socketService.off("ticket.updated", handleTicketUpdated);
+      socketService.off("ticket.assigned", handleTicketAssigned);
     };
   }, [user?.companyId]); // Depend on user.companyId
 };

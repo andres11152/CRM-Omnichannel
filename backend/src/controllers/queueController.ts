@@ -91,8 +91,8 @@ export const updateQueue = catchAsync(
         isActive,
         type,
         config,
-        departmentId,
-        aiAssistantId,
+        departmentId: departmentId || null,
+        aiAssistantId: aiAssistantId || null,
       },
     });
 

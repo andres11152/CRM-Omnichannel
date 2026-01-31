@@ -11,7 +11,6 @@ import { prisma } from "@/config/database";
 import {
   downloadMediaMessage,
   WAMessage,
-  WAMessageContent,
   AnyMessageContent,
   WAMessageUpdate,
 } from "@whiskeysockets/baileys";
@@ -25,14 +24,11 @@ import { Readable } from "stream";
 // 🛠️ UTILS
 import { convertAudioToMP4, cleanupTempFile } from "@/utils/audioConverter";
 import fs from "fs";
+import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 
 // 🏗️ SERVICES & INTERFACES (Clean Architecture)
 import { chatService } from "@/services/chatService";
-import {
-  ExtendedMessageKey,
-  SessionData,
-  MessageMetadata,
-} from "@/interfaces/WhatsAppEvents";
+import { SessionData, MessageMetadata } from "@/interfaces/WhatsAppEvents";
 import { Conversation, Queue, MediaType, Prisma, User } from "@prisma/client";
 import { AIResponseSchema } from "@/interfaces/AIInterfaces";
 
@@ -223,24 +219,8 @@ export class MessageHandler implements IMessageHandler {
     sessionId: string,
     messageId: string,
   ): Promise<void> {
-    let sessionData = this.sessionCache.get(sessionId);
-
-    if (!sessionData) {
-      const session = await prisma.whatsAppSession.findUnique({
-        where: { sessionId },
-        select: { companyId: true, phone: true },
-      });
-
-      if (!session) return;
-
-      sessionData = {
-        companyId: session.companyId,
-        sessionId,
-        status: "CONNECTED",
-        userId: session.phone || undefined,
-      };
-      this.sessionCache.set(sessionId, sessionData);
-    }
+    const sessionData = await this.ensureSessionData(sessionId);
+    if (!sessionData) return;
 
     const { companyId, userId: sessionPhone } = sessionData;
 
@@ -251,212 +231,391 @@ export class MessageHandler implements IMessageHandler {
         requestId: `msg:${messageId}`,
       },
       async () => {
+        // 0. Deduplication Check
         if (await chatService.doesMessageExist(messageId)) {
           return;
         }
 
-        const rawRemoteJid = message.key.remoteJid!;
-        const baseJid = rawRemoteJid.split(":")[0].split("@")[0];
-        const domain = rawRemoteJid.split("@")[1];
-        const isLid = domain === "lid";
-        const isLikelyLid = isLid || baseJid.length > 13;
-        let truePhone =
-          !isLikelyLid && /^\d{7,15}$/.test(baseJid) ? baseJid : null;
-        let uniqueSystemId = baseJid;
+        // 1. JID Parsing
+        const rawRemoteJid = message.key.remoteJid;
+        let cleanRemoteJid = WhatsAppIdUtils.getCleanJid(rawRemoteJid);
 
-        if (isLid && !truePhone) {
-          const foundRealPhone = this.extractPhoneFromLid(message);
-          if (foundRealPhone) {
-            const cleanRealPhone = foundRealPhone.split("@")[0].split(":")[0];
-            truePhone = cleanRealPhone;
-            uniqueSystemId = cleanRealPhone;
-          }
-        }
-
-        // 100-Year Solution: Strict Self-Chat Filtering & Normalization
-        // Normalize phones to pure digits for robust comparison (ignores +, spaces, etc)
-        const cleanSessionPhone = sessionPhone?.replace(/\D/g, "");
-        const cleanBaseJid = baseJid.replace(/\D/g, "");
-        const cleanTruePhone = truePhone?.replace(/\D/g, "");
-
-        // 1. Check if the message target/source matches the connected system number
-        if (
-          cleanSessionPhone &&
-          (cleanBaseJid === cleanSessionPhone ||
-            cleanTruePhone === cleanSessionPhone)
-        ) {
-          // Verify it's not a misidentified customer (double check logical flow)
-          // If remoteJid == MyNumber, it's a self-chat (Note to Self). Ignore.
+        if (!cleanRemoteJid) {
+          console.warn(`[MessageHandler] Invalid JID: ${rawRemoteJid}`);
           return;
         }
 
-        // 2. Extra Safety: If fromMe is true, and the remote ID looks suspiciously like it could be us (but sessionPhone was missing),
-        // we might handle it, but for now rely on sessionPhone presence.
-        // If sessionPhone is missing from cache, this check might fail, so ensure SessionManager updates DB correctly.
+        // 🛡️ 100-YEAR FIX: LIDs to Phone Resolution (Conversation Level)
+        // If the conversation ID is a LID, resolve it to the Real Phone ID immediately.
+        if (WhatsAppIdUtils.isLid(cleanRemoteJid)) {
+          console.info(`[MessageHandler] 🔍 LID Detected: ${cleanRemoteJid}`);
 
-        const messageType = Object.keys(message.message)[0];
-        const pushName = message.pushName;
+          let resolved = false;
 
-        if (truePhone) {
-          const existing = await chatService.findUserByPhone(
-            companyId,
-            truePhone,
-            `${uniqueSystemId}@whatsapp.user`,
+          // 🎯 STEP 0: Check hidden properties where Baileys stores real JIDs
+          // 1. remoteJidAlt (Standard Baileys)
+          // 2. senderPn (Observed in logs for some versions)
+          const messageKey = message.key as {
+            remoteJidAlt?: string;
+            senderPn?: string;
+          };
+
+          // 🔬 DEBUG: Log keys to confirm hidden properties
+          console.info(
+            `[MessageHandler] 🔬 Message Key Dump:`,
+            JSON.stringify(message.key),
           );
-          if (existing) uniqueSystemId = existing.email.split("@")[0];
-        } else if (isLid && pushName) {
-          const existing = await chatService.findUserByName(
-            companyId,
-            pushName,
-          );
-          if (existing) uniqueSystemId = existing.email.split("@")[0];
-        }
 
-        let textContent = "";
-        let mediaUrl: string | undefined;
-        let mediaSize = 0;
-        let mediaType: MediaType | null = null;
+          // Check remoteJidAlt
+          if (
+            messageKey.remoteJidAlt &&
+            messageKey.remoteJidAlt.includes("@s.whatsapp.net") &&
+            !messageKey.remoteJidAlt.includes("@lid")
+          ) {
+            console.info(
+              `[MessageHandler] 🎯 FOUND! Real phone in remoteJidAlt: ${messageKey.remoteJidAlt}`,
+            );
+            cleanRemoteJid =
+              WhatsAppIdUtils.getCleanJid(messageKey.remoteJidAlt) ||
+              cleanRemoteJid;
+            resolved = true;
+          }
 
-        if (messageType === "conversation") {
-          textContent = message.message.conversation || "";
-        } else if (messageType === "extendedTextMessage") {
-          textContent = message.message.extendedTextMessage?.text || "";
-        } else {
-          const supportedMedia = [
-            "imageMessage",
-            "videoMessage",
-            "audioMessage",
-            "documentMessage",
-            "stickerMessage",
-          ];
-          if (supportedMedia.includes(messageType)) {
-            try {
-              const stream = await downloadMediaMessage(message, "stream", {});
+          // Check senderPn (Found in user logs via debug)
+          if (
+            !resolved &&
+            messageKey.senderPn &&
+            messageKey.senderPn.includes("@s.whatsapp.net") &&
+            !messageKey.senderPn.includes("@lid")
+          ) {
+            console.info(
+              `[MessageHandler] 🎯 FOUND! Real phone in senderPn: ${messageKey.senderPn}`,
+            );
+            cleanRemoteJid =
+              WhatsAppIdUtils.getCleanJid(messageKey.senderPn) ||
+              cleanRemoteJid;
+            resolved = true;
+          }
 
-              const content = message.message as WAMessageContent;
-              // Strict Type Guarding via Cast - Extended for Mime/Size
-              const rawContent = content as unknown as Record<
-                string,
-                {
-                  caption?: string;
-                  text?: string;
-                  fileName?: string;
-                  mimetype?: string;
-                  fileLength?: number | string;
-                }
-              >;
-              const msgObj = rawContent[messageType];
+          // STEP 1: Check participant field (for group messages)
+          const participant = message.key.participant;
+          if (!resolved && participant && !WhatsAppIdUtils.isLid(participant)) {
+            console.info(
+              `[MessageHandler] 🎯 Resolved via participant: ${participant}`,
+            );
+            cleanRemoteJid =
+              WhatsAppIdUtils.getCleanJid(participant) || cleanRemoteJid;
+            resolved = true;
+          }
 
-              textContent =
-                msgObj?.caption ||
-                msgObj?.text ||
-                msgObj?.fileName ||
-                `[${mapBaileysToMediaType(messageType)}]`;
-
-              if (stream) {
-                mediaType = mapBaileysToMediaType(messageType);
-                const mimetype = msgObj?.mimetype || "application/octet-stream";
-                const ext = mime.extension(mimetype) || "bin";
-                const filename = `${messageId}.${ext}`;
-
-                // Upload Stream (No Heap Load)
-                const uploadResult = await storageService.uploadStream(
-                  stream as Readable,
-                  filename,
-                  mimetype,
+          // STEP 1.5: Check messageStubParameters (Legacy fallback)
+          if (
+            !resolved &&
+            message.messageStubParameters &&
+            Array.isArray(message.messageStubParameters)
+          ) {
+            for (const param of message.messageStubParameters) {
+              if (
+                typeof param === "string" &&
+                param.includes("@s.whatsapp.net") &&
+                !param.includes("@lid")
+              ) {
+                console.info(
+                  `[MessageHandler] 🎯 Resolved via messageStubParameters: ${param}`,
                 );
-                mediaUrl = uploadResult.url;
-                mediaSize = Number(msgObj?.fileLength || 0);
+                cleanRemoteJid =
+                  WhatsAppIdUtils.getCleanJid(param) || cleanRemoteJid;
+                resolved = true;
+                break;
               }
-            } catch (e) {
-              console.error(
-                `[media] Download/Upload failed for ${messageId}`,
-                e,
-              );
             }
           }
+
+          // STEP 2: Try store resolution (cached mappings)
+          if (!resolved) {
+            const resolvedContact =
+              this.sessionManager.findContactByLid(cleanRemoteJid);
+            if (
+              resolvedContact?.id &&
+              !WhatsAppIdUtils.isLid(resolvedContact.id)
+            ) {
+              const realJid = WhatsAppIdUtils.getCleanJid(resolvedContact.id);
+              console.info(
+                `[MessageHandler] 🎯 Resolved via store: ${realJid}`,
+              );
+              if (realJid) {
+                cleanRemoteJid = realJid;
+                resolved = true;
+              }
+            }
+          }
+
+          // STEP 3: Active resolution via WhatsApp API (the same method WhatsApp Web uses)
+          if (!resolved) {
+            console.info(
+              `[MessageHandler] 🔄 Attempting active WhatsApp API resolution...`,
+            );
+            const realPhone = await this.sessionManager.resolveLidToPhone(
+              sessionId,
+              cleanRemoteJid,
+            );
+            if (realPhone) {
+              cleanRemoteJid = `${realPhone}@s.whatsapp.net`;
+              console.info(
+                `[MessageHandler] 🎯 Resolved via API: ${cleanRemoteJid}`,
+              );
+              resolved = true;
+            }
+          }
+
+          if (!resolved) {
+            console.warn(
+              `[MessageHandler] ⚠️ LID could not be resolved: ${cleanRemoteJid}`,
+            );
+          }
         }
 
-        const customerEmail = `${uniqueSystemId}@whatsapp.user`;
-        const customer = await chatService.upsertWhatsAppUser({
-          email: customerEmail,
-          name: pushName || (truePhone ? `+${truePhone}` : "Usuario WhatsApp"),
-          companyId,
-          phone: truePhone,
-          role: "USER", // Default role
-        });
+        const isGroup = WhatsAppIdUtils.isGroup(cleanRemoteJid);
+        let isFromMe = message.key.fromMe || false;
 
-        if (
-          message.key.fromMe &&
-          ["ADMIN", "MASTER", "AGENT"].includes(customer.role)
-        )
-          return;
+        // 🛡️ 100-YEAR FIX: Robust "From Me" Detection
+        // Baileys sometimes fails to set fromMe=true for synced messages in groups (LID/Phone mismatch).
+        // We manually verify if the sender (participant) matches the session owner.
+        if (!isFromMe && isGroup && message.key.participant) {
+          const senderPhone = WhatsAppIdUtils.getPhoneNumber(
+            message.key.participant,
+          );
+          if (senderPhone && sessionPhone && senderPhone === sessionPhone) {
+            isFromMe = true;
+            console.info(
+              `[MessageHandler] 🔧 Fixed isFromMe=true (Group Participant Match): ${senderPhone}`,
+            );
+          }
+        }
 
-        const lockKey = `conv:${companyId}:${uniqueSystemId}`;
+        // 🛡️ ANTI-ECHO / SELF-CHAT PROTECTION (100-YEAR SOLUTION)
+        // Detect if the remoteJid is the bot itself (Note to Self).
+        // Check both direct Phone match and potential LID match if available.
+        const sock = this.sessionManager.getSession(sessionId);
+        const myJidRaw = sock?.user?.id;
 
+        if (myJidRaw) {
+          const myJid = WhatsAppIdUtils.getCleanJid(myJidRaw);
+          if (cleanRemoteJid === myJid) {
+            console.warn(
+              `[MessageHandler] 🛡️ Ignoring Self-Chat (Note to Self) from ${cleanRemoteJid}`,
+            );
+            return;
+          }
+        }
+
+        // 3. IDENTIFICAR CONVERSACIÓN (El "Room")
+        // En WhatsApp, el remoteJid SIEMPRE es el ID de la conversación (sea user o grupo)
+        // EXCEPTO en Broadcasts (que ignoraremos por ahora)
+        const chatUniqueId = cleanRemoteJid.split("@")[0];
+        const chatEmail = `${chatUniqueId}@whatsapp.user`; // Virtual email for conversation lookup
+
+        // 4. IDENTIFICAR AL "OTRO" (El Cliente)
+        // - Si es DM Inbound: El sender es el remoteJid
+        // - Si es DM Outbound (fromMe): El destinatario es el remoteJid
+        // - Si es Grupo: El remoteJid es el grupo.
+
+        // Si el mensaje es OUTBOUND (fromMe), NO creamos un usuario "You".
+        // Asumimos que el sistema o un agente lo envió.
+        let customerUser: User | null = null;
+
+        if (!isFromMe) {
+          // Es INBOUND. Necesitamos asegurar que el remitente existe como contacto.
+          // Para Grupos, el remitente real es el participant. Para DMs, es el remoteJid.
+          let senderJid = WhatsAppIdUtils.getSenderJid(message);
+
+          // 🛡️ 100-YEAR FIX: Resolve Sender LID to Phone
+          if (senderJid && WhatsAppIdUtils.isLid(senderJid)) {
+            const resolvedSender =
+              this.sessionManager.findContactByLid(senderJid);
+            if (resolvedSender?.id) {
+              const realSenderJid = WhatsAppIdUtils.getCleanJid(
+                resolvedSender.id,
+              );
+              if (realSenderJid && !WhatsAppIdUtils.isLid(realSenderJid)) {
+                senderJid = realSenderJid;
+              }
+            }
+          }
+          const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
+          const pushName = message.pushName;
+
+          if (senderJid) {
+            customerUser = await chatService.upsertWhatsAppUser({
+              email: `${senderJid.split("@")[0]}@whatsapp.user`,
+              name:
+                pushName ||
+                (senderPhone ? `+${senderPhone}` : "Usuario WhatsApp"),
+              companyId,
+              phone: senderPhone,
+              role: "USER",
+            });
+          }
+        } else {
+          // Es OUTBOUND (Sincronización desde celular).
+          // No creamos sender. Pero necesitamos asegurar que la conversación existe con el CLIENTE.
+          // En DM outbound, remoteJid es el cliente.
+          if (!isGroup) {
+            const destPhone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
+            customerUser = await chatService.upsertWhatsAppUser({
+              email: chatEmail,
+              name: destPhone ? `+${destPhone}` : chatUniqueId,
+              companyId,
+              phone: destPhone,
+              role: "USER",
+            });
+          }
+          // En Grupo Outbound, la conversación es el grupo, no necesitamos crear usuario "Grupo" aquí,
+          // se maneja en la lógica de conv.
+        }
+
+        const lockKey = `conv:${companyId}:${chatUniqueId}`;
+
+        // 🔒 Critical Section: Conversation Creation
         const conversation = await this.withLock(lockKey, async () => {
           let conv = await chatService.findConversation(
             companyId,
-            uniqueSystemId,
-            customerEmail,
+            chatUniqueId,
+            chatEmail,
           );
 
           if (!conv) {
-            if (truePhone) {
-              const ghost = await chatService.findGhostConversation(companyId);
-              if (ghost && ghost.participants.length === 1) {
-                await chatService.migrateConversationHistory(
-                  ghost.id,
-                  ghost.participants[0].id,
-                  customer.id,
-                );
-                conv = await chatService.findConversation(
-                  companyId,
-                  uniqueSystemId,
-                  customerEmail,
+            // Si no existe, la creamos.
+            // El userId inicial debe ser el CLIENTE (incluso si es outbound sync, queremos que el chat sea con el cliente)
+            // Si es grupo, userId puede ser null o el primer participante detectado.
+
+            let conversationSubject = message.pushName || chatUniqueId;
+
+            // 🏢 100-YEAR FIX: Enhanced Group Detection with Metadata
+            let groupMetadata:
+              | {
+                  groupName?: string;
+                  description?: string;
+                  participantCount?: number;
+                  groupPicUrl?: string | null;
+                }
+              | undefined;
+
+            if (isGroup) {
+              // For groups, use a better name format
+              conversationSubject = `📢 Grupo ${chatUniqueId.slice(0, 8)}...`;
+
+              // Try to fetch group metadata from WhatsApp (async, non-blocking)
+              try {
+                const sock = this.sessionManager.getSession(sessionId);
+                if (sock) {
+                  const groupInfo = await sock.groupMetadata(cleanRemoteJid);
+                  if (groupInfo) {
+                    conversationSubject = `📢 ${groupInfo.subject || "Grupo"}`;
+                    groupMetadata = {
+                      groupName: groupInfo.subject,
+                      description: groupInfo.desc || undefined,
+                      participantCount: groupInfo.participants?.length,
+                      groupPicUrl: undefined, // Can be fetched separately if needed
+                    };
+                  }
+                }
+              } catch {
+                // Non-blocking - continue with basic group info
+                console.warn(
+                  `[MessageHandler] Could not fetch group metadata for ${cleanRemoteJid}`,
                 );
               }
             }
 
-            if (!conv) {
-              conv = await chatService.createConversation({
-                companyId,
-                channelId: uniqueSystemId,
-                subject: customer.name || uniqueSystemId,
-                userId: customer.id,
-              });
-            }
-          } else {
-            if (["CLOSED", "RESOLVED"].includes(conv.status)) {
-              await chatService.updateConversation(conv.id, { status: "OPEN" });
-            } else {
-              await chatService.updateConversation(conv.id, {});
-            }
+            conv = await chatService.createConversation({
+              companyId,
+              channelId: chatUniqueId,
+              subject: conversationSubject,
+              userId: customerUser?.id || undefined, // undefined si es fromMe en grupo nuevo (raro)
+              isGroup,
+              groupMetadata,
+            });
           }
 
-          const convWithQueue = await prisma.conversation.findUnique({
-            where: { id: conv!.id },
-            include: { queue: true, participants: true, assignedTo: true },
-          });
-
-          return convWithQueue as ConversationWithQueue;
+          // Asegurar que el mensaje refresque el estado OPEN
+          if (["CLOSED", "RESOLVED"].includes(conv.status)) {
+            await chatService.updateConversation(conv.id, { status: "OPEN" });
+          }
+          return await chatService.getFullConversation(conv.id);
         });
 
-        let ticketId: string | undefined;
-        try {
-          const ticket = await chatService.ensureTicket(
-            companyId,
-            conversation.id,
-            customer.id,
-            conversation.subject || "WhatsApp",
-            textContent || "Media",
-          );
-          ticketId = ticket?.id;
-        } catch (err) {
-          console.error("[Ticket] Creation failed (ignoring):", err);
+        if (!conversation) return;
+
+        // 6. Content Extraction
+        // 🛡️ 100-YEAR FIX: Handle empty/protocol messages safely
+        const contentData = await this.extractMessageContent(
+          message,
+          messageId,
+        );
+
+        // If content is null, it means it's an ignored type (protocol, reaction) or empty.
+        // We skip persistence to avoid "Ghost Bubbles" in the UI.
+        if (!contentData) {
+          return;
         }
 
-        const isOutbound = message.key.fromMe || false;
+        const { textContent, mediaUrl, mediaType, mediaSize } = contentData;
+
+        // 7. Message Persistence
+        const isOutbound = isFromMe;
+
+        // 🧠 HITL: Auto-Mute AI on Outbound (Agent) Message
+        // If an agent (or system sync) sends a message, silence the AI to prevent interruptions.
+        if (isOutbound) {
+          try {
+            await chatService.updateConversation(conversation.id, {
+              aiEnabled: false,
+              lastManualIntervention: new Date(),
+            });
+            // Update local object to reflect DB change immediately for this flow
+            conversation.aiEnabled = false;
+          } catch (err) {
+            console.error("[HITL] Failed to auto-mute AI:", err);
+          }
+        }
+
+        // Determinar SenderID para la DB
+        // - Si es Inbound: customerUser.id
+        // - Si es Outbound: Buscamos un Agente genérico o usamos el assignedTo de la conv, o null (sistema).
+        //   Para mantener integridad FK, si es outbound y no tenemos agente mapeado desde el fono, usamos el sistema o el assignedTo.
+        let dbSenderId = customerUser?.id;
+
+        if (isOutbound) {
+          // Es mensaje del negocio.
+          // Idealmente deberíamos saber QUÉ agente lo envió (si tuviéramos mapeo de dispositivo).
+          // Por ahora, usamos el assignedTo de la conversación o el primer admin/agente disponible,
+          // OJO: upsertMessage requiere senderId valido.
+
+          if (conversation.assignedToId) {
+            dbSenderId = conversation.assignedToId;
+          } else {
+            // Fallback: Buscar cualquier agente o usar el mismo ID del cliente temporalmente (sucio pero evita crash)
+            // MEJOR: Usar el customerUser si es INBOUND, pero si es OUTBOUND no podemos usar customerUser como sender.
+            // Busquemos el "System User" o el dueño de la sesión.
+            const sessionOwner = await prisma.user.findFirst({
+              where: { phone: sessionPhone, companyId },
+            });
+            dbSenderId = sessionOwner?.id;
+
+            if (!dbSenderId) {
+              // Critical fallback: Si no encontramos al agente, lo asignamos al mismo usuario
+              // para que al menos se guarde, aunque aparezca "a la derecha" visualmente por direction=OUTBOUND.
+              // Aunque visualmente el frontend usa `senderType` o `direction`.
+              // Vamos a buscar un agente default.
+              const defaultAgent = await prisma.user.findFirst({
+                where: { companyId, role: "ADMIN" },
+              });
+              dbSenderId = defaultAgent?.id;
+            }
+          }
+        }
+
         const metadata: MessageMetadata = {
           messageId,
           media:
@@ -474,8 +633,8 @@ export class MessageHandler implements IMessageHandler {
                   url: mediaUrl,
                 }
               : undefined,
-          ticketId,
           origin: isOutbound ? "phone_sync" : "whatsapp",
+          isGroup,
         };
 
         const savedMessage = await chatService.upsertMessage({
@@ -484,45 +643,86 @@ export class MessageHandler implements IMessageHandler {
           content: textContent,
           direction: isOutbound ? "OUTBOUND" : "INBOUND",
           conversationId: conversation.id,
-          senderId: customer.id,
+          senderId: dbSenderId || conversation.participants[0]?.id, // Safety net
           status: isOutbound ? "SENT" : "DELIVERED",
-          metadata: prepareMetadataForDB(metadata), // 🛡️ Approved sanitization
+          metadata: prepareMetadataForDB(metadata),
           createdAt:
             typeof message.messageTimestamp === "number"
               ? new Date(message.messageTimestamp * 1000)
-              : typeof message.messageTimestamp === "object"
-                ? new Date(Number(message.messageTimestamp) * 1000)
-                : undefined,
+              : new Date(),
         });
 
+        // 8. Real-time Events
         const fullConversation = await chatService.getFullConversation(
           conversation.id,
         );
 
         if (fullConversation) {
-          // Enriched payload strictly typed
-          const enrichedPayload = ticketId
-            ? { ...fullConversation, ticketId }
-            : fullConversation;
-
-          // Use inference from the emitter method signature to ensure type compatibility
-          // We cast through unknown to allow excessive properties (ticketId) to pass through to the socket payload
-          type EmitterPayload = Parameters<
-            typeof this.socketEmitter.emitConversationCreated
-          >[0];
-          this.socketEmitter.emitConversationCreated(
-            enrichedPayload as unknown as EmitterPayload,
-          );
-
           if (isOutbound) {
+            // Syncing message sent from phone -> Treat as "Message Sent" event
             this.socketEmitter.emitMessageSent(savedMessage, fullConversation);
           } else {
+            // Incoming message -> New Message + Ticket Logic + AI
+            // Ensure ticket exists logic...
+            let ticketId = undefined;
+            try {
+              // Only create ticket for REAL incoming messages (not syncs)
+              // FIX: Use customerUser instead of undefined senderUser
+              if (customerUser) {
+                const ticket = await chatService.ensureTicket(
+                  companyId,
+                  conversation.id,
+                  customerUser.id,
+                  conversation.subject || "WhatsApp",
+                  textContent || "Media",
+                );
+                ticketId = ticket?.id;
+              }
+            } catch (e) {
+              console.error("Ticket error", e);
+            }
+
             this.socketEmitter.emitMessageReceived(
               savedMessage,
               fullConversation,
               ticketId,
             );
-            if (textContent) {
+
+            if (textContent && !isGroup) {
+              // 🧠 HITL LOGIC: Check if AI is allowed to respond
+              // We trust Prisma types are up to date
+              const isAiEnabled = conversation.aiEnabled !== false; // Default true
+
+              if (!isAiEnabled) {
+                const lastIntervention = conversation.lastManualIntervention
+                  ? new Date(conversation.lastManualIntervention)
+                  : null;
+
+                const GRACE_PERIOD_MS = 30 * 60 * 1000; // 30 Minutes
+                const timeSinceIntervention = lastIntervention
+                  ? Date.now() - lastIntervention.getTime()
+                  : 0;
+
+                if (
+                  lastIntervention &&
+                  timeSinceIntervention < GRACE_PERIOD_MS
+                ) {
+                  console.info(
+                    `[HITL] 🔇 AI Silenced. Manual intervention was ${Math.round(timeSinceIntervention / 60000)}m ago.`,
+                  );
+                  return; // EXIT: Do not trigger AI
+                } else {
+                  console.info(
+                    `[HITL] 🔊 Auto-Reactivating AI after grace period (${Math.round(timeSinceIntervention / 60000)}m)`,
+                  );
+                  // Reactivate in DB
+                  await chatService.updateConversation(conversation.id, {
+                    aiEnabled: true,
+                  });
+                }
+              }
+
+              // TODO: Enable AI for groups later if needed
               this.triggerAIResponse(
                 conversation,
                 textContent,
@@ -535,28 +735,130 @@ export class MessageHandler implements IMessageHandler {
     );
   }
 
-  private extractPhoneFromLid(message: WAMessage): string | null {
-    const key = message.key as ExtendedMessageKey;
-    if (key.senderPn?.includes("@s.whatsapp.net")) return key.senderPn;
-    if (key.remoteJidAlt?.includes("@s.whatsapp.net")) return key.remoteJidAlt;
-    if (
-      key.participant?.includes("@s.whatsapp.net") &&
-      !key.participant.includes("@lid")
-    )
-      return key.participant;
-    if (
-      message.participant?.includes("@s.whatsapp.net") &&
-      !message.participant.includes("@lid")
-    )
-      return message.participant;
-
-    if (message.messageStubParameters) {
-      const found = message.messageStubParameters.find(
-        (p) => p && p.includes("@s.whatsapp.net") && !p.includes("@lid"),
-      );
-      if (found) return found;
+  // Helper to ensure session data is available
+  private async ensureSessionData(
+    sessionId: string,
+  ): Promise<SessionData | null> {
+    let sessionData = this.sessionCache.get(sessionId);
+    if (!sessionData) {
+      const session = await prisma.whatsAppSession.findUnique({
+        where: { sessionId },
+        select: { companyId: true, phone: true },
+      });
+      if (!session) return null;
+      sessionData = {
+        companyId: session.companyId,
+        sessionId,
+        status: "CONNECTED",
+        userId: session.phone || undefined,
+      };
+      this.sessionCache.set(sessionId, sessionData);
     }
-    return null;
+    return sessionData;
+  }
+
+  // Refactored Content Extraction for cleaner main method
+  private async extractMessageContent(
+    message: WAMessage,
+    messageId: string,
+  ): Promise<{
+    textContent: string;
+    mediaUrl?: string;
+    mediaType?: MediaType | null;
+    mediaSize?: number;
+  } | null> {
+    let textContent = "";
+    let mediaUrl: string | undefined;
+    let mediaSize = 0;
+    let mediaType: MediaType | null = null;
+
+    const messageType = Object.keys(message.message || {})[0];
+    if (!messageType) return null; // Completely empty message
+
+    // 🛡️ IGNORE PROTOCOL MESSAGES
+    // These types create "Ghost Bubbles" if processed as text. We strictly ignore them.
+    const ignoredTypes = [
+      "protocolMessage",
+      "senderKeyDistributionMessage",
+      "reactionMessage",
+      "keepInChatMessage",
+      "pollUpdateMessage",
+    ];
+
+    if (ignoredTypes.includes(messageType)) {
+      return null;
+    }
+
+    if (messageType === "conversation") {
+      textContent = message.message?.conversation || "";
+    } else if (messageType === "extendedTextMessage") {
+      textContent = message.message?.extendedTextMessage?.text || "";
+    } else {
+      const supportedMedia = [
+        "imageMessage",
+        "videoMessage",
+        "audioMessage",
+        "documentMessage",
+        "stickerMessage",
+      ];
+      if (supportedMedia.includes(messageType)) {
+        try {
+          const stream = await downloadMediaMessage(message, "stream", {});
+          // 🛡️ TYPE-SAFE: Access message content dynamically without `any`
+          const content = message.message as unknown as Record<string, unknown>;
+          const msgObj = content[messageType] as
+            | Record<string, unknown>
+            | undefined;
+
+          textContent =
+            (msgObj?.caption as string) ||
+            (msgObj?.text as string) ||
+            (msgObj?.fileName as string) ||
+            `[${mapBaileysToMediaType(messageType)}]`;
+
+          if (stream) {
+            mediaType = mapBaileysToMediaType(messageType);
+            // 🛡️ TYPE-SAFE: Explicit string cast for mimetype
+            const mimetype: string =
+              (msgObj?.mimetype as string | undefined) ||
+              "application/octet-stream";
+            const ext = mime.extension(mimetype) || "bin";
+            const filename = `${messageId}.${ext}`;
+
+            const uploadResult = await storageService.uploadStream(
+              stream as Readable,
+              filename,
+              mimetype,
+            );
+            mediaUrl = uploadResult.url;
+            mediaSize = Number(
+              (msgObj?.fileLength as number | bigint | undefined) || 0,
+            );
+          }
+        } catch (e) {
+          console.error(`[media] Download failed for ${messageId}`, e);
+        }
+      } else {
+        // Unsupported type (e.g. contactMessage, locationMessage) - fallback to text representation
+        // Only if not ignored list
+        // 🛡️ TYPE-SAFE: Access message content dynamically without `any`
+        const content = message.message as unknown as Record<string, unknown>;
+        const msgObj = content[messageType] as
+          | Record<string, unknown>
+          | undefined;
+        // Try to grab some text description if possible
+        if (msgObj) {
+          textContent = `[${messageType}]`; // Placeholder for now
+        }
+      }
+    }
+
+    // Final sanity check: if no text and no media, it's a ghost message
+    if (!textContent && !mediaUrl && !mediaType) {
+      return null;
+    }
+
+    return { textContent, mediaUrl, mediaType, mediaSize };
   }
 
   private async triggerAIResponse(
@@ -621,13 +923,14 @@ export class MessageHandler implements IMessageHandler {
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
     const { companyId, conversationId, senderId, metadata } = options;
-    const session = await prisma.whatsAppSession.findFirst({
-      where: { companyId, status: "CONNECTED" },
-    });
-    if (!session) throw new Error("No session");
 
-    const sock = this.sessionManager.getSession(session.sessionId);
-    if (!sock) throw new Error("No socket");
+    // 🛡️ 100-YEAR FIX: Memory-First session lookup (consistent with WhatsAppQueue)
+    const activeSession =
+      await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+    const sock = activeSession.socket;
 
     const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
     const sentMsg = await sock.sendMessage(jid, { text: content });
@@ -671,13 +974,14 @@ export class MessageHandler implements IMessageHandler {
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
     const { companyId, conversationId, senderId } = options;
-    const session = await prisma.whatsAppSession.findFirst({
-      where: { companyId, status: "CONNECTED" },
-    });
-    if (!session) throw new Error("No session");
 
-    const sock = this.sessionManager.getSession(session.sessionId);
-    if (!sock) throw new Error("No socket");
+    // 🛡️ 100-YEAR FIX: Memory-First session lookup (consistent with WhatsAppQueue)
+    const activeSession =
+      await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+    const sock = activeSession.socket;
 
     const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
 

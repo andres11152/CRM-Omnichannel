@@ -7,6 +7,7 @@ import { validateFileType, validateFileSize } from "@/services/uploadService";
 import { toMediaDTO, MediaDTO } from "@/dtos/media.dto";
 import { Media, MediaType, Prisma } from "@prisma/client";
 import { Readable } from "stream";
+import { MediaCategory } from "@/constants/mediaCategories";
 
 // Helper to map string types to Prisma Enum safely
 const toMediaType = (type: string): MediaType => {
@@ -29,9 +30,11 @@ interface UploadMediaParams {
 interface MediaFilterParams {
   type?: string;
   category?: string;
+  categories?: string[]; // Support filtering by multiple categories
   search?: string;
   page: number;
   limit: number;
+  excludeCategories?: string[]; // For excluding voice-notes, etc.
 }
 
 export const mediaService = {
@@ -127,16 +130,53 @@ export const mediaService = {
   },
 
   /**
-   * List media
+   * List media for library view
+   *
+   * By default, excludes voice-notes and chat-attachments to keep
+   * the library clean and focused on reusable assets.
    */
   async list(companyId: string, params: MediaFilterParams) {
-    const { page, limit, search, type, category } = params;
+    const {
+      page,
+      limit,
+      search,
+      type,
+      category,
+      categories,
+      excludeCategories = [
+        MediaCategory.VOICE_NOTES,
+        MediaCategory.CHAT_ATTACHMENTS,
+      ],
+    } = params;
     const skip = (page - 1) * limit;
+
+    // Build category filter
+    let categoryFilter: Prisma.MediaWhereInput = {};
+
+    if (category) {
+      // Single category filter
+      categoryFilter = { category };
+    } else if (categories && categories.length > 0) {
+      // Multiple categories filter (OR)
+      categoryFilter = { category: { in: categories } };
+    }
+
+    // Build exclusion filter (voice-notes, chat-attachments by default)
+    let exclusionFilter: Prisma.MediaWhereInput = {};
+    if (excludeCategories && excludeCategories.length > 0) {
+      exclusionFilter = {
+        OR: [
+          { category: { notIn: excludeCategories } },
+          { category: null }, // Include items without category (legacy)
+        ],
+      };
+    }
 
     const where: Prisma.MediaWhereInput = {
       companyId,
       ...(type && { type: toMediaType(type) }),
-      ...(category && { category }),
+      ...categoryFilter,
+      ...exclusionFilter,
       ...(search && {
         OR: [
           { originalName: { contains: search, mode: "insensitive" } },
@@ -232,18 +272,26 @@ export const mediaService = {
   },
 
   /**
-   * Helper: Resolve URL (Signed vs Proxy)
+   * Helper: Resolve URL (Always use proxy for reliability)
+   *
+   * IMPORTANT: We return RELATIVE URLs (not absolute) because:
+   * 1. In development, Vite proxies /api/* to the backend (localhost:4000)
+   * 2. In production, frontend/backend are typically on same domain
+   * 3. Relative URLs avoid CORS issues entirely
+   *
+   * The frontend receives "/api/media/xxx/content" which the browser
+   * loads from the same origin, and it gets proxied appropriately.
    */
   async resolveUrl(media: Media): Promise<string> {
-    if (media.url.includes("s3.amazonaws.com")) {
-      try {
-        return await storageProvider.getSignedUrl(media.key);
-      } catch {
-        // Fallback to proxy
-        const baseUrl = process.env.APP_URL || "http://localhost:4000";
-        return `${baseUrl}/api/media/${media.id}/content`;
-      }
+    // Always use the content proxy endpoint for S3 files
+    // Key structure: companyId/type/filename (contains slashes)
+    if (media.url.includes("s3.amazonaws.com") || media.key.includes("/")) {
+      // Return RELATIVE URL - works with Vite proxy and production
+      const proxyUrl = `/api/media/${media.id}/content`;
+      console.info(`[MediaService] resolveUrl: ${media.id} -> ${proxyUrl}`);
+      return proxyUrl;
     }
+    // For local files that are already accessible
     return media.url;
   },
 

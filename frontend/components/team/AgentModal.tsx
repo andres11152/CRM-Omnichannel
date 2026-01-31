@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 export interface AgentFormData {
   name: string;
@@ -15,12 +15,12 @@ interface AgentModalProps {
   isEditing: boolean;
   saving: boolean;
   currentUser?: any;
-  
+
   // Form state
   formData: AgentFormData;
   skillInput: string;
   departments: Array<{ id: string; name: string }>;
-  
+
   // Handlers
   onClose: () => void;
   onSave: () => void;
@@ -57,13 +57,18 @@ export const AgentModal: React.FC<AgentModalProps> = ({
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-[#2a3942]/50">
           <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-            {isEditing ? 'Editar Agente' : 'Nuevo Agente'}
+            {isEditing ? "Editar Agente" : "Nuevo Agente"}
           </h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -84,7 +89,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => onFormChange('name', e.target.value)}
+              onChange={(e) => onFormChange("name", e.target.value)}
               className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
               placeholder="Ej: Juan Pérez"
             />
@@ -98,7 +103,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             <input
               type="email"
               value={formData.email}
-              onChange={(e) => onFormChange('email', e.target.value)}
+              onChange={(e) => onFormChange("email", e.target.value)}
               className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
               placeholder="juan@empresa.com"
             />
@@ -111,14 +116,16 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             </label>
             <select
               value={formData.role}
-              onChange={(e) => onFormChange('role', e.target.value)}
-              disabled={currentUser?.role === 'SUPERVISOR'}
+              onChange={(e) => onFormChange("role", e.target.value)}
+              disabled={currentUser?.role === "SUPERVISOR"}
               className={`w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none ${
-                currentUser?.role === 'SUPERVISOR' ? 'opacity-60 cursor-not-allowed' : ''
+                currentUser?.role === "SUPERVISOR"
+                  ? "opacity-60 cursor-not-allowed"
+                  : ""
               }`}
             >
               <option value="AGENT">🎧 Agente (Miembro)</option>
-              {currentUser?.role !== 'SUPERVISOR' && (
+              {currentUser?.role !== "SUPERVISOR" && (
                 <>
                   <option value="SUPERVISOR">👀 Supervisor</option>
                   <option value="ADMIN">🛡️ Administrador</option>
@@ -136,7 +143,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               <input
                 type="password"
                 value={formData.password}
-                onChange={(e) => onFormChange('password', e.target.value)}
+                onChange={(e) => onFormChange("password", e.target.value)}
                 className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                 placeholder="••••••••"
               />
@@ -150,7 +157,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             </label>
             <select
               value={formData.department}
-              onChange={(e) => onFormChange('department', e.target.value)}
+              onChange={(e) => onFormChange("department", e.target.value)}
               className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
             >
               {departments.length === 0 ? (
@@ -184,14 +191,17 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               <input
                 type="range"
                 min="1"
-                max="10"
+                max="50"
                 step="1"
                 value={formData.maxConcurrency}
-                onChange={(e) => onFormChange('maxConcurrency', parseInt(e.target.value))}
+                onChange={(e) =>
+                  onFormChange("maxConcurrency", parseInt(e.target.value))
+                }
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
               />
               <p className="text-[10px] text-gray-400 mt-1">
-                El sistema dejará de asignar tickets automáticos al llegar a este límite.
+                El sistema dejará de asignar tickets automáticos al llegar a
+                este límite.
               </p>
             </div>
 
@@ -240,10 +250,14 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             onClick={onSave}
             disabled={saving}
             className={`px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg hover:shadow-indigo-500/30 transition-all ${
-              saving ? 'opacity-50 cursor-not-allowed' : ''
+              saving ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
-            {saving ? 'Guardando...' : isEditing ? 'Guardar Cambios' : 'Crear Cuenta'}
+            {saving
+              ? "Guardando..."
+              : isEditing
+                ? "Guardar Cambios"
+                : "Crear Cuenta"}
           </button>
         </div>
       </div>

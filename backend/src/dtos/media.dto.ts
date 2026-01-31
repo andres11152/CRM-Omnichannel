@@ -1,4 +1,4 @@
-import { Media, User } from "@prisma/client";
+import { Media, MediaType, User } from "@prisma/client";
 
 /**
  * 📦 MEDIA DTOs
@@ -6,13 +6,18 @@ import { Media, User } from "@prisma/client";
 
 export interface MediaDTO {
   id: string;
+  companyId: string;
+  filename: string;
   originalName: string;
   mimeType: string;
   size: number;
   url: string;
+  key: string;
+  type: MediaType; // IMAGE | AUDIO | VIDEO | DOCUMENT
   category: string | null;
   tags: string[];
   description: string | null;
+  uploadedById: string;
   uploadedBy: {
     id: string;
     name: string | null;
@@ -27,13 +32,18 @@ export const toMediaDTO = (
 ): MediaDTO => {
   return {
     id: media.id,
+    companyId: media.companyId,
+    filename: media.filename,
     originalName: media.originalName,
     mimeType: media.mimeType,
     size: media.size,
     url: media.url, // Service should ensure this is signed/proxied before mapping
+    key: media.key,
+    type: media.type, // CRITICAL: Must include type for frontend rendering
     category: media.category,
     tags: media.tags,
     description: media.description,
+    uploadedById: media.uploadedById,
     uploadedBy: media.uploadedBy
       ? {
           id: media.uploadedBy.id!,

@@ -15,7 +15,7 @@ import {
 } from "../services/departmentService";
 import { getAssistants } from "../services/aiService";
 
-export const QueuesConfig: React.FC = () => {
+const QueuesConfig: React.FC = () => {
   const [queues, setQueues] = useState<QueueConfig[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [assistants, setAssistants] = useState<any[]>([]);
@@ -241,7 +241,9 @@ export const QueuesConfig: React.FC = () => {
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                       <span className="bg-gray-100 dark:bg-[#111b21] px-2 py-1 rounded text-xs border border-gray-200 dark:border-gray-700">
                         {queue.departmentDetails?.name ||
-                          queue.department ||
+                          (typeof queue.department === "object"
+                            ? (queue.department as any)?.name
+                            : queue.department) ||
                           "General"}
                       </span>
                     </td>
@@ -508,3 +510,5 @@ export const QueuesConfig: React.FC = () => {
     </div>
   );
 };
+
+export default QueuesConfig;

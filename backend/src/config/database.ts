@@ -31,6 +31,7 @@ const GLOBAL_MODELS = [
   "AIConfig",
   "AIAssistant",
   "Media",
+  "AgentSession",
 ];
 
 const SOFT_DELETE_MODELS = ["Contact", "Deal", "Ticket", "Campaign"];
@@ -195,17 +196,34 @@ const createExtendedClient = () => {
                 where: { ...args.where, companyId },
               });
             }
+          } else if (operation === "upsert") {
+            // 🛡️ UPSERT: Inject companyId in both where AND create/update data
+            const upsertArgs = args as {
+              where?: Record<string, unknown>;
+              create?: Record<string, unknown>;
+              update?: Record<string, unknown>;
+            };
+            if (upsertArgs.where) {
+              upsertArgs.where.companyId = companyId;
+            }
+            if (upsertArgs.create) {
+              upsertArgs.create.companyId = companyId;
+            }
+            // Note: update data typically doesn't need companyId injection (it's already filtered by where)
           } else if (
             [
               "findMany",
               "findFirst",
               "count",
+              "delete",
               "deleteMany",
+              "update",
               "updateMany",
               "groupBy",
               "aggregate",
             ].includes(operation)
           ) {
+            // 🛡️ All read/modify operations: Inject companyId in where clause
             const safeArgs = args as { where?: Record<string, unknown> };
             safeArgs.where = {
               ...safeArgs.where,

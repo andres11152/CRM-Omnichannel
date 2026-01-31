@@ -19,6 +19,11 @@ import {
   PanelLeftOpen,
   CheckCircle,
   Archive,
+  Headphones,
+  Activity,
+  TrendingUp,
+  Zap,
+  RefreshCw,
 } from "lucide-react";
 import { Ticket, Contact, AIConfig, User, Tag, Channel } from "../types";
 import { getTickets, updateTicket } from "../services/ticketService";
@@ -26,6 +31,9 @@ import { ContactList } from "./ContactList";
 import { ChatInterface } from "./ChatInterface";
 import { NewChatModal } from "./NewChatModal";
 import { SyncMessagesModal } from "./SyncMessagesModal";
+import { TransferModal } from "./TransferModal";
+import { QueueView } from "./QueueView";
+import { ResolvedView } from "./ResolvedView";
 import { API_BASE_URL, BASE_URL } from "../services/apiConfig";
 
 import { resolveContactName, getInitials } from "../src/utils/contactUtils";
@@ -45,6 +53,11 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const [loading, setLoading] = useState(true);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  // 🏢 ENTERPRISE: Queue Transfer Modal State
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferringTicketId, setTransferringTicketId] = useState<
+    string | null
+  >(null);
   const [allTags, setAllTags] = useState<Tag[]>([]);
 
   const [filterUnread, setFilterUnread] = useState(false);
@@ -290,14 +303,113 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     }
   };
 
-  // Filter Logic
-  // My Chats: OPEN or IN_PROGRESS and assigned to me (handled by backend or implicit)
-  const myTickets = tickets.filter(
-    (t) => t.status === "OPEN" || t.status === "IN_PROGRESS",
-  );
+  // 🏢 ENTERPRISE: Queue Transfer Handlers
+  const handleOpenTransferModal = (ticketId: string) => {
+    setTransferringTicketId(ticketId);
+    setIsTransferModalOpen(true);
+  };
 
-  // Queue: OPEN but unassigned (no PENDING status exists in enum)
-  const queueTickets = tickets.filter(
+  const handleQueueTransfer = async (
+    targetId: string,
+    type: "AGENT" | "QUEUE",
+  ) => {
+    if (!transferringTicketId) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const updateData =
+        type === "AGENT"
+          ? { assignedToId: targetId, status: "IN_PROGRESS" }
+          : { queueId: targetId, assignedToId: null, status: "OPEN" };
+
+      const res = await fetch(
+        `${API_BASE_URL}/tickets/${transferringTicketId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updateData),
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Error al transferir el ticket");
+      }
+
+      const updatedTicket = await res.json();
+
+      // Update local state
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === transferringTicketId ? { ...t, ...updatedTicket } : t,
+        ),
+      );
+
+      toast.success(
+        type === "AGENT"
+          ? "Ticket asignado al agente correctamente"
+          : "Ticket movido a la cola correctamente",
+      );
+
+      // Close modal and reset state
+      setIsTransferModalOpen(false);
+      setTransferringTicketId(null);
+    } catch (error: unknown) {
+      console.error("[AgentWorkspace] ❌ Error transferring ticket:", error);
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "Error al transferir el ticket";
+      toast.error(msg);
+    }
+  };
+
+  // Filter Logic
+  // 🔒 CRITICAL FIX: My Chats MUST only show tickets assigned to the current user
+  // This ensures that when a ticket is transferred, it disappears from the original agent's view
+  // 🔒 CRITICAL FIX: Deduplication Logic (100-Year Solution)
+  // Ensure we NEVER show duplicate tickets for the same conversation
+  // Or phantom duplicates with same message content but different IDs
+  const uniqueTicketsMap = new Map<string, Ticket>();
+
+  tickets.forEach((ticket) => {
+    // Key by conversationId (primary) or fall back to ticket.id
+    // This merges duplicates into a single entry
+    const key = ticket.conversationId || ticket.id;
+
+    if (!uniqueTicketsMap.has(key)) {
+      uniqueTicketsMap.set(key, ticket);
+    } else {
+      // If duplicate exists, keep the one with the most recent activity
+      const existing = uniqueTicketsMap.get(key)!;
+      const existingTime = new Date(existing.lastMessageAt || 0).getTime();
+      const newTime = new Date(ticket.lastMessageAt || 0).getTime();
+
+      if (newTime > existingTime) {
+        uniqueTicketsMap.set(key, ticket);
+      }
+    }
+  });
+
+  const curatedTickets = Array.from(uniqueTicketsMap.values());
+
+  const currentUserId = user?.id;
+
+  const myTickets = curatedTickets.filter((t) => {
+    // Must be assigned to current user
+    if (!currentUserId || t.assignedToId !== currentUserId) {
+      return false;
+    }
+    // And must be active (not closed/resolved)
+    return t.status === "OPEN" || t.status === "IN_PROGRESS";
+  });
+
+  // Queue: OPEN but unassigned
+  // 🏢 ENTERPRISE TRICK: Filter out Groups from Main Queue if desired,
+  // but for now we keep them DEDUPLICATED so they don't spam.
+  const queueTickets = curatedTickets.filter(
     (t) => t.status === "OPEN" && !t.assignedToId,
   );
 
@@ -356,8 +468,19 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       queueName: t.contact.queueName || t.queue?.name,
       assignedAgentName: t.contact.assignedAgentName || t.assignedTo?.name,
       channel: t.channel as Channel,
+      // 🏢 GROUP CHAT SUPPORT
+      isGroup: t.isGroup ?? t.contact.isGroup ?? false,
     };
   });
+
+  // 100-Year Solution: Smart Grouping for Enterprise Workflow
+  let directContacts = contacts;
+  let groupContacts: Contact[] = [];
+
+  if (activeTab === "my_chats") {
+    directContacts = contacts.filter((c) => !c.isGroup);
+    groupContacts = contacts.filter((c) => c.isGroup);
+  }
 
   const activeTicket = tickets.find((t) => t.id === activeTicketId);
 
@@ -396,8 +519,9 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
           if (clean.startsWith("000")) return ""; // DB IDs
           if (clean.startsWith("40000")) return ""; // Virtual IDs
 
-          // Special Check for Long LIDs (often start with 45 and length > 12)
+          // Special Check for Long LIDs (often start with 45 or 40 and length > 12)
           if (clean.startsWith("45") && clean.length > 12) return "";
+          if (clean.startsWith("40") && clean.length > 12) return "";
 
           // 4. Relaxed Length Check (7-15)
           if (clean.length >= 7 && clean.length <= 15) return `+${clean}`;
@@ -415,6 +539,8 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
           | "human",
         queueName: activeTicket.queue?.name,
         assignedAgentName: activeTicket.assignedTo?.name,
+        // 🏢 GROUP CHAT SUPPORT
+        isGroup: activeTicket.isGroup ?? activeTicket.contact.isGroup ?? false,
       }
     : null;
 
@@ -560,82 +686,224 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   return (
     <div className="h-full flex flex-col bg-gray-50 dark:bg-[#0b141a]">
       {/* Header */}
-      <div className="px-3 py-2 md:px-6 md:py-3 bg-white dark:bg-[#202c33] border-b border-gray-200 dark:border-gray-700 flex justify-between items-center flex-shrink-0 gap-2">
-        <div className="flex items-center gap-2 md:gap-3">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-            <LayoutDashboard
-              className={`w-5 h-5 ${socketConnected ? "text-green-500" : "text-red-500"}`}
-            />
-            <span className="hidden sm:inline">Panel de Agente</span>
-          </h2>
-          {user && (
-            <span className="hidden md:inline-block text-sm text-gray-500 dark:text-gray-400 border-l border-gray-300 dark:border-gray-600 pl-3">
-              Hola,{" "}
-              <span className="font-semibold text-gray-700 dark:text-gray-200">
-                {user.name}
-              </span>
-            </span>
-          )}
-        </div>
+      {/* 👑 ENTERPRISE HEADER */}
+      <div className="px-6 py-4 bg-white/80 dark:bg-[#111b21]/95 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800 sticky top-0 z-50 transition-all duration-300 shadow-sm relative">
+        <div className="flex justify-between items-center max-w-full gap-4">
+          {/* LEFT: Branding & Status */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 group">
+              <div
+                className={`p-2.5 rounded-xl bg-gradient-to-br transition-all duration-500 ${socketConnected ? "from-emerald-500/10 to-teal-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20 group-hover:from-emerald-500/20 group-hover:to-teal-500/20" : "from-red-500/10 to-pink-500/10 text-red-600 dark:text-red-400 ring-1 ring-red-500/20"}`}
+              >
+                <LayoutDashboard className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight tracking-tight font-display">
+                  Panel de Agente
+                </h2>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="relative flex h-2 w-2">
+                    <span
+                      className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${socketConnected ? "bg-emerald-400" : "bg-red-400"}`}
+                    ></span>
+                    <span
+                      className={`relative inline-flex rounded-full h-2 w-2 ${socketConnected ? "bg-emerald-500" : "bg-red-500"}`}
+                    ></span>
+                  </div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {socketConnected ? "Online" : "Offline"}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-        {/* 🆕 CENTER: Dynamic Actions Portal */}
-        <div
-          id="header-actions-portal"
-          className="flex-1 flex justify-center items-center px-1 min-w-0"
-        ></div>
+            <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 hidden xl:block" />
 
-        <div className="flex gap-2 items-center flex-shrink-0">
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="hidden md:block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            title={
-              isSidebarOpen
-                ? "Ocultar lista de chats"
-                : "Mostrar lista de chats"
-            }
-          >
-            {isSidebarOpen ? (
-              <PanelLeftClose className="w-5 h-5" />
-            ) : (
-              <PanelLeftOpen className="w-5 h-5" />
+            {/* Desktop Tabs - Segmented Control */}
+            <div className="hidden xl:flex p-1 bg-gray-100/50 dark:bg-[#202c33]/50 rounded-xl border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm">
+              {[
+                {
+                  id: "my_chats",
+                  label: "Mis Chats",
+                  count: myTickets.length,
+                  icon: Inbox,
+                  color: "indigo",
+                },
+                {
+                  id: "queue",
+                  label: "Colas",
+                  count: queueTickets.length,
+                  icon: Layers,
+                  color: "orange",
+                },
+                {
+                  id: "resolved",
+                  label: "Resueltos",
+                  count: tickets.filter(
+                    (t) => t.status === "CLOSED" || t.status === "RESOLVED",
+                  ).length,
+                  icon: CheckCircle,
+                  color: "green",
+                },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id as "my_chats" | "queue" | "resolved");
+                    setActiveTicketId(null);
+                  }}
+                  className={`
+                     relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ease-out
+                     ${
+                       activeTab === tab.id
+                         ? "bg-white dark:bg-[#2a3942] text-gray-900 dark:text-white shadow-md shadow-gray-200/50 dark:shadow-none ring-1 ring-black/5 dark:ring-white/10 scale-100"
+                         : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
+                     }
+                   `}
+                >
+                  {activeTab === tab.id && (
+                    <span
+                      className={`absolute left-0 w-1 h-3/4 bg-${tab.color}-500 rounded-r-full opacity-0 md:opacity-100 transition-opacity`}
+                    ></span>
+                  )}
+                  <span>{tab.label}</span>
+                  {tab.count > 0 && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold shadow-sm ${
+                        activeTab === tab.id
+                          ? `bg-${tab.color}-100 text-${tab.color}-700 dark:bg-${tab.color}-500/20 dark:text-${tab.color}-300`
+                          : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* CENTER: Agent Quick Stats (Hidden on mobile) */}
+          <div className="hidden lg:flex items-center gap-4 flex-1 justify-center">
+            {/* Active Chats Stat */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800/30">
+              <Headphones className="w-4 h-4 text-indigo-500" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                  Activos
+                </span>
+                <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">
+                  {myTickets.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Queue Stat */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-100 dark:border-orange-800/30">
+              <Activity className="w-4 h-4 text-orange-500" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+                  En Cola
+                </span>
+                <span className="text-sm font-bold text-orange-700 dark:text-orange-300">
+                  {queueTickets.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Resolved Today Stat */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-800/30">
+              <TrendingUp className="w-4 h-4 text-green-500" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                  Hoy
+                </span>
+                <span className="text-sm font-bold text-green-700 dark:text-green-300">
+                  {
+                    tickets.filter(
+                      (t) =>
+                        (t.status === "CLOSED" || t.status === "RESOLVED") &&
+                        t.resolvedAt &&
+                        new Date(t.resolvedAt).toDateString() ===
+                          new Date().toDateString(),
+                    ).length
+                  }
+                </span>
+              </div>
+            </div>
+
+            {/* Refresh Button */}
+            <button
+              onClick={() => fetchData(true)}
+              disabled={loading}
+              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all disabled:opacity-50"
+              title="Actualizar datos"
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+              />
+            </button>
+          </div>
+
+          {/* Portal for additional actions */}
+          <div
+            id="header-actions-portal"
+            className="lg:hidden flex-1 flex justify-end items-center px-2 min-w-0"
+          />
+
+          {/* RIGHT: Tools */}
+          <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+            {/* Mobile Tabs */}
+            <div className="xl:hidden flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+              <button
+                onClick={() => setActiveTab("my_chats")}
+                className={`p-2 rounded-md transition-all ${activeTab === "my_chats" ? "bg-white dark:bg-gray-700 shadow text-indigo-600" : "text-gray-500"}`}
+              >
+                <Inbox className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setActiveTab("queue")}
+                className={`p-2 rounded-md transition-all ${activeTab === "queue" ? "bg-white dark:bg-gray-700 shadow text-orange-600" : "text-gray-500"}`}
+              >
+                <Layers className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setActiveTab("resolved")}
+                className={`p-2 rounded-md transition-all ${activeTab === "resolved" ? "bg-white dark:bg-gray-700 shadow text-green-600" : "text-gray-500"}`}
+              >
+                <CheckCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1 hidden md:block" />
+
+            {/* Agent Profile (Hidden on small screens) */}
+            {user && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                  {user.name?.charAt(0).toUpperCase() || "A"}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate max-w-[100px]">
+                    {user.name || "Agente"}
+                  </span>
+                  <span className="text-[9px] text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    {user.role === "ADMIN" ? "Admin" : "Agente"}
+                  </span>
+                </div>
+              </div>
             )}
-          </button>
-          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+
             <button
-              onClick={() => {
-                setActiveTab("my_chats");
-                setActiveTicketId(null);
-              }}
-              className={`px-2 md:px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 md:gap-2 ${activeTab === "my_chats" ? "bg-white dark:bg-[#202c33] shadow text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="group p-2.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+              title={isSidebarOpen ? "Ocultar panel" : "Mostrar panel"}
             >
-              <span className="hidden sm:inline">📥 Mis Chats</span>
-              <Inbox className="sm:hidden w-5 h-5" />
-              <span className="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 px-1.5 rounded-full text-[10px]">
-                {myTickets.length}
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("queue");
-                setActiveTicketId(null);
-              }}
-              className={`px-2 md:px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 md:gap-2 ${activeTab === "queue" ? "bg-white dark:bg-[#202c33] shadow text-orange-600 dark:text-orange-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
-            >
-              <span className="hidden sm:inline">⏳ Colas</span>
-              <Layers className="sm:hidden w-5 h-5" />
-              <span className="bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 px-1.5 rounded-full text-[10px]">
-                {queueTickets.length}
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("resolved");
-                setActiveTicketId(null);
-              }}
-              className={`px-2 md:px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 md:gap-2 ${activeTab === "resolved" ? "bg-white dark:bg-[#202c33] shadow text-green-600 dark:text-green-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
-            >
-              <span className="hidden sm:inline">✅ Resueltos</span>
-              <CheckCircle className="sm:hidden w-5 h-5" />
+              {isSidebarOpen ? (
+                <PanelLeftClose className="w-5 h-5 group-hover:scale-90 transition-transform" />
+              ) : (
+                <PanelLeftOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              )}
             </button>
           </div>
         </div>
@@ -656,9 +924,28 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
             <div className="p-8 text-center text-gray-500 text-sm">
               Cargando tickets...
             </div>
+          ) : activeTab === "queue" ? (
+            // 🏢 ENTERPRISE: Queue View with priority grouping + Manual Transfer
+            <QueueView
+              tickets={queueTickets}
+              activeTicketId={activeTicketId}
+              onSelectTicket={handleSelectContact}
+              onTransferTicket={handleOpenTransferModal}
+            />
+          ) : activeTab === "resolved" ? (
+            // 🏢 ENTERPRISE: Resolved View with history and metrics
+            <ResolvedView
+              tickets={tickets.filter(
+                (t) => t.status === "CLOSED" || t.status === "RESOLVED",
+              )}
+              activeTicketId={activeTicketId}
+              onSelectTicket={handleSelectContact}
+            />
           ) : (
+            // My Chats: Standard ContactList with Direct/Groups
             <ContactList
-              contacts={contacts}
+              contacts={directContacts}
+              groups={groupContacts}
               activeContactId={activeTicketId || ""}
               onSelectContact={handleSelectContact}
               userRole={user?.role}
@@ -791,16 +1078,80 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               </div>
             )
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 p-10 text-center">
-              <MessageCircle className="w-24 h-24 mb-4 opacity-20" />
-              <p className="text-lg font-medium">
-                Selecciona un ticket de la lista
-              </p>
-              <p className="text-sm mt-2 max-w-xs">
-                {activeTab === "queue"
-                  ? "Revisa los tickets pendientes y asígnatelos para comenzar a chatear."
-                  : "Gestiona tus conversaciones activas y responde a los clientes."}
-              </p>
+            // 🏢 ENTERPRISE: Enhanced Empty State
+            <div className="h-full flex flex-col items-center justify-center p-10 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0b141a] dark:via-[#111b21] dark:to-[#0b141a]">
+              <div className="max-w-md w-full text-center">
+                {/* Animated Icon */}
+                <div className="relative inline-block mb-6">
+                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 blur-3xl rounded-full" />
+                  <div className="relative p-6 bg-white dark:bg-[#202c33] rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700">
+                    {activeTab === "queue" ? (
+                      <Layers className="w-16 h-16 text-orange-400" />
+                    ) : activeTab === "resolved" ? (
+                      <CheckCircle className="w-16 h-16 text-green-400" />
+                    ) : (
+                      <MessageCircle className="w-16 h-16 text-indigo-400" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Title */}
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                  {activeTab === "queue"
+                    ? "Cola de Espera"
+                    : activeTab === "resolved"
+                      ? "Historial de Tickets"
+                      : "Selecciona una Conversación"}
+                </h3>
+
+                {/* Description */}
+                <p className="text-gray-500 dark:text-gray-400 mb-6">
+                  {activeTab === "queue"
+                    ? "Revisa los tickets pendientes y asígnatelos para comenzar a atender."
+                    : activeTab === "resolved"
+                      ? "Consulta el historial de tickets resueltos y sus métricas."
+                      : "Elige un chat de tu bandeja para comenzar a responder."}
+                </p>
+
+                {/* Quick Stats Summary */}
+                <div className="flex justify-center gap-4 p-4 bg-gray-50 dark:bg-[#202c33] rounded-xl">
+                  <div className="text-center px-4">
+                    <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                      {myTickets.length}
+                    </div>
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">
+                      Activos
+                    </div>
+                  </div>
+                  <div className="w-px bg-gray-200 dark:bg-gray-700" />
+                  <div className="text-center px-4">
+                    <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                      {queueTickets.length}
+                    </div>
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">
+                      En Cola
+                    </div>
+                  </div>
+                  <div className="w-px bg-gray-200 dark:bg-gray-700" />
+                  <div className="text-center px-4">
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {
+                        tickets.filter(
+                          (t) =>
+                            (t.status === "CLOSED" ||
+                              t.status === "RESOLVED") &&
+                            t.resolvedAt &&
+                            new Date(t.resolvedAt).toDateString() ===
+                              new Date().toDateString(),
+                        ).length
+                      }
+                    </div>
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">
+                      Resueltos Hoy
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -814,6 +1165,15 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         onSubmit={handleSyncSubmit}
+      />
+      {/* 🏢 ENTERPRISE: Queue Transfer Modal */}
+      <TransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => {
+          setIsTransferModalOpen(false);
+          setTransferringTicketId(null);
+        }}
+        onTransfer={handleQueueTransfer}
       />
     </div>
   );

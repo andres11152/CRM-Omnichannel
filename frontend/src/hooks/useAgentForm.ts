@@ -47,7 +47,7 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
     password: "",
     role: "AGENT",
     department: "",
-    maxConcurrency: 3,
+    maxConcurrency: 5, // Enterprise Default
     skills: [],
   });
 
@@ -103,7 +103,7 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
       password: "",
       role: "AGENT",
       department: defaultDepartment || "",
-      maxConcurrency: 3,
+      maxConcurrency: 5,
       skills: [],
     });
     setSkillInput("");
@@ -125,10 +125,10 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
         agent.role === "Supervisor"
           ? "SUPERVISOR"
           : agent.role === "Admin"
-          ? "ADMIN"
-          : "AGENT",
+            ? "ADMIN"
+            : "AGENT",
       department: agent.department || defaultDepartment || "",
-      maxConcurrency: agent.maxCapacity || 3,
+      maxConcurrency: agent.maxCapacity || 5,
       skills: agent.skills || [],
     });
     setSkillInput("");

@@ -1,6 +1,6 @@
 import { prisma } from "@/config/database";
-/* removed unused MessageMetadata */
 import { ConversationStatus, Prisma } from "@prisma/client";
+import { contactService } from "@/services/contactService";
 
 /**
  * 💬 CHAT SERVICE
@@ -43,21 +43,22 @@ export class ChatService {
   }
 
   /**
-   * Create or Update a WhatsApp "Shadow" User
+   * Create or Update a WhatsApp "Shadow" User & Sync with CRM Contact
    */
   async upsertWhatsAppUser(params: {
     email: string;
     name: string;
     companyId: string;
     phone?: string | null;
-    role?: "USER" | "AGENT" | "ADMIN" | "MASTER"; // Extended
+    role?: "USER" | "AGENT" | "ADMIN" | "MASTER";
   }) {
-    return prisma.user.upsert({
+    // 1. Upsert System User (Authentication/Chat Identity)
+    const user = await prisma.user.upsert({
       where: { email: params.email },
       update: {
         ...(params.name && { name: params.name }),
         ...(params.phone && { phone: params.phone }),
-        updatedAt: new Date(), // 🛡️ Force update to track "Last Active"
+        updatedAt: new Date(),
       },
       create: {
         email: params.email,
@@ -68,6 +69,40 @@ export class ChatService {
         phone: params.phone,
       },
     });
+
+    // 2. 100-YEAR FIX: Sync with CRM Contact Module
+    // Only sync valid "USER" roles (customers) not groups.
+    // UPDATE: Allow LIDs to sync. If we don't have a phone, we still create the contact
+    // so the agent can rename it manually in CRM. We prioritize capturing the interaction.
+
+    if (user.role === "USER" && !params.email.includes("@g.us")) {
+      try {
+        await contactService.upsert(params.companyId, {
+          // If we have a real phone, use it. If not (LID), leave phone empty.
+          phone: params.phone || undefined,
+          // 🛡️ 100-YEAR FIX: Pass the email as-is.
+          // contactService.upsert now handles internal email logic correctly:
+          // - If phone is available, it will discard internal emails
+          // - If phone is NOT available (LID), it will keep the email as identifier
+          email: params.email,
+          name: params.name, // Will be the LID if no pushname, but user can edit it.
+          customFields: {
+            source: "whatsapp",
+            whatsappId: params.email.split("@")[0], // This is the LID or Phone ID
+            userId: user.id,
+          },
+          tags: ["Importado de Chat"],
+        });
+      } catch (error) {
+        // CRM Sync should be non-blocking. Log and continue.
+        console.warn(
+          `[ChatService] Failed to sync CRM contact for ${params.email}`,
+          error,
+        );
+      }
+    }
+
+    return user;
   }
 
   /**
@@ -91,12 +126,20 @@ export class ChatService {
 
   /**
    * Create new conversation (Atomic)
+   * 🛡️ 100-YEAR FIX: Now supports Group chats with metadata
    */
   async createConversation(data: {
     companyId: string;
     channelId: string;
     subject: string;
-    userId: string;
+    userId?: string;
+    isGroup?: boolean;
+    groupMetadata?: {
+      groupName?: string;
+      description?: string;
+      participantCount?: number;
+      groupPicUrl?: string | null;
+    };
   }) {
     return prisma.conversation.create({
       data: {
@@ -104,7 +147,11 @@ export class ChatService {
         channelId: data.channelId,
         subject: data.subject,
         status: "OPEN",
-        participants: { connect: [{ id: data.userId }] },
+        isGroup: data.isGroup ?? false,
+        groupMetadata: data.groupMetadata ?? undefined,
+        participants: data.userId
+          ? { connect: [{ id: data.userId }] }
+          : undefined,
       },
     });
   }
@@ -114,7 +161,7 @@ export class ChatService {
    */
   async updateConversation(
     id: string,
-    updates: { status?: ConversationStatus; channelId?: string },
+    updates: Prisma.ConversationUncheckedUpdateInput,
   ) {
     return prisma.conversation.update({
       where: { id },
@@ -182,7 +229,7 @@ export class ChatService {
     senderId: string;
     status: "SENT" | "DELIVERED";
     metadata: Prisma.InputJsonValue;
-    createdAt?: Date; // 🛡️ Optional timestamp to override default now()
+    createdAt?: Date;
   }) {
     return prisma.message.upsert({
       where: { whatsappMessageId: data.whatsappMessageId },

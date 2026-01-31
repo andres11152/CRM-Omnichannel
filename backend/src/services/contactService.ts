@@ -18,7 +18,7 @@ interface ContactUpsertParams {
   phone?: string | null;
   tags?: string[];
   notes?: string;
-  customFields?: Record<string, any>;
+  customFields?: Prisma.InputJsonValue;
   avatarUrl?: string;
 }
 
@@ -120,9 +120,24 @@ export const contactService = {
   ): Promise<ContactDTO> {
     // 1. Sanitize
     let email = data.email?.toLowerCase().trim() || null;
-    let phone = data.phone?.replace(/\D/g, "") || null;
-    if (email && (email.includes("@whatsapp.user") || email.includes("@c.us")))
+    const phone = data.phone?.replace(/\D/g, "") || null;
+
+    // 🛡️ 100-YEAR FIX: Handle WhatsApp Internal Emails
+    // If email is an internal WhatsApp identifier (@whatsapp.user, @c.us),
+    // we ONLY nullify it if we have a real phone number to use instead.
+    // If phone is unavailable (LID scenario), keep the email as internal identifier.
+    const isInternalEmail =
+      email &&
+      (email.includes("@whatsapp.user") ||
+        email.includes("@c.us") ||
+        email.includes("@lid"));
+
+    if (isInternalEmail && phone) {
+      // We have a real phone, so we can safely discard the internal email
       email = null;
+    }
+    // If isInternalEmail && !phone, we KEEP the email as our only identifier
+
     if (!phone && !email && !data.id) {
       throw new AppError(
         "Phone, Email or ID required",
@@ -185,8 +200,10 @@ export const contactService = {
         },
       });
       return toContactDTO(updated);
-    } catch (error: any) {
-      if (error.code === "P2002") {
+    } catch (error: unknown) {
+      // 🛡️ TYPE-SAFE ERROR HANDLING: Prisma P2002 = Unique constraint violation
+      const prismaError = error as { code?: string };
+      if (prismaError.code === "P2002") {
         // Zombie logic
         const zombie = await prisma.contact.findFirst({
           where: {
@@ -250,9 +267,20 @@ export const contactService = {
     if (!canCreate)
       throw new AppError("Plan limit exceeded", HTTP_STATUS.FORBIDDEN);
 
-    try {
-      const created = await prisma.contact.create({
-        data: {
+    // 🛡️ 100-YEAR FIX: Use atomic upsert to prevent P2002 errors and race conditions
+    // Contact has unique constraint on (companyId, phone)
+    if (data.phone) {
+      // Phone-based upsert (atomic, prevents duplicates)
+      const contact = await prisma.contact.upsert({
+        where: {
+          companyId_phone: { companyId, phone: data.phone },
+        },
+        update: {
+          // Only update if incoming data is better (non-empty)
+          ...(data.name && { name: data.name }),
+          ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
+        },
+        create: {
           companyId,
           name: data.name || "New Contact",
           email: data.email,
@@ -263,25 +291,44 @@ export const contactService = {
           avatarUrl: data.avatarUrl,
         },
       });
-      return toContactDTO(created);
-    } catch (err: any) {
-      // Race condition safety
-      if (err.code === "P2002") {
-        const existing = await prisma.contact.findFirst({
-          where: {
-            companyId,
-            OR: [
-              data.phone ? { phone: data.phone } : {},
-              data.email ? { email: data.email } : {},
-            ].filter((o) => Object.keys(o).length > 0),
+      return toContactDTO(contact);
+    }
+
+    // Email-only fallback (no unique constraint, use find+create pattern)
+    if (data.email) {
+      const existing = await prisma.contact.findFirst({
+        where: { companyId, email: data.email },
+      });
+
+      if (existing) {
+        const updated = await prisma.contact.update({
+          where: { id: existing.id },
+          data: {
+            ...(data.name && { name: data.name }),
+            ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
           },
         });
-        if (existing) {
-          return this.updateExisting(existing, { ...data, companyId } as any);
-        }
+        return toContactDTO(updated);
       }
-      throw err;
+
+      const created = await prisma.contact.create({
+        data: {
+          companyId,
+          name: data.name || "New Contact",
+          email: data.email,
+          tags: data.tags || [],
+          notes: data.notes,
+          customFields: data.customFields || {},
+          avatarUrl: data.avatarUrl,
+        },
+      });
+      return toContactDTO(created);
     }
+
+    throw new AppError(
+      "Phone or email required for contact creation",
+      HTTP_STATUS.BAD_REQUEST,
+    );
   },
 
   async delete(companyId: string, id: string) {
@@ -322,7 +369,9 @@ export const contactService = {
     if (!contact)
       throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
 
-    const [deals, activities, tickets, conversations] = await Promise.all([
+    // 🛡️100-YEAR FIX: Fetch related data for timeline.
+    // Note: tickets and conversations are fetched for potential future use in timeline expansion.
+    const [deals, activities, _tickets, _conversations] = await Promise.all([
       prisma.deal.findMany({
         where: { contactId: id },
         include: { stage: true },
@@ -336,7 +385,7 @@ export const contactService = {
       prisma.ticket.findMany({
         where: { companyId, createdById: id },
         orderBy: { createdAt: "desc" },
-      }), // Using createdById as simplistic link if applicable, or derived via conversation
+      }), // Reserved for future timeline integration
       contact.phone
         ? prisma.conversation.findMany({
             where: { companyId, channelId: contact.phone },

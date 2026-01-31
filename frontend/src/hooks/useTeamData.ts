@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { teamService } from "../../services/teamService";
 import { type TeamAgent } from "../../components/team/types";
+import { socketService } from "../../services/socketService";
 
 // Interfaces
 export interface Department {
@@ -82,6 +84,48 @@ export const useTeamData = (): UseTeamDataReturn => {
   const departments = data?.departments || [];
   const aiAssistants = data?.aiAssistants || [];
 
+  // 100-Year Real-Time Updates
+  useEffect(() => {
+    const handleStatusUpdate = (payload: {
+      id: string;
+      status: string;
+      lastSeen?: string;
+    }) => {
+      console.log("[TeamData] Received real-time update:", payload);
+
+      // 1. Optimistic Update (Instant Feedback)
+      queryClient.setQueryData(["team-data"], (oldData: any) => {
+        if (!oldData || !oldData.agents) return oldData;
+
+        return {
+          ...oldData,
+          agents: oldData.agents.map((agent: TeamAgent) => {
+            if (agent.id === payload.id) {
+              return {
+                ...agent,
+                status: payload.status,
+                lastConnectedAt: payload.lastSeen || agent.lastConnectedAt,
+              };
+            }
+            return agent;
+          }),
+        };
+      });
+
+      // 2. Background Sync (Ensure Consistency of Counters)
+      // Slight delay to allow backend to finish writing session logs if needed
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["team-data"] });
+      }, 1000);
+    };
+
+    socketService.on("agent:status", handleStatusUpdate);
+
+    return () => {
+      socketService.off("agent:status", handleStatusUpdate);
+    };
+  }, [queryClient]);
+
   /**
    * REFRESH DATA
    * Manually trigger refetch
@@ -111,7 +155,7 @@ export const useTeamData = (): UseTeamDataReturn => {
       (agent) =>
         agent.name.toLowerCase().includes(lowercaseQuery) ||
         agent.email.toLowerCase().includes(lowercaseQuery) ||
-        agent.role.toLowerCase().includes(lowercaseQuery)
+        agent.role.toLowerCase().includes(lowercaseQuery),
     );
   };
 

@@ -1166,6 +1166,15 @@ export const ChatInterface: React.FC<Props> = ({
   const handleVoiceNoteSend = async (blob: Blob) => {
     setIsRecording(false);
 
+    // ⏹️ Stop recording status
+    const remoteId = (activeContact as any).phone || activeContact.channelId;
+    if (remoteId) {
+      socketService.emit("conversation:typing", {
+        to: remoteId,
+        status: "paused",
+      });
+    }
+
     // 🎯 Use FileReader to convert Blob to Base64 (Reliable fallback if upload API fails)
     const reader = new FileReader();
 
@@ -2038,7 +2047,18 @@ export const ChatInterface: React.FC<Props> = ({
                 <div className="absolute bottom-0 left-0 right-0 z-[120] bg-white dark:bg-[#202c33] border-t border-gray-200 dark:border-gray-700">
                   <AudioRecorder
                     onSend={handleVoiceNoteSend}
-                    onCancel={() => setIsRecording(false)}
+                    onCancel={() => {
+                      setIsRecording(false);
+                      // ⏹️ Stop recording status
+                      const remoteId =
+                        (activeContact as any).phone || activeContact.channelId;
+                      if (remoteId) {
+                        socketService.emit("conversation:typing", {
+                          to: remoteId,
+                          status: "paused",
+                        });
+                      }
+                    }}
                   />
                 </div>
               )}
@@ -2062,7 +2082,18 @@ export const ChatInterface: React.FC<Props> = ({
                 }
                 onMediaLibraryClick={() => setShowMediaLibrary(true)}
                 onAttachmentClick={() => fileInputRef.current?.click()}
-                onVoiceNoteClick={() => setIsRecording(true)}
+                onVoiceNoteClick={() => {
+                  setIsRecording(true);
+                  // 🎤 Emit 'recording' status
+                  const remoteId =
+                    (activeContact as any).phone || activeContact.channelId;
+                  if (remoteId) {
+                    socketService.emit("conversation:typing", {
+                      to: remoteId,
+                      status: "recording",
+                    });
+                  }
+                }}
                 onStickerClick={() => setShowStickerPicker(!showStickerPicker)}
                 // âœ… Action Menu Handlers
                 onSchedule={() => setActionModalType("SCHEDULE")}

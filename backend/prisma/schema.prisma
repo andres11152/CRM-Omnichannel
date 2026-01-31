@@ -48,6 +48,12 @@ model Conversation {
   // ID of the specific channel/session (e.g. WhatsApp phone number or Session ID)
   channelId String?
 
+  // 🏢 GROUP CHAT SUPPORT (Enterprise CRM Feature)
+  // Distinguishes between individual DMs and group conversations
+  isGroup       Boolean @default(false)
+  // JSON: { groupName, description, participantCount, groupPicUrl, createdBy, admins[] }
+  groupMetadata Json?
+
   // Relación con participantes (muchos a muchos implícito)
   participants User[] @relation("Participants")
 
@@ -68,6 +74,12 @@ model Conversation {
 
   // Chatbot Flow Sessions
   flowSessions ContactFlowSession[]
+
+  // 🤖 AI Control State (HITL)
+  // Determines if AI can respond to this conversation
+  aiEnabled              Boolean   @default(true)
+  // Tracks when a human last took control (for auto-unmute grace period)
+  lastManualIntervention DateTime?
 
   // === HIGH-PERFORMANCE COMPOSITE INDEXES ===
 
@@ -227,6 +239,7 @@ model Company {
 
   // Relaciones
   users            User[]
+  agentSessions    AgentSession[]
   tickets          Ticket[]
   apiKeys          ApiKey[]
   conversations    Conversation[]
@@ -274,6 +287,7 @@ model Company {
   // RBAC - Custom Roles
   roles   Role[]
   Message Message[]
+  notifications Notification[]
 
   @@map("companies")
 }
@@ -298,6 +312,11 @@ model User {
   about         String? // WhatsApp Status/About info
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  
+  // Activity Tracking
+  lastSeen      DateTime?
+  isOnline      Boolean  @default(false)
+  agentSessions AgentSession[]
 
   // Relación con Compañía (Tenant)
   companyId String?
@@ -435,6 +454,30 @@ model WhatsAppCredential {
 
   @@unique([sessionId, key])
   @@map("whatsapp_credentials")
+}
+
+model AgentSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  connectedAt    DateTime @default(now())
+  disconnectedAt DateTime?
+  duration       Int?     // Duration in seconds
+
+  socketId  String?  // Useful for debugging specific socket drops
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // === ANALYTICS INDEXES ===
+  // 1. Durations per user per day ("How long did Cheo work today?")
+  @@index([userId, connectedAt])
+  // 2. Company-wide usage reports ("Total agent hours this month")
+  @@index([companyId, connectedAt])
+  @@map("agent_sessions")
 }
 
 model Plan {
@@ -1388,6 +1431,10 @@ model Notification {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // 🛡️ MULTI-TENANCY
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   type    String // "mention", "assignment", "ticket_update", etc.
   title   String
   message String
@@ -1405,5 +1452,6 @@ model Notification {
 
   @@index([userId, read])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([companyId, createdAt(sort: Desc)])
   @@map("notifications")
 }

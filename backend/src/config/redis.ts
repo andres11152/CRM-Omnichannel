@@ -35,6 +35,7 @@ if (redisUrl) {
       "ECONNRESET",
       "ETIMEDOUT",
       "Socket closed",
+      "Socket closed unexpectedly", // 🛡️ Cloud Redis TLS disconnects
       "ENOTFOUND",
       "ECONNABORTED",
       "getaddrinfo",

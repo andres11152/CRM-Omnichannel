@@ -22,6 +22,9 @@ interface SocketData {
   };
 }
 
+// Importing service for session tracking
+import { agentSessionService } from "@/services/agentSessionService";
+
 // Enforcing strict event signatures.
 // Ideally, all events should be named here.
 interface ServerToClientEvents {
@@ -192,18 +195,48 @@ class WebSocketGateway {
       const userRoom = `agent:${user.id}`;
       socket.join(userRoom);
 
-      // Auto-join company room if present
+      // 🛡️ 100-YEAR FIX: Strict Access Control for Agents via Socket Rooms
+      // Agents should NOT receive all company traffic. They only care about their assigned work.
+      // Admins and Supervisors need full visibility (Company Room).
       if (user.companyId) {
-        const companyRoom = `company:${user.companyId}`;
-        socket.join(companyRoom);
-        Logger.debug(
-          `[Gateway] ${user.id} auto-joined company room: ${companyRoom}`,
-        );
+        if (["ADMIN", "SUPERVISOR", "MASTER"].includes(user.role)) {
+          const companyRoom = `company:${user.companyId}`;
+          socket.join(companyRoom);
+          Logger.debug(
+            `[Gateway] ${user.id} (${user.role}) joined company room: ${companyRoom}`,
+          );
+        } else {
+          Logger.debug(
+            `[Gateway] ${user.id} (${user.role}) restricted to personal room only`,
+          );
+        }
+      }
+
+      // 🟢 CONNECTION EVENT
+      // 1. Update DB/Redis with status 'online' & 'lastSeen'
+      this.updateUserStatus(user.id, "online");
+
+      // 1.5 Start Analytics Session
+      if (user.companyId) {
+        agentSessionService.startSession({
+          userId: user.id,
+          companyId: user.companyId,
+          socketId: socket.id,
+        });
       }
 
       Logger.debug(
         `[Gateway] Client connected: ${user.id} (Role: ${user.role})`,
       );
+
+      // EMIT STATUS ONLINE
+      if (user.companyId) {
+        this.emitToCompany(user.companyId, "agent:status", {
+          id: user.id,
+          status: "online",
+          lastSeen: new Date().toISOString(),
+        });
+      }
 
       socket.on("join", (room: string) => {
         if (room) {
@@ -221,10 +254,45 @@ class WebSocketGateway {
         }
       });
 
-      socket.on("disconnect", (reason) => {
+      socket.on("disconnect", async (reason) => {
         Logger.debug(`[Gateway] Client disconnected: ${user.id} (${reason})`);
+
+        // 🔴 DISCONNECT EVENT
+        // Update DB/Redis with status 'offline' & 'lastSeen'
+        await this.updateUserStatus(user.id, "offline");
+
+        // End Analytics Session
+        await agentSessionService.endSession({ socketId: socket.id });
+
+        // EMIT STATUS OFFLINE
+        if (user.companyId) {
+          this.emitToCompany(user.companyId, "agent:status", {
+            id: user.id,
+            status: "offline",
+            lastSeen: new Date().toISOString(),
+          });
+        }
       });
     });
+  }
+
+  // Helper method to update Prisma + Redis (if needed)
+  private async updateUserStatus(userId: string, status: "online" | "offline") {
+    try {
+      // We use dynamic import for prisma to avoid circular dep issues in singleton if any
+      const { prisma } = await import("@/config/database");
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          // We might need to add 'status' field to User model if not present, but for now we track lastSeen.
+          // Actually, the UI relies on 'lastSeen'.
+          lastSeen: new Date(),
+          isOnline: status === "online",
+        },
+      });
+    } catch (err) {
+      Logger.error(`[Gateway] Failed to update user status for ${userId}`, err);
+    }
   }
 
   public getIO() {

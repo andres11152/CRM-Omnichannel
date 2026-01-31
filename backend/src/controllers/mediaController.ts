@@ -138,25 +138,32 @@ export const mediaController = {
 
   /**
    * Stream Content (Proxy)
+   * Serves media files through backend to avoid CORS and signed URL issues
    */
   getMediaContent: catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
 
+    console.info(`[MediaController] Streaming content for media ID: ${id}`);
+
     const { stream, mimeType } = await mediaService.getStream(id);
 
-    if (!stream) {
-      throw new AppError("File stream unavailable", HTTP_STATUS.NOT_FOUND);
-    }
-
+    // Set proper headers for browser to display content inline
     res.setHeader("Content-Type", mimeType);
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("Content-Disposition", "inline"); // Display in browser, don't download
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable"); // 1 year cache
+    res.setHeader("Accept-Ranges", "bytes"); // Enable seeking for audio/video
+    res.setHeader("Access-Control-Allow-Origin", "*"); // Allow cross-origin
 
-    if (typeof stream.pipe === "function") {
-      stream.pipe(res);
-    } else {
-      // Fallback
-      res.end(stream);
-    }
+    // Pipe the stream to response
+    stream.pipe(res);
+
+    // Handle stream errors
+    stream.on("error", (err) => {
+      console.error(`[MediaController] Stream error for ${id}:`, err);
+      if (!res.headersSent) {
+        res.status(500).end();
+      }
+    });
   }),
 };
 

@@ -21,4 +21,6 @@ export interface TeamAgent {
   department?: string;
   companyId?: string;
   skills?: string[];
+  lastConnectedAt?: string | null;
+  totalOnlineSeconds?: number;
 }

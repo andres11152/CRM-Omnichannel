@@ -14,4 +14,10 @@ export interface ISessionManager {
     companyId: string,
   ): Promise<{ sessionId: string; socket: WASocket } | null>;
   hasActiveSessionInMemory(companyId: string): boolean;
+
+  // 🛡️ User Identity Resolution (LID -> Phone)
+  findContactByLid(lid: string): { id: string } | undefined;
+
+  // 🛡️ Active LID Resolution (Queries WhatsApp servers directly)
+  resolveLidToPhone(sessionId: string, lid: string): Promise<string | null>;
 }

@@ -29,22 +29,102 @@ import { userService } from "@/services/userService";
  * Lista todos los usuarios con filtros opcionales
  */
 export const getUsers = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     // 1. Extraer parámetros de la request
-    const { role } = req.query;
+    const { role, roles } = req.query;
     const companyId = req.companyId || req.user?.companyId;
+
+    // Parse roles (support comma-separated string)
+    let parsedRoles: string[] | undefined;
+    if (roles) {
+      parsedRoles = Array.isArray(roles)
+        ? (roles as string[])
+        : (roles as string).split(",");
+    }
 
     // 2. Llamar al servicio
     const users = await userService.findUsers({
       companyId,
       role: role as string,
+      roles: parsedRoles,
+    });
+
+    // Map status and calculate time metrics
+    // Define type for User with included relations
+    type ExtendedUser = (typeof users)[0] & {
+      agentSessions?: Array<{
+        duration: number | null;
+        disconnectedAt: Date | null;
+        connectedAt: Date;
+      }>;
+      _count?: {
+        assignedTickets: number;
+      };
+    };
+
+    const mappedUsers = users.map((user) => {
+      const extendedUser = user as ExtendedUser;
+
+      // 1. Calculate Total Online Time Today
+      const sessions = extendedUser.agentSessions || [];
+      let totalSeconds = 0;
+      let activeSessionFound = false;
+      let activeSessionStart: Date | null = null;
+
+      sessions.forEach((session) => {
+        if (session.duration) {
+          totalSeconds += session.duration;
+        } else if (!session.disconnectedAt) {
+          // Open session (currently online)
+          activeSessionFound = true;
+          activeSessionStart = new Date(session.connectedAt);
+
+          // Add time from connectedAt until now
+          const now = new Date();
+          const start = new Date(session.connectedAt);
+          const diff = Math.floor((now.getTime() - start.getTime()) / 1000);
+          totalSeconds += diff > 0 ? diff : 0;
+        }
+      });
+
+      // 2. Determine definitive status and timestamp
+      const isOnline = extendedUser.isOnline || activeSessionFound;
+      const definitiveStatus = isOnline ? "online" : "offline";
+
+      // If online, 'lastConnectedAt' is when they logged in (activeSession start).
+      // If offline, 'lastConnectedAt' is when they were last seen (disconnectedAt/lastSeen).
+      // If online, 'lastConnectedAt' is when they logged in (activeSession start).
+      // If offline, 'lastConnectedAt' is when they were last seen (disconnectedAt/lastSeen).
+      let finalLastConnectedAt: string | null = null;
+
+      if (isOnline) {
+        if (activeSessionStart) {
+          finalLastConnectedAt = activeSessionStart.toISOString();
+        } else if (extendedUser.lastSeen instanceof Date) {
+          finalLastConnectedAt = extendedUser.lastSeen.toISOString();
+        }
+      } else {
+        if (extendedUser.lastSeen instanceof Date) {
+          finalLastConnectedAt = extendedUser.lastSeen.toISOString();
+        }
+      }
+
+      return {
+        ...extendedUser,
+        status: definitiveStatus,
+        resolvedToday: extendedUser._count?.assignedTickets || 0,
+        totalOnlineSeconds: totalSeconds,
+        lastConnectedAt: finalLastConnectedAt,
+        // We explicitly hide the raw sessions array from the frontend to keep payload light
+        agentSessions: undefined,
+      };
     });
 
     // 3. Enviar response
     res.status(200).json({
       status: "success",
-      results: users.length,
-      data: { users },
+      results: mappedUsers.length,
+      data: { users: mappedUsers },
     });
   },
 );

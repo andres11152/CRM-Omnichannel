@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { prisma } from "@/config/database";
+import { TicketPriority, TicketStatus, Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "@/types/types";
 import { gateway } from "@/gateways/socketGateway";
 import { webhookDispatcher } from "@/services/webhookDispatcher";
@@ -140,16 +141,9 @@ export const createTicket = catchAsync(
  * GET ALL TICKETS
  */
 export const getAllTickets = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     const companyId = req.companyId || req.user?.companyId;
     const { status, priority, queueId, assignedToId } = req.query;
-
-    console.log("[Tickets] 🔍 GET Params:", {
-      status,
-      assignedToIdQuery: assignedToId,
-      reqUserId: req.user?.id,
-      companyId,
-    });
 
     if (!companyId) {
       return res
@@ -157,12 +151,22 @@ export const getAllTickets = catchAsync(
         .json({ status: "success", results: 0, data: { tickets: [] } });
     }
 
-    const where: any = { companyId };
+    const where: Prisma.TicketWhereInput = { companyId };
 
-    if (status) where.status = status;
-    if (priority) where.priority = priority;
-    if (queueId) where.queueId = queueId;
-    if (assignedToId) where.assignedToId = assignedToId;
+    if (status) where.status = status as TicketStatus;
+    if (priority) where.priority = priority as TicketPriority;
+    if (queueId) where.queueId = queueId as string;
+    if (assignedToId) where.assignedToId = assignedToId as string;
+
+    // 🛡️ 100-YEAR FIX: Strict Access Control (The "User Request" barrier)
+    // Agents can ONLY see tickets assigned to them.
+    // They cannot see the global queue or other agents' tickets.
+    if (req.user?.role === "AGENT") {
+      where.assignedToId = req.user.id;
+      console.info(
+        `[TicketController] 🔍 AGENT Query: userId=${req.user.id}, companyId=${companyId}`,
+      );
+    }
 
     const tickets = await prisma.ticket.findMany({
       where,
@@ -182,9 +186,17 @@ export const getAllTickets = catchAsync(
       orderBy: { createdAt: "desc" },
     });
 
-    console.log(
-      `[Tickets] 🔍 Found ${tickets.length} tickets for Company ${companyId}`,
-    );
+    // 🔍 DEBUG: Log what we found for agents
+    if (req.user?.role === "AGENT") {
+      console.info(
+        `[TicketController] 🎯 AGENT Results: Found ${tickets.length} tickets for ${req.user.id}`,
+      );
+      tickets.forEach((t) => {
+        console.info(
+          `  - Ticket ${t.id} | assignedToId: ${t.assignedToId} | status: ${t.status}`,
+        );
+      });
+    }
 
     // 1. Initial Mapping to DTO
     const baseDtos = tickets.map((t) =>
@@ -238,6 +250,16 @@ export const getTicketById = catchAsync(
       );
     }
 
+    // 🛡️ 100-YEAR FIX: Agent Isolation
+    if (req.user?.role === "AGENT" && ticket.assignedToId !== req.user.id) {
+      return next(
+        new AppError(
+          "Access denied: You can only view tickets assigned to you.",
+          403,
+        ),
+      );
+    }
+
     // 1. Initial Mapping
     const baseDto = toTicketDTO(ticket as unknown as TicketWithRelations);
 
@@ -283,37 +305,43 @@ export const updateTicket = catchAsync(
     }
 
     // Filter allowed fields to prevent Prisma errors with unknown arguments
-    const allowedFields = [
-      "subject",
-      "description",
-      "priority",
-      "status",
-      "queueId",
-      "assignedToId",
-      "resolvedAt",
-      "resolutionType",
-      "resolutionNotes",
-    ];
-    const updateData: any = {};
+    // 🛡️ 100-YEAR FIX: Strict Typing for Updates
+    // We strictly map only allowed fields to prevent arbitrary data injection
+    const updateData: Prisma.TicketUpdateInput = {};
 
-    Object.keys(data).forEach((key) => {
-      if (allowedFields.includes(key)) {
-        updateData[key] = data[key];
-      }
-    });
-
-    // Handle explicit null for assignedToId (unassign)
-    if (updateData.assignedToId === null) {
-      delete updateData.assignedToId;
-      updateData.assignedTo = { disconnect: true };
+    if (data.subject !== undefined) updateData.subject = data.subject;
+    if (data.description !== undefined)
+      updateData.description = data.description;
+    if (
+      data.priority !== undefined &&
+      Object.values(TicketPriority).includes(data.priority)
+    ) {
+      updateData.priority = data.priority;
     }
+    if (
+      data.status !== undefined &&
+      Object.values(TicketStatus).includes(data.status)
+    ) {
+      updateData.status = data.status;
+    }
+    if (data.queueId !== undefined) {
+      updateData.queue = data.queueId
+        ? { connect: { id: data.queueId } }
+        : { disconnect: true };
+    }
+    if (data.assignedToId !== undefined) {
+      updateData.assignedTo = data.assignedToId
+        ? { connect: { id: data.assignedToId } }
+        : { disconnect: true };
+    }
+    if (data.resolvedAt !== undefined) updateData.resolvedAt = data.resolvedAt;
+    if (data.resolutionType !== undefined)
+      updateData.resolutionType = data.resolutionType;
+    if (data.resolutionNotes !== undefined)
+      updateData.resolutionNotes = data.resolutionNotes;
 
-    console.log("[TicketController] Updating ticket ID:", id);
-    console.log("[TicketController] Raw Data:", JSON.stringify(data));
-    console.log(
-      "[TicketController] Filtered Update Data:",
-      JSON.stringify(updateData),
-    );
+    // (Handled above in strict mapping)
+    // if (updateData.assignedToId === null) { ... } logic is now obsolete due to above block
 
     let updatedTicket;
     try {
@@ -334,10 +362,13 @@ export const updateTicket = catchAsync(
           },
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[TicketController] Prisma Update Failed:", error);
       // Check for Foreign Key constraint violation (e.g. invalid queueId)
-      if (error.code === "P2003") {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2003"
+      ) {
         return next(new AppError("Invalid Queue ID or User ID", 400));
       }
       throw error;
@@ -354,43 +385,169 @@ export const updateTicket = catchAsync(
       }
     }
 
-    // 🔥 CRITICAL: Si el ticket tiene conversación, sincronizar el queueId
-    // Esto permite que el AI assistant responda cuando se transfiere un ticket
-    if (updatedTicket.conversationId && updateData.queueId !== undefined) {
-      try {
-        await prisma.conversation.update({
-          where: { id: updatedTicket.conversationId },
-          data: { queueId: updateData.queueId },
-        });
-        console.log(
-          `[TicketController] ✓ Synced conversation queueId: ${updateData.queueId}`,
-        );
-      } catch (error) {
-        console.error(
-          "[TicketController] Failed to sync conversation queueId:",
-          error,
-        );
+    // 🔥 CRITICAL: Sync Conversation Queue & Assignment
+    // The Chat System relies on Conversation model, not Ticket model.
+    // If we don't sync assignedToId, the agent won't receive message socket events.
+    if (updatedTicket.conversationId) {
+      const syncData: Prisma.ConversationUpdateInput = {};
+      let needsSync = false;
+
+      if (data.queueId !== undefined) {
+        syncData.queue = data.queueId
+          ? { connect: { id: data.queueId } }
+          : { disconnect: true };
+        needsSync = true;
+      }
+
+      if (data.assignedToId !== undefined) {
+        syncData.assignedTo = data.assignedToId
+          ? { connect: { id: data.assignedToId } }
+          : { disconnect: true };
+        needsSync = true;
+      }
+
+      if (needsSync) {
+        try {
+          await prisma.conversation.update({
+            where: { id: updatedTicket.conversationId },
+            data: syncData,
+          });
+          console.info(
+            "[TicketController] ✅ Synced Conversation Assignment/Queue",
+          );
+        } catch (error) {
+          console.error(
+            "[TicketController] Failed to sync conversation:",
+            error,
+          );
+        }
       }
     }
 
-    // 🚀 EMIT EVENT FOR FRONTEND UPDATE
-    // This fixes the bug where the badge doesn't update immediately
+    // 🚀 ENTERPRISE: Real-time notifications for ticket updates
+    const ticketDto = toTicketDTO(
+      updatedTicket as unknown as TicketWithRelations,
+    );
+
     try {
       const io = gateway.getIO();
-      const payload = {
-        id: updatedTicket.conversationId, // Match frontend "conversation.updated" expectation
-        ticketId: updatedTicket.id,
-        contact: {
-          queueName: updatedTicket.queue?.name,
-          assignedAgentName: updatedTicket.assignedTo?.name,
-          assignedAgentId: updatedTicket.assignedToId,
-        },
-      };
+      const previousAssignee = existingTicket.assignedToId;
+      const newAssignee = updatedTicket.assignedToId;
+      const assigneeChanged =
+        previousAssignee !== newAssignee && newAssignee !== null;
 
-      if (updatedTicket.companyId) {
+      // 1️⃣ BROADCAST: Notify entire company about ticket update (for list refreshes)
+      io.to(`company:${updatedTicket.companyId}`).emit("ticket.updated", {
+        ticket: ticketDto,
+        changedFields: Object.keys(updateData),
+      });
+
+      // 1.5 DIRECT UPDATE (100-Year Fix): Always notify the current assignee about ANY update
+      // Agents are NOT in the company room, so they need direct updates.
+      if (updatedTicket.assignedToId) {
+        io.to(`agent:${updatedTicket.assignedToId}`).emit("ticket.updated", {
+          ticket: ticketDto,
+          changedFields: Object.keys(updateData),
+        });
+      }
+
+      // 2️⃣ DIRECT NOTIFICATION: If ticket was assigned to someone new (Sound + Toast)
+      if (assigneeChanged && newAssignee) {
+        // Emit to agent's personal room (Canonical room is `agent:${id}`)
+        io.to(`agent:${newAssignee}`).emit("ticket.assigned", {
+          ticket: ticketDto,
+          message: `Se te ha asignado el ticket #${updatedTicket.ticketNumber}: ${updatedTicket.subject}`,
+          assignedBy: req.user?.name || "Sistema",
+          timestamp: new Date().toISOString(),
+        });
+
+        // 3️⃣ PERSISTENT NOTIFICATION: Create in-app notification record
+        try {
+          await prisma.notification.create({
+            data: {
+              companyId: updatedTicket.companyId,
+              userId: newAssignee,
+              type: "TICKET_ASSIGNED",
+              title: `Ticket #${updatedTicket.ticketNumber} asignado`,
+              message: `Se te ha asignado: ${updatedTicket.subject}`,
+              link: `/tickets/${updatedTicket.id}`,
+              metadata: {
+                ticketId: updatedTicket.id,
+                ticketNumber: updatedTicket.ticketNumber,
+                conversationId: updatedTicket.conversationId,
+                assignedBy: req.user?.id,
+              },
+              read: false,
+            },
+          });
+        } catch (notifError) {
+          // Non-blocking: Log but don't fail the request
+          console.error(
+            "[TicketController] Failed to create notification:",
+            notifError,
+          );
+        }
+      }
+
+      // 4️⃣ CONVERSATION SYNC: Also emit conversation.updated for chat panels
+      if (updatedTicket.conversationId) {
         io.to(`company:${updatedTicket.companyId}`).emit(
           "conversation.updated",
-          payload,
+          {
+            id: updatedTicket.conversationId,
+            ticketId: updatedTicket.id,
+            queueId: updatedTicket.queueId,
+            assignedToId: updatedTicket.assignedToId,
+            contact: {
+              queueName: updatedTicket.queue?.name,
+              assignedAgentName: updatedTicket.assignedTo?.name,
+              assignedAgentId: updatedTicket.assignedToId,
+            },
+          },
+        );
+        // 3️⃣ PERSISTENT NOTIFICATION: Create in-app notification record
+        try {
+          await prisma.notification.create({
+            data: {
+              companyId: updatedTicket.companyId,
+              userId: newAssignee,
+              type: "TICKET_ASSIGNED",
+              title: `Ticket #${updatedTicket.ticketNumber} asignado`,
+              message: `Se te ha asignado: ${updatedTicket.subject}`,
+              link: `/tickets/${updatedTicket.id}`,
+              metadata: {
+                ticketId: updatedTicket.id,
+                ticketNumber: updatedTicket.ticketNumber,
+                conversationId: updatedTicket.conversationId,
+                assignedBy: req.user?.id,
+              },
+              read: false,
+            },
+          });
+        } catch (notifError) {
+          // Non-blocking: Log but don't fail the request
+          console.error(
+            "[TicketController] Failed to create notification:",
+            notifError,
+          );
+        }
+      }
+
+      // 4️⃣ CONVERSATION SYNC: Also emit conversation.updated for chat panels
+      if (updatedTicket.conversationId) {
+        io.to(`company:${updatedTicket.companyId}`).emit(
+          "conversation.updated",
+          {
+            id: updatedTicket.conversationId,
+            ticketId: updatedTicket.id,
+            queueId: updatedTicket.queueId,
+            assignedToId: updatedTicket.assignedToId,
+            contact: {
+              queueName: updatedTicket.queue?.name,
+              assignedAgentName: updatedTicket.assignedTo?.name,
+              assignedAgentId: updatedTicket.assignedToId,
+            },
+          },
         );
       }
     } catch (e) {
@@ -414,13 +571,6 @@ export const deleteTicket = catchAsync(
     const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
 
-    console.log(
-      `[TicketController] 🚨 DELETE request received for ticket: ${id}`,
-    );
-    console.log(
-      `[TicketController] 👤 Requested by User: ${req.user?.id} (${req.user?.name})`,
-    );
-
     const ticket = await prisma.ticket.findUnique({ where: { id } });
     if (!ticket) {
       return next(new AppError("Ticket not found", 404));
@@ -429,11 +579,13 @@ export const deleteTicket = catchAsync(
       return next(new AppError("Permission denied", 403));
     }
 
-    const deletedTicket = await prisma.ticket.delete({ where: { id } });
+    await prisma.ticket.delete({ where: { id } });
 
     // 🚀 EMIT EVENT
     try {
-      gateway.emitToCompany(companyId, "ticket.deleted", { ticketId: id });
+      if (companyId) {
+        gateway.emitToCompany(companyId, "ticket.deleted", { ticketId: id });
+      }
     } catch (e) {
       console.error("[TicketController] Socket emit failed:", e);
     }

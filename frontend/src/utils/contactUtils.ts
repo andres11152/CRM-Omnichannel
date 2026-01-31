@@ -1,5 +1,15 @@
 import { Contact } from "../../types";
 
+// 🏢 100-Year Solution: Flexible input type for resolving contact names
+// This allows various contact formats from sockets, DTOs, etc.
+interface ResolveContactInput {
+  name?: string;
+  phone?: string;
+  channelId?: string;
+  email?: string;
+  id?: string;
+}
+
 /**
  * 🧹 Sanitiza y resuelve el nombre a mostrar para un contacto.
  *
@@ -11,8 +21,8 @@ import { Contact } from "../../types";
  * @returns Nombre limpio y legible para humanos
  */
 export const resolveContactName = (
-  contact: Partial<Contact>,
-  fallbackSubject?: string,
+  contact: ResolveContactInput,
+  fallbackSubject?: string | null,
 ): string => {
   let name = contact.name || "";
 

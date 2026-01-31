@@ -10,7 +10,10 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   isJidBroadcast,
   proto,
+  jidNormalizedUser,
 } from "@whiskeysockets/baileys";
+import { SimpleInMemoryStore } from "./SimpleStore";
+
 import { prisma } from "@/config/database";
 import TenantContextManager from "@/config/tenantContext";
 import pino from "pino";
@@ -20,6 +23,10 @@ const logger = pino({
   level: process.env.LOG_LEVEL || "info",
   timestamp: pino.stdTimeFunctions.isoTime,
 });
+
+// 🛡️ 100-YEAR FIX: Memory Store for Contact Resolution (LID -> Phone)
+// Replaced broken Baileys import with custom implementation
+const store = new SimpleInMemoryStore();
 
 export class SessionManager implements ISessionManager {
   private sessions: Map<string, WASocket> = new Map();
@@ -35,6 +42,110 @@ export class SessionManager implements ISessionManager {
 
   constructor(private authProvider: IAuthProvider) {
     this.eventBus = EventBus.getInstance();
+    // Optional: Load store from file if needed in future
+    // store.readFromFile('./baileys_store.json')
+  }
+
+  // 🛡️ Helper to get user info from store
+  public getContactInfo(jid: string) {
+    return store.contacts[jidNormalizedUser(jid)];
+  }
+
+  // 🛡️ REVERSE LOOKUP: Find real phone JID from LID
+  // 🔧 100-YEAR FIX: More robust lookup using numeric base and proper normalization
+  public findContactByLid(lid: string): { id: string } | undefined {
+    // 1. Extract numeric base from target LID (e.g. "459089..." from "459089...@s.whatsapp.net")
+    const lidBase = lid.split("@")[0].split(":")[0];
+    if (!lidBase || lidBase.length < 10) return undefined;
+
+    // 🔍 Step 0: Check the fast LID->Phone cache first
+    const cachedPhone = store.getPhoneFromLid(lidBase);
+    if (cachedPhone && !cachedPhone.includes(lidBase)) {
+      console.info(
+        `[SessionManager] ⚡ Cache hit: LID ${lidBase} → ${cachedPhone}`,
+      );
+      return { id: cachedPhone };
+    }
+
+    const contacts = store.contacts;
+
+    // 🔍 Step 1: Search by 'lid' property (Looking for Phone contacts that reference this LID)
+    for (const jid in contacts) {
+      const contact = contacts[jid];
+      if (!contact.lid) continue;
+
+      const storedLidBase = contact.lid.split("@")[0].split(":")[0];
+      if (lidBase === storedLidBase) {
+        console.info(
+          `[SessionManager] ✅ Identity Match! LID ${lidBase} belongs to Phone ${jid}`,
+        );
+        return contact;
+      }
+    }
+
+    // 🔍 Step 2: Fallback to the LID entry itself if we have it in store
+    const normalizedLid = jidNormalizedUser(lid);
+    if (contacts[normalizedLid]) {
+      return contacts[normalizedLid];
+    }
+
+    console.warn(
+      `[SessionManager] ⚠️ ID Resolution Failed: ${lidBase} not found in Store mappings.`,
+    );
+    return undefined;
+  }
+  /**
+   * 🛡️ 100-YEAR FIX: Active LID Resolution
+   * Queries WhatsApp servers directly to resolve a LID to a real phone number.
+   * This is what WhatsApp Web does when displaying unknown contacts.
+   */
+  public async resolveLidToPhone(
+    sessionId: string,
+    lid: string,
+  ): Promise<string | null> {
+    const sock = this.sessions.get(sessionId);
+    if (!sock) {
+      console.warn(
+        `[SessionManager] Session not found for LID resolution: ${sessionId}`,
+      );
+      return null;
+    }
+
+    try {
+      // Extract the numeric part of the LID
+      const lidNumeric = lid.split("@")[0].split(":")[0];
+
+      console.info(
+        `[SessionManager] 🔬 Attempting to resolve LID: ${lidNumeric}`,
+      );
+
+      // Method 1: Try onWhatsApp with the LID number
+      const result = await sock.onWhatsApp(lidNumeric);
+      console.info(
+        `[SessionManager] 🔬 onWhatsApp result: ${JSON.stringify(result)}`,
+      );
+
+      if (result && result.length > 0 && result[0].exists) {
+        const realJid = result[0].jid;
+        const realPhone = realJid.split("@")[0].split(":")[0];
+        console.info(
+          `[SessionManager] 🎯 ACTIVE RESOLUTION: LID ${lidNumeric} → Phone ${realPhone}`,
+        );
+        return realPhone;
+      }
+
+      // Note: WhatsApp does not provide a public API to resolve LID -> Phone
+      // This is a privacy feature. The only ways to get the real number are:
+      // 1. User is saved in phone contacts (triggers contact sync with LID mapping)
+      // 2. User shares their number via { requestPhoneNumber: true } message
+      console.info(
+        `[SessionManager] ℹ️ LID ${lidNumeric} cannot be resolved (user not in contacts or privacy setting)`,
+      );
+      return null;
+    } catch (error) {
+      console.error(`[SessionManager] Error resolving LID ${lid}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -163,6 +274,7 @@ export class SessionManager implements ISessionManager {
     });
 
     // 5. MEMORY SAFETY: Bind listeners globally but clean them on close
+    store.bind(sock.ev); // 🛡️ Bind Store for contact updates
     this.bindEvents(sock, sessionId, companyId, saveCreds);
 
     this.sessions.set(sessionId, sock);

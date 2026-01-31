@@ -44,13 +44,6 @@ class SocketService {
 
     this.socket.on("connect", () => {
       console.log("[Socket] Connected to", SOCKET_URL);
-
-      // 🛡️ CRITICAL: Join company room to receive updates
-      if (companyId) {
-        const room = `company:${companyId}`;
-        this.socket?.emit("join", room);
-        console.log(`[Socket] Joined room: ${room}`);
-      }
     });
 
     this.socket.on("disconnect", (reason) => {

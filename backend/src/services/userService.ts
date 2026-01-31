@@ -10,6 +10,7 @@ import redisClient from "@/config/redis"; // 100-Year Fix: For cache invalidatio
 export interface UserFilters {
   companyId?: string;
   role?: string;
+  roles?: string[]; // 🛡️ 100-YEAR FIX: Support multi-role filtering (e.g. Staff Only)
 }
 
 export interface CreateUserInput {
@@ -274,7 +275,15 @@ export const userService = {
       where.companyId = filters.companyId;
     }
 
-    if (
+    // 🛡️ 100-YEAR FIX: Prioritize multi-role filter for robust lists
+    if (filters.roles && filters.roles.length > 0) {
+      const validRoles = filters.roles.filter((r) =>
+        Object.values(UserRole).includes(r as UserRole),
+      ) as UserRole[];
+      if (validRoles.length > 0) {
+        where.role = { in: validRoles };
+      }
+    } else if (
       filters.role &&
       Object.values(UserRole).includes(filters.role as UserRole)
     ) {
@@ -299,6 +308,32 @@ export const userService = {
       maxConcurrency: true,
       skills: true,
       isOwner: true,
+      lastSeen: true,
+      isOnline: true,
+      _count: {
+        select: {
+          assignedTickets: {
+            where: {
+              status: "RESOLVED",
+              updatedAt: {
+                gte: new Date(new Date().setHours(0, 0, 0, 0)),
+              },
+            },
+          },
+        },
+      },
+      agentSessions: {
+        where: {
+          connectedAt: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+          },
+        },
+        select: {
+          connectedAt: true,
+          disconnectedAt: true,
+          duration: true,
+        },
+      },
       queues: {
         select: {
           id: true,

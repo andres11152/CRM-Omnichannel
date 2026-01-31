@@ -5,6 +5,7 @@ import { AuthenticatedRequest } from "../../types";
 import { prisma } from "../../config/database";
 import { GoogleCalendarService } from "../../services/googleCalendarService";
 import { mentionService } from "../../services/mentionService";
+import { ActivityType, Prisma } from "@prisma/client";
 
 const resolveContactId = async (id: string, companyId: string) => {
   if (!id) return undefined;
@@ -14,7 +15,7 @@ const resolveContactId = async (id: string, companyId: string) => {
   try {
     const contact = await prisma.contact.findUnique({ where: { id } });
     if (contact) return id;
-  } catch (e) {
+  } catch {
     // Ignore error if ID format is invalid (e.g. too long for column, though CUID is string)
   }
 
@@ -36,23 +37,62 @@ const resolveContactId = async (id: string, companyId: string) => {
   // 3. Check if it's a Conversation ID (Very common case)
   // Frontend often passes Conversation ID instead of Contact ID by mistake
   try {
-    const convo = await prisma.conversation.findUnique({ where: { id } });
-    if (convo && convo.channelId) {
-      // The channelId usually contains the phone number (e.g. "57300...")
-      // We can use it to find the contact
-      const convoPhone = convo.channelId
-        .replace("@c.us", "")
-        .replace("@g.us", "");
-      const contactByConvo = await prisma.contact.findFirst({
-        where: {
-          companyId,
-          phone: convoPhone,
-        },
-      });
-      if (contactByConvo) return contactByConvo.id;
+    const convo = await prisma.conversation.findUnique({
+      where: { id },
+      select: { id: true, contactId: true, channelId: true, companyId: true },
+    });
+
+    if (convo) {
+      // 🛡️ 100-YEAR FIX: First check if Conversation has direct contactId relation
+      if (convo.contactId) {
+        console.info(
+          `[resolveContactId] Found via Conversation.contactId: ${convo.contactId}`,
+        );
+        return convo.contactId;
+      }
+      // 🛡️ ENTERPRISE POLICY: NO AUTO-CREATION
+      // Fallback: Try to find EXISTING contact by channelId (phone number)
+      // Groups are NEVER processed here - their participants must be extracted manually
+      const isGroup =
+        convo.channelId?.includes("@g.us") ||
+        convo.channelId?.startsWith("120");
+
+      if (convo.channelId && !isGroup) {
+        const convoPhone = convo.channelId
+          .replace("@c.us", "")
+          .replace("@s.whatsapp.net", "");
+
+        // Validate it looks like a phone number (8-15 digits)
+        if (/^\d{8,15}$/.test(convoPhone)) {
+          const contactByConvo = await prisma.contact.findFirst({
+            where: {
+              companyId,
+              phone: convoPhone,
+            },
+          });
+
+          if (contactByConvo) {
+            // Link conversation to existing contact (if not already linked)
+            if (!convo.contactId) {
+              await prisma.conversation.update({
+                where: { id: convo.id },
+                data: { contactId: contactByConvo.id },
+              });
+              console.info(
+                `[resolveContactId] Linked conversation ${convo.id} to existing contact ${contactByConvo.id}`,
+              );
+            }
+            return contactByConvo.id;
+          }
+        }
+      }
+
+      // No contact found - return undefined (note will be created without contact link)
+      // This is the ENTERPRISE approach: manual contact management
+      return undefined;
     }
-  } catch (e) {
-    // Ignore
+  } catch (err) {
+    console.error("[resolveContactId] Error in conversation lookup:", err);
   }
 
   // 4. Check if it's a User (Internal Team Member)
@@ -84,7 +124,7 @@ const resolveContactId = async (id: string, companyId: string) => {
       }
       return linkedContact.id;
     }
-  } catch (e) {
+  } catch {
     // Ignore
   }
 
@@ -97,21 +137,44 @@ export const getActivities = catchAsync(
     const companyId = req.user?.companyId;
     const { dealId, accountId, contactId, type } = req.query;
 
+    console.info(`[ActivityController] GET Request:`, {
+      companyId,
+      query: req.query,
+      user: req.user?.id,
+    });
+
     if (!companyId) {
+      console.error(`[ActivityController] ❌ Missing Company ID`);
       return next(new AppError("Company ID is missing", 400));
     }
 
-    const where: any = { companyId };
-    if (dealId) where.dealId = dealId;
-    if (accountId) where.accountId = accountId;
+    const where: Prisma.ActivityWhereInput = { companyId };
+    if (dealId) where.dealId = dealId as string;
+    if (accountId) where.accountId = accountId as string;
 
     if (contactId) {
       const resolvedId = await resolveContactId(contactId as string, companyId);
-      if (resolvedId) where.contactId = resolvedId;
-      else where.contactId = contactId; // Fallback to original if resolution fails (likely 0 results)
+      if (resolvedId) {
+        where.contactId = resolvedId;
+      } else {
+        where.contactId = contactId as string; // Fallback to original
+      }
     }
 
-    if (type) where.type = type;
+    if (type) {
+      // 🛡️ VALIDATION: Strict Enum Check to prevent Prisma 500/400 errors
+      const isValidType = Object.values(ActivityType).includes(
+        type as ActivityType,
+      );
+
+      if (isValidType) {
+        where.type = type as ActivityType;
+      } else {
+        console.warn(
+          `[ActivityController] ⚠️ Invalid ActivityType received: ${type}. Filtering ignored.`,
+        );
+      }
+    }
 
     const activities = await prisma.activity.findMany({
       where,
@@ -129,7 +192,7 @@ export const getActivities = catchAsync(
       results: activities.length,
       data: { activities },
     });
-  }
+  },
 );
 
 // Create activity
@@ -157,13 +220,15 @@ export const createActivity = catchAsync(
     // Resolve contact ID
     let finalContactId: string | undefined = undefined;
     if (contactId && contactId !== "") {
-      console.log(
-        `[DEBUG] createActivity - Resolving contactId: ${contactId} for company: ${companyId}`
+      console.info(
+        `[DEBUG] createActivity - Resolving contactId: ${contactId} for company: ${companyId}`,
       );
       const resolved = await resolveContactId(contactId, companyId);
-      finalContactId = resolved || contactId;
-      console.log(
-        `[DEBUG] createActivity - Resolved: ${resolved}, Final: ${finalContactId}`
+      // 🛡️ 100-YEAR FIX: Don't fallback to invalid ID - use undefined if unresolved
+      // This prevents FK constraint violations when frontend passes conversationId instead of contactId
+      finalContactId = resolved; // undefined if not resolved
+      console.info(
+        `[DEBUG] createActivity - Resolved: ${resolved ?? "undefined"}, Final: ${finalContactId ?? "none"}`,
       );
     }
 
@@ -175,12 +240,12 @@ export const createActivity = catchAsync(
       try {
         const mentionData = await mentionService.processText(
           description,
-          companyId
+          companyId,
         );
         mentionedUserIds = mentionData.mentionedUserIds;
 
-        console.log(
-          `[MentionDetect] Found ${mentionedUserIds.length} mentions in note`
+        console.info(
+          `[MentionDetect] Found ${mentionedUserIds.length} mentions in note`,
         );
       } catch (error) {
         // FAULT TOLERANCE: Log but don't fail the entire operation
@@ -196,7 +261,7 @@ export const createActivity = catchAsync(
           select: { name: true },
         });
         contactNameForContext = contact?.name || undefined;
-      } catch (e) {
+      } catch {
         // Ignore
       }
     }
@@ -234,7 +299,7 @@ export const createActivity = catchAsync(
       const targetUserId = assignedToId || userId;
 
       try {
-        console.log("[ActivityController] Triggering Google Calendar sync");
+        console.info("[ActivityController] Triggering Google Calendar sync");
         const googleEventId = await GoogleCalendarService.createMeetingEvent(
           targetUserId,
           {
@@ -243,7 +308,7 @@ export const createActivity = catchAsync(
             dueDate: new Date(dueDate),
             assignedToId,
             participantIds, // Pass participants to service
-          }
+          },
         );
 
         if (googleEventId) {
@@ -252,9 +317,9 @@ export const createActivity = catchAsync(
             where: { id: activity.id },
             data: { googleEventId },
           });
-          console.log(
+          console.info(
             "[ActivityController] Saved Google Event ID:",
-            googleEventId
+            googleEventId,
           );
         }
       } catch (err) {
@@ -271,7 +336,7 @@ export const createActivity = catchAsync(
           contactName: contactNameForContext,
         })
         .catch((err) =>
-          console.error("[MentionNotify] Failed to notify users:", err)
+          console.error("[MentionNotify] Failed to notify users:", err),
         );
     }
 
@@ -279,7 +344,7 @@ export const createActivity = catchAsync(
       status: "success",
       data: { activity },
     });
-  }
+  },
 );
 
 // Update activity
@@ -298,19 +363,21 @@ export const updateActivity = catchAsync(
     }
 
     // Sanitize update data
-    const updateData: any = { ...req.body };
+    const { participantIds, ...restBody } = req.body;
+    const updateData: Prisma.ActivityUncheckedUpdateInput = { ...restBody };
+
     if (updateData.accountId === "") updateData.accountId = null;
     if (updateData.dealId === "") updateData.dealId = null;
     if (updateData.contactId === "") updateData.contactId = null;
     if (updateData.assignedToId === "") updateData.assignedToId = null;
-    if (updateData.dueDate) updateData.dueDate = new Date(updateData.dueDate);
+    if (updateData.dueDate)
+      updateData.dueDate = new Date(updateData.dueDate as string);
 
     // Handle participants update
-    if (updateData.participantIds) {
+    if (participantIds) {
       updateData.participants = {
-        set: updateData.participantIds.map((pid: string) => ({ id: pid })),
+        set: participantIds.map((pid: string) => ({ id: pid })),
       };
-      delete updateData.participantIds;
     }
 
     const updatedActivity = await prisma.activity.update({
@@ -336,24 +403,24 @@ export const updateActivity = catchAsync(
 
       if (activity.googleEventId) {
         // CASE A: Exists in Google -> Update it
-        console.log(
+        console.info(
           "[ActivityController] Updating existing Google Calendar event...",
-          { eventId: activity.googleEventId }
+          { eventId: activity.googleEventId },
         );
         await GoogleCalendarService.updateMeetingEvent(
           targetUserId,
           activity.googleEventId,
-          activityData
+          activityData,
         );
       } else {
         // CASE B: Missing in Google (Legacy/Error) -> Create it (Self-Healing)
-        console.log(
-          "[ActivityController] Meeting has no Google ID. Creating new event in Google Calendar (Self-Healing)..."
+        console.info(
+          "[ActivityController] Meeting has no Google ID. Creating new event in Google Calendar (Self-Healing)...",
         );
         try {
           const newEventId = await GoogleCalendarService.createMeetingEvent(
             targetUserId,
-            activityData
+            activityData,
           );
 
           if (newEventId) {
@@ -361,15 +428,15 @@ export const updateActivity = catchAsync(
               where: { id: updatedActivity.id },
               data: { googleEventId: newEventId },
             });
-            console.log(
+            console.info(
               "[ActivityController] ✅ Linked legacy meeting to new Google Event:",
-              newEventId
+              newEventId,
             );
           }
         } catch (err) {
           console.error(
             "[ActivityController] Failed to self-heal Google Event:",
-            err
+            err,
           );
         }
       }
@@ -379,7 +446,7 @@ export const updateActivity = catchAsync(
       status: "success",
       data: { activity: updatedActivity },
     });
-  }
+  },
 );
 
 // Delete activity
@@ -402,13 +469,13 @@ export const deleteActivity = catchAsync(
       (activity.assignedToId || activity.createdById)
     ) {
       const targetUserId = activity.assignedToId || activity.createdById;
-      console.log(
+      console.info(
         "[ActivityController] Deleting from Google Calendar:",
-        activity.googleEventId
+        activity.googleEventId,
       );
       await GoogleCalendarService.deleteMeetingEvent(
         targetUserId,
-        activity.googleEventId
+        activity.googleEventId,
       );
     }
 
@@ -418,5 +485,5 @@ export const deleteActivity = catchAsync(
       status: "success",
       data: null,
     });
-  }
+  },
 );

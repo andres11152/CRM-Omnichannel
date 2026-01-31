@@ -165,8 +165,19 @@ export const createConversation = catchAsync(
 export const listConversations = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     if (!req.companyId) throw new AppError("Not authorized", 401);
+    const whereClause: Prisma.ConversationWhereInput = {
+      companyId: req.companyId,
+    };
+
+    // 🛡️ 100-YEAR FIX: Strict Access Control
+    // Agents can ONLY see conversations assigned to them.
+    // They should use the "Pick Ticket" button to get new work, not browse queues.
+    if (req.user?.role === "AGENT") {
+      whereClause.assignedToId = req.user.id;
+    }
+
     const conversations = await prisma.conversation.findMany({
-      where: { companyId: req.companyId },
+      where: whereClause,
       orderBy: { updatedAt: "desc" },
       include: {
         participants: true,

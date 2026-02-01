@@ -442,6 +442,12 @@ if (require.main === module) {
       // ✅ Initialize Message Queue Workers
       Logger.info("[Server] 🚀 Initializing Message Queue Workers...");
       try {
+        // Initialize Flow Queue Worker
+        Logger.info("[Server] 🌊 Initializing Flow Queue Workers...");
+        const { flowQueueWorker } =
+          await import("./services/queue/flowQueue.worker");
+        flowQueueWorker.startWorker();
+
         const { getMessageQueueWorker } =
           await import("./services/queue/messageQueue.worker");
         // Get singleton instance with whatsappService
@@ -474,6 +480,9 @@ if (require.main === module) {
           const { messageQueueService } =
             await import("./services/queue/messageQueue.service");
           await messageQueueService.shutdown();
+          const { flowQueueWorker } =
+            await import("./services/queue/flowQueue.worker");
+          await flowQueueWorker.shutdown();
           process.exit(0);
         });
       } catch (workerError: unknown) {

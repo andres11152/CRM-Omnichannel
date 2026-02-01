@@ -22,13 +22,14 @@ import type {
   FlowSessionState,
   FlowVariables,
   FlowNode,
-  FlowEdge,
   FlowStructure,
   FlowExecutionResult,
   FlowMediaResponse,
   FlowSessionUpdate,
   KeywordTriggerData,
 } from "../interfaces/FlowSession";
+import { cacheService } from "./cacheService";
+import { flowQueueService } from "./queue/flowQueue.service";
 
 // 🛡️ TIMEOUT CONFIGURATION
 const NODE_TIMEOUT_MS = 30000; // 30 seconds per node
@@ -41,7 +42,7 @@ const toFlowSessionState = (
     contactId: string;
     flowId: string;
     companyId: string;
-    conversationId: string;
+    conversationId: string | null;
     currentNodeId: string | null;
     isActive: boolean;
     isPaused: boolean;
@@ -56,8 +57,18 @@ const toFlowSessionState = (
 
   return {
     ...prismaSession,
+    // Ensure conversationId is string (handle null)
+    conversationId: prismaSession.conversationId || "",
     variables: (prismaSession.variables as FlowVariables) || {},
   };
+};
+
+// ⏳ HELPER: Pause execution helper
+const pauseSession = async (sessionId: string) => {
+  await prisma.contactFlowSession.update({
+    where: { id: sessionId },
+    data: { isPaused: true },
+  });
 };
 
 export class FlowExecutorService {
@@ -78,47 +89,118 @@ export class FlowExecutorService {
    * @param companyId ID de la empresa (tenant)
    * @returns Respuesta del bot o null si no hay flujo activo
    */
+  async resumeSession(sessionId: string): Promise<FlowExecutionResult[]> {
+    const sessionPrisma = await prisma.contactFlowSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!sessionPrisma || !sessionPrisma.isActive) return [];
+
+    // Unpause session since we are resuming from delay
+    await prisma.contactFlowSession.update({
+      where: { id: sessionId },
+      data: { isPaused: false },
+    });
+
+    const session = toFlowSessionState(sessionPrisma);
+    if (!session) return [];
+
+    // Execute flow loop with empty message (timers don't have user input)
+    return await this.runFlowLoop(
+      session,
+      "", // Empty message
+      session.companyId,
+      session.conversationId,
+    );
+  }
+
+  /**
+   * Procesa un mensaje entrante del usuario
+   * @param contactId ID del contacto que envió el mensaje
+   * @param message Contenido del mensaje
+   * @param conversationId ID de la conversación
+   * @param companyId ID de la empresa (tenant)
+   * @returns Lista de respuestas del bot (texto, imagen, video, etc.)
+   */
   async processMessage(
     contactId: string,
     message: string,
     conversationId: string,
     companyId: string,
-  ): Promise<FlowExecutionResult> {
+  ): Promise<FlowExecutionResult[]> {
+    const results: FlowExecutionResult[] = [];
+    // const MAX_LOOPS = 20; // Moved to runFlowLoop
+    // let loopCount = 0; // Moved to runFlowLoop
+
     try {
       // PASO 1: Verificar si hay flujo activo para este contacto
       let session = await this.getActiveSession(contactId);
 
+      // Si no hay sesión, chequear triggers (palabras clave)
       if (!session) {
-        // No hay flujo activo, verificar si el mensaje es un trigger (palabra clave)
         session = await this.checkTriggers(
           contactId,
           message,
           companyId,
           conversationId,
         );
-
-        if (!session) {
-          // No hay trigger coincidente, no hacer nada
-          return null;
-        }
+        // Si no hay trigger, retornamos array vacío (no flow executed)
+        if (!session) return [];
       }
 
-      // PASO 2: Obtener el flujo completo
-      const flow = await prisma.flow.findUnique({
-        where: { id: session.flowId },
-      });
+      // PASO 2: Ejecución en Loop (Extracted for reusability)
+      return await this.runFlowLoop(
+        session,
+        message,
+        companyId,
+        conversationId,
+      );
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
+      Logger.error("[FlowExecutor] Error processing message:", errorMsg);
+      // Retornar lo que se haya acumulado hasta el error o null error msg
+      if (results.length === 0)
+        return ["Hubo un error técnico procesando tu solicitud."];
+      return results;
+    }
+  }
+
+  /**
+   * Core execution loop shared by processMessage and resumeSession
+   */
+  async runFlowLoop(
+    initialSession: FlowSessionState,
+    message: string,
+    companyId: string,
+    conversationId: string,
+  ): Promise<FlowExecutionResult[]> {
+    const results: FlowExecutionResult[] = [];
+    const MAX_LOOPS = 20;
+    let loopCount = 0;
+    let session = initialSession;
+
+    while (
+      session &&
+      session.isActive &&
+      !session.isPaused &&
+      loopCount < MAX_LOOPS
+    ) {
+      loopCount++;
+
+      // 🚀 Caching Implementation
+      const flow = await this.getFlowCached(session.flowId);
 
       if (!flow || !flow.isActive) {
         Logger.warn(
           `[FlowExecutor] Flow ${session.flowId} not found or inactive`,
         );
         await this.endSession(session.id);
-        return null;
+        break;
       }
 
       const flowStructure = flow.nodes as unknown as FlowStructure;
 
-      // PASO 3: Identificar el nodo actual
+      // Identificar el nodo actual
       const currentNode = flowStructure.nodes.find(
         (n) => n.id === session.currentNodeId,
       );
@@ -128,10 +210,10 @@ export class FlowExecutorService {
           `[FlowExecutor] Current node ${session.currentNodeId} not found`,
         );
         await this.endSession(session.id);
-        return null;
+        break;
       }
 
-      // PASO 4: Ejecutar lógica según el tipo de nodo CON TIMEOUT
+      // Ejecutar nodo con Timeout Protection
       const result = await this.executeNodeWithTimeout(
         currentNode,
         session,
@@ -141,12 +223,44 @@ export class FlowExecutorService {
         conversationId,
       );
 
-      return result;
-    } catch (error: unknown) {
-      const errorMsg = getErrorMessage(error);
-      Logger.error("[FlowExecutor] Error processing message:", errorMsg);
-      return null;
+      // Acumular respuesta si existe
+      if (result) {
+        results.push(result);
+      }
+
+      // 🛡️ RE-FETCH SESSION STATE
+      const freshSession = await prisma.contactFlowSession.findUnique({
+        where: { id: session.id },
+      });
+
+      if (!freshSession) break; // Sesión eliminada (END node)
+
+      session = {
+        ...freshSession,
+        variables: (freshSession.variables as FlowVariables) || {},
+      };
     }
+
+    if (loopCount >= MAX_LOOPS) {
+      Logger.warn(
+        `[FlowExecutor] ⚠️ Max loops exceeded for session ${session?.id}`,
+      );
+    }
+
+    return results;
+  }
+
+  /**
+   * 🏗️ CACHED FLOW RETRIEVAL
+   */
+  private async getFlowCached(flowId: string) {
+    return await cacheService.wrap(
+      `workflow:${flowId}`,
+      async () => {
+        return prisma.workflow.findUnique({ where: { id: flowId } });
+      },
+      3600,
+    ); // 1 Hour Cache
   }
 
   /**
@@ -208,21 +322,44 @@ export class FlowExecutorService {
   }
 
   /**
+   * Obtiene una sesión por su ID (usado por el worker)
+   */
+  async getSessionById(sessionId: string): Promise<FlowSessionState | null> {
+    const session = await prisma.contactFlowSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        flow: true,
+      },
+    });
+
+    if (session && session.flow) {
+      return toFlowSessionState(session);
+    }
+    return null;
+  }
+
+  /**
    * Obtiene la sesión activa de un contacto
    */
   private async getActiveSession(
     contactId: string,
   ): Promise<FlowSessionState | null> {
-    const prismaSession = await prisma.contactFlowSession.findFirst({
+    const session = await prisma.contactFlowSession.findFirst({
       where: {
         contactId,
         isActive: true,
-        isPaused: false,
+      },
+      include: {
+        flow: true,
       },
       orderBy: { startedAt: "desc" },
     });
 
-    return toFlowSessionState(prismaSession);
+    if (session && session.flow && session.flow.isActive) {
+      return toFlowSessionState(session);
+    }
+
+    return null;
   }
 
   /**
@@ -235,20 +372,20 @@ export class FlowExecutorService {
     conversationId: string,
   ): Promise<FlowSessionState | null> {
     // Buscar flows activos con trigger de KEYWORD
-    const flows = await prisma.flow.findMany({
+    const flows = await prisma.workflow.findMany({
       where: {
         companyId,
         isActive: true,
         triggerType: "KEYWORD",
       },
-      orderBy: { priority: "desc" },
+      orderBy: { createdAt: "desc" },
     });
 
     const messageLower = message.toLowerCase().trim();
 
     for (const flow of flows) {
       const triggerData =
-        flow.triggerData as unknown as KeywordTriggerData | null;
+        flow.triggerConfig as unknown as KeywordTriggerData | null;
       const keywords = triggerData?.keywords || [];
 
       // Verificar si alguna keyword coincide
@@ -256,8 +393,8 @@ export class FlowExecutorService {
         if (messageLower.includes(keyword.toLowerCase())) {
           // ¡Match! Iniciar nuevo flujo
           return await this.startNewSession(
-            contactId,
             flow.id,
+            contactId,
             companyId,
             conversationId,
           );
@@ -272,13 +409,13 @@ export class FlowExecutorService {
    * Inicia una nueva sesión de flujo
    */
   private async startNewSession(
-    contactId: string,
     flowId: string,
+    contactId: string,
     companyId: string,
     conversationId: string,
   ): Promise<FlowSessionState> {
     // Obtener el nodo START del flujo
-    const flow = await prisma.flow.findUnique({ where: { id: flowId } });
+    const flow = await this.getFlowCached(flowId);
     if (!flow) throw new Error("Flow not found");
 
     const flowStructure = flow.nodes as unknown as FlowStructure;
@@ -289,7 +426,7 @@ export class FlowExecutorService {
     }
 
     // Crear sesión
-    const session = await prisma.contactFlowSession.create({
+    const newSession = await prisma.contactFlowSession.create({
       data: {
         contactId,
         flowId,
@@ -303,16 +440,13 @@ export class FlowExecutorService {
     });
 
     Logger.info(
-      `[FlowExecutor] Started new session ${session.id} for contact ${contactId}`,
+      `[FlowExecutor] Started new session ${newSession.id} for contact ${contactId}`,
     );
 
-    // Incrementar contador de ejecuciones
-    await prisma.flow.update({
-      where: { id: flowId },
-      data: { executionCount: { increment: 1 } },
-    });
+    // Incrementar contador de ejecuciones (Not in schema yet)
+    // await prisma.workflow.update({ ... });
 
-    return toFlowSessionState(session) as FlowSessionState;
+    return toFlowSessionState(newSession) as FlowSessionState;
   }
 
   /**
@@ -815,7 +949,7 @@ export class FlowExecutorService {
     node: FlowNode,
     session: FlowSessionState,
     conversationId: string,
-    flowStructure: FlowStructure,
+    _flowStructure: FlowStructure,
   ): Promise<string | null> {
     const agentId = node.data.agentId;
 
@@ -841,7 +975,7 @@ export class FlowExecutorService {
     node: FlowNode,
     session: FlowSessionState,
     conversationId: string,
-    flowStructure: FlowStructure,
+    _flowStructure: FlowStructure,
   ): Promise<string> {
     // Pausar el bot y transferir a cola
     await prisma.conversation.update({
@@ -862,9 +996,19 @@ export class FlowExecutorService {
     session: FlowSessionState,
     flowStructure: FlowStructure,
   ): Promise<string | null> {
-    // TODO: Implementar con Bull Queue para delays programados
-    // Por ahora, mover directamente al siguiente nodo
+    // Default to 5 seconds if not defined
+    const duration = parseInt(node.data.content || "5") * 1000;
+
+    // 1. Move pointer to next node (so when we resume, we are at next node)
     await this.moveToNextNode(session.id, node.id, flowStructure);
+
+    // 2. Schedule Resume
+    await flowQueueService.scheduleResume(session.id, duration);
+
+    // 3. Pause Session (stop loop)
+    await pauseSession(session.id);
+
+    // Return null to allow loop to exit normally (loop checks isPaused)
     return null;
   }
 
@@ -907,7 +1051,7 @@ export class FlowExecutorService {
   private async moveToSpecificNode(
     sessionId: string,
     targetNodeId: string,
-    flowStructure: FlowStructure,
+    _flowStructure: FlowStructure,
   ): Promise<void> {
     await prisma.contactFlowSession.update({
       where: { id: sessionId },

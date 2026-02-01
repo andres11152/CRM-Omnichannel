@@ -8,11 +8,10 @@ import {
   User,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { retryWithBackoff } from "@/utils/resilience";
-import { getErrorMessage } from "@/utils/errorHelpers";
 import { Logger } from "@/utils/logger";
 import { DistributedLock } from "@/utils/distributedLock";
 import { ContactStrategy } from "@/utils/contactStrategy";
+import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import type {
   IncomingMessagePayload,
   SocketDashboardPayload,
@@ -36,32 +35,31 @@ function isPrismaError(
 }
 
 /**
- * 🛡️ TYPE DEFINITIONS (Strict & Scalable)
- */
-// Interface moved to @/interfaces/MessageTypes.ts
-
-/**
  * 🧠 UTILITY: JID Normalizer
  * Converts messy JIDs (12345:11@s.whatsapp.net) into clean ints (12345)
+ * 🛡️ 100-YEAR ENTERPRISE FIX: Uses WhatsAppIdUtils for consistent validation
  */
 const normalizeJid = (jid: string): string | null => {
   if (!jid) return null;
-  let clean = jid.split("@")[0].split(":")[0];
-  clean = clean.replace(/\D/g, "");
 
-  // 🛡️ BLOCK UNRESOLVED LIDs (15-20 digits)
-  if (clean.length > 14) {
-    Logger.warn(`[normalizeJid] 🛑 Rejected Unresolved LID: ${clean}`);
+  // Use the centralized utility for LID detection and phone extraction
+  const phone = WhatsAppIdUtils.getPhoneNumber(jid);
+
+  if (!phone) {
+    Logger.info(
+      `[normalizeJid] ⏩ Rejected: Not a valid phone (LID, group, or invalid format): ${jid}`,
+    );
     return null;
   }
 
-  // Basic phone number validation (minimum 7 digits)
-  if (clean.length < 7) {
-    Logger.warn(`[normalizeJid] ⚠️ Rejected short number: ${clean}`);
+  // Double-check: WhatsAppIdUtils.getPhoneNumber already validates, but we add
+  // an explicit length check for extra safety
+  if (phone.length < 7 || phone.length > 15) {
+    Logger.warn(`[normalizeJid] ⚠️ Rejected: Invalid phone length: ${phone}`);
     return null;
   }
 
-  return clean;
+  return phone;
 };
 
 export const messageProcessor = {
@@ -136,7 +134,6 @@ export const messageProcessor = {
       // to avoid deadlocks on high concurrency, but Critical Mutations are safe via Lock.
 
       // A. CONTACT HANDLING
-      // A. CONTACT HANDLING
       // 🕵️ Flexible Search: Handle cases where admin manually created contact with "+" prefix
       let contact = await prisma.contact.findFirst({
         where: {
@@ -159,11 +156,6 @@ export const messageProcessor = {
       if (contact) {
         // Update Name if better (and valid)
         if (identity.contactName && !isOutbound) {
-          // Check if current name is generic/phone done by strategy logic implicitly?
-          // We blindly update IF valid. Strategy ensures we don't save garbage.
-          // But we must check if current name is NOT better?
-          // "Better" = Human Name.
-
           const currentNameIsPhone = contact.name === phone || !contact.name;
           if (currentNameIsPhone && contact.name !== identity.contactName) {
             Logger.info(
@@ -209,9 +201,9 @@ export const messageProcessor = {
                 tags: ["WHATSAPP_LEAD"],
               },
             });
-          } catch (error: any) {
+          } catch (error: unknown) {
             // 🛡️ RACE CONDITION HANDLER: If contact was created ms ago by another process
-            if (error.code === "P2002") {
+            if (isPrismaError(error) && error.code === "P2002") {
               Logger.info(
                 `[MsgProcessor] ♻️ Contact already exists (Race Condition): ${phone}. Fetching existing.`,
               );
@@ -219,8 +211,9 @@ export const messageProcessor = {
               // 🧟 ZOMBIE CHECK: Bypass middleware to find even soft-deleted contacts
               contact = await prisma.contact.findFirst({
                 where: { companyId, phone },
+                // @ts-expect-error: Custom middleware param check (SafeDeleteMiddleware) - Not in standard types
                 includeDeleted: true,
-              } as any);
+              });
 
               if (contact) {
                 // 🚑 Restore & Self-Healing
@@ -283,7 +276,7 @@ export const messageProcessor = {
 
       // B. USER HANDLING (Upsert)
       const userEmail = `${phone}@whatsapp.user`;
-      const userUpdateData: any = { phone };
+      const userUpdateData: Prisma.UserUpdateInput = { phone };
       if (!isOutbound) {
         userUpdateData.name = identity.subjectDisplayName;
         if (payload.profilePicUrl)
@@ -535,9 +528,18 @@ export const messageProcessor = {
         }
 
         // Re-open if closed (customer sent new message)
-        if (conversation.status !== "OPEN" && !isOutbound) {
-          updates.status = "OPEN";
-          Logger.info(`[MsgProcessor] 🔓 Re-opening conversation`);
+        // 🛡️ 100-YEAR FIX: Only re-open if actually closed/resolved.
+        // NEVER downgrade 'IN_PROGRESS' to 'OPEN' on new message.
+        const isClosed =
+          conversation.status === "CLOSED" ||
+          conversation.status === "RESOLVED";
+
+        if (isClosed && !isOutbound) {
+          // Smart Re-open: If agent owns it, keep it active (IN_PROGRESS). Else Queue (OPEN).
+          updates.status = conversation.assignedToId ? "IN_PROGRESS" : "OPEN";
+          Logger.info(
+            `[MsgProcessor] 🔓 Re-opening conversation as ${updates.status}`,
+          );
         }
 
         // Apply updates if any
@@ -576,7 +578,6 @@ export const messageProcessor = {
       // SAVE MESSAGE
       const newMessage = await prisma.message.create({
         data: {
-          // @ts-ignore: Pending 'prisma generate' restart to recognize 'companyId' in types
           companyId, // ✅ CRITICAL: Assign companyId explicitly for multi-tenancy visibility
           conversationId: conversation!.id,
           channel: Channel.WHATSAPP,
@@ -617,7 +618,83 @@ export const messageProcessor = {
         user,
       );
 
+      // 🛡️ FLOW ENGINE INTEGRATION (Enterprise Grade)
+      // Check for active flows or triggers BEFORE AI.
+      // Flows take precedence as they are deterministic business logic.
+      let flowHandled = false;
+
       if (!isOutbound) {
+        try {
+          const { flowExecutor } = await import("./flowExecutor");
+
+          // Execute Flow Engine (support loop/multi-step)
+          const flowResults = await flowExecutor.processMessage(
+            contact!.id, // Contact is guaranteed to exist by logic above
+            text,
+            conversation!.id,
+            companyId,
+          );
+
+          if (flowResults && flowResults.length > 0) {
+            flowHandled = true;
+            Logger.info(
+              `[MsgProcessor] 🤖 Flow Engine handled message. Sending ${flowResults.length} responses.`,
+            );
+
+            const { whatsappService } = await import("../whatsapp");
+
+            // Simple MIME Inference Helper
+            const inferMime = (url: string, type: string) => {
+              const ext = url.split(".").pop()?.toLowerCase();
+              if (type === "image") return "image/jpeg";
+              if (type === "video") return "video/mp4";
+              if (type === "audio") return "audio/mp4";
+              if (type === "document") return "application/pdf";
+              return "application/octet-stream";
+            };
+
+            // Send responses sequentially
+            for (const result of flowResults) {
+              if (typeof result === "string") {
+                // Text Message
+                await whatsappService.sendMessage(
+                  conversation!.channelId,
+                  result,
+                  {
+                    companyId,
+                    conversationId: conversation!.id,
+                    senderId: user.id, // Attributed to user (or bot user if preferred)
+                  },
+                );
+              } else if (result && typeof result === "object") {
+                // Media Message
+                await whatsappService.sendMessage(
+                  conversation!.channelId,
+                  result.message || "",
+                  {
+                    companyId,
+                    conversationId: conversation!.id,
+                    senderId: user.id,
+                    media: {
+                      type: result.type,
+                      url: result.url,
+                      mimetype: inferMime(result.url, result.type),
+                      filename: result.filename,
+                    },
+                  },
+                );
+              }
+              // Small delay to ensure order in WhatsApp (optional but recommended for UX)
+              await new Promise((r) => setTimeout(r, 300));
+            }
+          }
+        } catch (error) {
+          Logger.error(`[MsgProcessor] Flow Execution Failed`, error);
+          // Fallback to AI if flow crashes? Maybe safer not to to avoid spam.
+        }
+      }
+
+      if (!isOutbound && !flowHandled) {
         setImmediate(() => {
           this._handleAIAutoResponse(
             conversation!.id,

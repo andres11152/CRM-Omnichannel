@@ -1,4 +1,5 @@
 import { planLimitsService } from "@/services/planLimitsService"; // Added Import
+import { cacheService } from "@/services/cacheService";
 
 import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
@@ -21,14 +22,14 @@ export const createFlow = catchAsync(
     if (initActive) {
       const canCreate = await planLimitsService.canCreateResource(
         companyId,
-        "workflows"
+        "workflows",
       );
       if (!canCreate) {
         return next(
           new AppError(
             "Has alcanzado el límite de workflows activos de tu plan",
-            403
-          )
+            403,
+          ),
         );
       }
     }
@@ -52,7 +53,7 @@ export const createFlow = catchAsync(
       console.error("Error creating flow:", error);
       return next(new AppError("Failed to create flow", 500));
     }
-  }
+  },
 );
 
 export const getFlows = catchAsync(
@@ -73,7 +74,7 @@ export const getFlows = catchAsync(
       console.error("Error fetching flows:", error);
       return next(new AppError("Failed to fetch flows", 500));
     }
-  }
+  },
 );
 
 export const updateFlow = catchAsync(
@@ -104,12 +105,15 @@ export const updateFlow = catchAsync(
         },
       });
 
+      // 🧹 Invalidate Cache
+      await cacheService.delete(`workflow:${id}`);
+
       res.status(200).json(updatedFlow);
     } catch (error) {
       console.error("Error updating flow:", error);
       return next(new AppError("Failed to update flow", 500));
     }
-  }
+  },
 );
 
 export const deleteFlow = catchAsync(
@@ -127,12 +131,16 @@ export const deleteFlow = catchAsync(
 
     try {
       await prisma.workflow.delete({ where: { id } });
+
+      // 🧹 Invalidate Cache
+      await cacheService.delete(`workflow:${id}`);
+
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting flow:", error);
       return next(new AppError("Failed to delete flow", 500));
     }
-  }
+  },
 );
 
 /**
@@ -153,7 +161,7 @@ export const getFlowById = catchAsync(
     }
 
     res.status(200).json(flow);
-  }
+  },
 );
 
 /**
@@ -178,14 +186,14 @@ export const toggleFlow = catchAsync(
       if (!flow.isActive) {
         const canActivate = await planLimitsService.canCreateResource(
           companyId,
-          "workflows"
+          "workflows",
         );
         if (!canActivate) {
           return next(
             new AppError(
               "Has alcanzado el límite de workflows activos de tu plan",
-              403
-            )
+              403,
+            ),
           );
         }
       }
@@ -195,12 +203,15 @@ export const toggleFlow = catchAsync(
         data: { isActive: !flow.isActive },
       });
 
+      // 🧹 Invalidate Cache
+      await cacheService.delete(`workflow:${id}`);
+
       res.status(200).json(updated);
     } catch (error) {
       console.error("Error toggling flow:", error);
       return next(new AppError("Failed to toggle flow", 500));
     }
-  }
+  },
 );
 
 /**
@@ -238,5 +249,5 @@ export const duplicateFlow = catchAsync(
       console.error("Error duplicating flow:", error);
       return next(new AppError("Failed to duplicate flow", 500));
     }
-  }
+  },
 );

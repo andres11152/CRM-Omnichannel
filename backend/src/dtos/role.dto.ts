@@ -47,7 +47,7 @@ export interface RoleDTO {
   isSystem: boolean;
   isActive: boolean;
   permissions: PermissionDTO[];
-  userCount?: number;
+  _count?: { users: number };
   createdAt: string;
   updatedAt: string;
 }
@@ -75,7 +75,7 @@ export const toRoleDTO = (
   isSystem: role.isSystem,
   isActive: role.isActive,
   permissions: role.permissions.map((rp) => toPermissionDTO(rp.permission)),
-  userCount: role._count?.users,
+  _count: role._count,
   createdAt: role.createdAt.toISOString(),
   updatedAt: role.updatedAt.toISOString(),
 });

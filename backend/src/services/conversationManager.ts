@@ -13,8 +13,16 @@
  * - Open/Closed: Extensible for new conversation types
  */
 
-import { PrismaClient, Conversation, ConversationStatus } from "@prisma/client";
+import {
+  PrismaClient,
+  Conversation,
+  ConversationStatus,
+  Prisma,
+} from "@prisma/client";
 import { Logger } from "@/utils/logger";
+
+// Type that covers both the main client and transaction clients
+type PrismaClientOrTransaction = PrismaClient | Prisma.TransactionClient;
 
 export interface FindOrCreateConversationParams {
   companyId: string;
@@ -37,7 +45,7 @@ export interface IConversationEvents {
 
 export class ConversationManager {
   constructor(
-    private readonly prisma: any, // Accept both PrismaClient and extended client
+    private readonly prisma: PrismaClientOrTransaction, // Accept both PrismaClient and extended client
     private readonly events?: IConversationEvents,
   ) {}
 
@@ -59,14 +67,77 @@ export class ConversationManager {
 
     try {
       // 🛡️ STRATEGY: Transaction with retry on unique violation
-      return await this.prisma.$transaction(
-        async (tx) => {
-          // 1. Try to find existing conversation
-          let conversation = await tx.conversation.findUnique({
-            where: {
-              conversation_unique_channel: {
-                companyId,
-                channelId,
+
+      const runInTransaction = async (tx: Prisma.TransactionClient) => {
+        // 1. Try to find existing conversation
+        let conversation = await tx.conversation.findUnique({
+          where: {
+            conversation_unique_channel: {
+              companyId,
+              channelId,
+            },
+          },
+          include: {
+            participants: true,
+            assignedTo: true,
+          },
+        });
+
+        if (conversation) {
+          // Conversation exists - update timestamp and reopen if needed
+          Logger.info(
+            `[ConversationManager] Found existing conversation: ${conversation.id} (Status: ${conversation.status}, Assigned: ${conversation.assignedToId})`,
+          );
+
+          // 🛡️ 100-YEAR FIX: Smart Status Transition
+          const isAssigned = !!conversation.assignedToId;
+          let newStatus = conversation.status;
+
+          if (
+            conversation.status === "CLOSED" ||
+            conversation.status === "RESOLVED"
+          ) {
+            // Re-opening a closed ticket
+            newStatus = isAssigned ? "IN_PROGRESS" : "OPEN";
+          } else {
+            // It's already active (OPEN or IN_PROGRESS)
+            // Force IN_PROGRESS if assigned (to be safe for My Chats view)
+            // Force OPEN if unassigned (Queue)
+            newStatus = isAssigned ? "IN_PROGRESS" : "OPEN";
+          }
+
+          conversation = await tx.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              status: newStatus,
+              updatedAt: new Date(),
+            },
+            include: {
+              participants: true,
+              assignedTo: true,
+            },
+          });
+
+          // Emit update event
+          await this.events?.onUpdated?.(conversation);
+
+          return conversation;
+        }
+
+        // 2. Conversation doesn't exist - create new one
+        Logger.info(
+          `[ConversationManager] Creating new conversation for ${channelId}`,
+        );
+
+        try {
+          conversation = await tx.conversation.create({
+            data: {
+              companyId,
+              channelId,
+              subject: subject || channelId,
+              status: status || "OPEN",
+              participants: {
+                connect: [{ id: customerId }],
               },
             },
             include: {
@@ -75,44 +146,30 @@ export class ConversationManager {
             },
           });
 
-          if (conversation) {
-            // Conversation exists - update timestamp and reopen if needed
-            Logger.info(
-              `[ConversationManager] Found existing conversation: ${conversation.id}`,
-            );
+          // Emit creation event
+          await this.events?.onCreated?.(conversation);
 
-            conversation = await tx.conversation.update({
-              where: { id: conversation.id },
-              data: {
-                status: "OPEN", // Always reopen on new activity
-                updatedAt: new Date(),
-              },
-              include: {
-                participants: true,
-                assignedTo: true,
-              },
-            });
-
-            // Emit update event
-            await this.events?.onUpdated?.(conversation);
-
-            return conversation;
-          }
-
-          // 2. Conversation doesn't exist - create new one
           Logger.info(
-            `[ConversationManager] Creating new conversation for ${channelId}`,
+            `[ConversationManager] ✅ Created conversation: ${conversation.id}`,
           );
 
-          try {
-            conversation = await tx.conversation.create({
-              data: {
-                companyId,
-                channelId,
-                subject: subject || channelId,
-                status: status || "OPEN",
-                participants: {
-                  connect: [{ id: customerId }],
+          return conversation;
+        } catch (createError: unknown) {
+          // 🛡️ RACE CONDITION HANDLER
+          if (
+            createError instanceof Prisma.PrismaClientKnownRequestError &&
+            createError.code === "P2002"
+          ) {
+            // Unique constraint violation
+            Logger.warn(
+              `[ConversationManager] Race condition detected for ${channelId}, fetching existing`,
+            );
+
+            conversation = await tx.conversation.findUniqueOrThrow({
+              where: {
+                conversation_unique_channel: {
+                  companyId,
+                  channelId,
                 },
               },
               include: {
@@ -121,57 +178,37 @@ export class ConversationManager {
               },
             });
 
-            // Emit creation event
-            await this.events?.onCreated?.(conversation);
-
-            Logger.info(
-              `[ConversationManager] ✅ Created conversation: ${conversation.id}`,
-            );
-
             return conversation;
-          } catch (createError: any) {
-            // 🛡️ RACE CONDITION HANDLER
-            // If another process created the conversation simultaneously,
-            // fetch it instead of failing
-            if (createError.code === "P2002") {
-              // Unique constraint violation
-              Logger.warn(
-                `[ConversationManager] Race condition detected for ${channelId}, fetching existing`,
-              );
-
-              conversation = await tx.conversation.findUniqueOrThrow({
-                where: {
-                  conversation_unique_channel: {
-                    companyId,
-                    channelId,
-                  },
-                },
-                include: {
-                  participants: true,
-                  assignedTo: true,
-                },
-              });
-
-              return conversation;
-            }
-
-            // Re-throw other errors
-            throw createError;
           }
-        },
-        {
-          // 🛡️ ISOLATION LEVEL: Prevent phantom reads
-          isolationLevel: "Serializable",
-          maxWait: 5000, // 5 seconds max wait for lock
-          timeout: 10000, // 10 seconds total timeout
-        },
-      );
-    } catch (error: any) {
+
+          // Re-throw other errors
+          throw createError;
+        }
+      };
+
+      // Check if we can start a new transaction (is this.prisma the main client?)
+      // 'PrismaClient' usually has $transaction. 'TransactionClient' does not have $transaction method.
+      if ("$transaction" in this.prisma) {
+        return await (this.prisma as PrismaClient).$transaction(
+          runInTransaction,
+          {
+            // 🛡️ ISOLATION LEVEL: Prevent phantom reads
+            isolationLevel: "Serializable",
+            maxWait: 5000, // 5 seconds max wait for lock
+            timeout: 10000, // 10 seconds total timeout
+          },
+        );
+      } else {
+        // Already in a transaction context, just run it
+        return await runInTransaction(this.prisma as Prisma.TransactionClient);
+      }
+    } catch (error: unknown) {
       Logger.error(
         `[ConversationManager] ❌ Failed to find/create conversation:`,
         error,
       );
-      throw new Error(`Failed to manage conversation: ${error.message}`);
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to manage conversation: ${msg}`);
     }
   }
 

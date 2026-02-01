@@ -31,6 +31,7 @@ import { chatService } from "@/services/chatService";
 import { SessionData, MessageMetadata } from "@/interfaces/WhatsAppEvents";
 import { Conversation, Queue, MediaType, Prisma, User } from "@prisma/client";
 import { AIResponseSchema } from "@/interfaces/AIInterfaces";
+import { flowExecutor } from "@/services/flowExecutor";
 
 type ConversationWithQueue = Conversation & {
   queue: (Queue & { aiAssistantId: string | null }) | null;
@@ -721,6 +722,85 @@ export class MessageHandler implements IMessageHandler {
                   });
                 }
               }
+
+              // 🌊 FLOW ENGINE INTEGRATION
+              let flowExecuted = false;
+              if (customerUser?.phone) {
+                try {
+                  // Resolver contacto CRM asociado (required for flows)
+                  const contact = await prisma.contact.findFirst({
+                    where: { companyId, phone: customerUser.phone },
+                  });
+
+                  if (contact) {
+                    const flowResults = await flowExecutor.processMessage(
+                      contact.id,
+                      textContent,
+                      conversation.id,
+                      companyId,
+                    );
+
+                    if (flowResults && flowResults.length > 0) {
+                      flowExecuted = true;
+
+                      // Process Flow Results
+                      // Create a generic Bot User for sending flow messages
+                      const botUser = await chatService.upsertWhatsAppUser({
+                        email: `bot_${companyId}@reply.bot`,
+                        name: "Flow Bot",
+                        companyId,
+                        role: "AGENT",
+                      });
+
+                      await TenantContextManager.run(
+                        { companyId, userId: botUser.id, requestId: "flow" },
+                        async () => {
+                          for (const result of flowResults) {
+                            if (typeof result === "string") {
+                              await this.sendMessage(
+                                conversation.channelId,
+                                result,
+                                {
+                                  companyId,
+                                  conversationId: conversation.id,
+                                  senderId: botUser.id,
+                                  metadata: { flowGenerated: true },
+                                },
+                              );
+                            } else if (
+                              result &&
+                              typeof result === "object" &&
+                              "type" in result
+                            ) {
+                              await this.sendMedia(
+                                conversation.channelId,
+                                {
+                                  type: result.type,
+                                  url: result.url,
+                                  caption: result.message,
+                                  mimetype:
+                                    mime.lookup(result.url) ||
+                                    "application/octet-stream",
+                                },
+                                {
+                                  companyId,
+                                  conversationId: conversation.id,
+                                  senderId: botUser.id,
+                                  metadata: { flowGenerated: true },
+                                },
+                              );
+                            }
+                          }
+                        },
+                      );
+                    }
+                  }
+                } catch (err) {
+                  console.error("[MessageHandler] Flow Execution Failed:", err);
+                }
+              }
+
+              if (flowExecuted) return; // Si el flujo respondió, no activar IA standard
 
               // TODO: Enable AI for groups later if needed
               this.triggerAIResponse(

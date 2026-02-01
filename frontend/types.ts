@@ -147,6 +147,8 @@ export interface Contact {
   about?: string; // WhatsApp Status/About
   // 🏢 GROUP CHAT SUPPORT
   isGroup?: boolean;
+  // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
+  whatsappSessionIndex?: number;
 }
 
 // NEW: Represents the conversation/case
@@ -181,6 +183,8 @@ export interface TicketContact {
   assignedAgentName?: string;
   // 🏢 GROUP CHAT SUPPORT
   isGroup?: boolean;
+  // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
+  whatsappSessionIndex?: number;
 }
 
 export interface Ticket {
@@ -543,7 +547,7 @@ export interface ResolveTicketDTO {
 }
 
 export interface TransferTicketDTO {
-  assignedToId?: string;
-  queueId?: string;
+  assignedToId?: string | null;
+  queueId?: string | null;
   status: "OPEN";
 }

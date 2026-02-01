@@ -1,5 +1,5 @@
 import { prisma } from "@/config/database";
-import { ConversationStatus, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { contactService } from "@/services/contactService";
 
 /**
@@ -70,34 +70,51 @@ export class ChatService {
       },
     });
 
-    // 2. 100-YEAR FIX: Sync with CRM Contact Module
-    // Only sync valid "USER" roles (customers) not groups.
-    // UPDATE: Allow LIDs to sync. If we don't have a phone, we still create the contact
-    // so the agent can rename it manually in CRM. We prioritize capturing the interaction.
+    // 2. 🛡️ 100-YEAR ENTERPRISE FIX: CRM Contact Sync with Real Phone Validation
+    // Requirements:
+    //   1. ONLY sync USER roles (customers), never groups
+    //   2. ONLY sync if we have a REAL phone number (not LID, not fake)
+    //   3. NEVER create garbage contacts that pollute the CRM
+    //
+    // If phone is null/undefined, the contact had a LID that couldn't be resolved.
+    // In that case, we DO NOT create a CRM contact (it would be useless).
 
-    if (user.role === "USER" && !params.email.includes("@g.us")) {
+    const isGroup = params.email.includes("@g.us");
+    const hasRealPhone =
+      params.phone && params.phone.length >= 7 && params.phone.length <= 15;
+
+    if (user.role === "USER" && !isGroup && hasRealPhone) {
       try {
         await contactService.upsert(params.companyId, {
-          // If we have a real phone, use it. If not (LID), leave phone empty.
-          phone: params.phone || undefined,
-          // 🛡️ 100-YEAR FIX: Pass the email as-is.
-          // contactService.upsert now handles internal email logic correctly:
-          // - If phone is available, it will discard internal emails
-          // - If phone is NOT available (LID), it will keep the email as identifier
-          email: params.email,
-          name: params.name, // Will be the LID if no pushname, but user can edit it.
+          phone: params.phone,
+          // 🛡️ For CRM, we use the phone as primary identifier.
+          // Internal emails (@whatsapp.user) are never stored in CRM.
+          email: null,
+          name: params.name,
           customFields: {
             source: "whatsapp",
-            whatsappId: params.email.split("@")[0], // This is the LID or Phone ID
+            whatsappId: params.email.split("@")[0],
             userId: user.id,
           },
           tags: ["Importado de Chat"],
         });
+        console.info(
+          `[ChatService] ✅ CRM Contact synced for real phone: ${params.phone}`,
+        );
       } catch (error) {
         // CRM Sync should be non-blocking. Log and continue.
         console.warn(
           `[ChatService] Failed to sync CRM contact for ${params.email}`,
           error,
+        );
+      }
+    } else {
+      // Log why we skipped CRM sync
+      if (isGroup) {
+        console.info(`[ChatService] ⏩ Skipped CRM sync: Group chat`);
+      } else if (!hasRealPhone) {
+        console.info(
+          `[ChatService] ⏩ Skipped CRM sync: No real phone (LID or invalid)`,
         );
       }
     }

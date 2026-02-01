@@ -17,6 +17,8 @@ import {
 import { prisma } from "@/config/database";
 import { TenantContextManager } from "@/config/tenantContext";
 import pino from "pino";
+import { WASocket } from "@whiskeysockets/baileys"; // 🛡️ Import for raw socket access
+
 // 🚧 BullMQ queue disabled - Redis allkeys-lru incompatible
 // import { whatsappQueue } from "./queue/WhatsAppQueue";
 
@@ -321,6 +323,15 @@ export class WhatsAppService {
 
   async getSession(sessionId: string): Promise<SessionStatus> {
     return this.sessionManager.getSessionStatus(sessionId);
+  }
+
+  /**
+   * 🛡️ 100-YEAR FIX: Expose Raw Socket
+   * Necessary for advanced operations like Group Metadata, Blocklist, etc.
+   * that are not covered by the simplified Service interface.
+   */
+  getSocket(sessionId: string): WASocket | undefined {
+    return this.sessionManager.getSession(sessionId);
   }
 
   /**

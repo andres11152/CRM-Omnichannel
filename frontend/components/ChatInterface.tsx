@@ -43,6 +43,7 @@ import { TransferModal } from "./TransferModal";
 import { SmartComposer } from "./SmartComposer";
 import { Customer360Panel } from "./Customer360Panel";
 import { ChatHeaderEnhanced } from "./ChatHeaderEnhanced";
+import { GroupParticipantsPanel } from "./GroupParticipantsPanel";
 import { VoiceNotePlayer } from "./VoiceNotePlayer";
 import { ActivityModal } from "./crm/ActivityModal";
 import { DealModal } from "./crm/DealModal";
@@ -108,6 +109,8 @@ interface Props {
   readOnly?: boolean;
   onBack?: () => void;
   onContactUpdate?: (contact: Contact) => void;
+  /** 🛡️ 100-YEAR FIX: Optimistic Update Callback */
+  onTicketUpdate?: (ticketId: string, updates: any) => void;
 }
 
 export const ChatInterface: React.FC<Props> = ({
@@ -117,6 +120,7 @@ export const ChatInterface: React.FC<Props> = ({
   readOnly = false,
   onBack,
   onContactUpdate,
+  onTicketUpdate,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -193,6 +197,7 @@ export const ChatInterface: React.FC<Props> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false); // New Resolve Modal State
   const [isResolving, setIsResolving] = useState(false);
+  const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
   //  Customer 360 Toggle State
   const [isCustomer360Visible, setIsCustomer360Visible] = useState(() => {
     const saved = localStorage.getItem("customer360_visible");
@@ -1350,7 +1355,7 @@ export const ChatInterface: React.FC<Props> = ({
       const payload: TransferTicketDTO =
         type === "AGENT"
           ? { assignedToId: targetId, status: "OPEN" }
-          : { queueId: targetId, assignedToId: undefined, status: "OPEN" }; // Sending undefined or null for unassignment depends on backend handler
+          : { queueId: targetId, assignedToId: null, status: "OPEN" }; // Explicit null to unassign
 
       // If backend specifically needs explicit null for unassignment, we might need to adjust DTO
       // Assuming standard PATCH:
@@ -1361,8 +1366,20 @@ export const ChatInterface: React.FC<Props> = ({
         payload as any,
       );
 
+      // 🛡️ 100-YEAR FIX: Optimistic Update to Parent
+      if (onTicketUpdate) {
+        onTicketUpdate(activeContact.ticketId || activeContact.id, {
+          assignedToId: type === "AGENT" ? targetId : null,
+          queueId: type === "QUEUE" ? targetId : undefined,
+          status: "OPEN",
+        });
+      }
+
       setTransferSuccess(true);
       toast.success("Transferencia exitosa");
+
+      // 🛡️ 100-YEAR FIX: Visual Cleanup
+      if (onBack) setTimeout(() => onBack(), 50);
     } catch (error) {
       console.error("Transfer failed", error);
       toast.error("Error al transferir el ticket");
@@ -1515,6 +1532,13 @@ export const ChatInterface: React.FC<Props> = ({
                 localStorage.setItem("customer360_visible", String(newState));
               }}
               isCustomer360Visible={isCustomer360Visible}
+              // GROUP PARTICIPANTS PANEL
+              onToggleParticipantsPanel={
+                activeContact.isGroup
+                  ? () => setShowParticipantsPanel(!showParticipantsPanel)
+                  : undefined
+              }
+              isParticipantsPanelVisible={showParticipantsPanel}
             />
           </div>
 
@@ -2297,11 +2321,34 @@ export const ChatInterface: React.FC<Props> = ({
         </div>
       )}
 
+      {/* Participants Panel (Right Sidebar) */}
+      {showParticipantsPanel && activeContact.isGroup && (
+        <GroupParticipantsPanel
+          conversationId={activeContact.id}
+          onClose={() => setShowParticipantsPanel(false)}
+        />
+      )}
+
+      {/* Transfer Modal */}
       {showTransferModal && (
         <TransferModal
           isOpen={showTransferModal}
           onClose={() => setShowTransferModal(false)}
           onTransfer={handleTransferSubmit}
+          currentUserId={(() => {
+            try {
+              const token = localStorage.getItem("token");
+              if (token) {
+                const decoded = jwtDecode<{ id?: string; userId?: string }>(
+                  token,
+                );
+                return decoded.id || decoded.userId;
+              }
+            } catch (e) {
+              console.error("[ChatInterface] Error decoding token:", e);
+            }
+            return undefined;
+          })()}
         />
       )}
 

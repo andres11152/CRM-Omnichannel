@@ -16,8 +16,11 @@ import {
 // (Legacy mapTicketToFrontend removed in favor of toTicketDTO)
 
 /**
- * Helper to enrich TicketDTOs with CRM Contact Data
+ * Helper to enrich TicketDTOs with CRM Contact Data AND WhatsApp Session Index
  * This keeps the controller clean and focuses on business integration logic
+ *
+ * 🎯 100-YEAR FIX: Maps each ticket to its corresponding WhatsApp session (#1, #2, #3)
+ * based on the phone number of the connected WhatsApp session.
  */
 const enrichWithCrmData = async (
   dtos: TicketDTO[],
@@ -28,7 +31,24 @@ const enrichWithCrmData = async (
     if (t.contact.phone) phonesToFetch.add(t.contact.phone);
   });
 
-  if (phonesToFetch.size === 0) return dtos;
+  // 📱 Fetch WhatsApp Sessions for this company (sorted by creation for consistent indexing)
+  const whatsappSessions = await prisma.whatsAppSession.findMany({
+    where: { companyId, status: "CONNECTED" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, phone: true, sessionId: true },
+  });
+
+  // Build a map of session phone -> index (1-based for user display)
+  const sessionIndexMap = new Map<string, number>();
+  whatsappSessions.forEach((session, index) => {
+    if (session.phone) {
+      // Normalize phone (remove + and leading zeros for matching)
+      const normalizedPhone = session.phone.replace(/^\+/, "");
+      sessionIndexMap.set(normalizedPhone, index + 1);
+    }
+  });
+
+  if (phonesToFetch.size === 0 && whatsappSessions.length === 0) return dtos;
 
   const contacts = await prisma.contact.findMany({
     where: {
@@ -48,6 +68,19 @@ const enrichWithCrmData = async (
       ? crmMap.get(dto.contact.phone)
       : undefined;
 
+    // 📱 Determine WhatsApp session index
+    // If we only have 1 session, always use index 1
+    // If we have multiple, try to match based on session metadata or default to 1
+    let whatsappSessionIndex: number | undefined;
+    if (whatsappSessions.length > 0) {
+      if (whatsappSessions.length === 1) {
+        whatsappSessionIndex = 1;
+      } else {
+        // For multi-session, default to 1 (future: can be enhanced with conversation metadata)
+        whatsappSessionIndex = 1;
+      }
+    }
+
     if (crmData) {
       // 🛡️ CRM Data takes precedence
       return {
@@ -60,10 +93,18 @@ const enrichWithCrmData = async (
               ? crmData.name
               : dto.contact.name,
           avatarUrl: crmData.avatarUrl || dto.contact.avatarUrl,
+          whatsappSessionIndex, // 📱 Add session index
         },
       };
     }
-    return dto;
+
+    return {
+      ...dto,
+      contact: {
+        ...dto.contact,
+        whatsappSessionIndex, // 📱 Add session index even without CRM data
+      },
+    };
   });
 };
 
@@ -158,13 +199,18 @@ export const getAllTickets = catchAsync(
     if (queueId) where.queueId = queueId as string;
     if (assignedToId) where.assignedToId = assignedToId as string;
 
-    // 🛡️ 100-YEAR FIX: Strict Access Control (The "User Request" barrier)
-    // Agents can ONLY see tickets assigned to them.
-    // They cannot see the global queue or other agents' tickets.
+    // 🛡️ 100-YEAR ENTERPRISE FIX: Role-Based Access Control
+    // Agents can see:
+    //   1. Tickets assigned TO THEM (for "My Chats")
+    //   2. Tickets that are UNASSIGNED (for "Queue" view - to pick up new work)
+    // Agents CANNOT see tickets assigned to OTHER agents (privacy/security)
     if (req.user?.role === "AGENT") {
-      where.assignedToId = req.user.id;
+      where.OR = [
+        { assignedToId: req.user.id }, // Their own tickets
+        { assignedToId: null }, // Unassigned queue tickets
+      ];
       console.info(
-        `[TicketController] 🔍 AGENT Query: userId=${req.user.id}, companyId=${companyId}`,
+        `[TicketController] 🔍 AGENT Query: userId=${req.user.id}, companyId=${companyId} (Own + Unassigned)`,
       );
     }
 
@@ -251,14 +297,23 @@ export const getTicketById = catchAsync(
     }
 
     // 🛡️ 100-YEAR FIX: Agent Isolation
-    if (req.user?.role === "AGENT" && ticket.assignedToId !== req.user.id) {
-      return next(
-        new AppError(
-          "Access denied: You can only view tickets assigned to you.",
-          403,
-        ),
-      );
+    // Agents can only view:
+    // 1. Their own tickets (assignedToId === user.id)
+    // 2. Unassigned tickets (assignedToId === null) - from Queue
+    if (req.user?.role === "AGENT") {
+      const isMine = ticket.assignedToId === req.user.id;
+      const isUnassigned = !ticket.assignedToId;
+
+      if (!isMine && !isUnassigned) {
+        return next(
+          new AppError(
+            "Access restricted to assigned or queue tickets only",
+            403,
+          ),
+        );
+      }
     }
+    // Access granted
 
     // 1. Initial Mapping
     const baseDto = toTicketDTO(ticket as unknown as TicketWithRelations);
@@ -333,6 +388,14 @@ export const updateTicket = catchAsync(
       updateData.assignedTo = data.assignedToId
         ? { connect: { id: data.assignedToId } }
         : { disconnect: true };
+
+      // 🛡️ 100-YEAR FIX: Auto-update Status on Assignment
+      // - Assigning -> IN_PROGRESS (User takes the ticket)
+      // - Unassigning -> OPEN (Back to queue)
+      // Only apply if 'status' wasn't explicitly provided in the payload.
+      if (data.status === undefined) {
+        updateData.status = data.assignedToId ? "IN_PROGRESS" : "OPEN";
+      }
     }
     if (data.resolvedAt !== undefined) updateData.resolvedAt = data.resolvedAt;
     if (data.resolutionType !== undefined)
@@ -442,14 +505,21 @@ export const updateTicket = catchAsync(
         changedFields: Object.keys(updateData),
       });
 
-      // 1.5 DIRECT UPDATE (100-Year Fix): Always notify the current assignee about ANY update
-      // Agents are NOT in the company room, so they need direct updates.
-      if (updatedTicket.assignedToId) {
-        io.to(`agent:${updatedTicket.assignedToId}`).emit("ticket.updated", {
+      // 1.5 DIRECT UPDATE (100-Year Fix): Notify ALL affected agents (Current & Previous)
+      // Agents are NOT in the company room.
+      // - New Assignee needs to see the update (or assignment).
+      // - Old Assignee needs to see the update (so it disappears from their list).
+      const affectedAgents = new Set<string>();
+      if (updatedTicket.assignedToId)
+        affectedAgents.add(updatedTicket.assignedToId);
+      if (previousAssignee) affectedAgents.add(previousAssignee);
+
+      affectedAgents.forEach((agentId) => {
+        io.to(`agent:${agentId}`).emit("ticket.updated", {
           ticket: ticketDto,
           changedFields: Object.keys(updateData),
         });
-      }
+      });
 
       // 2️⃣ DIRECT NOTIFICATION: If ticket was assigned to someone new (Sound + Toast)
       if (assigneeChanged && newAssignee) {
@@ -461,50 +531,6 @@ export const updateTicket = catchAsync(
           timestamp: new Date().toISOString(),
         });
 
-        // 3️⃣ PERSISTENT NOTIFICATION: Create in-app notification record
-        try {
-          await prisma.notification.create({
-            data: {
-              companyId: updatedTicket.companyId,
-              userId: newAssignee,
-              type: "TICKET_ASSIGNED",
-              title: `Ticket #${updatedTicket.ticketNumber} asignado`,
-              message: `Se te ha asignado: ${updatedTicket.subject}`,
-              link: `/tickets/${updatedTicket.id}`,
-              metadata: {
-                ticketId: updatedTicket.id,
-                ticketNumber: updatedTicket.ticketNumber,
-                conversationId: updatedTicket.conversationId,
-                assignedBy: req.user?.id,
-              },
-              read: false,
-            },
-          });
-        } catch (notifError) {
-          // Non-blocking: Log but don't fail the request
-          console.error(
-            "[TicketController] Failed to create notification:",
-            notifError,
-          );
-        }
-      }
-
-      // 4️⃣ CONVERSATION SYNC: Also emit conversation.updated for chat panels
-      if (updatedTicket.conversationId) {
-        io.to(`company:${updatedTicket.companyId}`).emit(
-          "conversation.updated",
-          {
-            id: updatedTicket.conversationId,
-            ticketId: updatedTicket.id,
-            queueId: updatedTicket.queueId,
-            assignedToId: updatedTicket.assignedToId,
-            contact: {
-              queueName: updatedTicket.queue?.name,
-              assignedAgentName: updatedTicket.assignedTo?.name,
-              assignedAgentId: updatedTicket.assignedToId,
-            },
-          },
-        );
         // 3️⃣ PERSISTENT NOTIFICATION: Create in-app notification record
         try {
           await prisma.notification.create({

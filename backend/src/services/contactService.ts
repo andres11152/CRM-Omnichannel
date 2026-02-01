@@ -371,7 +371,7 @@ export const contactService = {
 
     // 🛡️100-YEAR FIX: Fetch related data for timeline.
     // Note: tickets and conversations are fetched for potential future use in timeline expansion.
-    const [deals, activities, _tickets, _conversations] = await Promise.all([
+    const [deals, activities, tickets, conversations] = await Promise.all([
       prisma.deal.findMany({
         where: { contactId: id },
         include: { stage: true },
@@ -413,7 +413,24 @@ export const contactService = {
         icon: "📅",
         color: "yellow",
       })),
-      // Add others...
+      ...tickets.map((t) => ({
+        type: "TICKET" as const,
+        id: t.id,
+        date: t.createdAt.toISOString(),
+        title: `Ticket #${t.ticketNumber}: ${t.subject}`,
+        subtitle: t.status,
+        icon: "🎫",
+        color: "red",
+      })),
+      ...conversations.map((c) => ({
+        type: "CONVERSATION" as const,
+        id: c.id,
+        date: c.createdAt.toISOString(),
+        title: "Chat Iniciado",
+        subtitle: c.messages[0]?.content || "Sin mensajes",
+        icon: "💬",
+        color: "blue",
+      })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return {

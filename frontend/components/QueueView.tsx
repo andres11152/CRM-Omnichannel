@@ -301,39 +301,46 @@ export const QueueView: React.FC<QueueViewProps> = ({
         </div>
       </div>
 
-      {/* Sort Controls */}
-      <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2 bg-gray-50/50 dark:bg-[#0b141a]/50">
-        <span className="text-[9px] text-gray-400 uppercase tracking-wider font-bold">
-          Ordenar:
-        </span>
-        {[
-          { field: "waitTime" as SortField, label: "Tiempo", icon: Timer },
-          { field: "priority" as SortField, label: "Prioridad", icon: Zap },
-          {
-            field: "lastMessage" as SortField,
-            label: "Mensaje",
-            icon: MessageSquare,
-          },
-        ].map(({ field, label, icon: Icon }) => (
-          <button
-            key={field}
-            onClick={() => toggleSort(field)}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-              sortField === field
-                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
-                : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
-          >
-            <Icon className="w-3 h-3" />
-            {label}
-            {sortField === field &&
-              (sortDirection === "desc" ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronUp className="w-3 h-3" />
-              ))}
-          </button>
-        ))}
+      {/* Sort Controls - Responsive & Compact */}
+      <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2 bg-gray-50/50 dark:bg-[#0b141a]/50 overflow-hidden">
+        {/* Compact Label / Icon */}
+        <div className="flex-shrink-0 text-gray-400" title="Ordenar por">
+          <ArrowUpDown className="w-3 h-3" />
+        </div>
+
+        {/* Scrollable Container for Filters */}
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar mask-gradient-right flex-1 p-0.5">
+          {[
+            { field: "waitTime" as SortField, label: "Tiempo", icon: Timer },
+            { field: "priority" as SortField, label: "Prioridad", icon: Zap },
+            {
+              field: "lastMessage" as SortField,
+              label: "Reciente",
+              icon: MessageSquare,
+            },
+          ].map(({ field, label, icon: Icon }) => (
+            <button
+              key={field}
+              onClick={() => toggleSort(field)}
+              className={`
+                flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium whitespace-nowrap transition-all border
+                ${
+                  sortField === field
+                    ? "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-orange-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 dark:hover:border-gray-600"
+                }
+              `}
+            >
+              <Icon className="w-3 h-3" />
+              <span>{label}</span>
+              {sortField === field && (
+                <span className="text-[9px] opacity-70">
+                  {sortDirection === "asc" ? "↑" : "↓"}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* List */}

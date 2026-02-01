@@ -8,6 +8,12 @@ export type ContactType = "LEAD" | "CUSTOMER" | "PARTNER";
 export type ContactStatus = "ACTIVE" | "ARCHIVED" | "BLOCKED";
 export type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "INSTAGRAM";
 
+export interface Tag extends BaseEntity {
+  name: string;
+  color: string; // Tailwind class e.g., 'bg-red-500 text-white'
+  companyId: string;
+}
+
 export interface Contact extends BaseEntity {
   companyId: string;
   name: string;

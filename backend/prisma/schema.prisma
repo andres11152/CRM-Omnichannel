@@ -262,7 +262,12 @@ model Company {
   products         Product[] // Product Catalog
 
   // Chatbot Flows
-  flows        Flow[]
+  // flows        Workflow[] // Deprecated or renamed? Schema has 'flows', but relation uses Workflow
+  // Let's use the explicit 'workflows' relation defined in line 251.
+  // Line 251 says: workflows Workflow[]
+  // Line 265 says: flows Flow[]
+  // We should remove the broken 'flows Flow[]' entirely as 'workflows' already exists.
+  
   flowSessions ContactFlowSession[]
 
   // Multimedia Library
@@ -349,7 +354,13 @@ model User {
   mentionedInActivities   Activity[] @relation("ActivityMentions")
 
   // Chatbot Flows
-  createdFlows Flow[]
+  // createdFlows Workflow[] -- No relation defined in Workflow model for 'createdBy' user yet??
+  // Checking Workflow model... no createdById.
+  // So 'createdFlows' in User model has no counterpart.
+  // We should REMOVE this line until we add createdById to Workflow.
+  // Or, if we want to keep it future-proof, add createdById to Workflow OR just comment it out.
+  // Given the error P1012, removing the invalid type reference is the fix.
+  // createdFlows Flow[] -- REMOVED due to invalid type "Flow"
 
   // Campaigns
   createdCampaigns Campaign[]
@@ -402,6 +413,7 @@ model Workflow {
   updatedAt DateTime @updatedAt
 
   executions WorkflowExecution[]
+  flowSessions ContactFlowSession[]
 
   @@map("workflows")
 }
@@ -1069,45 +1081,6 @@ enum FlowStatus {
   ARCHIVED
 }
 
-model Flow {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  name        String
-  description String?
-  status      FlowStatus @default(DRAFT)
-
-  // Flow Structure (JSON from React Flow)
-  nodes Json // Array of nodes with {id, type, data, position}
-  edges Json // Array of edges with {id, source, target, sourceHandle?, targetHandle?}
-
-  // Trigger Configuration
-  triggerType FlowTriggerType
-  triggerData Json? // Extra config (keywords, delay time, etc.)
-
-  // Settings
-  isActive Boolean @default(false)
-  priority Int     @default(0) // Higher priority flows execute first
-
-  // Stats
-  executionCount Int   @default(0) // Cuántas veces se ha ejecutado
-  completionRate Float @default(0) // % de usuarios que completan el flujo
-
-  // Relations
-  sessions ContactFlowSession[]
-
-  createdById String
-  createdBy   User   @relation(fields: [createdById], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId, isActive])
-  @@index([triggerType])
-  @@map("flows")
-}
-
 // Contact Flow Session (Estado de ejecución por contacto)
 model ContactFlowSession {
   id String @id @default(cuid())
@@ -1118,8 +1091,9 @@ model ContactFlowSession {
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
+  // 🛡️ UNIFICATION: Link to Workflow (Single Source of Truth)
   flowId String
-  flow   Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  flow   Workflow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
 
   conversationId String?
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)

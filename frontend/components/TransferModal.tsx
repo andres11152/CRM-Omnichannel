@@ -10,12 +10,15 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onTransfer: (targetId: string, type: "AGENT" | "QUEUE") => void;
+  /** 🛡️ 100-Year Fix: Current user ID to exclude from transfer list */
+  currentUserId?: string;
 }
 
 export const TransferModal: React.FC<Props> = ({
   isOpen,
   onClose,
   onTransfer,
+  currentUserId,
 }) => {
   const [activeTab, setActiveTab] = useState<"AGENTS" | "QUEUES">("AGENTS");
   const [agents, setAgents] = useState<AgentWithAI[]>([]);
@@ -39,8 +42,12 @@ export const TransferModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  const filteredAgents = agents.filter((a) =>
-    a.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  // 🛡️ 100-Year Fix: Exclude current user from transfer list
+  // An agent cannot transfer a ticket to themselves
+  const filteredAgents = agents.filter(
+    (a) =>
+      a.id !== currentUserId &&
+      a.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Show ALL queues including those with AI

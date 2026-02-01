@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { DollarSign, Ticket, MessageCircle, Calendar } from "lucide-react";
 import { API_BASE_URL } from "../../services/apiConfig";
 import { Contact } from "../../types";
 
@@ -11,6 +12,14 @@ interface TimelineEvent {
   subtitle: string;
   icon: string;
   color: string;
+}
+
+interface TimelineResponse {
+  status: string;
+  data: {
+    contact: Contact;
+    timeline: TimelineEvent[];
+  };
 }
 
 interface Props {
@@ -37,11 +46,11 @@ export const ContactTimelineView: React.FC<Props> = ({
           },
         );
         if (res.ok) {
-          const data = await res.json();
-          setTimeline(data.timeline || []);
-          setContact(data.contact);
+          const response = (await res.json()) as TimelineResponse;
+          setTimeline(response.data?.timeline || []);
+          setContact(response.data?.contact);
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error loading timeline", error);
       } finally {
         setLoading(false);
@@ -124,16 +133,26 @@ export const ContactTimelineView: React.FC<Props> = ({
                 >
                   {/* Icon */}
                   <div
-                    className={`absolute -left-[11px] top-0 w-6 h-6 rounded-full border-2 border-white dark:border-[#202c33] flex items-center justify-center text-xs shadow-sm
-                                        ${event.type === "DEAL" ? "bg-green-100 text-green-600" : ""}
-                                        ${event.type === "TICKET" ? "bg-red-100 text-red-600" : ""}
-                                        ${event.type === "CONVERSATION" ? "bg-blue-100 text-blue-600" : ""}
-                                        ${event.type === "ACTIVITY" ? "bg-amber-100 text-amber-600" : ""}
+                    className={`absolute -left-[11px] top-0 w-6 h-6 rounded-full border-2 border-white dark:border-[#202c33] flex items-center justify-center text-xs shadow-sm bg-white dark:bg-[#111b21]
+                                        ${event.type === "DEAL" ? "text-green-600 dark:text-green-400" : ""}
+                                        ${event.type === "TICKET" ? "text-red-600 dark:text-red-400" : ""}
+                                        ${event.type === "CONVERSATION" ? "text-blue-600 dark:text-blue-400" : ""}
+                                        ${event.type === "ACTIVITY" ? "text-amber-600 dark:text-amber-400" : ""}
                                     `}
                   >
-                    {event.icon}
+                    {event.type === "DEAL" && (
+                      <DollarSign className="w-3.5 h-3.5" />
+                    )}
+                    {event.type === "TICKET" && (
+                      <Ticket className="w-3.5 h-3.5" />
+                    )}
+                    {event.type === "CONVERSATION" && (
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    )}
+                    {event.type === "ACTIVITY" && (
+                      <Calendar className="w-3.5 h-3.5" />
+                    )}
                   </div>
-
                   {/* Content Card */}
                   <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
                     <div className="flex justify-between items-start mb-1">

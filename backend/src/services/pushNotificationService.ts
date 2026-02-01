@@ -11,19 +11,22 @@ import { Logger } from "@/utils/logger";
 const vapidKeys = {
   publicKey:
     process.env.VAPID_PUBLIC_KEY ||
-    "BEcKZE_JF5xqXQz9YhB5L9rH6qJ8vN3dV2mT4wK1bP0xY7sZ3cA2hN1gF9jL8vE6pK5sR4tW3yX2zA1bC0dE2fG",
-  privateKey: process.env.VAPID_PRIVATE_KEY || "your-private-key-here",
+    "BNWMhNVrSIdGVkoccDNV4KxchWXpB74JTSKUNQyPJaNcKn1ILi8pSWvexxruUgkoEoKmWnI2UGSpMEgD7wZmabR4",
+  privateKey:
+    process.env.VAPID_PRIVATE_KEY ||
+    "TX8yfc_5VownXWmZfuF63d-JwJ2uLrtkRdl4mNszpeo",
 };
 
 try {
   webpush.setVapidDetails(
     `mailto:${process.env.SMTP_USER || "noreply@replycrm.com"}`,
     vapidKeys.publicKey,
-    vapidKeys.privateKey
+    vapidKeys.privateKey,
   );
 } catch (error) {
   Logger.warn(
-    "Failed to init Web Push. Check VAPID keys. Push notifications disabled."
+    "Failed to init Web Push. Check VAPID keys. Push notifications disabled.",
+    error,
   );
 }
 
@@ -42,7 +45,7 @@ export interface PushNotificationPayload {
   body: string;
   icon?: string;
   badge?: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   tag?: string;
   requireInteraction?: boolean;
   actions?: Array<{
@@ -116,7 +119,7 @@ class PushNotificationService {
    */
   async sendToUser(
     userId: string,
-    payload: PushNotificationPayload
+    payload: PushNotificationPayload,
   ): Promise<void> {
     try {
       const subscriptions = await prisma.pushSubscription.findMany({
@@ -138,9 +141,9 @@ class PushNotificationService {
                 auth: sub.auth,
               },
             },
-            payload
-          )
-        )
+            payload,
+          ),
+        ),
       );
 
       const sent = results.filter((r) => r.status === "fulfilled").length;
@@ -173,7 +176,7 @@ class PushNotificationService {
    */
   async sendToCompany(
     companyId: string,
-    payload: PushNotificationPayload
+    payload: PushNotificationPayload,
   ): Promise<void> {
     try {
       const subscriptions = await prisma.pushSubscription.findMany({
@@ -195,9 +198,9 @@ class PushNotificationService {
                 auth: sub.auth,
               },
             },
-            payload
-          )
-        )
+            payload,
+          ),
+        ),
       );
 
       const sent = results.filter((r) => r.status === "fulfilled").length;
@@ -219,7 +222,7 @@ class PushNotificationService {
    */
   async sendToUsers(
     userIds: string[],
-    payload: PushNotificationPayload
+    payload: PushNotificationPayload,
   ): Promise<void> {
     try {
       const subscriptions = await prisma.pushSubscription.findMany({
@@ -243,9 +246,9 @@ class PushNotificationService {
                 auth: sub.auth,
               },
             },
-            payload
-          )
-        )
+            payload,
+          ),
+        ),
       );
 
       Logger.info("Push notifications sent to users", {
@@ -262,7 +265,7 @@ class PushNotificationService {
    */
   private async sendPushNotification(
     subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
-    payload: PushNotificationPayload
+    payload: PushNotificationPayload,
   ): Promise<void> {
     const pushSubscription = {
       endpoint: subscription.endpoint,
@@ -304,7 +307,7 @@ class PushNotificationService {
   async notifyNewMessage(
     userId: string,
     from: string,
-    preview: string
+    preview: string,
   ): Promise<void> {
     await this.sendToUser(userId, {
       title: `New message from ${from}`,
@@ -329,7 +332,7 @@ class PushNotificationService {
   async notifyTicketAssigned(
     userId: string,
     ticketId: string,
-    subject: string
+    subject: string,
   ): Promise<void> {
     await this.sendToUser(userId, {
       title: "🎫 New Ticket Assigned",
@@ -350,7 +353,7 @@ class PushNotificationService {
   async notifyQuotaWarning(
     companyId: string,
     quotaType: string,
-    percentage: number
+    percentage: number,
   ): Promise<void> {
     // Send to all admins
     const admins = await prisma.user.findMany({
@@ -376,7 +379,7 @@ class PushNotificationService {
           percentage,
         },
         actions: [{ action: "upgrade", title: "Upgrade Plan" }],
-      }
+      },
     );
   }
 
@@ -385,7 +388,7 @@ class PushNotificationService {
    */
   async notifyWhatsAppDisconnected(
     companyId: string,
-    sessionId: string
+    sessionId: string,
   ): Promise<void> {
     const admins = await prisma.user.findMany({
       where: {
@@ -408,7 +411,7 @@ class PushNotificationService {
           sessionId,
         },
         actions: [{ action: "reconnect", title: "Reconnect" }],
-      }
+      },
     );
   }
 
@@ -418,7 +421,7 @@ class PushNotificationService {
   async notifyCampaignCompleted(
     userId: string,
     campaignName: string,
-    stats: { sent: number; total: number }
+    stats: { sent: number; total: number },
   ): Promise<void> {
     const successRate = ((stats.sent / stats.total) * 100).toFixed(1);
 

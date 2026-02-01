@@ -311,25 +311,53 @@ export const useAgentWorkspaceSockets = ({
 
     // 🔄 TICKET TRANSFER/UPDATE LISTENER
     // This handles when a ticket is reassigned to another agent
+    // 🔄 TICKET TRANSFER/UPDATE LISTENER
     const handleTicketUpdated = (data: {
       ticket: Ticket;
       changedFields: string[];
     }) => {
+      // 🐛 DEBUG (Console Log)
       console.log(
-        "[AgentWorkspace] 🔄 Ticket updated:",
+        `Update Socket: ${data.ticket.assignedToId ? "Asignado" : "Sin Asignar"}`,
+      );
+
+      console.log(
+        "[AgentWorkspace] 🔄 Ticket updated payload:",
         data.ticket.id,
+        "AssignedTo:",
+        data.ticket.assignedToId,
+        "Fields:",
         data.changedFields,
       );
 
       setTickets((prev) => {
         const ticketIndex = prev.findIndex((t) => t.id === data.ticket.id);
 
+        // 🛡️ 100-YEAR FIX: Role-aware visibility
+        // ADMINs/SUPERVISORs see ALL tickets (company-wide view)
+        // AGENTs only see tickets assigned to them or unassigned/queue
+        const isAdminOrSupervisor = ["ADMIN", "SUPERVISOR", "MASTER"].includes(
+          user?.role || "",
+        );
+
+        // CASE 1: Ticket NOT in list
         if (ticketIndex === -1) {
-          // Ticket not in our list - this could be a new assignment TO us
-          // Check if it's assigned to current user
-          if (data.ticket.assignedToId === user?.id) {
+          // Admins get all tickets
+          if (isAdminOrSupervisor) {
             console.log(
-              "[AgentWorkspace] ✨ New ticket assigned to me:",
+              "[AgentWorkspace] ✨ Admin: Adding ticket to view:",
+              data.ticket.id,
+            );
+            return [data.ticket, ...prev];
+          }
+
+          // Agents: Only add if assigned to them or unassigned
+          const isForMe = data.ticket.assignedToId === user?.id;
+          const isForQueue = !data.ticket.assignedToId; // Null/undefined means Queue/Unassigned
+
+          if (isForMe || isForQueue) {
+            console.log(
+              "[AgentWorkspace] ✨ Agent: New relevant ticket arrived:",
               data.ticket.id,
             );
             return [data.ticket, ...prev];
@@ -337,25 +365,78 @@ export const useAgentWorkspaceSockets = ({
           return prev;
         }
 
-        // Ticket exists - update it with new data (including new assignedToId)
-        // The filtering logic in myTickets will handle removing it from view if no longer assigned to us
+        // CASE 2: Ticket IS in list - Check if we should KEEP it
+        const incoming = data.ticket;
+
+        // Admins always keep tickets in their view
+        if (isAdminOrSupervisor) {
+          const updatedTickets = [...prev];
+          updatedTickets[ticketIndex] = {
+            ...updatedTickets[ticketIndex],
+            ...incoming,
+            contact: {
+              ...updatedTickets[ticketIndex].contact,
+              ...incoming.contact,
+            },
+          };
+          return updatedTickets;
+        }
+
+        // Agents: Check if still relevant
+        const isAssignedToMe = incoming.assignedToId === user?.id;
+        const isUnassigned = !incoming.assignedToId;
+
+        // 🛡️ SECURITY/PRIVACY: If assigned to ANOTHER agent, remove it immediately.
+        // Agents should not see tickets assigned to others.
+        if (!isAssignedToMe && !isUnassigned) {
+          console.log(
+            "[AgentWorkspace] 🧹 Ticket reassigned to another agent. Removing from view.",
+            incoming.id,
+          );
+
+          // CRITICAL FIX: If this was the active ticket, deselect it immediately
+          if (
+            activeTicketIdRef.current === incoming.id ||
+            activeTicketIdRef.current === incoming.conversationId
+          ) {
+            console.log(
+              "[AgentWorkspace] 🧹 Deselecting active ticket as it was transferred",
+            );
+            setActiveTicketId(null);
+          }
+
+          return prev.filter((t) => t.id !== incoming.id);
+        }
+
+        // Update logic (preserve local overrides if valid)
+        if (ticketIndex === -1) {
+          // 🆕 NEW TICKET CASE: Ticket matches criteria but not in list? Add it!
+          console.log(
+            "[AgentWorkspace] 🆕 New ticket received via socket:",
+            incoming.id,
+          );
+          return [incoming as any, ...prev];
+        }
+
         const updatedTickets = [...prev];
         updatedTickets[ticketIndex] = {
           ...updatedTickets[ticketIndex],
-          ...data.ticket,
-          // Preserve local state
+          ...incoming,
+          // Ensure contact info is merged not lost
           contact: {
             ...updatedTickets[ticketIndex].contact,
-            ...data.ticket.contact,
+            ...incoming.contact,
           },
         };
 
-        console.log(
-          "[AgentWorkspace] ✅ Ticket updated, assignedToId:",
-          data.ticket.assignedToId,
-        );
         return updatedTickets;
       });
+
+      // 🛡️ 100-YEAR FIX: DO NOT trigger immediate background refresh here.
+      // The socket event already provides complete ticket data.
+      // Immediate refresh was causing a race condition where the server hadn't
+      // fully propagated the assignment, causing the ticket to disappear.
+      // The socket data is the source of truth for real-time updates.
     };
     socketService.on("ticket.updated", handleTicketUpdated);
 

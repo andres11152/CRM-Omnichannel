@@ -19,7 +19,7 @@
 export interface FlowSessionState {
   id: string;
   contactId: string;
-  flowId: string;
+  flowId: string; // Renamed from workflowId
   companyId: string;
   conversationId: string;
   currentNodeId: string | null;

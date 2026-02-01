@@ -338,14 +338,39 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
         throw new Error("Error al transferir el ticket");
       }
 
-      const updatedTicket = await res.json();
+      const json = await res.json();
+      const updatedTicketData = json.data?.ticket || json; // Robust fallback
 
-      // Update local state
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.id === transferringTicketId ? { ...t, ...updatedTicket } : t,
-        ),
-      );
+      // 🛡️ 100-YEAR ENTERPRISE FIX: Smart State Update Based on Transfer Type
+      if (type === "AGENT") {
+        // TRANSFER TO AGENT: The ticket now belongs to someone else.
+        // Remove it from the current agent's view IMMEDIATELY.
+        // The new assignee will receive it via socket event.
+        setTickets((prev) => prev.filter((t) => t.id !== transferringTicketId));
+        console.log(
+          "[AgentWorkspace] 🚀 Ticket transferred to agent. Removed from local view.",
+          transferringTicketId,
+        );
+      } else {
+        // TRANSFER TO QUEUE: The ticket is now unassigned.
+        // Update local state so it moves from "My Chats" to "Queue".
+        setTickets((prev) =>
+          prev.map((t) =>
+            t.id === transferringTicketId
+              ? {
+                  ...t,
+                  ...updatedTicketData,
+                  assignedToId: null, // Force NULL to ensure queue visibility
+                  status: "OPEN" as const,
+                }
+              : t,
+          ),
+        );
+        console.log(
+          "[AgentWorkspace] 📥 Ticket moved to queue. Updated local state.",
+          transferringTicketId,
+        );
+      }
 
       toast.success(
         type === "AGENT"
@@ -406,12 +431,19 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     return t.status === "OPEN" || t.status === "IN_PROGRESS";
   });
 
-  // Queue: OPEN but unassigned
-  // 🏢 ENTERPRISE TRICK: Filter out Groups from Main Queue if desired,
-  // but for now we keep them DEDUPLICATED so they don't spam.
-  const queueTickets = curatedTickets.filter(
-    (t) => t.status === "OPEN" && !t.assignedToId,
-  );
+  // 🛡️ 100-YEAR ENTERPRISE: Queue Visibility
+  // Requirements:
+  // - ONLY tickets that are OPEN AND have NO assignedToId (unassigned)
+  // - Future: Filter by queues the agent has access to (for multi-department orgs)
+  const queueTickets = curatedTickets.filter((t) => {
+    // Must be OPEN and UNASSIGNED
+    if (t.status !== "OPEN" || t.assignedToId) {
+      return false;
+    }
+    // TODO: Add queue-based access control here if needed
+    // Example: return userQueueIds.includes(t.queueId) || !t.queueId;
+    return true;
+  });
 
   // Select Source
   let displayedTickets: Ticket[] = [];
@@ -425,9 +457,24 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       (t) => t.status !== "CLOSED" && t.status !== "RESOLVED",
     );
   } else if (activeTab === "resolved") {
-    displayedTickets = tickets.filter(
-      (t) => t.status === "CLOSED" || t.status === "RESOLVED",
+    // 🛡️ 100-YEAR ENTERPRISE: Role-aware Resolved View
+    const isAdminOrSupervisor = ["ADMIN", "SUPERVISOR", "MASTER"].includes(
+      user?.role || "",
     );
+
+    if (isAdminOrSupervisor) {
+      // Admins see ALL resolved tickets for the company
+      displayedTickets = tickets.filter(
+        (t) => t.status === "CLOSED" || t.status === "RESOLVED",
+      );
+    } else {
+      // Agents only see THEIR resolved tickets (tickets they handled)
+      displayedTickets = tickets.filter(
+        (t) =>
+          (t.status === "CLOSED" || t.status === "RESOLVED") &&
+          t.assignedToId === currentUserId,
+      );
+    }
   }
 
   if (filterUnread) {
@@ -470,6 +517,8 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       channel: t.channel as Channel,
       // 🏢 GROUP CHAT SUPPORT
       isGroup: t.isGroup ?? t.contact.isGroup ?? false,
+      // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
+      whatsappSessionIndex: t.contact.whatsappSessionIndex,
     };
   });
 
@@ -682,6 +731,27 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
 
   const isRestricted =
     user?.companyStatus === "INACTIVE" || user?.companyStatus === "CANCELED";
+
+  // 🛡️ 100-YEAR FIX: Global Optimistic Update
+  const handleOptimisticTicketUpdate = (ticketId: string, updates: any) => {
+    console.log("[AgentWorkspace] ⚡ Optimistic Update:", ticketId, updates);
+    setTickets((prev) =>
+      prev.map((t) => {
+        if (t.id === ticketId || t.conversationId === ticketId) {
+          return {
+            ...t,
+            ...updates,
+            // Ensure contact object is preserved
+            contact: {
+              ...t.contact,
+              ...(updates.contact || {}),
+            },
+          };
+        }
+        return t;
+      }),
+    );
+  };
 
   return (
     <div className="h-full flex flex-col bg-gray-50 dark:bg-[#0b141a]">
@@ -978,6 +1048,8 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                 aiConfig={aiConfig}
                 readOnly={isRestricted}
                 onBack={() => setActiveTicketId(null)}
+                // 🛡️ 100-YEAR FIX: Pass Optimistic Update Handler
+                onTicketUpdate={handleOptimisticTicketUpdate}
               />
             ) : (
               // QUEUE PREVIEW VIEW (Pick Ticket) - Improved Design
@@ -1174,6 +1246,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
           setTransferringTicketId(null);
         }}
         onTransfer={handleQueueTransfer}
+        currentUserId={user?.id}
       />
     </div>
   );

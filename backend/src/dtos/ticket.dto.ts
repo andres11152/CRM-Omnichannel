@@ -13,6 +13,7 @@ export interface TicketDTO {
   resolvedAt: Date | null;
 
   // Clean relational objects
+  assignedToId: string | null;
   assignedTo: {
     id: string;
     name: string;
@@ -20,6 +21,7 @@ export interface TicketDTO {
     avatarUrl?: string | null;
   } | null;
 
+  queueId: string | null;
   queue: {
     id: string;
     name: string;
@@ -61,6 +63,9 @@ export interface TicketContactDTO {
 
   // 🏢 GROUP CHAT SUPPORT
   isGroup?: boolean;
+
+  // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
+  whatsappSessionIndex?: number;
 }
 
 // Type that includes everything needed for mapping
@@ -161,6 +166,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     updatedAt: ticket.updatedAt,
     resolvedAt: ticket.resolvedAt,
 
+    assignedToId: ticket.assignedToId,
     assignedTo: ticket.assignedTo
       ? {
           id: ticket.assignedTo.id,
@@ -170,6 +176,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
         }
       : null,
 
+    queueId: ticket.queueId,
     queue: ticket.queue
       ? {
           id: ticket.queue.id,

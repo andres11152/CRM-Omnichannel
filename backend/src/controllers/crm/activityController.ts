@@ -330,11 +330,17 @@ export const createActivity = catchAsync(
     // 💬 STEP 3: Send notifications to mentioned users (Async, non-blocking)
     if (mentionedUserIds.length > 0) {
       mentionService
-        .notifyMentionedUsers(mentionedUserIds, activity.id, userId, {
-          type: type || "note",
-          subject,
-          contactName: contactNameForContext,
-        })
+        .notifyMentionedUsers(
+          mentionedUserIds,
+          activity.id,
+          userId,
+          companyId,
+          {
+            type: type || "note",
+            subject,
+            contactName: contactNameForContext,
+          },
+        )
         .catch((err) =>
           console.error("[MentionNotify] Failed to notify users:", err),
         );

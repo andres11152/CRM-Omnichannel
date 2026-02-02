@@ -81,6 +81,9 @@ model Conversation {
   // Tracks when a human last took control (for auto-unmute grace period)
   lastManualIntervention DateTime?
 
+  // 🔴 UNREAD COUNTER (Badge Support)
+  unreadCount Int @default(0)
+
   // === HIGH-PERFORMANCE COMPOSITE INDEXES ===
 
   // 🛡️ DATA INTEGRITY
@@ -733,6 +736,7 @@ model Campaign {
   channel        Channel  @default(WHATSAPP)
   subject        String?
   templateId     String?
+  template       MessageTemplate? @relation(fields: [templateId], references: [id])
   messageContent String
   targetTags     String[]
   status         String   @default("draft")
@@ -781,6 +785,8 @@ model MessageTemplate {
   components Json
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  campaigns Campaign[]
 
   @@map("message_templates")
 }

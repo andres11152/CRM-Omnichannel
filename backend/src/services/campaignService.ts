@@ -1,15 +1,16 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/config/database";
 import { whatsappService } from "@/whatsapp";
 import { renderTemplate, componentsToText } from "./templateService";
 import { getErrorMessage } from "@/utils/errorHelpers";
 import { Logger } from "@/utils/logger";
-import { MessageTemplate } from "@prisma/client";
+import { sleep, getRandomDelay } from "@/utils/timeUtils";
+import { hash } from "bcryptjs";
 import {
-  TypedCampaign,
   CampaignStats,
   AudienceContact,
   AudienceFilter,
-} from "@/interfaces/CampaignTypes";
+} from "@/types/campaign.types";
 
 /**
  * 🚀 CAMPAIGN EXECUTION ENGINE
@@ -28,92 +29,79 @@ const MAX_DELAY_MS = 5000;
 const BATCH_UPDATE_SIZE = 10;
 const RATE_LIMIT_PAUSE_MS = 60000;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// 🧼 Type Guard for Campaign Stats
+function normalizeStats(json: Prisma.JsonValue | null): CampaignStats {
+  if (!json || typeof json !== "object" || Array.isArray(json)) {
+    return {
+      targetAudienceSize: 0,
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+      skipped: 0,
+      startedAt: new Date().toISOString(),
+    };
+  }
+  return json as unknown as CampaignStats;
 }
 
-function getRandomDelay(): number {
-  return (
-    Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS)) + MIN_DELAY_MS
-  );
+// 🧼 Type Guard for Custom Fields
+function normalizeCustomFields(
+  json: Prisma.JsonValue | null,
+): Record<string, unknown> {
+  if (!json || typeof json !== "object" || Array.isArray(json)) {
+    return {};
+  }
+  return json as Record<string, unknown>;
 }
 
 export const campaignService = {
   /**
    * Execute campaign with intelligent throttling and error handling
    */
-  async executeCampaign(campaignId: string, companyId: string) {
+  async executeCampaign(campaignId: string, companyId: string): Promise<void> {
     Logger.info(`[Campaign] Starting execution for ${campaignId}`);
 
     try {
       // 1. Fetch Campaign (Optimized Select)
-      const rawCampaign = await prisma.campaign.findFirst({
+      const rawCampaign = (await prisma.campaign.findFirst({
         where: { id: campaignId, companyId },
-        select: {
-          id: true,
-          companyId: true,
-          name: true,
-          status: true,
-          templateId: true,
-          targetTags: true,
-          messageContent: true,
-          stats: true,
-          // Exclude bulky config/history if not needed
+        include: {
+          template: true, // Fetch template eagerly
         },
-      });
+      })) as unknown as Prisma.CampaignGetPayload<{
+        include: { template: true };
+      }> | null;
 
       if (!rawCampaign) {
         throw new Error("Campaign not found");
       }
 
-      // Safe cast to typed interface
-      const campaign: TypedCampaign = {
-        ...rawCampaign,
-        channel: "WHATSAPP", // Default inferred
-        subject: null,
-        createdById: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        deletedAt: null,
-        deletedBy: null,
-        config: null,
-        stats: rawCampaign.stats as unknown as CampaignStats | null,
-      };
+      // Safe Typed Object Construction
+      const currentStats = normalizeStats(rawCampaign.stats);
 
-      if (campaign.status === "completed" || campaign.status === "failed") {
+      if (
+        rawCampaign.status === "completed" ||
+        rawCampaign.status === "failed"
+      ) {
         Logger.info(
-          `[Campaign] Campaign ${campaignId} already finished (${campaign.status})`,
+          `[Campaign] Campaign ${campaignId} already finished (${rawCampaign.status})`,
         );
         return;
       }
 
-      // 2. Fetch Template
-      let template: MessageTemplate | null = null;
-      if (campaign.templateId) {
-        template = await prisma.messageTemplate.findFirst({
-          where: { id: campaign.templateId, companyId },
-        });
-
-        if (!template) {
-          Logger.warn(
-            `[Campaign] Template ${campaign.templateId} not found, using messageContent`,
-          );
-        }
-      }
-
-      // 3. Fetch Audience
-      const contacts = await this.getAudience(companyId, campaign.targetTags);
+      // 2. Fetch Audience
+      const contacts = await this.getAudience(
+        companyId,
+        rawCampaign.targetTags,
+      );
 
       Logger.info(`[Campaign] Audience size: ${contacts.length}`);
 
       if (contacts.length === 0) {
         const emptyStats: CampaignStats = {
+          ...currentStats,
           targetAudienceSize: 0,
-          sent: 0,
-          delivered: 0,
-          failed: 0,
-          skipped: 0,
-          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
           message: "No contacts found for target tags",
         };
 
@@ -121,20 +109,17 @@ export const campaignService = {
           where: { id: campaignId },
           data: {
             status: "completed",
-            stats: emptyStats as any,
+            stats: emptyStats as unknown as Prisma.InputJsonValue,
           },
         });
         Logger.warn(`[Campaign] No contacts found for campaign ${campaignId}`);
         return;
       }
 
-      // 4. Initialize Stats
+      // 3. Initialize Stats
       const stats: CampaignStats = {
+        ...currentStats,
         targetAudienceSize: contacts.length,
-        sent: 0,
-        delivered: 0,
-        failed: 0,
-        skipped: 0,
         startedAt: new Date().toISOString(),
       };
 
@@ -142,33 +127,57 @@ export const campaignService = {
         where: { id: campaignId },
         data: {
           status: "sending",
-          stats: stats as any,
+          stats: stats as unknown as Prisma.InputJsonValue,
         },
       });
 
-      // 5. Execute Campaign
+      // 🔁 PREPARATION: Resolve System User ONCE (Optimization)
+      let systemUser = await prisma.user.findFirst({
+        where: { companyId, email: "campaigns@system.bot" },
+        select: { id: true },
+      });
+
+      if (!systemUser) {
+        Logger.info("[Campaign] Creating System User for campaigns...");
+        systemUser = await prisma.user.create({
+          data: {
+            email: "campaigns@system.bot",
+            companyId,
+            name: "Campaign System",
+            role: "AGENT",
+            password: await hash("system", 10),
+          },
+        });
+      }
+
+      // 4. Execute Campaign
       let consecutiveRateLimitErrors = 0;
 
       for (let i = 0; i < contacts.length; i++) {
         const contact = contacts[i];
 
         try {
-          // Send message (Typed arguments)
+          // Send message
           await this.sendCampaignMessage(
             contact,
-            campaign,
-            template,
+            rawCampaign.name,
+            rawCampaign.template as {
+              id: string;
+              name: string;
+              components: Prisma.JsonValue;
+            } | null,
+            rawCampaign.messageContent,
             companyId,
             campaignId,
+            systemUser.id, // Pass resolved sender ID
           );
 
           stats.sent++;
           consecutiveRateLimitErrors = 0;
 
           Logger.info(
-            `[Campaign] Progress: ${stats.sent}/${
-              contacts.length
-            } (${Math.round((stats.sent / contacts.length) * 100)}%)`,
+            `[Campaign] Progress: ${stats.sent}/${contacts.length} ` +
+              `(${Math.round((stats.sent / contacts.length) * 100)}%)`,
           );
         } catch (error: unknown) {
           const errorMsg = getErrorMessage(error);
@@ -198,18 +207,18 @@ export const campaignService = {
         if ((i + 1) % BATCH_UPDATE_SIZE === 0) {
           await prisma.campaign.update({
             where: { id: campaignId },
-            data: { stats: stats as any },
+            data: { stats: stats as unknown as Prisma.InputJsonValue },
           });
         }
 
         // Human-like delay
         if (i < contacts.length - 1) {
-          const delay = getRandomDelay();
+          const delay = getRandomDelay(MIN_DELAY_MS, MAX_DELAY_MS);
           await sleep(delay);
         }
       }
 
-      // 6. Final Update
+      // 5. Final Update
       const finalStats: CampaignStats = {
         ...stats,
         completedAt: new Date().toISOString(),
@@ -220,7 +229,7 @@ export const campaignService = {
         where: { id: campaignId },
         data: {
           status: stats.failed > 0 && stats.sent === 0 ? "failed" : "completed",
-          stats: finalStats as any,
+          stats: finalStats as unknown as Prisma.InputJsonValue,
         },
       });
 
@@ -238,7 +247,7 @@ export const campaignService = {
           stats: {
             error: errorMsg,
             failedAt: new Date().toISOString(),
-          } as any,
+          } as unknown as Prisma.InputJsonValue,
         },
       });
     }
@@ -274,10 +283,13 @@ export const campaignService = {
       },
     });
 
-    // Map Prisma result to strict type (handle Json -> Record)
+    // Map Prisma result to strict type
     return contacts.map((c) => ({
-      ...c,
-      customFields: (c.customFields as Record<string, any>) || {},
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      email: c.email,
+      customFields: normalizeCustomFields(c.customFields),
     }));
   },
 
@@ -286,28 +298,43 @@ export const campaignService = {
    */
   async sendCampaignMessage(
     contact: AudienceContact,
-    campaign: TypedCampaign,
-    template: MessageTemplate | null,
+    campaignName: string,
+    template: { id: string; name: string; components: Prisma.JsonValue } | null,
+    defaultMessageContent: string | null,
     companyId: string,
     campaignId: string,
+    senderId: string, // Injected dependency
   ): Promise<void> {
     const phone = contact.phone;
     if (!phone) {
       throw new Error("Contact has no phone number");
     }
 
-    let messageContent = campaign.messageContent || "Hola!";
+    let messageContent = defaultMessageContent || "Hola!";
 
     if (template) {
       try {
-        const templateText = componentsToText(template.components as any);
+        // Safe cast for components list
+        const componentsList = Array.isArray(template.components)
+          ? template.components
+          : [];
+
+        const templateText = componentsToText(componentsList);
 
         const parameters: Record<string, string> = {
           name: contact.name || "Cliente",
           email: contact.email || "",
           phone: contact.phone || "",
-          ...(contact.customFields || {}),
         };
+
+        // 🛡️ Safe mapping of unknown custom fields to string parameters
+        if (contact.customFields) {
+          Object.entries(contact.customFields).forEach(([key, val]) => {
+            if (typeof val === "string" || typeof val === "number") {
+              parameters[key] = String(val);
+            }
+          });
+        }
 
         messageContent = renderTemplate(templateText, parameters);
 
@@ -327,7 +354,7 @@ export const campaignService = {
         companyId,
         channelId: contact.phone,
       },
-      select: { id: true }, // Optimization: Only select ID
+      select: { id: true },
     });
 
     if (!conversation) {
@@ -340,32 +367,15 @@ export const campaignService = {
       });
     }
 
-    // Get System User for Campaigns
-    // Optimization: Cache this ID in memory in future iterations
-    let systemUser = await prisma.user.findFirst({
-      where: { companyId, email: "campaigns@system.bot" },
-      select: { id: true },
-    });
-
-    if (!systemUser) {
-      systemUser = await prisma.user.create({
-        data: {
-          email: "campaigns@system.bot",
-          companyId,
-          name: "Campaign System",
-          role: "AGENT",
-          password: await import("bcryptjs").then((b) => b.hash("system", 10)),
-        },
-      });
-    }
+    // Use injected senderId instead of redundant DB lookup
 
     await whatsappService.sendMessage(phone, messageContent, {
       companyId,
       conversationId: conversation.id,
-      senderId: systemUser.id,
+      senderId: senderId, // Use injected ID
       metadata: {
         campaignId,
-        campaignName: campaign.name,
+        campaignName,
         isCampaignMessage: true,
         templateId: template?.id,
         templateName: template?.name,

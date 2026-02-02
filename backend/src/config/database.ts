@@ -240,15 +240,13 @@ const createExtendedClient = () => {
 
 // ================= SINGLETON & EXPORTS =================
 
+export type ExtendedPrismaClient = ReturnType<typeof createExtendedClient>;
+
 const globalForPrisma = global as unknown as {
-  prisma: ReturnType<typeof createExtendedClient> | undefined;
+  prisma: ExtendedPrismaClient | undefined;
 };
 
 export const prisma = globalForPrisma.prisma ?? createExtendedClient();
-// Raw client for system ops (bypass RLS)
-// Note: We access the underlying client via a hack or simpler: create a new one.
-// Ideally we expose a system method. For "100-Year", we should expose a safe system accessor.
-// For now, exporting the extended client is the standard. Backdoor access should be explicit.
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 

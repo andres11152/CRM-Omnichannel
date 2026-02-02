@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "@/config/database";
 import redisClient from "@/config/redis";
+import { HealthStatus, ServiceHealth, MemoryHealth } from "@/types/health";
 
 /**
  * 🛡️ HEALTH CHECK ENDPOINT
@@ -13,32 +14,7 @@ import redisClient from "@/config/redis";
  * - 503: One or more critical services are down
  */
 
-interface HealthStatus {
-  status: "healthy" | "degraded" | "unhealthy";
-  timestamp: string;
-  uptime: number;
-  services: {
-    database: ServiceHealth;
-    redis: ServiceHealth;
-    memory: MemoryHealth;
-  };
-}
-
-interface ServiceHealth {
-  status: "up" | "down";
-  responseTime?: number;
-  error?: string;
-}
-
-interface MemoryHealth {
-  status: "ok" | "warning" | "critical";
-  usedMB: number;
-  totalMB: number;
-  percentUsed: number;
-}
-
 export const healthCheck = async (req: Request, res: Response) => {
-  const startTime = Date.now();
   const health: HealthStatus = {
     status: "healthy",
     timestamp: new Date().toISOString(),
@@ -52,7 +28,7 @@ export const healthCheck = async (req: Request, res: Response) => {
 
   // Determine overall health
   const hasDownService = Object.values(health.services).some(
-    (service) => service.status === "down" || service.status === "critical"
+    (service) => service.status === "down" || service.status === "critical",
   );
 
   if (hasDownService) {
@@ -61,7 +37,7 @@ export const healthCheck = async (req: Request, res: Response) => {
   }
 
   const hasDegradedService = Object.values(health.services).some(
-    (service) => service.status === "warning"
+    (service) => service.status === "warning",
   );
 
   if (hasDegradedService) {
@@ -136,7 +112,7 @@ export const readinessCheck = async (req: Request, res: Response) => {
     // Quick database ping
     await prisma.$queryRaw`SELECT 1`;
     res.status(200).json({ ready: true });
-  } catch (error) {
+  } catch {
     res.status(503).json({ ready: false });
   }
 };

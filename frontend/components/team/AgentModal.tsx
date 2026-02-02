@@ -53,18 +53,56 @@ export const AgentModal: React.FC<AgentModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div className="bg-white dark:bg-[#202c33] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200 dark:border-gray-700 transform transition-all scale-100">
+      <div className="bg-white dark:bg-[#202c33] rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-200 dark:border-gray-700 transform transition-all scale-100 flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-[#2a3942]/50">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-            {isEditing ? "Editar Agente" : "Nuevo Agente"}
+        <div className="px-8 py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-[#2a3942]/50">
+          <h3 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            {isEditing ? (
+              <>
+                <span className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                </span>
+                Editar Agente
+              </>
+            ) : (
+              <>
+                <span className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
+                    />
+                  </svg>
+                </span>
+                Nuevo Agente
+              </>
+            )}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
           >
             <svg
-              className="w-5 h-5"
+              className="w-6 h-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -79,185 +117,241 @@ export const AgentModal: React.FC<AgentModalProps> = ({
           </button>
         </div>
 
-        {/* Form Content */}
-        <div className="p-6 space-y-5">
-          {/* Name */}
-          <div>
-            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">
-              Nombre Completo
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => onFormChange("name", e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
-              placeholder="Ej: Juan Pérez"
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">
-              Email
-            </label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => onFormChange("email", e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
-              placeholder="juan@empresa.com"
-            />
-          </div>
-
-          {/* Role */}
-          <div>
-            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">
-              Rol de Sistema
-            </label>
-            <select
-              value={formData.role}
-              onChange={(e) => onFormChange("role", e.target.value)}
-              disabled={currentUser?.role === "SUPERVISOR"}
-              className={`w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none ${
-                currentUser?.role === "SUPERVISOR"
-                  ? "opacity-60 cursor-not-allowed"
-                  : ""
-              }`}
-            >
-              <option value="AGENT">🎧 Agente (Miembro)</option>
-              {currentUser?.role !== "SUPERVISOR" && (
-                <>
-                  <option value="SUPERVISOR">👀 Supervisor</option>
-                  <option value="ADMIN">🛡️ Administrador</option>
-                </>
-              )}
-            </select>
-          </div>
-
-          {/* Password (only for new agents) */}
-          {!isEditing && (
-            <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => onFormChange("password", e.target.value)}
-                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
-                placeholder="••••••••"
-              />
-            </div>
-          )}
-
-          {/* Department */}
-          <div>
-            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">
-              Departamento
-            </label>
-            <select
-              value={formData.department}
-              onChange={(e) => onFormChange("department", e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
-            >
-              {departments.length === 0 ? (
-                <option value="">Sin departamentos disponibles</option>
-              ) : (
-                departments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* WFM Section */}
-          <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-            <h4 className="font-bold text-gray-800 dark:text-white mb-3">
-              Gestión de Carga & Habilidades
-            </h4>
-
-            {/* Max Concurrency Slider */}
-            <div className="mb-4">
-              <div className="flex justify-between mb-1.5">
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">
-                  Chats Simultáneos (Max)
-                </label>
-                <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold">
-                  {formData.maxConcurrency}
+        {/* Form Content - Horizontal Layout */}
+        <div className="p-8 overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            {/* LEFT COLUMN: Identity & Access */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100 dark:border-gray-700">
+                <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                  Perfil & Acceso
                 </span>
               </div>
-              <input
-                type="range"
-                min="1"
-                max="50"
-                step="1"
-                value={formData.maxConcurrency}
-                onChange={(e) =>
-                  onFormChange("maxConcurrency", parseInt(e.target.value))
-                }
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
-              />
-              <p className="text-[10px] text-gray-400 mt-1">
-                El sistema dejará de asignar tickets automáticos al llegar a
-                este límite.
-              </p>
-            </div>
 
-            {/* Skills Tags */}
-            <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">
-                Habilidades (Skills)
-              </label>
-              <div className="flex flex-wrap gap-2 mb-2 p-2 border border-gray-200 dark:border-gray-700 rounded-lg min-h-[42px] bg-gray-50 dark:bg-black/20">
-                {formData.skills.map((skill) => (
-                  <span
-                    key={skill}
-                    className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs px-2 py-1 rounded flex items-center gap-1"
-                  >
-                    {skill}
-                    <button
-                      onClick={() => onRemoveSkill(skill)}
-                      className="hover:text-red-500"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                  Nombre Completo
+                </label>
                 <input
                   type="text"
-                  value={skillInput}
-                  onChange={(e) => onSkillInputChange(e.target.value)}
-                  onKeyDown={onAddSkill}
-                  className="bg-transparent outline-none text-sm flex-1 min-w-[60px]"
-                  placeholder="Añadir skill..."
+                  value={formData.name}
+                  onChange={(e) => onFormChange("name", e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                  placeholder="Ej: Juan Pérez"
                 />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                  Email Corporativo
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => onFormChange("email", e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                  placeholder="juan@empresa.com"
+                />
+              </div>
+
+              {/* Password (only for new agents) */}
+              {!isEditing && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                    Contraseña
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => onFormChange("password", e.target.value)}
+                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    placeholder="••••••••"
+                  />
+                  <p className="text-xs text-gray-400 mt-2">
+                    Mínimo 8 caracteres, incluye números y símbolos.
+                  </p>
+                </div>
+              )}
+
+              {/* Role */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                  Rol de Sistema
+                </label>
+                <div className="relative">
+                  <select
+                    value={formData.role}
+                    onChange={(e) => onFormChange("role", e.target.value)}
+                    disabled={currentUser?.role === "SUPERVISOR"}
+                    className={`w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none appearance-none ${
+                      currentUser?.role === "SUPERVISOR"
+                        ? "opacity-60 cursor-not-allowed"
+                        : ""
+                    }`}
+                  >
+                    <option value="AGENT">🎧 Agente (Operador)</option>
+                    {currentUser?.role !== "SUPERVISOR" && (
+                      <>
+                        <option value="SUPERVISOR">👀 Supervisor</option>
+                        <option value="ADMIN">🛡️ Administrador</option>
+                      </>
+                    )}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                    <svg
+                      className="w-4 h-4 ml-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Operation & Config */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100 dark:border-gray-700">
+                <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                  Operación & Skills
+                </span>
+              </div>
+
+              {/* Department */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                  Departamento
+                </label>
+                <div className="relative">
+                  <select
+                    value={formData.department}
+                    onChange={(e) => onFormChange("department", e.target.value)}
+                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none appearance-none"
+                  >
+                    {departments.length === 0 ? (
+                      <option value="">Sin departamentos disponibles</option>
+                    ) : (
+                      departments.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                    <svg
+                      className="w-4 h-4 ml-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Max Concurrency Slider */}
+              <div className="bg-gray-50 dark:bg-[#111b21] p-5 rounded-xl border border-gray-100 dark:border-gray-700">
+                <div className="flex justify-between mb-4">
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                    Chats Simultáneos
+                  </label>
+                  <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 font-bold px-2 py-0.5 rounded text-sm">
+                    {formData.maxConcurrency}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="50"
+                  step="1"
+                  value={formData.maxConcurrency}
+                  onChange={(e) =>
+                    onFormChange("maxConcurrency", parseInt(e.target.value))
+                  }
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
+                />
+                <div className="flex justify-between text-[10px] text-gray-400 mt-2 font-medium uppercase tracking-wide">
+                  <span>Baja Carga</span>
+                  <span>Alta Carga</span>
+                </div>
+              </div>
+
+              {/* Skills Tags */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                  Habilidades (Skills)
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2 p-3 border border-gray-300 dark:border-gray-600 rounded-xl min-h-[52px] bg-white dark:bg-[#111b21] focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-al">
+                  {formData.skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 border border-indigo-100 dark:border-indigo-800/50"
+                    >
+                      {skill}
+                      <button
+                        onClick={() => onRemoveSkill(skill)}
+                        className="hover:text-red-500 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    value={skillInput}
+                    onChange={(e) => onSkillInputChange(e.target.value)}
+                    onKeyDown={onAddSkill}
+                    className="bg-transparent outline-none text-sm flex-1 min-w-[80px] text-gray-900 dark:text-white placeholder-gray-400"
+                    placeholder="Escribe y presiona Enter..."
+                  />
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Usadas para el enrutamiento inteligente de tickets.
+                </p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="p-6 pt-2 flex justify-end gap-3">
+        <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-[#2a3942]/30 flex justify-end gap-3 backdrop-blur-sm">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm font-semibold transition-colors"
+            className="px-6 py-2.5 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:shadow-sm border border-transparent hover:border-gray-200 dark:hover:border-gray-600 rounded-xl text-sm font-bold transition-all"
           >
             Cancelar
           </button>
           <button
             onClick={onSave}
             disabled={saving}
-            className={`px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg hover:shadow-indigo-500/30 transition-all ${
-              saving ? "opacity-50 cursor-not-allowed" : ""
+            className={`px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transform hover:-translate-y-0.5 transition-all flex items-center gap-2 ${
+              saving ? "opacity-70 cursor-wait transform-none" : ""
             }`}
           >
+            {saving && (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            )}
             {saving
               ? "Guardando..."
               : isEditing
                 ? "Guardar Cambios"
-                : "Crear Cuenta"}
+                : "Crear Agente"}
           </button>
         </div>
       </div>

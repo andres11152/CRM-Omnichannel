@@ -32,6 +32,7 @@ const QueuesConfig: React.FC = () => {
     type: "MANUAL",
     aiAssistantId: "",
     promptTemplateId: "Default",
+    config: { requiredSkills: [] },
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -71,6 +72,7 @@ const QueuesConfig: React.FC = () => {
         type: queue.type || "MANUAL",
         aiAssistantId: queue.aiAssistantId || "",
         promptTemplateId: queue.promptTemplateId || "Default",
+        config: (queue as any).config || { requiredSkills: [] },
       });
     } else {
       setEditingQueue(null);
@@ -80,6 +82,7 @@ const QueuesConfig: React.FC = () => {
         type: "MANUAL",
         aiAssistantId: "",
         promptTemplateId: "Default",
+        config: { requiredSkills: [] },
       });
     }
     setIsModalOpen(true);
@@ -477,6 +480,65 @@ const QueuesConfig: React.FC = () => {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* SKILLS - 100 Year Feature */}
+              <div className="col-span-2">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Skills Requeridos (Opcional)
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg
+                      className="h-5 w-5 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                      />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={formData.config?.requiredSkills?.join(", ") || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      // Don't filter immediately to allow typing spaces
+                      const skills = val.split(",").map((s) => s.trim());
+                      // Filter empty only on save effectively, but here we store as array
+                      // Better: Store raw input if possible? No, bound to array.
+                      // We'll clean on save? Or just filter empty strings rendering default.
+                      const cleanSkills = skills.filter((s) => s !== "");
+                      setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          requiredSkills: val.split(",").map((s) => s.trim()),
+                        }, // Keep empties to allow typing commasp
+                      });
+                    }}
+                    onBlur={() => {
+                      // Clean on blur
+                      const current = formData.config?.requiredSkills || [];
+                      const clean = current.filter(Boolean);
+                      setFormData({
+                        ...formData,
+                        config: { ...formData.config, requiredSkills: clean },
+                      });
+                    }}
+                    placeholder="Ej: Ventas, Inglés, VIP (Separados por coma)"
+                    className="w-full pl-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-[#2a3942] text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-1">
+                  El sistema solo asignará chats a agentes que tengan{" "}
+                  <b>TODOS</b> estos skills.
+                </p>
               </div>
             </div>
 

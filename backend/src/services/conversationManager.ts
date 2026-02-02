@@ -1,62 +1,32 @@
-/**
- * 🏗️ CONVERSATION MANAGER
- *
- * Handles atomic conversation creation/updates with:
- * - Zero duplicates (even under high concurrency)
- * - Automatic tenant isolation via Prisma extension
- * - Real-time event emissions
- * - Transaction-based consistency
- *
- * Follows SOLID principles:
- * - Single Responsibility: Only manages conversations
- * - Dependency Inversion: Depends on interfaces (PrismaClient, EventEmitter)
- * - Open/Closed: Extensible for new conversation types
- */
-
-import {
-  PrismaClient,
-  Conversation,
-  ConversationStatus,
-  Prisma,
-} from "@prisma/client";
+import { Conversation, Prisma } from "@prisma/client";
 import { Logger } from "@/utils/logger";
+import { ExtendedPrismaClient } from "@/config/database";
+import {
+  FindOrCreateConversationParams,
+  UpdateConversationParams,
+  IConversationEvents,
+} from "@/types/conversation.types";
 
-// Type that covers both the main client and transaction clients
-type PrismaClientOrTransaction = PrismaClient | Prisma.TransactionClient;
+// 🛡️ 100-YEAR FIX: Exact Transaction Client Type Extraction
+// This extracts the exact type expected by the $transaction callback of our specific extended client.
+type ExtendedTransactionClient = Parameters<
+  Parameters<ExtendedPrismaClient["$transaction"]>[0]
+>[0];
 
-export interface FindOrCreateConversationParams {
-  companyId: string;
-  channelId: string; // Phone number, email, etc.
-  customerId: string;
-  subject?: string;
-  status?: ConversationStatus;
-}
-
-export interface UpdateConversationParams {
-  status?: ConversationStatus;
-  assignedToId?: string | null;
-  subject?: string;
-}
-
-export interface IConversationEvents {
-  onCreated: (conversation: Conversation) => void | Promise<void>;
-  onUpdated: (conversation: Conversation) => void | Promise<void>;
-}
+// Type that covers both the main extended client and transaction clients
+type PrismaClientOrTransaction =
+  | ExtendedPrismaClient
+  | ExtendedTransactionClient
+  | Prisma.TransactionClient;
 
 export class ConversationManager {
   constructor(
-    private readonly prisma: PrismaClientOrTransaction, // Accept both PrismaClient and extended client
+    private readonly prisma: PrismaClientOrTransaction,
     private readonly events?: IConversationEvents,
   ) {}
 
   /**
    * Find existing conversation or create new one atomically
-   *
-   * 🛡️ GUARANTEE: Never creates duplicates
-   * - Uses unique constraint on (companyId, channelId)
-   * - Transaction ensures atomicity
-   * - Handles race conditions gracefully
-   *
    * @param params - Conversation parameters
    * @returns Existing or newly created conversation
    */
@@ -68,7 +38,7 @@ export class ConversationManager {
     try {
       // 🛡️ STRATEGY: Transaction with retry on unique violation
 
-      const runInTransaction = async (tx: Prisma.TransactionClient) => {
+      const runInTransaction = async (tx: ExtendedTransactionClient) => {
         // 1. Try to find existing conversation
         let conversation = await tx.conversation.findUnique({
           where: {
@@ -89,7 +59,7 @@ export class ConversationManager {
             `[ConversationManager] Found existing conversation: ${conversation.id} (Status: ${conversation.status}, Assigned: ${conversation.assignedToId})`,
           );
 
-          // 🛡️ 100-YEAR FIX: Smart Status Transition
+          // 🛡️ Smart Status Transition
           const isAssigned = !!conversation.assignedToId;
           let newStatus = conversation.status;
 
@@ -97,12 +67,8 @@ export class ConversationManager {
             conversation.status === "CLOSED" ||
             conversation.status === "RESOLVED"
           ) {
-            // Re-opening a closed ticket
             newStatus = isAssigned ? "IN_PROGRESS" : "OPEN";
           } else {
-            // It's already active (OPEN or IN_PROGRESS)
-            // Force IN_PROGRESS if assigned (to be safe for My Chats view)
-            // Force OPEN if unassigned (Queue)
             newStatus = isAssigned ? "IN_PROGRESS" : "OPEN";
           }
 
@@ -118,9 +84,7 @@ export class ConversationManager {
             },
           });
 
-          // Emit update event
           await this.events?.onUpdated?.(conversation);
-
           return conversation;
         }
 
@@ -146,7 +110,6 @@ export class ConversationManager {
             },
           });
 
-          // Emit creation event
           await this.events?.onCreated?.(conversation);
 
           Logger.info(
@@ -160,7 +123,6 @@ export class ConversationManager {
             createError instanceof Prisma.PrismaClientKnownRequestError &&
             createError.code === "P2002"
           ) {
-            // Unique constraint violation
             Logger.warn(
               `[ConversationManager] Race condition detected for ${channelId}, fetching existing`,
             );
@@ -181,26 +143,22 @@ export class ConversationManager {
             return conversation;
           }
 
-          // Re-throw other errors
           throw createError;
         }
       };
 
-      // Check if we can start a new transaction (is this.prisma the main client?)
-      // 'PrismaClient' usually has $transaction. 'TransactionClient' does not have $transaction method.
+      // Check if we can start a new transaction
       if ("$transaction" in this.prisma) {
-        return await (this.prisma as PrismaClient).$transaction(
-          runInTransaction,
-          {
-            // 🛡️ ISOLATION LEVEL: Prevent phantom reads
-            isolationLevel: "Serializable",
-            maxWait: 5000, // 5 seconds max wait for lock
-            timeout: 10000, // 10 seconds total timeout
-          },
-        );
+        // Safe: Types explicitly match now via helper type
+        const client = this.prisma as ExtendedPrismaClient;
+        return await client.$transaction(runInTransaction, {
+          isolationLevel: "Serializable",
+          maxWait: 5000,
+          timeout: 10000,
+        });
       } else {
         // Already in a transaction context, just run it
-        return await runInTransaction(this.prisma as Prisma.TransactionClient);
+        return await runInTransaction(this.prisma as ExtendedTransactionClient);
       }
     } catch (error: unknown) {
       Logger.error(
@@ -214,10 +172,6 @@ export class ConversationManager {
 
   /**
    * Update conversation fields
-   *
-   * @param conversationId - ID of conversation to update
-   * @param params - Fields to update
-   * @returns Updated conversation
    */
   async update(
     conversationId: string,
@@ -227,7 +181,12 @@ export class ConversationManager {
       `[ConversationManager] Updating conversation: ${conversationId}`,
     );
 
-    const conversation = await this.prisma.conversation.update({
+    // We cast to ExtendedPrismaClient for top-level updates.
+    // This assumes `this.prisma` supports the .conversation property access.
+    // Given PrismaClientOrTransaction, both types structurally support standard model queries.
+    const conversation = await (
+      this.prisma as ExtendedPrismaClient
+    ).conversation.update({
       where: { id: conversationId },
       data: {
         ...params,
@@ -239,13 +198,7 @@ export class ConversationManager {
       },
     });
 
-    // Emit update event
     await this.events?.onUpdated?.(conversation);
-
-    Logger.info(
-      `[ConversationManager] ✅ Updated conversation: ${conversationId}`,
-    );
-
     return conversation;
   }
 
@@ -253,7 +206,7 @@ export class ConversationManager {
    * Get conversation by ID
    */
   async findById(conversationId: string): Promise<Conversation | null> {
-    return await this.prisma.conversation.findUnique({
+    return await (this.prisma as ExtendedPrismaClient).conversation.findUnique({
       where: { id: conversationId },
       include: {
         participants: true,

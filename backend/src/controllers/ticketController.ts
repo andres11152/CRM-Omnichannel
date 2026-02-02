@@ -10,7 +10,7 @@ import {
   toTicketDTO,
   TicketWithRelations,
   TicketDTO,
-} from "../dtos/ticket.dto";
+} from "@/types/ticket.types";
 
 // --- HELPERS ---
 // (Legacy mapTicketToFrontend removed in favor of toTicketDTO)

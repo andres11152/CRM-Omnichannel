@@ -9,7 +9,7 @@ import {
   toContactDTO,
   TimelineItemDTO,
   ContactTimelineResponseDTO,
-} from "@/dtos/contact.dto";
+} from "@/types/contact.types";
 
 interface ContactUpsertParams {
   id?: string;

@@ -1,14 +1,28 @@
 import { Request, Response } from "express";
 import { google } from "googleapis";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
-import { signToken } from "./authController"; // Import token signer
+import { signToken } from "./authController";
+
+// Environment Variables Check
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const BACKEND_URL = process.env.BACKEND_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+
+// Fail fast or warn if critical config is missing
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !BACKEND_URL) {
+  console.error(
+    "❌ CRITICAL: Missing Google Auth Environment Variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, BACKEND_URL)",
+  );
+}
 
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  `${process.env.BACKEND_URL || "http://localhost:4000"}/api/google/callback`
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+  `${BACKEND_URL}/api/google/callback`,
 );
 
 // Scopes
@@ -18,40 +32,42 @@ const LOGIN_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
+interface StateData {
+  action: "login" | "calendar";
+  userId?: string;
+}
+
 export const googleAuthController = {
   /**
    * Initiate OAuth flow
-   * Query params:
-   * - action: 'login' | 'calendar' (default: 'calendar' if userId present)
-   * - userId: required only for 'calendar'
+   * Action: 'login' | 'calendar'
+   * Security: 'calendar' requires authenticated session.
    */
   initiateAuth: catchAsync(async (req: AuthenticatedRequest, res: Response) => {
-    const userId = req.user?.id || (req.query.userId as string);
-    const action =
-      (req.query.action as string) || (userId ? "calendar" : "login");
+    const actionQuery = req.query.action;
+    const action = typeof actionQuery === "string" ? actionQuery : "login";
+    const userId = req.user?.id;
 
-    let SCOPES = CALENDAR_SCOPES;
-    let state = "";
+    let SCOPES = LOGIN_SCOPES;
+    let stateData: StateData = { action: "login" };
 
     if (action === "calendar") {
+      // 🛡️ SECURITY: Calendar connection REQUIRES authenticated session
       if (!userId) {
-        return res
-          .status(401)
-          .json({ message: "Unauthorized - No user ID for calendar sync" });
+        return res.status(401).json({
+          message:
+            "Unauthorized - You must be logged in to connect Google Calendar.",
+        });
       }
       SCOPES = CALENDAR_SCOPES;
-      state = JSON.stringify({ action: "calendar", userId });
-    } else {
-      // Login Flow
-      SCOPES = LOGIN_SCOPES;
-      state = JSON.stringify({ action: "login" });
+      stateData = { action: "calendar", userId };
     }
 
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: "offline",
       scope: SCOPES,
-      state: state, // JSON state to identify flow in callback
-      prompt: "consent",
+      state: JSON.stringify(stateData),
+      prompt: "consent", // Force consent to ensure refresh token is returned
     });
 
     res.redirect(authUrl);
@@ -63,54 +79,45 @@ export const googleAuthController = {
   handleCallback: catchAsync(async (req: Request, res: Response) => {
     const { code, state } = req.query;
 
-    if (!code || !state) {
-      return res.status(400).send("Missing code or state parameter");
+    if (typeof code !== "string" || typeof state !== "string") {
+      return res.redirect(`${FRONTEND_URL}/login?error=missing_params`);
     }
 
     try {
       // Decode state
-      let stateData: { action: string; userId?: string };
+      let stateData: StateData;
       try {
-        // Backward compatibility check (if state is just userId string)
-        if ((state as string).startsWith("{")) {
-          stateData = JSON.parse(state as string);
-        } else {
-          stateData = { action: "calendar", userId: state as string };
-        }
-      } catch (e) {
-        // Fallback
-        stateData = { action: "calendar", userId: state as string };
+        stateData = JSON.parse(state);
+      } catch {
+        return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
       }
 
       // Exchange code for tokens
-      const { tokens } = await oauth2Client.getToken(code as string);
-      oauth2Client.setCredentials(tokens); // Set for this request instance
-
-      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      const { tokens } = await oauth2Client.getToken(code);
+      oauth2Client.setCredentials(tokens);
 
       // === FLOW: LOGIN ===
       if (stateData.action === "login") {
         const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
         const userInfo = await oauth2.userinfo.get();
-
-        const { email, name, picture, id: googleId } = userInfo.data;
+        const { email, name, picture } = userInfo.data;
 
         if (!email) {
-          return res.redirect(`${frontendUrl}/login?error=no_email`);
+          return res.redirect(`${FRONTEND_URL}/login?error=no_email`);
         }
 
-        // Find or Create User
-        let user = await prisma.user.findUnique({ where: { email } });
+        // Find or Create User (Transactional with Company)
+        let user = await prisma.user.findUnique({
+          where: { email },
+          include: { company: true },
+        });
 
         if (!user) {
-          // Create new user
-          // Password fallback? Random password?
-          // Or set a flag 'isGoogleAuth: true' so they can't login with password unless they set one?
-          // For now, random strong password.
+          // New User: Create User + Company (Trial)
+          // 🛡️ 100-YEAR SOLUTION: Every user belongs to a Tenant (Company).
           const randomPassword =
             Math.random().toString(36).slice(-8) +
             Math.random().toString(36).slice(-8);
-          const bcrypt = require("bcryptjs");
           const hashedPassword = await bcrypt.hash(randomPassword, 12);
 
           user = await prisma.user.create({
@@ -119,14 +126,22 @@ export const googleAuthController = {
               name: name || "Google User",
               password: hashedPassword,
               profilePicUrl: picture || null,
-              role: "ADMIN", // Default role for new signups via Google? Or 'AGENT'? Safer 'company_admin' for SaaS trial?
-              // Assuming new signup = SaaS Trial
+              role: "ADMIN",
               preferences: { googleAuth: true },
+              company: {
+                create: {
+                  name: `${name || "User"}'s Workspace`,
+                  status: "TRIAL",
+                  emailProvider: "SMTP", // Explicit default
+                },
+              },
             },
+            include: { company: true },
           });
         } else {
-          // Update pic if missing?
+          // Existing User: Update ID if missing
           if (!user.profilePicUrl && picture) {
+            // Update profile pic asynchronously/independently of company logic
             await prisma.user.update({
               where: { id: user.id },
               data: { profilePicUrl: picture },
@@ -134,27 +149,33 @@ export const googleAuthController = {
           }
         }
 
+        // Integrity check
+        if (!user.companyId || !user.company) {
+          return res.redirect(`${FRONTEND_URL}/login?error=no_company`);
+        }
+
         // Generate JWT
         const token = signToken({
           id: user.id,
           role: user.role,
           companyId: user.companyId,
-          // @ts-ignore
-          companyStatus: user.company?.status,
-          // @ts-ignore
-          planId: user.company?.planId,
+          companyStatus: user.company.status,
+          planId: user.company.planId || undefined,
         });
 
-        // Redirect to Frontend with Token
-        // Security Note: Passing token in URL fragment/query is risky but standard for this flow (fragment is better).
-        // We'll use a temporary code logic or just token in URL for specific route which frontend handles immediately and clears history.
-        // Or set a cookie? JWT in cookie is better but cross-origin implies issues if locally developing.
-        // Let's use simple query param to specific 'auth-callback' page.
-        return res.redirect(`${frontendUrl}/login?token=${token}`);
+        return res.redirect(`${FRONTEND_URL}/login?token=${token}`);
       }
 
       // === FLOW: CALENDAR ===
       if (stateData.action === "calendar" && stateData.userId) {
+        // Verify user exists
+        const user = await prisma.user.findUnique({
+          where: { id: stateData.userId },
+        });
+        if (!user) {
+          return res.redirect(`${FRONTEND_URL}/settings?error=user_not_found`);
+        }
+
         await prisma.user.update({
           where: { id: stateData.userId },
           data: {
@@ -162,19 +183,18 @@ export const googleAuthController = {
             googleCalendarRefreshToken: tokens.refresh_token || null,
           },
         });
-        return res.redirect(`${frontendUrl}/settings?calendar=connected`);
+        return res.redirect(`${FRONTEND_URL}/settings?calendar=connected`);
       }
 
-      return res.redirect(`${frontendUrl}/login?error=invalid_action`);
+      return res.redirect(`${FRONTEND_URL}/login?error=invalid_action`);
     } catch (error) {
       console.error("[GoogleAuth] Error:", error);
-      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-      res.redirect(`${frontendUrl}/settings?error=auth_failed`);
+      res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
     }
   }),
 
   /**
-   * Disconnect Google Calendar - remove tokens from DB
+   * Disconnect Google Calendar
    */
   disconnect: catchAsync(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;

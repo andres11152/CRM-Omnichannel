@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, QueryClient } from "@tanstack/react-query";
 import { socketService } from "../../services/socketService";
 import {
   addMessageToCache,
@@ -161,14 +161,43 @@ export const useChatSockets = (currentTicketId: string | null) => {
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
     };
 
+    /**
+     * SOCKET EVENT: conversation:typing
+     * Fires when a customer is typing
+     */
+    const handleConversationTyping = (payload: {
+      conversationId: string;
+      from: string;
+      status: "composing" | "recording" | "paused";
+    }) => {
+      // 1. Update status immediately
+      updateConversationTypingStatus(
+        queryClient,
+        payload.conversationId,
+        payload.status,
+      );
+
+      // 2. Auto-clear status after 6 seconds (Safety Net)
+      // This prevents "typing..." from getting stuck if "paused" event is dropped
+      if (payload.status !== "paused") {
+        setTimeout(() => {
+          updateConversationTypingStatus(
+            queryClient,
+            payload.conversationId,
+            "paused",
+          );
+        }, 6000);
+      }
+    };
+
     // Subscribe to socket events
     socketService.on("message.received", handleMessageReceived);
     socketService.on("conversation.updated", handleConversationUpdated);
     socketService.on("ticket.deleted", handleTicketDeleted);
     socketService.on("message.status", handleMessageStatus);
-    socketService.on("ticket.created", handleTicketCreated); // ✅ Added
-    // socketService.on("conversation.created", handleConversationCreated); // ❌ DISABLED (Handled by useConversationSync)
-    socketService.on("conversation.closed", handleConversationClosed); // ✅ NEW
+    socketService.on("ticket.created", handleTicketCreated);
+    socketService.on("conversation.closed", handleConversationClosed);
+    socketService.on("conversation:typing", handleConversationTyping); // ✅ NEW
 
     // Cleanup on unmount
     return () => {
@@ -176,11 +205,60 @@ export const useChatSockets = (currentTicketId: string | null) => {
       socketService.off("conversation.updated", handleConversationUpdated);
       socketService.off("ticket.deleted", handleTicketDeleted);
       socketService.off("message.status", handleMessageStatus);
-      socketService.off("ticket.created", handleTicketCreated); // ✅ Added
-      // socketService.off("conversation.created", handleConversationCreated); // ❌ DISABLED
-      socketService.off("conversation.closed", handleConversationClosed); // ✅ NEW
+      socketService.off("ticket.created", handleTicketCreated);
+      socketService.off("conversation.closed", handleConversationClosed);
+      socketService.off("conversation:typing", handleConversationTyping); // ✅ NEW
     };
   }, [queryClient, currentTicketId]);
+
+  /**
+   * HELPER: Update Conversation Typing Status
+   * Updates the ephemeral typing state in the conversation list
+   */
+  const updateConversationTypingStatus = (
+    queryClient: QueryClient,
+    conversationId: string,
+    status: "composing" | "recording" | "paused",
+  ) => {
+    console.log(
+      `[Frontend] 🟢 Updating Typing Status: ${status} for Conv ${conversationId}`,
+    );
+
+    // 100-YEAR FIX: Use setQueriesData to match ALL conversation lists
+    // regardless of status filter (open, pending, resolved, undefined)
+    queryClient.setQueriesData<{
+      conversations: Conversation[];
+      total: number;
+    }>(
+      { queryKey: ["conversations"] }, // Partial match on key
+      (old) => {
+        if (!old || !old.conversations) return old;
+
+        const targetIndex = old.conversations.findIndex(
+          (c) => c.id === conversationId || c.ticketId === conversationId,
+        );
+
+        if (targetIndex === -1) return old;
+
+        console.log(
+          `[Frontend] ✅ Found conv in cache at index ${targetIndex}, updating...`,
+        );
+
+        const updatedConv = {
+          ...old.conversations[targetIndex],
+          typingStatus: status === "paused" ? undefined : status,
+        };
+
+        const newConvs = [...old.conversations];
+        newConvs[targetIndex] = updatedConv;
+
+        return {
+          ...old,
+          conversations: newConvs,
+        };
+      },
+    );
+  };
 
   return {
     // Could expose socket connection status here if needed

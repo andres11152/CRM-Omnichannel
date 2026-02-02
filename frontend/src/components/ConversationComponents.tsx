@@ -194,13 +194,26 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
         {getStatusBadge(conversation.status)}
       </div>
 
-      {conversation.lastMessage && (
-        <div className="last-message">
-          <span className="sender">
-            {conversation.lastMessage.sender.name}:
+      {conversation.typingStatus && conversation.typingStatus !== "paused" ? (
+        <div className="last-message typing-indicator">
+          <span
+            className="typing-text"
+            style={{ color: "#25D366", fontWeight: "bold" }}
+          >
+            {conversation.typingStatus === "recording"
+              ? "🎤 Grabando audio..."
+              : "✍️ Escribiendo..."}
           </span>
-          <span className="content">{conversation.lastMessage.content}</span>
         </div>
+      ) : (
+        conversation.lastMessage && (
+          <div className="last-message">
+            <span className="sender">
+              {conversation.lastMessage.sender.name}:
+            </span>
+            <span className="content">{conversation.lastMessage.content}</span>
+          </div>
+        )
       )}
 
       <div className="conversation-footer">

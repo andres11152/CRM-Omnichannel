@@ -15,6 +15,7 @@ import {
   User,
   Conversation,
   Contact,
+  Prisma,
 } from "@prisma/client";
 
 // ============================================================================
@@ -70,7 +71,6 @@ export interface MessageWithSender extends Message {
 }
 
 export interface ConversationWithQueue extends Conversation {
-  unreadCount?: number;
   queue?: {
     aiAssistant?: {
       id: string;
@@ -83,4 +83,19 @@ export interface ConversationWithQueue extends Conversation {
 export interface ProcessingError extends Error {
   code?: string;
   meta?: unknown;
+}
+
+// ============================================================================
+// 📦 REPOSITORY TYPES
+// ============================================================================
+
+export interface CreateMessageParams {
+  companyId: string;
+  conversationId: string;
+  content: string;
+  direction: MessageDirection;
+  senderId: string;
+  channel: Channel;
+  status?: "SENT" | "DELIVERED" | "READ" | "FAILED" | "SCHEDULED" | "QUEUED";
+  metadata?: Prisma.InputJsonValue;
 }

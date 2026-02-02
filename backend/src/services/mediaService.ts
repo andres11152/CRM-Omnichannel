@@ -4,7 +4,7 @@ import { HTTP_STATUS } from "@/constants/httpStatus";
 import { storageProvider } from "@/providers/StorageProvider";
 import { planLimitsService } from "@/services/planLimitsService";
 import { validateFileType, validateFileSize } from "@/services/uploadService";
-import { toMediaDTO, MediaDTO } from "@/dtos/media.dto";
+import { toMediaDTO, MediaDTO } from "@/types/media.types";
 import { Media, MediaType, Prisma } from "@prisma/client";
 import { Readable } from "stream";
 import { MediaCategory } from "@/constants/mediaCategories";

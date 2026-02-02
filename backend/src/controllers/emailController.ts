@@ -1,34 +1,16 @@
 import { Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "../types";
-import { emailService } from "../services/email/email.service";
+import { emailService } from "../services/email/emailService";
 import { timelineService } from "../services/timelineService";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
 import { CreateEmailDTO } from "../types/email.types";
-import { z } from "zod";
 import { prisma } from "../config/database";
-
-// ===================================
-// VALIDATION SCHEMAS
-// ===================================
-
-const sendEmailSchema = z.object({
-  to: z.array(z.string().email()).or(
-    z
-      .string()
-      .email()
-      .transform((email) => [email]),
-  ),
-  cc: z.array(z.string().email()).optional(),
-  bcc: z.array(z.string().email()).optional(),
-  subject: z.string().min(1, "Subject is required"),
-  bodyHtml: z.string().min(1, "Email body is required"),
-  bodyText: z.string().optional(),
-  replyTo: z.string().email().optional(),
-  contactId: z.string().optional(),
-  ticketId: z.string().optional(),
-  enableTracking: z.boolean().optional(),
-});
+import {
+  sendEmailSchema,
+  testEmailConnectionSchema,
+} from "../schemas/email.schema";
+import { EmailProviderFactory } from "../services/email/email.provider";
 
 // ===================================
 // CONTROLLERS
@@ -79,9 +61,7 @@ export const sendEmail = catchAsync(
     const dto: CreateEmailDTO = {
       companyId,
       from: `${fromName} <${fromEmail}>`, // Format: "Company Name <email@company.com>"
-      to: Array.isArray(validatedData.to)
-        ? validatedData.to
-        : [validatedData.to],
+      to: validatedData.to,
       cc: validatedData.cc,
       bcc: validatedData.bcc,
       subject: validatedData.subject,
@@ -107,7 +87,7 @@ export const sendEmail = catchAsync(
  * POST /api/emails/webhook
  */
 export const receiveWebhook = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     const body = req.body;
     const headers = req.headers;
 
@@ -232,8 +212,9 @@ export const testEmailConnection = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
+    // Parse and validate with new schema
     const { host, port, user, password, secure, toEmail, senderEmail } =
-      req.body;
+      testEmailConnectionSchema.parse(req.body);
 
     if (!host || !user || !toEmail) {
       return next(
@@ -242,25 +223,20 @@ export const testEmailConnection = catchAsync(
     }
 
     // Intelligent Security Configuration
-    // Port 465 -> Requires Implicit SSL (secure: true)
-    // Port 587 -> Requires STARTTLS (secure: false)
     let useSecure = secure;
-    const portNum = parseInt(port);
-    if (portNum === 587) useSecure = false;
-    if (portNum === 465) useSecure = true;
+    // port is already a Number from schema transform
+    if (port === 587) useSecure = false;
+    if (port === 465) useSecure = true;
 
-    // Attempt to verify connection using a temporary Nodemailer Provider
+    // Attempt to verify connection using a temporary Provider via Factory
     try {
-      const {
-        NodemailerProvider,
-      } = require("../services/email/email.provider");
-      const tempProvider = new NodemailerProvider({
+      // Create provider instance using the Factory
+      const tempProvider = EmailProviderFactory.createProvider("nodemailer", {
         host,
-        port: portNum,
+        port,
         secure: useSecure,
         user,
-
-        pass: password,
+        pass: password, // nodemon config usually expects 'pass' in NodeMailerConfig
       });
 
       // Send Test Email
@@ -279,7 +255,7 @@ export const testEmailConnection = catchAsync(
                         Host: ${host}<br>
                         Usuario: ${user}<br>
                         Puerto: ${port}<br>
-                        Seguro: ${secure ? "Sí" : "No"}
+                        Seguro: ${useSecure ? "Sí" : "No"}
                     </p>
                 </div>
             `,
@@ -295,9 +271,11 @@ export const testEmailConnection = catchAsync(
         status: "success",
         message: "Conexión verificada y correo de prueba enviado exitosamente.",
       });
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown SMTP error";
       return next(
-        new AppError(`Fallo al conectar o enviar: ${error.message}`, 400),
+        new AppError(`Fallo al conectar o enviar: ${errorMessage}`, 400),
       );
     }
   },

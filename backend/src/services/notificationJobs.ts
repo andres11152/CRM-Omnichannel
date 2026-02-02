@@ -1,12 +1,15 @@
 import { prisma } from "@/config/database";
-import { notificationService } from "./notificationService";
+import { notificationService } from "./notification/notificationService";
 import { Logger } from "@/utils/logger";
 import TenantContextManager from "@/config/tenantContext";
+import { Company, Plan } from "@prisma/client";
 
 /**
  * ⏰ SCHEDULED NOTIFICATION JOBS
  * Automatic checks for quotas, expiration, and alerts
  */
+
+type CompanyWithPlan = Company & { plan: Plan | null };
 
 export class NotificationJobs {
   /**
@@ -44,7 +47,7 @@ export class NotificationJobs {
         await this.checkContactQuota(company);
         await this.checkStorageQuota(company);
       } catch (error) {
-        Logger.error(`Failed to check company ${company.id}`, error);
+        Logger.error(`Failed to check company ${company.id}`, error as Error);
       }
     }
 
@@ -114,7 +117,7 @@ export class NotificationJobs {
       } catch (error) {
         Logger.error(
           `Failed to notify WhatsApp disconnection ${session.id}`,
-          error,
+          error as Error,
         );
       }
     }
@@ -133,7 +136,7 @@ export class NotificationJobs {
    * ⏰ Private Helper Methods
    */
 
-  private async checkTrialExpiration(company: any) {
+  private async checkTrialExpiration(company: CompanyWithPlan) {
     if (!company.trialEndsAt) return;
 
     const now = new Date();
@@ -162,7 +165,7 @@ export class NotificationJobs {
     }
   }
 
-  private async checkSubscriptionExpiration(company: any) {
+  private async checkSubscriptionExpiration(company: CompanyWithPlan) {
     if (!company.planExpiresAt) return;
 
     const now = new Date();
@@ -190,11 +193,11 @@ export class NotificationJobs {
     }
   }
 
-  private async checkMessageQuota(company: any) {
+  private async checkMessageQuota(company: CompanyWithPlan) {
     if (!company.plan) return;
 
-    const planConfig = company.plan.config as any;
-    const limit = planConfig?.messageLimit || 1000; // Default 1000 if not set
+    const planConfig = company.plan.config as Record<string, unknown> | null;
+    const limit = (planConfig?.messageLimit as number) || 1000; // Default 1000 if not set
     if (limit === Infinity) return;
 
     // Get message count for current month
@@ -234,7 +237,7 @@ export class NotificationJobs {
     }
   }
 
-  private async checkContactQuota(company: any) {
+  private async checkContactQuota(company: CompanyWithPlan) {
     if (!company.plan) return;
 
     const limit = company.plan.maxContacts || Infinity;
@@ -264,7 +267,7 @@ export class NotificationJobs {
     }
   }
 
-  private async checkStorageQuota(company: any) {
+  private async checkStorageQuota(company: CompanyWithPlan) {
     if (!company.plan) return;
 
     // Convert GB to Bytes (or Infinity)
@@ -283,7 +286,7 @@ export class NotificationJobs {
       }),
     );
 
-    const used = media._sum.size || 0;
+    const used = Number(media._sum.size || 0);
     const percentage = (used / limit) * 100;
 
     if (percentage >= 100) {

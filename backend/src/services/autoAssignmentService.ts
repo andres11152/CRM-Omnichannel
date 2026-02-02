@@ -16,21 +16,51 @@ export const assignTicketToAgent = async (
     });
 
     if (!queue || queue.type !== "ROUND_ROBIN") {
-      console.log(
+      console.warn(
         `[AutoAssign] Queue ${queueId} is not ROUND_ROBIN or not found.`,
       );
       return;
     }
 
     if (queue.agents.length === 0) {
-      console.log(`[AutoAssign] No ONLINE agents in queue ${queue.name}`);
+      console.warn(`[AutoAssign] No ONLINE agents in queue ${queue.name}`);
       return;
+    }
+
+    // 1.5 SKILLS-BASED ROUTING (100-Year Logic)
+    // Filter agents based on Queue's required skills configuration
+    const config = queue.config as { requiredSkills?: string[] } | null;
+    const requiredSkills = Array.isArray(config?.requiredSkills)
+      ? config!.requiredSkills
+      : [];
+
+    let candidates = queue.agents;
+
+    if (requiredSkills.length > 0) {
+      candidates = candidates.filter((agent) => {
+        const agentSkills = agent.skills || [];
+        const hasAllSkills = requiredSkills.every((req) =>
+          agentSkills.includes(req),
+        );
+
+        if (!hasAllSkills) {
+          // console.log(`[AutoAssign] Skipping ${agent.name} (Missing skills for ${queue.name})`);
+        }
+        return hasAllSkills;
+      });
+
+      if (candidates.length === 0) {
+        console.warn(
+          `[AutoAssign] No agents in ${queue.name} match required skills: ${requiredSkills.join(", ")}`,
+        );
+        return;
+      }
     }
 
     // 2. Load Balancing with Capacity Check
     const eligibleAgents = [];
 
-    for (const agent of queue.agents) {
+    for (const agent of candidates) {
       // Get current active load
       const currentLoad = await prisma.ticket.count({
         where: {
@@ -58,7 +88,7 @@ export const assignTicketToAgent = async (
     }
 
     if (eligibleAgents.length === 0) {
-      console.log(
+      console.warn(
         `[AutoAssign] All agents in queue ${queue.name} are at full capacity.`,
       );
       return;
@@ -70,7 +100,7 @@ export const assignTicketToAgent = async (
     const candidate = eligibleAgents[0];
 
     if (candidate) {
-      console.log(
+      console.info(
         `[AutoAssign] Assigning ticket ${ticketId} to ${candidate.name} (Load: ${candidate.load}/${candidate.maxCapacity})`,
       );
 

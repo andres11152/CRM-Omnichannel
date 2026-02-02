@@ -5,7 +5,7 @@ import { flowExecutor } from "@/services/flowExecutor";
 import { whatsappService } from "@/whatsapp";
 import { chatService } from "@/services/chatService";
 import { TenantContextManager } from "@/config/tenantContext";
-import { FlowExecutionResult } from "@/interfaces/FlowSession";
+import { FlowExecutionResult } from "@/types/flow.types";
 import mime from "mime-types";
 
 const QUEUE_NAME = "flow-execution-queue";

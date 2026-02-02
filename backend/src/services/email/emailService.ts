@@ -1,14 +1,20 @@
 import { prisma } from "../../config/database";
-import { EmailStatus, EmailType } from "@prisma/client";
+import { EmailStatus, EmailType, Prisma } from "@prisma/client";
 import {
   CreateEmailDTO,
   UpdateEmailStatusDTO,
   IEmailProvider,
+  WebhookEventType,
 } from "../../types/email.types";
 import { EmailProviderFactory } from "./email.provider";
 import { Logger } from "../../utils/logger";
 import { AppError } from "../../utils/AppError";
 import { CircuitBreaker } from "../../utils/resilience";
+
+// Helper to strip undefined values for JSON B storage
+const sanitizeForJson = (data: unknown): Prisma.InputJsonValue => {
+  return JSON.parse(JSON.stringify(data));
+};
 
 export class EmailService {
   private provider: IEmailProvider;
@@ -30,7 +36,7 @@ export class EmailService {
    * Get provider for a specific company (Multi-Tenant)
    */
   private async getProviderForCompany(
-    companyId: string
+    companyId: string,
   ): Promise<IEmailProvider> {
     try {
       const company = await prisma.company.findUnique({
@@ -53,7 +59,7 @@ export class EmailService {
         company.emailProvider === "SMTP"
       ) {
         Logger.info(
-          `[EmailService] Using Custom SMTP for Company: ${companyId}`
+          `[EmailService] Using Custom SMTP for Company: ${companyId}`,
         );
         return EmailProviderFactory.createProvider("nodemailer", {
           host: company.smtpHost,
@@ -69,7 +75,7 @@ export class EmailService {
     } catch (error) {
       Logger.error(
         `[EmailService] Error fetching company config, using default provider`,
-        error
+        error as Error,
       );
       return this.provider;
     }
@@ -106,7 +112,8 @@ export class EmailService {
       });
 
       if (!result.success) {
-        throw new AppError(`Failed to send email: ${result.error}`, 500);
+        const errorMsg = result.error || "Unknown error";
+        throw new AppError(`Failed to send email: ${errorMsg}`, 500);
       }
 
       // 2. Save to database
@@ -127,8 +134,8 @@ export class EmailService {
           contactId: dto.contactId,
           ticketId: dto.ticketId,
           attachments: dto.attachments
-            ? JSON.parse(JSON.stringify(dto.attachments))
-            : null,
+            ? (sanitizeForJson(dto.attachments) as Prisma.InputJsonValue)
+            : undefined,
           sentAt: new Date(),
         },
         include: {
@@ -140,8 +147,8 @@ export class EmailService {
       Logger.info(`[EmailService] Email saved to DB: ${email.id}`);
 
       return email;
-    } catch (error: any) {
-      Logger.error("[EmailService] Send failed:", error);
+    } catch (error) {
+      Logger.error("[EmailService] Send failed:", error as Error);
       throw error;
     }
   }
@@ -153,7 +160,7 @@ export class EmailService {
     dto: Omit<CreateEmailDTO, "companyId"> & {
       companyId: string;
       messageId?: string;
-    }
+    },
   ) {
     try {
       // Find or create contact by email
@@ -198,8 +205,8 @@ export class EmailService {
           contactId: contact?.id,
           ticketId: dto.ticketId,
           attachments: dto.attachments
-            ? JSON.parse(JSON.stringify(dto.attachments))
-            : null,
+            ? (sanitizeForJson(dto.attachments) as Prisma.InputJsonValue)
+            : undefined,
         },
         include: {
           contact: { select: { name: true, email: true } },
@@ -209,8 +216,11 @@ export class EmailService {
       Logger.info(`[EmailService] Inbound email saved: ${email.id}`);
 
       return email;
-    } catch (error: any) {
-      Logger.error("[EmailService] Failed to save inbound email:", error);
+    } catch (error) {
+      Logger.error(
+        "[EmailService] Failed to save inbound email:",
+        error as Error,
+      );
       throw error;
     }
   }
@@ -226,7 +236,7 @@ export class EmailService {
 
       if (!email) {
         Logger.warn(
-          `[EmailService] Email not found for messageId: ${dto.messageId}`
+          `[EmailService] Email not found for messageId: ${dto.messageId}`,
         );
         return null;
       }
@@ -242,12 +252,12 @@ export class EmailService {
       });
 
       Logger.info(
-        `[EmailService] Status updated: ${updated.id} -> ${dto.status}`
+        `[EmailService] Status updated: ${updated.id} -> ${dto.status}`,
       );
 
       return updated;
-    } catch (error: any) {
-      Logger.error("[EmailService] Failed to update status:", error);
+    } catch (error) {
+      Logger.error("[EmailService] Failed to update status:", error as Error);
       throw error;
     }
   }
@@ -282,7 +292,7 @@ export class EmailService {
   /**
    * Process webhook from email provider
    */
-  async processWebhook(body: any, headers: any) {
+  async processWebhook(body: unknown, headers: unknown) {
     try {
       const event = this.provider.parseWebhook(body, headers);
 
@@ -292,13 +302,13 @@ export class EmailService {
       }
 
       // Map webhook event to email status
-      const statusMap: Record<string, EmailStatus> = {
-        delivered: EmailStatus.DELIVERED,
-        opened: EmailStatus.OPENED,
-        clicked: EmailStatus.CLICKED,
-        bounced: EmailStatus.BOUNCED,
-        spam: EmailStatus.SPAM,
-        failed: EmailStatus.FAILED,
+      const statusMap: Record<WebhookEventType, EmailStatus> = {
+        [WebhookEventType.DELIVERED]: EmailStatus.DELIVERED,
+        [WebhookEventType.OPENED]: EmailStatus.OPENED,
+        [WebhookEventType.CLICKED]: EmailStatus.CLICKED,
+        [WebhookEventType.BOUNCED]: EmailStatus.BOUNCED,
+        [WebhookEventType.SPAM]: EmailStatus.SPAM,
+        [WebhookEventType.FAILED]: EmailStatus.FAILED,
       };
 
       const status = statusMap[event.eventType] || EmailStatus.SENT;
@@ -306,11 +316,17 @@ export class EmailService {
       return this.updateEmailStatus({
         messageId: event.messageId,
         status,
-        openedAt: event.eventType === "opened" ? event.timestamp : undefined,
-        clickedAt: event.eventType === "clicked" ? event.timestamp : undefined,
+        openedAt:
+          event.eventType === WebhookEventType.OPENED
+            ? event.timestamp
+            : undefined,
+        clickedAt:
+          event.eventType === WebhookEventType.CLICKED
+            ? event.timestamp
+            : undefined,
       });
-    } catch (error: any) {
-      Logger.error("[EmailService] Webhook processing failed:", error);
+    } catch (error) {
+      Logger.error("[EmailService] Webhook processing failed:", error as Error);
       throw error;
     }
   }

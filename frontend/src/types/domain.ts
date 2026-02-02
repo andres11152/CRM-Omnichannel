@@ -190,21 +190,33 @@ export interface Conversation extends BaseEntity {
   lastMessage?: Message;
 }
 
+export interface UserBasic {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+}
+
+export interface MessagePreview {
+  id: string;
+  content: string;
+  createdAt: string;
+  sender: UserBasic;
+}
+
 export interface ConversationListItem {
   id: string;
-  subject: string | null;
+  ticketId: string; // Used for routing/Identification
+  subject: string;
   status: ConversationStatus;
-  createdAt: string;
+  priority: string;
+  channel: string;
   updatedAt: string;
   messageCount: number;
-  assignedTo: UserListItem | null;
-  contact: Contact | null;
-  lastMessage?: {
-    id: string;
-    content: string;
-    createdAt: string;
-    sender: UserListItem;
-  };
+  unreadCount: number;
+  assignedTo: UserBasic | null;
+  lastMessage: MessagePreview | null;
+  typingStatus?: "composing" | "recording" | "paused"; // ✅ NEW
 }
 
 export interface ConversationDetail extends Conversation {

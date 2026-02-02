@@ -57,7 +57,7 @@ export const mentionService = {
    */
   async resolveUsernames(
     usernames: string[],
-    companyId: string
+    companyId: string,
   ): Promise<MentionDetectionResult> {
     if (!usernames || usernames.length === 0) {
       return {
@@ -103,7 +103,7 @@ export const mentionService = {
       const resolvedUsernames = users.map((u) => u.name || u.email);
 
       Logger.info(
-        `[MentionService] Resolved ${resolvedUserIds.length}/${usernames.length} mentions`
+        `[MentionService] Resolved ${resolvedUserIds.length}/${usernames.length} mentions`,
       );
 
       return {
@@ -129,7 +129,7 @@ export const mentionService = {
    */
   async processText(
     text: string,
-    companyId: string
+    companyId: string,
   ): Promise<MentionDetectionResult> {
     const usernames = this.detectMentions(text);
     if (usernames.length === 0) {
@@ -151,11 +151,12 @@ export const mentionService = {
     mentionedUserIds: string[],
     activityId: string,
     createdByUserId: string,
+    companyId: string,
     context: {
       type: string; // "note", "comment", etc.
       subject: string;
       contactName?: string;
-    }
+    },
   ): Promise<void> {
     if (!mentionedUserIds || mentionedUserIds.length === 0) return;
 
@@ -178,10 +179,11 @@ export const mentionService = {
           context.type === "note" ? "una nota" : "un comentario"
         }${context.contactName ? ` sobre ${context.contactName}` : ""}`;
 
-        // Crear notificación en DB
+        // Crear notificación en DB (🛡️ 100-YEAR FIX: Include companyId and strict metadata typing)
         await prisma.notification.create({
           data: {
             userId,
+            companyId,
             type: "mention",
             title,
             message,
@@ -200,10 +202,8 @@ export const mentionService = {
       await Promise.all(notificationPromises);
 
       // 3. Emitir evento Socket.IO (real-time)
-      // Importaremos el socket emitter más adelante
-      const { emitMentionNotification } = await import(
-        "@/services/socketEmitter"
-      );
+      const { emitMentionNotification } =
+        await import("@/services/socketEmitter");
 
       for (const userId of mentionedUserIds) {
         // Evitar notificarse a sí mismo
@@ -225,7 +225,7 @@ export const mentionService = {
       }
 
       Logger.info(
-        `[MentionService] Notified ${mentionedUserIds.length} users about mention in activity ${activityId}`
+        `[MentionService] Notified ${mentionedUserIds.length} users about mention in activity ${activityId}`,
       );
     } catch (error) {
       // FAULT TOLERANCE: Log error pero no fallar la operación principal

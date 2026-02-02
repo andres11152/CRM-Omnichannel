@@ -8,7 +8,7 @@ import {
   PermissionModule,
   PermissionAction,
   PermissionDTO,
-} from "@/dtos/role.dto";
+} from "@/types/role.types";
 
 interface CreateRoleParams {
   name: string;

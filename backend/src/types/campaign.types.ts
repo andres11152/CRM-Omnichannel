@@ -1,4 +1,4 @@
-import { Campaign, MessageTemplate, Contact } from "@prisma/client";
+import { Campaign, MessageTemplate } from "@prisma/client";
 
 /**
  * 📦 CAMPAIGN INTERFACES
@@ -22,7 +22,7 @@ export interface CampaignStats {
 // Campaign with typed stats (Prisma stats is Json)
 export interface TypedCampaign extends Omit<Campaign, "stats" | "config"> {
   stats: CampaignStats | null;
-  config: Record<string, any> | null;
+  config: Record<string, unknown> | null;
 }
 
 // Optimized Audience Contact (only what's needed for sending)
@@ -31,7 +31,7 @@ export interface AudienceContact {
   name: string;
   phone: string | null;
   email: string | null;
-  customFields?: Record<string, any>; // For personalization
+  customFields?: Record<string, unknown>; // For personalization
 }
 
 // Execution Payload

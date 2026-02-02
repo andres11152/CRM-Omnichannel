@@ -111,41 +111,24 @@ export class SessionManager implements ISessionManager {
       return null;
     }
 
-    try {
-      // Extract the numeric part of the LID
-      const lidNumeric = lid.split("@")[0].split(":")[0];
-
+    // 🛡️ 100-YEAR FIX: First check the Store (Memory)
+    // The Store is populated by syncFullHistory: true
+    const fromStore = this.findContactByLid(lid);
+    if (fromStore?.id) {
+      const realPhone = fromStore.id.split("@")[0].split(":")[0];
       console.info(
-        `[SessionManager] 🔬 Attempting to resolve LID: ${lidNumeric}`,
+        `[SessionManager] ⚡ Store-hit: LID ${lid} resolved to ${realPhone}`,
       );
-
-      // Method 1: Try onWhatsApp with the LID number
-      const result = await sock.onWhatsApp(lidNumeric);
-      console.info(
-        `[SessionManager] 🔬 onWhatsApp result: ${JSON.stringify(result)}`,
-      );
-
-      if (result && result.length > 0 && result[0].exists) {
-        const realJid = result[0].jid;
-        const realPhone = realJid.split("@")[0].split(":")[0];
-        console.info(
-          `[SessionManager] 🎯 ACTIVE RESOLUTION: LID ${lidNumeric} → Phone ${realPhone}`,
-        );
-        return realPhone;
-      }
-
-      // Note: WhatsApp does not provide a public API to resolve LID -> Phone
-      // This is a privacy feature. The only ways to get the real number are:
-      // 1. User is saved in phone contacts (triggers contact sync with LID mapping)
-      // 2. User shares their number via { requestPhoneNumber: true } message
-      console.info(
-        `[SessionManager] ℹ️ LID ${lidNumeric} cannot be resolved (user not in contacts or privacy setting)`,
-      );
-      return null;
-    } catch (error) {
-      console.error(`[SessionManager] Error resolving LID ${lid}:`, error);
-      return null;
+      return realPhone;
     }
+
+    // Note: onWhatsApp CANNOT resolve LIDs directly. It only verifies if a number exists.
+    // Since we can't query "Who owns this LID?" via public API, we must rely on the Store.
+
+    console.warn(
+      `[SessionManager] ⚠️ Could not resolve LID ${lid} (not in Store). Waiting for history sync...`,
+    );
+    return null;
   }
 
   /**
@@ -253,7 +236,7 @@ export class SessionManager implements ISessionManager {
       logger: this.createSessionLogger(sessionId) as pino.Logger,
       browser: Browsers.ubuntu("Reply CRM"),
       generateHighQualityLinkPreview: true,
-      syncFullHistory: false, // Performance optimization
+      syncFullHistory: true, // 🛡️ 100-YEAR FIX: Must be TRUE to resolve LIDs -> Phones
       shouldIgnoreJid: (jid) => isJidBroadcast(jid), // Ignore status updates
       // Optimized message retrieval (only minimal fields)
       getMessage: async (key) => {
@@ -449,6 +432,7 @@ export class SessionManager implements ISessionManager {
 
     // 🟢 PRESENCE UPDATES (Typing indicators)
     sock.ev.on("presence.update", (data) => {
+      console.info(`[SessionManager] Raw Presence: ${JSON.stringify(data)}`);
       this.eventBus.publish({
         type: WhatsAppEventType.PRESENCE_UPDATE,
         sessionId,

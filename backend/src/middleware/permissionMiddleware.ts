@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { rolesService } from "@/services/rolesService";
-import { PermissionModule, PermissionAction } from "@/dtos/role.dto";
+import { PermissionModule, PermissionAction } from "@/types/role.types";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 
 export const requirePermission = (

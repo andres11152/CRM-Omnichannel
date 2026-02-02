@@ -6,30 +6,7 @@ import {
   getSignedUrl,
   getFileStream,
 } from "@/services/uploadService";
-
-/**
- * ☁️ STORAGE PROVIDER INTERFACE
- * Agnostic contract for file storage (Local, S3, GCS)
- */
-
-export interface StorageUploadResult {
-  key: string;
-  url: string;
-  mimeType: string;
-  size: number;
-  filename: string;
-}
-
-export interface IStorageProvider {
-  upload(
-    file: Express.Multer.File,
-    context: { companyId: string; type: MediaType },
-  ): Promise<StorageUploadResult>;
-
-  delete(key: string): Promise<void>;
-  getSignedUrl(key: string): Promise<string>;
-  getStream(key: string): Promise<Readable>;
-}
+import { IStorageProvider, StorageUploadResult } from "@/types/storage.types";
 
 /**
  * 🔌 ADAPTER IMPLEMENTATION

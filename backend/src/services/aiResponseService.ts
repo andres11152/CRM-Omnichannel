@@ -4,7 +4,7 @@ import { Readable } from "stream";
 import { prisma } from "@/config/database";
 import { USE_S3, s3Client, BUCKET_NAME } from "@/config/s3";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { AIHistoryMessage } from "@/interfaces/AIInterfaces";
+import { AIHistoryMessage } from "@/types/ai.types";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: pdf-parse might lack types in strict mode
 import pdfParse from "pdf-parse";

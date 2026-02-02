@@ -8,6 +8,7 @@ export interface CreateQueueDTO {
   type: "MANUAL" | "ROUND_ROBIN" | "AI";
   aiAssistantId?: string | null;
   promptTemplateId?: string;
+  config?: { requiredSkills?: string[] };
 }
 
 export interface UpdateQueueDTO extends Partial<CreateQueueDTO> {

@@ -25,6 +25,7 @@ type ConversationWithRelations = Conversation & {
   participants?: User[];
   assignedTo?: User | null;
   messages?: Message[];
+  unreadCount?: number | null; // Explicitly allowed for type safety
 };
 
 type MessageWithSender = Message & {
@@ -119,7 +120,7 @@ export class SocketEventEmitter {
         ...this.formatConversation(conversation),
         lastMessage: message.content,
         lastMessageAt: message.createdAt.toISOString(),
-        unreadCount: 1, // Frontend manages the count locally but this trigger is needed
+        // unreadCount is now provided by formatConversation
       },
     );
 
@@ -140,7 +141,7 @@ export class SocketEventEmitter {
           ...this.formatConversation(conversation),
           lastMessage: message.content,
           lastMessageAt: message.createdAt.toISOString(),
-          unreadCount: 1,
+          // unreadCount is now provided by formatConversation
         },
       );
     }
@@ -306,6 +307,25 @@ export class SocketEventEmitter {
   }
 
   /**
+   * Emit when a client is typing on WhatsApp
+   *
+   * Frontend: Shows "Typing..." indicator in chat
+   */
+  emitConversationTyping(
+    conversationId: string,
+    companyId: string,
+    from: string, // Phone number/Name
+    status: "composing" | "recording" | "paused",
+  ): void {
+    // 1. Emit to Company Room (All agents see it)
+    this.socketGateway.emitToCompany(companyId, "conversation:typing", {
+      conversationId,
+      from,
+      status,
+    });
+  }
+
+  /**
    * Format conversation for client consumption
    * Removes sensitive data, normalizes structure, and maps contact info
    */
@@ -363,6 +383,8 @@ export class SocketEventEmitter {
         : null,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
+      // 🔴 Badge Logic: Include database value (defaults to 0)
+      unreadCount: conversation.unreadCount || 0,
     };
   }
 

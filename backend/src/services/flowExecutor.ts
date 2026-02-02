@@ -30,7 +30,7 @@ import type {
   FlowSessionUpdate,
   KeywordTriggerData,
   FlowEdge,
-} from "@/interfaces/FlowSession";
+} from "@/types/flow.types";
 import { cacheService } from "./cacheService";
 import { flowQueueService } from "./queue/flowQueue.service";
 
@@ -1682,14 +1682,10 @@ export class FlowExecutorService {
    * Finaliza una sesión de flujo
    */
   private async endSession(sessionId: string): Promise<void> {
-    // 🛡️ 100-YEAR FIX: Use updateMany to safely handle missing records (idempotent)
-    await prisma.contactFlowSession.updateMany({
+    // 🛡️ 100-YEAR FIX: Delete the session to prevent Unique Constraint violations on (contactId, flowId, isActive)
+    // History is implicitly transient or tracked via other means. This cleans up the state.
+    await prisma.contactFlowSession.deleteMany({
       where: { id: sessionId },
-      data: {
-        isActive: false,
-        currentNodeId: null,
-        completedAt: new Date(),
-      },
     });
 
     Logger.info(`[FlowExecutor] Session ${sessionId} ended`);

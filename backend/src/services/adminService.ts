@@ -1,5 +1,4 @@
 import type { Company, Plan, CompanyStatus, Prisma } from "@prisma/client";
-import { Buffer } from "buffer";
 import { prisma } from "@/config/database";
 import { signToken } from "@/controllers/authController";
 import { cacheService } from "@/services/cacheService";

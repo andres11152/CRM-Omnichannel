@@ -52,17 +52,37 @@ export class ChatService {
     phone?: string | null;
     role?: "USER" | "AGENT" | "ADMIN" | "MASTER";
   }) {
+    // 0. 🛡️ 100-YEAR FIX: Name Preservation Logic
+    // Prevent overwriting a real name (e.g. "Juan Perez") with a phone-number-name (e.g. "+57300...")
+    // which happens when WhatsApp messages arrive without a pushName.
+
+    let nameToPersist = params.name;
+    const existingUser = await prisma.user.findUnique({
+      where: { email: params.email },
+      select: { name: true },
+    });
+
+    if (existingUser) {
+      const isNewNamePhone = /^\+?\d[\d\s-]*$/.test(params.name);
+      const isOldNamePhone = /^\+?\d[\d\s-]*$/.test(existingUser.name);
+
+      // If new name is just a phone number, but we already have a real name, KEEP the real name.
+      if (isNewNamePhone && !isOldNamePhone) {
+        nameToPersist = existingUser.name;
+      }
+    }
+
     // 1. Upsert System User (Authentication/Chat Identity)
     const user = await prisma.user.upsert({
       where: { email: params.email },
       update: {
-        ...(params.name && { name: params.name }),
+        name: nameToPersist,
         ...(params.phone && { phone: params.phone }),
         updatedAt: new Date(),
       },
       create: {
         email: params.email,
-        name: params.name,
+        name: nameToPersist,
         password: "$2a$10$DummyHashForWhatsAppUser",
         role: params.role || "USER",
         companyId: params.companyId,
@@ -87,10 +107,9 @@ export class ChatService {
       try {
         await contactService.upsert(params.companyId, {
           phone: params.phone,
-          // 🛡️ For CRM, we use the phone as primary identifier.
-          // Internal emails (@whatsapp.user) are never stored in CRM.
+          // 🛡️ Use the Persisted Name (which preserves history), not the raw param
+          name: user.name,
           email: null,
-          name: params.name,
           customFields: {
             source: "whatsapp",
             whatsappId: params.email.split("@")[0],
@@ -138,6 +157,15 @@ export class ChatService {
         ],
       },
       orderBy: { updatedAt: "desc" },
+    });
+  }
+
+  /**
+   * Find CRM Contact by Phone (Helper for MessageHandler)
+   */
+  async findContact(companyId: string, phone: string) {
+    return prisma.contact.findFirst({
+      where: { companyId, phone, deletedAt: null },
     });
   }
 

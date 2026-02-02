@@ -290,6 +290,15 @@ export const userService = {
       where.role = filters.role as UserRole;
     }
 
+    // 🛡️ 100-YEAR FIX: Exclude System Bots (Flow/AI Agents)
+    // These internal accounts should never be selectable for assignment or displayed in lists.
+    where.email = {
+      ...((where.email as Prisma.StringFilter) || {}), // Preserve existing email filters if any (future proof)
+      not: {
+        endsWith: "@reply.bot",
+      },
+    };
+
     return where;
   },
 

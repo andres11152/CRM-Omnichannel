@@ -424,11 +424,23 @@ export class MessageHandler implements IMessageHandler {
         // Si el mensaje es OUTBOUND (fromMe), NO creamos un usuario "You".
         // Asumimos que el sistema o un agente lo envió.
         let customerUser: User | null = null;
+        const pushName = message.pushName;
 
         if (!isFromMe) {
           // Es INBOUND. Necesitamos asegurar que el remitente existe como contacto.
           // Para Grupos, el remitente real es el participant. Para DMs, es el remoteJid.
           let senderJid = WhatsAppIdUtils.getSenderJid(message);
+
+          // 🛡️ 100-YEAR FIX: Use resolved cleanRemoteJid for DMs
+          // If we successfully resolved an LID to a real phone earlier (lines 250+),
+          // we MUST use that resolved ID instead of the raw message key which still has the LID.
+          if (
+            !isGroup &&
+            cleanRemoteJid &&
+            !WhatsAppIdUtils.isLid(cleanRemoteJid)
+          ) {
+            senderJid = cleanRemoteJid;
+          }
 
           // 🛡️ 100-YEAR FIX: Resolve Sender LID to Phone
           if (senderJid && WhatsAppIdUtils.isLid(senderJid)) {
@@ -444,7 +456,8 @@ export class MessageHandler implements IMessageHandler {
             }
           }
           const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
-          const pushName = message.pushName;
+          // Moved pushName up to be accessible in Flow Engine logic
+          // const pushName = message.pushName;
 
           if (senderJid) {
             customerUser = await chatService.upsertWhatsAppUser({
@@ -456,6 +469,20 @@ export class MessageHandler implements IMessageHandler {
               phone: senderPhone,
               role: "USER",
             });
+
+            // 🖼️ 100-YEAR FIX: Fetch WhatsApp Profile Picture (Non-Blocking)
+            // Baileys provides profilePictureUrl() to fetch the contact's profile image.
+            // We persist it to the User record so the frontend can display it.
+            this.fetchAndPersistProfilePicture(
+              sessionId,
+              senderJid,
+              customerUser.id,
+            ).catch((err) =>
+              console.warn(
+                `[MessageHandler] Profile pic fetch failed for ${senderJid}:`,
+                err,
+              ),
+            );
           }
         } else {
           // Es OUTBOUND (Sincronización desde celular).
@@ -566,20 +593,16 @@ export class MessageHandler implements IMessageHandler {
         // 7. Message Persistence
         const isOutbound = isFromMe;
 
-        // 🧠 HITL: Auto-Mute AI on Outbound (Agent) Message
-        // If an agent (or system sync) sends a message, silence the AI to prevent interruptions.
-        if (isOutbound) {
-          try {
-            await chatService.updateConversation(conversation.id, {
-              aiEnabled: false,
-              lastManualIntervention: new Date(),
-            });
-            // Update local object to reflect DB change immediately for this flow
-            conversation.aiEnabled = false;
-          } catch (err) {
-            console.error("[HITL] Failed to auto-mute AI:", err);
-          }
-        }
+        // 🛡️ 100-YEAR FIX: AI Auto-Mute Logic
+        // REMOVED: We do NOT auto-mute AI here for ALL outbound messages.
+        // Reason: This handler processes BOTH:
+        //   1. Messages sent from CRM (real agent intervention) ✅ Should mute AI
+        //   2. Messages synced from user's phone (NOT agent intervention) ❌ Should NOT mute AI
+        //
+        // The AI muting is now handled ONLY in the sendMessage() method,
+        // which is called exclusively when an agent sends from the CRM.
+        // This way, if the business owner responds from their WhatsApp mobile,
+        // the AI continues working normally.
 
         // Determinar SenderID para la DB
         // - Si es Inbound: customerUser.id
@@ -690,47 +713,59 @@ export class MessageHandler implements IMessageHandler {
             );
 
             if (textContent && !isGroup) {
-              // 🧠 HITL LOGIC: Check if AI is allowed to respond
-              // We trust Prisma types are up to date
-              const isAiEnabled = conversation.aiEnabled !== false; // Default true
+              console.log(
+                `[DEBUG] 🟢 Message Processing Start: "${textContent}" from ${cleanRemoteJid}`,
+              );
 
-              if (!isAiEnabled) {
-                const lastIntervention = conversation.lastManualIntervention
-                  ? new Date(conversation.lastManualIntervention)
-                  : null;
-
-                const GRACE_PERIOD_MS = 30 * 60 * 1000; // 30 Minutes
-                const timeSinceIntervention = lastIntervention
-                  ? Date.now() - lastIntervention.getTime()
-                  : 0;
-
-                if (
-                  lastIntervention &&
-                  timeSinceIntervention < GRACE_PERIOD_MS
-                ) {
-                  console.info(
-                    `[HITL] 🔇 AI Silenced. Manual intervention was ${Math.round(timeSinceIntervention / 60000)}m ago.`,
-                  );
-                  return; // EXIT: Do not trigger AI
-                } else {
-                  console.info(
-                    `[HITL] 🔊 Auto-Reactivating AI after grace period (${Math.round(timeSinceIntervention / 60000)}m)`,
-                  );
-                  // Reactivate in DB
-                  await chatService.updateConversation(conversation.id, {
-                    aiEnabled: true,
-                  });
-                }
-              }
+              // [Moved HITL Logic down]
 
               // 🌊 FLOW ENGINE INTEGRATION
               let flowExecuted = false;
-              if (customerUser?.phone) {
+
+              // 🛡️ 100-YEAR FIX: Robust Phone resolution for Flow Engine
+              // Even if customerUser is missing due to CRM sync skip (LID issues),
+              // we can still execute flows if we have a valid phone number from the JID.
+              const flowPhone =
+                customerUser?.phone ||
+                WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
+              console.log(`[DEBUG] 📱 Flow Phone Resolved: ${flowPhone}`);
+
+              if (flowPhone) {
                 try {
+                  console.log(
+                    `[DEBUG] 🔍 Looking up Contact for flowPhone: ${flowPhone}`,
+                  );
                   // Resolver contacto CRM asociado (required for flows)
-                  const contact = await prisma.contact.findFirst({
-                    where: { companyId, phone: customerUser.phone },
+                  let contact = await prisma.contact.findFirst({
+                    where: { companyId, phone: flowPhone },
                   });
+
+                  // 🛡️ 100-YEAR FIX: Lazy Contact Creation for Flows
+                  // If ChatService failed to sync (due to LID), we create the contact here
+                  // to ensure the Flow triggers correctly.
+                  if (!contact) {
+                    try {
+                      console.info(
+                        `[FlowEngine] 🆕 Creating implicit contact for flow execution: ${flowPhone}`,
+                      );
+                      contact = await prisma.contact.create({
+                        data: {
+                          companyId,
+                          phone: flowPhone,
+                          name: pushName || "Usuario WhatsApp", // Use pushName if available
+                          tags: ["WHATSAPP_LEAD", "AUTO_CREATED"],
+                        },
+                      });
+                    } catch (createErr) {
+                      // Handle race condition if created in parallel
+                      console.warn(
+                        `[FlowEngine] Contact creation race condition, fetching again.`,
+                      );
+                      contact = await prisma.contact.findFirst({
+                        where: { companyId, phone: flowPhone },
+                      });
+                    }
+                  }
 
                   if (contact) {
                     const flowResults = await flowExecutor.processMessage(
@@ -800,7 +835,39 @@ export class MessageHandler implements IMessageHandler {
                 }
               }
 
-              if (flowExecuted) return; // Si el flujo respondió, no activar IA standard
+              if (flowExecuted) return; // Flow handled it, skip AI and HITL check
+
+              // 🧠 HITL LOGIC: Check if AI is allowed to respond (Standard LLM)
+              // Only check this if Flow didn't run
+              const isAiEnabled = conversation.aiEnabled !== false; // Default true
+
+              if (!isAiEnabled) {
+                const lastIntervention = conversation.lastManualIntervention
+                  ? new Date(conversation.lastManualIntervention)
+                  : null;
+
+                const GRACE_PERIOD_MS = 10 * 60 * 1000; // 10 Minutes
+                const timeSinceIntervention = lastIntervention
+                  ? Date.now() - lastIntervention.getTime()
+                  : 0;
+
+                if (
+                  lastIntervention &&
+                  timeSinceIntervention < GRACE_PERIOD_MS
+                ) {
+                  console.info(
+                    `[HITL] 🔇 AI Silenced. Manual intervention was ${Math.round(timeSinceIntervention / 60000)}m ago.`,
+                  );
+                  return; // EXIT: Do not trigger AI
+                } else {
+                  console.info(
+                    `[HITL] 🔊 Auto-Reactivating AI after grace period`,
+                  );
+                  await chatService.updateConversation(conversation.id, {
+                    aiEnabled: true,
+                  });
+                }
+              }
 
               // TODO: Enable AI for groups later if needed
               this.triggerAIResponse(
@@ -947,7 +1014,10 @@ export class MessageHandler implements IMessageHandler {
     companyId: string,
   ) {
     if (!conversation?.queue?.aiAssistantId) return;
-    await new Promise((r) => setTimeout(r, 1500));
+
+    // 1. Initial "Thinking" Delay (1-2s) - simulates reading time
+    const thinkingTime = Math.floor(Math.random() * 1000) + 1000;
+    await new Promise((r) => setTimeout(r, thinkingTime));
 
     const history = await prisma.message.findMany({
       where: { conversationId: conversation.id },
@@ -960,6 +1030,7 @@ export class MessageHandler implements IMessageHandler {
       parts: m.content,
     }));
 
+    // Generate AI Response
     const rawResponse = await generateAIResponse(
       companyId,
       conversation.queue.aiAssistantId,
@@ -972,10 +1043,35 @@ export class MessageHandler implements IMessageHandler {
       if (!validation.success) return;
 
       const cleanResponse = validation.data;
+
+      // 🧠 HUMAN SIMULATION: Typing Indicator
+      // Calculate typing time based on length (avg 50ms per char, min 1.5s, max 8s)
+      const typingTime = Math.min(
+        Math.max(cleanResponse.length * 50, 1500),
+        8000,
+      );
+
+      // Send "Typing..." status
+      await this.sendPresenceUpdate(
+        conversation.channelId,
+        "composing",
+        companyId,
+      );
+
+      // Wait for the calculated typing time
+      await new Promise((r) => setTimeout(r, typingTime));
+
+      // Fetch Real AI Name to avoid "AI Assistant" duplicate in Team View
+      const aiAssistant = await prisma.aIAssistant.findUnique({
+        where: { id: conversation.queue.aiAssistantId },
+        select: { name: true },
+      });
+      const botName = aiAssistant?.name || "AI Assistant";
+
       const botEmail = `ai_${conversation.queue.aiAssistantId}@reply.bot`;
       const botUser = await chatService.upsertWhatsAppUser({
         email: botEmail,
-        name: "AI Assistant",
+        name: botName,
         companyId,
         role: "AGENT",
       });
@@ -983,6 +1079,13 @@ export class MessageHandler implements IMessageHandler {
       await TenantContextManager.run(
         { companyId, userId: botUser.id, requestId: "ai" },
         async () => {
+          // Stop typing status (optional, sending message usually clears it but good practice)
+          await this.sendPresenceUpdate(
+            conversation.channelId,
+            "paused",
+            companyId,
+          );
+
           await this.sendMessage(conversation.channelId, cleanResponse, {
             companyId,
             conversationId: conversation.id,
@@ -1039,6 +1142,30 @@ export class MessageHandler implements IMessageHandler {
       metadata: prepareMetadataForDB(mergedMeta), // 🛡️ Sanitized
     });
 
+    // 🧠 100-YEAR FIX: HITL (Human-in-the-Loop) - Auto-Mute AI
+    // When a HUMAN AGENT sends a message from the CRM, we silence the AI.
+    // BUT if the message is from AI or Flow, we DON'T mute - the AI should keep responding!
+    const isAiGenerated = metadata?.aiGenerated === true;
+    const isFlowGenerated = metadata?.flowGenerated === true;
+
+    if (!isAiGenerated && !isFlowGenerated) {
+      try {
+        await chatService.updateConversation(conversationId, {
+          aiEnabled: false,
+          lastManualIntervention: new Date(),
+        });
+        console.info(
+          `[HITL] ✅ AI muted for conversation ${conversationId} (human agent intervention)`,
+        );
+      } catch (err) {
+        console.error("[HITL] Failed to auto-mute AI:", err);
+      }
+    } else {
+      console.info(
+        `[HITL] ⏩ Skipping AI mute - message is ${isAiGenerated ? "AI-generated" : "Flow-generated"}`,
+      );
+    }
+
     await chatService.updateConversation(conversationId, {});
     const fullConv = await chatService.getFullConversation(conversationId);
     if (fullConv) this.socketEmitter.emitMessageSent(savedMessage, fullConv);
@@ -1069,6 +1196,37 @@ export class MessageHandler implements IMessageHandler {
     let messageContent: AnyMessageContent;
     let metaType: "image" | "video" | "audio" | "document";
     let tempFilePath: string | null = null;
+    // 🛡️ 100-YEAR FIX: Resolve Relative URLs (from MediaService) to Absolute URLs
+    // The MediaService returns relative paths like "/api/media/..." for frontend compatibility.
+    // But here in the backend, we need an absolute URL to fetch the content via HTTP.
+    if (media.url && media.url.startsWith("/api/")) {
+      const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+      const cleanBackendUrl = backendUrl.replace(/\/$/, ""); // Remove trailing slash
+      media.url = `${cleanBackendUrl}${media.url}`;
+      console.info(
+        `[MessageHandler] 🔄 Resolved relative media URL to: ${media.url}`,
+      );
+    }
+
+    // 🛡️ 100-YEAR FIX: Robust "Is this a local file?" check
+    // We assume anything NOT http/https and NOT data-uri is a local path.
+    const isHttp =
+      media.url.startsWith("http://") || media.url.startsWith("https://");
+    const isData = media.url.startsWith("data:");
+
+    if (!isHttp && !isData) {
+      if (!fs.existsSync(media.url)) {
+        console.error(
+          `[MessageHandler] ❌ Local media file not found: ${media.url}`,
+        );
+        // Fallback: Send a text message explaining the error instead of crashing the flow
+        const warningContent = media.caption
+          ? `${media.caption}\n\n(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`
+          : `(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`;
+
+        return this.sendMessage(to, warningContent, options);
+      }
+    }
 
     try {
       if (media.type === "image") {
@@ -1086,42 +1244,97 @@ export class MessageHandler implements IMessageHandler {
         };
         metaType = "document";
       } else if (media.type === "audio") {
-        // let finalAudioUrl = media.url; // Unused
+        let realMimeType = media.mimetype;
         const isBase64 = media.url.startsWith("data:");
 
-        // 🔄 AUTO-CONVERT BASE64 AUDIO (WebM -> OGG/Opus)
-        if (isBase64) {
+        // 🔍 1. Resolve Real MimeType from DB (if Proxy URL)
+        const proxyMatch = !isBase64
+          ? media.url.match(/\/api\/media\/([^/]+)\/content/)
+          : null;
+        if (proxyMatch && proxyMatch[1]) {
           try {
-            // console.log("[MessageHandler] 🔄 Converting Base64 audio to OGG/Opus...");
-            tempFilePath = await convertAudioToMP4(media.url);
-            // console.log("[MessageHandler] ✅ Conversion successful:", tempFilePath);
+            const mediaId = proxyMatch[1];
+            const dbMedia = await prisma.media.findUnique({
+              where: { id: mediaId },
+              select: { mimeType: true },
+            });
+            if (dbMedia?.mimeType) {
+              realMimeType = dbMedia.mimeType;
+              console.info(
+                `[MessageHandler] 🎯 Resolved MIME for ${mediaId}: ${realMimeType}`,
+              );
+            }
+          } catch (err) {
+            console.warn(
+              `[MessageHandler] ⚠️ Failed to resolve MIME from DB:`,
+              err,
+            );
+          }
+        }
 
-            // Read file buffer and send as buffer (Baileys handles it better)
+        // 🎛️ 2. Determine if Conversion is Needed
+        // Convert if: Base64 OR it's WebM (needs OGG for PTT)
+        const isWebM =
+          realMimeType === "audio/webm" ||
+          media.url.toLowerCase().endsWith(".webm");
+        const needsConversion = isBase64 || isWebM;
+
+        if (needsConversion) {
+          try {
+            const inputSource = media.url;
+
+            // This now handles both Base64 AND URLs/Paths
+            tempFilePath = await convertAudioToMP4(inputSource);
+
+            // Read file buffer
             const audioBuffer = fs.readFileSync(tempFilePath);
 
             messageContent = {
               audio: audioBuffer,
               mimetype: "audio/ogg; codecs=opus",
-              ptt: true,
+              ptt: true, // Converted to OGG/Opus -> PTT Safe
             };
           } catch (error) {
             console.error(
               "[MessageHandler] ❌ Conversion failed, falling back to raw:",
               error,
             );
-            // Fallback to original
+            // Fallback: Send original URL
             messageContent = {
               audio: { url: media.url },
-              mimetype: "audio/ogg; codecs=opus",
+              mimetype: realMimeType || "audio/ogg; codecs=opus",
               ptt: true,
             };
           }
         } else {
-          // Normal URL flow
+          // 🛑 3. No Conversion Needed (MP3, OGG, WAV, etc.)
+          const isMp3 =
+            realMimeType === "audio/mpeg" ||
+            realMimeType === "audio/mp3" ||
+            media.url.toLowerCase().endsWith(".mp3");
+
+          let finalMime = "audio/ogg; codecs=opus";
+          let isPtt = true;
+
+          if (isMp3) {
+            // MP3 -> Audio File (Safe)
+            finalMime = "audio/mpeg";
+            isPtt = false;
+          } else if (
+            realMimeType &&
+            realMimeType !== "application/octet-stream"
+          ) {
+            // Trust DB Mime
+            finalMime = realMimeType;
+            if (finalMime === "audio/ogg" && !finalMime.includes("codecs")) {
+              finalMime = "audio/ogg; codecs=opus";
+            }
+          }
+
           messageContent = {
             audio: { url: media.url },
-            mimetype: "audio/ogg; codecs=opus",
-            ptt: true,
+            mimetype: finalMime,
+            ptt: isPtt,
           };
         }
 
@@ -1129,8 +1342,40 @@ export class MessageHandler implements IMessageHandler {
       } else if (media.type === "sticker") {
         messageContent = { sticker: { url: media.url } };
         metaType = "image";
+      } else if (media.type === "file" || media.type === "document") {
+        // 📄 SUPPORT FOR DOCUMENTS/FILES
+        // Try to fetch specific mimetype if possible, otherwise default
+        let docMime = "application/octet-stream";
+        let fileName = "document";
+
+        // Attempt to resolve stored mimetype/filename from DB if it's a proxy URL
+        const proxyMatch = media.url.match(/\/api\/media\/([^/]+)\/content/);
+        if (proxyMatch && proxyMatch[1]) {
+          try {
+            const mediaId = proxyMatch[1];
+            const dbMedia = await prisma.media.findUnique({
+              where: { id: mediaId },
+              select: { mimeType: true, filename: true },
+            });
+            if (dbMedia?.mimeType) docMime = dbMedia.mimeType;
+            if (dbMedia?.filename) fileName = dbMedia.filename;
+          } catch (e) {
+            console.warn(
+              "[MessageHandler] Failed to resolve document metadata",
+              e,
+            );
+          }
+        }
+
+        messageContent = {
+          document: { url: media.url },
+          mimetype: docMime,
+          fileName: fileName,
+          caption: media.caption || "",
+        };
+        metaType = "document";
       } else {
-        throw new Error("Unsupported media type");
+        throw new Error(`Unsupported media type: ${media.type}`);
       }
 
       const sentMsg = await sock.sendMessage(jid, messageContent);
@@ -1152,12 +1397,41 @@ export class MessageHandler implements IMessageHandler {
         metadata: prepareMetadataForDB(meta), // 🛡️ Sanitized
       });
 
+      // 🧠 100-YEAR FIX: HITL (Human-in-the-Loop) - Auto-Mute AI
+      // Same logic as sendMessage() - only mute if HUMAN agent sends media
+      const metadata = options.metadata;
+      const isAiGenerated = metadata?.aiGenerated === true;
+      const isFlowGenerated = metadata?.flowGenerated === true;
+
+      if (!isAiGenerated && !isFlowGenerated) {
+        try {
+          await chatService.updateConversation(conversationId, {
+            aiEnabled: false,
+            lastManualIntervention: new Date(),
+          });
+          console.info(
+            `[HITL] ✅ AI muted for conversation ${conversationId} (human agent sent media)`,
+          );
+        } catch (err) {
+          console.error("[HITL] Failed to auto-mute AI:", err);
+        }
+      } else {
+        console.info(
+          `[HITL] ⏩ Skipping AI mute for media - ${isAiGenerated ? "AI-generated" : "Flow-generated"}`,
+        );
+      }
+
       await chatService.updateConversation(conversationId, {});
       const fullConv = await chatService.getFullConversation(conversationId);
       if (fullConv) this.socketEmitter.emitMessageSent(savedMessage, fullConv);
 
       // 🚀 100-YEAR FIX: Return savedMessage (with DB id) for frontend deduplication
       return savedMessage as unknown as MessagePayload;
+    } catch (err) {
+      console.error(`[MessageHandler] ❌ sendMedia failed unexpectedly:`, err);
+      // Fallback: Send a text message explaining the error
+      const warningContent = `(⚠️ Error enviando archivo multimedia: ${media.type})`;
+      return this.sendMessage(to, warningContent, options);
     } finally {
       // 🧹 CLEANUP TEMP FILE ALWAYS
       if (tempFilePath) {
@@ -1223,5 +1497,86 @@ export class MessageHandler implements IMessageHandler {
     const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
     // Baileys types allow 'composing' | 'recording' | 'paused'
     await sock.sendPresenceUpdate(type, jid);
+  }
+
+  /**
+   * 🖼️ 100-YEAR ENTERPRISE FIX: Fetch and Persist WhatsApp Profile Picture
+   *
+   * This method fetches the profile picture from WhatsApp using Baileys and
+   * persists it to the User record. It's designed to be:
+   * - Non-blocking (called with .catch() in the main flow)
+   * - Fail-safe (silently logs errors, never crashes message processing)
+   * - Cacheable (only updates if profilePicUrl is not already set)
+   *
+   * @param sessionId - The WhatsApp session ID
+   * @param jid - The WhatsApp JID of the contact (e.g., "573001234567@s.whatsapp.net")
+   * @param userId - The internal User ID to update
+   */
+  private async fetchAndPersistProfilePicture(
+    sessionId: string,
+    jid: string,
+    userId: string,
+  ): Promise<void> {
+    try {
+      const sock = this.sessionManager.getSession(sessionId);
+      if (!sock) {
+        console.warn(`[ProfilePic] No socket for session ${sessionId}`);
+        return;
+      }
+
+      // Normalize JID for Baileys
+      const normalizedJid = jid.includes("@") ? jid : `${jid}@s.whatsapp.net`;
+
+      // Check if user already has a profile pic (skip if already set)
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { profilePicUrl: true },
+      });
+
+      // 🛡️ Skip if already has a valid URL (not a placeholder)
+      if (
+        existingUser?.profilePicUrl &&
+        existingUser.profilePicUrl.startsWith("http")
+      ) {
+        return;
+      }
+
+      // Fetch from WhatsApp (try high-res first, fallback to preview)
+      let profilePicUrl: string | undefined;
+
+      try {
+        // 'image' = full resolution, 'preview' = thumbnail
+        profilePicUrl = await sock.profilePictureUrl(normalizedJid, "image");
+      } catch {
+        // If high-res fails (privacy settings), try preview
+        try {
+          profilePicUrl = await sock.profilePictureUrl(
+            normalizedJid,
+            "preview",
+          );
+        } catch {
+          // No profile pic available (privacy or no pic set)
+          console.info(
+            `[ProfilePic] No profile picture available for ${normalizedJid}`,
+          );
+          return;
+        }
+      }
+
+      if (!profilePicUrl) return;
+
+      // Persist to database
+      await prisma.user.update({
+        where: { id: userId },
+        data: { profilePicUrl },
+      });
+
+      console.info(
+        `[ProfilePic] ✅ Saved profile picture for user ${userId}: ${profilePicUrl.slice(0, 60)}...`,
+      );
+    } catch (error) {
+      // Non-blocking - log and continue
+      console.warn(`[ProfilePic] Failed to fetch/save profile pic:`, error);
+    }
   }
 }

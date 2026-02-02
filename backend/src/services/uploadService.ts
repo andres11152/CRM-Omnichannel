@@ -152,7 +152,15 @@ export const uploadFile = async (
           ACL: "private",
         });
 
-        await s3Client.send(command);
+        // 🛡️ 100-YEAR FIX: Race against timeout to prevent hanging requests
+        // If S3 takes >5s, fail fast and fall back to local storage
+        await Promise.race([
+          s3Client.send(command),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("S3 Upload Timeout (5s)")), 5000),
+          ),
+        ]);
+
         console.info("[UploadService] S3 upload successful");
 
         const url = `https://${BUCKET_NAME}.s3.amazonaws.com/${key}`;

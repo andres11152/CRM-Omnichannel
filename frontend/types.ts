@@ -417,7 +417,9 @@ export interface FlowNode {
     // AI
     aiAssistantId?: string;
     // Assign
+    assignmentType?: "agent" | "queue";
     agentId?: string;
+    queueId?: string;
     message?: string; // Alternate content field
     // Delay
     delayValue?: string | number;

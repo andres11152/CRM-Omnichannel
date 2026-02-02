@@ -38,6 +38,7 @@ import { API_BASE_URL, BASE_URL } from "../services/apiConfig";
 
 import { resolveContactName, getInitials } from "../src/utils/contactUtils";
 import { useAgentWorkspaceSockets } from "../src/hooks/useAgentWorkspaceSockets";
+import { socketService } from "../services/socketService";
 
 interface Props {
   aiConfig: AIConfig;
@@ -243,6 +244,38 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     fetchData,
     triggerBackgroundRefresh,
   });
+
+  // 🛡️ 100-YEAR FIX: Real-time WhatsApp Status Synchronization
+  // Listens to 'session.status' event emitted by backend when WhatsApp connects/disconnects
+  useEffect(() => {
+    // Handler for status updates
+    const handleSessionStatus = (data: {
+      sessionId: string;
+      status: string;
+    }) => {
+      console.log("[AgentWorkspace] 🔌 WhatsApp Status Update:", data.status);
+      setSocketConnected(data.status === "CONNECTED");
+    };
+
+    // Handler for QR updates (implies unexpected disconnection or new session)
+    const handleQrUpdated = () => {
+      console.log("[AgentWorkspace] 📷 QR Code received, marking as Offline");
+      setSocketConnected(false);
+    };
+
+    // Register listeners
+    socketService.on("session.status", handleSessionStatus);
+    socketService.on("qr.updated", handleQrUpdated);
+
+    // Request initial status check if needed (backend syncs on connect, but good to be sure)
+    // socketService.emit("session.check_status");
+
+    return () => {
+      // Cleanup
+      socketService.off("session.status", handleSessionStatus);
+      socketService.off("qr.updated", handleQrUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     // Load Tags
@@ -602,30 +635,92 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const handlePickTicket = async () => {
     if (!activeTicketId || !user) return;
 
-    const ticketToUpdate = tickets.find((t) => t.id === activeTicketId);
-    if (!ticketToUpdate) return;
+    // 🕵️ DEBUG: deeply inspect ID
+    console.log(
+      `[handlePickTicket] Attempting to pick ID: '${activeTicketId}'`,
+    );
+    console.log(`[handlePickTicket] ID Length: ${activeTicketId.length}`);
+    // Check for invisible chars
+    for (let i = 0; i < activeTicketId.length; i++) {
+      const code = activeTicketId.charCodeAt(i);
+      if (code < 32 || code > 126)
+        console.warn(`[handlePickTicket] ⚠️ Suspicious char at ${i}: ${code}`);
+    }
+
+    const cleanId = activeTicketId.trim();
+
+    const ticketToUpdate = tickets.find((t) => t.id === cleanId);
+    if (!ticketToUpdate) {
+      console.error("[handlePickTicket] Ticket not found in local state");
+      return;
+    }
 
     try {
       const token = localStorage.getItem("token");
 
       // 1. Assign ticket to current agent
-      const assignRes = await fetch(
-        `${API_BASE_URL}/tickets/${activeTicketId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            status: "OPEN",
-            assignedToId: user.id,
-          }),
+      let response = await fetch(`${API_BASE_URL}/tickets/${cleanId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+        body: JSON.stringify({
+          status: "OPEN",
+          assignedToId: user.id,
+        }),
+      });
 
-      if (!assignRes.ok) {
-        throw new Error("Error al asignar ticket");
+      // 🛡️ 100-YEAR FIX: Self-Healing for Optimistic IDs (404 Handling)
+      // If we get a 404, it likely means we used a ConversationID (optimistic) instead of the real TicketID.
+      // We force a refresh, find the REAL ticket using the conversation ID, and retry.
+      if (response.status === 404) {
+        console.warn(
+          "[handlePickTicket] ⚠️ 404 encountered. ID might be optimistic. Attempting self-heal...",
+        );
+
+        // 1. Force Sync Fetch (wait for it)
+        await new Promise<void>((resolve) => {
+          // Manually trigger fetch logic here or wait for global fetch
+          // For safety, we'll re-call the logic of getTickets here directly to avoid state hook delays
+          getTickets()
+            .then((realTickets) => {
+              // 2. Find the REAL ticket via Conversation ID
+              const ticketConvId =
+                ticketToUpdate.conversationId || ticketToUpdate.id;
+              const realTicket = realTickets.find(
+                (t) => t.conversationId === ticketConvId,
+              );
+
+              if (realTicket && realTicket.id !== cleanId) {
+                console.log(
+                  `[handlePickTicket] 🩹 Healed ID: ${cleanId} -> ${realTicket.id}`,
+                );
+                // 3. Retry with Real ID
+                fetch(`${API_BASE_URL}/tickets/${realTicket.id}`, {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    status: "OPEN",
+                    assignedToId: user.id,
+                  }),
+                }).then((retryRes) => {
+                  response = retryRes; // Update response ref
+                  resolve();
+                });
+              } else {
+                resolve(); // Could not heal
+              }
+            })
+            .catch(() => resolve());
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error("Error al asignar ticket (Posiblemente ya no existe)");
       }
 
       // 2. Send system notification to chat

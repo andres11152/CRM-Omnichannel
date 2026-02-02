@@ -341,10 +341,19 @@ export const updateTicket = catchAsync(
     const data = req.body;
 
     // First check existence and permission
+    console.log(`[TicketController] 🛠️ Update Request for ID: '${id}'`); // Quote to see whitespace
     const existingTicket = await prisma.ticket.findUnique({ where: { id } });
+
     if (!existingTicket) {
+      console.error(
+        `[TicketController] ❌ Ticket NOT FOUND in DB for ID: '${id}'`,
+      );
       return next(new AppError("Ticket not found", 404));
     }
+    console.log(
+      `[TicketController] ✅ Found ticket: ${existingTicket.id} (Company: ${existingTicket.companyId})`,
+    );
+
     if (companyId && existingTicket.companyId !== companyId) {
       return next(new AppError("Permission denied", 403));
     }

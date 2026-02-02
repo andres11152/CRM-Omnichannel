@@ -92,7 +92,7 @@ import emailRouter from "@/routes/emailRoutes";
 
 import pushNotificationsRoutes from "@/routes/pushNotifications";
 import rolesRouter from "@/routes/roles";
-import devRouter from "@/routes/devRoutes";
+
 import searchRouter from "@/routes/searchRoutes";
 import notificationsRouter from "@/routes/notificationsRoutes";
 import { initScheduler } from "@/services/schedulerService";
@@ -273,12 +273,6 @@ app.use("/api/roles", apiLimiter, protect, rolesRouter);
 app.use("/api/search", apiLimiter, protect, searchRouter);
 app.use("/api/notifications", apiLimiter, protect, notificationsRouter);
 
-// 🛠️ DEV TOOLS (Non-Production Only)
-if (process.env.NODE_ENV !== "production") {
-  app.use("/api/dev", devRouter);
-  Logger.info("[Server] 🧪 Dev Routes enabled at /api/dev");
-}
-
 app.use((req, res, next) => {
   next(
     new AppError(
@@ -401,7 +395,12 @@ if (require.main === module) {
             });
 
             // ⌨️ TYPING INDICATOR HANDLER (Frontend -> WhatsApp)
-            socket.on("conversation:typing", (payload: any) => {
+            interface TypingPayload {
+              to: string;
+              status: "composing" | "paused";
+            }
+
+            socket.on("conversation:typing", (payload: TypingPayload) => {
               // Payload: { to: string (phone), status: "composing" | "paused" }
               if (payload?.to && payload?.status) {
                 // Fire & Forget for performance

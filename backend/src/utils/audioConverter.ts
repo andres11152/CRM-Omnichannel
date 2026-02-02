@@ -13,45 +13,46 @@ if (ffmpegPath) {
  * @param base64DataUrl - Base64 encoded audio data URL (e.g., "data:audio/webm;base64,...")
  * @returns Promise<string> - Path to the converted MP4 file
  */
-export async function convertAudioToMP4(
-  base64DataUrl: string
-): Promise<string> {
-  // Extract base64 data from data URL
-  // Updated regex to handle more complex mime types (e.g. including codecs)
-  // Matches: data:[mime-type];base64,[data]
-  const matches = base64DataUrl.match(
-    /^data:([A-Za-z0-9-+\/;= ]+);base64,(.+)$/
-  );
-
-  if (!matches || matches.length !== 3) {
-    console.error(
-      "[AudioConverter] Invalid format. URL start:",
-      base64DataUrl.substring(0, 50)
-    );
-    throw new Error("Invalid base64 data URL format");
-  }
-
-  const base64Data = matches[2];
-  const audioBuffer = Buffer.from(base64Data, "base64");
-
+export async function convertAudioToMP4(inputSource: string): Promise<string> {
   // Create temporary files
   const tempDir = path.join(process.cwd(), "temp");
   await fs.mkdir(tempDir, { recursive: true });
 
-  const inputFile = path.join(tempDir, `input_${Date.now()}.webm`);
   const outputFile = path.join(tempDir, `output_${Date.now()}.ogg`);
+  let inputFile: string | null = null;
+  let inputPath = inputSource;
 
   try {
-    // Write input buffer to temp file
-    await fs.writeFile(inputFile, audioBuffer);
+    // Check if input is Base64 Data URL
+    if (inputSource.startsWith("data:")) {
+      const matches = inputSource.match(
+        /^data:([A-Za-z0-9-+/;= ]+);base64,(.+)$/,
+      );
+
+      if (matches && matches.length === 3) {
+        // Handle Base64
+        const base64Data = matches[2];
+        const audioBuffer = Buffer.from(base64Data, "base64");
+        inputFile = path.join(tempDir, `input_${Date.now()}.webm`);
+        await fs.writeFile(inputFile, audioBuffer);
+        inputPath = inputFile;
+      } else {
+        // If it starts with data: but regex fails, it might be malformed, but we'll try passing it or throw?
+        // Let's assume if it fails regex, it's invalid base64.
+        console.warn(
+          "[AudioConverter] Malformed data URI, trying as is or failing.",
+        );
+      }
+    }
+    // If not data URI, we treat 'inputSource' as a file path or URL directly.
 
     // Convert using ffmpeg
     await new Promise<void>((resolve, reject) => {
-      ffmpeg(inputFile)
+      ffmpeg(inputPath)
         .audioCodec("libopus")
         .format("ogg")
         .on("end", () => {
-          console.log("[AudioConverter] Conversion completed successfully");
+          console.info("[AudioConverter] Conversion completed successfully");
           resolve();
         })
         .on("error", (err: Error) => {
@@ -61,13 +62,15 @@ export async function convertAudioToMP4(
         .save(outputFile);
     });
 
-    // Clean up input file
-    await fs.unlink(inputFile).catch(() => {});
+    // Clean up input file ONLY if we created a temp one from base64
+    if (inputFile) {
+      await fs.unlink(inputFile).catch(() => {});
+    }
 
     return outputFile;
   } catch (error) {
     // Clean up files on error
-    await fs.unlink(inputFile).catch(() => {});
+    if (inputFile) await fs.unlink(inputFile).catch(() => {});
     await fs.unlink(outputFile).catch(() => {});
     throw error;
   }
@@ -80,11 +83,11 @@ export async function convertAudioToMP4(
 export async function cleanupTempFile(filePath: string): Promise<void> {
   try {
     await fs.unlink(filePath);
-    console.log(`[AudioConverter] Cleaned up temp file: ${filePath}`);
+    console.info(`[AudioConverter] Cleaned up temp file: ${filePath}`);
   } catch (error) {
     console.warn(
       `[AudioConverter] Failed to cleanup temp file: ${filePath}`,
-      error
+      error,
     );
   }
 }

@@ -104,9 +104,15 @@ export interface FlowNodeData {
 
   // UPDATE_CONTACT
   fields?: Record<string, string>;
+  name?: string;
+  email?: string;
+  phone?: string;
+  customFields?: string; // JSON String from textarea in frontend
 
   // ASSIGN_AGENT
+  assignmentType?: "agent" | "queue";
   agentId?: string;
+  queueId?: string;
 }
 
 /**

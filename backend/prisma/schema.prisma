@@ -262,11 +262,8 @@ model Company {
   products         Product[] // Product Catalog
 
   // Chatbot Flows
-  // flows        Workflow[] // Deprecated or renamed? Schema has 'flows', but relation uses Workflow
-  // Let's use the explicit 'workflows' relation defined in line 251.
-  // Line 251 says: workflows Workflow[]
-  // Line 265 says: flows Flow[]
-  // We should remove the broken 'flows Flow[]' entirely as 'workflows' already exists.
+  // Link to 'workflows' is the single source of truth (line 251)
+  // Cleaned up deprecated 'flows' reference.
   
   flowSessions ContactFlowSession[]
 

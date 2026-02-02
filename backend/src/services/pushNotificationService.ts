@@ -18,15 +18,25 @@ const vapidKeys = {
 };
 
 try {
-  webpush.setVapidDetails(
-    `mailto:${process.env.SMTP_USER || "noreply@replycrm.com"}`,
-    vapidKeys.publicKey,
-    vapidKeys.privateKey,
-  );
+  const isPlaceholder =
+    vapidKeys.publicKey.includes("BNWMhNVr") ||
+    vapidKeys.privateKey.includes("TX8yfc");
+
+  if (!isPlaceholder) {
+    webpush.setVapidDetails(
+      `mailto:${process.env.SMTP_USER || "noreply@replycrm.com"}`,
+      vapidKeys.publicKey,
+      vapidKeys.privateKey,
+    );
+  } else {
+    // Silently ignore if using placeholders, or log a debug
+    Logger.debug("Using placeholder VAPID keys. Web Push disabled.");
+  }
 } catch (error) {
+  // Just log the message, not the stack trace, to keep console clean
+  const msg = error instanceof Error ? error.message : String(error);
   Logger.warn(
-    "Failed to init Web Push. Check VAPID keys. Push notifications disabled.",
-    error,
+    `Failed to init Web Push: ${msg}. Push notifications disabled (Check VAPID_PUBLIC/PRIVATE_KEY env vars).`,
   );
 }
 

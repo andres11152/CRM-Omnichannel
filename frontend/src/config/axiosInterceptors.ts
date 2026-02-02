@@ -131,7 +131,21 @@ export const setupAxiosInterceptors = () => {
 
       // 401 Unauthorized
       if (status === 401) {
-        console.warn("[Auth] Token expired or invalid");
+        // 🔒 IGNORAR LOGIN: Si el error viene del endpoint de login, NO hacemos logout.
+        // Un 401 en login significa "Credenciales Incorrectas", no "Token Expirado".
+        // Dejamos que el componente LoginPage maneje el error y muestre el mensaje correcto.
+        const requestUrl = error.config?.url || "";
+        const isLoginRequest =
+          requestUrl.includes("/auth/login") || requestUrl.includes("login");
+
+        if (isLoginRequest) {
+          console.warn(
+            "[Auth] 401 on Login (Invalid Credentials) - Skipping global logout",
+          );
+          return Promise.reject(error);
+        }
+
+        console.warn("[Auth] Token expired or invalid - Triggering Logout");
         useAuthStore.getState().logout(); // Unified logout
         return Promise.reject(error);
       }

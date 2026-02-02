@@ -152,10 +152,33 @@ export class WhatsAppService {
 
     // 🛡️ SYSTEM MODE: Server startup needs access to all sessions
     // This bypasses tenant isolation since there's no active request context
+
+    // 🧹 CLEANUP: Remove stale SCANNING sessions (user never completed QR scan)
+    // These are "ghost" sessions that should not be restored.
+    const deletedStale = await TenantContextManager.runAsSystem(() =>
+      prisma.whatsAppSession.deleteMany({
+        where: {
+          status: "SCANNING",
+          // Only delete if older than 10 minutes (stale)
+          updatedAt: {
+            lt: new Date(Date.now() - 10 * 60 * 1000),
+          },
+        },
+      }),
+    );
+
+    if (deletedStale.count > 0) {
+      logger.info(
+        `[WhatsAppService] 🧹 Cleaned up ${deletedStale.count} stale SCANNING sessions`,
+      );
+    }
+
+    // 🛡️ 100-YEAR FIX: Only restore sessions that were CONNECTED at some point.
+    // Sessions in SCANNING state are incomplete and should NOT be auto-restored.
     const sessions = await TenantContextManager.runAsSystem(() =>
       prisma.whatsAppSession.findMany({
         where: {
-          status: { in: ["CONNECTED", "SCANNING", "DISCONNECTED"] }, // 🛡️ 100-YEAR FIX: Auto-heal disconnected sessions on boot
+          status: { in: ["CONNECTED", "DISCONNECTED"] },
         },
       }),
     );

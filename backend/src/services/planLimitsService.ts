@@ -182,7 +182,7 @@ export async function getCurrentUsage(companyId: string): Promise<UsageStats> {
     prisma.media.aggregate({ where: { companyId }, _sum: { size: true } }), // Using 'media' table size column
     prisma.contact.count({ where: { companyId } }),
     prisma.account.count({ where: { companyId } }), // CRM Companies/Accounts
-    prisma.flow.count({ where: { companyId, isActive: true } }), // Active workflows only
+    prisma.workflow.count({ where: { companyId, isActive: true } }), // Active workflows only
   ]);
 
   return {

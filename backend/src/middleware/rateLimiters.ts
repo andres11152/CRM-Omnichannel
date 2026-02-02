@@ -25,7 +25,7 @@ import { Logger } from "@/utils/logger";
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // Max 500 attempts per window (Dev Mode)
+  max: 50000, // 🛡️ DEV MODE: Increased limit for testing (was 500)
 
   // Message returned when rate limit is exceeded
   message: {

@@ -132,21 +132,16 @@ export class WhatsAppIdUtils {
     if (digits.length < 7 || digits.length > 15) return false;
 
     // 🛡️ LID PATTERNS: Internal WhatsApp IDs that look like phones
-    // Pattern 1: Starts with 1-3 and is exactly 15 digits (LID pattern)
-    if (/^[1-3]\d{14}$/.test(digits)) return false;
+    // Pattern 1: Starts with 1 and is roughly 15-20 digits (Typical LID)
+    // Real international numbers max out at 15. We filter ONLY obviously wrong ones.
+    if (digits.length > 15) return false;
 
-    // Pattern 2: Starts with 4-5 and has 12+ digits (observed LID pattern)
-    if (/^[45]\d{11,}$/.test(digits)) return false;
+    // 🛡️ REVERTED 100-YEAR FIX: The previous rule blocking starting with 4 or 5 was TOO AGGRESSIVE.
+    // It blocked valid Colombia (57...), Brazil (55...), Mexico (52...) numbers.
+    // We now rely primarily on length and explicit @lid domain checks.
 
-    // Pattern 3: Numbers with more than 12 digits are suspicious
-    // Most country codes + phone numbers max out at 12-13 digits
-    // Examples: +1 (3 country) + 10 local = 13, +52 (2) + 10 = 12
-    if (digits.length > 13) {
-      // Double-check: only known large country codes (China, etc.) have 13+
-      // If it doesn't look like a valid country code pattern, reject
-      const startsWithValidLargeCode = /^(86|91|62|55|81)/.test(digits);
-      if (!startsWithValidLargeCode) return false;
-    }
+    // Pattern 3: Repeated digits patterns (fake/test numbers)
+    if (/^(\d)\1{6,}$/.test(digits)) return false;
 
     // Pattern 4: Repeated digits patterns (fake/test numbers)
     if (/^(\d)\1{6,}$/.test(digits)) return false;

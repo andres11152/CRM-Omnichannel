@@ -68,14 +68,8 @@ export const adminService = {
     return prisma.company.findMany({
       // Filter out system companies safely
       where: {
-        users: {
-          none: {
-            // Master usually has a specific role. Let's rely on slug for safety if possible or role MASTER
-            role: "MASTER",
-          },
-        },
-        // Fallback: Exclude by slug convention if MASTER role check fails
-        slug: { notIn: ["reply-saas-admin", "crm-saas"] },
+        // Fallback: Exclude only specific system slugs if absolutely necessary, but generally show everything to Master
+        // slug: { notIn: ["reply-saas-admin", "crm-saas"] },
       },
       include: {
         users: {
@@ -708,8 +702,8 @@ export const adminService = {
       id: c.id,
       name: c.name,
       plan: c.plan?.name || "N/A",
-      users: c._count.users,
-      tickets: c._count.tickets,
+      users: c._count?.users || 0,
+      tickets: c._count?.tickets || 0,
       status: c.status,
     }));
 

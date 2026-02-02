@@ -68,6 +68,15 @@ api.interceptors.response.use(
 
     // --- CASE 1: 401 UNAUTHORIZED (Token Expired/Invalid) ---
     if (response?.status === 401) {
+      // 🔒 SKIP LOGOUT FOR LOGIN: Allow 401 on login to pass through so the UI handles it
+      const requestUrl = error.config?.url || "";
+      if (requestUrl.includes("/auth/login") || requestUrl.includes("login")) {
+        console.warn(
+          "[Axios] 401 on Login (Invalid Credentials) - Skipping logout",
+        );
+        return Promise.reject(error); // Pass original error to LoginPage
+      }
+
       console.warn("[Axios] 401 Session Expired. Triggering logout...");
 
       // Use Store Action for Clean Logout (clears state, storage, and redirects)

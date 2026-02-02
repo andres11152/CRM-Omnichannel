@@ -3,7 +3,7 @@ import { useForm, UseFormRegister, FieldErrors, Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { toast } from "sonner";
+import { toast, Toaster } from "sonner";
 import { AxiosError } from "axios";
 
 import { useAuthStore } from "../stores/authStore";
@@ -195,12 +195,25 @@ export const LoginPage = () => {
       toast.success(`Bienvenido de nuevo, ${user.name.split(" ")[0]} 👋`);
       navigate(from, { replace: true });
     } catch (error: unknown) {
+      console.error("[LoginPage] Login Error:", error);
+
       if (error instanceof AxiosError) {
+        console.log("[LoginPage] Axios Response:", error.response);
+
         if (error.response?.status === 429) {
           toast.error("Demasiados intentos. Espera un minuto.");
+        } else if (error.response?.status === 401) {
+          // 🎯 SHOW SPECIFIC INVALID CREDENTIALS MESSAGE
+          const serverMsg = error.response.data?.message;
+          const displayMsg =
+            typeof serverMsg === "string"
+              ? serverMsg
+              : "Email o contraseña incorrectos";
+          console.log("[LoginPage] Displaying Toast:", displayMsg);
+          toast.error(displayMsg);
         } else if (
           error.response?.status === 403 &&
-          typeof error.response.data.message === "string" &&
+          typeof error.response.data?.message === "string" &&
           error.response.data.message.includes("Acceso denegado")
         ) {
           const msg = error.response.data.message;
@@ -218,7 +231,12 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-white dark:bg-[#0b141a] font-sans selection:bg-green-100 dark:selection:bg-green-900">
+    <div className="flex min-h-screen bg-white dark:bg-[#0b141a] font-sans selection:bg-green-100 dark:selection:bg-green-900 relative">
+      <Toaster
+        position="top-right"
+        richColors
+        toastOptions={{ style: { zIndex: 99999 } }}
+      />
       {/* 🖼️ LEFT SIDE: ARTWORK & BRANDING */}
       <div className="hidden lg:flex w-[48%] fixed inset-y-0 left-0 bg-gradient-to-br from-[#00a884] to-[#005c4b] items-center justify-center p-12 overflow-hidden z-0">
         {/* Background Patterns */}

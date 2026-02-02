@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../../services/apiConfig';
+import React, { useState, useEffect } from "react";
+import { API_BASE_URL } from "../../services/apiConfig";
+
+import { AudioRecorder } from "../Media/AudioRecorder";
 
 interface MediaAsset {
   id: string;
@@ -7,7 +9,7 @@ interface MediaAsset {
   url?: string; // From backend (old format)
   fileUrl: string; // From backend (new format)
   thumbnailUrl?: string;
-  type: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+  type: "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT";
   mimeType: string;
   size?: number; // From backend (size field)
   fileSize: number; // Alternative field
@@ -15,15 +17,20 @@ interface MediaAsset {
 }
 
 interface MediaSelectorModalProps {
-  type: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+  type: "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT";
   onSelect: (asset: MediaAsset) => void;
   onClose: () => void;
 }
 
-export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({ type, onSelect, onClose }) => {
+export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
+  type,
+  onSelect,
+  onClose,
+}) => {
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
+  const [mode, setMode] = useState<"SELECT" | "RECORD">("SELECT");
 
   useEffect(() => {
     fetchAssets();
@@ -32,20 +39,20 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({ type, on
   async function fetchAssets() {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const response = await fetch(
         `${API_BASE_URL}/media?type=${type}&limit=50`,
         {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
+          headers: { Authorization: `Bearer ${token}` },
+        },
       );
 
-      if (!response.ok) throw new Error('Failed to fetch media');
+      if (!response.ok) throw new Error("Failed to fetch media");
 
       const data = await response.json();
       setAssets(data.data?.media || data.media || []);
     } catch (error) {
-      console.error('[MediaSelector] Error fetching media:', error);
+      console.error("[MediaSelector] Error fetching media:", error);
       setAssets([]);
     } finally {
       setLoading(false);
@@ -54,23 +61,28 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({ type, on
 
   function getTypeIcon(assetType: string) {
     switch (assetType) {
-      case 'IMAGE': return '🖼️';
-      case 'VIDEO': return '🎥';
-      case 'AUDIO': return '🎵';
-      case 'DOCUMENT': return '📄';
-      default: return '📦';
+      case "IMAGE":
+        return "🖼️";
+      case "VIDEO":
+        return "🎥";
+      case "AUDIO":
+        return "🎵";
+      case "DOCUMENT":
+        return "📄";
+      default:
+        return "📦";
     }
   }
 
   function formatFileSize(bytes: number) {
-    if (!bytes || isNaN(bytes)) return '0 KB';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (!bytes || isNaN(bytes)) return "0 KB";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   }
 
   function handleSelect() {
-    const asset = assets.find(a => a.id === selectedAsset);
+    const asset = assets.find((a) => a.id === selectedAsset);
     if (asset) {
       onSelect(asset);
     }
@@ -84,7 +96,14 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({ type, on
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                {getTypeIcon(type)} Seleccionar {type === 'IMAGE' ? 'Imagen' : type === 'VIDEO' ? 'Video' : type === 'AUDIO' ? 'Audio' : 'Documento'}
+                {getTypeIcon(type)} Seleccionar{" "}
+                {type === "IMAGE"
+                  ? "Imagen"
+                  : type === "VIDEO"
+                    ? "Video"
+                    : type === "AUDIO"
+                      ? "Audio"
+                      : "Documento"}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Haz click en un archivo para seleccionarlo
@@ -94,23 +113,71 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({ type, on
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
         </div>
 
+        {type === "AUDIO" && (
+          <div className="px-6 pb-0 flex gap-4 border-b border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setMode("SELECT")}
+              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                mode === "SELECT"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              }`}
+            >
+              📚 Biblioteca
+            </button>
+            <button
+              onClick={() => setMode("RECORD")}
+              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                mode === "RECORD"
+                  ? "border-red-500 text-red-600 dark:text-red-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              }`}
+            >
+              🎙️ Grabar Voz
+            </button>
+          </div>
+        )}
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
+          {mode === "RECORD" ? (
+            // @ts-ignore
+            <AudioRecorder
+              onRecordingComplete={(asset) => {
+                onSelect(asset);
+                onClose();
+              }}
+              onCancel={() => setMode("SELECT")}
+            />
+          ) : loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-              <p className="ml-4 text-gray-600 dark:text-gray-400">Cargando archivos...</p>
+              <p className="ml-4 text-gray-600 dark:text-gray-400">
+                Cargando archivos...
+              </p>
             </div>
           ) : assets.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64">
-              <div className="text-6xl mb-4 opacity-50">{getTypeIcon(type)}</div>
+              <div className="text-6xl mb-4 opacity-50">
+                {getTypeIcon(type)}
+              </div>
               <p className="text-gray-500 dark:text-gray-400 text-center">
                 No hay archivos de este tipo aún
               </p>
@@ -126,24 +193,31 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({ type, on
                   onClick={() => setSelectedAsset(asset.id)}
                   className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                     selectedAsset === asset.id
-                      ? 'border-blue-500 ring-4 ring-blue-500/20 shadow-lg scale-105'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                      ? "border-blue-500 ring-4 ring-blue-500/20 shadow-lg scale-105"
+                      : "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600"
                   }`}
                 >
                   {/* Thumbnail */}
                   <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center overflow-hidden">
-                    {(asset.type === 'IMAGE' && (asset.thumbnailUrl || asset.fileUrl || asset.url)) ? (
+                    {asset.type === "IMAGE" &&
+                    (asset.thumbnailUrl || asset.fileUrl || asset.url) ? (
                       <img
-                        src={asset.thumbnailUrl || asset.fileUrl || (asset as any).url}
+                        src={
+                          asset.thumbnailUrl ||
+                          asset.fileUrl ||
+                          (asset as any).url
+                        }
                         alt={asset.filename}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.style.display = "none";
                           e.currentTarget.parentElement!.innerHTML = `<div class="text-4xl opacity-50">${getTypeIcon(asset.type)}</div>`;
                         }}
                       />
                     ) : (
-                      <div className="text-4xl opacity-50">{getTypeIcon(asset.type)}</div>
+                      <div className="text-4xl opacity-50">
+                        {getTypeIcon(asset.type)}
+                      </div>
                     )}
                   </div>
 
@@ -160,8 +234,16 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({ type, on
                   {/* Selected check */}
                   {selectedAsset === asset.id && (
                     <div className="absolute top-2 right-2 bg-blue-500 rounded-full p-1 shadow-lg">
-                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      <svg
+                        className="w-4 h-4 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                     </div>
                   )}
@@ -182,10 +264,10 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({ type, on
           <button
             onClick={handleSelect}
             disabled={!selectedAsset}
-            className={`px-6 py-2 rounded-lg font-medium transition shadow-md ${ 
+            className={`px-6 py-2 rounded-lg font-medium transition shadow-md ${
               selectedAsset
-                ? 'bg-blue-500 hover:bg-blue-600 text-white hover:shadow-lg'
-                : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
+                ? "bg-blue-500 hover:bg-blue-600 text-white hover:shadow-lg"
+                : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50"
             }`}
           >
             Seleccionar

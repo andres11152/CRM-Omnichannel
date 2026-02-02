@@ -286,9 +286,6 @@ export const FlowBuilder: React.FC = () => {
         gradient="from-slate-600 to-gray-600 dark:from-slate-800 dark:to-gray-800"
         action={
           <div className="flex gap-3">
-            <button className="px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/20 rounded-lg text-sm font-bold text-white backdrop-blur-sm transition-colors">
-              Simular Chat
-            </button>
             <button
               onClick={handleSaveFlow}
               className="px-6 py-2 bg-white text-indigo-600 hover:bg-gray-100 rounded-lg text-sm font-bold shadow-md transition-colors"

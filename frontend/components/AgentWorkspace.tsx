@@ -852,18 +852,18 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     <div className="h-full flex flex-col bg-gray-50 dark:bg-[#0b141a]">
       {/* Header */}
       {/* 👑 ENTERPRISE HEADER */}
-      <div className="px-6 py-4 bg-white/80 dark:bg-[#111b21]/95 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800 sticky top-0 z-50 transition-all duration-300 shadow-sm relative">
+      <div className="px-4 md:px-6 py-3 md:py-4 bg-white/80 dark:bg-[#111b21]/95 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800 sticky top-0 z-40 transition-all duration-300 shadow-sm relative">
         <div className="flex justify-between items-center max-w-full gap-4">
           {/* LEFT: Branding & Status */}
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3 group">
+          <div className="flex items-center gap-2 md:gap-6">
+            <div className="flex items-center gap-2 md:gap-3 group">
               <div
-                className={`p-2.5 rounded-xl bg-gradient-to-br transition-all duration-500 ${socketConnected ? "from-emerald-500/10 to-teal-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20 group-hover:from-emerald-500/20 group-hover:to-teal-500/20" : "from-red-500/10 to-pink-500/10 text-red-600 dark:text-red-400 ring-1 ring-red-500/20"}`}
+                className={`p-2 md:p-2.5 rounded-xl bg-gradient-to-br transition-all duration-500 ${socketConnected ? "from-emerald-500/10 to-teal-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20 group-hover:from-emerald-500/20 group-hover:to-teal-500/20" : "from-red-500/10 to-pink-500/10 text-red-600 dark:text-red-400 ring-1 ring-red-500/20"}`}
               >
-                <LayoutDashboard className="w-6 h-6" />
+                <LayoutDashboard className="w-5 h-5 md:w-6 md:h-6" />
               </div>
               <div className="flex flex-col">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight tracking-tight font-display">
+                <h2 className="text-sm md:text-lg font-bold text-gray-900 dark:text-white leading-tight tracking-tight font-display">
                   Panel de Agente
                 </h2>
                 <div className="flex items-center gap-2 mt-0.5">
@@ -1021,19 +1021,28 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
             {/* Mobile Tabs */}
             <div className="xl:hidden flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               <button
-                onClick={() => setActiveTab("my_chats")}
+                onClick={() => {
+                  setActiveTab("my_chats");
+                  setActiveTicketId(null);
+                }}
                 className={`p-2 rounded-md transition-all ${activeTab === "my_chats" ? "bg-white dark:bg-gray-700 shadow text-indigo-600" : "text-gray-500"}`}
               >
                 <Inbox className="w-5 h-5" />
               </button>
               <button
-                onClick={() => setActiveTab("queue")}
+                onClick={() => {
+                  setActiveTab("queue");
+                  setActiveTicketId(null);
+                }}
                 className={`p-2 rounded-md transition-all ${activeTab === "queue" ? "bg-white dark:bg-gray-700 shadow text-orange-600" : "text-gray-500"}`}
               >
                 <Layers className="w-5 h-5" />
               </button>
               <button
-                onClick={() => setActiveTab("resolved")}
+                onClick={() => {
+                  setActiveTab("resolved");
+                  setActiveTicketId(null);
+                }}
                 className={`p-2 rounded-md transition-all ${activeTab === "resolved" ? "bg-white dark:bg-gray-700 shadow text-green-600" : "text-gray-500"}`}
               >
                 <CheckCircle className="w-5 h-5" />
@@ -1061,7 +1070,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
 
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="group p-2.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+              className="hidden md:flex group p-2.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
               title={isSidebarOpen ? "Ocultar panel" : "Mostrar panel"}
             >
               {isSidebarOpen ? (

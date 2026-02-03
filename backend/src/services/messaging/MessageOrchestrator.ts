@@ -2,10 +2,10 @@ import { ContactRepository } from "@/repositories/ContactRepository";
 import { ConversationRepository } from "@/repositories/ConversationRepository";
 import { MessageRepository } from "@/repositories/MessageRepository";
 import { DomainEventBus, DomainEventType } from "@/events/DomainEventBus";
-import { IncomingMessagePayload } from "@/interfaces/MessageTypes";
+import { IncomingMessagePayload } from "@/types/message.types";
 import { Logger } from "@/utils/logger";
 import { ContactStrategy } from "@/utils/contactStrategy";
-import { Channel, MessageDirection, UserRole } from "@prisma/client";
+import { Channel, MessageDirection, UserRole, Prisma } from "@prisma/client";
 import { prisma } from "@/config/database"; // Still used for User ops (could be Repo too)
 import bcrypt from "bcryptjs";
 
@@ -133,7 +133,10 @@ export class MessageOrchestrator {
         : MessageDirection.INBOUND,
       senderId: user.id,
       channel: Channel.WHATSAPP,
-      metadata: payload.hasMedia ? { media: payload.media } : undefined,
+      metadata:
+        payload.hasMedia && payload.media
+          ? { media: payload.media as unknown as Prisma.InputJsonObject }
+          : undefined,
     });
 
     // 5.1. Update Conversation Stats (Unread Badge + Sorting)

@@ -30,6 +30,7 @@ import fs from "fs";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 
 import { chatService } from "@/services/chatService";
+import { contactService } from "@/services/contactService";
 import { SessionData, MessageMetadata } from "@/types/whatsapp.types";
 import { Conversation, Queue, MediaType, Prisma, User } from "@prisma/client";
 import { AIResponseSchema } from "@/types/ai.types";
@@ -152,13 +153,19 @@ export class MessageHandler implements IMessageHandler {
 
         // 🛡️ STRATEGY 1: Resolve LID to Phone (Primary)
         if (WhatsAppIdUtils.isLid(originalJid)) {
-          const resolved = this.sessionManager.findContactByLid(originalJid);
-          if (resolved?.id) {
-            const real = WhatsAppIdUtils.getCleanJid(resolved.id);
-            if (real && !WhatsAppIdUtils.isLid(real)) {
-              targetJid = real;
-              // console.info(`[Presence] 🔄 Resolved LID ${originalJid} -> ${targetJid}`);
-            }
+          console.info(`[Presence] 🔍 Resolving LID ${originalJid}...`);
+          // 🛡️ RETRY LOGIC FOR PRESENCE TOO
+          for (let i = 0; i < 5; i++) {
+             const resolved = this.sessionManager.findContactByLid(originalJid);
+             if (resolved?.id) {
+                const real = WhatsAppIdUtils.getCleanJid(resolved.id);
+                if (real && !WhatsAppIdUtils.isLid(real)) {
+                   targetJid = real;
+                   break;
+                }
+             }
+             // Wait briefly if not found immediately (though presence updates usually mean we have data)
+             await new Promise(r => setTimeout(r, 200));
           }
         }
 
@@ -388,13 +395,22 @@ export class MessageHandler implements IMessageHandler {
           }
 
           if (!resolved) {
-            const realPhone = await this.sessionManager.resolveLidToPhone(
-              sessionId,
-              cleanRemoteJid,
-            );
+            // 🛡️ REINTRODUCING RETRY LOGIC FOR LID RESOLUTION
+            // Wait for history sync to populate SimpleStore
+            let realPhone = null;
+            for (let i = 0; i < 10; i++) {
+               realPhone = await this.sessionManager.resolveLidToPhone(
+                 sessionId,
+                 cleanRemoteJid,
+               );
+               if (realPhone) break;
+               await new Promise((r) => setTimeout(r, 500));
+            }
+
             if (realPhone) {
               cleanRemoteJid = `${realPhone}@s.whatsapp.net`;
               resolved = true;
+              console.info(`[MessageHandler] 🎯 Retried & Resolved LID ${cleanRemoteJid}`);
             }
           }
 

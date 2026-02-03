@@ -122,7 +122,7 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
       {/* BACKDROP (Mobile) */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-black/50 z-[90] md:hidden transition-opacity duration-300"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -134,7 +134,7 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
               ref={provided.innerRef}
               {...provided.droppableProps}
               className={`
-                                fixed md:static inset-y-0 left-0 z-50 h-full
+                                fixed md:static inset-y-0 left-0 z-[100] h-full
                                 bg-white dark:bg-[#111b21] flex flex-col py-6
                                 border-r border-gray-200/60 dark:border-gray-800 shadow-xl md:shadow-none
                                 transition-[width,transform] duration-300 ease-spring

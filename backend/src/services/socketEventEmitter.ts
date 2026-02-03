@@ -124,28 +124,6 @@ export class SocketEventEmitter {
       },
     );
 
-    // 🛡️ 100-YEAR FIX: Direct Emit to Assigned Agent
-    // Since Agents are no longer in the Company Room, we must target them directly.
-    if (conversation.assignedToId && this.socketGateway.emitToUser) {
-      this.socketGateway.emitToUser(
-        conversation.assignedToId,
-        "conversation.new_message",
-        messagePayload,
-      );
-
-      this.socketGateway.emitToUser(
-        conversation.assignedToId,
-        "conversation.updated",
-        {
-          id: conversation.id,
-          ...this.formatConversation(conversation),
-          lastMessage: message.content,
-          lastMessageAt: message.createdAt.toISOString(),
-          // unreadCount is now provided by formatConversation
-        },
-      );
-    }
-
     // 3. Legacy / Compatibility
     this.socketGateway.emitToCompany(
       conversation.companyId,
@@ -191,25 +169,6 @@ export class SocketEventEmitter {
         lastMessageAt: message.createdAt.toISOString(),
       },
     );
-
-    // 🛡️ 100-YEAR FIX: Direct Emit to Assigned Agent
-    if (conversation.assignedToId && this.socketGateway.emitToUser) {
-      this.socketGateway.emitToUser(
-        conversation.assignedToId,
-        "conversation.new_message",
-        messagePayload,
-      );
-      this.socketGateway.emitToUser(
-        conversation.assignedToId,
-        "conversation.updated",
-        {
-          id: conversation.id,
-          ...this.formatConversation(conversation),
-          lastMessage: message.content,
-          lastMessageAt: message.createdAt.toISOString(),
-        },
-      );
-    }
 
     // 3. Legacy
     this.socketGateway.emitToCompany(conversation.companyId, "message.sent", {

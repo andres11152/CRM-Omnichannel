@@ -16,13 +16,13 @@ import {
 } from "./core/types/whatsapp.types";
 import { prisma } from "@/config/database";
 import { TenantContextManager } from "@/config/tenantContext";
-import pino from "pino";
+import { Logger } from "@/utils/logger";
 import { WASocket } from "@whiskeysockets/baileys"; // 🛡️ Import for raw socket access
 
+import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionRepository";
+import { AppError } from "@/utils/AppError";
 // 🚧 BullMQ queue disabled - Redis allkeys-lru incompatible
 // import { whatsappQueue } from "./queue/WhatsAppQueue";
-
-const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
 export class WhatsAppService {
   private static instance: WhatsAppService;
@@ -32,6 +32,7 @@ export class WhatsAppService {
   private messageHandler: IMessageHandler;
   private rateLimitService: RateLimitService;
   private eventBus: EventBus;
+  private sessionRepository: WhatsAppSessionRepository;
 
   private constructor() {
     this.eventBus = EventBus.getInstance();
@@ -39,6 +40,7 @@ export class WhatsAppService {
     this.sessionManager = new SessionManager(this.authProvider);
     this.messageHandler = new MessageHandler(this.sessionManager);
     this.rateLimitService = new RateLimitService();
+    this.sessionRepository = new WhatsAppSessionRepository();
 
     this.setupEventHandlers();
   }
@@ -52,13 +54,10 @@ export class WhatsAppService {
 
   private setupEventHandlers(): void {
     this.eventBus.subscribe("*", (event: WhatsAppEvent) => {
-      logger.info(
-        {
-          sessionId: event.sessionId,
-          companyId: event.companyId,
-        },
-        `[WhatsAppService] Event: ${event.type}`,
-      );
+      Logger.info(`[WhatsAppService] Event: ${event.type}`, {
+        sessionId: event.sessionId,
+        companyId: event.companyId,
+      });
     });
 
     this.eventBus.subscribe(
@@ -69,9 +68,9 @@ export class WhatsAppService {
         // 🛡️ 100-YEAR FIX: If it's reconnecting, don't mark as DISCONNECTED in DB
         // This prevents the frontend from showing 'Disconnected' during a simple network blip
         if (data.isReconnecting) {
-          logger.info(
-            { sessionId },
+          Logger.info(
             `[WhatsAppService] Session blip, ignoring DISCONNECTED update (reconnecting...)`,
+            { sessionId },
           );
           return;
         }
@@ -82,28 +81,27 @@ export class WhatsAppService {
 
         while (attempts < maxAttempts) {
           try {
-            await prisma.whatsAppSession.update({
-              where: { sessionId },
-              data: { status: "DISCONNECTED" },
+            await this.sessionRepository.update(sessionId, {
+              status: "DISCONNECTED",
             });
-            logger.info(
-              { sessionId },
+            Logger.info(
               `[WhatsAppService] ✅ Session marked DISCONNECTED in DB`,
+              { sessionId },
             );
             break;
           } catch (error: unknown) {
             attempts++;
             const errorMessage =
               error instanceof Error ? error.message : String(error);
-            logger.warn(
-              { error: errorMessage, sessionId, attempt: attempts },
+            Logger.warn(
               `[WhatsAppService] ⚠️ DB Status Sync Failed. Retrying...`,
+              { error: errorMessage, sessionId, attempt: attempts },
             );
 
             if (attempts === maxAttempts) {
-              logger.error(
-                { sessionId, error: errorMessage },
+              Logger.error(
                 `[WhatsAppService] ❌ Failed to update session status.`,
+                { sessionId, error: errorMessage },
               );
             } else {
               await new Promise((resolve) =>
@@ -119,18 +117,17 @@ export class WhatsAppService {
       WhatsAppEventType.SESSION_CONNECTED,
       async (event) => {
         try {
-          await prisma.whatsAppSession.update({
-            where: { sessionId: event.sessionId },
-            data: { status: "CONNECTED", phone: event.data.phone },
+          await this.sessionRepository.update(event.sessionId, {
+            status: "CONNECTED",
+            phone: event.data.phone,
           });
-          logger.info(
-            { sessionId: event.sessionId },
-            `[WhatsAppService] ✅ Session marked CONNECTED in DB`,
-          );
+          Logger.info(`[WhatsAppService] ✅ Session marked CONNECTED in DB`, {
+            sessionId: event.sessionId,
+          });
         } catch (error) {
-          logger.error(
-            { sessionId: event.sessionId, error },
+          Logger.error(
             `[WhatsAppService] ❌ Failed to update session status to CONNECTED`,
+            { sessionId: event.sessionId, error },
           );
         }
       },
@@ -139,16 +136,16 @@ export class WhatsAppService {
     this.eventBus.subscribe(
       WhatsAppEventType.RATE_LIMIT_EXCEEDED,
       async (event) => {
-        logger.warn(
-          { sessionId: event.sessionId, data: event.data },
-          `[WhatsAppService] Rate limit exceeded`,
-        );
+        Logger.warn(`[WhatsAppService] Rate limit exceeded`, {
+          sessionId: event.sessionId,
+          data: event.data,
+        });
       },
     );
   }
 
   async initialize(): Promise<void> {
-    logger.info("[WhatsAppService] Initializing...");
+    Logger.info("[WhatsAppService] Initializing...");
 
     // 🛡️ SYSTEM MODE: Server startup needs access to all sessions
     // This bypasses tenant isolation since there's no active request context
@@ -156,19 +153,16 @@ export class WhatsAppService {
     // 🧹 CLEANUP: Remove stale SCANNING sessions (user never completed QR scan)
     // These are "ghost" sessions that should not be restored.
     const deletedStale = await TenantContextManager.runAsSystem(() =>
-      prisma.whatsAppSession.deleteMany({
-        where: {
-          status: "SCANNING",
-          // Only delete if older than 10 minutes (stale)
-          updatedAt: {
-            lt: new Date(Date.now() - 10 * 60 * 1000),
-          },
+      this.sessionRepository.deleteMany({
+        status: "SCANNING",
+        updatedAt: {
+          lt: new Date(Date.now() - 10 * 60 * 1000),
         },
       }),
     );
 
     if (deletedStale.count > 0) {
-      logger.info(
+      Logger.info(
         `[WhatsAppService] 🧹 Cleaned up ${deletedStale.count} stale SCANNING sessions`,
       );
     }
@@ -176,14 +170,10 @@ export class WhatsAppService {
     // 🛡️ 100-YEAR FIX: Only restore sessions that were CONNECTED at some point.
     // Sessions in SCANNING state are incomplete and should NOT be auto-restored.
     const sessions = await TenantContextManager.runAsSystem(() =>
-      prisma.whatsAppSession.findMany({
-        where: {
-          status: { in: ["CONNECTED", "DISCONNECTED"] },
-        },
-      }),
+      this.sessionRepository.findByStatus(["CONNECTED", "DISCONNECTED"]),
     );
 
-    logger.info(
+    Logger.info(
       `[WhatsAppService] Found ${sessions.length} active sessions to restore`,
     );
 
@@ -195,50 +185,46 @@ export class WhatsAppService {
           // authDir deprecated: DatabaseAuthProvider handles storage
         });
       } catch (error) {
-        logger.error(
-          { error, sessionId: session.sessionId },
+        Logger.error(
           `[WhatsAppService] Failed to initialize session ${session.sessionId}`,
+          { error, sessionId: session.sessionId },
         );
       }
     }
 
-    logger.info("[WhatsAppService] Initialization complete");
+    Logger.info("[WhatsAppService] Initialization complete");
   }
 
   async createSession(
     companyId: string,
     sessionId?: string,
   ): Promise<{ sessionId: string; qrCode: string | null }> {
-    logger.info(`[WhatsAppService] createSession called for ${companyId}`);
+    Logger.info(`[WhatsAppService] createSession called for ${companyId}`);
 
     // 🔧 CRITICAL FIX: Clean up abandoned sessions before creating new one
     // This prevents QR generation for old sessions that were never completed
     const abandonedSessions = await TenantContextManager.runAsSystem(async () =>
-      prisma.whatsAppSession.findMany({
-        where: {
-          companyId,
-          status: { in: ["CONNECTING", "SCANNING", "DISCONNECTED"] },
-        },
-      }),
+      this.sessionRepository.findByStatus(
+        ["CONNECTING", "SCANNING", "DISCONNECTED"],
+        [companyId], // Filter by company
+      ),
     );
 
-    logger.info(
+    Logger.info(
       `[WhatsAppService] Found ${abandonedSessions.length} abandoned sessions for ${companyId}`,
     );
 
     for (const oldSession of abandonedSessions) {
-      logger.info(
+      Logger.info(
         `[WhatsAppService] Cleaning up abandoned session: ${oldSession.sessionId}`,
       );
       try {
         await this.sessionManager.terminateSession(oldSession.sessionId);
         await TenantContextManager.runAsSystem(async () =>
-          prisma.whatsAppSession.delete({
-            where: { sessionId: oldSession.sessionId },
-          }),
+          this.sessionRepository.delete(oldSession.sessionId),
         );
       } catch (err) {
-        logger.warn(
+        Logger.warn(
           `[WhatsAppService] Failed to cleanup ${oldSession.sessionId}: ${String(err)}`,
         );
       }
@@ -246,24 +232,22 @@ export class WhatsAppService {
 
     // Now create fresh session
     const finalSessionId = sessionId || `wa_${companyId}_${Date.now()}`;
-    logger.info(`[WhatsAppService] Creating NEW session ${finalSessionId}`);
+    Logger.info(`[WhatsAppService] Creating NEW session ${finalSessionId}`);
 
-    await prisma.whatsAppSession.create({
-      data: {
-        sessionId: finalSessionId,
-        companyId,
-        status: "DISCONNECTED",
-      },
+    await this.sessionRepository.create({
+      sessionId: finalSessionId,
+      status: "DISCONNECTED",
+      company: { connect: { id: companyId } },
     });
 
     // 🎯 ENTERPRISE PATTERN: Wait for QR code generation using EventBus
     // This ensures we don't return until QR is available or timeout occurs
-    logger.info(
+    Logger.info(
       `[WhatsAppService] Setting up QR listener for ${finalSessionId}`,
     );
     const qrCodePromise = new Promise<string>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        logger.warn(
+        Logger.warn(
           `[WhatsAppService] QR timeout for ${finalSessionId} after 30s`,
         );
         this.eventBus.unsubscribe(WhatsAppEventType.SESSION_QR_CODE, handler);
@@ -274,7 +258,7 @@ export class WhatsAppService {
         event: WhatsAppEvent<WhatsAppEventType.SESSION_QR_CODE>,
       ) => {
         if (event.sessionId === finalSessionId && event.data.qr) {
-          logger.info(
+          Logger.info(
             `[WhatsAppService] QR received via EventBus for ${finalSessionId}`,
           );
           clearTimeout(timeout);
@@ -284,24 +268,24 @@ export class WhatsAppService {
       };
 
       this.eventBus.subscribe(WhatsAppEventType.SESSION_QR_CODE, handler);
-      logger.info(
+      Logger.info(
         `[WhatsAppService] EventBus subscription active for ${finalSessionId}`,
       );
     });
 
     // Initialize session (this will trigger QR generation)
-    logger.info(`[WhatsAppService] Initializing socket for ${finalSessionId}`);
+    Logger.info(`[WhatsAppService] Initializing socket for ${finalSessionId}`);
     await this.sessionManager.initializeSession({
       sessionId: finalSessionId,
       companyId,
       // authDir deprecated: DatabaseAuthProvider handles storage
     });
-    logger.info(`[WhatsAppService] Socket initialized for ${finalSessionId}`);
+    Logger.info(`[WhatsAppService] Socket initialized for ${finalSessionId}`);
 
     // Wait for QR code or timeout
     try {
       const qrCode = await qrCodePromise;
-      logger.info(
+      Logger.info(
         `[WhatsAppService] QR code generated successfully for ${finalSessionId}`,
       );
       return {
@@ -311,16 +295,15 @@ export class WhatsAppService {
     } catch (error) {
       // If QR generation fails, return what we have
       // Session might be connecting without QR (already authenticated)
-      logger.warn(
-        { error },
+      Logger.warn(
         `[WhatsAppService] QR timeout/error for ${finalSessionId}, checking DB...`,
+        { error },
       );
 
-      const updatedSession = await prisma.whatsAppSession.findUnique({
-        where: { sessionId: finalSessionId },
-      });
+      const updatedSession =
+        await this.sessionRepository.findOne(finalSessionId);
 
-      logger.info(
+      Logger.info(
         `[WhatsAppService] DB check result - qrCode: ${updatedSession?.qrCode ? "EXISTS" : "NULL"}, status: ${updatedSession?.status}`,
       );
 
@@ -335,9 +318,38 @@ export class WhatsAppService {
     await this.sessionManager.terminateSession(sessionId);
     await this.authProvider.clearCredentials(sessionId);
 
-    await prisma.whatsAppSession.delete({
-      where: { sessionId },
-    });
+    await this.sessionRepository.delete(sessionId);
+  }
+
+  /**
+   * 🏗️ REFACTOR SUPPORT: New methods for Controller
+   */
+
+  async getSessions(companyId: string) {
+    return this.sessionRepository.findByCompany(companyId);
+  }
+
+  async updateSessionQueue(
+    companyId: string,
+    sessionId: string,
+    queueId: string | null,
+  ) {
+    // 1. Ownership Check
+    const session = await this.sessionRepository.findOne(sessionId, companyId);
+    if (!session) {
+      throw new AppError("Session not found", 404);
+    }
+
+    // 2. Update via Repository
+    if (queueId) {
+      return this.sessionRepository.update(sessionId, {
+        defaultQueue: { connect: { id: queueId } },
+      });
+    } else {
+      return this.sessionRepository.update(sessionId, {
+        defaultQueue: { disconnect: true },
+      });
+    }
   }
 
   async listSessions(companyId: string): Promise<SessionStatus[]> {
@@ -572,10 +584,10 @@ export class WhatsAppService {
     }
 
     // 2. Fallback to DB (cold start scenario)
-    const session = await prisma.whatsAppSession.findFirst({
-      where: { companyId, status: "CONNECTED" },
-    });
-    return !!session;
+    const sessions = await this.sessionRepository.findByStatus("CONNECTED", [
+      companyId,
+    ]);
+    return sessions.length > 0;
   }
 
   getEventBus(): EventBus {

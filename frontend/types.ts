@@ -327,6 +327,8 @@ export interface MessageTemplate {
   language: string;
   status: "approved" | "rejected" | "pending";
   category: "MARKETING" | "UTILITY" | "AUTHENTICATION";
+  subject?: string;
+  createdAt: string | Date;
   components: {
     type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
     text?: string;

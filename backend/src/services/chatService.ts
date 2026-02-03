@@ -1,6 +1,7 @@
 import { prisma } from "@/config/database";
 import { Prisma } from "@prisma/client";
 import { contactService } from "@/services/contactService";
+import { Logger } from "@/utils/logger";
 
 /**
  * 💬 CHAT SERVICE
@@ -117,22 +118,22 @@ export class ChatService {
           },
           tags: ["Importado de Chat"],
         });
-        console.info(
+        Logger.info(
           `[ChatService] ✅ CRM Contact synced for real phone: ${params.phone}`,
         );
       } catch (error) {
         // CRM Sync should be non-blocking. Log and continue.
-        console.warn(
+        Logger.warn(
           `[ChatService] Failed to sync CRM contact for ${params.email}`,
-          error,
+          { error },
         );
       }
     } else {
       // Log why we skipped CRM sync
       if (isGroup) {
-        console.info(`[ChatService] ⏩ Skipped CRM sync: Group chat`);
+        Logger.info(`[ChatService] ⏩ Skipped CRM sync: Group chat`);
       } else if (!hasRealPhone) {
-        console.info(
+        Logger.info(
           `[ChatService] ⏩ Skipped CRM sync: No real phone (LID or invalid)`,
         );
       }
@@ -357,6 +358,15 @@ export class ChatService {
     return prisma.message.update({
       where: { whatsappMessageId },
       data: { status },
+    });
+  }
+  /**
+   * Update user profile picture
+   */
+  async updateUserProfilePic(userId: string, url: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { profilePicUrl: url },
     });
   }
 }

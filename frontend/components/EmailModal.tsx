@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { sendEmail, SendEmailDTO } from "../services/emailService";
 import { api } from "../src/lib/axios";
@@ -93,8 +94,8 @@ export const EmailModal: React.FC<EmailModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[5000] p-4 animate-fade-in">
       {/* Container: Max height constrained to viewport, properly centered */}
       <div className="bg-white dark:bg-[#202c33] rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200 dark:border-gray-700">
         {/* Header - Fixed at top */}
@@ -323,6 +324,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

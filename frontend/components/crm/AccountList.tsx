@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Account } from '../../types/crm';
-import { getAccounts, deleteAccount } from '../../services/crmService';
-import { AccountModal } from './AccountModal';
-import { ModuleHeader } from '../common/ModuleHeader';
+import React, { useState, useEffect } from "react";
+import { Account } from "../../types/crm";
+import { Search, Building2, Trash2, Users, Settings } from "lucide-react";
+
+import { getAccounts, deleteAccount } from "../../services/crmService";
+import { AccountModal } from "./AccountModal";
+import { ModuleHeader } from "../common/ModuleHeader";
 
 export const AccountList: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<Account | undefined>(undefined);
+  const [selectedAccount, setSelectedAccount] = useState<Account | undefined>(
+    undefined,
+  );
 
   const fetchAccounts = async () => {
     try {
@@ -16,7 +20,7 @@ export const AccountList: React.FC = () => {
       const data = await getAccounts();
       setAccounts(data.accounts || []);
     } catch (error) {
-      console.error('Error fetching accounts:', error);
+      console.error("Error fetching accounts:", error);
     } finally {
       setLoading(false);
     }
@@ -27,12 +31,12 @@ export const AccountList: React.FC = () => {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás seguro de eliminar esta empresa?')) {
+    if (window.confirm("¿Estás seguro de eliminar esta empresa?")) {
       try {
         await deleteAccount(id);
         fetchAccounts();
       } catch (error) {
-        console.error('Error deleting account:', error);
+        console.error("Error deleting account:", error);
       }
     }
   };
@@ -55,111 +59,303 @@ export const AccountList: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden">
-
-
       <ModuleHeader
         title="Empresas"
         description="Gestiona tus clientes B2B"
         icon={
-          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          <svg
+            className="w-8 h-8 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+            />
           </svg>
         }
         gradient="from-emerald-600 to-teal-600 dark:from-emerald-800 dark:to-teal-800"
         stats={{
           label: "Total Empresas",
-          value: accounts.length
+          value: accounts.length,
         }}
         action={
           <button
             onClick={handleCreate}
             className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors backdrop-blur-sm border border-white/20 font-medium"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
             </svg>
             Nueva Empresa
           </button>
         }
       />
 
-      <div className="flex-1 p-6 overflow-hidden flex flex-col">
-        <div className="bg-reply-panel dark:bg-reply-panel-dark rounded-xl shadow-sm border border-reply-border dark:border-reply-border-dark flex-1 overflow-hidden flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-reply-border dark:border-reply-border-dark text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">
-                <th className="p-4 font-medium">Nombre</th>
-                <th className="p-4 font-medium">Industria</th>
-                <th className="p-4 font-medium">Tamaño</th>
-                <th className="p-4 font-medium">Estado</th>
-                <th className="p-4 font-medium">Contactos</th>
-                <th className="p-4 font-medium">Deals</th>
-                <th className="p-4 font-medium text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-reply-border dark:divide-reply-border-dark">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-gray-500">Cargando empresas...</td>
-                </tr>
-              ) : accounts.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-gray-500">No hay empresas registradas.</td>
-                </tr>
-              ) : (
-                accounts.map((account) => (
-                  <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
-                    <td className="p-4">
-                      <div className="font-medium text-reply-text dark:text-reply-text-dark">{account.name}</div>
-                      {account.website && (
-                        <a href={account.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
-                          {account.website}
-                        </a>
-                      )}
-                    </td>
-                    <td className="p-4 text-gray-600 dark:text-gray-300">{account.industry || '-'}</td>
-                    <td className="p-4 text-gray-600 dark:text-gray-300">{account.size || '-'}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        account.status === 'ACTIVE' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        account.status === 'CHURNED' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                      }`}>
-                        {account.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-gray-600 dark:text-gray-300">{account._count?.contacts || 0}</td>
-                    <td className="p-4 text-gray-600 dark:text-gray-300">{account._count?.deals || 0}</td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleEdit(account)}
-                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 hover:text-blue-500 transition-colors"
-                          title="Editar"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(account.id)}
-                          className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-gray-500 hover:text-red-500 transition-colors"
-                          title="Eliminar"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* TOOLBAR */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-20 bg-gray-50/80 dark:bg-reply-bg-dark/80 backdrop-blur-xl py-2">
+            <div className="relative group flex-1 max-w-2xl">
+              <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-500 transition-colors" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, industria o sitio web..."
+                className="w-full pl-12 pr-6 py-4 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium text-gray-900 dark:text-white"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="px-4 py-2 bg-white dark:bg-[#202c33] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {accounts.length} Empresas
+              </div>
+            </div>
+          </div>
+
+          {/* CONTENT AREA */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="h-64 bg-white dark:bg-[#202c33] rounded-[2.5rem] border border-gray-100 dark:border-gray-800 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : accounts.length === 0 ? (
+            <div className="text-center py-24 bg-white dark:bg-[#202c33] rounded-[3rem] border border-dashed border-gray-200 dark:border-gray-800 shadow-inner">
+              <div className="w-24 h-24 bg-gray-50 dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Building2 className="w-10 h-10 text-gray-300" />
+              </div>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
+                No hay empresas registradas
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
+                Comienza a construir tu portafolio B2B agregando la primera
+                compañía.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* MOBILE CARDS */}
+              <div className="grid grid-cols-1 gap-4 md:hidden pb-10">
+                {accounts.map((account) => (
+                  <div
+                    key={account.id}
+                    className="bg-white dark:bg-[#1c272f] p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-all relative overflow-hidden"
+                  >
+                    <div className="flex items-center gap-4 mb-5">
+                      <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xl font-black shadow-lg shadow-emerald-500/20">
+                        {account.name.charAt(0).toUpperCase()}
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-lg font-black text-gray-900 dark:text-white truncate">
+                          {account.name}
+                        </h4>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div
+                            className={`w-1.5 h-1.5 rounded-full ${account.status === "ACTIVE" ? "bg-emerald-500" : "bg-gray-400"}`}
+                          />
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            {account.status}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 mb-6">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-400 font-bold uppercase tracking-tighter">
+                          Industria
+                        </span>
+                        <span className="text-gray-900 dark:text-white font-black">
+                          {account.industry || "-"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-400 font-bold uppercase tracking-tighter">
+                          Equipo
+                        </span>
+                        <span className="text-gray-900 dark:text-white font-black">
+                          {account.size || "-"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-50 dark:border-gray-800">
+                        <div className="flex gap-4">
+                          <div className="text-center">
+                            <div className="text-xs font-black text-gray-900 dark:text-white">
+                              {account._count?.contacts || 0}
+                            </div>
+                            <div className="text-[9px] font-bold text-gray-400 uppercase">
+                              Contactos
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xs font-black text-gray-900 dark:text-white">
+                              {account._count?.deals || 0}
+                            </div>
+                            <div className="text-[9px] font-bold text-gray-400 uppercase">
+                              Deals
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(account)}
+                        className="flex-1 py-4 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-2xl font-bold text-sm transition-all"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(account.id)}
+                        className="p-4 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-100 transition-all"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* DESKTOP TABLE */}
+              <div className="hidden md:block bg-white dark:bg-[#1c272f] rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/50 dark:shadow-none overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
+                      <th className="px-10 py-8">Compañía</th>
+                      <th className="px-6 py-8">Industria & Tamaño</th>
+                      <th className="px-6 py-8">Estado</th>
+                      <th className="px-6 py-8 text-center">Métricas CRM</th>
+                      <th className="px-10 py-8 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                    {accounts.map((account) => (
+                      <tr
+                        key={account.id}
+                        className="hover:bg-gray-50/50 dark:hover:bg-emerald-500/[0.02] transition-all group"
+                      >
+                        <td className="px-10 py-6 whitespace-nowrap">
+                          <div className="flex items-center gap-5">
+                            <div className="h-14 w-14 rounded-[1.25rem] bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-black shadow-lg shadow-emerald-500/10 border-2 border-white dark:border-gray-800 transform group-hover:scale-110 group-hover:rotate-2 transition-all duration-500">
+                              {account.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-lg font-black text-gray-900 dark:text-white mb-0.5 tracking-tight">
+                                {account.name}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {account.website && (
+                                  <a
+                                    href={account.website}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] font-black text-emerald-500 hover:text-emerald-600 uppercase tracking-widest flex items-center gap-1"
+                                  >
+                                    <svg
+                                      className="w-3 h-3"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                    {account.website
+                                      .replace("https://", "")
+                                      .replace("www.", "")}
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-6 whitespace-nowrap">
+                          <div className="space-y-1">
+                            <div className="text-sm font-black text-gray-900 dark:text-white">
+                              {account.industry || "No especificado"}
+                            </div>
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                              <Users className="w-3 h-3" />
+                              {account.size || "Tamaño desconocido"}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-6">
+                          <span
+                            className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
+                              account.status === "ACTIVE"
+                                ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border-emerald-100 dark:border-emerald-500/20 shadow-sm shadow-emerald-500/10"
+                                : account.status === "CHURNED"
+                                  ? "bg-red-50 dark:bg-red-500/10 text-red-600 border-red-100 dark:border-red-500/20"
+                                  : "bg-amber-50 dark:bg-amber-500/10 text-amber-600 border-amber-100 dark:border-amber-500/20"
+                            }`}
+                          >
+                            {account.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-6">
+                          <div className="flex items-center justify-center gap-8">
+                            <div className="text-center">
+                              <div className="text-lg font-black text-gray-900 dark:text-white">
+                                {account._count?.contacts || 0}
+                              </div>
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                Contactos
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-lg font-black text-gray-900 dark:text-white">
+                                {account._count?.deals || 0}
+                              </div>
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                Deals
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-10 py-6 whitespace-nowrap text-right">
+                          <div className="flex justify-end items-center gap-3">
+                            <button
+                              onClick={() => handleEdit(account)}
+                              className="p-3 bg-white dark:bg-gray-800 hover:bg-emerald-600 hover:text-white text-gray-400 rounded-2xl transition-all shadow-sm border border-gray-100 dark:border-gray-700 group-hover:scale-105"
+                              title="Configuración de cuenta"
+                            >
+                              <Settings className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(account.id)}
+                              className="p-3 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-300 hover:text-red-500 rounded-2xl transition-all active:scale-95"
+                              title="Eliminar Empresa"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
-      </div>
       </div>
 
       {isModalOpen && (

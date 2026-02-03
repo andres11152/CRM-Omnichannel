@@ -17,7 +17,7 @@ import type {
   SocketDashboardPayload,
   ConversationWithQueue,
   MessageWithSender,
-} from "../interfaces/MessageTypes";
+} from "@/types/message.types";
 
 /**
  * 🛡️ TYPE GUARD
@@ -262,7 +262,7 @@ export const messageProcessor = {
           (contact.customFields as Record<string, unknown>) || {};
         if (currentFields.lid !== payload.originalLid) {
           // Non-blocking update
-          console.log(`[MsgProcessor] 💾 Persisting LID mapping`);
+          Logger.info(`[MsgProcessor] 💾 Persisting LID mapping`);
           await prisma.contact
             .update({
               where: { id: contact.id },
@@ -270,7 +270,7 @@ export const messageProcessor = {
                 customFields: { ...currentFields, lid: payload.originalLid },
               },
             })
-            .catch((e) => console.warn("LID map save failed", e));
+            .catch((e) => Logger.warn("LID map save failed", { error: e }));
         }
       }
 
@@ -604,7 +604,9 @@ export const messageProcessor = {
             where: { id: contact.id },
             data: { updatedAt: new Date() },
           })
-          .catch((e) => console.warn("Contact update touch failed", e)); // Non-blocking
+          .catch((e) =>
+            Logger.warn("Contact update touch failed", { error: e }),
+          ); // Non-blocking
       }
 
       // EVENTS & AI
@@ -645,7 +647,6 @@ export const messageProcessor = {
 
             // Simple MIME Inference Helper
             const inferMime = (url: string, type: string) => {
-              const ext = url.split(".").pop()?.toLowerCase();
               if (type === "image") return "image/jpeg";
               if (type === "video") return "video/mp4";
               if (type === "audio") return "audio/mp4";
@@ -787,7 +788,7 @@ export const messageProcessor = {
         },
       );
     } catch (error) {
-      console.error(`[AI] Error:`, error);
+      Logger.error(`[AI] Error:`, error);
     }
   },
 

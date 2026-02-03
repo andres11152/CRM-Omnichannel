@@ -1,17 +1,17 @@
+import { Logger } from "@/utils/logger";
 import { Response } from "express";
 // ♻️ REFACTOR: Unified Service (Split Brain Fix)
 import { whatsappService } from "@/whatsapp";
 import { planLimitsService } from "@/services/planLimitsService";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
-import { prisma } from "@/config/database";
 import { AppError } from "@/utils/AppError";
 
 export const createSession = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    console.log("[WhatsAppController] createSession called");
+    Logger.info("[WhatsAppController] createSession called");
     if (!req.companyId) {
-      console.error("[WhatsAppController] No company ID in request");
+      Logger.error("[WhatsAppController] No company ID in request");
       throw new Error("No company ID");
     }
 
@@ -47,18 +47,8 @@ export const getSessions = catchAsync(
       throw new Error("No company ID");
     }
 
-    // 🔍 FETCH FROM DB (Truth Source) instead of Memory
-    // This ensures we get the persisted 'phone' number and other metadata
-    const sessions = await prisma.whatsAppSession.findMany({
-      where: { companyId: req.companyId },
-      select: {
-        sessionId: true,
-        status: true,
-        phone: true,
-        qrCode: true,
-        defaultQueueId: true,
-      },
-    });
+    // 🔍 FETCH FROM SERVICE (Repository abstraction)
+    const sessions = await whatsappService.getSessions(req.companyId);
 
     res.status(200).json({
       status: "success",
@@ -84,19 +74,15 @@ export const updateSession = catchAsync(
     const { sessionId } = req.params;
     const { defaultQueueId } = req.body;
 
-    // Verify ownership
-    const session = await prisma.whatsAppSession.findFirst({
-      where: { sessionId, companyId: req.companyId },
-    });
-
-    if (!session) {
-      throw new AppError("Session not found", 404);
+    if (!req.companyId) {
+      throw new AppError("No company ID", 401);
     }
 
-    const updated = await prisma.whatsAppSession.update({
-      where: { sessionId },
-      data: { defaultQueueId } as any,
-    });
+    const updated = await whatsappService.updateSessionQueue(
+      req.companyId,
+      sessionId,
+      defaultQueueId,
+    );
 
     res.status(200).json({
       status: "success",
@@ -109,17 +95,8 @@ export const reconnectSession = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { sessionId } = req.params;
 
-    // Verify ownership
-    const session = await prisma.whatsAppSession.findFirst({
-      where: { sessionId, companyId: req.companyId },
-    });
-
-    if (!session) {
-      throw new AppError("Session not found", 404);
-    }
-
     // Force initialization
-    console.log(
+    Logger.info(
       `[WhatsAppController] Manual reconnect requested for ${sessionId}`,
     );
 
@@ -127,7 +104,7 @@ export const reconnectSession = catchAsync(
     whatsappService
       .reconnectSession(sessionId)
       .catch((e) =>
-        console.error(`[WhatsAppController] Manual reconnect failed `, e),
+        Logger.error(`[WhatsAppController] Manual reconnect failed `, e),
       );
 
     res.status(200).json({

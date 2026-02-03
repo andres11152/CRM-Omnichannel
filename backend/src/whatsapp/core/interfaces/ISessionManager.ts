@@ -20,4 +20,12 @@ export interface ISessionManager {
 
   // 🛡️ Active LID Resolution (Queries WhatsApp servers directly)
   resolveLidToPhone(sessionId: string, lid: string): Promise<string | null>;
+  // 🛡️ Data Access without ORM Leakage
+  getSessionInfo(
+    sessionId: string,
+  ): Promise<{
+    companyId: string;
+    status: SessionStatus["status"];
+    phone?: string | null;
+  } | null>;
 }

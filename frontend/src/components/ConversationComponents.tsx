@@ -5,7 +5,7 @@
  * State, props, and events are all FULLY typed
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ConversationListItem,
   ConversationDetail,
@@ -313,6 +313,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 // MESSAGE INPUT COMPONENT
 // ============================================
 
+// ... imports
+import { socketService } from "../../services/socketService";
+
+// ... inside MessageInput
 export const MessageInput: React.FC<MessageInputProps> = ({
   conversationId,
   onSendMessage,
@@ -322,6 +326,34 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [content, setContent] = useState<string>("");
   const [sending, setSending] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch conversation to get customer phone for typing status
+  const { conversation } = useConversation(conversationId);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ✅ TYPING INDICATOR HANDLER
+  const handleTyping = () => {
+    if (!conversation?.contact?.phone) return;
+
+    // Emit 'composing'
+    socketService.emit("conversation:typing", {
+      to: conversation.contact.phone,
+      status: "composing",
+    });
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set timeout to emit 'paused' after 3s of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      socketService.emit("conversation:typing", {
+        to: conversation.contact.phone,
+        status: "paused",
+      });
+    }, 3000);
+  };
 
   // ✅ TYPED FORM HANDLER
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -348,6 +380,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
       // Clear input on success
       setContent("");
+
+      // Clear typing status immediately
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (conversation?.contact?.phone) {
+        socketService.emit("conversation:typing", {
+          to: conversation.contact.phone,
+          status: "paused",
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
@@ -359,7 +400,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
     if (error) setError(null);
+    handleTyping();
   };
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, []);
 
   // ✅ TYPED KEY HANDLER
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

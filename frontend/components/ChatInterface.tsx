@@ -200,11 +200,21 @@ export const ChatInterface: React.FC<Props> = ({
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
   //  Customer 360 Toggle State
   const [isCustomer360Visible, setIsCustomer360Visible] = useState(() => {
+    // 🛡️ 100-YEAR FIX: On small screens, ALWAYS start closed to avoid obscuring the chat
+    if (typeof window !== "undefined" && window.innerWidth < 1024) return false;
+
     const saved = localStorage.getItem("customer360_visible");
     return saved !== null
       ? saved === "true"
       : typeof window !== "undefined" && window.innerWidth > 1024;
   });
+
+  // 📱 MOBILE UX FIX: Close 360 panel when switching chats on mobile
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setIsCustomer360Visible(false);
+    }
+  }, [activeContact.id]);
 
   // Rapid Actions State
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -347,7 +357,7 @@ export const ChatInterface: React.FC<Props> = ({
               new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
           );
 
-          setMessages(sortedHistory);
+          setMessages(sortedHistory.filter((m: any) => m.id));
 
           // ’¾ SAVE TO CACHE for offline access
           messageCacheService
@@ -427,31 +437,45 @@ export const ChatInterface: React.FC<Props> = ({
           return prev;
         }
 
-        // 🎯 ATOMIC REPLACEMENT: Always try to replace temp first (removed senderType check)
-        const optimisticIndex = prev.findIndex((m) => m.id.startsWith("temp-"));
+        // 🎯 ATOMIC REPLACEMENT: Find SPECIFIC temp message by content match
+        // This prevents replacing the wrong temp message if multiple are in flight
+        let optimisticIndex = prev.findIndex(
+          (m) =>
+            m.id &&
+            m.id.startsWith("temp-") &&
+            m.content?.trim() === processedMsg.content?.trim(),
+        );
 
-        if (optimisticIndex !== -1) {
-          const tempMsg = prev[optimisticIndex];
-          const isContentMatch =
-            tempMsg.content?.trim() === processedMsg.content?.trim();
-          const isSinglePending =
-            prev.filter((m) => m.id.startsWith("temp-")).length === 1;
+        // Fallback: If no exact content match, assume FIFO (First-In-First-Out)
+        // This handles cases where content might be slightly modified by backend or simple race conditions
+        if (optimisticIndex === -1) {
+          const tempMessages = prev
+            .map((m, idx) => ({ ...m, idx }))
+            .filter((m) => m.id && m.id.startsWith("temp-"));
 
-          if (isContentMatch || isSinglePending) {
-            console.log(
-              "[Socket] 🎯 Replacing temp:",
-              tempMsg.id,
-              "->",
-              processedMsg.id,
-            );
-            const updated = [...prev];
-            updated[optimisticIndex] = processedMsg;
-            return updated;
+          if (tempMessages.length > 0) {
+            // ⚡ FIFO STRATEGY: Replace the oldest temp message
+            // We assume socket ACKs usually come in order
+            optimisticIndex = tempMessages[0].idx;
           }
         }
 
-        console.log("[ChatInterface] âœ… Message appended:", processedMsg.id);
-        return [...prev, processedMsg];
+        if (optimisticIndex !== -1) {
+          console.log(
+            "[Socket] 🎯 Replacing temp:",
+            prev[optimisticIndex].id,
+            "->",
+            processedMsg.id,
+          );
+          const updated = [...prev];
+          updated[optimisticIndex] = processedMsg;
+          return updated;
+        }
+
+        console.log("[ChatInterface] ✅ Message appended:", processedMsg.id);
+        const newState = [...prev, processedMsg];
+        // 🔒 NUCLEAR OPTION: Enforce uniqueness by ID
+        return Array.from(new Map(newState.map((m) => [m.id, m])).values());
       });
 
       // Trigger scroll
@@ -506,30 +530,25 @@ export const ChatInterface: React.FC<Props> = ({
 
     // 6. Typing Indicators
     // 🟢 CUSTOMER TYPING (WhatsApp -> CRM)
-    const handlePresenceUpdate = (data: any) => {
-      if (!data?.id) return;
-
-      // Check if update belongs to current contact
-      // WhatsApp JIDs format: 123456@s.whatsapp.net
-      // CRM channelId format: 123456 (usually)
-      const remoteJid = data.id;
-      const currentId = activeContact.channelId;
-
-      if (remoteJid.includes(currentId)) {
-        const presences = data.presences || {};
-        const participant = Object.values(presences)[0] as any;
-        const status = participant?.lastKnownPresence;
-
-        if (status === "composing" || status === "recording") {
+    // 🟢 CUSTOMER TYPING (WhatsApp -> CRM)
+    // We use the normalized event from MessageHandler which handles LIDs and Phone mapping
+    const handleConversationTyping = (data: {
+      conversationId: string;
+      from: string;
+      status: "composing" | "recording" | "paused";
+    }) => {
+      // Robust check: Ensure event belongs to this conversation
+      if (data.conversationId === activeContact.id) {
+        if (data.status === "composing" || data.status === "recording") {
           setIsRemoteTyping(true);
-          // Safety timeout
+          // Safety timeout (clears if no 'paused' event received)
           setTimeout(() => setIsRemoteTyping(false), 10000);
         } else {
           setIsRemoteTyping(false);
         }
       }
     };
-    socketService.on("presence.update", handlePresenceUpdate);
+    socketService.on("conversation:typing", handleConversationTyping);
 
     // 🔵 AGENT TYPING (Other agents -> CRM)
     const handleAgentTyping = (data: {
@@ -568,7 +587,7 @@ export const ChatInterface: React.FC<Props> = ({
       socketService.off("conversation.new_message", handleIncomingMessage);
       socketService.off("connect", handleConnect);
       socketService.off("disconnect", handleDisconnect);
-      socketService.off("presence.update", handlePresenceUpdate); // ✅ CLEANUP
+      socketService.off("conversation:typing", handleConversationTyping); // ✅ CLEANUP
       socketService.off("agent.typing", handleAgentTyping);
       socketService.off("agent.stopped_typing", handleAgentStoppedTyping);
     };

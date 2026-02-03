@@ -1,15 +1,35 @@
-import React, { useState, useEffect } from 'react';
-import { toast } from 'sonner';
-import { Activity } from '../../types/crm';
-import { getActivities, deleteActivity, updateActivity } from '../../services/crmService';
-import { ActivityModal } from './ActivityModal';
-import { ModuleHeader } from '../common/ModuleHeader';
+import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
+import { Activity } from "../../types/crm";
+import {
+  getActivities,
+  deleteActivity,
+  updateActivity,
+} from "../../services/crmService";
+import { ActivityModal } from "./ActivityModal";
+import { ModuleHeader } from "../common/ModuleHeader";
+import {
+  Calendar,
+  Search,
+  Trash2,
+  CheckCircle2,
+  Circle,
+  Settings,
+  Phone,
+  Mail,
+  Users,
+  CheckSquare,
+  FileText,
+} from "lucide-react";
 
 export const ActivityList: React.FC = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState<Activity | undefined>(undefined);
+  const [selectedActivity, setSelectedActivity] = useState<
+    Activity | undefined
+  >(undefined);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const fetchActivities = async () => {
     try {
@@ -17,7 +37,7 @@ export const ActivityList: React.FC = () => {
       const data = await getActivities();
       setActivities(data.activities || []);
     } catch (error) {
-      console.error('Error fetching activities:', error);
+      console.error("Error fetching activities:", error);
     } finally {
       setLoading(false);
     }
@@ -28,42 +48,37 @@ export const ActivityList: React.FC = () => {
   }, []);
 
   const handleDelete = (id: string) => {
-    console.log('🛑 [ActivityList] Requesting delete for Activity ID:', id);
-
-    toast('¿Estás seguro de eliminar esta actividad?', {
-      description: 'Esta acción no se puede deshacer',
+    toast("¿Estás seguro de eliminar esta actividad?", {
+      description: "Esta acción no se puede deshacer",
       action: {
-        label: 'Eliminar',
+        label: "Eliminar",
         onClick: async () => {
-             const toastId = toast.loading('Eliminando actividad...');
-             try {
-                console.log('🚀 [ActivityList] Calling deleteService...');
-                await deleteActivity(id);
-                console.log('✅ [ActivityList] Delete successful.');
-                
-                toast.success('Actividad eliminada', { id: toastId });
-                await fetchActivities();
-             } catch (error) {
-                console.error('❌ [ActivityList] Error deleting activity:', error);
-                toast.error('Error al eliminar actividad', { id: toastId });
-             }
-        }
+          const toastId = toast.loading("Eliminando actividad...");
+          try {
+            await deleteActivity(id);
+            toast.success("Actividad eliminada", { id: toastId });
+            await fetchActivities();
+          } catch (error) {
+            console.error("Error deleting activity:", error);
+            toast.error("Error al eliminar actividad", { id: toastId });
+          }
+        },
       },
       cancel: {
-        label: 'Cancelar',
-        onClick: () => console.log('❌ [ActivityList] Delete cancelled by user.')
+        label: "Cancelar",
+        onClick: () => {},
       },
-      duration: 5000, // Give user time to decide
+      duration: 5000,
     });
   };
 
   const handleStatusToggle = async (activity: Activity) => {
     try {
-      const newStatus = activity.status === 'PENDING' ? 'COMPLETED' : 'PENDING';
+      const newStatus = activity.status === "PENDING" ? "COMPLETED" : "PENDING";
       await updateActivity(activity.id, { status: newStatus });
       fetchActivities();
     } catch (error) {
-      console.error('Error updating activity status:', error);
+      console.error("Error updating activity status:", error);
     }
   };
 
@@ -85,156 +100,332 @@ export const ActivityList: React.FC = () => {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'CALL':
-        return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>;
-      case 'EMAIL':
-        return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
-      case 'MEETING':
-        return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
-      case 'TASK':
-        return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
+      case "CALL":
+        return <Phone className="w-3.5 h-3.5" />;
+      case "EMAIL":
+        return <Mail className="w-3.5 h-3.5" />;
+      case "MEETING":
+        return <Users className="w-3.5 h-3.5" />;
+      case "TASK":
+        return <CheckSquare className="w-3.5 h-3.5" />;
       default: // NOTE
-        return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
+        return <FileText className="w-3.5 h-3.5" />;
     }
   };
 
   const getTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      'NOTE': 'Nota',
-      'CALL': 'Llamada',
-      'EMAIL': 'Email',
-      'MEETING': 'Reunión',
-      'TASK': 'Tarea'
+      NOTE: "Nota",
+      CALL: "Llamada",
+      EMAIL: "Email",
+      MEETING: "Reunión",
+      TASK: "Tarea",
     };
     return labels[type] || type;
   };
 
+  const filteredActivities = activities.filter(
+    (activity) =>
+      activity.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      activity.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      activity.assignedTo?.name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      getTypeLabel(activity.type)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()),
+  );
 
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden">
-
-
       <ModuleHeader
         title="Actividades"
         description="Gestiona tus tareas y recordatorios"
-        icon={
-          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z" />
-          </svg>
-        }
+        icon={<Calendar className="w-8 h-8 text-white" />}
         gradient="from-orange-600 to-amber-600 dark:from-orange-800 dark:to-amber-800"
         stats={{
           label: "Pendientes",
-          value: activities.filter(a => a.status === 'PENDING').length
+          value: activities.filter((a) => a.status === "PENDING").length,
         }}
         action={
           <button
             onClick={handleCreate}
             className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors backdrop-blur-sm border border-white/20 font-medium"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
             </svg>
             Nueva Actividad
           </button>
         }
       />
 
-      <div className="flex-1 p-6 overflow-hidden flex flex-col">
-        <div className="bg-reply-panel dark:bg-reply-panel-dark rounded-xl shadow-sm border border-reply-border dark:border-reply-border-dark flex-1 overflow-hidden flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-reply-border dark:border-reply-border-dark text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">
-                <th className="p-4 font-medium w-10"></th>
-                <th className="p-4 font-medium">Asunto</th>
-                <th className="p-4 font-medium">Tipo</th>
-                <th className="p-4 font-medium">Vencimiento</th>
-                <th className="p-4 font-medium">Asignado a</th>
-                <th className="p-4 font-medium text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-reply-border dark:divide-reply-border-dark">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">Cargando actividades...</td>
-                </tr>
-              ) : activities.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">No hay actividades pendientes.</td>
-                </tr>
-              ) : (
-                activities.map((activity) => (
-                  <tr key={activity.id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group ${activity.status === 'COMPLETED' ? 'opacity-50' : ''}`}>
-                    <td className="p-4">
-                      <input
-                        type="checkbox"
-                        checked={activity.status === 'COMPLETED'}
-                        onChange={() => handleStatusToggle(activity)}
-                        className="w-4 h-4 text-reply-blue rounded border-gray-300 focus:ring-reply-blue cursor-pointer"
-                      />
-                    </td>
-                    <td className="p-4">
-                      <div className={`font-medium text-reply-text dark:text-reply-text-dark ${activity.status === 'COMPLETED' ? 'line-through' : ''}`}>
-                        {activity.subject}
-                      </div>
-                      {activity.description && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">
-                          {activity.description}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* TOOLBAR */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-20 bg-gray-50/80 dark:bg-reply-bg-dark/80 backdrop-blur-xl py-2">
+            <div className="relative group flex-1 max-w-2xl">
+              <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por asunto, descripción o responsable..."
+                className="w-full pl-12 pr-6 py-4 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none font-medium text-gray-900 dark:text-white"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="px-4 py-2 bg-white dark:bg-[#202c33] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                {activities.filter((a) => a.status === "PENDING").length} Tareas
+                Pendientes
+              </div>
+            </div>
+          </div>
+
+          {/* CONTENT AREA */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="h-64 bg-white dark:bg-[#202c33] rounded-[2.5rem] border border-gray-100 dark:border-gray-800 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : activities.length === 0 ? (
+            <div className="text-center py-24 bg-white dark:bg-[#202c33] rounded-[3rem] border border-dashed border-gray-200 dark:border-gray-800 shadow-inner">
+              <div className="w-24 h-24 bg-gray-50 dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Calendar className="w-10 h-10 text-gray-300" />
+              </div>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
+                Todo bajo control
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
+                No tienes actividades pendientes por el momento. ¡Buen trabajo!
+              </p>
+            </div>
+          ) : filteredActivities.length === 0 ? (
+            <div className="text-center py-24 bg-white dark:bg-[#202c33] rounded-[3rem] border border-dashed border-gray-200 dark:border-gray-800 shadow-inner">
+              <div className="w-24 h-24 bg-gray-50 dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Search className="w-10 h-10 text-gray-300" />
+              </div>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
+                Sin coincidencias
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
+                No encontramos actividades que coincidan con tu búsqueda "
+                {searchTerm}".
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* MOBILE CARDS */}
+              <div className="grid grid-cols-1 gap-4 md:hidden pb-10">
+                {filteredActivities.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className={`bg-white dark:bg-[#1c272f] p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-all relative overflow-hidden ${activity.status === "COMPLETED" ? "opacity-60 saturate-[0.2]" : ""}`}
+                  >
+                    <div className="flex items-start gap-4 mb-5">
+                      <button
+                        onClick={() => handleStatusToggle(activity)}
+                        className={`mt-1.5 transform transition-all active:scale-90 ${activity.status === "COMPLETED" ? "text-emerald-500" : "text-gray-300"}`}
+                      >
+                        {activity.status === "COMPLETED" ? (
+                          <CheckCircle2 className="w-6 h-6" />
+                        ) : (
+                          <Circle className="w-6 h-6" />
+                        )}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <h4
+                          className={`text-lg font-black text-gray-900 dark:text-white truncate ${activity.status === "COMPLETED" ? "line-through" : ""}`}
+                        >
+                          {activity.subject}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                            {getTypeIcon(activity.type)}
+                            {getTypeLabel(activity.type)}
+                          </span>
                         </div>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <span className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
-                        {getTypeIcon(activity.type)}
-                        {getTypeLabel(activity.type)}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      {activity.dueDate ? (
-                        <span className={`text-sm ${
-                          new Date(activity.dueDate) < new Date() && activity.status !== 'COMPLETED'
-                            ? 'text-red-500 font-medium'
-                            : 'text-gray-600 dark:text-gray-300'
-                        }`}>
-                          {new Date(activity.dueDate).toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-gray-600 dark:text-gray-300">
-                      {activity.assignedTo?.name || '-'}
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleEdit(activity)}
-                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 hover:text-blue-500 transition-colors"
-                          title="Editar"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(activity.id)}
-                          className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-gray-500 hover:text-red-500 transition-colors"
-                          title="Eliminar"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </div>
+
+                    <div className="space-y-4 mb-6 bg-gray-50/50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400 font-bold uppercase tracking-tighter">
+                          Vencimiento
+                        </span>
+                        <span
+                          className={`font-black ${new Date(activity.dueDate || "") < new Date() && activity.status !== "COMPLETED" ? "text-red-500" : "text-gray-900 dark:text-white"}`}
+                        >
+                          {activity.dueDate
+                            ? new Date(activity.dueDate).toLocaleString([], {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "Sin fecha"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400 font-bold uppercase tracking-tighter">
+                          Responsable
+                        </span>
+                        <span className="text-gray-900 dark:text-white font-black">
+                          {activity.assignedTo?.name || "Unassigned"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(activity)}
+                        className="flex-1 py-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-[1.25rem] font-bold text-sm transition-all shadow-sm"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(activity.id)}
+                        className="p-4 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-[1.25rem] hover:bg-red-100 transition-all"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* DESKTOP TABLE */}
+              <div className="hidden md:block bg-white dark:bg-[#1c272f] rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/50 dark:shadow-none overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
+                      <th className="px-8 py-8 w-16"></th>
+                      <th className="px-6 py-8">Actividad / Asunto</th>
+                      <th className="px-6 py-8">Tipo de Tarea</th>
+                      <th className="px-6 py-8">Vencimiento Estimado</th>
+                      <th className="px-6 py-8">Responsable</th>
+                      <th className="px-8 py-8 text-right">Gestión</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                    {filteredActivities.map((activity) => (
+                      <tr
+                        key={activity.id}
+                        className={`hover:bg-gray-50/50 dark:hover:bg-orange-500/[0.02] transition-all group ${activity.status === "COMPLETED" ? "opacity-50 grayscale" : ""}`}
+                      >
+                        <td className="px-8 py-6 text-center">
+                          <button
+                            onClick={() => handleStatusToggle(activity)}
+                            className={`transform transition-all active:scale-75 ${activity.status === "COMPLETED" ? "text-emerald-500" : "text-gray-200 hover:text-gray-300 dark:text-gray-700 dark:hover:text-gray-600"}`}
+                          >
+                            {activity.status === "COMPLETED" ? (
+                              <CheckCircle2 className="w-6 h-6" />
+                            ) : (
+                              <Circle className="w-6 h-6" />
+                            )}
+                          </button>
+                        </td>
+                        <td className="px-6 py-6 whitespace-nowrap">
+                          <div className="flex flex-col gap-0.5">
+                            <div
+                              className={`text-base font-black text-gray-900 dark:text-white mb-0.5 tracking-tight ${activity.status === "COMPLETED" ? "line-through decoration-emerald-500/50" : ""}`}
+                            >
+                              {activity.subject}
+                            </div>
+                            <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest truncate max-w-[200px]">
+                              {activity.description ||
+                                "Sin descripción adicional."}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-6 whitespace-nowrap">
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 w-fit">
+                            <span className="text-orange-500">
+                              {getTypeIcon(activity.type)}
+                            </span>
+                            <span className="text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase tracking-widest">
+                              {getTypeLabel(activity.type)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-6">
+                          <div className="flex flex-col gap-1">
+                            <div
+                              className={`text-sm font-black tracking-tighter ${new Date(activity.dueDate || "") < new Date() && activity.status !== "COMPLETED" ? "text-red-500 animate-pulse" : "text-gray-900 dark:text-white"}`}
+                            >
+                              {activity.dueDate
+                                ? new Date(activity.dueDate).toLocaleString(
+                                    [],
+                                    {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                    },
+                                  )
+                                : "-"}
+                            </div>
+                            <div className="text-[10px] font-bold text-gray-400 uppercase italic">
+                              {activity.dueDate
+                                ? new Date(activity.dueDate).toLocaleString(
+                                    [],
+                                    { hour: "2-digit", minute: "2-digit" },
+                                  )
+                                : "Sin plazo"}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-6">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-[10px] font-black text-gray-500">
+                              {activity.assignedTo?.name
+                                ?.charAt(0)
+                                .toUpperCase() || "?"}
+                            </div>
+                            <div className="text-sm font-bold text-gray-600 dark:text-gray-300">
+                              {activity.assignedTo?.name || "Sin asignar"}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6 whitespace-nowrap text-right">
+                          <div className="flex justify-end items-center gap-2">
+                            <button
+                              onClick={() => handleEdit(activity)}
+                              className="p-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-400 hover:text-orange-500 rounded-2xl transition-all shadow-sm border border-gray-100 dark:border-gray-700 active:scale-90"
+                            >
+                              <Settings className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(activity.id)}
+                              className="p-3 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-300 hover:text-red-500 rounded-2xl transition-all active:scale-95"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
-      </div>
       </div>
 
       {isModalOpen && (

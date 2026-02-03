@@ -45,7 +45,7 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
   };
 
   return (
-    <div className="w-full md:w-96 bg-white dark:bg-[#111b21] border-l border-gray-100 dark:border-gray-800 flex flex-col h-full shadow-2xl relative z-0">
+    <div className="w-full md:w-96 bg-white dark:bg-[#111b21] border-l border-gray-100 dark:border-gray-800 flex flex-col h-full relative">
       {/* Dynamic Header with Status Indicator */}
       <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-[#111b21] flex items-center justify-between flex-shrink-0">
         <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.1em] flex items-center gap-2">

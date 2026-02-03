@@ -1,5 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { Contact, Tag } from "../types";
 
 interface Agent {
@@ -63,18 +62,13 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
   availableTags = [],
   isTyping = false,
 }) => {
-  const [showAssignMenu, setShowAssignMenu] = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
+  const isTightMode = isChatListVisible && isCustomer360Visible; // 🧠 Detect "Tight Mode" (Both Panels Open)
+
   const [slaStatus, setSlaStatus] = useState<"ok" | "warning" | "critical">(
     "ok",
   );
   const [timeElapsed, setTimeElapsed] = useState(0);
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    // Buscar el contenedor en el Top Bar
-    setPortalTarget(document.getElementById("header-actions-portal"));
-  }, []);
 
   useEffect(() => {
     if (!ticketCreatedAt) return;
@@ -121,40 +115,30 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
     }
   };
 
-  // Content for the Portal (Global Actions) - STATUS ONLY
-  const renderGlobalStatus = () => (
-    <div className="flex items-center gap-2 w-full h-full justify-end animate-fade-in px-2">
-      {/* 1. SLA Indicator */}
-      {ticketCreatedAt && (
-        <div className="hidden lg:flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 mr-2">
-          <div
-            className={`w-2.5 h-2.5 rounded-full border-2 ${getSLAColor()}`}
-          ></div>
-          <div className="text-[10px]">
-            <span className="font-bold text-gray-700 dark:text-gray-300">
-              {timeElapsed}m
-            </span>
-            <span className="text-gray-400 dark:text-gray-500">
-              {" "}
-              / {responseTimeSLA}m
-            </span>
-          </div>
-        </div>
-      )}
+  // 🛠️ HELPER: Premium Dropdown Menu
+  const ActionMenu = () => {
+    const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
 
-      {/* 2. Priority Selector */}
-      <div className="relative">
-        <button
-          onClick={() => setShowPriorityMenu(!showPriorityMenu)}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${getPriorityColor(currentPriority)}`}
-          title="Cambiar Prioridad"
-        >
-          {currentPriority === "HIGH" && "🔴"}
-          {currentPriority === "MEDIUM" && "🟡"}
-          {currentPriority === "LOW" && "🔵"}
-          <span className="hidden sm:inline">{currentPriority}</span>
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (
+          menuRef.current &&
+          !menuRef.current.contains(event.target as Node)
+        ) {
+          setIsOpen(false);
+        }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const menuItems = [
+      {
+        icon: (
           <svg
-            className="w-2.5 h-2.5"
+            className="w-4 h-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -163,47 +147,154 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M19 9l-7 7-7-7"
+              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            />
+          </svg>
+        ),
+        label: "Enviar Email",
+        onClick: onEmail,
+        visible: !!onEmail,
+      },
+      {
+        icon: (
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+            />
+          </svg>
+        ),
+        label: "Transferir Ticket",
+        onClick: onTransfer,
+        visible: true,
+      },
+      {
+        icon: (
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+            />
+          </svg>
+        ),
+        label: "Copiar Historial",
+        onClick: onCopyChat,
+        visible: true,
+      },
+      {
+        icon: (
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+            />
+          </svg>
+        ),
+        label: "Editar Contacto",
+        onClick: onEditContact,
+        visible: true,
+      },
+    ];
+
+    return (
+      <div className="relative" ref={menuRef}>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 transition-all hover:shadow-sm active:scale-95"
+          title="Más Acciones"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
             />
           </svg>
         </button>
-        {showPriorityMenu && (
-          <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-[#202c33] rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 overflow-hidden z-[100]">
-            <div className="p-2 space-y-1">
-              {(["HIGH", "MEDIUM", "LOW"] as const).map((priority) => (
-                <button
-                  key={priority}
-                  onClick={() => {
-                    onChangePriority?.(priority);
-                    setShowPriorityMenu(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors text-left`}
-                >
-                  <span className="text-lg">
-                    {priority === "HIGH" && "🔴"}
-                    {priority === "MEDIUM" && "🟡"}
-                    {priority === "LOW" && "🔵"}
-                  </span>
-                  <div>
-                    <div className="text-sm font-bold text-gray-900 dark:text-white">
-                      {priority}
-                    </div>
-                  </div>
-                </button>
-              ))}
+
+        {isOpen && (
+          <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-[#202c33] rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-[100]">
+            <div className="py-1">
+              {menuItems
+                .filter((i) => i.visible)
+                .map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={(e) => {
+                      item.onClick();
+                      setIsOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-3 transition-colors"
+                  >
+                    <span className="text-gray-400 dark:text-gray-500 group-hover:text-blue-500">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </button>
+                ))}
             </div>
+
+            {/* Priority Selector Inside Dropdown for Ultra-Compact Mode */}
+            {isTightMode && (
+              <div className="border-t border-gray-100 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-800/50">
+                <div className="text-[10px] font-bold text-gray-400 mb-1 px-2 uppercase">
+                  Prioridad
+                </div>
+                <div className="flex gap-1">
+                  {(["LOW", "MEDIUM", "HIGH"] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => onChangePriority?.(p)}
+                      className={`flex-1 py-1 rounded text-[10px] font-bold border ${
+                        currentPriority === p
+                          ? getPriorityColor(p)
+                          : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-500"
+                      }`}
+                    >
+                      {p.charAt(0)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <>
-      {/* 🟢 UNIFIED CHAT HEADER */}
-      <div className="bg-white dark:bg-[#202c33] px-4 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 flex-shrink-0 relative shadow-sm h-[60px] z-30">
-        {/* LEFT: Sidebar Toggle & Identity */}
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="bg-white dark:bg-[#202c33] px-3 sm:px-4 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 flex-shrink-0 relative shadow-sm h-[60px] z-30">
+        {/* LEFT: Identity & Toggles */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           {onToggleChatList && (
             <button
               onClick={onToggleChatList}
@@ -248,11 +339,11 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
           )}
 
           <div
-            className="flex items-center gap-3 group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 p-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-2 sm:gap-3 group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 p-1 rounded-lg transition-colors overflow-hidden"
             onClick={onEditContact}
           >
             <div
-              className={`relative ${isChatListVisible && isCustomer360Visible ? "hidden 2xl:block" : "block"}`}
+              className={`relative shrink-0 ${isChatListVisible && isCustomer360Visible ? "hidden 2xl:block" : "block"}`}
             >
               <img
                 src={
@@ -261,188 +352,62 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
                   `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=random`
                 }
                 alt={contact.name}
-                className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-gray-600 shadow-sm"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-white dark:border-gray-600 shadow-sm"
               />
               <div
-                className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-[#202c33] ${socketStatus === "connected" ? "bg-green-500" : "bg-red-500"}`}
+                className={`absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 border-white dark:border-[#202c33] ${socketStatus === "connected" ? "bg-green-500" : "bg-red-500"}`}
               ></div>
             </div>
 
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-gray-900 dark:text-white font-bold text-sm truncate max-w-[150px] lg:max-w-[250px]">
+                <h2 className="text-gray-900 dark:text-white font-bold text-sm truncate">
                   {contact.name}
                 </h2>
                 {contact.channel && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase shrink-0">
+                  <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase shrink-0">
                     {contact.channel}
                   </span>
                 )}
-                {/* 🛠️ Clean Actions: Copy & Edit */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCopyChat();
-                    }}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                    title="Copiar Historial"
-                  >
-                    {isCopied ? (
-                      <span className="text-green-500 font-bold text-[10px]">
-                        COPIADO
-                      </span>
-                    ) : (
-                      <svg
-                        className="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTagsClick();
-                    }}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                    title="Gestionar Etiquetas"
-                  >
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                      />
-                    </svg>
-                  </button>
-                </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 h-5">
                 {isTyping ? (
                   <span className="text-green-500 font-bold animate-pulse">
                     escribiendo...
                   </span>
                 ) : (
-                  (() => {
-                    // 🧠 DYNAMIC LAYOUT LOGIC:
-                    // Maximize tag visibility when space allows (Panel 360 Closed)
-                    const is360Closed = !isCustomer360Visible;
-                    const isChatListClosed = !isChatListVisible;
-
-                    // Width Strategy
-                    const dynamicMaxWidth = is360Closed
-                      ? "max-w-[600px] lg:max-w-[800px]" // Huge space if 360 closed
-                      : "max-w-[200px] lg:max-w-[350px]"; // Tight space if 360 open
-
-                    // Count Strategy
-                    let maxVisibleTags = 2; // Default strict (Safe Mode)
-                    if (is360Closed) maxVisibleTags = 6; // Relaxed
-                    if (is360Closed && isChatListClosed) maxVisibleTags = 8; // Ultra Wide
-
-                    // Semi-compact adjustment (Laptop with 1 panel open)
-                    if (isCustomer360Visible && !isChatListVisible)
-                      maxVisibleTags = 3;
-
-                    return (
-                      <div
-                        className={`flex items-center gap-1.5 flex-nowrap overflow-hidden ${dynamicMaxWidth} mask-gradient-r transition-all duration-300`}
-                      >
-                        {/* 🏷️ 100-Year Solution: Visible Tag Badges for Customer Context */}
-                        {contact.tags && contact.tags.length > 0 ? (
-                          <>
-                            {contact.tags
-                              .slice(0, maxVisibleTags) // Dynamic limit
-                              .map((tagId: string, index: number) => {
-                                // Resolve tag data from availableTags
-                                const tag = availableTags.find(
-                                  (t) => t.id === tagId || t.name === tagId,
-                                );
-
-                                // Debug: Log if tags aren't matching
-                                if (!tag && index === 0) {
-                                  // Silent debug for dev
-                                }
-
-                                // Fallback: If tag not found, show generic badge
-                                if (!tag) {
-                                  return (
-                                    <span
-                                      key={tagId}
-                                      className="px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap"
-                                      title={`Tag ID: ${tagId}`}
-                                    >
-                                      🏷️ {tagId.substring(0, 8)}...
-                                    </span>
-                                  );
-                                }
-
-                                return (
-                                  <span
-                                    key={tagId}
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm whitespace-nowrap ${tag.color || "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"}`}
-                                    title={tag.name}
-                                  >
-                                    {tag.name}
-                                  </span>
-                                );
-                              })}
-                            {contact.tags.length > maxVisibleTags && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onTagsClick();
-                                }}
-                                className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors cursor-pointer whitespace-nowrap"
-                                title="Ver todas las etiquetas"
+                  <div className="flex items-center gap-1.5 overflow-hidden w-full">
+                    {contact.tags && contact.tags.length > 0 ? (
+                      <>
+                        {contact.tags
+                          .slice(0, isTightMode ? 1 : 3)
+                          .map((tagId: string) => {
+                            const tag = availableTags.find(
+                              (t) => t.id === tagId || t.name === tagId,
+                            );
+                            if (!tag) return null;
+                            return (
+                              <span
+                                key={tagId}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm whitespace-nowrap ${tag.color || "bg-gray-200 text-gray-700"}`}
                               >
-                                +{contact.tags.length - maxVisibleTags}
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onTagsClick();
-                            }}
-                            className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer flex items-center gap-1"
-                            title="Agregar etiquetas"
-                          >
-                            <svg
-                              className="w-3 h-3"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                              />
-                            </svg>
-                            Agregar etiquetas
-                          </button>
+                                {tag.name}
+                              </span>
+                            );
+                          })}
+                        {contact.tags.length > (isTightMode ? 1 : 3) && (
+                          <span className="text-[9px] bg-gray-100 px-1 rounded">
+                            +{contact.tags.length - (isTightMode ? 1 : 3)}
+                          </span>
                         )}
-                      </div>
-                    );
-                  })()
+                      </>
+                    ) : (
+                      <span className="text-[10px] italic opacity-60">
+                        Sin etiquetas
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -450,57 +415,46 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
         </div>
 
         {/* RIGHT: Actions Toolbar */}
-        <div className="flex items-center gap-1 md:gap-2">
-          {/* 0. SLA & Priority (Always Visible) */}
-          <div className="flex items-center gap-2 mr-2">
-            {/* SLA Indicator */}
-            {ticketCreatedAt && (
-              <div className="hidden lg:flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div
-                  className={`w-2.5 h-2.5 rounded-full border-2 ${getSLAColor()}`}
-                ></div>
-                <div className="text-[10px]">
-                  <span className="font-bold text-gray-700 dark:text-gray-300">
+        <div className="flex items-center gap-1 sm:gap-2 pl-2">
+          {/* 1. SLA & Priority (Hidden in Ultra Tight Mode, Moved to Dropdown) */}
+          {!isTightMode && (
+            <div className="flex items-center gap-2 hidden lg:flex">
+              {ticketCreatedAt && (
+                <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div
+                    className={`w-2 h-2 rounded-full ${getSLAColor()}`}
+                  ></div>
+                  <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300">
                     {timeElapsed}m
                   </span>
-                  <span className="text-gray-400 dark:text-gray-500">
-                    {" "}
-                    / {responseTimeSLA}m
-                  </span>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Priority Selector */}
-            <div className="relative">
-              <button
-                onClick={() => setShowPriorityMenu(!showPriorityMenu)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${getPriorityColor(
-                  currentPriority,
-                )}`}
-                title="Cambiar Prioridad"
-              >
-                {currentPriority === "HIGH" && "🔴"}
-                {currentPriority === "MEDIUM" && "🟡"}
-                {currentPriority === "LOW" && "🔵"}
-                <span className="hidden sm:inline">{currentPriority}</span>
-                <svg
-                  className="w-2.5 h-2.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <div className="relative">
+                <button
+                  onClick={() => setShowPriorityMenu(!showPriorityMenu)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${getPriorityColor(currentPriority)}`}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </button>
-              {showPriorityMenu && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-[#202c33] rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 overflow-hidden z-[100]">
-                  <div className="p-2 space-y-1">
+                  {currentPriority === "HIGH" && "🔴"}
+                  {currentPriority === "MEDIUM" && "🟡"}
+                  {currentPriority === "LOW" && "🔵"}
+                  <span className="ml-1">{currentPriority}</span>
+                  <svg
+                    className="w-2.5 h-2.5 ml-1 opacity-50"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+                {showPriorityMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-32 bg-white dark:bg-[#202c33] rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-[100]">
                     {(["HIGH", "MEDIUM", "LOW"] as const).map((priority) => (
                       <button
                         key={priority}
@@ -508,113 +462,84 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
                           onChangePriority?.(priority);
                           setShowPriorityMenu(false);
                         }}
-                        className={`w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors text-left`}
+                        className="w-full text-left px-3 py-2 text-[10px] font-bold hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
                       >
-                        <span className="text-lg">
-                          {priority === "HIGH" && "🔴"}
-                          {priority === "MEDIUM" && "🟡"}
-                          {priority === "LOW" && "🔵"}
-                        </span>
-                        <div>
-                          <div className="text-sm font-bold text-gray-900 dark:text-white">
-                            {priority}
-                          </div>
-                        </div>
+                        {priority === "HIGH" && "🔴"}{" "}
+                        {priority === "MEDIUM" && "🟡"}{" "}
+                        {priority === "LOW" && "🔵"}
+                        {priority}
                       </button>
                     ))}
                   </div>
-                </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 2. Direct Actions (Visible in Normal Mode) */}
+          {!isTightMode && (
+            <div className="hidden md:flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-2 ml-2">
+              {onTransfer && (
+                <button
+                  onClick={onTransfer}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                  title="Transferir"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                    />
+                  </svg>
+                </button>
               )}
             </div>
-          </div>
+          )}
 
-          {/* 1. Quick Tools (Desktop) */}
-          <div className="hidden md:flex items-center gap-1 mr-2">
-            {/* Removed Redundant Buttons (Tags/Copy) as requested via "Better Handling" */}
-          </div>
-
-          <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1 hidden md:block" />
-
-          {/* 2. Primary Actions */}
-          <div className="flex items-center gap-2">
-            {onEmail && (
-              <button
-                onClick={onEmail}
-                className="hidden md:flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-bold transition-all border border-gray-200 dark:border-gray-700"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
-                </svg>
-                <span>Email</span>
-              </button>
-            )}
-
-            <button
-              onClick={onTransfer}
-              className="hidden md:flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg text-xs font-bold transition-all border border-blue-100 dark:border-blue-900/30"
+          {/* 3. Primary Action: Resolve (Always Visible but Compact in Tight Mode) */}
+          <button
+            onClick={onResolve}
+            className={`
+              flex items-center gap-2 px-3 sm:px-4 py-2 
+              bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 
+              text-white rounded-lg text-xs font-bold shadow-md shadow-green-500/20 
+              transition-all transform hover:scale-105 active:scale-95
+              ${isTightMode ? "aspect-square p-2 justify-center" : ""}
+            `}
+            title="Resolver Ticket"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                />
-              </svg>
-              <span>Transferir</span>
-            </button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            {!isTightMode && <span>Resolver</span>}
+          </button>
 
-            <button
-              onClick={onResolve}
-              className="hidden lg:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-lg text-xs font-bold shadow-md shadow-green-500/20 transition-all transform hover:scale-105 active:scale-95"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              <span>Resolver</span>
-            </button>
-          </div>
+          {/* 4. Dropdown Menu (Secondary Actions) */}
+          <ActionMenu />
 
-          {/* 3. Panel Toggles */}
-          {onToggleParticipantsPanel && (
-            <>
-              <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2" />
+          {/* 5. Right Sidebar Toggles */}
+          <div className="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-2 ml-1">
+            {onToggleParticipantsPanel && (
               <button
                 onClick={onToggleParticipantsPanel}
-                className={`
-                       p-2 rounded-lg transition-all border
-                       ${
-                         isParticipantsPanelVisible
-                           ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800"
-                           : "bg-transparent text-gray-400 hover:text-gray-600 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700"
-                       }
-                    `}
-                title="Participantes del Grupo"
+                className={`p-2 rounded-lg transition-all ${isParticipantsPanelVisible ? "bg-indigo-50 text-indigo-600" : "text-gray-400 hover:bg-gray-100"}`}
               >
                 <svg
                   className="w-5 h-5"
@@ -630,28 +555,14 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
                   />
                 </svg>
               </button>
-            </>
-          )}
-
-          {onToggleCustomer360 && (
-            <>
-              {!onToggleParticipantsPanel && (
-                <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2" />
-              )}
+            )}
+            {onToggleCustomer360 && !onToggleParticipantsPanel && (
               <button
                 onClick={onToggleCustomer360}
-                className={`
-                       p-2 rounded-lg transition-all border
-                       ${
-                         isCustomer360Visible
-                           ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800"
-                           : "bg-transparent text-gray-400 hover:text-gray-600 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700"
-                       }
-                    `}
-                title="Panel Customer 360"
+                className={`p-2 rounded-lg transition-all ${isCustomer360Visible ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-100"}`}
               >
                 <svg
-                  className={`w-5 h-5 transition-transform duration-300 ${!isCustomer360Visible ? "rotate-180" : ""}`}
+                  className={`w-5 h-5 transition-transform ${!isCustomer360Visible ? "rotate-180" : ""}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -664,26 +575,7 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
                   />
                 </svg>
               </button>
-            </>
-          )}
-
-          {/* Mobile Actions Menu */}
-          <div className="md:hidden ml-1">
-            <button className="p-2 text-gray-500 dark:text-gray-400">
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-                />
-              </svg>
-            </button>
+            )}
           </div>
         </div>
       </div>

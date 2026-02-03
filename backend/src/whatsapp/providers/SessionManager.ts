@@ -46,6 +46,49 @@ export class SessionManager implements ISessionManager {
     // store.readFromFile('./baileys_store.json')
   }
 
+  /**
+   * 🛡️ Returns session metadata for consumers (avoiding direct DB access in controllers)
+   */
+  async getSessionInfo(sessionId: string): Promise<{
+    companyId: string;
+    status: SessionStatus["status"];
+    phone?: string | null;
+  } | null> {
+    // 1. Check Memory
+    const meta = this.sessionMetadata.get(sessionId);
+    const sock = this.sessions.get(sessionId);
+    if (meta) {
+      let phone = undefined;
+      if (sock?.user?.id) {
+        phone = sock.user.id.split(":")[0].split("@")[0];
+      }
+      return { ...meta, phone };
+    }
+
+    // 2. Database Fallback (System Context)
+    const session = await TenantContextManager.runAsSystem(async () =>
+      prisma.whatsAppSession.findUnique({
+        where: { sessionId },
+        select: { companyId: true, status: true, phone: true },
+      }),
+    );
+
+    if (session) {
+      // Heal memory cache
+      this.sessionMetadata.set(sessionId, {
+        companyId: session.companyId,
+        status: session.status as SessionStatus["status"],
+      });
+      return {
+        companyId: session.companyId,
+        status: session.status as SessionStatus["status"],
+        phone: session.phone,
+      };
+    }
+
+    return null;
+  }
+
   // 🛡️ Helper to get user info from store
   public getContactInfo(jid: string) {
     return store.contacts[jidNormalizedUser(jid)];
@@ -83,11 +126,9 @@ export class SessionManager implements ISessionManager {
       }
     }
 
-    // 🔍 Step 2: Fallback to the LID entry itself if we have it in store
-    const normalizedLid = jidNormalizedUser(lid);
-    if (contacts[normalizedLid]) {
-      return contacts[normalizedLid];
-    }
+    // 🔍 Step 2: Fallback REMOVED.
+    // We only want to return a result if we found a LINK to a Phone JID.
+    // Returning the LID contact itself is useless for resolution.
 
     console.warn(
       `[SessionManager] ⚠️ ID Resolution Failed: ${lidBase} not found in Store mappings.`,

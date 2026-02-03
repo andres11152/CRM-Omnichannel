@@ -3,6 +3,7 @@ import {
   Contact,
   jidNormalizedUser,
 } from "@whiskeysockets/baileys";
+import { Logger } from "@/utils/logger";
 
 /**
  * 🛡️ 100-YEAR FIX: Custom In-Memory Store
@@ -34,7 +35,7 @@ export class SimpleInMemoryStore {
       this.contacts[jid].lid = lid;
       const lidBase = lid.split("@")[0].split(":")[0];
       this.lidToPhone[lidBase] = jid;
-      console.info(`[Store] 🔗 LID Mapping: ${lidBase} → ${jid}`);
+      Logger.info(`[Store] 🔗 LID Mapping: ${lidBase} → ${jid}`);
     }
 
     // 🛡️ If this is a LID contact with phoneNumber field, create reverse mapping
@@ -53,16 +54,22 @@ export class SimpleInMemoryStore {
     // 1. Bulk History Sync (The most important for LID resolution)
     ev.on("messaging-history.set", ({ contacts }) => {
       if (!contacts) return;
+      console.info(
+        `[Store] 📥 Received history payload with ${contacts.length} contacts`,
+      );
       for (const contact of contacts) {
         this.upsertContact(contact);
       }
       console.info(
-        `[Store] 📚 History sync: Loaded ${contacts.length} contacts`,
+        `[Store] 📚 History sync processed: Loaded ${contacts.length} contacts`,
       );
     });
 
     // 2. New Contacts
     ev.on("contacts.upsert", (contacts: Contact[]) => {
+      console.info(
+        `[Store] 📥 contacts.upsert received ${contacts.length} contacts`,
+      );
       for (const contact of contacts) {
         this.upsertContact(contact);
       }

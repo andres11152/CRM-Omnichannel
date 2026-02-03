@@ -1,39 +1,96 @@
-import { Message, Prisma } from "@prisma/client";
-import { prisma, ExtendedPrismaClient } from "@/config/database";
-import { CreateMessageParams } from "@/types/message.types";
+import { prisma } from "@/config/database";
+import { Message, Prisma, User } from "@prisma/client";
+import { MessageMetadata } from "@/types/whatsapp.types";
 
 export class MessageRepository {
-  constructor(private db: ExtendedPrismaClient = prisma) {}
+  async findMessageByWhatsAppId(whatsappMessageId: string): Promise<{
+    id: string;
+    conversationId: string;
+    status: string;
+    companyId: string;
+  } | null> {
+    return prisma.message.findUnique({
+      where: { whatsappMessageId },
+      select: {
+        id: true,
+        conversationId: true,
+        status: true,
+        companyId: true,
+      },
+    });
+  }
+
+  async doesMessageExist(whatsappMessageId: string): Promise<boolean> {
+    const count = await prisma.message.count({
+      where: { whatsappMessageId },
+    });
+    return count > 0;
+  }
+
+  async findDuplicateOutbound(
+    conversationId: string,
+    content: string,
+    timeThreshold: Date,
+  ): Promise<Message | null> {
+    return prisma.message.findFirst({
+      where: {
+        conversationId,
+        direction: "OUTBOUND",
+        content,
+        createdAt: { gt: timeThreshold },
+      },
+    });
+  }
+
+  async getSessionOwner(
+    phone: string,
+    companyId: string,
+  ): Promise<User | null> {
+    return prisma.user.findFirst({
+      where: { phone, companyId },
+    });
+  }
+
+  async getDefaultAgent(companyId: string): Promise<User | null> {
+    return prisma.user.findFirst({
+      where: { companyId, role: "ADMIN" },
+    });
+  }
+
+  async getConversationHistory(
+    conversationId: string,
+    limit: number = 10,
+  ): Promise<Message[]> {
+    return prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+  }
 
   async findDuplicate(
     conversationId: string,
     content: string,
-    timeWindowMs: number = 5000,
   ): Promise<Message | null> {
-    return this.db.message.findFirst({
+    const recent = new Date(Date.now() - 60 * 1000);
+    return prisma.message.findFirst({
       where: {
         conversationId,
         content,
-        createdAt: { gt: new Date(Date.now() - timeWindowMs) },
+        createdAt: { gt: recent },
       },
     });
   }
 
-  async create(data: CreateMessageParams): Promise<Message> {
-    return this.db.message.create({
-      data: {
-        companyId: data.companyId,
-        conversationId: data.conversationId,
-        content: data.content,
-        direction: data.direction,
-        senderId: data.senderId,
-        channel: data.channel,
-        // Status is likely a String field in Prisma schema or managed implicitly.
-        // We pass the string directly (Type safety ensured by CreateMessageParams interface).
-        status: data.status || "SENT",
-        metadata: data.metadata || Prisma.JsonNull,
-      },
-      include: { sender: true },
+  /**
+   * Creates a new message directly in the database.
+   * Useful for logging failed messages or simple inserts bypassing complex logic.
+   */
+  async create(data: Prisma.MessageUncheckedCreateInput): Promise<Message> {
+    return prisma.message.create({
+      data,
     });
   }
 }
+
+export const messageRepository = new MessageRepository();

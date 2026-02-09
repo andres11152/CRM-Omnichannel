@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+@config "../tailwind.config.js";
+@plugin "tailwindcss-animate";
+
+/* Custom utility overloads if needed, 
+   but try to keep everything in the config or standard utilities */

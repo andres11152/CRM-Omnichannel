@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { socketService } from "../../services/socketService";
 import { Ticket, User, Channel } from "../../types";
 import { resolveContactName } from "../utils/contactUtils";
@@ -60,6 +60,12 @@ export const useAgentWorkspaceSockets = ({
   fetchData,
   triggerBackgroundRefresh,
 }: UseAgentWorkspaceSocketsProps) => {
+  // 🛡️ 100-YEAR FIX: Ref for Debouncing Disconnects
+  // We don't want to show "Offline" for micro-drops (common in cloud Redis)
+  const disconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
   // 🔔 NOTIFICATION SOUND (Base64 for reliability)
   const playNotificationSound = () => {
     try {
@@ -102,7 +108,17 @@ export const useAgentWorkspaceSockets = ({
       }
     }
 
+    // 🛡️ 100-YEAR FIX: Ref for Debouncing Disconnects
+    // We don't want to show "Offline" for micro-drops (common in cloud Redis)
+
     const onConnect = () => {
+      // ✅ Cancel pending disconnect if we reconnected quickly
+      if (disconnectTimeoutRef.current) {
+        clearTimeout(disconnectTimeoutRef.current);
+        disconnectTimeoutRef.current = null;
+        // console.log("[AgentWorkspace] ♻️ Quick reconnect - Suppressed offline state");
+      }
+
       setSocketConnected(true);
       if (user) {
         // Re-join on reconnect
@@ -119,7 +135,17 @@ export const useAgentWorkspaceSockets = ({
     };
 
     const onDisconnect = () => {
-      setSocketConnected(false);
+      // ⏳ Start Grace Period
+      // Only show offline if disconnected for > 5 seconds
+      if (disconnectTimeoutRef.current)
+        clearTimeout(disconnectTimeoutRef.current);
+
+      disconnectTimeoutRef.current = setTimeout(() => {
+        console.warn(
+          "[AgentWorkspace] 🔌 Socket disconnected (grace period expired)",
+        );
+        setSocketConnected(false);
+      }, 5000);
     };
 
     socketService.on("connect", onConnect);

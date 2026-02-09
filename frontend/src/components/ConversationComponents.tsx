@@ -337,7 +337,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     // Emit 'composing'
     socketService.emit("conversation:typing", {
-      to: conversation.contact.phone,
+      to: conversation.contact?.phone,
       status: "composing",
     });
 
@@ -349,7 +349,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // Set timeout to emit 'paused' after 3s of inactivity
     typingTimeoutRef.current = setTimeout(() => {
       socketService.emit("conversation:typing", {
-        to: conversation.contact.phone,
+        to: conversation.contact?.phone,
         status: "paused",
       });
     }, 3000);

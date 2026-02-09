@@ -103,6 +103,13 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // 🔌 WebSocket Proxy (CRITICO para evitar OFFLINE en dev)
+      "/socket.io": {
+        target: "http://127.0.0.1:4000",
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+      },
     },
   },
 });

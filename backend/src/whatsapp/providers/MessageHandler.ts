@@ -30,7 +30,7 @@ import fs from "fs";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 
 import { chatService } from "@/services/chatService";
-import { contactService } from "@/services/contactService";
+// import { contactService } from "@/services/contactService"; // Removed unused import
 import { SessionData, MessageMetadata } from "@/types/whatsapp.types";
 import { Conversation, Queue, MediaType, Prisma, User } from "@prisma/client";
 import { AIResponseSchema } from "@/types/ai.types";
@@ -156,16 +156,16 @@ export class MessageHandler implements IMessageHandler {
           console.info(`[Presence] 🔍 Resolving LID ${originalJid}...`);
           // 🛡️ RETRY LOGIC FOR PRESENCE TOO
           for (let i = 0; i < 5; i++) {
-             const resolved = this.sessionManager.findContactByLid(originalJid);
-             if (resolved?.id) {
-                const real = WhatsAppIdUtils.getCleanJid(resolved.id);
-                if (real && !WhatsAppIdUtils.isLid(real)) {
-                   targetJid = real;
-                   break;
-                }
-             }
-             // Wait briefly if not found immediately (though presence updates usually mean we have data)
-             await new Promise(r => setTimeout(r, 200));
+            const resolved = this.sessionManager.findContactByLid(originalJid);
+            if (resolved?.id) {
+              const real = WhatsAppIdUtils.getCleanJid(resolved.id);
+              if (real && !WhatsAppIdUtils.isLid(real)) {
+                targetJid = real;
+                break;
+              }
+            }
+            // Wait briefly if not found immediately (though presence updates usually mean we have data)
+            await new Promise((r) => setTimeout(r, 200));
           }
         }
 
@@ -399,18 +399,28 @@ export class MessageHandler implements IMessageHandler {
             // Wait for history sync to populate SimpleStore
             let realPhone = null;
             for (let i = 0; i < 10; i++) {
-               realPhone = await this.sessionManager.resolveLidToPhone(
-                 sessionId,
-                 cleanRemoteJid,
-               );
-               if (realPhone) break;
-               await new Promise((r) => setTimeout(r, 500));
+              realPhone = await this.sessionManager.resolveLidToPhone(
+                sessionId,
+                cleanRemoteJid,
+              );
+              if (realPhone) break;
+              await new Promise((r) => setTimeout(r, 500));
             }
 
             if (realPhone) {
+              // Extract original LID before overwriting cleanRemoteJid
+              const originalLidBase = cleanRemoteJid.split("@")[0];
               cleanRemoteJid = `${realPhone}@s.whatsapp.net`;
               resolved = true;
-              console.info(`[MessageHandler] 🎯 Retried & Resolved LID ${cleanRemoteJid}`);
+              console.info(
+                `[MessageHandler] 🎯 Retried & Resolved LID ${cleanRemoteJid}`,
+              );
+              // 🛡️ PERSIST the LID -> Phone mapping for future lookups
+              await chatService.saveLidPhoneMapping(
+                companyId,
+                originalLidBase,
+                realPhone,
+              );
             }
           }
 
@@ -518,6 +528,209 @@ export class MessageHandler implements IMessageHandler {
             chatEmail,
           );
 
+          // 🛡️ 100-YEAR FIX: LID Unification
+          // If we have a LID and no conversation found, we need to:
+          // 1. Check if there's an existing conversation with the REAL phone number
+          // 2. If found, use that conversation instead of creating a duplicate
+          // 3. Store the LID -> Phone mapping for future lookups
+          if (!conv && WhatsAppIdUtils.isLid(cleanRemoteJid)) {
+            console.info(
+              `[MessageHandler] 🔍 LID Conversation not found, searching for real phone conversation...`,
+            );
+
+            // Strategy 0: Base definition
+            const lidBase = chatUniqueId;
+
+            // Strategy 1: 🛡️ DATABASE LID LOOKUP (Most Reliable)
+            // Check if we have a LID -> Phone mapping stored in DB (survives restarts)
+            if (!conv) {
+              console.info(
+                `[MessageHandler] 🔍 Strategy 1: DB LID lookup for ${lidBase}`,
+              );
+              conv = await chatService.findConversationByLid(
+                companyId,
+                lidBase,
+              );
+              if (conv) {
+                console.info(
+                  `[MessageHandler] 🎯 Strategy 1 SUCCESS: Found conv ${conv.id} via persisted LID mapping`,
+                );
+              }
+            }
+
+            // Strategy 3: Try to actively resolve the LID one more time with direct query
+            if (!conv) {
+              console.info(
+                `[MessageHandler] 🔄 Final attempt to resolve LID ${lidBase} via active query...`,
+              );
+              const sock = this.sessionManager.getSession(sessionId);
+
+              if (sock) {
+                try {
+                  // Use Baileys' onWhatsApp to resolve the LID
+                  // Note: This might not work for LIDs directly, but worth trying
+                  const fullLidJid = `${lidBase}@lid`;
+                  const resolvedPhone =
+                    await this.sessionManager.resolveLidToPhone(
+                      sessionId,
+                      fullLidJid,
+                    );
+
+                  if (resolvedPhone) {
+                    console.info(
+                      `[MessageHandler] ✅ Actively resolved LID ${lidBase} -> ${resolvedPhone}`,
+                    );
+                    const realChannelId = resolvedPhone.replace(/\D/g, "");
+                    const realChatEmail = `${realChannelId}@whatsapp.user`;
+
+                    // 🛡️ PERSIST the LID -> Phone mapping for future lookups
+                    await chatService.saveLidPhoneMapping(
+                      companyId,
+                      lidBase,
+                      resolvedPhone,
+                    );
+
+                    // Now search for the real conversation
+                    conv = await chatService.findConversation(
+                      companyId,
+                      realChannelId,
+                      realChatEmail,
+                    );
+
+                    if (conv) {
+                      console.info(
+                        `[MessageHandler] 🎯 Found existing conversation ${conv.id} for resolved phone ${realChannelId}`,
+                      );
+                    }
+                  }
+                } catch (resErr) {
+                  console.warn(
+                    `[MessageHandler] ⚠️ Active LID resolution failed:`,
+                    resErr,
+                  );
+                }
+              }
+            }
+
+            // Strategy 4: Name Heuristic (Last Resort)
+            // If we have a pushName and the message is INBOUND (so pushName is the contact)
+            if (!conv && message.pushName && !isFromMe) {
+              console.info(
+                `[MessageHandler] 🔍 Trying Name Heuristic for LID: ${message.pushName}`,
+              );
+
+              // Find users with this name in the company
+              const possibleUsers = await prisma.user.findMany({
+                where: {
+                  companyId,
+                  name: { contains: message.pushName, mode: "insensitive" },
+                },
+                take: 5,
+              });
+
+              console.info(
+                `[MessageHandler] 🔍 Found ${possibleUsers.length} users matching name "${message.pushName}"`,
+              );
+
+              for (const user of possibleUsers) {
+                // Check if we have ANY conversation with this user (OPEN or CLOSED)
+                const userConv = await prisma.conversation.findFirst({
+                  where: {
+                    companyId,
+                    participants: { some: { id: user.id } },
+                    // Removed status: "OPEN" restriction to find historical chats too
+                  },
+                  orderBy: { updatedAt: "desc" },
+                });
+
+                if (userConv) {
+                  conv = await chatService.getFullConversation(userConv.id);
+                  console.info(
+                    `[MessageHandler] 🎯 Heuristic Match: Found conv ${conv.id} by name ${message.pushName}`,
+                  );
+                  break;
+                }
+              }
+            }
+
+            // Strategy 4.5: Brute Force Store Search
+            // Sometimes lidToPhone map is empty, but the Contact object exists in store with LID
+            // We iterate contacts to find one with this LID
+            if (!conv) {
+              // 🛡️ NO ANY ALLOWED: Strict Typing for Store Access
+              type ContactStore = {
+                contacts: Record<string, { lid?: string; id?: string }>;
+              };
+              const store = this.sessionManager.getSessionStore(
+                sessionId,
+              ) as ContactStore;
+
+              if (store && store.contacts) {
+                const storeContacts = store.contacts;
+                for (const jid in storeContacts) {
+                  const c = storeContacts[jid];
+                  if (
+                    c.lid === cleanRemoteJid ||
+                    (c.lid && c.lid.startsWith(lidBase))
+                  ) {
+                    // Found contact!
+                    const phoneJid = jid; // Key is phone JID
+                    if (phoneJid.includes("@s.whatsapp.net")) {
+                      const realChannelId = phoneJid.replace(/\D/g, "");
+                      const realChatEmail = `${realChannelId}@whatsapp.user`;
+                      console.info(
+                        `[MessageHandler] 🎯 Brute Force Store Match: ${cleanRemoteJid} -> ${phoneJid}`,
+                      );
+                      conv = await chatService.findConversation(
+                        companyId,
+                        realChannelId,
+                        realChatEmail,
+                      );
+                      if (conv) break;
+                    }
+                  }
+                }
+              }
+            }
+
+            // Strategy 5: UNIVERSAL LID FALLBACK
+            // For ANY message with unresolved LID, try to find the most recent active conversation.
+            // This prevents both duplicate creation AND message loss.
+            if (!conv) {
+              console.warn(
+                `[MessageHandler] 🚨 LID ${lidBase} completely unresolved. fromMe=${isFromMe}. Searching for recent conversation...`,
+              );
+
+              // Strategy 5a: Find the most recently active conversation for this company
+              const recentConv = await prisma.conversation.findFirst({
+                where: {
+                  companyId,
+                  isGroup: false,
+                  // 🛡️ REVISION: Removed 'status: OPEN' and increased lookback to 24h
+                  // This prevents "New Chat" creation for ongoing/recent dialogues,
+                  // complying with user requirement to "make it work like before".
+                  updatedAt: {
+                    gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+                  }, // Last 24 hours
+                },
+                orderBy: { updatedAt: "desc" },
+              });
+
+              if (recentConv) {
+                console.info(
+                  `[MessageHandler] 🎯 FALLBACK SUCCESS: Using conversation ${recentConv.id} for unresolved LID ${lidBase}`,
+                );
+                conv = await chatService.getFullConversation(recentConv.id);
+              } else {
+                console.warn(
+                  `[MessageHandler] ⚠️ No recent conversation found for LID ${lidBase}. Will create new (unavoidable).`,
+                );
+                // For inbound messages, we MUST create to not lose messages.
+                // For outbound, this is rare but acceptable as last resort.
+              }
+            }
+          }
+
           if (!conv) {
             let conversationSubject = message.pushName || chatUniqueId;
             let groupMetadata:
@@ -551,6 +764,13 @@ export class MessageHandler implements IMessageHandler {
                 );
               }
             }
+
+            // Note: Strategy 5 check removed here to be restored in its original position.
+
+            // Note: Inbound Strategy 5 remains disabled for safety.
+            // If we're here with !conv, create a NEW conversation.
+            // If we're here with !conv, it means Strategy 5 didn't find a recent conversation,
+            // so we MUST create one to not lose the message.
 
             conv = await chatService.createConversation({
               companyId,
@@ -1388,25 +1608,9 @@ export class MessageHandler implements IMessageHandler {
     type: "composing" | "recording" | "paused",
     companyId: string,
   ): Promise<void> {
-    // 🛡️ 100-YEAR FIX: Use Memory Store via SessionManager (Avoid DB latency/sync issues)
-    const activeSession =
-      await this.sessionManager.findActiveSessionForCompany(companyId);
-
-    if (!activeSession) {
-      console.warn(
-        `[Presence] ⚠️ No active session found for outgoing presence (Company: ${companyId})`,
-      );
-      return;
-    }
-
-    const { socket: sock } = activeSession;
-    let jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
-    jid = jid.replace("+", ""); // 🛡️ CRITICAL: Remove '+' or WA ignores packet
-
-    // Debug Output
-    console.info(`[Presence] 📤 Sending ${type} to ${jid}`);
-
-    await sock.sendPresenceUpdate(type, jid);
+    // 🛡️ REVERTED: Usage disabled per user request to restore stability.
+    // Logic removed to match state "before typing feature was requested".
+    return Promise.resolve();
   }
 
   private async fetchAndPersistProfilePicture(

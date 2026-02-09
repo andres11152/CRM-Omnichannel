@@ -206,17 +206,18 @@ export interface MessagePreview {
 
 export interface ConversationListItem {
   id: string;
-  ticketId: string; // Used for routing/Identification
-  subject: string;
+  ticketId?: string;
+  subject: string | null;
   status: ConversationStatus;
-  priority: string;
-  channel: string;
+  priority?: string;
+  channel?: string;
   updatedAt: string;
   messageCount: number;
   unreadCount: number;
   assignedTo: UserBasic | null;
-  lastMessage: MessagePreview | null;
-  typingStatus?: "composing" | "recording" | "paused"; // ✅ NEW
+  contact?: Contact | null;
+  lastMessage?: MessagePreview | null; // Optional and Nullable
+  typingStatus?: "composing" | "recording" | "paused";
 }
 
 export interface ConversationDetail extends Conversation {

@@ -2,8 +2,7 @@ import { Server } from "http";
 import { gateway } from "@/gateways/socketGateway";
 import { EventBus } from "@/whatsapp/core/events/EventBus";
 import { WhatsAppEventType } from "@/whatsapp/core/events/WhatsAppEvents";
-import { whatsappService } from "@/whatsapp";
-import { prisma } from "@/config/database";
+
 import { Logger } from "@/utils/logger";
 
 /**
@@ -81,9 +80,13 @@ export const initSocketGateway = async (httpServer: Server) => {
     io.on("connection", async (socket) => {
       const user = socket.data.user;
       if (user && user.companyId) {
+        // 🔄 Use Dynamic Import to avoid Circular Dependency OOM
+        const { whatsappService } = await import("@/whatsapp");
+
         Logger.debug(
           `[Loader] 🔄 Syncing session status for ${user.id} (Company: ${user.companyId})`,
         );
+
         // Fetch status from Service (Memory First)
         const sessions = await whatsappService.listSessions(user.companyId);
 
@@ -96,18 +99,28 @@ export const initSocketGateway = async (httpServer: Server) => {
           });
         });
 
-        // ⌨️ TYPING INDICATOR HANDLER (Frontend -> WhatsApp)
-        socket.on(
-          "conversation:typing",
-          (payload: { to: string; status: "composing" | "paused" }) => {
-            if (payload?.to && payload?.status && user.companyId) {
-              // Added check for companyId
-              whatsappService
-                .sendPresenceUpdate(payload.to, payload.status, user.companyId)
-                .catch((err) => Logger.warn(`[Typing] Failed: ${err.message}`));
-            }
-          },
-        );
+        // ⌨️ TYPING INDICATOR HANDLER moved to socketGateway.ts (Single Responsibility)
+        // Eliminado código duplicado para evitar doble ejecución de eventos.
+
+        // 🔄 MANUAL STATUS CHECK HANDLER
+        // Allows frontend to request immediate status update (e.g. on "Update Data" click)
+        socket.on("session.check_status", async () => {
+          if (!user.companyId) return;
+
+          Logger.debug(
+            `[Loader] 🔄 Manual status check requested by ${user.id}`,
+          );
+          const { whatsappService } = await import("@/whatsapp");
+          const sessions = await whatsappService.listSessions(user.companyId);
+
+          sessions.forEach((session) => {
+            socket.emit("session.status", {
+              sessionId: session.sessionId,
+              status: session.status,
+              timestamp: new Date(),
+            });
+          });
+        });
       }
     });
   }

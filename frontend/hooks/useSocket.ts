@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
-
-/**
- * 🔌 USE SOCKET HOOK
- * Returns connected Socket.IO instance for real-time events
- */
+import { BASE_URL } from "../services/apiConfig";
 
 let socketInstance: Socket | null = null;
 
@@ -14,8 +10,7 @@ export const useSocket = () => {
   useEffect(() => {
     // Only create socket if not already exists
     if (!socketInstance) {
-      const SOCKET_URL =
-        import.meta.env.VITE_SOCKET_URL || "http://localhost:4000";
+      const SOCKET_URL = BASE_URL;
       const token = localStorage.getItem("token");
 
       if (token) {

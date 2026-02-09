@@ -6,8 +6,10 @@ import { toast } from "sonner";
 // Use relative path in development (Vite proxy handles the rest)
 // In production, use full URL from env variable
 const API_BASE_URL = import.meta.env.DEV
-  ? "/api" // Development: Let Vite proxy handle it
-  : (import.meta.env.VITE_API_URL || "http://localhost:4000") + "/api"; // Production
+  ? "/api"
+  : (import.meta.env.VITE_API_URL || "http://localhost:4000")
+      .replace(/\/api\/?$/, "")
+      .replace(/\/$/, "") + "/api";
 
 // ==================== AXIOS INSTANCE ====================
 
@@ -36,7 +38,7 @@ apiClient.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // ==================== RESPONSE INTERCEPTOR ====================
@@ -65,7 +67,7 @@ apiClient.interceptors.response.use(
           // Only show toast if not already on login page
           if (!window.location.pathname.includes("/login")) {
             toast.error(
-              "Sesión expirada. Por favor, inicia sesión nuevamente."
+              "Sesión expirada. Por favor, inicia sesión nuevamente.",
             );
             setTimeout(() => {
               window.location.href = "/login";
@@ -76,7 +78,7 @@ apiClient.interceptors.response.use(
         case 403:
           // Forbidden
           toast.error(
-            data.message || "No tienes permisos para realizar esta acción."
+            data.message || "No tienes permisos para realizar esta acción.",
           );
           break;
 
@@ -86,7 +88,7 @@ apiClient.interceptors.response.use(
 
         case 500:
           toast.error(
-            "Error del servidor. Por favor, intenta de nuevo más tarde."
+            "Error del servidor. Por favor, intenta de nuevo más tarde.",
           );
           break;
 
@@ -119,7 +121,7 @@ apiClient.interceptors.response.use(
         data: null,
       });
     }
-  }
+  },
 );
 
 // ==================== TYPED API CLIENT ====================
@@ -141,7 +143,7 @@ export const api = {
   post: <T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig
+    config?: AxiosRequestConfig,
   ): Promise<T> => {
     return apiClient.post(url, data, config);
   },
@@ -152,7 +154,7 @@ export const api = {
   put: <T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig
+    config?: AxiosRequestConfig,
   ): Promise<T> => {
     return apiClient.put(url, data, config);
   },
@@ -163,7 +165,7 @@ export const api = {
   patch: <T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig
+    config?: AxiosRequestConfig,
   ): Promise<T> => {
     return apiClient.patch(url, data, config);
   },

@@ -171,6 +171,74 @@ export class ChatService {
   }
 
   /**
+   * 🛡️ 100-YEAR FIX: Save LID -> Phone mapping in Contact's customFields
+   * This persists the mapping so it survives session restarts
+   */
+  async saveLidPhoneMapping(companyId: string, lid: string, phone: string) {
+    try {
+      // Find contact by phone
+      const contact = await prisma.contact.findFirst({
+        where: { companyId, phone, deletedAt: null },
+      });
+
+      if (contact) {
+        // Update customFields to include the LID
+        const currentFields =
+          (contact.customFields as Record<string, unknown>) || {};
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: {
+            customFields: {
+              ...currentFields,
+              whatsappLid: lid,
+            },
+          },
+        });
+        Logger.info(
+          `[ChatService] 🎯 LID->Phone mapping saved: ${lid} -> ${phone}`,
+        );
+      }
+    } catch (error) {
+      Logger.warn(`[ChatService] Failed to save LID mapping`, { error });
+    }
+  }
+
+  /**
+   * 🛡️ 100-YEAR FIX: Find Contact by LID stored in customFields
+   */
+  async findContactByLid(companyId: string, lid: string) {
+    // Search for contact with this LID in customFields
+    const contact = await prisma.contact.findFirst({
+      where: {
+        companyId,
+        deletedAt: null,
+        customFields: {
+          path: ["whatsappLid"],
+          equals: lid,
+        },
+      },
+    });
+    return contact;
+  }
+
+  /**
+   * 🛡️ 100-YEAR FIX: Find Conversation by Contact's LID
+   * Used when we can't resolve LID from store but have it persisted in DB
+   */
+  async findConversationByLid(companyId: string, lid: string) {
+    const contact = await this.findContactByLid(companyId, lid);
+    if (!contact || !contact.phone) return null;
+
+    // Search for conversation with this phone's channelId
+    const phoneChannelId = contact.phone.replace(/\D/g, "");
+    return this.findConversation(
+      companyId,
+      phoneChannelId,
+      `${phoneChannelId}@whatsapp.user`,
+    );
+  }
+
+  /**
    * Create new conversation (Atomic)
    * 🛡️ 100-YEAR FIX: Now supports Group chats with metadata
    */

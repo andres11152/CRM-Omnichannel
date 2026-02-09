@@ -1,22 +1,23 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+import React from "react";
+import ReactDOM from "react-dom/client";
 
 // 🚑 EMERGENCY: Kill any zombie Service Workers from previous projects/versions
-if ('serviceWorker' in navigator) {
+if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     for (const registration of registrations) {
-      console.log('Unregistering zombie SW:', registration);
+      console.log("Unregistering zombie SW:", registration);
       registration.unregister();
     }
   });
 }
 
-import App from './App';
+import "./src/index.css";
+import App from "./App";
 
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from './src/lib/react-query';
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./src/lib/react-query";
 
-const rootElement = document.getElementById('root');
+const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
@@ -27,5 +28,5 @@ root.render(
     <QueryClientProvider client={queryClient}>
       <App />
     </QueryClientProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

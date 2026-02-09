@@ -8,19 +8,16 @@ const redisUrl = process.env.REDIS_URL;
 if (redisUrl) {
   redisClient = createClient({
     url: redisUrl,
-    pingInterval: 5000, // 🔥 Send PING every 5s (prevents cloud idle disconnections)
+    pingInterval: 20000, // 20s Ping (Less aggressive)
     socket: {
-      connectTimeout: 60000, // 60s timeout
-      tls: redisUrl.startsWith("rediss://"), // Auto-detect TLS
-      rejectUnauthorized: false, // Required for self-signed certs
-      keepAlive: 10000, // 🔥 TCP keepAlive every 10s (CRITICAL for cloud providers)
-      noDelay: true, // Disable Nagle's algorithm for faster response
+      connectTimeout: 60000,
+      tls: redisUrl.startsWith("rediss://"),
+      rejectUnauthorized: false,
+      keepAlive: 30000, // 30s KeepAlive (Standard)
+      noDelay: true,
       reconnectStrategy: (retries) => {
-        // Exponential backoff: 100ms, 200ms, 400ms... max 5s
         const delay = Math.min(retries * 100, 5000);
-        Logger.info(
-          `[Redis] Reconnecting in ${delay}ms (attempt ${retries})...`,
-        );
+        // Logger.info(`[Redis] Reconnecting in ${delay}ms...`); // Reduce spam
         return delay;
       },
     },
@@ -51,7 +48,10 @@ if (redisUrl) {
       // These are routine network blips. Auto-reconnect handles them silently.
       return;
     }
-    Logger.error("[Redis] Client Error", err);
+    // Only log if it's NOT a silent error (Double check logic)
+    if (!silentErrors.some((e) => String(err).includes(e))) {
+      Logger.error("[Redis] Client Error", err);
+    }
   });
 
   redisClient.on("reconnecting", () => {

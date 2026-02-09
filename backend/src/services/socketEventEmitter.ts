@@ -43,6 +43,7 @@ export interface ISocketGateway {
     event: string,
     data: Record<string, unknown>,
   ): void; // Optional
+  emitToRoom?(room: string, event: string, data: Record<string, unknown>): void;
 }
 
 export class SocketEventEmitter {
@@ -109,6 +110,13 @@ export class SocketEventEmitter {
       "conversation.new_message",
       messagePayload,
     );
+    if (this.socketGateway.emitToRoom) {
+      this.socketGateway.emitToRoom(
+        conversation.id,
+        "conversation.new_message",
+        messagePayload,
+      );
+    }
 
     // 2. Emit for Chat List (AgentWorkspace)
     // Frontend expects 'conversation.updated' with lastMessage info
@@ -157,6 +165,13 @@ export class SocketEventEmitter {
       "conversation.new_message",
       messagePayload,
     );
+    if (this.socketGateway.emitToRoom) {
+      this.socketGateway.emitToRoom(
+        conversation.id,
+        "conversation.new_message",
+        messagePayload,
+      );
+    }
 
     // 2. Update Conversation List
     this.socketGateway.emitToCompany(
@@ -200,6 +215,14 @@ export class SocketEventEmitter {
       status,
       timestamp: new Date().toISOString(),
     });
+    if (this.socketGateway.emitToRoom) {
+      this.socketGateway.emitToRoom(conversationId, "message.status", {
+        messageId,
+        conversationId,
+        status,
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
   /**

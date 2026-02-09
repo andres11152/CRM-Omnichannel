@@ -248,7 +248,7 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
                   <button
                     key={idx}
                     onClick={(e) => {
-                      item.onClick();
+                      item.onClick?.();
                       setIsOpen(false);
                     }}
                     className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-3 transition-colors"

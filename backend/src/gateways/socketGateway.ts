@@ -35,6 +35,7 @@ interface ClientToServerEvents {
   join: (room: string) => void;
   join_room: (data: { conversationId: string }) => void;
   "conversation:typing": (data: { to: string; status: string }) => void;
+  "session.check_status": () => void | Promise<void>;
 }
 
 interface InterServerEvents {
@@ -70,9 +71,16 @@ class WebSocketGateway {
         methods: ["GET", "POST"],
         credentials: true,
       },
-      transports: ["polling", "websocket"],
-      pingTimeout: 20000,
-      pingInterval: 25000,
+      // 🛡️ 100-YEAR FIX: Prioritize WebSocket for lower latency, fallback to polling
+      transports: ["websocket", "polling"],
+      // Increase timeouts to reduce false disconnections
+      pingTimeout: 30000, // 30s (was 20s)
+      pingInterval: 25000, // 25s
+      // Enable connection state recovery for seamless reconnections
+      connectionStateRecovery: {
+        maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
+        skipMiddlewares: true,
+      },
     });
 
     await this.setupRedis();
@@ -410,6 +418,11 @@ class WebSocketGateway {
       return;
     }
     const room = `company:${companyId}`;
+    this.io.to(room).emit(event, data);
+  }
+
+  public emitToRoom(room: string, event: string, data: unknown): void {
+    if (!this.io) return;
     this.io.to(room).emit(event, data);
   }
 

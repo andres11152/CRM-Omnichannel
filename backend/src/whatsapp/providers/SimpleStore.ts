@@ -13,6 +13,10 @@ import { Logger } from "@/utils/logger";
 export class SimpleInMemoryStore {
   public contacts: { [jid: string]: Contact } = {};
 
+  // 🔄 CHAT SYNC: Store chats and messages for historical sync
+  public chats: Map<string, unknown> = new Map();
+  public messages: { [jid: string]: unknown[] } = {};
+
   // 🛡️ Reverse mapping: LID -> Phone for quick lookups
   public lidToPhone: { [lid: string]: string } = {};
 
@@ -52,17 +56,83 @@ export class SimpleInMemoryStore {
 
   public bind(ev: BaileysEventEmitter) {
     // 1. Bulk History Sync (The most important for LID resolution)
-    ev.on("messaging-history.set", ({ contacts }) => {
-      if (!contacts) return;
-      console.info(
-        `[Store] 📥 Received history payload with ${contacts.length} contacts`,
-      );
-      for (const contact of contacts) {
-        this.upsertContact(contact);
+    ev.on("messaging-history.set", ({ contacts, messages, chats }) => {
+      // Store contacts
+      if (contacts) {
+        console.info(
+          `[Store] 📥 Received history payload with ${contacts.length} contacts`,
+        );
+        for (const contact of contacts) {
+          this.upsertContact(contact);
+        }
+        console.info(
+          `[Store] 📚 History sync processed: Loaded ${contacts.length} contacts`,
+        );
       }
-      console.info(
-        `[Store] 📚 History sync processed: Loaded ${contacts.length} contacts`,
-      );
+
+      // 🔄 CHAT SYNC: Store chats for later sync
+      if (chats) {
+        for (const chat of chats) {
+          if (chat.id) {
+            this.chats.set(chat.id, chat);
+          }
+        }
+        console.info(`[Store] 📚 History sync: Loaded ${chats.length} chats`);
+      }
+
+      // 🔄 CHAT SYNC: Store messages for later sync
+      // Also extract LID -> Phone mappings from message metadata
+      if (messages) {
+        for (const msgObj of messages) {
+          const msg = msgObj as {
+            key?: {
+              remoteJid?: string;
+              remoteJidAlt?: string;
+              senderPn?: string;
+              participant?: string;
+            };
+            message?: unknown;
+          };
+          if (msg.key?.remoteJid && msg.message) {
+            const jid = msg.key.remoteJid;
+            if (!this.messages[jid]) {
+              this.messages[jid] = [];
+            }
+            this.messages[jid].push(msg);
+
+            // 🛡️ Extract LID -> Phone mappings from message metadata
+            // This is crucial for outbound messages sent from phone
+            if (jid.includes("@lid")) {
+              const lidBase = jid.split("@")[0].split(":")[0];
+
+              // Check remoteJidAlt (alternative JID with real phone)
+              if (
+                msg.key.remoteJidAlt &&
+                msg.key.remoteJidAlt.includes("@s.whatsapp.net")
+              ) {
+                this.lidToPhone[lidBase] = msg.key.remoteJidAlt;
+                console.info(
+                  `[Store] 🎯 LID Mapping from remoteJidAlt: ${lidBase} → ${msg.key.remoteJidAlt}`,
+                );
+              }
+
+              // Check senderPn (sender phone number)
+              if (
+                msg.key.senderPn &&
+                msg.key.senderPn.includes("@s.whatsapp.net")
+              ) {
+                this.lidToPhone[lidBase] = msg.key.senderPn;
+                console.info(
+                  `[Store] 🎯 LID Mapping from senderPn: ${lidBase} → ${msg.key.senderPn}`,
+                );
+              }
+            }
+          }
+        }
+        console.info(
+          `[Store] 📚 History sync: Loaded ${messages.length} messages`,
+        );
+      }
     });
 
     // 2. New Contacts
@@ -79,6 +149,66 @@ export class SimpleInMemoryStore {
     ev.on("contacts.update", (updates: Partial<Contact>[]) => {
       for (const update of updates) {
         this.upsertContact(update);
+      }
+    });
+
+    // 🛡️ NEW: Listen for real-time messages to extract LID mappings
+    // This catches outbound messages from phone that have LID + phone metadata
+    ev.on("messages.upsert", ({ messages: msgs }) => {
+      for (const msg of msgs) {
+        const key = msg.key as {
+          remoteJid?: string;
+          remoteJidAlt?: string;
+          senderPn?: string;
+          participant?: string;
+        };
+
+        const jid = key.remoteJid;
+        if (!jid || !jid.includes("@lid")) continue;
+
+        const lidBase = jid.split("@")[0].split(":")[0];
+
+        // Extract phone from remoteJidAlt
+        if (key.remoteJidAlt && key.remoteJidAlt.includes("@s.whatsapp.net")) {
+          if (!this.lidToPhone[lidBase]) {
+            this.lidToPhone[lidBase] = key.remoteJidAlt;
+            console.info(
+              `[Store] 🎯 RT LID Mapping (remoteJidAlt): ${lidBase} → ${key.remoteJidAlt}`,
+            );
+          }
+        }
+
+        // Extract phone from senderPn
+        if (key.senderPn && key.senderPn.includes("@s.whatsapp.net")) {
+          if (!this.lidToPhone[lidBase]) {
+            this.lidToPhone[lidBase] = key.senderPn;
+            console.info(
+              `[Store] 🎯 RT LID Mapping (senderPn): ${lidBase} → ${key.senderPn}`,
+            );
+          }
+        }
+
+        // Check for phone in message stub parameters (e.g., for system messages)
+        if (
+          msg.messageStubParameters &&
+          Array.isArray(msg.messageStubParameters)
+        ) {
+          for (const param of msg.messageStubParameters) {
+            if (
+              typeof param === "string" &&
+              param.includes("@s.whatsapp.net") &&
+              !param.includes("@lid")
+            ) {
+              if (!this.lidToPhone[lidBase]) {
+                this.lidToPhone[lidBase] = param;
+                console.info(
+                  `[Store] 🎯 RT LID Mapping (stubParam): ${lidBase} → ${param}`,
+                );
+              }
+              break;
+            }
+          }
+        }
       }
     });
 

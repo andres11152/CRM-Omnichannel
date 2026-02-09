@@ -153,13 +153,17 @@ export const MessageCreateSchema = z.object({
 
 export const ConversationListItemSchema = z.object({
   id: z.string().cuid(),
+  ticketId: z.string().optional(),
   subject: z.string().nullable(),
   status: ConversationStatusSchema,
-  createdAt: z.string().datetime(),
+  priority: z.string().optional(),
+  channel: z.string().optional(),
+  createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime(),
   messageCount: z.number().int().nonnegative(),
+  unreadCount: z.number().int().nonnegative().default(0),
   assignedTo: UserListItemSchema.nullable(),
-  contact: ContactSchema.nullable(),
+  contact: ContactSchema.nullable().optional(),
   lastMessage: z
     .object({
       id: z.string().cuid(),
@@ -167,6 +171,7 @@ export const ConversationListItemSchema = z.object({
       createdAt: z.string().datetime(),
       sender: UserListItemSchema,
     })
+    .nullable()
     .optional(),
 });
 

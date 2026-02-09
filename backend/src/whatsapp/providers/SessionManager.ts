@@ -201,7 +201,9 @@ export class SessionManager implements ISessionManager {
             if (
               msg.includes("Bad MAC") ||
               msg.includes("Decryption failed") ||
-              msg.includes("Session error")
+              msg.includes("Session error") ||
+              msg.includes("No matching sessions") ||
+              msg.includes("failed to decrypt")
             ) {
               logger.error(
                 `[SessionGuard] 🚨 CORRUPTION DETECTED in Session ${sessionId}: "${msg.substring(
@@ -412,12 +414,23 @@ export class SessionManager implements ISessionManager {
             status: "DISCONNECTED",
           });
 
-          // Exponential backoff or simple delay
+          // 🛡️ 100-YEAR FIX: Smart Reconnect Delay
+          // If conflict, wait longer to let the other connection die or stabilize
+          // "Stream Errored (conflict)" usually means another client is connected
+          const isConflict = errorMsg.toLowerCase().includes("conflict");
+          const delayMs = isConflict ? 15000 : 5000;
+
+          if (isConflict) {
+            logger.warn(
+              `[SessionManager] ⚠️ Conflict detected (Stream Replaced). Waiting ${delayMs}ms before reconnect...`,
+            );
+          }
+
           const timeout = setTimeout(() => {
             this.reconnectSession(sessionId).catch((e) =>
               logger.error(`Reconnect failed: ${e}`),
             );
-          }, 5000); // 5s delay
+          }, delayMs);
 
           this.retryTimeouts.set(sessionId, timeout);
         } else {
@@ -688,5 +701,20 @@ export class SessionManager implements ISessionManager {
       }
     }
     return false;
+  }
+
+  /**
+   * 🗄️ GET SESSION STORE
+   * Returns the Baileys in-memory store for historical message access.
+   * Used by ChatSyncService for syncing historical messages.
+   */
+  getSessionStore(_sessionId: string): unknown {
+    // Return the shared store instance
+    // In future, could be per-session if needed
+    return {
+      chats: store.chats,
+      messages: store.messages,
+      contacts: store.contacts,
+    };
   }
 }

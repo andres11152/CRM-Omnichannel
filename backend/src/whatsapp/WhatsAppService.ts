@@ -569,8 +569,64 @@ export class WhatsAppService {
     await this.sessionManager.reconnectSession(sessionId);
   }
 
-  async syncMessages(_companyId: string, _fromDate: Date): Promise<void> {
-    throw new Error("Message sync not yet implemented in new architecture");
+  /**
+   * 🔄 SYNC MESSAGES FROM PHONE HISTORY
+   * Enterprise-grade historical message synchronization.
+   * Delegates to ChatSyncService for actual processing.
+   *
+   * @param companyId - Company to sync for
+   * @param fromDate - Sync messages from this date onwards
+   * @param userId - User initiating the sync (for audit)
+   * @param limit - Max messages to process (default 500)
+   */
+  async syncMessages(
+    companyId: string,
+    fromDate: Date,
+    userId?: string,
+    limit?: number,
+  ): Promise<{
+    success: boolean;
+    messagesNew: number;
+    messagesDuplicate: number;
+    errors: string[];
+  }> {
+    const { chatSyncService, ChatSyncRequestSchema } =
+      await import("@/services/chatSyncService");
+
+    // Find active session for company
+    const activeSession =
+      await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+
+    const request = ChatSyncRequestSchema.parse({
+      companyId,
+      sessionId: activeSession.sessionId,
+      sinceDate: fromDate.toISOString(),
+      limit: limit || 500,
+      dryRun: false,
+    });
+
+    const result = await chatSyncService.syncMessages(
+      request,
+      userId || "system",
+    );
+    return {
+      success: result.success,
+      messagesNew: result.messagesNew,
+      messagesDuplicate: result.messagesDuplicate,
+      errors: result.errors,
+    };
+  }
+
+  /**
+   * 🗄️ GET SESSION STORE
+   * Returns the Baileys in-memory store for a session.
+   * Used by ChatSyncService for historical message access.
+   */
+  getSessionStore(sessionId: string): unknown {
+    return this.sessionManager.getSessionStore(sessionId);
   }
 
   /**

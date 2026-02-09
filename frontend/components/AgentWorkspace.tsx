@@ -112,6 +112,10 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const fetchData = (isBackground = false) => {
     if (!isBackground) setLoading(true);
 
+    // 🔄 FORCE STATUS CHECK: Immediate feedback on connection status
+    // useful when user clicks "refresh" button
+    socketService.emit("session.check_status", {});
+
     getTickets()
       .then((allTickets) => {
         // DEBUG: Inspect Raw Data for specific ticket
@@ -249,18 +253,22 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   // Listens to 'session.status' event emitted by backend when WhatsApp connects/disconnects
   useEffect(() => {
     // Handler for status updates
+    // Handler for status updates
     const handleSessionStatus = (data: {
       sessionId: string;
       status: string;
     }) => {
       console.log("[AgentWorkspace] 🔌 WhatsApp Status Update:", data.status);
-      setSocketConnected(data.status === "CONNECTED");
+      // 🛡️ 100-YEAR FIX: Do NOT update socketConnected based on WA session.
+      // The "Offline" indicator should only reflect backend connectivity.
+      // setSocketConnected(data.status === "CONNECTED");
     };
 
     // Handler for QR updates (implies unexpected disconnection or new session)
     const handleQrUpdated = () => {
-      console.log("[AgentWorkspace] 📷 QR Code received, marking as Offline");
-      setSocketConnected(false);
+      console.log("[AgentWorkspace] 📷 QR Code received");
+      // 🛡️ 100-YEAR FIX: Do NOT update socketConnected based on QR.
+      // setSocketConnected(false);
     };
 
     // Register listeners
@@ -268,7 +276,8 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     socketService.on("qr.updated", handleQrUpdated);
 
     // Request initial status check if needed (backend syncs on connect, but good to be sure)
-    // socketService.emit("session.check_status");
+    // Request initial status check (backend syncs on connect, but good to be sure)
+    socketService.emit("session.check_status", {});
 
     return () => {
       // Cleanup

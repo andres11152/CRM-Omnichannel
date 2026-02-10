@@ -61,14 +61,35 @@ class WebSocketGateway {
 
     this.io = new Server(httpServer, {
       cors: {
-        origin: [
-          process.env.FRONTEND_URL || "http://localhost:5173",
-          "http://localhost:5174",
-          "https://reply.software",
-          "https://www.reply.software",
-          "https://app.reply.software", // 🛡️ Ensure app subdomain is allowed
-          "https://crm-omnichannel.onrender.com",
-        ],
+        origin: (origin, callback) => {
+          // Allow requests with no origin (mobile apps, Postman)
+          if (!origin) return callback(null, true);
+
+          const allowedOrigins = [
+            process.env.FRONTEND_URL || "http://localhost:5173",
+            "http://localhost:5174",
+            "https://reply.software",
+            "https://www.reply.software",
+            "https://app.reply.software",
+            "https://crm-omnichannel.onrender.com",
+          ];
+
+          if (allowedOrigins.includes(origin)) return callback(null, true);
+
+          // 🛡️ 100-YEAR FIX: Allow all subdomains (preview environments, staging)
+          if (
+            origin.endsWith(".reply.software") ||
+            origin.endsWith(".onrender.com")
+          ) {
+            return callback(null, true);
+          }
+
+          if (process.env.NODE_ENV !== "production") {
+            return callback(null, true);
+          }
+
+          callback(new Error(`CORS: Origin ${origin} not allowed`));
+        },
         methods: ["GET", "POST"],
         credentials: true,
       },

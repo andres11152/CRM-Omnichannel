@@ -1,8 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Command } from 'cmdk';
-import { Search, User, Ticket, DollarSign, X, CornerDownLeft } from 'lucide-react';
-import api from '../../services/apiClient';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from "react";
+import { Command } from "cmdk";
+import {
+  Search,
+  User,
+  Ticket,
+  DollarSign,
+  X,
+  CornerDownLeft,
+} from "lucide-react";
+import api from "../../services/apiClient";
+import { useNavigate } from "react-router-dom";
 
 /**
  * 🔍 COMMAND CENTER (Global Search)
@@ -15,28 +22,32 @@ interface SearchResults {
     name: string;
     phone: string | null;
     email: string | null;
-    type: 'contact';
+    type: "contact";
   }>;
   tickets: Array<{
     id: string;
     subject: string;
     ticketNumber: number;
     status: string;
-    type: 'ticket';
+    type: "ticket";
   }>;
   deals: Array<{
     id: string;
     title: string;
     value: number;
     stageName: string;
-    type: 'deal';
+    type: "deal";
   }>;
 }
 
 export const CommandCenter: React.FC = () => {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResults>({ contacts: [], tickets: [], deals: [] });
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResults>({
+    contacts: [],
+    tickets: [],
+    deals: [],
+  });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -51,11 +62,11 @@ export const CommandCenter: React.FC = () => {
       setLoading(true);
       try {
         const res = await api.get(`/search?q=${encodeURIComponent(query)}`);
-        if (res.data.status === 'success') {
+        if (res.data.status === "success") {
           setResults(res.data.data.results);
         }
       } catch (error) {
-        console.error('Search failed:', error);
+        console.error("Search failed:", error);
       } finally {
         setLoading(false);
       }
@@ -66,38 +77,46 @@ export const CommandCenter: React.FC = () => {
 
   // Keyboard shortcut listener (Cmd+K / Ctrl+K)
   useEffect(() => {
+    console.log("🔧 HubSpot Command Center: Listener Active"); // Debug
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      // Create global shortcut CMD+K or CTRL+K
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
-        setOpen((prev) => !prev);
+        e.stopPropagation();
+        setOpen((open) => !open);
+        console.log("🔧 HubSpot Command Center: Toggle");
       }
 
       // ESC to close
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setOpen(false);
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // Navigate to result
-  const handleSelect = useCallback((type: string, id: string) => {
-    switch (type) {
-      case 'contact':
-        navigate(`/contacts/${id}`);
-        break;
-      case 'ticket':
-        navigate(`/tickets/${id}`);
-        break;
-      case 'deal':
-        navigate(`/deals/${id}`);
-        break;
-    }
-    setOpen(false);
-    setQuery('');
-  }, [navigate]);
+  const handleSelect = useCallback(
+    (type: string, id: string) => {
+      switch (type) {
+        case "contact":
+          navigate(`/contacts/${id}`);
+          break;
+        case "ticket":
+          navigate(`/tickets/${id}`);
+          break;
+        case "deal":
+          navigate(`/deals/${id}`);
+          break;
+      }
+      setOpen(false);
+      setQuery("");
+    },
+    [navigate],
+  );
 
   // Close modal on backdrop click
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -108,16 +127,15 @@ export const CommandCenter: React.FC = () => {
 
   if (!open) return null;
 
-  const totalResults = results.contacts.length + results.tickets.length + results.deals.length;
+  const totalResults =
+    results.contacts.length + results.tickets.length + results.deals.length;
 
   return (
     <div
       className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-start justify-center pt-[15vh] animate-fade-in"
       onClick={handleBackdropClick}
     >
-      <Command
-        className="bg-white dark:bg-[#202c33] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-2xl overflow-hidden animate-slide-up"
-      >
+      <Command className="bg-white dark:bg-[#202c33] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-2xl overflow-hidden animate-slide-up">
         {/* Search Input */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <Search className="w-5 h-5 text-gray-400" />
@@ -145,14 +163,22 @@ export const CommandCenter: React.FC = () => {
           {query.length < 2 ? (
             <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
               <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Escribe al menos 2 caracteres para buscar</p>
-              <p className="text-xs mt-1 text-gray-400">Contactos • Tickets • Negocios</p>
+              <p className="text-sm">
+                Escribe al menos 2 caracteres para buscar
+              </p>
+              <p className="text-xs mt-1 text-gray-400">
+                Contactos • Tickets • Negocios
+              </p>
             </div>
           ) : totalResults === 0 && !loading ? (
             <Command.Empty className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
               <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm font-medium">No se encontraron resultados</p>
-              <p className="text-xs mt-1">Intenta con otro término de búsqueda</p>
+              <p className="text-sm font-medium">
+                No se encontraron resultados
+              </p>
+              <p className="text-xs mt-1">
+                Intenta con otro término de búsqueda
+              </p>
             </Command.Empty>
           ) : (
             <>
@@ -166,7 +192,7 @@ export const CommandCenter: React.FC = () => {
                     <Command.Item
                       key={contact.id}
                       value={`contact-${contact.id}`}
-                      onSelect={() => handleSelect('contact', contact.id)}
+                      onSelect={() => handleSelect("contact", contact.id)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                     >
                       <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50">
@@ -196,7 +222,7 @@ export const CommandCenter: React.FC = () => {
                     <Command.Item
                       key={ticket.id}
                       value={`ticket-${ticket.id}`}
-                      onSelect={() => handleSelect('ticket', ticket.id)}
+                      onSelect={() => handleSelect("ticket", ticket.id)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                     >
                       <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center group-hover:bg-green-200 dark:group-hover:bg-green-800/50">
@@ -226,7 +252,7 @@ export const CommandCenter: React.FC = () => {
                     <Command.Item
                       key={deal.id}
                       value={`deal-${deal.id}`}
-                      onSelect={() => handleSelect('deal', deal.id)}
+                      onSelect={() => handleSelect("deal", deal.id)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                     >
                       <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center group-hover:bg-yellow-200 dark:group-hover:bg-yellow-800/50">
@@ -253,20 +279,28 @@ export const CommandCenter: React.FC = () => {
         <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-[#111b21]">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-[10px] font-mono">↑↓</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-[10px] font-mono">
+                ↑↓
+              </kbd>
               Navegar
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-[10px] font-mono">↵</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-[10px] font-mono">
+                ↵
+              </kbd>
               Abrir
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-[10px] font-mono">ESC</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-[10px] font-mono">
+                ESC
+              </kbd>
               Cerrar
             </span>
           </div>
           {totalResults > 0 && (
-            <span>{totalResults} resultado{totalResults !== 1 && 's'}</span>
+            <span>
+              {totalResults} resultado{totalResults !== 1 && "s"}
+            </span>
           )}
         </div>
       </Command>

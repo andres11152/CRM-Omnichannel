@@ -68,6 +68,8 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const [viewMode, setViewMode] = useState<"compact" | "comfortable">(
     "comfortable",
   );
+  // 🏷️ ENTERPRISE: Tag Filtering State
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [socketConnected, setSocketConnected] = useState(false);
@@ -476,12 +478,20 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   // 🛡️ 100-YEAR ENTERPRISE: Queue Visibility
   // Requirements:
   // - ONLY tickets that are OPEN AND have NO assignedToId (unassigned)
+  // - EXCLUDE GROUPS (User Request: "no le debe salir los grupos a los agentes en 'cola de espera'")
   // - Future: Filter by queues the agent has access to (for multi-department orgs)
   const queueTickets = curatedTickets.filter((t) => {
     // Must be OPEN and UNASSIGNED
     if (t.status !== "OPEN" || t.assignedToId) {
       return false;
     }
+
+    // 🚫 EXCLUDE GROUPS
+    // Groups are handled separately or directly by assigned agents, not in the general queue
+    if (t.isGroup || t.contact?.isGroup) {
+      return false;
+    }
+
     // TODO: Add queue-based access control here if needed
     // Example: return userQueueIds.includes(t.queueId) || !t.queueId;
     return true;
@@ -521,6 +531,18 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
 
   if (filterUnread) {
     displayedTickets = displayedTickets.filter((t) => t.unreadCount > 0);
+  }
+
+  // 🏷️ ENTERPRISE: Advanced Tag Filtering
+  // Only show tickets that contain ALL selected tags (AND logic) or ANY (OR logic)?
+  // Usually "OR" is better for discovery, "AND" for strict narrowing.
+  // Let's go with "AND" for precise filtering (Enterprise standard).
+  if (selectedTags.length > 0) {
+    displayedTickets = displayedTickets.filter((t) => {
+      if (!t.tags || t.tags.length === 0) return false;
+      // Check if ticket tags include ALL selected tags
+      return selectedTags.every((tagId) => t.tags.includes(tagId));
+    });
   }
 
   // Apply Sort
@@ -818,7 +840,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     setIsSyncModalOpen(false);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/integrations/whatsapp/sync`, {
+      const res = await fetch(`${API_BASE_URL}/whatsapp/sync`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1077,6 +1099,16 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               </div>
             )}
 
+            {/* Sync Button (Disabled for now)
+            <button
+              onClick={() => setIsSyncModalOpen(true)}
+              className="hidden md:flex p-2.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-all border border-transparent hover:border-blue-100 dark:hover:border-blue-800"
+              title="Sincronizar Historial de WhatsApp"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+            */}
+
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="hidden md:flex group p-2.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
@@ -1142,6 +1174,15 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               viewMode={viewMode}
               onChangeViewMode={setViewMode}
               allTags={allTags}
+              // Tag Filtering
+              selectedTags={selectedTags}
+              onToggleTag={(tagId) => {
+                setSelectedTags((prev) =>
+                  prev.includes(tagId)
+                    ? prev.filter((id) => id !== tagId)
+                    : [...prev, tagId],
+                );
+              }}
             />
           )}
         </div>

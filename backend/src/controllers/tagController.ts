@@ -25,15 +25,16 @@ export const createTag = catchAsync(
         },
       });
       res.status(201).json(tag);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating tag:", error);
       // P2002 is Prisma's unique constraint violation code
-      if (error.code === "P2002") {
+      const prismaError = error as { code?: string };
+      if (prismaError.code === "P2002") {
         return next(new AppError("Tag already exists", 400));
       }
       return next(new AppError("Failed to create tag", 500));
     }
-  }
+  },
 );
 
 export const getTags = catchAsync(
@@ -62,7 +63,7 @@ export const getTags = catchAsync(
             },
           });
           return { ...tag, count };
-        })
+        }),
       );
 
       res.status(200).json(tagsWithCounts);
@@ -70,7 +71,7 @@ export const getTags = catchAsync(
       console.error("Error fetching tags:", error);
       return next(new AppError("Failed to fetch tags", 500));
     }
-  }
+  },
 );
 
 export const deleteTag = catchAsync(
@@ -97,5 +98,5 @@ export const deleteTag = catchAsync(
       console.error("Error deleting tag:", error);
       return next(new AppError("Failed to delete tag", 500));
     }
-  }
+  },
 );

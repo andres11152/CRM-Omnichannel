@@ -237,7 +237,7 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
                   </div>
                   <div className="text-left">
                     <p className="text-xs font-bold text-gray-900 dark:text-gray-100">
-                      Schedule Meeting
+                      Agendar Reunión
                     </p>
                     <p className="text-[10px] text-gray-400">
                       Programar llamada

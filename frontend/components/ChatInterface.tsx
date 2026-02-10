@@ -10,7 +10,9 @@ import {
   Tag,
   Document,
   User,
+  QuickReply,
 } from "../types";
+import { quickRepliesService } from "../services/quickRepliesService";
 import {
   Clock,
   CreditCard,
@@ -241,6 +243,21 @@ export const ChatInterface: React.FC<Props> = ({
     "connected" | "disconnected"
   >("disconnected");
 
+  // ⚡ SLASH COMMANDS STATE
+  const [quickRepliesData, setQuickRepliesData] = useState<QuickReply[]>([]);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashFiltered, setSlashFiltered] = useState<QuickReply[]>([]);
+
+  // Load Quick Replies for Slash Commands
+  useEffect(() => {
+    quickRepliesService
+      .getQuickReplies()
+      .then((data) => setQuickRepliesData(data))
+      .catch((err) =>
+        console.error("Failed to load quick replies for slash commands:", err),
+      );
+  }, []);
+
   // Load tags from backend
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -367,6 +384,10 @@ export const ChatInterface: React.FC<Props> = ({
           if (conv.tags && Array.isArray(conv.tags)) {
             setContactTags(conv.tags);
             setDisplayContact((prev) => ({ ...prev, tags: conv.tags })); // âœ… SYNC Header UI with fetched tags
+            // 🛡️ 100-YEAR FIX: Propagate tags to parent (AgentWorkspace) to prevent overwriting with stale props
+            if (onTicketUpdate) {
+              onTicketUpdate(activeContact.id, { tags: conv.tags });
+            }
           }
           if (conv.priority) {
             setCurrentPriority(conv.priority);
@@ -738,7 +759,10 @@ export const ChatInterface: React.FC<Props> = ({
         },
       );
 
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to send message");
+      }
 
       const data = await res.json();
       const serverMsg = data.data.message;
@@ -1252,7 +1276,10 @@ export const ChatInterface: React.FC<Props> = ({
           },
         );
 
-        if (!res.ok) throw new Error("Failed to send voice note");
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to send voice note");
+        }
 
         const data = await res.json();
         const serverMsg = data.data.message;
@@ -2109,8 +2136,57 @@ export const ChatInterface: React.FC<Props> = ({
               {showStickerPicker && (
                 <StickerPicker
                   onSelect={handleStickerSelect}
+                  onEmojiSelect={(emoji) =>
+                    setInputValue((prev) => prev + emoji.emoji)
+                  }
                   onClose={() => setShowStickerPicker(false)}
                 />
+              )}
+
+              {/* ⚡ SLASH COMMAND MENU */}
+              {showSlashMenu && (
+                <div className="absolute bottom-full left-0 w-full mb-2 bg-white dark:bg-[#1f2c34] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-[100] animate-in slide-in-from-bottom-2">
+                  <div className="bg-gray-50 dark:bg-[#111b21] px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider flex justify-between items-center">
+                    <span>Comandos Rápidos</span>
+                    <button
+                      onClick={() => setShowSlashMenu(false)}
+                      className="hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto scrollbar-thin">
+                    {slashFiltered.length === 0 ? (
+                      <div className="p-3 text-sm text-gray-500 text-center italic">
+                        No hay coincidencias
+                      </div>
+                    ) : (
+                      slashFiltered.map((qr) => (
+                        <button
+                          key={qr.id}
+                          onClick={() => {
+                            setInputValue(qr.content);
+                            setShowSlashMenu(false);
+                            // Optional: Focus input if lost
+                          }}
+                          className="w-full text-left p-3 hover:bg-gray-100 dark:hover:bg-[#2a3942] border-b border-gray-100 dark:border-gray-800 last:border-0 transition-colors group"
+                        >
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="font-bold text-sm text-gray-800 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                              /{qr.title}
+                            </span>
+                            <span className="text-[10px] bg-gray-200 dark:bg-gray-700 px-1.5 rounded text-gray-500">
+                              Fast
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {qr.content}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
               )}
 
               <SmartComposer
@@ -2118,6 +2194,20 @@ export const ChatInterface: React.FC<Props> = ({
                 onInputChange={(value) => {
                   setInputValue(value);
                   handleTypingIndicator();
+
+                  // ⚡ SLASH LOGIC
+                  if (value.startsWith("/")) {
+                    const query = value.slice(1).toLowerCase();
+                    const matches = quickRepliesData.filter(
+                      (r) =>
+                        r.title.toLowerCase().includes(query) ||
+                        r.shortcut?.toLowerCase().includes(query),
+                    );
+                    setSlashFiltered(matches);
+                    setShowSlashMenu(true);
+                  } else {
+                    setShowSlashMenu(false);
+                  }
                 }}
                 onSend={handleSendMessage}
                 onQuickRepliesClick={() =>
@@ -2222,7 +2312,7 @@ export const ChatInterface: React.FC<Props> = ({
           className={`
           transition-all duration-300 ease-in-out flex flex-col
           ${isCustomer360Visible ? "translate-x-0" : "translate-x-full md:translate-x-0 md:w-0 md:hidden"}
-          fixed inset-0 z-[3000] w-full bg-white dark:bg-[#0b141a] md:static md:w-auto md:bg-transparent md:flex-shrink-0
+          fixed inset-0 z-30 w-full bg-white dark:bg-[#0b141a] md:static md:w-auto md:bg-transparent md:flex-shrink-0
       `}
         >
           {/* Mobile Back Button for 360 */}

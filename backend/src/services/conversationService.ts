@@ -231,8 +231,23 @@ export const conversationService = {
       };
     });
 
+    // 🛡️ 100-YEAR FIX: Prioritize Contact Tags
+    // If a contact is linked, their tags are the source of truth for the user perspective.
+    let resolvedTags = conversation.tags;
+
+    if (conversation.contactId) {
+      const contact = await prisma.contact.findUnique({
+        where: { id: conversation.contactId },
+        select: { tags: true },
+      });
+      if (contact?.tags && contact.tags.length > 0) {
+        resolvedTags = contact.tags;
+      }
+    }
+
     return {
       ...conversation,
+      tags: resolvedTags,
       messages: messagesWithProps,
     };
   },
@@ -338,6 +353,35 @@ export const conversationService = {
     if (!conv || conv.companyId !== companyId)
       throw new AppError("Not found", 404);
 
-    return await conversationRepository.updateTags(id, tags);
+    // 1. Update Conversation Tags (Base requirement)
+    const updatedConv = await conversationRepository.updateTags(id, tags);
+
+    // 🛡️ 100-YEAR FIX: Sync Tags to Contact Entity for Persistence
+    // Users expect tags to "stick" to the person (Contact), not just the current chat session.
+    if (updatedConv.contactId) {
+      try {
+        await contactService.update(companyId, updatedConv.contactId, { tags });
+        Logger.info(
+          `[ConversationService] Synced tags to Contact ${updatedConv.contactId}`,
+        );
+      } catch (error) {
+        Logger.warn(
+          `[ConversationService] Failed to sync tags to contact: ${error}`,
+        );
+        // We don't fail the request if contact sync fails, preserving UX
+      }
+    } else {
+      // Try to find contact by phone if contactId is missing (Legacy/Simpler setups)
+      if (updatedConv.channelId) {
+        const contact = await contactService.findOne(companyId, {
+          phone: updatedConv.channelId,
+        });
+        if (contact) {
+          await contactService.update(companyId, contact.id, { tags });
+        }
+      }
+    }
+
+    return updatedConv;
   },
 };

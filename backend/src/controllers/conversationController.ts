@@ -4,6 +4,7 @@ import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
 import { conversationService } from "@/services/conversationService";
 import { Channel } from "@prisma/client";
+import { Logger } from "@/utils/logger";
 
 export const createConversation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
@@ -66,29 +67,55 @@ export const replyToConversation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     if (!req.user || !req.companyId) throw new AppError("Not authorized", 401);
 
-    const { content, channel, attachment, metadata, scheduledAt } = req.body;
+    try {
+      const { content, channel, attachment, metadata, scheduledAt } = req.body;
 
-    // Validate Channel Enum
-    let targetChannel: Channel | undefined;
-    if (channel && Object.values(Channel).includes(channel as Channel)) {
-      targetChannel = channel as Channel;
+      Logger.info(`[ConversationController] Replying to ${req.params.id}`, {
+        contentSample: content?.substring(0, 50),
+        hasAttachment: !!attachment,
+      });
+
+      // Validate Channel Enum
+      let targetChannel: Channel | undefined;
+      if (channel && Object.values(Channel).includes(channel as Channel)) {
+        targetChannel = channel as Channel;
+      }
+
+      const message = await conversationService.replyToConversation({
+        companyId: req.companyId,
+        userId: req.user.id,
+        conversationId: req.params.id,
+        content,
+        channel: targetChannel,
+        attachment,
+        metadata,
+        scheduledAt,
+      });
+
+      res.status(201).json({
+        status: "success",
+        data: { message },
+      });
+    } catch (error: unknown) {
+      Logger.error("[ConversationController] Reply Failed", error);
+
+      const isError = error instanceof Error;
+      const errorMessage = isError ? error.message : "Error desconocido";
+      const statusCode = (error as { statusCode?: number })?.statusCode || 500;
+
+      // 🛡️ DEBUG: Return full error details
+      res.status(statusCode).json({
+        status: "error",
+        message: errorMessage,
+        stack:
+          process.env.NODE_ENV === "development" && isError
+            ? (error as Error).stack
+            : undefined,
+        errorRaw: isError
+          ? JSON.stringify(error, Object.getOwnPropertyNames(error))
+          : JSON.stringify(error),
+      });
     }
-
-    const message = await conversationService.replyToConversation({
-      companyId: req.companyId,
-      userId: req.user.id,
-      conversationId: req.params.id,
-      content,
-      channel: targetChannel,
-      attachment,
-      metadata,
-      scheduledAt,
-    });
-
-    res.status(201).json({
-      status: "success",
-      data: { message },
-    });
   },
 );
 

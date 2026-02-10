@@ -1,13 +1,17 @@
 import express from "express";
 import { createTag, getTags, deleteTag } from "@/controllers/tagController";
 import { protect } from "@/middleware/authMiddleware";
+import { restrictTo } from "@/middleware/restrictTo";
 
 const router = express.Router();
 
 router.use(protect);
 
-router.route("/").get(getTags).post(createTag);
+// 🔓 ALL AUTHENTICATED USERS can view tags (Agents need this for chat tagging)
+router.get("/", getTags);
 
-router.route("/:id").delete(deleteTag);
+// 🔒 ADMIN+ ONLY: Create and Delete tags (Agents should NOT pollute the tag catalog)
+router.post("/", restrictTo("ADMIN", "SUPERVISOR", "MASTER"), createTag);
+router.delete("/:id", restrictTo("ADMIN", "SUPERVISOR", "MASTER"), deleteTag);
 
 export default router;

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, X } from 'lucide-react';
-import api from '../../services/apiClient';
-import { useNavigate } from 'react-router-dom';
-import { useSocket } from '../../hooks/useSocket';
+import React, { useState, useEffect, useRef } from "react";
+import { Bell, Check, X } from "lucide-react";
+import { api } from "../../src/lib/axios";
+import { useNavigate } from "react-router-dom";
+import { useSocket } from "../../hooks/useSocket";
 
 /**
  * 🔔 NOTIFICATION BELL
@@ -36,7 +36,7 @@ export const NotificationBell: React.FC = () => {
   // Listen for real-time notifications
   useEffect(() => {
     if (socket) {
-      socket.on('mention_notification', (data: any) => {
+      socket.on("mention_notification", (data: any) => {
         // Add new notification to list
         const newNotification: Notification = {
           id: Date.now().toString(), // Temporary ID
@@ -52,16 +52,16 @@ export const NotificationBell: React.FC = () => {
         setUnreadCount((prev) => prev + 1);
 
         // Optional: Show browser notification
-        if ('Notification' in window && Notification.permission === 'granted') {
+        if ("Notification" in window && Notification.permission === "granted") {
           new Notification(data.title, {
             body: data.message,
-            icon: '/logo.png',
+            icon: "/logo.png",
           });
         }
       });
 
       return () => {
-        socket.off('mention_notification');
+        socket.off("mention_notification");
       };
     }
   }, [socket]);
@@ -69,31 +69,37 @@ export const NotificationBell: React.FC = () => {
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setShowDropdown(false);
       }
     };
 
     if (showDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [showDropdown]);
 
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/notifications');
+      const response = await api.get("/notifications");
 
-      if (response.data.status === 'success') {
+      if (response.data.status === "success") {
         const fetchedNotifications = response.data.data.notifications || [];
         setNotifications(fetchedNotifications);
 
-        const unread = fetchedNotifications.filter((n: Notification) => !n.read).length;
+        const unread = fetchedNotifications.filter(
+          (n: Notification) => !n.read,
+        ).length;
         setUnreadCount(unread);
       }
     } catch (error) {
-      console.error('[NotificationBell] Error fetching notifications:', error);
+      console.error("[NotificationBell] Error fetching notifications:", error);
     } finally {
       setLoading(false);
     }
@@ -104,22 +110,22 @@ export const NotificationBell: React.FC = () => {
       await api.patch(`/notifications/${notificationId}/read`);
 
       setNotifications((prev) =>
-        prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+        prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)),
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (error) {
-      console.error('[NotificationBell] Error marking as read:', error);
+      console.error("[NotificationBell] Error marking as read:", error);
     }
   };
 
   const markAllAsRead = async () => {
     try {
-      await api.patch('/notifications/read-all');
+      await api.patch("/notifications/read-all");
 
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch (error) {
-      console.error('[NotificationBell] Error marking all as read:', error);
+      console.error("[NotificationBell] Error marking all as read:", error);
     }
   };
 
@@ -145,7 +151,7 @@ export const NotificationBell: React.FC = () => {
         {/* Unread Badge */}
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
@@ -193,7 +199,7 @@ export const NotificationBell: React.FC = () => {
                   className={`
                     px-4 py-3 border-b border-gray-100 dark:border-gray-700 cursor-pointer
                     hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors
-                    ${!notification.read ? 'bg-indigo-50 dark:bg-indigo-900/10' : ''}
+                    ${!notification.read ? "bg-indigo-50 dark:bg-indigo-900/10" : ""}
                   `}
                 >
                   <div className="flex items-start gap-3">
@@ -208,12 +214,15 @@ export const NotificationBell: React.FC = () => {
                         {notification.message}
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        {new Date(notification.createdAt).toLocaleString('es-ES', {
-                          day: '2-digit',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {new Date(notification.createdAt).toLocaleString(
+                          "es-ES",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
                       </p>
                     </div>
                   </div>
@@ -227,7 +236,7 @@ export const NotificationBell: React.FC = () => {
             <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
               <button
                 onClick={() => {
-                  navigate('/notifications');
+                  navigate("/notifications");
                   setShowDropdown(false);
                 }}
                 className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline w-full text-center"

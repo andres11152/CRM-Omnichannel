@@ -205,29 +205,16 @@ export class SessionManager implements ISessionManager {
               msg.includes("No matching sessions") ||
               msg.includes("failed to decrypt")
             ) {
-              logger.error(
-                `[SessionGuard] 🚨 CORRUPTION DETECTED in Session ${sessionId}: "${msg.substring(
+              // 🛡️ 100-YEAR FIX: ARMOR MODE
+              // We DO NOT nuke the session for decryption errors.
+              // We just log a warning and let Baileys handle the retry/drop.
+              logger.warn(
+                `[SessionGuard] 🛡️ Decryption error intercepted in Session ${sessionId}: "${msg.substring(
                   0,
                   100,
-                )}..."`,
+                )}..." - IGNORING to prevent session loss.`,
               );
-              logger.error(
-                `[SessionGuard] 🧨 TRIGGERING EMERGENCY SESSION RESET...`,
-              );
-
-              // 🛑 EMERGENCY NUKE
-              // Run async without awaiting to avoid blocking the logger
-              this.terminateSession(sessionId, true)
-                .then(() =>
-                  logger.info(
-                    `[SessionGuard] ✅ Session ${sessionId} successfully nuked.`,
-                  ),
-                )
-                .catch((e) =>
-                  logger.error(
-                    `[SessionGuard] ❌ Failed to nuke session: ${e.message}`,
-                  ),
-                );
+              return; // Suppress the loud error log
             }
 
             // Call original logger

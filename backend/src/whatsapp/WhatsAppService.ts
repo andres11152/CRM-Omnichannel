@@ -389,8 +389,9 @@ export class WhatsAppService {
     );
 
     if (!activeSession) {
-      throw new Error(
-        `No active WhatsApp session for company: ${options.companyId}`,
+      throw new AppError(
+        "No hay una sesión de WhatsApp activa. Por favor, ve a Configuración y escanea el código QR para reconectar.",
+        503,
       );
     }
 

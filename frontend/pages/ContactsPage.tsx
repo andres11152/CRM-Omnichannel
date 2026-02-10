@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Contact } from "../types";
+import { Contact, Tag } from "../types";
 import { ModuleHeader } from "../components/common/ModuleHeader";
 import { ContactTimelineView } from "../components/crm/ContactTimelineView";
 import { EmailModal } from "../components/EmailModal";
 import { API_BASE_URL } from "../services/apiConfig";
-import { Search, User, History, Trash2 } from "lucide-react";
+import { Search, User, History, Trash2, X } from "lucide-react";
 
 export const ContactsPage: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]); // 🏷️ Store full tag objects
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -27,12 +28,33 @@ export const ContactsPage: React.FC = () => {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
-  const [newTags, setNewTags] = useState("");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [newNotes, setNewNotes] = useState("");
 
   useEffect(() => {
     fetchContacts();
+    fetchTags();
   }, []);
+
+  const fetchTags = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/tags`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      // Robust handling: Check if array directly, or nested in data.data
+      const tagsData = Array.isArray(data)
+        ? data
+        : Array.isArray(data.data)
+          ? data.data
+          : [];
+      console.log("[ContactsPage] Parsed tags:", tagsData);
+      setAllTags(tagsData);
+    } catch (error) {
+      console.error("Error fetching tags:", error);
+    }
+  };
 
   const fetchContacts = async () => {
     try {
@@ -77,14 +99,14 @@ export const ContactsPage: React.FC = () => {
       );
       setNewEmail(cleanEmail);
       setNewPhone(displayPhone);
-      setNewTags(contact.tags?.join(", ") || "");
+      setSelectedTagIds(contact.tags || []);
       setNewNotes(contact.notes || "");
     } else {
       setEditingContact(null);
       setNewName("");
       setNewEmail("");
       setNewPhone("");
-      setNewTags("");
+      setSelectedTagIds([]);
       setNewNotes("");
     }
     setShowModal(true);
@@ -94,10 +116,6 @@ export const ContactsPage: React.FC = () => {
     e.preventDefault();
     try {
       const token = localStorage.getItem("token");
-      const tagsArray = newTags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
 
       // Use Unified Upsert Endpoint (Smart Logic) for both Create and Update
       // This ensures backend cleanup logic runs universally
@@ -114,7 +132,7 @@ export const ContactsPage: React.FC = () => {
           name: newName,
           email: newEmail,
           phone: newPhone,
-          tags: tagsArray,
+          tags: selectedTagIds,
           notes: newNotes,
         }),
       });
@@ -383,15 +401,15 @@ export const ContactsPage: React.FC = () => {
               </div>
 
               {/* DESKTOP TABLE */}
-              <div className="hidden md:block bg-white dark:bg-[#1c272f] rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/50 dark:shadow-none overflow-hidden">
+              <div className="hidden md:block bg-white dark:bg-[#1c272f] rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/50 dark:shadow-none overflow-visible">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
-                      <th className="px-10 py-8">Identidad Corporativa</th>
-                      <th className="px-6 py-8">Contacto Directo</th>
-                      <th className="px-6 py-8">Notas de CRM</th>
-                      <th className="px-6 py-8">Segmentación</th>
-                      <th className="px-10 py-8 text-right">Gestión</th>
+                      <th className="px-6 py-4">Identidad Corporativa</th>
+                      <th className="px-4 py-4">Contacto Directo</th>
+                      <th className="px-4 py-4">Notas de CRM</th>
+                      <th className="px-4 py-4">Segmentación</th>
+                      <th className="px-6 py-4 text-right">Gestión</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
@@ -400,45 +418,47 @@ export const ContactsPage: React.FC = () => {
                         key={contact.id}
                         className="hover:bg-gray-50/50 dark:hover:bg-cyan-500/[0.02] transition-all group"
                       >
-                        <td className="px-10 py-6 whitespace-nowrap">
-                          <div className="flex items-center gap-5">
-                            <div className="h-14 w-14 rounded-[1.25rem] bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black shadow-lg shadow-cyan-500/10 border-2 border-white dark:border-gray-800 transform group-hover:scale-110 group-hover:rotate-2 transition-all duration-500">
+                        <td className="px-6 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold shadow-lg shadow-cyan-500/10 border-2 border-white dark:border-gray-800 transform group-hover:scale-105 transition-all duration-300">
                               {contact.name.charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
-                              <div className="text-lg font-black text-gray-900 dark:text-white mb-0.5 tracking-tight">
+                              <div className="text-sm font-bold text-gray-900 dark:text-white mb-0.5 tracking-tight truncate max-w-[180px]">
                                 {contact.name}
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                                  Estado Premium
+                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                                  {contact.channel || "Cliente"}
                                 </span>
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-6 whitespace-nowrap">
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 font-semibold opacity-70 group-hover:opacity-100 transition-opacity">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 font-semibold opacity-80 group-hover:opacity-100 transition-opacity">
                               <svg
-                                className="w-4 h-4"
+                                className="w-3.5 h-3.5"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
                               >
                                 <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                               </svg>
-                              {contact.email && !contact.email.includes("@")
-                                ? "-"
-                                : contact.email?.includes("whatsapp.user") ||
-                                    contact.email?.includes("c.us")
-                                  ? "WhatsApp User"
-                                  : contact.email || "Sin correo"}
+                              <span className="truncate max-w-[150px]">
+                                {contact.email && !contact.email.includes("@")
+                                  ? "-"
+                                  : contact.email?.includes("whatsapp.user") ||
+                                      contact.email?.includes("c.us")
+                                    ? "WhatsApp User"
+                                    : contact.email || "Sin correo"}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-white tracking-widest bg-gray-50 dark:bg-gray-800/50 w-fit px-3 py-1 rounded-full border border-gray-100 dark:border-gray-800">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-900 dark:text-white tracking-wider bg-gray-50 dark:bg-gray-800/50 w-fit px-2 py-0.5 rounded-md border border-gray-100 dark:border-gray-800">
                               <svg
-                                className="w-4 h-4 text-cyan-600"
+                                className="w-3 h-3 text-cyan-600"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -452,44 +472,49 @@ export const ContactsPage: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-6 max-w-[200px]">
+                        <td className="px-4 py-3 max-w-[180px]">
                           <p
-                            className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 italic leading-relaxed font-medium"
+                            className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 italic leading-relaxed font-medium"
                             title={contact.notes}
                           >
-                            {contact.notes ||
-                              "El contacto no posee notas registradas actualmente."}
+                            {contact.notes || "Sin notas."}
                           </p>
                         </td>
-                        <td className="px-6 py-6">
-                          <div className="flex flex-wrap gap-2">
-                            {contact.tags?.map((tag, i) => (
-                              <span
-                                key={i}
-                                className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-cyan-50 dark:bg-cyan-900/10 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-800/50 shadow-sm"
-                              >
-                                {tag}
-                              </span>
-                            ))}
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1 max-h-[48px] overflow-hidden">
+                            {contact.tags?.map((tagId, i) => {
+                              const tagName =
+                                allTags.find((t) => t.id === tagId)?.name ||
+                                tagId;
+                              return (
+                                <span
+                                  key={i}
+                                  className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-cyan-50 dark:bg-cyan-900/10 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-800/50 shadow-sm truncate max-w-[80px]"
+                                  title={tagName}
+                                >
+                                  {tagName}
+                                </span>
+                              );
+                            })}
                             {(!contact.tags || contact.tags.length === 0) && (
-                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-tighter italic">
+                              <div className="flex items-center gap-1.5 text-[9px] font-bold text-gray-300 uppercase tracking-tighter italic">
                                 <div className="w-1 h-1 rounded-full bg-gray-200" />
                                 Sin segmentar
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-10 py-6 whitespace-nowrap text-right">
-                          <div className="flex justify-end items-center gap-3">
+                        <td className="px-6 py-3 whitespace-nowrap text-right">
+                          <div className="flex justify-end items-center gap-2">
                             <button
                               onClick={() => {
                                 setTimelineContactId(contact.id);
                                 setShowTimeline(true);
                               }}
-                              className="p-3 bg-white dark:bg-gray-800 hover:bg-cyan-600 hover:text-white text-gray-400 rounded-2xl transition-all shadow-sm border border-gray-100 dark:border-gray-700 active:scale-90"
-                              title="Actividad del contacto"
+                              className="p-2 bg-white dark:bg-gray-800 hover:bg-cyan-600 hover:text-white text-gray-400 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-gray-700 active:scale-95"
+                              title="Actividad"
                             >
-                              <History className="w-5 h-5" />
+                              <History className="w-4 h-4" />
                             </button>
 
                             <button
@@ -497,11 +522,11 @@ export const ContactsPage: React.FC = () => {
                                 setSelectedEmailContact(contact);
                                 setShowEmailModal(true);
                               }}
-                              className="p-3 bg-white dark:bg-gray-800 hover:bg-indigo-600 hover:text-white text-gray-400 rounded-2xl transition-all shadow-sm border border-gray-100 dark:border-gray-700 active:scale-90"
-                              title="Redactar Email"
+                              className="p-2 bg-white dark:bg-gray-800 hover:bg-indigo-600 hover:text-white text-gray-400 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-gray-700 active:scale-95"
+                              title="Email"
                             >
                               <svg
-                                className="w-5 h-5"
+                                className="w-4 h-4"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -510,11 +535,11 @@ export const ContactsPage: React.FC = () => {
                               </svg>
                             </button>
 
-                            <div className="w-px h-8 bg-gray-100 dark:bg-gray-800 mx-2" />
+                            <div className="w-px h-6 bg-gray-100 dark:bg-gray-800 mx-1" />
 
                             <button
                               onClick={() => handleOpenModal(contact)}
-                              className="px-5 py-2.5 text-sm font-black text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-2xl transition-all"
+                              className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-xl transition-all"
                             >
                               Editar
                             </button>
@@ -522,9 +547,9 @@ export const ContactsPage: React.FC = () => {
                               onClick={() =>
                                 handleDelete(contact.id, contact.name)
                               }
-                              className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all active:rotate-12"
+                              className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all active:rotate-12"
                             >
-                              <Trash2 className="w-5 h-5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -539,89 +564,187 @@ export const ContactsPage: React.FC = () => {
       </div>
 
       {/* Modal */}
+      {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-[#202c33] rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-100">
-              {editingContact ? "Editar Contacto" : "Nuevo Contacto"}
-            </h2>
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Nombre *
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-[#2a3942] text-gray-900 dark:text-gray-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-[#2a3942] text-gray-900 dark:text-gray-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Teléfono
-                  </label>
-                  <input
-                    type="tel"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-[#2a3942] text-gray-900 dark:text-gray-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Etiquetas (separadas por coma)
-                  </label>
-                  <input
-                    type="text"
-                    value={newTags}
-                    onChange={(e) => setNewTags(e.target.value)}
-                    placeholder="vip, lead, soporte"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-[#2a3942] text-gray-900 dark:text-gray-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Notas
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={newNotes}
-                    onChange={(e) => setNewNotes(e.target.value)}
-                    placeholder="Información adicional sobre el contacto..."
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-[#2a3942] text-gray-900 dark:text-gray-100 resize-none"
-                  />
-                </div>
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#202c33] rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-700 transform transition-all scale-100 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="px-8 py-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#111b21]/50 flex justify-between items-center shrink-0">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                  {editingContact ? "Editar Contacto" : "Nuevo Contacto"}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                  {editingContact
+                    ? "Actualiza la información del cliente"
+                    : "Agrega un nuevo cliente a tu base de datos"}
+                </p>
               </div>
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
-                >
-                  Guardar
-                </button>
-              </div>
-            </form>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Area */}
+            <div className="overflow-y-auto custom-scrollbar p-8">
+              <form
+                id="contact-form"
+                onSubmit={handleSubmit}
+                className="space-y-6"
+              >
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                      Nombre Completo <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <User className="h-5 w-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
+                      </div>
+                      <input
+                        required
+                        type="text"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        placeholder="Ej. Juan Pérez"
+                        className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none font-semibold text-gray-900 dark:text-white placeholder-gray-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        placeholder="cliente@ejemplo.com"
+                        className="w-full px-4 py-3.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none font-semibold text-gray-900 dark:text-white placeholder-gray-400 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                        Teléfono
+                      </label>
+                      <input
+                        type="tel"
+                        value={newPhone}
+                        onChange={(e) => setNewPhone(e.target.value)}
+                        placeholder="+57 300 123 4567"
+                        className="w-full px-4 py-3.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none font-semibold text-gray-900 dark:text-white placeholder-gray-400 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                      Etiquetas
+                    </label>
+                    <div className="space-y-3 bg-gray-50 dark:bg-gray-800/30 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
+                      {/* SELECTED TAGS */}
+                      <div className="flex flex-wrap gap-2 min-h-[32px]">
+                        {selectedTagIds.map((id) => {
+                          const tag = allTags.find((t) => t.id === id);
+                          return tag ? (
+                            <span
+                              key={id}
+                              className={`pl-3 pr-2 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border shadow-sm ${tag.color ? tag.color + " border-transparent" : "bg-white text-gray-800 border-gray-200"}`}
+                            >
+                              {tag.name}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedTagIds((prev) =>
+                                    prev.filter((tid) => tid !== id),
+                                  )
+                                }
+                                className="bg-black/10 hover:bg-black/20 rounded-full p-0.5 transition-colors"
+                              >
+                                <X size={10} />
+                              </button>
+                            </span>
+                          ) : null;
+                        })}
+                        {selectedTagIds.length === 0 && (
+                          <span className="text-gray-400 text-sm italic flex items-center gap-2">
+                            Sin etiquetas seleccionadas
+                          </span>
+                        )}
+                      </div>
+
+                      {/* SEPARATOR */}
+                      <div className="h-px bg-gray-200 dark:bg-gray-700 w-full" />
+
+                      {/* AVAILABLE TAGS */}
+                      <div>
+                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2.5">
+                          Disponibles para agregar
+                        </div>
+                        <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto custom-scrollbar">
+                          {allTags
+                            .filter((t) => !selectedTagIds.includes(t.id))
+                            .map((tag) => (
+                              <button
+                                key={tag.id}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedTagIds((prev) => [...prev, tag.id])
+                                }
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 active:scale-95 ${tag.color ? "bg-white dark:bg-[#202c33] " + tag.color.replace("text-", "border-").replace("bg-", "text-") : "border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400"}`}
+                              >
+                                + {tag.name}
+                              </button>
+                            ))}
+                          {allTags.filter((t) => !selectedTagIds.includes(t.id))
+                            .length === 0 && (
+                            <span className="text-gray-400 text-xs italic">
+                              No hay más etiquetas disponibles
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                      Notas Internas
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={newNotes}
+                      onChange={(e) => setNewNotes(e.target.value)}
+                      placeholder="Información relevante, preferencias, historial..."
+                      className="w-full px-4 py-3.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none font-medium text-gray-900 dark:text-white placeholder-gray-400 resize-none text-sm"
+                    />
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            {/* Footer */}
+            <div className="px-8 py-5 bg-gray-50 dark:bg-[#111b21]/50 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="px-6 py-3 text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="contact-form" // Link to form via ID
+                className="px-8 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition-all transform hover:-translate-y-0.5"
+              >
+                {editingContact ? "Guardar Cambios" : "Crear Contacto"}
+              </button>
+            </div>
           </div>
         </div>
       )}

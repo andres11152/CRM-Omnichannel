@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { prisma } from "@/config/database";
+import { Prisma } from "@prisma/client";
 
 /**
  * 🔔 NOTIFICATIONS CONTROLLER
@@ -22,7 +23,7 @@ export const getNotifications = catchAsync(
 
     const { limit = "20", unreadOnly = "false" } = req.query;
 
-    const where: any = { userId };
+    const where: Prisma.NotificationWhereInput = { userId };
     if (unreadOnly === "true") {
       where.read = false;
     }
@@ -42,7 +43,7 @@ export const getNotifications = catchAsync(
         }),
       },
     });
-  }
+  },
 );
 
 // Mark notification as read
@@ -78,7 +79,7 @@ export const markAsRead = catchAsync(
       status: "success",
       message: "Notification marked as read",
     });
-  }
+  },
 );
 
 // Mark all as read
@@ -102,7 +103,7 @@ export const markAllAsRead = catchAsync(
       status: "success",
       message: "All notifications marked as read",
     });
-  }
+  },
 );
 
 // Delete notification
@@ -137,5 +138,5 @@ export const deleteNotification = catchAsync(
       status: "success",
       message: "Notification deleted",
     });
-  }
+  },
 );

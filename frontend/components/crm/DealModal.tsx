@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Deal, Account } from "../../types/crm";
 import { getAccounts, updateDeal, createDeal } from "../../services/crmService";
 import { EmailModal } from "../EmailModal";
@@ -218,7 +219,7 @@ export const DealModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white dark:bg-[#1f2937] rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh]">
         {/* Header with Tabs */}
@@ -611,6 +612,7 @@ export const DealModal: React.FC<Props> = ({
           }
         />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 };

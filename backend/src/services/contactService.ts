@@ -359,6 +359,36 @@ export const contactService = {
     ]);
   },
 
+  /**
+   * Direct Update (Partial)
+   */
+  async update(
+    companyId: string,
+    id: string,
+    data: Partial<ContactUpsertParams>,
+  ): Promise<ContactDTO> {
+    const contact = await prisma.contact.findFirst({
+      where: { id, companyId },
+    });
+    if (!contact)
+      throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
+
+    const updated = await prisma.contact.update({
+      where: { id },
+      data: {
+        ...(data.name && { name: data.name }),
+        ...(data.email && { email: data.email }),
+        ...(data.phone && { phone: data.phone }),
+        ...(data.tags && { tags: data.tags }),
+        ...(data.notes && { notes: data.notes }),
+        ...(data.customFields && { customFields: data.customFields }),
+        ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
+      },
+    });
+
+    return toContactDTO(updated);
+  },
+
   async getTimeline(
     companyId: string,
     id: string,

@@ -992,7 +992,7 @@ export const MarketingDashboard: React.FC = () => {
         {/* CREATE TEMPLATE FORM */}
         {/* ENTERPRISE TEMPLATE BUILDER */}
         {isCreatingTemplate && (
-          <div className="fixed inset-0 z-50 bg-[#f8f9fa] dark:bg-[#0b141a] flex flex-col animate-fade-in font-sans">
+          <div className="fixed inset-0 z-[100] bg-[#f8f9fa] dark:bg-[#0b141a] flex flex-col animate-fade-in font-sans">
             {/* 1. TOP TOOLBAR */}
             <div className="h-16 px-6 bg-white dark:bg-[#202c33] border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shadow-sm z-30 relative">
               <div className="flex items-center gap-4">
@@ -1602,39 +1602,6 @@ export const MarketingDashboard: React.FC = () => {
                 )}
               </div>
             </div>
-
-            {/* MEDIA LIBRARY MODAL OVERLAY */}
-            {showMediaLibrary && (
-              <div className="absolute inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-8 animate-fade-in">
-                <div className="bg-white dark:bg-[#202c33] rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] overflow-hidden flex flex-col relative animate-scale-in">
-                  <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
-                    <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                      <span>🖼️</span> Galería Multimedia
-                    </h3>
-                    <button
-                      onClick={() => setShowMediaLibrary(false)}
-                      className="text-gray-500 hover:text-gray-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-hidden relative">
-                    <MediaLibrary
-                      onSelect={(media) => {
-                        const imgTag = `<img src="${media.url}" alt="Imagen" style="max-width: 100%; height: auto; border: 0; display: block;" />`;
-                        setNewTemplate((prev) => ({
-                          ...prev,
-                          content: prev.content + "\n" + imgTag,
-                        }));
-                        setShowMediaLibrary(false);
-                        toast.success("Imagen insertada");
-                      }}
-                      onClose={() => setShowMediaLibrary(false)}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -1735,6 +1702,39 @@ export const MarketingDashboard: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* MEDICAL LIBRARY GLOBAL MODAL */}
+        {showMediaLibrary && (
+          <div className="fixed inset-0 z-[110] bg-black/50 backdrop-blur-sm flex items-center justify-center p-8 animate-fade-in">
+            <div className="bg-white dark:bg-[#202c33] rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] overflow-hidden flex flex-col relative animate-scale-in">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
+                <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                  <span>🖼️</span> Galería Multimedia
+                </h3>
+                <button
+                  onClick={() => setShowMediaLibrary(false)}
+                  className="text-gray-500 hover:text-gray-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden relative">
+                <MediaLibrary
+                  onSelect={(media) => {
+                    const imgTag = `<img src="${media.url}" alt="Imagen" style="max-width: 100%; height: auto; border: 0; display: block;" />`;
+                    setNewTemplate((prev) => ({
+                      ...prev,
+                      content: prev.content + "\n" + imgTag,
+                    }));
+                    setShowMediaLibrary(false);
+                    toast.success("Imagen insertada");
+                  }}
+                  onClose={() => setShowMediaLibrary(false)}
+                />
+              </div>
             </div>
           </div>
         )}

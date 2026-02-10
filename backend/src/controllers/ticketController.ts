@@ -55,7 +55,7 @@ const enrichWithCrmData = async (
       companyId,
       phone: { in: Array.from(phonesToFetch) },
     },
-    select: { id: true, phone: true, name: true, avatarUrl: true },
+    select: { id: true, phone: true, name: true, avatarUrl: true, tags: true },
   });
 
   const crmMap = new Map<string, (typeof contacts)[0]>();
@@ -85,6 +85,8 @@ const enrichWithCrmData = async (
       // 🛡️ CRM Data takes precedence
       return {
         ...dto,
+        // 🔄 SYNC TAGS: Use Contact tags as source of truth if available
+        tags: crmData.tags && crmData.tags.length > 0 ? crmData.tags : dto.tags,
         contact: {
           ...dto.contact,
           realContactId: crmData.id,

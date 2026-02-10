@@ -42,11 +42,12 @@ export const TransferModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  // 🛡️ 100-Year Fix: Exclude current user from transfer list
-  // An agent cannot transfer a ticket to themselves
+  // 🛡️ 100-Year Fix: Exclude current user and MASTER (SaaS Admin) from transfer list
+  // An agent cannot transfer a ticket to themselves or to the System Admin
   const filteredAgents = agents.filter(
     (a) =>
       a.id !== currentUserId &&
+      a.role !== "MASTER" &&
       a.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 

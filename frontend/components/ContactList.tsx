@@ -12,6 +12,8 @@ import {
   User,
   Loader2,
   Trash2,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { ContactTimelineView } from "./crm/ContactTimelineView";
 import { ImageLightbox } from "./ImageLightbox";
@@ -151,6 +153,59 @@ const ChannelBadge: React.FC<ChannelBadgeProps> = ({
   );
 };
 
+interface FilterSectionProps {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  count?: number;
+  className?: string;
+}
+
+const FilterSection: React.FC<FilterSectionProps> = ({
+  title,
+  children,
+  defaultOpen = false,
+  count,
+  className = "",
+}) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className="border-b border-gray-100 dark:border-gray-700 last:border-0">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-hover:text-gray-700 dark:group-hover:text-gray-300">
+            {title}
+          </span>
+          {count !== undefined && count > 0 && (
+            <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+              {count}
+            </span>
+          )}
+        </div>
+        {isOpen ? (
+          <Minus className="w-3 h-3 text-gray-400 group-hover:text-indigo-500" />
+        ) : (
+          <Plus className="w-3 h-3 text-gray-400 group-hover:text-indigo-500" />
+        )}
+      </button>
+      {isOpen && (
+        <div
+          className={`animate-in slide-in-from-top-1 fade-in duration-200 ${className}`}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface Props {
   contacts: Contact[];
   groups?: Contact[]; // 🏢 Enterprise Grouping
@@ -168,6 +223,8 @@ interface Props {
   onChangeSortOrder?: (order: "date_desc" | "date_asc") => void;
   viewMode?: "compact" | "comfortable";
   onChangeViewMode?: (mode: "compact" | "comfortable") => void;
+  selectedTags?: string[];
+  onToggleTag?: (tagId: string) => void;
 }
 
 export const ContactList: React.FC<Props> = ({
@@ -185,6 +242,8 @@ export const ContactList: React.FC<Props> = ({
   onChangeSortOrder,
   viewMode = "comfortable",
   onChangeViewMode,
+  selectedTags = [],
+  onToggleTag,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [showTimelineFor, setShowTimelineFor] = React.useState<string | null>(
@@ -341,81 +400,117 @@ export const ContactList: React.FC<Props> = ({
 
               {/* Dropdown Menu */}
               {isMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-[#202c33] rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                  <div className="py-2">
-                    <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      Filtros
-                    </div>
-                    <button
-                      onClick={() => {
-                        onToggleFilterUnread?.();
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors"
-                    >
-                      <span>Solo No Leídos</span>
-                      {filterUnread && (
-                        <Check className="w-4 h-4 text-green-500" />
-                      )}
-                    </button>
+                <div className="absolute right-0 top-full mt-1 w-60 bg-white dark:bg-[#202c33] rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[60] flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200 origin-top-right overflow-hidden">
+                  <div className="overflow-y-auto scrollbar-thin">
+                    {/* 1. FILTER TYPE */}
+                    <FilterSection title="Estado" defaultOpen={true}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleFilterUnread?.();
+                          // setIsMenuOpen(false); // Valid to keep open for multiple selections
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
+                      >
+                        <span>Solo No Leídos</span>
+                        {filterUnread && (
+                          <Check className="w-4 h-4 text-green-500" />
+                        )}
+                      </button>
+                    </FilterSection>
 
-                    <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
-                    <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      Orden
-                    </div>
-                    <button
-                      onClick={() => {
-                        onChangeSortOrder?.("date_desc");
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors"
-                    >
-                      <span>Más Recientes</span>
-                      {sortOrder === "date_desc" && (
-                        <Check className="w-4 h-4 text-green-500" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        onChangeSortOrder?.("date_asc");
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors"
-                    >
-                      <span>Más Antiguos</span>
-                      {sortOrder === "date_asc" && (
-                        <Check className="w-4 h-4 text-green-500" />
-                      )}
-                    </button>
+                    {/* 2. SORT ORDER */}
+                    <FilterSection title="Orden" defaultOpen={false}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChangeSortOrder?.("date_desc");
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
+                      >
+                        <span>Más Recientes</span>
+                        {sortOrder === "date_desc" && (
+                          <Check className="w-4 h-4 text-green-500" />
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChangeSortOrder?.("date_asc");
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
+                      >
+                        <span>Más Antiguos</span>
+                        {sortOrder === "date_asc" && (
+                          <Check className="w-4 h-4 text-green-500" />
+                        )}
+                      </button>
+                    </FilterSection>
 
-                    <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
-                    <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      Vista
-                    </div>
-                    <button
-                      onClick={() => {
-                        onChangeViewMode?.("comfortable");
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors"
-                    >
-                      <span>Cómoda</span>
-                      {viewMode === "comfortable" && (
-                        <Check className="w-4 h-4 text-green-500" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        onChangeViewMode?.("compact");
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors"
-                    >
-                      <span>Compacta</span>
-                      {viewMode === "compact" && (
-                        <Check className="w-4 h-4 text-green-500" />
-                      )}
-                    </button>
+                    {/* 3. VIEW MODE */}
+                    <FilterSection title="Vista" defaultOpen={false}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChangeViewMode?.("comfortable");
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
+                      >
+                        <span>Cómoda</span>
+                        {viewMode === "comfortable" && (
+                          <Check className="w-4 h-4 text-green-500" />
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChangeViewMode?.("compact");
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
+                      >
+                        <span>Compacta</span>
+                        {viewMode === "compact" && (
+                          <Check className="w-4 h-4 text-green-500" />
+                        )}
+                      </button>
+                    </FilterSection>
+
+                    {/* 4. TAGS (Scrollable) */}
+                    {allTags.length > 0 && onToggleTag && (
+                      <FilterSection
+                        title="Etiquetas"
+                        count={selectedTags.length}
+                        defaultOpen={selectedTags.length > 0}
+                        className="max-h-64 overflow-y-auto scrollbar-thin pb-2"
+                      >
+                        {/* Search could be added here later */}
+                        {allTags.map((tag) => {
+                          const isSelected = selectedTags.includes(tag.id);
+                          return (
+                            <button
+                              key={tag.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleTag(tag.id);
+                              }}
+                              className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between transition-colors group ${isSelected ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300" : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div
+                                  className={`w-2.5 h-2.5 rounded-full ${tag.color.replace("text-", "bg-").replace("text-white", "")} shadow-sm border border-black/5 flex-shrink-0`}
+                                ></div>
+                                <span className="truncate flex-1 max-w-[180px]">
+                                  {tag.name}
+                                </span>
+                              </div>
+                              {isSelected && (
+                                <Check className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </FilterSection>
+                    )}
                   </div>
                 </div>
               )}

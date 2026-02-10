@@ -167,26 +167,6 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-            />
-          </svg>
-        ),
-        label: "Transferir Ticket",
-        onClick: onTransfer,
-        visible: true,
-      },
-      {
-        icon: (
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
               d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
             />
           </svg>
@@ -377,31 +357,22 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
                     escribiendo...
                   </span>
                 ) : (
-                  <div className="flex items-center gap-1.5 overflow-hidden w-full">
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full mask-linear-fade">
                     {contact.tags && contact.tags.length > 0 ? (
-                      <>
-                        {contact.tags
-                          .slice(0, isTightMode ? 1 : 3)
-                          .map((tagId: string) => {
-                            const tag = availableTags.find(
-                              (t) => t.id === tagId || t.name === tagId,
-                            );
-                            if (!tag) return null;
-                            return (
-                              <span
-                                key={tagId}
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm whitespace-nowrap ${tag.color || "bg-gray-200 text-gray-700"}`}
-                              >
-                                {tag.name}
-                              </span>
-                            );
-                          })}
-                        {contact.tags.length > (isTightMode ? 1 : 3) && (
-                          <span className="text-[9px] bg-gray-100 px-1 rounded">
-                            +{contact.tags.length - (isTightMode ? 1 : 3)}
+                      contact.tags.map((tagId: string) => {
+                        const tag = availableTags.find(
+                          (t) => t.id === tagId || t.name === tagId,
+                        );
+                        if (!tag) return null;
+                        return (
+                          <span
+                            key={tagId}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold shadow-sm whitespace-nowrap shrink-0 ${tag.color || "bg-gray-200 text-gray-700"}`}
+                          >
+                            {tag.name}
                           </span>
-                        )}
-                      </>
+                        );
+                      })
                     ) : (
                       <span className="text-[10px] italic opacity-60">
                         Sin etiquetas
@@ -476,32 +447,30 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
             </div>
           )}
 
-          {/* 2. Direct Actions (Visible in Normal Mode) */}
-          {!isTightMode && (
-            <div className="hidden md:flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-2 ml-2">
-              {onTransfer && (
-                <button
-                  onClick={onTransfer}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
-                  title="Transferir"
+          {/* 2. Direct Actions (Always Visible) */}
+          <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-2 ml-2">
+            {onTransfer && (
+              <button
+                onClick={onTransfer}
+                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                title="Transferir"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                    />
-                  </svg>
-                </button>
-              )}
-            </div>
-          )}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
 
           {/* 3. Primary Action: Resolve (Always Visible but Compact in Tight Mode) */}
           <button

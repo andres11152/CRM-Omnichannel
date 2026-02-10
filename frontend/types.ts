@@ -237,7 +237,7 @@ export interface Agent {
   companyId: string;
   name: string;
   email?: string;
-  role?: "admin" | "agent";
+  role?: "admin" | "agent" | "MASTER";
   status: "online" | "offline" | "busy";
   currentLoad: number;
   maxCapacity: number;

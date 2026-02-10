@@ -1608,9 +1608,31 @@ export class MessageHandler implements IMessageHandler {
     type: "composing" | "recording" | "paused",
     companyId: string,
   ): Promise<void> {
-    // 🛡️ REVERTED: Usage disabled per user request to restore stability.
-    // Logic removed to match state "before typing feature was requested".
-    return Promise.resolve();
+    try {
+      const activeSession =
+        await this.sessionManager.findActiveSessionForCompany(companyId);
+      if (!activeSession) return;
+
+      const sock = activeSession.socket;
+      // 🛡️ Ensure socket is connected before trying to send presence
+      if (!sock) return;
+
+      let jid = to;
+      if (!to.includes("@")) {
+        // 100-YEAR FIX: Sanitize phone number (remove +, spaces, dashes)
+        // Baileys expects pure digits for user JIDs
+        const cleanPhone = to.replace(/\D/g, "");
+        jid = `${cleanPhone}@s.whatsapp.net`;
+      }
+
+      // 100-YEAR FIX: Wrap in try-catch per call to avoid unhandled rejections
+      await sock.sendPresenceUpdate(type, jid).catch((err) => {
+        console.warn(`[Presence] Failed to send ${type} to ${jid}`, err);
+      });
+    } catch (error) {
+      // Fail silently to avoid interrupting main flow
+      console.warn(`[Presence] Error in sendPresenceUpdate:`, error);
+    }
   }
 
   private async fetchAndPersistProfilePicture(

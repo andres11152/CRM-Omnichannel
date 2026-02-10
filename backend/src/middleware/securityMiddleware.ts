@@ -58,7 +58,7 @@ export const securityMiddleware = (app: Express) => {
 
       // XSS Protection (legacy browsers)
       xssFilter: true,
-    })
+    }),
   );
 
   // ==================== CORS CONFIGURATION ====================
@@ -102,41 +102,52 @@ export const securityMiddleware = (app: Express) => {
       ...(isDevelopment ? defaultOrigins : []),
       ...productionOrigins,
       ...envOrigins,
+      // 🛡️ 100-YEAR FIX: Ensure root domains are always allowed
+      "https://reply.software",
+      "https://www.reply.software",
     ]),
   ];
 
   console.log("[CORS] 🛡️ Allowed origins:", allowedOrigins);
   console.log(
-    `[CORS] 🌍 Environment: ${process.env.NODE_ENV || "development"}`
+    `[CORS] 🌍 Environment: ${process.env.NODE_ENV || "development"}`,
   );
 
   // Configure CORS
   const corsOptions = {
     origin: (
       origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void
+      callback: (err: Error | null, allow?: boolean) => void,
     ) => {
       // Allow requests with no origin (mobile apps, Postman, server-to-server)
       if (!origin) {
         return callback(null, true);
       }
 
-      // Check if origin is allowed
+      // Check if origin is allowed (exact match)
       if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        // Log rejected origins in production for monitoring
-        if (!isDevelopment) {
-          console.warn(`[CORS] ⚠️ Rejected origin: ${origin}`);
-        }
+        return callback(null, true);
+      }
 
-        // In production: strict enforcement
-        // In development: allow all (for easier testing)
-        if (isDevelopment) {
-          callback(null, true);
-        } else {
-          callback(new Error(`CORS: Origin ${origin} not allowed`));
-        }
+      // 🛡️ 100-YEAR FIX: Allow all subdomains of reply.software
+      if (
+        origin.endsWith(".reply.software") ||
+        origin === "https://reply.software"
+      ) {
+        return callback(null, true);
+      }
+
+      // Log rejected origins in production for monitoring
+      if (!isDevelopment) {
+        console.warn(`[CORS] ⚠️ Rejected origin: ${origin}`);
+      }
+
+      // In production: strict enforcement
+      // In development: allow all (for easier testing)
+      if (isDevelopment) {
+        return callback(null, true);
+      } else {
+        return callback(new Error(`CORS: Origin ${origin} not allowed`));
       }
     },
 

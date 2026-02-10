@@ -66,6 +66,7 @@ class WebSocketGateway {
           "http://localhost:5174",
           "https://reply.software",
           "https://www.reply.software",
+          "https://app.reply.software", // 🛡️ Ensure app subdomain is allowed
           "https://crm-omnichannel.onrender.com",
         ],
         methods: ["GET", "POST"],

@@ -67,12 +67,15 @@ class WebSocketGateway {
 
           const allowedOrigins = [
             process.env.FRONTEND_URL || "http://localhost:5173",
-            "http://localhost:5174",
-            "https://reply.software",
-            "https://www.reply.software",
-            "https://app.reply.software",
-            "https://crm-omnichannel.onrender.com",
           ];
+
+          if (process.env.ALLOWED_ORIGINS) {
+            allowedOrigins.push(
+              ...process.env.ALLOWED_ORIGINS.split(",").map((o) =>
+                o.trim().replace(/\/$/, ""),
+              ),
+            );
+          }
 
           if (allowedOrigins.includes(origin)) return callback(null, true);
 

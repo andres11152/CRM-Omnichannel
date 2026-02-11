@@ -1,6 +1,7 @@
 import { Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import { Logger } from "@/utils/logger";
 
 /**
  * 🛡️ SECURITY MIDDLEWARE
@@ -69,11 +70,7 @@ export const securityMiddleware = (app: Express) => {
     "http://localhost:3000", // React dev
   ];
 
-  const productionOrigins = [
-    "https://reply.software",
-    "https://www.reply.software",
-    "https://app.reply.software",
-  ];
+  const productionOrigins: string[] = [];
 
   // Parse additional origins from environment
   const envOrigins: string[] = [];
@@ -102,14 +99,11 @@ export const securityMiddleware = (app: Express) => {
       ...(isDevelopment ? defaultOrigins : []),
       ...productionOrigins,
       ...envOrigins,
-      // 🛡️ 100-YEAR FIX: Ensure root domains are always allowed
-      "https://reply.software",
-      "https://www.reply.software",
     ]),
   ];
 
-  console.log("[CORS] 🛡️ Allowed origins:", allowedOrigins);
-  console.log(
+  Logger.info(`[CORS] 🛡️ Allowed origins: ${JSON.stringify(allowedOrigins)}`);
+  Logger.info(
     `[CORS] 🌍 Environment: ${process.env.NODE_ENV || "development"}`,
   );
 

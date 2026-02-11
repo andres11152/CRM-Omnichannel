@@ -24,6 +24,12 @@ const EnvSchema = z.object({
     .default(3000)
     .describe("HTTP server port"),
 
+  BACKEND_URL: z
+    .string()
+    .url()
+    .default("http://localhost:4000")
+    .describe("Public URL of the backend API"),
+
   // ==================== DATABASE ====================
   DATABASE_URL: z
     .string()

@@ -155,33 +155,36 @@ export const AIAgentConfig: React.FC<Props> = () => {
         gradient="from-emerald-600 to-teal-600 dark:from-emerald-800 dark:to-teal-800"
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar Navigation */}
-        <div className="w-64 bg-white dark:bg-[#202c33] border-r border-gray-200 dark:border-gray-700 flex flex-col">
-          <nav className="p-4 space-y-2">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {/* 📱 MOBILE TABS / 🖥️ DESKTOP SIDEBAR */}
+        <div className="md:w-64 bg-white dark:bg-[#202c33] border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 flex flex-col shrink-0">
+          <nav className="p-2 md:p-4 flex md:flex-col overflow-x-auto md:overflow-x-visible no-scrollbar space-x-1 md:space-x-0 md:space-y-2">
             <NavButton
               active={activeTab === "assistants"}
               onClick={() => setActiveTab("assistants")}
               icon="🤖"
-              label="Asistentes (Personas)"
+              label="Asistentes"
+              fullLabel="Asistentes (Personas)"
             />
             <NavButton
               active={activeTab === "credentials"}
               onClick={() => setActiveTab("credentials")}
               icon="🔑"
-              label="Credenciales API"
+              label="Credenciales"
+              fullLabel="Credenciales API"
             />
             <NavButton
               active={activeTab === "knowledge"}
               onClick={() => setActiveTab("knowledge")}
               icon="📚"
-              label="Base de Conocimiento"
+              label="Conocimiento"
+              fullLabel="Base de Conocimiento"
             />
           </nav>
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
           {/* CREDENTIALS TAB */}
           {activeTab === "credentials" && (
             <div className="max-w-2xl mx-auto space-y-6">
@@ -263,13 +266,13 @@ export const AIAgentConfig: React.FC<Props> = () => {
             <div className="space-y-6">
               {!isEditingAssistant ? (
                 <>
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">
                       Mis Asistentes
                     </h2>
                     <button
                       onClick={handleCreateNew}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center gap-2"
+                      className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
                     >
                       <span>+</span> Nuevo Asistente
                     </button>
@@ -337,7 +340,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
                   </div>
                 </>
               ) : (
-                <div className="max-w-4xl mx-auto bg-white dark:bg-[#202c33] p-8 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg">
+                <div className="max-w-4xl mx-auto bg-white dark:bg-[#202c33] p-4 md:p-8 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg">
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white">
                       Configurar Nuevo Asistente
@@ -498,12 +501,22 @@ const NavButton: React.FC<{
   onClick: () => void;
   icon: string;
   label: string;
-}> = ({ active, onClick, icon, label }) => (
+  fullLabel?: string;
+}> = ({ active, onClick, icon, label, fullLabel }) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${active ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-bold" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"}`}
+    className={`flex-1 md:w-full flex items-center justify-center md:justify-start gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg transition-all whitespace-nowrap ${
+      active
+        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-100 dark:border-emerald-800/50"
+        : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent"
+    }`}
   >
-    <span className="text-xl">{icon}</span>
-    <span className="text-sm">{label}</span>
+    <span className="text-lg md:text-xl">{icon}</span>
+    <span className="text-xs md:text-sm hidden sm:inline md:hidden">
+      {label}
+    </span>
+    <span className="text-xs md:text-sm inline sm:hidden md:inline">
+      {fullLabel || label}
+    </span>
   </button>
 );

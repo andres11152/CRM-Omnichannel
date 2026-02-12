@@ -66,6 +66,7 @@ export interface TicketContactDTO {
 
   // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
   whatsappSessionIndex?: number;
+  whatsappSessionPhone?: string;
 }
 
 // Type that includes everything needed for mapping

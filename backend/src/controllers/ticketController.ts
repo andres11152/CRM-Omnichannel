@@ -35,16 +35,30 @@ const enrichWithCrmData = async (
   const whatsappSessions = await prisma.whatsAppSession.findMany({
     where: { companyId, status: "CONNECTED" },
     orderBy: { createdAt: "asc" },
-    select: { id: true, phone: true, sessionId: true },
+    select: { id: true, phone: true, sessionId: true, defaultQueueId: true },
   });
 
-  // Build a map of session phone -> index (1-based for user display)
-  const sessionIndexMap = new Map<string, number>();
+  // Build maps for resolution
+  const sessionIndexMap = new Map<string, number>(); // Phone -> Index
+  const queueToSessionDataMap = new Map<
+    string,
+    { index: number; phone: string | null }
+  >(); // QueueId -> {index, phone}
+
+  // 📱 Map sessions to queues and phone numbers
   whatsappSessions.forEach((session, index) => {
+    const sessionIdx = index + 1;
+
     if (session.phone) {
-      // Normalize phone (remove + and leading zeros for matching)
       const normalizedPhone = session.phone.replace(/^\+/, "");
-      sessionIndexMap.set(normalizedPhone, index + 1);
+      sessionIndexMap.set(normalizedPhone, sessionIdx);
+    }
+
+    if (session.defaultQueueId) {
+      queueToSessionDataMap.set(session.defaultQueueId, {
+        index: sessionIdx,
+        phone: session.phone,
+      });
     }
   });
 
@@ -68,16 +82,22 @@ const enrichWithCrmData = async (
       ? crmMap.get(dto.contact.phone)
       : undefined;
 
-    // 📱 Determine WhatsApp session index
-    // If we only have 1 session, always use index 1
-    // If we have multiple, try to match based on session metadata or default to 1
+    // 📱 Determine WhatsApp session index & phone
     let whatsappSessionIndex: number | undefined;
-    if (whatsappSessions.length > 0) {
+    let whatsappSessionPhone: string | undefined;
+
+    // Strategy 1: Match by Queue ID
+    if (dto.queueId && queueToSessionDataMap.has(dto.queueId)) {
+      const data = queueToSessionDataMap.get(dto.queueId);
+      whatsappSessionIndex = data?.index;
+      whatsappSessionPhone = data?.phone || undefined;
+    }
+
+    // Strategy 2: Default logic (Single Session Fallback)
+    if (!whatsappSessionIndex && whatsappSessions.length > 0) {
       if (whatsappSessions.length === 1) {
         whatsappSessionIndex = 1;
-      } else {
-        // For multi-session, default to 1 (future: can be enhanced with conversation metadata)
-        whatsappSessionIndex = 1;
+        whatsappSessionPhone = whatsappSessions[0].phone || undefined;
       }
     }
 
@@ -96,6 +116,7 @@ const enrichWithCrmData = async (
               : dto.contact.name,
           avatarUrl: crmData.avatarUrl || dto.contact.avatarUrl,
           whatsappSessionIndex, // 📱 Add session index
+          whatsappSessionPhone, // 📞 Add session phone
         },
       };
     }
@@ -105,6 +126,7 @@ const enrichWithCrmData = async (
       contact: {
         ...dto.contact,
         whatsappSessionIndex, // 📱 Add session index even without CRM data
+        whatsappSessionPhone, // 📞 Add session phone
       },
     };
   });
@@ -201,18 +223,41 @@ export const getAllTickets = catchAsync(
     if (queueId) where.queueId = queueId as string;
     if (assignedToId) where.assignedToId = assignedToId as string;
 
-    // 🛡️ 100-YEAR ENTERPRISE FIX: Role-Based Access Control
-    // Agents can see:
-    //   1. Tickets assigned TO THEM (for "My Chats")
-    //   2. Tickets that are UNASSIGNED (for "Queue" view - to pick up new work)
-    // Agents CANNOT see tickets assigned to OTHER agents (privacy/security)
+    // 🛡️ 100-YEAR ENTERPRISE FIX: Strict Role-Based Access Control (RBAC)
+    // Agents can ONLY see:
+    //   1. Tickets assigned TO THEM ("My Actives")
+    //   2. Tickets in THEIR ASSIGNED QUEUES ("My Queue")
+    //   3. NO WhatsApp Groups (Noise reduction)
     if (req.user?.role === "AGENT") {
-      where.OR = [
-        { assignedToId: req.user.id }, // Their own tickets
-        { assignedToId: null }, // Unassigned queue tickets
+      // 1. Fetch Agent's Allowed Queues
+      const agent = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { queues: { select: { id: true } } },
+      });
+      const agentQueueIds = agent?.queues.map((q) => q.id) || [];
+
+      where.AND = [
+        // 🚫 NO GROUPS: Exclude WhatsApp group chats explicitly
+        {
+          OR: [
+            { conversation: { is: null } }, // Internal tickets ok
+            { conversation: { isGroup: false } }, // 1-on-1 chats ok
+          ],
+        },
+        // 🔒 SCOPE: My Tickets OR My Queue
+        {
+          OR: [
+            { assignedToId: req.user.id }, // Assigned to me
+            {
+              assignedToId: null, // Unassigned...
+              queueId: { in: agentQueueIds }, // ...but only in my queues
+            },
+          ],
+        },
       ];
+
       console.info(
-        `[TicketController] 🔍 AGENT Query: userId=${req.user.id}, companyId=${companyId} (Own + Unassigned)`,
+        `[TicketController] 🔐 AGENT Access Scope: User=${req.user.id}, Queues=[${agentQueueIds.join(", ")}]`,
       );
     }
 
@@ -343,7 +388,7 @@ export const updateTicket = catchAsync(
     const data = req.body;
 
     // First check existence and permission
-    console.log(`[TicketController] 🛠️ Update Request for ID: '${id}'`); // Quote to see whitespace
+    console.info(`[TicketController] 🛠️ Update Request for ID: '${id}'`); // Info level
     const existingTicket = await prisma.ticket.findUnique({ where: { id } });
 
     if (!existingTicket) {
@@ -352,7 +397,7 @@ export const updateTicket = catchAsync(
       );
       return next(new AppError("Ticket not found", 404));
     }
-    console.log(
+    console.info(
       `[TicketController] ✅ Found ticket: ${existingTicket.id} (Company: ${existingTicket.companyId})`,
     );
 
@@ -480,6 +525,20 @@ export const updateTicket = catchAsync(
         needsSync = true;
       }
 
+      if (data.status !== undefined) {
+        // Enforce type compatibility since Enums match exactly
+        syncData.status = data.status as unknown as
+          | "OPEN"
+          | "IN_PROGRESS"
+          | "RESOLVED"
+          | "CLOSED";
+        needsSync = true;
+
+        if (data.status === "RESOLVED" || data.status === "CLOSED") {
+          syncData.resolvedAt = new Date();
+        }
+      }
+
       if (needsSync) {
         try {
           await prisma.conversation.update({
@@ -487,7 +546,7 @@ export const updateTicket = catchAsync(
             data: syncData,
           });
           console.info(
-            "[TicketController] ✅ Synced Conversation Assignment/Queue",
+            `[TicketController] ✅ Synced Conversation Status/Queue/Assignee for Ticket ${updatedTicket.id}`,
           );
         } catch (error) {
           console.error(

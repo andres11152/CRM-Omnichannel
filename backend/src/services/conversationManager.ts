@@ -6,6 +6,7 @@ import {
   UpdateConversationParams,
   IConversationEvents,
 } from "@/types/conversation.types";
+import { TenantContextManager } from "@/config/tenantContext";
 
 // 🛡️ 100-YEAR FIX: Exact Transaction Client Type Extraction
 // This extracts the exact type expected by the $transaction callback of our specific extended client.
@@ -147,17 +148,31 @@ export class ConversationManager {
         }
       };
 
+      // 🛡️ DANGER: Async context can be lost in transactions!
+      // We must capture it explicitly.
+      const currentContext = TenantContextManager.getContext();
+
       // Check if we can start a new transaction
       if ("$transaction" in this.prisma) {
         // Safe: Types explicitly match now via helper type
         const client = this.prisma as ExtendedPrismaClient;
-        return await client.$transaction(runInTransaction, {
-          isolationLevel: "Serializable",
-          maxWait: 5000,
-          timeout: 10000,
-        });
+        return await client.$transaction(
+          async (tx) => {
+            // 🛡️ RESTORE CONTEXT inside transaction callback
+            return TenantContextManager.run(currentContext, () =>
+              runInTransaction(tx),
+            );
+          },
+          {
+            isolationLevel: "Serializable",
+            maxWait: 5000,
+            timeout: 10000,
+          },
+        );
       } else {
-        // Already in a transaction context, just run it
+        // Already in a transaction context, context should exist, but let's be safe
+        // However, we cannot re-wrap easily if we are just calling runInTransaction directly.
+        // Assuming context flows in same async scope.
         return await runInTransaction(this.prisma as ExtendedTransactionClient);
       }
     } catch (error: unknown) {

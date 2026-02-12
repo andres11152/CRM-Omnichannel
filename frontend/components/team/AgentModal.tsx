@@ -52,16 +52,16 @@ export const AgentModal: React.FC<AgentModalProps> = ({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div className="bg-white dark:bg-[#202c33] rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-200 dark:border-gray-700 transform transition-all scale-100 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 animate-fade-in">
+      <div className="bg-white dark:bg-[#202c33] rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-200 dark:border-gray-700 transform transition-all scale-100 flex flex-col max-h-[95vh] sm:max-h-[90vh]">
         {/* Header */}
-        <div className="px-8 py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-[#2a3942]/50">
-          <h3 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+        <div className="px-5 md:px-8 py-4 md:py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-[#2a3942]/50">
+          <h3 className="text-lg md:text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
             {isEditing ? (
               <>
                 <span className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
                   <svg
-                    className="w-5 h-5"
+                    className="w-4 h-4 md:w-5 md:h-5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -80,7 +80,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               <>
                 <span className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
                   <svg
-                    className="w-5 h-5"
+                    className="w-4 h-4 md:w-5 md:h-5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -99,10 +99,10 @@ export const AgentModal: React.FC<AgentModalProps> = ({
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1.5 md:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
           >
             <svg
-              className="w-6 h-6"
+              className="w-5 h-5 md:w-6 md:h-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -118,8 +118,8 @@ export const AgentModal: React.FC<AgentModalProps> = ({
         </div>
 
         {/* Form Content - Horizontal Layout */}
-        <div className="p-8 overflow-y-auto custom-scrollbar">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <div className="p-5 md:p-8 overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
             {/* LEFT COLUMN: Identity & Access */}
             <div className="space-y-6">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100 dark:border-gray-700">
@@ -330,18 +330,18 @@ export const AgentModal: React.FC<AgentModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-[#2a3942]/30 flex justify-end gap-3 backdrop-blur-sm">
+        <div className="p-4 md:p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-[#2a3942]/30 flex flex-row justify-end gap-2 md:gap-3 backdrop-blur-sm">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:shadow-sm border border-transparent hover:border-gray-200 dark:hover:border-gray-600 rounded-xl text-sm font-bold transition-all"
+            className="flex-1 md:flex-none px-4 md:px-6 py-2.5 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 border border-transparent hover:border-gray-200 dark:hover:border-gray-600 rounded-xl text-xs md:text-sm font-bold transition-all"
           >
             Cancelar
           </button>
           <button
             onClick={onSave}
             disabled={saving}
-            className={`px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transform hover:-translate-y-0.5 transition-all flex items-center gap-2 ${
-              saving ? "opacity-70 cursor-wait transform-none" : ""
+            className={`flex-[2] md:flex-none px-4 md:px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs md:text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 ${
+              saving ? "opacity-70 cursor-wait active:scale-100" : ""
             }`}
           >
             {saving && (

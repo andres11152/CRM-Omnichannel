@@ -139,7 +139,21 @@ class ChatSyncService {
       this.emitProgress(companyId, progress);
 
       // 2. Get messages from store
-      const allMessages = this.extractMessagesFromStore(store, sinceDate);
+      // 🎯 TARGETED SYNC: If conversationId is provided (as a phone), resolve its JID and filter only that chat.
+      let targetJid: string | undefined;
+      if (request.conversationId) {
+        // This field holds the PHONE (e.g. "57300...") in this context
+        const phone = request.conversationId.replace(/\D/g, "");
+        // Try common suffixes for simple matching
+        targetJid = `${phone}@s.whatsapp.net`;
+      }
+
+      const allMessages = this.extractMessagesFromStore(
+        store,
+        sinceDate,
+        targetJid, // Pass the target filter down
+      );
+
       progress.total = Math.min(allMessages.length, limit);
       progress.messagesFound = allMessages.length;
 
@@ -261,16 +275,23 @@ class ChatSyncService {
   }
 
   /**
-   * Extract messages from Baileys store with optional date filtering.
+   * Extract messages from Baileys store with optional date and JID filtering.
    */
   private extractMessagesFromStore(
     store: SimpleStoreData,
     sinceDate?: string,
+    targetJid?: string,
   ): BaileysMessage[] {
     const allMessages: BaileysMessage[] = [];
     const sinceDateTs = sinceDate ? new Date(sinceDate).getTime() / 1000 : 0;
 
-    for (const jid of Object.keys(store.messages || {})) {
+    // 🎯 OPTIMIZATION: If targetJid is provided, only access that key.
+    // If not provided, scan all keys (full sync).
+    const jidsToScan = targetJid
+      ? [targetJid]
+      : Object.keys(store.messages || {});
+
+    for (const jid of jidsToScan) {
       const chatMessages = store.messages[jid] || [];
 
       for (const msg of chatMessages) {

@@ -158,7 +158,7 @@ export const NotificationBell: React.FC = () => {
 
       {/* Dropdown */}
       {showDropdown && (
-        <div className="absolute right-0 mt-2 w-96 bg-white dark:bg-[#202c33] rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 z-50 animate-fade-in">
+        <div className="fixed inset-x-4 top-16 mt-2 md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-96 bg-white dark:bg-[#202c33] rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 z-50 animate-fade-in origin-top-right">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <h3 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2">

@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 import {
   Inbox,
   Layers,
@@ -81,6 +82,38 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   useEffect(() => {
     activeTicketIdRef.current = activeTicketId;
   }, [activeTicketId]);
+
+  // 🔗 URL DEEP LINKING: Handle ?ticketId=xyz
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryTicketId = searchParams.get("ticketId");
+
+  useEffect(() => {
+    if (queryTicketId && tickets.length > 0) {
+      // Find ticket by ID or Conversation ID
+      const found = tickets.find(
+        (t) => t.id === queryTicketId || t.conversationId === queryTicketId,
+      );
+
+      if (found) {
+        console.log(`[AgentWorkspace] 🔗 Deep linking to ticket: ${found.id}`);
+        setActiveTicketId(found.id);
+
+        // Smart Tab Switching
+        if (found.assignedToId === user?.id) {
+          setActiveTab("my_chats");
+        } else if (found.status === "OPEN" && !found.assignedToId) {
+          setActiveTab("queue");
+        } else if (found.status === "CLOSED" || found.status === "RESOLVED") {
+          setActiveTab("resolved");
+        }
+
+        // Clear param to keep URL clean
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete("ticketId");
+        setSearchParams(newParams);
+      }
+    }
+  }, [queryTicketId, tickets, user, searchParams, setSearchParams]);
 
   // ✅ FIX: Debounced refresh to avoid overwriting optimistic updates immediately with stale data
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1029,16 +1062,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
             </div>
 
             {/* Refresh Button */}
-            <button
-              onClick={() => fetchData(true)}
-              disabled={loading}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all disabled:opacity-50"
-              title="Actualizar datos"
-            >
-              <RefreshCw
-                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-              />
-            </button>
+            {/* Refresh Button Removed by User Request */}
           </div>
 
           {/* Portal for additional actions */}

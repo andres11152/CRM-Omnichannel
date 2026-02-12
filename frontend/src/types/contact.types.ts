@@ -40,6 +40,8 @@ export interface Contact extends BaseEntity {
   channelId?: string;
   about?: string;
   realContactId?: string;
+  whatsappSessionIndex?: number; // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
+  whatsappSessionPhone?: string; // 📞 Phone number for tooltip
 
   // Runtime UI State
   lastMessage?: string;

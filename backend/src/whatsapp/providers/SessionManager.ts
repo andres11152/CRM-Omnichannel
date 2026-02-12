@@ -666,11 +666,21 @@ export class SessionManager implements ISessionManager {
         );
         return { sessionId: dbSession.sessionId, socket };
       }
+
       // Socket not in memory (server restart edge case)
       logger.warn(
         { sessionId: dbSession.sessionId },
-        "[SessionManager] DB-hit but socket missing - requires reconnect",
+        "[SessionManager] DB-hit but socket missing - Triggering Auto-Reconnect",
       );
+
+      // 🛡️ 100-YEAR FIX: Auto-Heal "Zombie" Sessions
+      // If DB says connected but we have no socket, we must reconnect.
+      // We check if it's already being reconnected to avoid loops.
+      if (!this.retryTimeouts.has(dbSession.sessionId)) {
+        this.reconnectSession(dbSession.sessionId).catch((err) =>
+          logger.error(`[SessionManager] Auto-reconnect failed: ${err}`),
+        );
+      }
     }
 
     return null;

@@ -15,9 +15,61 @@ export const assignTicketToAgent = async (
       },
     });
 
-    if (!queue || queue.type !== "ROUND_ROBIN") {
+    if (!queue) {
+      console.warn(`[AutoAssign] Queue ${queueId} not found.`);
+      return;
+    }
+
+    // 🧠 100-YEAR FIX: AI QUEUE HANDLING
+    // If Queue is AI-managed, trigger the bot immediately
+    if (queue.type === "AI" && queue.aiAssistantId) {
+      console.info(
+        `[AutoAssign] 🤖 Queue ${queue.name} is AI-managed. Triggering bot...`,
+      );
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+        include: {
+          conversation: {
+            include: {
+              messages: {
+                orderBy: { createdAt: "desc" },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+      if (ticket?.conversation?.messages?.[0]) {
+        const lastMsg = ticket.conversation.messages[0];
+        // Only trigger if last message was from user (INBOUND)
+        // to avoid AI loop or responding to itself/other agents
+        if (lastMsg.direction === "INBOUND") {
+          try {
+            // Dynamic import to avoid circular dep risks
+            const { messageProcessor } =
+              await import("./messageProcessorService");
+            await messageProcessor._handleAIAutoResponse(
+              ticket.conversationId!,
+              lastMsg.id,
+              lastMsg.content,
+              queue.companyId,
+            );
+            console.info(`[AutoAssign] ✅ AI Response Triggered successfully`);
+          } catch (err) {
+            console.error(`[AutoAssign] ❌ Failed to trigger AI response`, err);
+          }
+        } else {
+          console.info(`[AutoAssign] ⏩ Skipped AI: Last message was OUTBOUND`);
+        }
+      }
+      return; // Stop here, no agent assignment needed
+    }
+
+    if (queue.type !== "ROUND_ROBIN") {
       console.warn(
-        `[AutoAssign] Queue ${queueId} is not ROUND_ROBIN or not found.`,
+        `[AutoAssign] Queue ${queue.name} is MANUAL (or unknown type). Skipping auto-assign.`,
       );
       return;
     }

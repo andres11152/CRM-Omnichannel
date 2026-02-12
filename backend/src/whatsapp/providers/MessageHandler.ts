@@ -1252,122 +1252,147 @@ export class MessageHandler implements IMessageHandler {
     to: string,
     content: string,
     options: SendMessageOptions,
+    retries = 3, // 🛡️ 100-YEAR FIX: Retry attempts
   ): Promise<MessagePayload> {
     const { companyId, conversationId, senderId, metadata } = options;
 
-    const activeSession =
-      await this.sessionManager.findActiveSessionForCompany(companyId);
-    if (!activeSession) {
-      throw new Error(`No active WhatsApp session for company: ${companyId}`);
-    }
-    const sock = activeSession.socket;
-
-    const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
-    const generatedId = generateMessageID();
-    // 🛡️ RACE CONDITION FIX: Track ID *before* sending to prevent duplicate processing by event handler
-    this.recentSentMessageIds.add(generatedId);
-    setTimeout(() => this.recentSentMessageIds.delete(generatedId), 10000);
-
-    // 🛡️ CONTENT DEDUP: Track content to handle ID mismatch Scenarios
-    const dedupKey = this.getDedupKey(conversationId, content);
-    this.recentSentContent.add(dedupKey);
-    setTimeout(() => this.recentSentContent.delete(dedupKey), 10000);
-
-    const sentMsg = await sock.sendMessage(
-      jid,
-      { text: content },
-      { messageId: generatedId },
-    );
-    // Note: sentMsg.key.id should match generatedId if Baileys respects it.
-    // If not, we track whatever it returns (but pre-tracking relies on respect).
-
-    const mergedMeta: MessageMetadata = {
-      messageId: sentMsg?.key?.id,
-      ...metadata,
-    };
-
-    const savedMessage = await chatService.upsertMessage({
-      whatsappMessageId: sentMsg?.key?.id || `temp_${Date.now()}`,
-      companyId,
-      content,
-      direction: "OUTBOUND",
-      conversationId,
-      senderId,
-      status: "SENT",
-      metadata: prepareMetadataForDB(mergedMeta),
-    });
-
-    const isAiGenerated = metadata?.aiGenerated === true;
-    const isFlowGenerated = metadata?.flowGenerated === true;
-
-    if (!isAiGenerated && !isFlowGenerated) {
-      try {
-        await chatService.updateConversation(conversationId, {
-          aiEnabled: false,
-          lastManualIntervention: new Date(),
-        });
-        console.info(
-          `[HITL] ✅ AI muted for conversation ${conversationId} (human agent intervention)`,
-        );
-      } catch (err) {
-        console.error("[HITL] Failed to auto-mute AI:", err);
+    try {
+      const activeSession =
+        await this.sessionManager.findActiveSessionForCompany(companyId);
+      if (!activeSession) {
+        throw new Error(`No active WhatsApp session for company: ${companyId}`);
       }
-    } else {
-      console.info(
-        `[HITL] ⏩ Skipping AI mute - message is ${isAiGenerated ? "AI-generated" : "Flow-generated"}`,
+      const sock = activeSession.socket;
+
+      const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
+      const generatedId = generateMessageID();
+      // 🛡️ RACE CONDITION FIX: Track ID *before* sending to prevent duplicate processing by event handler
+      this.recentSentMessageIds.add(generatedId);
+      setTimeout(() => this.recentSentMessageIds.delete(generatedId), 10000);
+
+      // 🛡️ CONTENT DEDUP: Track content to handle ID mismatch Scenarios
+      const dedupKey = this.getDedupKey(conversationId, content);
+      this.recentSentContent.add(dedupKey);
+      setTimeout(() => this.recentSentContent.delete(dedupKey), 10000);
+
+      const sentMsg = await sock.sendMessage(
+        jid,
+        { text: content },
+        { messageId: generatedId },
       );
+      // Note: sentMsg.key.id should match generatedId if Baileys respects it.
+      // If not, we track whatever it returns (but pre-tracking relies on respect).
+
+      const mergedMeta: MessageMetadata = {
+        messageId: sentMsg?.key?.id,
+        ...metadata,
+      };
+
+      const savedMessage = await chatService.upsertMessage({
+        whatsappMessageId: sentMsg?.key?.id || `temp_${Date.now()}`,
+        companyId,
+        content,
+        direction: "OUTBOUND",
+        conversationId,
+        senderId,
+        status: "SENT",
+        metadata: prepareMetadataForDB(mergedMeta),
+      });
+
+      const isAiGenerated = metadata?.aiGenerated === true;
+      const isFlowGenerated = metadata?.flowGenerated === true;
+
+      if (!isAiGenerated && !isFlowGenerated) {
+        try {
+          await chatService.updateConversation(conversationId, {
+            aiEnabled: false,
+            lastManualIntervention: new Date(),
+          });
+          console.info(
+            `[HITL] ✅ AI muted for conversation ${conversationId} (human agent intervention)`,
+          );
+        } catch (err) {
+          console.error("[HITL] Failed to auto-mute AI:", err);
+        }
+      } else {
+        console.info(
+          `[HITL] ⏩ Skipping AI mute - message is ${
+            isAiGenerated ? "AI-generated" : "Flow-generated"
+          }`,
+        );
+      }
+
+      await chatService.updateConversation(conversationId, {});
+      const fullConv = await chatService.getFullConversation(conversationId);
+      if (fullConv) this.socketEmitter.emitMessageSent(savedMessage, fullConv);
+
+      return savedMessage as unknown as MessagePayload;
+    } catch (err: unknown) {
+      // 🛡️ RETRY LOGIC for Connection issues
+      const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
+      const isConnectionError =
+        errorMsg.includes("Connection Closed") ||
+        errorMsg.includes("Precondition Required") ||
+        errorMsg.includes("Bad MAC") ||
+        errorMsg.includes("Timed Out");
+
+      if (isConnectionError && retries > 0) {
+        console.warn(
+          `[MessageHandler] ⚠️ Send failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return this.sendMessage(to, content, options, retries - 1);
+      }
+
+      console.error("[MessageHandler] ❌ sendMessage failed final:", err);
+      throw err;
     }
-
-    await chatService.updateConversation(conversationId, {});
-    const fullConv = await chatService.getFullConversation(conversationId);
-    if (fullConv) this.socketEmitter.emitMessageSent(savedMessage, fullConv);
-
-    return savedMessage as unknown as MessagePayload;
   }
 
   async sendMedia(
     to: string,
     media: MediaPayload,
     options: SendMessageOptions,
+    retries = 3, // 🛡️ 100-YEAR FIX: Retry attempts
   ): Promise<MessagePayload> {
     const { companyId, conversationId, senderId } = options;
 
-    const activeSession =
-      await this.sessionManager.findActiveSessionForCompany(companyId);
-    if (!activeSession) {
-      throw new Error(`No active WhatsApp session for company: ${companyId}`);
-    }
-    const sock = activeSession.socket;
-
-    const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
-
-    let messageContent: AnyMessageContent;
-    let metaType: "image" | "video" | "audio" | "document";
     let tempFilePath: string | null = null;
-    if (media.url && media.url.startsWith("/api/")) {
-      const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
-      const cleanBackendUrl = backendUrl.replace(/\/$/, "");
-      media.url = `${cleanBackendUrl}${media.url}`;
-    }
-
-    const isHttp =
-      media.url.startsWith("http://") || media.url.startsWith("https://");
-    const isData = media.url.startsWith("data:");
-
-    if (!isHttp && !isData) {
-      if (!fs.existsSync(media.url)) {
-        console.error(
-          `[MessageHandler] ❌ Local media file not found: ${media.url}`,
-        );
-        const warningContent = media.caption
-          ? `${media.caption}\n\n(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`
-          : `(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`;
-
-        return this.sendMessage(to, warningContent, options);
-      }
-    }
-
     try {
+      const activeSession =
+        await this.sessionManager.findActiveSessionForCompany(companyId);
+      if (!activeSession) {
+        throw new Error(`No active WhatsApp session for company: ${companyId}`);
+      }
+      const sock = activeSession.socket;
+
+      const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
+
+      let messageContent: AnyMessageContent;
+      let metaType: "image" | "video" | "audio" | "document";
+      if (media.url && media.url.startsWith("/api/")) {
+        const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+        const cleanBackendUrl = backendUrl.replace(/\/$/, "");
+        media.url = `${cleanBackendUrl}${media.url}`;
+      }
+
+      const isHttp =
+        media.url.startsWith("http://") || media.url.startsWith("https://");
+      const isData = media.url.startsWith("data:");
+
+      if (!isHttp && !isData) {
+        if (!fs.existsSync(media.url)) {
+          console.error(
+            `[MessageHandler] ❌ Local media file not found: ${media.url}`,
+          );
+          const warningContent = media.caption
+            ? `${media.caption}\n\n(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`
+            : `(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`;
+
+          return this.sendMessage(to, warningContent, options);
+        }
+      }
+
       if (media.type === "image") {
         messageContent = { image: { url: media.url }, caption: media.caption };
         metaType = "image";
@@ -1544,7 +1569,9 @@ export class MessageHandler implements IMessageHandler {
         }
       } else {
         console.info(
-          `[HITL] ⏩ Skipping AI mute for media - ${isAiGenerated ? "AI-generated" : "Flow-generated"}`,
+          `[HITL] ⏩ Skipping AI mute for media - ${
+            isAiGenerated ? "AI-generated" : "Flow-generated"
+          }`,
         );
       }
 
@@ -1553,7 +1580,37 @@ export class MessageHandler implements IMessageHandler {
       if (fullConv) this.socketEmitter.emitMessageSent(savedMessage, fullConv);
 
       return savedMessage as unknown as MessagePayload;
-    } catch (err) {
+    } catch (err: unknown) {
+      // 🛡️ RETRY LOGIC for Connection issues
+      const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
+      const isConnectionError =
+        errorMsg.includes("Connection Closed") ||
+        errorMsg.includes("Precondition Required") ||
+        errorMsg.includes("Bad MAC") ||
+        errorMsg.includes("Timed Out");
+
+      if (isConnectionError && retries > 0) {
+        console.warn(
+          `[MessageHandler] ⚠️ SendMedia failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (tempFilePath) {
+          try {
+            // Re-convert if needed or just pass same file?
+            // Actually recursion will re-do logic.
+            // Cleanup previous temp file to prevent leak
+            await cleanupTempFile(tempFilePath);
+            tempFilePath = null; // ✅ Fix: Prevent double cleanup in finally block
+          } catch (cleanupErr) {
+            console.warn(
+              "[MessageHandler] ⚠️ Temp file cleanup failed during retry:",
+              cleanupErr,
+            );
+          }
+        }
+        return this.sendMedia(to, media, options, retries - 1);
+      }
+
       console.error(`[MessageHandler] ❌ sendMedia failed unexpectedly:`, err);
       const warningContent = `(⚠️ Error enviando archivo multimedia: ${media.type})`;
       return this.sendMessage(to, warningContent, options);

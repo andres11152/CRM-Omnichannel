@@ -51,32 +51,181 @@ export const TeamTable: React.FC<TeamTableProps> = ({
   }
 
   return (
-    <div className="bg-white dark:bg-[#202c33] rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-      <table className="w-full text-left border-collapse">
-        <thead className="bg-gray-50 dark:bg-[#111b21] text-gray-500 dark:text-gray-400 text-xs uppercase font-bold tracking-wider">
-          <tr>
-            <th className="px-6 py-4">Agente</th>
-            <th className="px-6 py-4">Estado</th>
-            <th className="px-6 py-4">Carga Actual</th>
-            <th className="px-6 py-4">Rendimiento (Hoy)</th>
-            <th className="px-6 py-4">Conectado</th>
-            <th className="px-6 py-4">Tiempo Total (Hoy)</th>
-            <th className="px-6 py-4">Velocidad (FRT)</th>
-            <th className="px-6 py-4 text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-          {agents.map((agent) => (
-            <TeamTableRow
-              key={agent.id}
-              agent={agent}
-              currentUser={currentUser}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-4">
+      {/* 🖥️ DESKTOP TABLE VIEW */}
+      <div className="hidden lg:block bg-white dark:bg-[#202c33] rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-gray-50 dark:bg-[#111b21] text-gray-500 dark:text-gray-400 text-xs uppercase font-bold tracking-wider">
+            <tr>
+              <th className="px-6 py-4">Agente</th>
+              <th className="px-6 py-4">Estado</th>
+              <th className="px-6 py-4">Carga Actual</th>
+              <th className="px-6 py-4">Rendimiento (Hoy)</th>
+              <th className="px-6 py-4">Conectado</th>
+              <th className="px-6 py-4">Tiempo Total (Hoy)</th>
+              <th className="px-6 py-4">Velocidad (FRT)</th>
+              <th className="px-6 py-4 text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            {agents.map((agent) => (
+              <TeamTableRow
+                key={agent.id}
+                agent={agent}
+                currentUser={currentUser}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 📱 MOBILE CARD VIEW */}
+      <div className="lg:hidden space-y-3">
+        {agents.map((agent) => (
+          <div
+            key={agent.id}
+            className="bg-white dark:bg-[#1f2937] p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4"
+          >
+            {/* Header: Avatar, Name, Status */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <img
+                  src={
+                    agent.avatar ||
+                    `https://ui-avatars.com/api/?name=${agent.name}&background=random`
+                  }
+                  alt=""
+                  className="w-12 h-12 rounded-full object-cover border border-gray-100 dark:border-gray-700"
+                />
+                <div>
+                  <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                    {agent.isOwner && "👑"}
+                    {agent.name}
+                  </h4>
+                  <p className="text-[10px] text-gray-500 truncate max-w-[150px]">
+                    {agent.email}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {agent.role === "Admin" ? (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 uppercase tracking-wide">
+                        ADMIN
+                      </span>
+                    ) : agent.role === "Supervisor" ? (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 uppercase tracking-wide">
+                        SUP
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-gray-100 text-gray-600">
+                        AGENT
+                      </span>
+                    )}
+                    {agent.isAI && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-100 text-emerald-700 uppercase">
+                        🤖 IA
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-end gap-2">
+                <div
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    agent.status === "online"
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  <span
+                    className={`w-1 h-1 rounded-full ${agent.status === "online" ? "bg-green-500" : "bg-gray-400"}`}
+                  ></span>
+                  {agent.status.toUpperCase()}
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => onEdit(agent)}
+                    className="p-1.5 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => onDelete(agent.id, agent.name)}
+                    disabled={agent.isOwner || agent.id === currentUser?.id}
+                    className={`p-1.5 rounded-lg ${agent.isOwner ? "text-gray-300 bg-gray-50" : "text-red-600 bg-red-50 dark:bg-red-900/20"}`}
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics Grid for Mobile */}
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-50 dark:border-gray-800">
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold">
+                  Carga
+                </p>
+                <p className="text-xs font-bold text-gray-700 dark:text-gray-200">
+                  {agent.currentLoad} / {agent.maxCapacity}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold">
+                  Resueltos
+                </p>
+                <p className="text-xs font-bold text-gray-700 dark:text-gray-200">
+                  {agent.performance.resolved}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold">
+                  Tiempo Online
+                </p>
+                <p className="text-xs font-bold text-indigo-600">
+                  <LiveTimer
+                    initialSeconds={agent.totalOnlineSeconds || 0}
+                    isActive={agent.status === "online"}
+                  />
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold">
+                  CSAT Prom
+                </p>
+                <p className="text-xs font-bold text-yellow-500">
+                  {agent.performance.csat.toFixed(1)} ⭐
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

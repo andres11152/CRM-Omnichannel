@@ -470,101 +470,142 @@ export const CompanySettings: React.FC = () => {
                 Información General
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Logo */}
-                <div className="col-span-2 flex justify-center mb-4">
-                  <div className="text-center">
-                    <img
-                      src={settings.general.logo}
-                      className="w-24 h-24 rounded-full mx-auto mb-2 border-4 border-gray-100 dark:border-gray-700 object-cover"
-                      alt="Logo"
-                    />
+                {/* Logo Section */}
+                <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-black/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700/50 mb-4">
+                  <div className="relative group">
+                    <div className="w-32 h-32 rounded-2xl overflow-hidden border-4 border-white dark:border-gray-800 shadow-xl relative">
+                      <img
+                        src={
+                          settings.general.logo ||
+                          "https://ui-avatars.com/api/?name=Company&background=random"
+                        }
+                        className="w-full h-full object-cover"
+                        alt="Logo"
+                      />
+                      {uploadingImage && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                    </div>
                     {/* Logo Picker Trigger */}
                     <button
                       onClick={() => {
                         setPickerTarget("company");
                         setPickerOpen(true);
                       }}
-                      className="text-xs text-indigo-500 font-bold hover:underline"
+                      className="absolute -bottom-3 -right-3 p-2.5 bg-indigo-600 text-white rounded-xl shadow-lg border-2 border-white dark:border-gray-800 hover:bg-indigo-700 transition-all active:scale-90"
                     >
-                      CAMBIAR LOGO
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
                     </button>
+                  </div>
+                  <div className="mt-4 text-center">
+                    <h4 className="text-sm font-bold text-gray-800 dark:text-white uppercase tracking-wider">
+                      Logo de la Empresa
+                    </h4>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Recomendado: 512x512px (PNG/JPG)
+                    </p>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Nombre de la Empresa
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block uppercase tracking-tight">
+                      Nombre de la Empresa
+                    </span>
+                    <input
+                      type="text"
+                      value={settings.general.name}
+                      onChange={(e) =>
+                        updateSetting("general", "name", e.target.value)
+                      }
+                      className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    />
                   </label>
-                  <input
-                    type="text"
-                    value={settings.general.name}
-                    onChange={(e) =>
-                      updateSetting("general", "name", e.target.value)
-                    }
-                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
-                  />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Sitio Web
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block uppercase tracking-tight">
+                      Sitio Web
+                    </span>
+                    <input
+                      type="url"
+                      value={settings.general.website}
+                      onChange={(e) =>
+                        updateSetting("general", "website", e.target.value)
+                      }
+                      className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                      placeholder="https://ejemplo.com"
+                    />
                   </label>
-                  <input
-                    type="url"
-                    value={settings.general.website}
-                    onChange={(e) =>
-                      updateSetting("general", "website", e.target.value)
-                    }
-                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
-                  />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Teléfono de Contacto
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block uppercase tracking-tight">
+                      Teléfono Corporativo
+                    </span>
+                    <input
+                      type="tel"
+                      value={settings.general.phone}
+                      onChange={(e) =>
+                        updateSetting("general", "phone", e.target.value)
+                      }
+                      className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    />
                   </label>
-                  <input
-                    type="tel"
-                    value={settings.general.phone}
-                    onChange={(e) =>
-                      updateSetting("general", "phone", e.target.value)
-                    }
-                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
-                  />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Zona Horaria
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block uppercase tracking-tight">
+                      Zona Horaria
+                    </span>
+                    <select
+                      value={settings.general.timezone}
+                      onChange={(e) =>
+                        updateSetting("general", "timezone", e.target.value)
+                      }
+                      className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none appearance-none"
+                    >
+                      <option value="America/Bogota">Bogotá (GMT-5)</option>
+                      <option value="America/Mexico_City">CDMX (GMT-6)</option>
+                      <option value="America/New_York">New York (GMT-5)</option>
+                      <option value="UTC">UTC (GMT+0)</option>
+                    </select>
                   </label>
-                  <select
-                    value={settings.general.timezone}
-                    onChange={(e) =>
-                      updateSetting("general", "timezone", e.target.value)
-                    }
-                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
-                  >
-                    <option value="America/Bogota">
-                      America/Bogota (GMT-5)
-                    </option>
-                    <option value="America/Mexico_City">
-                      America/Mexico_City (GMT-6)
-                    </option>
-                    <option value="America/New_York">
-                      America/New_York (GMT-5)
-                    </option>
-                    <option value="UTC">UTC (GMT+0)</option>
-                  </select>
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Dirección Física
+                <div className="col-span-1 md:col-span-2 space-y-4">
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block uppercase tracking-tight">
+                      Dirección Principal
+                    </span>
+                    <input
+                      type="text"
+                      value={settings.general.address}
+                      onChange={(e) =>
+                        updateSetting("general", "address", e.target.value)
+                      }
+                      className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    />
                   </label>
-                  <input
-                    type="text"
-                    value={settings.general.address}
-                    onChange={(e) =>
-                      updateSetting("general", "address", e.target.value)
-                    }
-                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
-                  />
                 </div>
               </div>
             </div>
@@ -574,89 +615,103 @@ export const CompanySettings: React.FC = () => {
       case "hours":
         return (
           <div className="space-y-6 animate-fadeIn">
-            <div className="bg-white dark:bg-[#202c33] p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-                  Horario de Atención
-                </h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">
-                    Habilitar Horarios
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={settings.businessHours.enabled}
-                    className="toggle"
-                    onChange={(e) =>
-                      updateSetting(
-                        "businessHours",
-                        "enabled",
-                        e.target.checked,
-                      )
-                    }
-                  />
+            <div className="bg-white dark:bg-[#202c33] p-5 md:p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+                    Horario de Atención
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Define cuándo tu equipo está disponible para responder.
+                  </p>
                 </div>
+                <label className="inline-flex items-center cursor-pointer group">
+                  <span className="mr-3 text-sm font-bold text-gray-700 dark:text-gray-400 group-hover:text-indigo-600 transition-colors">
+                    Estado del Horario
+                  </span>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={settings.businessHours.enabled}
+                      onChange={(e) =>
+                        updateSetting(
+                          "businessHours",
+                          "enabled",
+                          e.target.checked,
+                        )
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                  </div>
+                </label>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3 bg-gray-50 dark:bg-black/20 p-4 md:p-6 rounded-2xl">
                 {["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map(
                   (day) => {
                     const dayKey =
                       day as keyof typeof settings.businessHours.schedule;
                     // @ts-ignore
                     const dayConfig = settings.businessHours.schedule[dayKey];
+                    const dayNames = {
+                      mon: "Lunes",
+                      tue: "Martes",
+                      wed: "Miércoles",
+                      thu: "Jueves",
+                      fri: "Viernes",
+                      sat: "Sábado",
+                      sun: "Domingo",
+                    };
 
                     return (
                       <div
                         key={day}
-                        className="flex items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
+                        className={`flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl transition-all ${dayConfig.active ? "bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700" : "opacity-60 underline-offset-4"}`}
                       >
-                        <div className="w-24 text-sm font-bold uppercase text-gray-500 dark:text-gray-400">
-                          {day === "mon"
-                            ? "Lunes"
-                            : day === "tue"
-                              ? "Martes"
-                              : day === "wed"
-                                ? "Miércoles"
-                                : day === "thu"
-                                  ? "Jueves"
-                                  : day === "fri"
-                                    ? "Viernes"
-                                    : day === "sat"
-                                      ? "Sábado"
-                                      : "Domingo"}
+                        <div className="flex items-center gap-3 min-w-[120px]">
+                          <input
+                            type="checkbox"
+                            checked={dayConfig.active}
+                            onChange={(e) =>
+                              updateBusinessHour(
+                                day,
+                                "active",
+                                e.target.checked,
+                              )
+                            }
+                            className="w-5 h-5 rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                          <span
+                            className={`text-sm font-bold ${dayConfig.active ? "text-gray-900 dark:text-white" : "text-gray-400"}`}
+                          >
+                            {dayNames[dayKey]}
+                          </span>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={dayConfig.active}
-                          className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          onChange={(e) =>
-                            updateBusinessHour(day, "active", e.target.checked)
-                          }
-                        />
+
                         {dayConfig.active ? (
-                          <>
+                          <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-900 p-1.5 rounded-lg border border-gray-100 dark:border-gray-800">
                             <input
                               type="time"
                               value={dayConfig.open}
                               onChange={(e) =>
                                 updateBusinessHour(day, "open", e.target.value)
                               }
-                              className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-[#111b21] text-sm text-gray-900 dark:text-white"
+                              className="bg-transparent text-sm font-bold text-indigo-600 focus:outline-none px-1"
                             />
-                            <span className="text-gray-400">-</span>
+                            <span className="text-gray-400 px-1">a</span>
                             <input
                               type="time"
                               value={dayConfig.close}
                               onChange={(e) =>
                                 updateBusinessHour(day, "close", e.target.value)
                               }
-                              className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-[#111b21] text-sm text-gray-900 dark:text-white"
+                              className="bg-transparent text-sm font-bold text-indigo-600 focus:outline-none px-1"
                             />
-                          </>
+                          </div>
                         ) : (
-                          <span className="text-xs text-gray-400 italic">
-                            Cerrado
+                          <span className="text-xs font-medium text-gray-400 uppercase tracking-widest bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-full">
+                            No Laboral
                           </span>
                         )}
                       </div>
@@ -671,43 +726,99 @@ export const CompanySettings: React.FC = () => {
       case "automation":
         return (
           <div className="space-y-6 animate-fadeIn">
-            <div className="bg-white dark:bg-[#202c33] p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
-                Mensaje de Bienvenida
-              </h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Se envía automáticamente cuando un cliente escribe por primera
-                vez (o después de 24h).
+            {/* Welcome Message Card */}
+            <div className="bg-white dark:bg-[#202c33] p-5 md:p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm relative group overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                <svg
+                  className="w-24 h-24 text-emerald-500"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" />
+                </svg>
+              </div>
+              <div className="flex items-center gap-3 mb-4 relative z-10">
+                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                  Respuesta de Bienvenida
+                </h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                Este mensaje se enviará automáticamente a nuevos contactos o
+                tras 24h de inactividad.
               </p>
               <textarea
-                className="w-full h-24 border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-sm bg-white dark:bg-[#111b21] text-gray-900 dark:text-white"
+                className="w-full h-32 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 text-sm bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none resize-none no-scrollbar font-medium"
                 value={settings.automation.welcomeMessage}
                 onChange={(e) =>
                   updateSetting("automation", "welcomeMessage", e.target.value)
                 }
+                placeholder="Hola! Gracias por contactarnos..."
               ></textarea>
             </div>
 
-            <div className="bg-white dark:bg-[#202c33] p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-                  Respuesta de Ausencia (OOO)
-                </h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                    AUTO
-                  </span>
-                </div>
+            {/* OOO Message Card */}
+            <div className="bg-white dark:bg-[#202c33] p-5 md:p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm relative group overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                <svg
+                  className="w-24 h-24 text-amber-500"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+                </svg>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
-                Se envía cuando escriben fuera del horario laboral configurado.
+              <div className="flex justify-between items-center mb-4 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                    Horario de Ausencia (OOO)
+                  </h3>
+                </div>
+                <span className="text-[10px] items-center gap-1 font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase hidden sm:flex">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>{" "}
+                  Sistema Auto
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                Se envía automáticamente cuando un cliente escribe fuera de tu
+                horario laboral configurado.
               </p>
               <textarea
-                className="w-full h-24 border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-sm bg-white dark:bg-[#111b21] text-gray-900 dark:text-white"
+                className="w-full h-32 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 text-sm bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none resize-none no-scrollbar font-medium"
                 value={settings.automation.oooMessage}
                 onChange={(e) =>
                   updateSetting("automation", "oooMessage", e.target.value)
                 }
+                placeholder="Lo sentimos, en este momento no estamos disponibles..."
               ></textarea>
             </div>
 
@@ -1121,41 +1232,152 @@ export const CompanySettings: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-[#202c33] p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
-                Información del Remitente
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-[#202c33] p-5 md:p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
+              <div className="flex justify-between items-center mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Nombre para Mostrar
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+                    Servidor SMTP
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Configura el envío de correos desde tu propio dominio.
+                  </p>
+                </div>
+                <div className="hidden sm:block px-3 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                  {settings.smtp.host ? "Personalizado" : "Sistema"}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* SMTP Config Grid */}
+                <div className="space-y-4 col-span-1 md:col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                        Host SMTP
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="smtp.dominio.com"
+                        value={settings.smtp.host}
+                        onChange={(e) =>
+                          updateSetting("smtp", "host", e.target.value)
+                        }
+                        className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                        Puerto
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="587"
+                        value={settings.smtp.port}
+                        onChange={(e) =>
+                          updateSetting(
+                            "smtp",
+                            "port",
+                            parseInt(e.target.value),
+                          )
+                        }
+                        className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                    Usuario / Email
                   </label>
                   <input
                     type="text"
-                    placeholder="ej. Soporte Ventas"
-                    value={settings.smtp.senderName}
+                    placeholder="usuario@dominio.com"
+                    value={settings.smtp.user}
                     onChange={(e) =>
-                      updateSetting("smtp", "senderName", e.target.value)
+                      updateSetting("smtp", "user", e.target.value)
                     }
-                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
+                    className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Email del Remitente
+
+                <div className="space-y-4">
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                    Contraseña
                   </label>
                   <input
-                    type="email"
-                    placeholder="ej. contacto@miempresa.com"
-                    value={settings.smtp.senderEmail}
+                    type="password"
+                    placeholder="••••••••"
+                    value={settings.smtp.password}
                     onChange={(e) =>
-                      updateSetting("smtp", "senderEmail", e.target.value)
+                      updateSetting("smtp", "password", e.target.value)
                     }
-                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
+                    className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Debe coincidir o estar autorizado por tu servidor SMTP.
-                  </p>
+                </div>
+
+                <div className="col-span-1 md:col-span-2 border-t border-gray-100 dark:border-gray-800 pt-5 mt-2">
+                  <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-tighter">
+                    Identidad del Remitente
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                        Nombre a Mostrar
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Replie Soporte"
+                        value={settings.smtp.senderName}
+                        onChange={(e) =>
+                          updateSetting("smtp", "senderName", e.target.value)
+                        }
+                        className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                        Email Remitente
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="noreply@tuempresa.com"
+                        value={settings.smtp.senderEmail}
+                        onChange={(e) =>
+                          updateSetting("smtp", "senderEmail", e.target.value)
+                        }
+                        className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Test Connection Button */}
+                <div className="col-span-1 md:col-span-2 flex justify-center pt-4">
+                  <button
+                    onClick={handleTestEmail}
+                    disabled={testingConnection}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all ${testingConnection ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"}`}
+                  >
+                    {testingConnection ? (
+                      <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
+                      </svg>
+                    )}
+                    <span>Probar Conexión SMTP</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1164,45 +1386,99 @@ export const CompanySettings: React.FC = () => {
 
       case "security":
         return (
-          <div className="bg-white dark:bg-[#202c33] p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm animate-fadeIn">
-            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6">
-              Cambiar Contraseña
-            </h3>
-            <div className="max-w-md space-y-4">
-              <input
-                type="password"
-                placeholder="Contraseña Actual"
-                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
-                value={passwords.current}
-                onChange={(e) =>
-                  setPasswords({ ...passwords, current: e.target.value })
-                }
-              />
-              <input
-                type="password"
-                placeholder="Nueva Contraseña"
-                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
-                value={passwords.new}
-                onChange={(e) =>
-                  setPasswords({ ...passwords, new: e.target.value })
-                }
-              />
-              <input
-                type="password"
-                placeholder="Confirmar Contraseña"
-                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-900 dark:text-white"
-                value={passwords.confirm}
-                onChange={(e) =>
-                  setPasswords({ ...passwords, confirm: e.target.value })
-                }
-              />
-              <button
-                className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded-lg text-sm font-bold"
-                onClick={handleSave}
-              >
-                Actualizar Seguridad
-              </button>
-              {/* Hidden button to prevent double submit confusion, handleSave covers it */}
+          <div className="bg-white dark:bg-[#202c33] p-6 md:p-10 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm animate-fadeIn max-w-2xl mx-auto">
+            <div className="flex flex-col items-center text-center mb-8">
+              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mb-4">
+                <svg
+                  className="w-8 h-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+                Seguridad de la Cuenta
+              </h3>
+              <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                Protege el acceso a tu plataforma. Te recomendamos usar
+                contraseñas fuertes y únicas.
+              </p>
+            </div>
+
+            <div className="space-y-4 max-w-md mx-auto">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                  Contraseña Actual
+                </label>
+                <input
+                  type="password"
+                  placeholder="Contraseña Actual"
+                  className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all"
+                  value={passwords.current}
+                  onChange={(e) =>
+                    setPasswords({ ...passwords, current: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                  Nueva Contraseña
+                </label>
+                <input
+                  type="password"
+                  placeholder="Mínimo 8 caracteres"
+                  className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all"
+                  value={passwords.new}
+                  onChange={(e) =>
+                    setPasswords({ ...passwords, new: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                  Confirmar Nueva Contraseña
+                </label>
+                <input
+                  type="password"
+                  placeholder="Repite la contraseña"
+                  className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all"
+                  value={passwords.confirm}
+                  onChange={(e) =>
+                    setPasswords({ ...passwords, confirm: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="pt-4">
+                <button
+                  disabled={loading || !passwords.new}
+                  className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 ${loading || !passwords.new ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-red-600 text-white hover:bg-red-700 active:scale-95 shadow-red-500/30"}`}
+                  onClick={handleSave}
+                >
+                  {loading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    "Actualizar Contraseña"
+                  )}
+                </button>
+              </div>
+
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700 mt-6">
+                <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-2">
+                  Tip de Seguridad
+                </h4>
+                <p className="text-[11px] text-gray-500 leading-tight italic">
+                  "Usa una combinación de letras, números y caracteres
+                  especiales. No compartas nunca tu contraseña con terceros."
+                </p>
+              </div>
             </div>
           </div>
         );
@@ -1243,8 +1519,7 @@ export const CompanySettings: React.FC = () => {
 
       <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
         {/* Sidebar Tabs */}
-        <div className="w-full md:w-64 bg-white dark:bg-[#111b21] border-r border-gray-200 dark:border-gray-700 flex flex-row md:flex-col overflow-x-auto md:overflow-visible">
-          {/* Profile Tab Removed */}
+        <div className="w-full md:w-64 bg-white dark:bg-[#111b21] border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 flex flex-row md:flex-col overflow-x-auto md:overflow-visible no-scrollbar shrink-0">
           <NavButton
             active={activeTab === "general"}
             onClick={() => setActiveTab("general")}
@@ -1271,7 +1546,8 @@ export const CompanySettings: React.FC = () => {
             icon={
               <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             }
-            label="Email / SMTP"
+            label="Email"
+            fullLabel="Email / SMTP"
           />
           <NavButton
             active={activeTab === "security"}
@@ -1293,12 +1569,7 @@ export const CompanySettings: React.FC = () => {
             active={activeTab === "sound"}
             onClick={() => setActiveTab("sound")}
             icon={
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-              />
+              <path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
             }
             label="Sonido"
           />
@@ -1306,14 +1577,10 @@ export const CompanySettings: React.FC = () => {
             active={activeTab === "permissions"}
             onClick={() => setActiveTab("permissions")}
             icon={
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-              />
+              <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             }
-            label="Permisos"
+            label="Roles"
+            fullLabel="Roles y Permisos"
           />
         </div>
 
@@ -1665,38 +1932,19 @@ export const CompanySettings: React.FC = () => {
             </div>
           </div>
 
-          {/* Fixed Footer Bar */}
-          <div className="bg-white dark:bg-[#111b21] p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20 sticky bottom-0">
+          {/* Fixed Footer Bar - Responsive */}
+          <div className="bg-white/80 dark:bg-[#111b21]/80 backdrop-blur-md p-4 md:p-5 border-t border-gray-200 dark:border-gray-700 flex justify-center md:justify-end items-center shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-20 sticky bottom-0">
             <button
               onClick={handleSave}
               disabled={loading}
-              className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2 text-sm"
+              className="w-full md:w-auto bg-indigo-600 text-white px-10 py-3 rounded-2xl font-bold shadow-xl shadow-indigo-500/30 hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-3 text-sm md:text-base group"
             >
               {loading ? (
-                <svg
-                  className="animate-spin h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 <>
                   <svg
-                    className="w-5 h-5"
+                    className="w-5 h-5 group-hover:rotate-12 transition-transform"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -1708,7 +1956,7 @@ export const CompanySettings: React.FC = () => {
                       d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  Guardar Cambios
+                  <span>Guardar Cambios</span>
                 </>
               )}
             </button>
@@ -1725,23 +1973,25 @@ const NavButton: React.FC<{
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
-}> = ({ active, onClick, icon, label }) => (
+  fullLabel?: string;
+}> = ({ active, onClick, icon, label, fullLabel }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-3 px-6 py-4 w-full text-left transition-colors border-l-4 ${
+    className={`flex-none md:w-full flex items-center justify-center md:justify-start gap-3 px-5 md:px-6 py-4 transition-all border-b-2 md:border-b-0 md:border-l-4 whitespace-nowrap ${
       active
-        ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-600"
-        : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 border-transparent"
+        ? "bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 border-indigo-600 font-bold"
+        : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 border-transparent hover:text-gray-700 dark:hover:text-gray-200"
     }`}
   >
     <svg
-      className={`w-5 h-5 ${active ? "text-indigo-600" : "text-gray-400"}`}
+      className={`w-5 h-5 shrink-0 ${active ? "text-indigo-600 dark:text-indigo-400" : "text-gray-400"}`}
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
     >
       {icon}
     </svg>
-    <span className="font-medium text-sm hidden md:block">{label}</span>
+    <span className="text-sm md:hidden">{label}</span>
+    <span className="text-sm hidden md:block">{fullLabel || label}</span>
   </button>
 );

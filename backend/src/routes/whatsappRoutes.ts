@@ -25,5 +25,6 @@ router.post(
 router.post("/sync", chatSyncController.triggerSync);
 router.get("/sync/status", chatSyncController.getSyncStatus);
 router.post("/sync/quick", chatSyncController.quickSync);
+router.post("/sync/conversation/:phone", chatSyncController.syncConversation);
 
 export default router;

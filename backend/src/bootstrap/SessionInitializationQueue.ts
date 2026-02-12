@@ -3,14 +3,9 @@ import { Redis } from "ioredis";
 import { whatsappService } from "@/whatsapp";
 import { prisma } from "@/config/database";
 import pino from "pino";
+import type { SessionInitJobData } from "@/types/queue.types";
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
-
-interface SessionInitJob {
-  sessionId: string;
-  companyId: string;
-  authDir: string;
-}
 
 /**
  * SESSION INITIALIZATION QUEUE
@@ -23,8 +18,8 @@ interface SessionInitJob {
  * - Memory-efficient streaming (no array accumulation)
  */
 export class SessionInitializationQueue {
-  private queue: Queue<SessionInitJob>;
-  private worker: Worker<SessionInitJob>;
+  private queue: Queue<SessionInitJobData>;
+  private worker: Worker<SessionInitJobData>;
   private queueEvents: QueueEvents;
   private connection: Redis;
 
@@ -37,7 +32,7 @@ export class SessionInitializationQueue {
       enableReadyCheck: false,
     });
 
-    this.queue = new Queue<SessionInitJob>("session-initialization", {
+    this.queue = new Queue<SessionInitJobData>("session-initialization", {
       connection: this.connection,
       defaultJobOptions: {
         attempts: 3,
@@ -60,9 +55,9 @@ export class SessionInitializationQueue {
     });
 
     // Setup worker with concurrency control
-    this.worker = new Worker<SessionInitJob>(
+    this.worker = new Worker<SessionInitJobData>(
       "session-initialization",
-      async (job: Job<SessionInitJob>) => {
+      async (job: Job<SessionInitJobData>) => {
         return this.processSessionInit(job);
       },
       {
@@ -91,7 +86,7 @@ export class SessionInitializationQueue {
         {
           jobId: job?.id,
           sessionId: job?.data?.sessionId,
-          error: err.message,
+          err,
           attempts: job?.attemptsMade,
         },
         "[SessionQueue] Job failed",
@@ -99,7 +94,7 @@ export class SessionInitializationQueue {
     });
 
     this.worker.on("error", (err) => {
-      logger.error({ error: err.message }, "[SessionQueue] Worker error");
+      logger.error({ err }, "[SessionQueue] Worker error");
     });
 
     this.queueEvents.on("completed", ({ jobId }) => {
@@ -107,7 +102,9 @@ export class SessionInitializationQueue {
     });
   }
 
-  private async processSessionInit(job: Job<SessionInitJob>): Promise<void> {
+  private async processSessionInit(
+    job: Job<SessionInitJobData>,
+  ): Promise<void> {
     const { sessionId, companyId, authDir } = job.data;
 
     logger.info(
@@ -125,12 +122,13 @@ export class SessionInitializationQueue {
         { sessionId },
         "[SessionQueue] Session initialized successfully",
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
       logger.error(
-        { sessionId, error: error.message },
+        { sessionId, err },
         "[SessionQueue] Failed to initialize session",
       );
-      throw error; // Re-throw to trigger retry
+      throw err; // Re-throw to trigger retry
     }
   }
 
@@ -208,12 +206,10 @@ export class SessionInitializationQueue {
         { totalProcessed: processed, totalQueued: queued },
         "[SessionQueue] All sessions queued successfully",
       );
-    } catch (error: any) {
-      logger.error(
-        { error: error.message },
-        "[SessionQueue] Error queuing sessions",
-      );
-      throw error;
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error({ err }, "[SessionQueue] Error queuing sessions");
+      throw err;
     }
   }
 

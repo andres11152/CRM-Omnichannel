@@ -169,7 +169,12 @@ const createExtendedClient = () => {
           // Inject companyId
           const injectCompanyId = (target: unknown) => {
             if (target && typeof target === "object" && target !== null) {
-              (target as Record<string, unknown>).companyId = companyId;
+              const record = target as Record<string, unknown>;
+              // If company relation 'connect' is already present, do not inject scalar companyId
+              // to avoid 'Unknown argument' error in Prisma.
+              if (!record.company) {
+                record.companyId = companyId;
+              }
             }
           };
 

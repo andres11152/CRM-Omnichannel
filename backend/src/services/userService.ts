@@ -288,6 +288,10 @@ export const userService = {
       Object.values(UserRole).includes(filters.role as UserRole)
     ) {
       where.role = filters.role as UserRole;
+    } else {
+      // 🛡️ 100-YEAR FIX: Global MASTER Exclusion
+      // Master users (God Mode) should never appear in standard lists (transfer, admin views, etc.)
+      where.role = { not: UserRole.MASTER };
     }
 
     // 🛡️ 100-YEAR FIX: Exclude System Bots (Flow/AI Agents)

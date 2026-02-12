@@ -35,7 +35,7 @@ const baseDealFields = {
     .string()
     .length(
       3,
-      "Currency code must be exactly 3 characters (e.g., USD, EUR, COP)"
+      "Currency code must be exactly 3 characters (e.g., USD, EUR, COP)",
     )
     .toUpperCase()
     .regex(/^[A-Z]{3}$/, "Invalid currency code format")
@@ -166,19 +166,18 @@ export const GetDealsSchema = z.object({
     pipelineId: z.string().cuid().optional(),
     stageId: z.string().cuid().optional(),
     contactId: z.string().cuid().optional(),
+    accountId: z.string().cuid().optional(),
     assignedToId: z.string().cuid().optional(),
     limit: z
-      .string()
-      .transform((val) => parseInt(val))
-      .pipe(z.number().min(1).max(100))
-      .optional()
-      .default("50"),
+      .union([z.string(), z.number()])
+      .default(50)
+      .transform((val) => (typeof val === "string" ? parseInt(val, 10) : val))
+      .pipe(z.number().min(1).max(100)),
     offset: z
-      .string()
-      .transform((val) => parseInt(val))
-      .pipe(z.number().min(0))
-      .optional()
-      .default("0"),
+      .union([z.string(), z.number()])
+      .default(0)
+      .transform((val) => (typeof val === "string" ? parseInt(val, 10) : val))
+      .pipe(z.number().min(0)),
   }),
 });
 

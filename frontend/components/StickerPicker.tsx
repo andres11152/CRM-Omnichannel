@@ -71,9 +71,9 @@ export const StickerPicker: React.FC<StickerPickerProps> = ({
   );
 
   return (
-    <div className="absolute bottom-full left-0 mb-3 ml-2 w-[350px] h-[450px] bg-white/95 dark:bg-[#1f2c34]/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col z-50 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-2 duration-200 origin-bottom-left">
+    <div className="absolute bottom-full left-0 mb-3 ml-2 w-[calc(100vw-24px)] xs:w-[320px] sm:w-[350px] h-[60vh] xs:h-[400px] sm:h-[450px] bg-white/95 dark:bg-[#1f2c34]/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col z-50 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-2 duration-200 origin-bottom-left">
       {/* Premium Header Tabs */}
-      <div className="flex items-center gap-2 p-2 bg-gray-50/50 dark:bg-[#111b21]/50 border-b border-gray-100 dark:border-gray-800">
+      <div className="flex items-center gap-1.5 p-1.5 sm:p-2 bg-gray-50/50 dark:bg-[#111b21]/50 border-b border-gray-100 dark:border-gray-800">
         <div className="flex-1 flex bg-gray-200/50 dark:bg-gray-800/50 p-1 rounded-xl">
           <button
             onClick={() => setActiveTab("emoji")}
@@ -123,7 +123,7 @@ export const StickerPicker: React.FC<StickerPickerProps> = ({
         ) : (
           <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0b141a]">
             {/* Sticker Search Bar */}
-            <div className="p-3 bg-white dark:bg-[#1f2c34] border-b border-gray-100 dark:border-gray-800">
+            <div className="p-2 sm:p-3 bg-white dark:bg-[#1f2c34] border-b border-gray-100 dark:border-gray-800">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                 <input
@@ -137,7 +137,7 @@ export const StickerPicker: React.FC<StickerPickerProps> = ({
             </div>
 
             {/* Sticker Grid */}
-            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-2 sm:p-3 custom-scrollbar">
               {loading ? (
                 <div className="flex justify-center p-8">
                   <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -155,7 +155,7 @@ export const StickerPicker: React.FC<StickerPickerProps> = ({
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-4 gap-2 sm:gap-3">
                   {filteredStickers.map((sticker) => (
                     <div
                       key={sticker.id}

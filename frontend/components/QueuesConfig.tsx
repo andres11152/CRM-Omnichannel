@@ -453,7 +453,6 @@ const QueuesConfig: React.FC = () => {
                     <option value="ROUND_ROBIN">
                       Automática (Round Robin)
                     </option>
-                    <option value="AI">Agente IA</option>
                   </select>
                 </div>
 

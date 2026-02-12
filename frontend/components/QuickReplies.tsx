@@ -11,6 +11,7 @@ import {
   Trash2,
   Edit2,
   Tag,
+  Zap,
 } from "lucide-react";
 
 interface Props {
@@ -34,12 +35,15 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
   });
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Delete Confirmation State - Enterprise: Uses inline confirmation for better UX
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchReplies();
     // Auto-focus search on mount
-    setTimeout(() => inputRef.current?.focus(), 100);
+    setTimeout(() => inputRef.current?.focus(), 150);
   }, []);
 
   const fetchReplies = async () => {
@@ -82,9 +86,6 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
     }
   };
 
-  // Delete Confirmation State
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-
   const handleDeleteClick = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setDeleteId(id);
@@ -106,6 +107,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
     setFormData({ title: "", content: "", category: "", tags: [] });
     setEditingId(null);
     setView("LIST");
+    setDeleteId(null);
   };
 
   const filteredReplies = replies.filter((r) => {
@@ -123,57 +125,74 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
   ) as string[];
 
   return (
-    <div className="w-96 bg-white dark:bg-[#1e293b] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col min-h-[300px] max-h-[500px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-slate-800/50 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          {view !== "LIST" && (
+    // 🛡️ ENTERPRISE UX FIX:
+    // 1. "bottom-full mb-4" -> Positions ABOVE the trigger button
+    // 2. "right-0" -> Aligns to the right edge
+    // 3. "origin-bottom-right" -> Animation flows from the button
+    // 4. "max-h-[600px]" + flex column -> Handles content overflow properly
+    // 5. "z-[9999]" -> Ensures it stays on top of sticky headers/navbars
+    <div className="absolute bottom-full right-0 mb-3 w-[calc(100vw-24px)] xs:w-[350px] sm:w-[400px] bg-white dark:bg-[#1f2937] rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[65vh] xs:max-h-[500px] sm:max-h-[600px] overflow-hidden origin-bottom-right animate-in fade-in zoom-in-95 duration-200 z-[9999]">
+      {/* 1. Header (Sticky) */}
+      <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-[#1f2937] shrink-0 z-[20]">
+        <div className="flex items-center gap-3">
+          {view !== "LIST" ? (
             <button
               onClick={resetForm}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full transition-colors"
+              className="p-1.5 -ml-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
             >
-              <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+              <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400 fill-current" />
+            </div>
           )}
-          <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-indigo-500" />
-            {view === "LIST"
-              ? "Respuestas Rápidas"
-              : view === "CREATE"
-                ? "Nueva Respuesta"
-                : "Editar Respuesta"}
-          </h3>
+
+          <div>
+            <h3 className="font-bold text-gray-900 dark:text-white text-base leading-tight">
+              {view === "LIST"
+                ? "Respuestas Rápidas"
+                : view === "CREATE"
+                  ? "Nueva Respuesta"
+                  : "Editar Respuesta"}
+            </h3>
+            {view === "LIST" && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Selecciona para enviar al instante
+              </p>
+            )}
+          </div>
         </div>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {view === "LIST" ? (
+      {view === "LIST" && (
         <>
-          {/* Search & Filter */}
-          <div className="p-3 space-y-3 bg-white dark:bg-[#1e293b]">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          {/* 2. Search & Filter (Sticky) */}
+          <div className="p-2 sm:p-3 bg-white dark:bg-[#1f2937] space-y-2 sm:space-y-3 shrink-0 border-b border-gray-50 dark:border-gray-700/50">
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Buscar (ej. Saludo, Precio...)"
+                placeholder="Buscar respuestas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-gray-100 dark:bg-slate-800 border border-transparent focus:border-indigo-500 rounded-lg text-sm text-gray-800 dark:text-gray-200 focus:outline-none transition-all"
+                className="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-gray-800 border border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-[#111b21] rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none transition-all placeholder:text-gray-400 shadow-sm"
               />
             </div>
 
             {/* Categories Pills */}
             {uniqueCategories.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide mask-fade-right">
                 <button
                   onClick={() => setSelectedCategory(null)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${!selectedCategory ? "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800" : "bg-white text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-400 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700"}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${!selectedCategory ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20" : "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
                 >
                   Todas
                 </button>
@@ -183,7 +202,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
                     onClick={() =>
                       setSelectedCategory(cat === selectedCategory ? null : cat)
                     }
-                    className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${cat === selectedCategory ? "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800" : "bg-white text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-400 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700"}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${cat === selectedCategory ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20" : "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
                   >
                     {cat}
                   </button>
@@ -192,32 +211,43 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
             )}
           </div>
 
-          {/* List */}
-          <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1 bg-gray-50/30 dark:bg-[#0b141a]/30">
+          {/* 3. List (Scrollable) */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar bg-gray-50/50 dark:bg-[#0b141a]/50 relative min-h-[200px]">
             {loading ? (
-              <div className="flex justify-center items-center h-40">
-                <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex flex-col items-center justify-center h-48 gap-3">
+                <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-gray-500 font-medium">
+                  Cargando biblioteca...
+                </span>
               </div>
             ) : filteredReplies.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-gray-400 text-sm">
-                <MessageSquare className="w-8 h-8 mb-2 opacity-20" />
-                <p>No se encontraron respuestas.</p>
-                {searchTerm && (
-                  <p className="text-xs mt-1">Intenta con otro término.</p>
-                )}
+              <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-center p-6">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                  <MessageSquare className="w-8 h-8 opacity-40 text-gray-500" />
+                </div>
+                <p className="font-medium text-gray-600 dark:text-gray-300">
+                  No hay respuestas
+                </p>
+                <p className="text-xs mt-1 max-w-[200px] opacity-75">
+                  {searchTerm
+                    ? "Intenta con otro término de búsqueda."
+                    : "Crea tu primera respuesta rápida para agilizar el chat."}
+                </p>
               </div>
             ) : (
               filteredReplies.map((reply) => (
                 <div
                   key={reply.id}
                   onClick={() => onSelect(reply.content)}
-                  className="group relative p-3 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 rounded-lg border border-gray-100 dark:border-gray-700 cursor-pointer transition-all hover:shadow-sm"
+                  className="group relative p-3 sm:p-3.5 bg-white dark:bg-[#1f2937] hover:bg-indigo-50 dark:hover:bg-indigo-900/10 rounded-xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800/50 cursor-pointer transition-all hover:shadow-sm hover:scale-[1.01]"
                 >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-bold text-sm text-gray-800 dark:text-gray-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                  <div className="flex justify-between items-start gap-3 mb-1.5">
+                    <span className="font-bold text-sm text-gray-800 dark:text-gray-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex-1 truncate">
                       {reply.title}
                     </span>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                    {/* Actions Overlay */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 dark:bg-[#1f2937]/80 backdrop-blur-sm rounded-lg pl-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -230,24 +260,28 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
                           setEditingId(reply.id);
                           setView("EDIT");
                         }}
-                        className="p-1 text-gray-400 hover:text-indigo-500 rounded"
+                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-md transition-colors"
+                        title="Editar"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={(e) => handleDeleteClick(reply.id, e)}
-                        className="p-1 text-gray-400 hover:text-red-500 rounded"
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                        title="Eliminar"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+
+                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed font-normal">
                     {reply.content}
                   </p>
+
                   {reply.category && (
-                    <div className="mt-2 flex gap-1">
-                      <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded-md font-medium">
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <span className="text-[9px] sm:text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-md font-bold uppercase tracking-wider">
                         {reply.category}
                       </span>
                     </div>
@@ -257,27 +291,29 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
             )}
           </div>
 
-          {/* Footer Action */}
-          <div className="p-3 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-[#1e293b]">
+          {/* 4. Footer Action (Sticky) */}
+          <div className="p-3 sm:p-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-[#1f2937] shrink-0">
             <button
               onClick={() => setView("CREATE")}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-900 dark:bg-indigo-600 hover:bg-gray-800 dark:hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+              className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 bg-gray-900 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-gray-200 dark:shadow-none hover:shadow-xl hover:-translate-y-0.5"
             >
               <Plus className="w-4 h-4" />
               Nueva Respuesta
             </button>
           </div>
         </>
-      ) : (
-        /* Create/Edit View */
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50 dark:bg-[#0b141a]/30">
+      )}
+
+      {/* CREATE / EDIT FORM */}
+      {view !== "LIST" && (
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5 bg-white dark:bg-[#1f2937]">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">
               Título
             </label>
             <input
               autoFocus
-              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+              className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium placeholder:font-normal"
               placeholder="Ej. Saludo Inicial"
               value={formData.title}
               onChange={(e) =>
@@ -287,27 +323,30 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-              Contenido
+            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">
+              Contenido del Mensaje
             </label>
             <textarea
-              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[120px] resize-none leading-relaxed"
-              placeholder="Hola, ¿en qué podemos ayudarte hoy?..."
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[140px] resize-none leading-relaxed placeholder:font-normal"
+              placeholder="Escribe el mensaje aquí..."
               value={formData.content}
               onChange={(e) =>
                 setFormData({ ...formData, content: e.target.value })
               }
             />
+            <p className="text-[10px] text-gray-400 text-right px-1">
+              Puedes usar variables como {"{{nombre}}"} en futuras versiones
+            </p>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">
               Categoría (Opcional)
             </label>
             <div className="relative">
               <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
-                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 placeholder="Ej. Ventas, Soporte"
                 value={formData.category}
                 onChange={(e) =>
@@ -323,44 +362,45 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
             </div>
           </div>
 
-          <div className="pt-4 flex gap-3">
+          <div className="pt-6 flex gap-3">
             <button
               onClick={resetForm}
-              className="flex-1 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 py-3 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancelar
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+              className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30"
             >
-              {view === "CREATE" ? "Crear" : "Guardar Cambios"}
+              {view === "CREATE" ? "Crear Respuesta" : "Guardar Cambios"}
             </button>
           </div>
         </div>
       )}
-      {/* Custom Delete Confirmation Overlay */}
+
+      {/* OVERLAY: Delete Confirmation */}
       {deleteId && (
-        <div className="absolute inset-0 bg-white/95 dark:bg-[#1e293b]/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
-          <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-3">
-            <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+        <div className="absolute inset-0 bg-white/95 dark:bg-[#1f2937]/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+          <div className="w-16 h-16 bg-red-50 dark:bg-red-900/10 rounded-full flex items-center justify-center mb-4 border border-red-100 dark:border-red-900/30">
+            <Trash2 className="w-8 h-8 text-red-500 dark:text-red-400" />
           </div>
-          <h4 className="text-gray-900 dark:text-white font-bold mb-1">
+          <h4 className="text-gray-900 dark:text-white font-bold text-lg mb-2">
             ¿Eliminar respuesta?
           </h4>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Esta acción no se puede deshacer.
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 max-w-[200px] leading-relaxed">
+            Esta acción es irreversible y la eliminará de tu lista.
           </p>
-          <div className="flex gap-2 w-full">
+          <div className="flex gap-3 w-full">
             <button
               onClick={() => setDeleteId(null)}
-              className="flex-1 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancelar
             </button>
             <button
               onClick={confirmDelete}
-              className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+              className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20"
             >
               Eliminar
             </button>

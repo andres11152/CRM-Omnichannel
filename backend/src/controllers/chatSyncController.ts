@@ -146,3 +146,64 @@ export const quickSync = catchAsync(async (req: Request, res: Response) => {
       : `Quick sync failed`,
   });
 });
+/**
+ * POST /api/whatsapp/sync/conversation/:phone
+ * On-Demand Sync: Sync messages for a specific chat (phone number).
+ * Used when an agent opens a chat to backfill history.
+ */
+export const syncConversation = catchAsync(
+  async (req: Request, res: Response) => {
+    const { phone } = req.params;
+    const companyId = req.user?.companyId;
+    const userId = req.user?.id;
+    const { limit = 50 } = req.body; // Default 50 messages per fetch
+
+    if (!companyId || !userId)
+      throw new AppError("Authentication required", 401);
+    if (!phone) throw new AppError("Phone Number is required", 400);
+
+    // 1. Find Connected Session (Memory First)
+    const sessions = await whatsappService.getSessions(companyId);
+    const activeSession = sessions.find((s) => s.status === "CONNECTED");
+
+    if (!activeSession) {
+      throw new AppError("No active WhatsApp session found", 404);
+    }
+
+    console.info(`[ChatSync] 🔄 On-Demand Sync for ${phone} (User: ${userId})`);
+
+    // 2. Execute Targeted Sync
+    // We use a generous lookback (30 days) but limit by count (limit=50)
+    // This ensures we get the *most recent* 50 messages, regardless of when they were sent.
+    const sinceDate = new Date();
+    sinceDate.setDate(sinceDate.getDate() - 30); // Last 30 days window
+
+    const request = ChatSyncRequestSchema.parse({
+      companyId,
+      sessionId: activeSession.sessionId,
+      sinceDate: sinceDate.toISOString(),
+      limit: Number(limit),
+      // 🎯 TARGETING STRATEGY:
+      // We want to filter ONLY this specific phone number in the service.
+      // Ideally, we'd pass `targetJid` to the service, but for now we filter in the loop (MVP)
+      // or we enable a specific mode in the service.
+      // IMPROVEMENT: Let's rely on the service to just do its job. It scans memory store.
+      // Since Memory Store is organized by JID, filtering is efficient.
+    });
+
+    // 3. ENHANCEMENT: Pass target phone to service (We need to update Service first?)
+    // For Phase 1, we will rely on key-based lookup in the Service update.
+    const result = await chatSyncService.syncMessages(
+      { ...request, conversationId: phone }, // Leveraging the optional field we added
+      userId,
+    );
+
+    res.json({
+      status: "success",
+      data: {
+        synced: result.messagesNew,
+        totalFound: result.messagesFound,
+      },
+    });
+  },
+);

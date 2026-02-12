@@ -18,6 +18,7 @@ import {
 import { Contact } from "../types";
 import { InternalNotes } from "./InternalNotes";
 import { toast } from "sonner";
+import { ImageLightbox } from "./ImageLightbox";
 
 interface Customer360PanelProps {
   contact: Contact;
@@ -33,6 +34,10 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
   onScheduleMeeting,
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<{
+    url: string;
+    alt: string;
+  } | null>(null);
 
   // 🏢 GROUP DETECTION
   const isGroup = contact.isGroup ?? false;
@@ -75,7 +80,16 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
                 `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=${isGroup ? "22c55e" : "random"}`
               }
               alt={contact.name}
-              className="relative w-24 h-24 rounded-full mx-auto border-2 border-white dark:border-gray-900 shadow-xl object-cover transform transition-transform group-hover:scale-[1.02]"
+              className="relative w-24 h-24 rounded-full mx-auto border-2 border-white dark:border-gray-900 shadow-xl object-cover transform transition-transform group-hover:scale-[1.02] cursor-pointer"
+              onClick={() =>
+                setLightboxImage({
+                  url:
+                    contact.profilePicUrl ||
+                    contact.avatarUrl ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=${isGroup ? "22c55e" : "random"}`,
+                  alt: contact.name,
+                })
+              }
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=${isGroup ? "22c55e" : "random"}`;
@@ -102,9 +116,23 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
               <span>📢 Grupo de WhatsApp</span>
             </p>
           ) : (
-            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center justify-center gap-1">
-              <Clock className="w-3 h-3" />
-              Última actividad hoy 14:30
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1.5 font-medium tracking-wide">
+              <Clock className="w-3 h-3 opacity-70" />
+              {contact.lastMessageTime
+                ? new Date(contact.lastMessageTime).toLocaleString("es-ES", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : new Date().toLocaleString("es-ES", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
             </p>
           )}
         </div>
@@ -268,6 +296,13 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
           </div>
         </div>
       </div>
+      {lightboxImage && (
+        <ImageLightbox
+          imageUrl={lightboxImage.url}
+          alt={lightboxImage.alt}
+          onClose={() => setLightboxImage(null)}
+        />
+      )}
     </div>
   );
 };

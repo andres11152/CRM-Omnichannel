@@ -26,6 +26,8 @@ import {
   Download,
   ExternalLink,
   Ban,
+  MessageSquare,
+  ArrowLeft,
 } from "lucide-react";
 import {
   generateBotResponse,
@@ -800,46 +802,21 @@ export const ChatInterface: React.FC<Props> = ({
         }
 
         // Socket.IO hasn't arrived yet, replace temp with server message
-        const tempStillExists = prev.some((m) => m.id === tempId);
-
-        if (!tempStillExists) {
-          // Temp was already replaced somehow, just append server message
-          console.warn(
-            "[ChatInterface] ⚠️ Temp gone but server msg not found, appending",
-          );
-          const updatedMsg: Message = {
-            ...serverMsg,
-            id: serverMsg.id,
-            ticketId: activeContact.id,
-            companyId: activeContact.companyId,
-            content: serverMsg.content,
-            senderType: SenderType.AGENT,
-            timestamp: serverMsg.createdAt,
-            senderName: "You",
-            attachment: finalAttachment,
-          };
-          return [...prev, updatedMsg];
-        }
-
-        // Normal case: Replace temp with server message
-        console.log(
-          "[ChatInterface] 🎯 Replacing temp:",
-          tempId,
-          "->",
-          serverMsg.id,
+        return prev.map((m) =>
+          m.id === tempId
+            ? {
+                ...serverMsg,
+                id: serverMsg.id,
+                ticketId: activeContact.id,
+                companyId: activeContact.companyId,
+                content: serverMsg.content,
+                senderType: SenderType.AGENT,
+                timestamp: serverMsg.createdAt,
+                senderName: "You",
+                attachment: finalAttachment,
+              }
+            : m,
         );
-        const updatedMsg: Message = {
-          ...serverMsg,
-          id: serverMsg.id,
-          ticketId: activeContact.id,
-          companyId: activeContact.companyId,
-          content: serverMsg.content,
-          senderType: SenderType.AGENT,
-          timestamp: serverMsg.createdAt,
-          senderName: "You",
-          attachment: finalAttachment,
-        };
-        return prev.map((m) => (m.id === tempId ? updatedMsg : m));
       });
     } catch (error: any) {
       console.error("Error sending message:", error);
@@ -851,6 +828,56 @@ export const ChatInterface: React.FC<Props> = ({
 
     // ✅ UPDATE TIMER ON OUTBOUND
     setLastInteraction(new Date());
+  };
+
+  /**
+   * 🔄 SYNC HISTORY HANDLER
+   * Triggers on-demand history synchronization for this chat
+   */
+  const handleSyncHistory = async () => {
+    if (!activeContact.phone) {
+      toast.error("No se puede sincronizar: El contacto no tiene teléfono");
+      return;
+    }
+
+    const toastId = toast.loading("Sincronizando historial...");
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${API_BASE_URL}/whatsapp/sync/conversation/${activeContact.phone.replace(/\D/g, "")}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Error al sincronizar");
+      }
+
+      const data = await res.json();
+      const count = data.data.synced || 0;
+
+      if (count > 0) {
+        toast.success(`Historial sincronizado: ${count} mensajes nuevos`, {
+          id: toastId,
+        });
+        // Reload to show new messages (Option B)
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        toast.info("No se encontraron mensajes nuevos en el historial", {
+          id: toastId,
+        });
+      }
+    } catch (error) {
+      console.error("Sync failed", error);
+      toast.error("Error al sincronizar el historial", { id: toastId });
+    }
   };
 
   const handleSaveSticker = async (stickerUrl: string) => {
@@ -1433,9 +1460,16 @@ export const ChatInterface: React.FC<Props> = ({
   };
 
   const handleResolveTicket = async (type: string, notes: string) => {
+    const ticketId = activeContact.ticketId || activeContact.id;
+    if (!ticketId) {
+      toast.error("Error: No se encontró el ID del ticket");
+      console.error("Missing ticketId for contact:", activeContact);
+      return;
+    }
+
     setIsResolving(true);
     try {
-      await resolveTicket(activeContact.ticketId || activeContact.id, {
+      await resolveTicket(ticketId, {
         status: "RESOLVED",
         resolutionType: type as ResolutionType,
         resolutionNotes: notes,
@@ -1475,6 +1509,26 @@ export const ChatInterface: React.FC<Props> = ({
 
   return (
     <>
+      {/* 📱 MOBILE NAVIGATION PORTAL: Volver al Chat (Solo visible en 360 móvil) */}
+      {isCustomer360Visible &&
+        typeof window !== "undefined" &&
+        window.innerWidth < 1024 &&
+        createPortal(
+          <div className="flex items-center mr-2 animate-in slide-in-from-right-4 duration-300">
+            <button
+              onClick={() => {
+                setIsCustomer360Visible(false);
+                localStorage.setItem("customer360_visible", "false");
+              }}
+              className="flex items-center justify-center p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md shadow-indigo-500/20 transition-all active:scale-95"
+              title="Volver al Chat"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          </div>,
+          document.getElementById("header-actions-portal")!,
+        )}
+
       <div className="flex h-full w-full overflow-hidden relative">
         {/* âœ… LEVEL 2: Main Chat Area - flex: 1, min-width: 0 (CRóTICO para shrink) */}
         <div className="flex flex-col flex-1 min-w-0 h-full relative">
@@ -1585,6 +1639,7 @@ export const ChatInterface: React.FC<Props> = ({
                   : undefined
               }
               isParticipantsPanelVisible={showParticipantsPanel}
+              onSyncHistory={handleSyncHistory} // 🆕 WIRING UP
             />
           </div>
 
@@ -2101,15 +2156,13 @@ export const ChatInterface: React.FC<Props> = ({
           ) : (
             <div className="relative flex-shrink-0">
               {showQuickReplies && (
-                <div className="absolute bottom-full left-0 mb-4 z-[100]">
-                  <QuickReplies
-                    onSelect={(text) => {
-                      setInputValue(text);
-                      setShowQuickReplies(false);
-                    }}
-                    onClose={() => setShowQuickReplies(false)}
-                  />
-                </div>
+                <QuickReplies
+                  onSelect={(text) => {
+                    setInputValue(text);
+                    setShowQuickReplies(false);
+                  }}
+                  onClose={() => setShowQuickReplies(false)}
+                />
               )}
 
               {/* Audio Recorder */}
@@ -2312,20 +2365,9 @@ export const ChatInterface: React.FC<Props> = ({
           className={`
           transition-all duration-300 ease-in-out flex flex-col
           ${isCustomer360Visible ? "translate-x-0" : "translate-x-full md:translate-x-0 md:w-0 md:hidden"}
-          fixed inset-0 z-30 w-full bg-white dark:bg-[#0b141a] md:static md:w-auto md:bg-transparent md:flex-shrink-0
+          fixed top-16 inset-x-0 bottom-0 z-30 w-full bg-white dark:bg-[#0b141a] md:static md:w-auto md:bg-transparent md:flex-shrink-0
       `}
         >
-          {/* Mobile Back Button for 360 */}
-          <div className="md:hidden flex items-center p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] flex-shrink-0">
-            <button
-              onClick={() => setIsCustomer360Visible(false)}
-              className="flex items-center gap-2 text-gray-600 dark:text-gray-300"
-            >
-              <ChevronRight className="w-6 h-6" />
-              <span className="font-bold">Volver al Chat</span>
-            </button>
-          </div>
-
           {isCustomer360Visible && (
             <div className="flex-1 overflow-hidden md:w-96">
               <Customer360Panel

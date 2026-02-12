@@ -5,9 +5,11 @@ import { ModuleHeader } from "../components/common/ModuleHeader";
 import { ContactTimelineView } from "../components/crm/ContactTimelineView";
 import { EmailModal } from "../components/EmailModal";
 import { API_BASE_URL } from "../services/apiConfig";
-import { Search, User, History, Trash2, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, User, History, Trash2, X, MessageSquare } from "lucide-react";
 
 export const ContactsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]); // 🏷️ Store full tag objects
   const [loading, setLoading] = useState(true);
@@ -198,6 +200,56 @@ export const ContactsPage: React.FC = () => {
     }
   };
 
+  const handleOpenChat = async (contact: Contact) => {
+    if (!contact.phone) {
+      toast.error("Este contacto no tiene un teléfono válido");
+      return;
+    }
+
+    const toastId = toast.loading("Abriendo chat...");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      // 1. Create or Get Conversation
+      // Utiliza el endpoint existente que maneja la lógica de findOrCreate
+      const res = await fetch(`${API_BASE_URL}/conversations`, {
+        method: "POST", // Endpoint correcto basado en conversationRoutes.ts
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          phone: contact.phone,
+          name: contact.name,
+          addToContacts: false, // Ya existe en contactos
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error("Chat Error:", errData);
+        throw new Error(
+          errData.message || "No se pudo iniciar la conversación",
+        );
+      }
+
+      const data = await res.json();
+      const conversation = data.data?.conversation || data.data;
+
+      if (conversation?.id) {
+        toast.dismiss(toastId);
+        // Navegar al workspace con el ID del ticket/conversación
+        navigate(`/workspace?ticketId=${conversation.id}`);
+      } else {
+        throw new Error("ID de conversación no recibido");
+      }
+    } catch (error) {
+      console.error("Error opening chat:", error);
+      toast.error("Error al abrir WhatsApp", { id: toastId });
+    }
+  };
+
   const filteredContacts = contacts.filter(
     (c) =>
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -330,6 +382,23 @@ export const ContactsPage: React.FC = () => {
                           </span>
                         </div>
                       </div>
+                      <button
+                        onClick={() =>
+                          toast.info(
+                            "Función Enterprise: Próximamente disponible",
+                            {
+                              description:
+                                "Estamos trabajando para integrar WhatsApp Directo.",
+                            },
+                          )
+                        }
+                        className="p-2 text-gray-300 hover:text-gray-400 cursor-not-allowed transition-colors relative group"
+                      >
+                        <MessageSquare className="w-5 h-5 opacity-50" />
+                        <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                          Próximamente
+                        </span>
+                      </button>
                       <button
                         onClick={() => handleDelete(contact.id, contact.name)}
                         className="p-2 text-gray-300 hover:text-red-500 transition-colors"
@@ -506,6 +575,25 @@ export const ContactsPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-3 whitespace-nowrap text-right">
                           <div className="flex justify-end items-center gap-2">
+                            <button
+                              onClick={() =>
+                                toast.info(
+                                  "Función Enterprise: Próximamente disponible",
+                                  {
+                                    description:
+                                      "Estamos trabajando para integrar WhatsApp Directo.",
+                                  },
+                                )
+                              }
+                              className="p-2 bg-gray-50 dark:bg-gray-800/50 text-gray-300 cursor-not-allowed rounded-xl border border-gray-100 dark:border-gray-800 relative group"
+                              title="Enterprise (Pronto)"
+                            >
+                              <MessageSquare className="w-4 h-4 opacity-50" />
+                              <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                                Próximamente
+                              </span>
+                            </button>
+
                             <button
                               onClick={() => {
                                 setTimelineContactId(contact.id);

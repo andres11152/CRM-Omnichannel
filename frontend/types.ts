@@ -149,6 +149,7 @@ export interface Contact {
   isGroup?: boolean;
   // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
   whatsappSessionIndex?: number;
+  whatsappSessionPhone?: string;
 }
 
 // NEW: Represents the conversation/case
@@ -185,6 +186,7 @@ export interface TicketContact {
   isGroup?: boolean;
   // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
   whatsappSessionIndex?: number;
+  whatsappSessionPhone?: string;
 }
 
 export interface Ticket {

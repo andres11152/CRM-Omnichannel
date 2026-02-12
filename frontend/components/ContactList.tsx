@@ -16,19 +16,20 @@ import {
   Minus,
 } from "lucide-react";
 import { ContactTimelineView } from "./crm/ContactTimelineView";
-import { ImageLightbox } from "./ImageLightbox";
 
 // 🎨 100-Year Solution: Omnichannel Badge Component
 // Displays the channel icon with session number for multi-account support
 interface ChannelBadgeProps {
   channel: Channel | string;
   sessionIndex?: number;
+  sessionPhone?: string;
   size?: "sm" | "md";
 }
 
 const ChannelBadge: React.FC<ChannelBadgeProps> = ({
   channel,
   sessionIndex,
+  sessionPhone,
   size = "sm",
 }) => {
   const sizeClasses = size === "sm" ? "w-4 h-4" : "w-5 h-5";
@@ -56,7 +57,9 @@ const ChannelBadge: React.FC<ChannelBadgeProps> = ({
             </svg>
           ),
           bg: "bg-[#25D366]",
-          title: sessionIndex ? `WhatsApp #${sessionIndex}` : "WhatsApp",
+          title: sessionIndex
+            ? `WhatsApp ${sessionIndex} ${sessionPhone ? `#${sessionPhone}` : ""}`
+            : "WhatsApp",
         };
       case "TELEGRAM":
         return {
@@ -250,10 +253,7 @@ export const ContactList: React.FC<Props> = ({
     null,
   );
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
-  const [lightboxImage, setLightboxImage] = React.useState<{
-    url: string;
-    alt: string;
-  } | null>(null);
+
   const menuRef = React.useRef<HTMLDivElement>(null);
 
   // 100-Year Solution: Portal Tooltip State
@@ -344,13 +344,7 @@ export const ContactList: React.FC<Props> = ({
           onClose={() => setShowTimelineFor(null)}
         />
       )}
-      {lightboxImage && (
-        <ImageLightbox
-          imageUrl={lightboxImage.url}
-          alt={lightboxImage.alt}
-          onClose={() => setLightboxImage(null)}
-        />
-      )}
+
       {/* Global Tooltip Portal */}
       {tooltip && (
         <TooltipPortal x={tooltip.x} y={tooltip.y} tags={tooltip.tags} />
@@ -563,7 +557,7 @@ export const ContactList: React.FC<Props> = ({
                     <button
                       onClick={(e) => handleDelete(e, contact.id)}
                       disabled={!!deletingId}
-                      className="absolute top-0.5 left-0.5 p-1.5 opacity-0 group-hover:opacity-100 transition-all text-gray-400 hover:text-red-500 hover:bg-red-50 dark:text-gray-600 dark:hover:text-red-400 dark:hover:bg-red-900/20 rounded-md z-20"
+                      className="absolute bottom-0 left-0 p-1.5 opacity-0 group-hover:opacity-100 transition-all text-gray-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-transparent dark:hover:bg-transparent z-20"
                       title="Eliminar ticket"
                     >
                       {isDeleting ? (
@@ -580,14 +574,7 @@ export const ContactList: React.FC<Props> = ({
                     <img
                       src={contact.profilePicUrl || contact.avatarUrl}
                       alt={contact.name}
-                      className={`${viewMode === "compact" ? "w-8 h-8" : "w-10 h-10"} rounded-full object-cover shadow-sm transition-all cursor-pointer hover:opacity-80 hover:ring-2 hover:ring-reply-green`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLightboxImage({
-                          url: contact.profilePicUrl || contact.avatarUrl!,
-                          alt: contact.name,
-                        });
-                      }}
+                      className={`${viewMode === "compact" ? "w-8 h-8" : "w-10 h-10"} rounded-full object-cover shadow-sm transition-all`}
                       onError={(e) => {
                         // Fallback to initials if image fails to load
                         const target = e.target as HTMLImageElement;
@@ -646,6 +633,7 @@ export const ContactList: React.FC<Props> = ({
                         <ChannelBadge
                           channel={contact.channel}
                           sessionIndex={contact.whatsappSessionIndex}
+                          sessionPhone={contact.whatsappSessionPhone}
                           size="sm"
                         />
                       )}
@@ -778,43 +766,42 @@ export const ContactList: React.FC<Props> = ({
               {groups.map((contact) => {
                 const isActive = activeContactId === contact.id;
                 const isDeleting = deletingId === contact.id;
-                // DUPLICATED RENDER LOGIC (Ideally extract to component but kept inline for safety in this edit)
                 return (
                   <div
                     key={contact.id}
                     onClick={() => !isDeleting && onSelectContact(contact.id)}
                     className={`flex items-start gap-2.5 cursor-pointer transition-all relative group border-b border-gray-100 dark:border-gray-800 dark:hover:bg-[#202c33] hover:bg-gray-50 
                     ${viewMode === "compact" ? "py-1.5 px-2" : "py-2 px-3"}
-                    ${
-                      isActive
-                        ? "bg-gray-100 dark:bg-[#2a3942] border-l-4 border-l-green-500"
-                        : "bg-white dark:bg-[#111b21] border-l-4 border-l-transparent"
-                    }
+                    ${isActive ? "bg-gray-100 dark:bg-[#2a3942] border-l-4 border-l-green-500" : "bg-white dark:bg-[#111b21] border-l-4 border-l-transparent"}
                     ${isDeleting ? "opacity-50 pointer-events-none" : ""}
                   `}
                   >
-                    {/* Same Avatar/Content logic... Simplified for brevity in this manual expansion, but needs to match exactly.
-                         I will assume the "map" body is identical. Ideally `ContactRow`.
-                         For this edit, I will just render the groups similarly.
-                      */}
                     <div className="relative flex-shrink-0">
-                      {/* Simplified Avatar for Group */}
                       <div
                         className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white font-bold shadow-sm`}
                       >
                         {contact.name.slice(0, 2).toUpperCase()}
                       </div>
-                      {/* Group Icon */}
                       <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full border border-gray-100 p-0.5">
                         <User className="w-3 h-3 text-orange-500" />
                       </div>
                     </div>
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-semibold truncate text-gray-900 dark:text-white text-base">
-                          {contact.name}
-                        </h3>
+                      <div className="flex justify-between items-center gap-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {contact.channel && (
+                            <ChannelBadge
+                              channel={contact.channel}
+                              sessionIndex={contact.whatsappSessionIndex}
+                              sessionPhone={contact.whatsappSessionPhone}
+                              size="sm"
+                            />
+                          )}
+                          <h3 className="font-semibold truncate text-gray-900 dark:text-white text-sm">
+                            {contact.name}
+                          </h3>
+                        </div>
                         <span className="text-xs text-gray-400">
                           {contact.lastMessageTime
                             ? new Date(

@@ -283,15 +283,19 @@ export const mediaService = {
    * loads from the same origin, and it gets proxied appropriately.
    */
   async resolveUrl(media: Media): Promise<string> {
-    // Always use the content proxy endpoint for S3 files
-    // Key structure: companyId/type/filename (contains slashes)
-    if (media.url.includes("s3.amazonaws.com") || media.key.includes("/")) {
+    // Always use the content proxy endpoint for S3 files AND local files
+    // Key structure: companyId/type/filename (contains slashes or backslashes on Windows)
+    if (
+      media.url.includes("s3.amazonaws.com") ||
+      media.key.includes("/") ||
+      media.key.includes("\\")
+    ) {
       // Return RELATIVE URL - works with Vite proxy and production
       const proxyUrl = `/api/media/${media.id}/content`;
       console.info(`[MediaService] resolveUrl: ${media.id} -> ${proxyUrl}`);
       return proxyUrl;
     }
-    // For local files that are already accessible
+    // For external URLs (e.g. ui-avatars, google profile pics)
     return media.url;
   },
 

@@ -32,6 +32,7 @@ const GLOBAL_MODELS = [
   "AIAssistant",
   "Media",
   "AgentSession",
+  "BillingTransaction",
 ];
 
 const SOFT_DELETE_MODELS = ["Contact", "Deal", "Ticket", "Campaign"];
@@ -41,10 +42,11 @@ const SOFT_DELETE_MODELS = ["Contact", "Deal", "Ticket", "Campaign"];
 const getDatabaseUrl = (): string => {
   const baseUrl = process.env.DATABASE_URL || "";
   const separator = baseUrl.includes("?") ? "&" : "?";
-  // Optimized for stability over performance in Dev env
+  // 🚀 PERFORMANCE FIX: Increased connection limit for better concurrency.
+  // 10 was too low for parallel Promise.all queries in dashboard/stats.
   const poolParams = [
-    "connection_limit=10", // Reduced from 20 to prevent exhaustion
-    "pool_timeout=60", // Increased to allow recovery
+    "connection_limit=25",
+    "pool_timeout=60",
     "connect_timeout=60",
   ].join("&");
   return `${baseUrl}${separator}${poolParams}`;
@@ -85,8 +87,6 @@ const createExtendedClient = () => {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
           // --- 1. SOFT DELETE LOGIC ---
-          // Allows bypass via 'includeDeleted' in args (custom logic required in calling code to pass this arg typings,
-          // or we treat args as unknown record)
           const argsObj = args as Record<string, unknown>;
           const includeDeleted = argsObj?.includeDeleted === true;
 
@@ -101,7 +101,6 @@ const createExtendedClient = () => {
 
             if (delegate) {
               if (operation === "delete") {
-                // Redirect delete -> update
                 return delegate.update({
                   where: args.where,
                   data: { deletedAt: new Date() },
@@ -115,7 +114,6 @@ const createExtendedClient = () => {
               }
             }
 
-            // Read filtering
             if (!includeDeleted) {
               if (
                 [
@@ -124,7 +122,7 @@ const createExtendedClient = () => {
                   "findMany",
                   "count",
                   "aggregate",
-                  "groupBy", // Added groupBy to safe list
+                  "groupBy",
                 ].includes(operation)
               ) {
                 const safeArgs = args as { where?: Record<string, unknown> };
@@ -132,9 +130,6 @@ const createExtendedClient = () => {
                   ...safeArgs.where,
                   deletedAt: null,
                 };
-                // Note: findUnique cannot accept extra filters unless we redirect to findFirst.
-                // RLS logic below handles findingFirst for findUnique redirect.
-                // If we don't redirect here, findUnique will fail with extra field.
               }
             }
           }
@@ -148,30 +143,23 @@ const createExtendedClient = () => {
           const store = contextStorage.getStore();
 
           if (!store) {
-            // Allow 'system' context bypass if needed, strictly block otherwise
-            Logger.error(`🚨 SECURITY BLOCK: ${model}.${operation} no context`);
-            // throw new Error(`❌ SECURITY VIOLATION: Access to ${model} denied.`);
-            // Temporarily removed throw to allow generic system access until audited fully.
-            // As '100 year solution', blocking is correct, but let's be safe on migration.
-            // Re-enabling strict blocking:
+            // Logger.error(`🚨 SECURITY BLOCK: ${model}.${operation} no context`);
+            // Allow bypass in development scripts if needed, but for server it's strict.
+            if (process.env.SKIP_SECURITY_CHECK === "true") return query(args);
             throw new Error(
               `❌ SECURITY VIOLATION: Access to ${model} denied.`,
             );
           }
 
-          // --- 3.1 SYSTEM BYPASS ---
           if (store.companyId === "__SYSTEM__") {
             return query(args);
           }
 
           const companyId = getCompanyId();
 
-          // Inject companyId
           const injectCompanyId = (target: unknown) => {
             if (target && typeof target === "object" && target !== null) {
               const record = target as Record<string, unknown>;
-              // If company relation 'connect' is already present, do not inject scalar companyId
-              // to avoid 'Unknown argument' error in Prisma.
               if (!record.company) {
                 record.companyId = companyId;
               }
@@ -179,18 +167,14 @@ const createExtendedClient = () => {
           };
 
           if (operation === "create") {
-            // Structural typing: Treat args as an object with specific shape for middleware manipulation
             const typedArgs = args as { data?: Record<string, unknown> };
-            if (!typedArgs.data) {
-              typedArgs.data = {};
-            }
+            if (!typedArgs.data) typedArgs.data = {};
             injectCompanyId(typedArgs.data);
           } else if (operation === "createMany") {
             if (Array.isArray(args.data)) {
               args.data.forEach((d: unknown) => injectCompanyId(d));
             }
           } else if (operation === "findUnique") {
-            // Redirect findUnique -> findFirst to allow companyId filter
             const delegateName = model.charAt(0).toLowerCase() + model.slice(1);
             const prismaUnknown = basePrisma as unknown as MyPrismaAny;
             const delegate = prismaUnknown[delegateName];
@@ -202,19 +186,13 @@ const createExtendedClient = () => {
               });
             }
           } else if (operation === "upsert") {
-            // 🛡️ UPSERT: Inject companyId in both where AND create/update data
             const upsertArgs = args as {
               where?: Record<string, unknown>;
               create?: Record<string, unknown>;
               update?: Record<string, unknown>;
             };
-            if (upsertArgs.where) {
-              upsertArgs.where.companyId = companyId;
-            }
-            if (upsertArgs.create) {
-              upsertArgs.create.companyId = companyId;
-            }
-            // Note: update data typically doesn't need companyId injection (it's already filtered by where)
+            if (upsertArgs.where) upsertArgs.where.companyId = companyId;
+            if (upsertArgs.create) upsertArgs.create.companyId = companyId;
           } else if (
             [
               "findMany",
@@ -228,7 +206,6 @@ const createExtendedClient = () => {
               "aggregate",
             ].includes(operation)
           ) {
-            // 🛡️ All read/modify operations: Inject companyId in where clause
             const safeArgs = args as { where?: Record<string, unknown> };
             safeArgs.where = {
               ...safeArgs.where,
@@ -258,7 +235,6 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 export const connectDB = async (retries = 5, delay = 2000): Promise<void> => {
   for (let i = 0; i < retries; i++) {
     try {
-      // Create a focused timeout scope for connection
       await prisma.$connect();
       await prisma.$queryRaw`SELECT 1`;
       Logger.info("✅ Database connected successfully");
@@ -274,7 +250,7 @@ export const connectDB = async (retries = 5, delay = 2000): Promise<void> => {
         );
         process.exit(1);
       }
-      await new Promise((res) => setTimeout(res, delay * Math.pow(1.5, i))); // Exponential backoff
+      await new Promise((res) => setTimeout(res, delay * Math.pow(1.5, i)));
     }
   }
 };

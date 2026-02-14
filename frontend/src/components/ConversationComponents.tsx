@@ -14,9 +14,9 @@ import {
   ConversationState,
   MessageState,
   ConversationStatus,
-} from "../types/domain";
+} from "@/types/domain";
 import { conversationApi, messageApi } from "../api/client";
-import { validateForm, MessageFormSchema } from "../types/validation";
+import { validateForm, MessageFormSchema } from "@/types/validation";
 
 // ============================================
 // COMPONENT PROPS (Strictly Typed)
@@ -314,7 +314,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 // ============================================
 
 // ... imports
-import { socketService } from "../../services/socketService";
+import { socketService } from "@/services/socketService";
 
 // ... inside MessageInput
 export const MessageInput: React.FC<MessageInputProps> = ({

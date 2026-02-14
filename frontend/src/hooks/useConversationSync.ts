@@ -7,10 +7,10 @@
 
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { socketService } from "../../services/socketService";
-import { type Conversation } from "../../services/chatService";
+import { socketService } from "@/services/socketService";
+import { type Conversation } from "@/services/chatService";
 import { CHAT_KEYS } from "./useChat";
-import { Logger } from "../utils/logger";
+import { Logger } from "@/utils/logger";
 
 interface ConversationCreatedPayload {
   conversation: Conversation;
@@ -127,3 +127,4 @@ export function useConversationSync(): void {
     };
   }, [queryClient]);
 }
+

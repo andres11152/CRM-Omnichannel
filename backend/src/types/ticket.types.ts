@@ -77,6 +77,7 @@ export type TicketWithRelations = Ticket & {
   conversation?:
     | (Conversation & {
         messages?: Message[];
+        participants?: User[];
       })
     | null;
 };
@@ -89,10 +90,10 @@ export type TicketWithRelations = Ticket & {
  */
 export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
   // 🔍 CONVERSATION TYPE DETECTION
-  // Access isGroup from conversation (will be available after Prisma migration)
   const conversation = ticket.conversation as
     | (Conversation & {
         messages?: Message[];
+        participants?: User[];
         isGroup?: boolean;
         groupMetadata?: {
           groupName?: string;
@@ -106,15 +107,44 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
   const isGroup = conversation?.isGroup ?? false;
   const groupMetadata = conversation?.groupMetadata ?? null;
 
+  // 🛡️ 100-YEAR FIX: Resolve the CUSTOMER, not the ticket creator.
+  // The ticket `createdBy` is usually the AGENT who opened the chat.
+  // The actual customer is the conversation participant who is NOT an admin/agent.
+  const AGENT_ROLES = ["ADMIN", "SUPERVISOR", "AGENT", "MASTER"];
+  const customer: User | null | undefined = (() => {
+    const participants = conversation?.participants;
+    if (participants && participants.length > 0) {
+      // Priority 1: Find participant whose email is a shadow user (WhatsApp pattern)
+      const shadowUser = participants.find((p) =>
+        p.email?.endsWith("@whatsapp.user"),
+      );
+      if (shadowUser) return shadowUser;
+
+      // Priority 2: Find participant who is NOT an agent/admin
+      const nonAgent = participants.find((p) => !AGENT_ROLES.includes(p.role));
+      if (nonAgent) return nonAgent;
+
+      // Priority 3: Find participant whose phone matches the channelId
+      if (conversation?.channelId) {
+        const byChannel = participants.find(
+          (p) => p.phone === conversation.channelId,
+        );
+        if (byChannel) return byChannel;
+      }
+    }
+    // Fallback: Use createdBy (legacy behavior)
+    return ticket.createdBy;
+  })();
+
   // --- PHONE RESOLUTION STRATEGY (Using WhatsAppIdUtils) ---
   const derivedPhone = WhatsAppIdUtils.extractDisplayPhone(
-    ticket.createdBy?.phone,
+    customer?.phone,
     conversation?.channelId,
-    null, // No secondary channel fallback needed
+    null,
   );
 
   // --- NAME RESOLUTION ---
-  let displayName = ticket.createdBy?.name || "";
+  let displayName = customer?.name || "";
   const checkName = displayName.toLowerCase();
   const isInvalidName =
     !displayName ||
@@ -136,24 +166,26 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
 
   // --- BUILD CONTACT OBJECT ---
   const contact: TicketContactDTO = {
-    id: ticket.createdById || "missing-user",
+    id: customer?.id || ticket.createdById || "missing-user",
     name: displayName,
-    email: ticket.createdBy?.email || "",
+    email: customer?.email?.endsWith("@whatsapp.user")
+      ? ""
+      : customer?.email || "",
     phone: derivedPhone || "",
-    channelId: conversation?.channelId || "", // Safe default
+    channelId: conversation?.channelId || "",
     companyId: ticket.companyId,
     avatarUrl:
       (isGroup && groupMetadata?.groupPicUrl) ||
-      ticket.createdBy?.profilePicUrl ||
+      customer?.profilePicUrl ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=${isGroup ? "22c55e" : "random"}`,
     profilePicUrl: isGroup
       ? groupMetadata?.groupPicUrl
-      : ticket.createdBy?.profilePicUrl,
-    about: ticket.createdBy?.about,
+      : customer?.profilePicUrl,
+    about: customer?.about,
     unreadCount: 0,
     status: ticket.status,
-    realContactId: undefined, // Enriched later by controller if needed
-    isGroup, // 🏢 Pass group flag to frontend
+    realContactId: undefined,
+    isGroup,
   };
 
   return {

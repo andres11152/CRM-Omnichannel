@@ -4,7 +4,13 @@ import { ConversationManager } from "./conversationManager";
 import { whatsappService, SendMessageOptions } from "@/whatsapp";
 import { gateway } from "@/gateways/socketGateway";
 import { contactService } from "./contactService";
-import { Channel, Conversation, Message, Prisma } from "@prisma/client";
+import {
+  Channel,
+  Conversation,
+  Message,
+  Prisma,
+  TicketStatus,
+} from "@prisma/client";
 import { Logger } from "@/utils/logger";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -82,10 +88,37 @@ export const conversationService = {
     }
 
     if (addToContacts) {
-      await contactService.upsert(companyId, {
+      const contact = await contactService.upsert(companyId, {
         phone: cleanPhone,
         name: name || cleanPhone,
         tags: ["Importado de Chat"],
+      });
+
+      // 🛡️ 100-YEAR FIX: Link Contact to Conversation immediately
+      await conversationRepository.update(conversation.id, {
+        contact: { connect: { id: contact.id } },
+      });
+    }
+
+    // 🛡️ 100-YEAR FIX: Ensure Ticket Exists for visibility in Agent Workspace
+    // Every conversation MUST have a ticket to be manageable.
+    const existingTicket = await ticketRepository.findByConversationId(
+      conversation.id,
+    );
+
+    const isTicketActive =
+      existingTicket &&
+      (existingTicket.status === TicketStatus.OPEN ||
+        existingTicket.status === TicketStatus.IN_PROGRESS);
+
+    if (!isTicketActive) {
+      await ticketRepository.create({
+        companyId,
+        conversationId: conversation.id,
+        subject: name || cleanPhone,
+        createdById: agentId,
+        assignedToId: agentId, // Auto-assign to the creator (Agent)
+        status: TicketStatus.IN_PROGRESS, // Active state
       });
     }
 

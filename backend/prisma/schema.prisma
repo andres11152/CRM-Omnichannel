@@ -293,6 +293,7 @@ model Company {
   roles   Role[]
   Message Message[]
   notifications Notification[]
+  transactions  BillingTransaction[]
 
   @@map("companies")
 }
@@ -885,7 +886,7 @@ model Deal {
 
   title    String
   value    Float  @default(0)
-  currency String @default("USD")
+  currency String @default("COP")
 
   // Dynamic Pipeline & Stage relationships
   pipelineId String
@@ -898,6 +899,10 @@ model Deal {
 
   probability       Int       @default(10) // 0-100%
   expectedCloseDate DateTime?
+
+  // Sales analytics
+  lostReason String? // Why the deal was lost (e.g. "Precio", "Competencia", "Sin presupuesto")
+  closedAt   DateTime? // When the deal was won or lost
 
   accountId String?
   account   Account? @relation(fields: [accountId], references: [id])
@@ -1431,4 +1436,32 @@ model Notification {
   @@index([userId, createdAt(sort: Desc)])
   @@index([companyId, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+// 💳 BILLING TRANSACTIONS (MASTER ADMIN)
+// Stores history of SaaS charges to tenants
+model BillingTransaction {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  description String
+  amount      Int      // Cents (USD/COP/MXN)
+  currency    String   @default("USD")
+  status      String   // succeeded, failed, refunded, pending
+  
+  invoiceId       String?  @unique
+  stripePaymentId String?
+
+  billingDate DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // === ANALYTICS INDEXES ===
+  // 1. "Revenue Today" query
+  @@index([status, billingDate(sort: Desc)])
+  // 2. Tenant billing history
+  @@index([companyId, billingDate(sort: Desc)])
+  
+  @@map("billing_transactions")
 }

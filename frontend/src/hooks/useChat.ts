@@ -10,7 +10,7 @@ import {
   type Message,
   type Conversation,
   type SendMessageInput,
-} from "../../services/chatService";
+} from "@/services/chatService";
 
 /**
  * QUERY KEYS

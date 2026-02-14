@@ -135,8 +135,8 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
               {...provided.droppableProps}
               className={`
                                 fixed md:static inset-y-0 left-0 z-[100] h-full
-                                bg-white dark:bg-[#111b21] flex flex-col py-6
-                                border-r border-gray-200/60 dark:border-gray-800 shadow-xl md:shadow-none
+                                bg-white dark:bg-reply-surface-dark flex flex-col py-6
+                                border-r border-gray-200/60 dark:border-reply-border-dark shadow-xl md:shadow-none
                                 transition-[width,transform] duration-300 ease-spring
                                 ${isExpanded ? "md:w-64" : "md:w-[88px]"}
                                 ${isMobileMenuOpen ? "w-64 translate-x-0" : "-translate-x-full md:translate-x-0 w-[88px]"}
@@ -224,7 +224,7 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
 
               {/* Footer Actions */}
               <div
-                className={`mt-auto pt-4 border-t border-gray-100 dark:border-gray-800 w-full flex flex-col gap-2 transition-all duration-300 ${isExpanded || isMobileMenuOpen ? "px-4" : "px-0 items-center"}`}
+                className={`mt-auto pt-4 border-t border-gray-100 dark:border-reply-border-dark w-full flex flex-col gap-2 transition-all duration-300 ${isExpanded || isMobileMenuOpen ? "px-4" : "px-0 items-center"}`}
               >
                 {/* Dark Mode Toggle */}
                 <button
@@ -252,19 +252,19 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                 <button
                   onClick={() => onNavigate("/profile")}
                   className={`
-                    mt-2 flex items-center gap-3 p-2 rounded-xl border 
-                    transition-all duration-300 w-full group
-                    ${
-                      currentPath === "/profile"
-                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                        : "border-transparent hover:bg-gray-100 dark:hover:bg-gray-800 hover:border-gray-200 dark:hover:border-gray-700"
-                    }
-                    ${
-                      isExpanded || isMobileMenuOpen
-                        ? "justify-start"
-                        : "justify-center"
-                    }
-                  `}
+                      hidden md:flex mt-2 items-center gap-3 p-2 rounded-xl border 
+                      transition-all duration-300 w-full group
+                      ${
+                        currentPath === "/profile"
+                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                          : "border-transparent hover:bg-gray-100 dark:hover:bg-gray-800 hover:border-gray-200 dark:hover:border-gray-700"
+                      }
+                      ${
+                        isExpanded || isMobileMenuOpen
+                          ? "justify-start"
+                          : "justify-center"
+                      }
+                    `}
                 >
                   <div
                     className={`

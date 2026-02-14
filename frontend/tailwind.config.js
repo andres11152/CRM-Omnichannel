@@ -10,36 +10,43 @@ export default {
     extend: {
       colors: {
         reply: {
+          brand: {
+            DEFAULT: "#00a884", // Pure Reply Emerald
+            dark: "#005c4b", // Deep Emerald
+            light: "#00e6b3", // Bright Emerald
+          },
           green: {
-            DEFAULT: "#007B65", // Light Mode Primary
-            dark: "#1ABC9C", // Dark Mode Primary
-          },
-          blue: {
-            DEFAULT: "#0047AB", // Light Mode Secondary
-            dark: "#4A90E2", // Dark Mode Secondary
-          },
-          accent: {
-            DEFAULT: "#7FFF00", // Vibrant Accent
+            DEFAULT: "#00a884", // 🎯 Outbound Bubble Color (Reply Emerald)
+            dark: "#005c4b", // Dark Mode Outbound Bubble
+            light: "#00e6b3", // Accent / Hover
           },
           bg: {
-            DEFAULT: "#F8F8F8", // Light Background
-            dark: "#121212", // Dark Background
+            DEFAULT: "#F0F2F5", // Clean Light Gray
+            dark: "#0b141a", // Master Dark Background
+          },
+          surface: {
+            DEFAULT: "#FFFFFF",
+            dark: "#111b21", // Sidebar/Secondary Surface
           },
           panel: {
-            DEFAULT: "#FFFFFF", // Light Card/Panel
-            dark: "#1E1E1E", // Dark Card/Panel
-          },
-          text: {
-            DEFAULT: "#212121", // Light Text
-            dark: "#E0E0E0", // Dark Text
+            DEFAULT: "#FFFFFF",
+            dark: "#202c33", // Cards/Modals/Bubbles
           },
           border: {
-            DEFAULT: "#E0E0E0",
-            dark: "#333333",
+            DEFAULT: "#E9EDEF",
+            dark: "#2a3942", // Professional Dark Border
           },
-          error: {
-            DEFAULT: "#D32F2F",
-            dark: "#EF5350",
+          text: {
+            DEFAULT: "#111b21", // 🎯 Inbound text color (Light Mode)
+            dark: "#e9edef", // 🎯 Inbound text color (Dark Mode)
+            primary: {
+              DEFAULT: "#111b21",
+              dark: "#e9edef",
+            },
+            secondary: {
+              DEFAULT: "#667781",
+              dark: "#8696a0",
+            },
           },
         },
       },

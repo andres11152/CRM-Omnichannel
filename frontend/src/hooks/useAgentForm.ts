@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { teamService } from "../../services/teamService";
-import { type AgentFormData } from "../../components/team/AgentModal";
-import { type TeamAgent } from "../../components/team/types";
+import { teamService } from "@/services/teamService";
+import { type AgentFormData } from "@/components/team/AgentModal";
+import { type TeamAgent } from "@/components/team/types";
 
 export interface UseAgentFormReturn {
   // Form state

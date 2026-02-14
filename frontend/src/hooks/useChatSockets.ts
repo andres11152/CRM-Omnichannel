@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 import { useQueryClient, QueryClient } from "@tanstack/react-query";
-import { socketService } from "../../services/socketService";
+import { socketService } from "@/services/socketService";
 import {
   addMessageToCache,
   updateConversationInCache,
   CHAT_KEYS,
 } from "./useChat";
-import { type Message, type Conversation } from "../../services/chatService";
-import { type Ticket } from "../../types";
+import { type Message, type Conversation } from "@/services/chatService";
+import { type Ticket } from "@/types";
 
 // 🔒 STRICT SOCKET TYPES
 interface RawSocketMessage {
@@ -265,3 +265,4 @@ export const useChatSockets = (currentTicketId: string | null) => {
     isConnected: socketService.isConnected,
   };
 };
+

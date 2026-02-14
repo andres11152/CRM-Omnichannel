@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { teamService } from "../../services/teamService";
+import { teamService } from "@/services/teamService";
 
 export interface UseAgentActionsReturn {
   deleteAgent: (id: string, name: string) => Promise<boolean>;

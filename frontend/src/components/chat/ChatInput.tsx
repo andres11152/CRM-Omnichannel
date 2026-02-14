@@ -47,7 +47,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+    <form onSubmit={handleSubmit} className="border-t border-gray-200 dark:border-reply-border-dark bg-white dark:bg-gray-800 p-4">
       <div className="flex items-end gap-2">
         {/* Attachment Buttons */}
         <div className="flex gap-1">
@@ -124,3 +124,4 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     </form>
   );
 };
+

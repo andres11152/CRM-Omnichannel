@@ -408,11 +408,7 @@ export const userService = {
         where: { id: targetUserId },
       });
 
-      if (
-        targetUser &&
-        targetUser.companyId === companyId &&
-        ["AGENT", "SUPERVISOR"].includes(targetUser.role)
-      ) {
+      if (targetUser && targetUser.companyId === companyId) {
         return true;
       }
     }

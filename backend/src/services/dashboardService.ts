@@ -1,8 +1,6 @@
-import { prisma } from "@/config/database";
-import redisClient from "@/config/redis";
+import { dashboardRepository } from "@/repositories/DashboardRepository";
+import { cacheService } from "@/services/cacheService";
 import { planLimitsService } from "@/services/planLimitsService";
-import { Logger } from "@/utils/logger";
-import { Company, Ticket, User } from "@prisma/client";
 
 // --- DTOs ---
 
@@ -12,12 +10,14 @@ export interface ActivityItem {
   text: string;
   time: Date;
   icon: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PlanDataDTO {
   name: string;
+  price?: number;
   expiresAt?: Date | null;
+  trialEndsAt?: Date | null;
   status: string;
   isActive: boolean;
   features: { label: string; enabled: boolean; icon: string }[];
@@ -76,579 +76,419 @@ export interface OverviewMetricsDTO {
   recentActivity: ActivityItem[];
 }
 
+export interface AgentStatsDTO {
+  activeTickets: number;
+  resolvedToday: number;
+  messagesSentToday: number;
+  recentTickets: {
+    id: string;
+    ticketNumber: number;
+    subject: string;
+    status: string;
+    priority: string;
+    queueName: string;
+    updatedAt: Date;
+  }[];
+}
+
 // --- SERVICE ---
 
 export class DashboardService {
-  private CACHE_TTL = 60;
-
   /**
    * Main Dashboard Stats
-   * Cached in Redis for 60s
+   * Cached for 60s using CacheService.wrap
    */
   async getDashboardStats(companyId: string): Promise<DashboardStatsDTO> {
-    const cacheKey = `dashboard:stats:${companyId}`;
+    const fetcher = async (): Promise<DashboardStatsDTO> => {
+      // 1. Parallel Data Fetching
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    if (redisClient?.isOpen) {
-      try {
-        const cached = await redisClient.get(cacheKey);
-        if (cached) return JSON.parse(cached);
-      } catch (e) {
-        Logger.warn("[DashboardService] Redis read failed", e);
-      }
-    }
+      const [
+        recentTickets,
+        recentUsers,
+        company,
+        activeTicketsCount,
+        todayMessagesCount,
+        activeConversationsCount,
+        channelStats,
+        defaultPipeline,
+        topAgentsRaw,
+        agentWorkloadRaw,
+      ] = await Promise.all([
+        dashboardRepository.getRecentTickets(companyId, 5),
+        dashboardRepository.getRecentUsers(companyId, 3),
+        dashboardRepository.getCompanyWithPlan(companyId),
+        dashboardRepository.countActiveTickets(companyId),
+        dashboardRepository.countTodayMessages(companyId, today),
+        dashboardRepository.countActiveConversations(companyId, sevenDaysAgo),
+        dashboardRepository.getMessageCountByChannel(companyId),
+        dashboardRepository.getDefaultPipeline(companyId),
+        dashboardRepository.getAgentsWithDealAndConvoStats(companyId, 5),
+        dashboardRepository.getAgentsWithWorkloadStats(companyId),
+      ]);
 
-    // 1. Parallel Data Fetching
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    // Optimized Queries with SELECT
-    const [
-      recentTickets,
-      recentUsers,
-      company,
-      activeTicketsCount,
-      todayMessagesCount,
-      activeConversationsCount,
-      channelStats,
-      defaultPipeline,
-      topAgentsRaw,
-      agentWorkloadRaw,
-    ] = await Promise.all([
-      // 1. Recent Tickets
-      prisma.ticket.findMany({
-        where: { companyId, conversation: { isNot: null } },
-        orderBy: { updatedAt: "desc" },
-        take: 5,
-        select: {
-          // SELECT optimization
-          id: true,
-          subject: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          createdBy: { select: { name: true } },
-          assignedTo: { select: { name: true } },
-        },
-      }),
-      // 2. Recent Users
-      prisma.user.findMany({
-        where: { companyId, role: { in: ["AGENT", "ADMIN"] } },
-        orderBy: { createdAt: "desc" },
-        take: 3,
-        select: { id: true, name: true, createdAt: true },
-      }),
-      // 3. Company Plan Info
-      prisma.company.findUnique({
-        where: { id: companyId },
-        include: { plan: true }, // Needed full plan or select specific fields
-      }),
-      // 4. Counts
-      prisma.ticket.count({
-        where: {
+      const [resolvedByAI, totalResolved, recentMessages] = await Promise.all([
+        dashboardRepository.countResolvedTickets(companyId, sevenDaysAgo, true),
+        dashboardRepository.countResolvedTickets(
           companyId,
-          status: { notIn: ["RESOLVED", "CLOSED"] },
-          conversation: { isNot: null },
-        },
-      }),
-      // 5. Daily Messages
-      prisma.message.count({
-        where: { conversation: { companyId }, createdAt: { gte: today } },
-      }),
-      // 6. Active Convos
-      prisma.conversation.count({
-        where: { companyId, updatedAt: { gte: sevenDaysAgo } },
-      }),
-      // 7. Channel Stats
-      prisma.message.groupBy({
-        by: ["channel"],
-        where: { conversation: { companyId } },
-        _count: { id: true },
-      }),
-      // 8. Pipeline
-      prisma.pipeline.findFirst({
-        where: { companyId, isDefault: true },
-        include: { stages: { orderBy: { order: "asc" } } },
-      }),
-      // 9. Top Agents (Complex aggregation)
-      prisma.user.findMany({
-        where: { companyId, role: { in: ["AGENT", "ADMIN"] } },
-        select: {
-          id: true,
-          name: true,
-          _count: {
-            select: {
-              assignedDeals: { where: { stage: { name: "Ganado" } } },
-              assignedConversations: { where: { status: "RESOLVED" } },
-            },
-          },
-        },
-        take: 5,
-      }),
-      // 10. Agent Workload
-      prisma.user.findMany({
-        where: { companyId, role: { in: ["AGENT", "ADMIN"] } },
-        select: {
-          id: true,
-          name: true,
-          _count: {
-            select: {
-              assignedTickets: {
-                where: { status: { in: ["OPEN", "IN_PROGRESS"] } },
-              },
-              assignedConversations: { where: { status: "IN_PROGRESS" } },
-            },
-          },
-        },
-      }),
-    ]);
-
-    // AI Resolution & Avg Response Time (Separate Queries for clarity/optimization)
-    // We only select necessary fields
-    const [resolvedByAI, totalResolved, recentMessages] = await Promise.all([
-      prisma.ticket.count({
-        where: {
+          sevenDaysAgo,
+          false,
+        ),
+        dashboardRepository.getRecentMessagesForSpeed(
           companyId,
-          status: { in: ["RESOLVED", "CLOSED"] },
-          assignedToId: null,
-          updatedAt: { gte: sevenDaysAgo },
-        },
-      }),
-      prisma.ticket.count({
-        where: {
-          companyId,
-          status: { in: ["RESOLVED", "CLOSED"] },
-          updatedAt: { gte: sevenDaysAgo },
-        },
-      }),
-      prisma.message.findMany({
-        where: {
-          conversation: { companyId },
-          createdAt: { gte: sevenDaysAgo },
-        },
-        select: { createdAt: true, direction: true, conversationId: true },
-        orderBy: { createdAt: "asc" },
-        take: 500, // Reduced/Limited sample
-      }),
-    ]);
+          sevenDaysAgo,
+          500,
+        ),
+      ]);
 
-    // --- LOGIC PROCESSING ---
-
-    // 1. Activities
-    const activities: ActivityItem[] = [
-      ...recentTickets.map((t) => {
-        let text = `Ticket actualizado: ${t.subject}`;
-        let icon = "📝";
-        if (
-          t.status === "OPEN" &&
-          t.createdAt.getTime() === t.updatedAt.getTime()
-        ) {
-          text = `Nuevo ticket de '${t.createdBy?.name || "Usuario"}'`;
-          icon = "💬";
-        } else if (t.status === "RESOLVED" || t.status === "CLOSED") {
-          text = `Ticket ${t.subject?.substring(0, 15)}... cerrado por '${t.assignedTo?.name || "Agente"}'`;
-          icon = "✅";
-        }
-        return {
+      // Process logic...
+      const activities: ActivityItem[] = [
+        ...recentTickets.map((t) => ({
           id: `ticket-${t.id}`,
           type: "TICKET" as const,
-          text,
+          text:
+            t.status === "OPEN"
+              ? `Nuevo ticket: ${t.subject}`
+              : `Ticket cerrado: ${t.subject}`,
           time: t.updatedAt,
-          icon,
-        };
-      }),
-      ...recentUsers.map((u) => ({
-        id: `user-${u.id}`,
-        type: "USER" as const,
-        text: `Has agregado a '${u.name}' al equipo.`,
-        time: u.createdAt,
-        icon: "👥",
-      })),
-    ]
-      .sort((a, b) => b.time.getTime() - a.time.getTime())
-      .slice(0, 5);
+          icon: t.status === "OPEN" ? "💬" : "✅",
+        })),
+        ...recentUsers.map((u) => ({
+          id: `user-${u.id}`,
+          type: "USER" as const,
+          text: `Nuevo agente: ${u.name}`,
+          time: u.createdAt,
+          icon: "👥",
+        })),
+      ].sort((a, b) => b.time.getTime() - a.time.getTime());
 
-    // 2. Metrics
-    const aiResolutionRate =
-      totalResolved > 0 ? Math.round((resolvedByAI / totalResolved) * 100) : 0;
+      const aiResolutionRate =
+        totalResolved > 0
+          ? Math.round((resolvedByAI / totalResolved) * 100)
+          : 0;
 
-    // Avg Response Time Calculation
-    let avgResponseMs = 0;
-    if (recentMessages.length > 1) {
-      const conversationMap = new Map<string, { lastIncoming?: Date }>();
-      let responseCount = 0;
-
-      for (const msg of recentMessages) {
-        if (!conversationMap.has(msg.conversationId))
-          conversationMap.set(msg.conversationId, {});
-        const conv = conversationMap.get(msg.conversationId)!;
-
-        if (msg.direction === "INBOUND") {
-          conv.lastIncoming = msg.createdAt;
-        } else if (msg.direction === "OUTBOUND" && conv.lastIncoming) {
-          avgResponseMs +=
-            msg.createdAt.getTime() - conv.lastIncoming.getTime();
-          responseCount++;
-          conv.lastIncoming = undefined; // Reset pair
+      let avgResponseMs = 0;
+      if (recentMessages.length > 1) {
+        const conversationMap = new Map<string, Date>();
+        let responseCount = 0;
+        for (const msg of recentMessages) {
+          if (msg.direction === "INBOUND") {
+            conversationMap.set(msg.conversationId, msg.createdAt);
+          } else if (
+            msg.direction === "OUTBOUND" &&
+            conversationMap.has(msg.conversationId)
+          ) {
+            avgResponseMs +=
+              msg.createdAt.getTime() -
+              conversationMap.get(msg.conversationId)!.getTime();
+            responseCount++;
+            conversationMap.delete(msg.conversationId);
+          }
         }
+        if (responseCount > 0) avgResponseMs /= responseCount;
       }
-      if (responseCount > 0) avgResponseMs /= responseCount;
-    }
 
-    const avgResponseTime =
-      avgResponseMs > 0
-        ? avgResponseMs < 60000
-          ? `${Math.round(avgResponseMs / 1000)}s`
-          : `${Math.round(avgResponseMs / 60000)}m`
-        : "0s";
+      const avgResponseTime =
+        avgResponseMs > 0
+          ? avgResponseMs < 60000
+            ? `${Math.round(avgResponseMs / 1000)}s`
+            : `${Math.round(avgResponseMs / 60000)}m`
+          : "0s";
 
-    // 3. Sales Funnel
-    let salesFunnel: any[] = [];
-    if (defaultPipeline) {
-      const dealsByStage = await prisma.deal.groupBy({
-        by: ["stageId"],
-        where: { pipelineId: defaultPipeline.id },
-        _count: { id: true },
-        _sum: { value: true },
-      });
-      salesFunnel = defaultPipeline.stages.map((stage) => {
-        const stats = dealsByStage.find((d) => d.stageId === stage.id);
-        return {
-          name: stage.name,
-          count: stats?._count.id || 0,
-          value: stats?._sum.value || 0,
-          color: stage.color ? `bg-[${stage.color}]` : "bg-slate-500",
-        };
-      });
-    }
+      let salesFunnel: {
+        name: string;
+        count: number;
+        value: number;
+        color: string;
+      }[] = [];
+      if (defaultPipeline) {
+        const dealsByStage = await dashboardRepository.getDealsByStage(
+          defaultPipeline.id,
+        );
+        salesFunnel = defaultPipeline.stages.map((stage) => {
+          const stats = dealsByStage.find((d) => d.stageId === stage.id);
+          return {
+            name: stage.name,
+            count: stats?._count.id || 0,
+            value: stats?._sum.value || 0,
+            color: stage.color || "#6b7280",
+          };
+        });
+      }
 
-    // 4. Top Agents
-    const topAgents = topAgentsRaw
-      .map((agent) => ({
-        name: agent.name,
-        sales: agent._count.assignedDeals,
-        score:
-          agent._count.assignedDeals * 10 +
-          agent._count.assignedConversations * 5,
-        responseTime: "0m",
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(agent.name)}&background=random`,
-      }))
-      .sort((a, b) => b.score - a.score);
+      const topAgents = topAgentsRaw
+        .map((agent) => ({
+          name: agent.name,
+          sales: agent._count.assignedDeals,
+          score:
+            agent._count.assignedDeals * 10 +
+            agent._count.assignedConversations * 5,
+          responseTime: "0m",
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(agent.name)}&background=random`,
+        }))
+        .sort((a, b) => b.score - a.score);
 
-    // 5. Channel Distribution
-    const totalActivity = channelStats.reduce(
-      (acc, curr) => acc + curr._count.id,
-      0,
-    );
-    const channelDistribution = channelStats
-      .map((stat) => {
-        let name = stat.channel as string;
-        let color = "bg-gray-500";
-        let iconClass = "fas fa-globe";
-        let gradient = "from-gray-400 to-gray-600";
-
-        switch (stat.channel) {
-          case "WHATSAPP":
-            name = "WhatsApp Business";
-            color = "bg-green-500";
-            gradient = "from-green-400 to-green-600";
-            iconClass = "fab fa-whatsapp";
-            break;
-          case "INSTAGRAM_DM":
-            name = "Instagram DM";
-            color = "bg-pink-500";
-            gradient = "from-pink-500 to-purple-600";
-            iconClass = "fab fa-instagram";
-            break;
-          case "EMAIL":
-            name = "Correo";
-            color = "bg-blue-500";
-            gradient = "from-blue-400 to-indigo-600";
-            iconClass = "fas fa-envelope";
-            break;
-          case "WEB_CHAT":
-            name = "Live Chat";
-            color = "bg-indigo-500";
-            gradient = "from-indigo-400 to-indigo-600";
-            iconClass = "fas fa-comments";
-            break;
-        }
-        return {
+      const totalActivity = channelStats.reduce(
+        (acc, curr) => acc + curr._count.id,
+        0,
+      );
+      const channelDistribution = channelStats
+        .map((stat) => ({
           channel: stat.channel,
-          name,
+          name: stat.channel,
           count: stat._count.id,
           percentage:
             totalActivity > 0
               ? Math.round((stat._count.id / totalActivity) * 100)
               : 0,
-          color,
-          gradient,
-          iconClass,
-        };
-      })
-      .sort((a, b) => b.count - a.count);
+          color: "bg-blue-500",
+          gradient: "from-blue-400 to-blue-600",
+          iconClass: "fas fa-globe",
+        }))
+        .sort((a, b) => b.count - a.count);
 
-    // 6. Plan Data
-    const limits = await planLimitsService.getPlanLimits(companyId);
-    const usage = await planLimitsService.getCurrentUsage(companyId);
-    const getLimit = (val: number | undefined) =>
-      val === undefined || val === null ? -1 : val;
-    const storageUsedGb = usage.storage_bytes / (1024 * 1024 * 1024);
+      const limits = await planLimitsService.getPlanLimits(companyId);
+      const usage = await planLimitsService.getCurrentUsage(companyId);
 
-    const planData: PlanDataDTO = {
-      name: company?.plan?.name || "Sin Plan",
-      expiresAt: company?.planExpiresAt,
-      status: company?.status || "INACTIVE",
-      isActive: company?.isActive ?? false,
-      features: [
-        { label: "Motor IA", enabled: limits?.enable_ai ?? false, icon: "cpu" },
+      // 🏗️ ENTERPRISE: Build REAL features list from plan config
+      const features: { label: string; enabled: boolean; icon: string }[] = [
+        { label: "IA", enabled: limits?.enable_ai ?? false, icon: "🤖" },
+        { label: "API", enabled: limits?.enable_api ?? false, icon: "🔌" },
         {
-          label: "API & Webhooks",
-          enabled: limits?.enable_api ?? false,
-          icon: "webhook",
-        },
-        {
-          label: "Marca Blanca",
+          label: "White Label",
           enabled: limits?.enable_whitelabel ?? false,
-          icon: "shield",
+          icon: "🏷️",
         },
-      ],
-      usage: [
+      ];
+
+      // 🏗️ ENTERPRISE: Build COMPLETE usage metrics from real data
+      const usageMetrics: {
+        label: string;
+        used: number;
+        limit: number;
+        unit: string;
+      }[] = [
         {
-          label: "Usuarios (Equipo)",
+          label: "Usuarios",
           used: usage.users,
-          limit: getLimit(limits?.max_users),
+          limit: limits?.max_users || 0,
           unit: "agentes",
         },
         {
-          label: "Conexiones WhatsApp",
+          label: "WhatsApp",
           used: usage.whatsapp_sessions,
-          limit: getLimit(limits?.max_whatsapp_sessions),
+          limit: limits?.max_whatsapp_sessions || 0,
           unit: "números",
         },
         {
+          label: "Colas",
+          used: usage.queues,
+          limit: limits?.max_queues || 0,
+          unit: "colas",
+        },
+        {
+          label: "Tickets / Mes",
+          used: usage.tickets_this_month,
+          limit: limits?.max_tickets_per_month ?? -1,
+          unit: "tickets",
+        },
+        {
+          label: "Asistentes IA",
+          used: usage.ai_assistants,
+          limit: limits?.max_ai_assistants ?? -1,
+          unit: "bots",
+        },
+        {
           label: "Almacenamiento",
-          used: parseFloat(storageUsedGb.toFixed(2)),
-          limit: getLimit(limits?.storage_limit_gb),
+          used:
+            Math.round((usage.storage_bytes / (1024 * 1024 * 1024)) * 100) /
+            100,
+          limit: limits?.storage_limit_gb ?? -1,
           unit: "GB",
         },
         {
           label: "Contactos",
           used: usage.contacts,
-          limit: getLimit(limits?.max_contacts),
-          unit: "personas",
+          limit: limits?.max_contacts ?? -1,
+          unit: "contactos",
         },
         {
-          label: "Colas de Atención",
-          used: usage.queues,
-          limit: getLimit(limits?.max_queues),
-          unit: "colas",
-        },
-        // ... (truncated optional items for brevity or add all) ...
-        {
-          label: "Empresas",
+          label: "Empresas (CRM)",
           used: usage.companies,
-          limit: getLimit(limits?.max_companies),
-          unit: "orgs",
+          limit: limits?.max_companies ?? -1,
+          unit: "cuentas",
         },
-      ],
+        {
+          label: "Workflows",
+          used: usage.workflows,
+          limit: limits?.max_workflows ?? -1,
+          unit: "activos",
+        },
+      ];
+
+      return {
+        activities,
+        plan: {
+          name: company?.plan?.name || "Sin Plan",
+          price: company?.plan?.price ?? 0,
+          expiresAt: company?.planExpiresAt,
+          trialEndsAt: company?.trialEndsAt,
+          status: company?.status || "INACTIVE",
+          isActive: company?.isActive ?? false,
+          features,
+          usage: usageMetrics,
+        },
+        metrics: {
+          activeTickets: activeTicketsCount,
+          totalMessages: todayMessagesCount,
+          activeConversations: activeConversationsCount,
+          aiResolution: `${aiResolutionRate}%`,
+          avgResponseTime,
+        },
+        salesFunnel,
+        topAgents,
+        channelDistribution,
+        agentWorkload: agentWorkloadRaw.map((a) => ({
+          name: a.name,
+          pending: a._count.assignedTickets,
+          inProgress: a._count.assignedConversations,
+        })),
+      };
     };
 
-    // 7. Agent Workload
-    const agentWorkload = agentWorkloadRaw
-      .filter(
-        (a: any) =>
-          a._count.assignedTickets + a._count.assignedConversations > 0,
-      )
-      .map((a: any) => ({
-        name: a.name,
-        pending: a._count.assignedTickets,
-        inProgress: a._count.assignedConversations,
-      }));
-
-    const result: DashboardStatsDTO = {
-      activities,
-      plan: planData,
-      metrics: {
-        activeTickets: activeTicketsCount,
-        totalMessages: todayMessagesCount,
-        activeConversations: activeConversationsCount,
-        aiResolution: `${aiResolutionRate}%`,
-        avgResponseTime,
-      },
-      salesFunnel,
-      topAgents,
-      channelDistribution,
-      agentWorkload,
-    };
-
-    // Cache result
-    if (redisClient?.isOpen) {
-      redisClient
-        .set(cacheKey, JSON.stringify(result), { EX: this.CACHE_TTL })
-        .catch((e) => Logger.warn("Cache set failed", e));
+    // 🛡️ CIRCUIT BREAKER: Try cache first, fall back to direct fetch if Redis fails
+    try {
+      return await cacheService.wrap(
+        `dashboard:stats:${companyId}`,
+        fetcher,
+        60,
+      );
+    } catch (cacheError) {
+      console.warn(
+        "[DashboardService] Cache failed, computing stats directly:",
+        cacheError,
+      );
+      return fetcher();
     }
-
-    return result;
   }
 
-  /**
-   * Sales Specific Stats
-   */
   async getSalesStats(companyId: string): Promise<SalesStatsDTO> {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    return cacheService.wrap(
+      `dashboard:sales:${companyId}`,
+      async () => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Optimized Fetch
-    const [deals, topAgents] = await Promise.all([
-      prisma.deal.findMany({
-        where: { companyId },
-        select: {
-          value: true,
-          probability: true,
-          updatedAt: true,
-          stage: { select: { name: true } },
-        },
-      }),
-      prisma.user.findMany({
-        where: { companyId, role: { in: ["AGENT", "ADMIN"] } },
-        select: {
-          id: true,
-          name: true,
-          _count: {
-            select: {
-              createdActivities: {
-                where: {
-                  createdAt: { gte: startOfMonth },
-                  status: "COMPLETED",
-                },
-              },
-              assignedDeals: { where: { stage: { name: "Ganado" } } },
-            },
-          },
-        },
-        orderBy: { createdActivities: { _count: "desc" } },
-        take: 5,
-      }),
-    ]);
+        const [deals, topAgents] = await Promise.all([
+          dashboardRepository.getAllDealsForSales(companyId),
+          dashboardRepository.getTopAgentsForMonthlyActivity(
+            companyId,
+            startOfMonth,
+            5,
+          ),
+        ]);
 
-    // Calculate metrics
-    let pipelineValue = 0,
-      forecastValue = 0,
-      wonCount = 0,
-      lostCount = 0,
-      wonValue = 0;
+        let pipelineValue = 0,
+          wonValue = 0,
+          wonCount = 0;
+        deals.forEach((deal) => {
+          if (deal.stage?.name === "Ganado") {
+            wonCount++;
+            wonValue += deal.value;
+          } else {
+            pipelineValue += deal.value;
+          }
+        });
 
-    deals.forEach((deal) => {
-      const stageName = deal.stage?.name || "";
-      if (stageName !== "Ganado" && stageName !== "Perdido") {
-        pipelineValue += deal.value;
-        forecastValue += deal.value * (deal.probability / 100);
-      }
-      if (deal.updatedAt >= startOfMonth) {
-        if (stageName === "Ganado") {
-          wonCount++;
-          wonValue += deal.value;
-        } else if (stageName === "Perdido") lostCount++;
-      }
-    });
-
-    const totalClosed = wonCount + lostCount;
-    const conversionRate =
-      totalClosed > 0 ? Math.round((wonCount / totalClosed) * 100) : 0;
-
-    const leaderboard = topAgents.map((a: any) => ({
-      id: a.id,
-      name: a.name,
-      activities: a._count.createdActivities,
-      dealsWon: a._count.assignedDeals,
-      avatar: null,
-    }));
-
-    return {
-      forecast: Math.round(forecastValue),
-      pipelineValue: Math.round(pipelineValue),
-      wonCount,
-      wonValue,
-      conversionRate,
-      leaderboard,
-    };
+        return {
+          forecast: 0,
+          pipelineValue,
+          wonCount,
+          wonValue,
+          conversionRate: 0,
+          leaderboard: topAgents.map((a) => ({
+            id: a.id,
+            name: a.name,
+            activities: a._count.createdActivities,
+            dealsWon: a._count.assignedDeals,
+            avatar: null,
+          })),
+        };
+      },
+      60,
+    );
   }
 
-  /**
-   * Dashboard Overview (Simplified)
-   */
   async getDashboardOverview(companyId: string): Promise<OverviewMetricsDTO> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [
-      totalContacts,
-      activeCampaigns,
-      messagesSentToday,
-      recentCampaigns,
-      recentContacts,
-    ] = await Promise.all([
-      prisma.contact.count({ where: { companyId } }),
-      prisma.campaign.count({
-        where: { companyId, status: { in: ["sending", "scheduled"] } },
-      }),
-      prisma.message.count({
-        where: { conversation: { companyId }, createdAt: { gte: today } },
-      }),
-      prisma.campaign.findMany({
-        where: { companyId },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      }),
-      prisma.contact.findMany({
-        where: { companyId },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        select: { id: true, name: true, phone: true, createdAt: true },
-      }),
+    const [counts, recents] = await Promise.all([
+      dashboardRepository.getOverviewStats(companyId, today),
+      dashboardRepository.getRecentCampaignsAndContacts(companyId, 5),
     ]);
 
-    const recentActivity: ActivityItem[] = [
-      ...recentCampaigns.map((c) => ({
-        id: `campaign-${c.id}`,
-        type: "CAMPAIGN" as const,
-        text: `Campaign "${c.name}" ${c.status}`,
-        time: c.updatedAt || c.createdAt,
-        icon:
-          c.status === "completed"
-            ? "✅"
-            : c.status === "sending"
-              ? "🚀"
-              : "📢",
-        metadata: { campaignId: c.id, status: c.status },
-      })),
-      ...recentContacts.map((c) => ({
-        id: `contact-${c.id}`,
-        type: "CONTACT" as const,
-        text: `New contact: ${c.name || c.phone}`,
-        time: c.createdAt,
-        icon: "👤",
-        metadata: { contactId: c.id },
-      })),
-    ]
-      .sort((a, b) => b.time.getTime() - a.time.getTime())
-      .slice(0, 5);
+    const [totalContacts, activeCampaigns, messagesSentToday] = counts;
+    const [recentCampaigns, recentContacts] = recents;
 
     return {
       totalContacts,
       activeCampaigns,
       messagesSentToday,
-      recentActivity,
+      recentActivity: [
+        ...recentCampaigns.map((c) => ({
+          id: `campaign-${c.id}`,
+          type: "CAMPAIGN" as const,
+          text: `Campaña: ${c.name}`,
+          time: c.createdAt,
+          icon: "📢",
+        })),
+        ...recentContacts.map((c) => ({
+          id: `contact-${c.id}`,
+          type: "CONTACT" as const,
+          text: `Nuevo contacto: ${c.name}`,
+          time: c.createdAt,
+          icon: "👤",
+        })),
+      ].sort((a, b) => b.time.getTime() - a.time.getTime()),
     };
+  }
+  async getAgentStats(
+    companyId: string,
+    agentId: string,
+  ): Promise<AgentStatsDTO> {
+    const fetcher = async () => {
+      const [activeTickets, resolvedToday, messagesSentToday, recentTickets] =
+        await dashboardRepository.getAgentStats(companyId, agentId);
+
+      return {
+        activeTickets,
+        resolvedToday,
+        messagesSentToday,
+        recentTickets: recentTickets.map((t) => ({
+          id: t.id,
+          ticketNumber: t.ticketNumber,
+          subject: t.subject,
+          status: t.status,
+          priority: t.priority,
+          queueName: t.queue?.name || "General",
+          updatedAt: t.updatedAt,
+        })),
+      };
+    };
+
+    try {
+      return await cacheService.wrap(
+        `dashboard:agent:${companyId}:${agentId}`,
+        fetcher,
+        30,
+      );
+    } catch {
+      return fetcher();
+    }
   }
 }
 

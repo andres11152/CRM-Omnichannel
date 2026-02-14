@@ -3,5 +3,100 @@
 @config "../tailwind.config.js";
 @plugin "tailwindcss-animate";
 
-/* Custom utility overloads if needed, 
-   but try to keep everything in the config or standard utilities */
+@theme {
+  --color-reply-brand: #00a884;
+  --color-reply-brand-dark: #005c4b;
+  --color-reply-brand-light: #00e6b3;
+  --color-reply-green: #00a884;
+  --color-reply-green-dark: #005c4b;
+  --color-reply-green-light: #00e6b3;
+  --color-reply-bg: #f2f5f7;
+  --color-reply-bg-dark: #0b141a;
+  --color-reply-surface: #ffffff;
+  --color-reply-surface-dark: #111b21;
+  --color-reply-panel: #ffffff;
+  --color-reply-panel-dark: #202c33;
+  --color-reply-border: #e9edef;
+  --color-reply-border-dark: #2a3942;
+  --color-reply-text: #111b21;
+  --color-reply-text-dark: #e9edef;
+  --color-reply-text-primary: #111b21;
+  --color-reply-text-primary-dark: #e9edef;
+  --color-reply-text-secondary: #667781;
+  --color-reply-text-secondary-dark: #8696a0;
+}
+
+/* Fail-safe bubble class using CSS variables */
+.bubble-outbound {
+  background-color: #00a884 !important;
+  color: white !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.bubble-inbound {
+  background-color: white;
+  color: #111b21;
+}
+
+.dark .bubble-inbound {
+  background-color: #202c33;
+  color: #e9edef;
+  border-color: #2a3942;
+}
+
+body {
+  @apply bg-reply-bg text-reply-text-primary dark:bg-reply-bg-dark dark:text-reply-text-primary-dark font-sans antialiased;
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-reply-border dark:bg-reply-border-dark rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-reply-text-secondary dark:bg-reply-text-secondary-dark;
+}
+
+@keyframes scan {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    top: 100%;
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+.animate-scan {
+  animation: scan 3s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-fade-in {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

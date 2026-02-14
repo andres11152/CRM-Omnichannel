@@ -1,5 +1,5 @@
 import React from "react";
-import { type Conversation } from "../../../services/chatService";
+import { type Conversation } from "@/services/chatService";
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -61,7 +61,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   return (
     <div className="flex flex-col h-full">
       {/* Header Actions */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="p-4 border-b border-gray-200 dark:border-reply-border-dark">
         <div className="flex gap-2">
           <button
             onClick={onNewChat}
@@ -168,10 +168,10 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`p-4 border-b border-gray-200 dark:border-gray-700 cursor-pointer transition-colors ${
+      className={`p-4 border-b border-gray-200 dark:border-reply-border-dark cursor-pointer transition-colors ${
         isSelected
           ? "bg-indigo-50 dark:bg-indigo-900/20 border-l-4 border-l-indigo-600"
-          : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+          : "hover:bg-reply-bg dark:hover:bg-gray-800/50"
       }`}
     >
       <div className="flex items-start gap-3">
@@ -215,3 +215,5 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     </div>
   );
 };
+
+

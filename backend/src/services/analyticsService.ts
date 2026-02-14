@@ -1,4 +1,9 @@
-import { prisma } from "@/config/database";
+import {
+  analyticsRepository,
+  AgentPerformanceQueryResult,
+} from "@/repositories/AnalyticsRepository";
+import { ticketRepository } from "@/repositories/TicketRepository";
+import { companyRepository } from "@/repositories/CompanyRepository";
 import { exportService } from "@/services/exportService";
 import dayjs from "dayjs";
 
@@ -45,34 +50,15 @@ export class AnalyticsService {
    * Get Financial Stats (MRR, Growth)
    */
   async getFinancialAnalytics(): Promise<FinancialAnalyticsDTO> {
-    // 1. MRR Calculation
-    const activeCompanies = await prisma.company.findMany({
-      where: {
-        status: { notIn: ["CANCELED", "INACTIVE"] },
-        plan: { isNot: null },
-      },
-      select: {
-        // Optimized
-        plan: { select: { price: true, name: true, id: true } },
-      },
-    });
+    const activeCompanies = await analyticsRepository.getFinancialData();
 
     const mrr = activeCompanies.reduce(
       (total, c) => total + (c.plan?.price || 0),
       0,
     );
 
-    // 2. Plan Distribution
-    const distributionRaw = await prisma.company.groupBy({
-      by: ["planId"],
-      _count: { planId: true },
-      where: { slug: { notIn: ["reply-saas-admin", "crm-saas"] } },
-    });
-
-    // Efficient Plan Name Resolution
-    const plans = await prisma.plan.findMany({
-      select: { id: true, name: true },
-    });
+    const distributionRaw = await analyticsRepository.getCompanyCountByPlan();
+    const plans = await analyticsRepository.getPlans();
     const planMap = new Map(plans.map((p) => [p.id, p]));
 
     const distribution = distributionRaw.map((item) => {
@@ -85,15 +71,9 @@ export class AnalyticsService {
       };
     });
 
-    // 3. Growth Trend
     const sixMonthsAgo = dayjs().subtract(5, "month").startOf("month").toDate();
-    const newCompanies = await prisma.company.findMany({
-      where: {
-        createdAt: { gte: sixMonthsAgo },
-        slug: { notIn: ["reply-saas-admin"] },
-      },
-      select: { createdAt: true },
-    });
+    const newCompanies =
+      await analyticsRepository.getNewCompanies(sixMonthsAgo);
 
     const trend = this.generateMonthlyTrend(newCompanies);
 
@@ -111,25 +91,13 @@ export class AnalyticsService {
     const start = startDate || dayjs().subtract(30, "day").toDate();
     const end = endDate || new Date();
 
-    const messages = await prisma.message.findMany({
-      where: {
-        conversation: { companyId },
-        createdAt: { gte: start, lte: end },
-      },
-      select: { createdAt: true },
-    });
+    const results = await analyticsRepository.getHeatmap(companyId, start, end);
 
-    const buckets: Record<string, number> = {};
-    messages.forEach((m) => {
-      const d = dayjs(m.createdAt);
-      const key = `${d.day()}-${d.hour()}`;
-      buckets[key] = (buckets[key] || 0) + 1;
-    });
-
-    return Object.entries(buckets).map(([key, value]) => {
-      const [day, hour] = key.split("-").map(Number);
-      return { day, hour, value };
-    });
+    return results.map((r) => ({
+      day: r.day,
+      hour: r.hour,
+      value: Number(r.value),
+    }));
   }
 
   /**
@@ -143,44 +111,23 @@ export class AnalyticsService {
     const start = startDate || dayjs().subtract(30, "day").toDate();
     const end = endDate || new Date();
 
-    const agents = await prisma.user.findMany({
-      where: { companyId, role: { in: ["AGENT", "ADMIN", "SUPERVISOR"] } },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        assignedTickets: {
-          where: { createdAt: { gte: start, lte: end } },
-          select: { status: true, createdAt: true, resolvedAt: true },
-        },
-      },
-    });
+    const results = await analyticsRepository.getAgentPerformance(
+      companyId,
+      start,
+      end,
+    );
 
-    return agents.map((agent) => {
-      const total = agent.assignedTickets.length;
-      const resolved = agent.assignedTickets.filter(
-        (t) => t.status === "RESOLVED" || t.status === "CLOSED",
-      );
-      const resolvedCount = resolved.length;
-
-      let totalTime = 0;
-      resolved.forEach((t) => {
-        if (t.resolvedAt)
-          totalTime += dayjs(t.resolvedAt).diff(dayjs(t.createdAt), "minute");
-      });
-
-      return {
-        agentId: agent.id,
-        name: agent.name,
-        email: agent.email,
-        role: agent.role,
-        totalTickets: total,
-        resolvedTickets: resolvedCount,
-        avgResolutionTime:
-          resolvedCount > 0 ? Math.round(totalTime / resolvedCount) : 0,
-      };
-    });
+    return results.map((r: AgentPerformanceQueryResult) => ({
+      agentId: r.agentId,
+      name: r.name,
+      email: r.email,
+      role: r.role,
+      totalTickets: r.totalTickets,
+      resolvedTickets: r.resolvedTickets,
+      avgResolutionTime: r.avgResolutionTime
+        ? Math.round(r.avgResolutionTime)
+        : 0,
+    }));
   }
 
   /**
@@ -194,20 +141,18 @@ export class AnalyticsService {
     const start = startDate || dayjs().subtract(30, "day").toDate();
     const end = endDate || new Date();
 
-    const conversations = await prisma.conversation.findMany({
-      where: { companyId, createdAt: { gte: start, lte: end } },
-      select: { tags: true },
-    });
+    const conversations = await analyticsRepository.getConversationsWithTags(
+      companyId,
+      start,
+      end,
+    );
 
     const tagCounts: Record<string, number> = {};
     conversations.forEach((c) =>
       c.tags.forEach((t) => (tagCounts[t] = (tagCounts[t] || 0) + 1)),
     );
 
-    const existingTags = await prisma.tag.findMany({
-      where: { companyId },
-      select: { name: true, color: true },
-    });
+    const existingTags = await analyticsRepository.getTags(companyId);
     const colorMap = new Map(existingTags.map((t) => [t.name, t.color]));
 
     return Object.entries(tagCounts)
@@ -341,7 +286,7 @@ export class AnalyticsService {
       },
     ];
 
-    const healthAnalysis = mockTenants
+    return mockTenants
       .map((t) => {
         let score = 60;
         const factors: string[] = [];
@@ -352,6 +297,7 @@ export class AnalyticsService {
           score -= 30;
           factors.push('Usuario "fantasma" > 14d (-30)');
         }
+
         if (t.openTickets === 0) {
           score += 10;
           factors.push("Sin incidentes técnicos (+10)");
@@ -359,6 +305,7 @@ export class AnalyticsService {
           score -= 40;
           factors.push("Múltiples problemas reportados (-40)");
         }
+
         if (t.plan === "Enterprise") {
           score += 5;
           factors.push("Contrato Enterprise estable (+5)");
@@ -372,7 +319,6 @@ export class AnalyticsService {
         return { ...t, healthScore: score, healthStatus, factors };
       })
       .sort((a, b) => b.mrr - a.mrr);
-    return healthAnalysis;
   }
 
   // --- EXPORT HELPERS ---
@@ -387,10 +333,7 @@ export class AnalyticsService {
       filters.startDate,
       filters.endDate,
     );
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: { name: true },
-    });
+    const company = await companyRepository.findById(companyId);
 
     const csvRecords = data.map((d) => ({
       name: d.name,
@@ -444,19 +387,12 @@ export class AnalyticsService {
     const start = filters.startDate || dayjs().subtract(30, "day").toDate();
     const end = filters.endDate || new Date();
 
-    const tickets = await prisma.ticket.findMany({
-      where: { companyId, createdAt: { gte: start, lte: end } },
-      select: {
-        ticketNumber: true,
-        subject: true,
-        status: true,
-        priority: true,
-        createdAt: true,
-        resolvedAt: true,
-        assignedTo: { select: { name: true } },
-        createdBy: { select: { name: true, email: true } },
-      },
-    });
+    const tickets = await ticketRepository.getTicketsForExport(
+      companyId,
+      start,
+      end,
+    );
+    const company = await companyRepository.findById(companyId);
 
     const records = tickets.map((t) => ({
       ticketNumber: `#${t.ticketNumber}`,
@@ -470,11 +406,6 @@ export class AnalyticsService {
         ? dayjs(t.resolvedAt).format("DD/MM/YYYY HH:mm")
         : "Pendiente",
     }));
-
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: { name: true },
-    });
 
     const exportData = {
       headers: [

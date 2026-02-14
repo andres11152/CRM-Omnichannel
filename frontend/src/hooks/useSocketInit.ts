@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
 // Service is in root/services, so we go up from hooks -> src -> root
-import { socketService } from "../../services/socketService";
-import { useAuthStore } from "../stores/authStore";
+import { socketService } from "@/services/socketService";
+import { useAuthStore } from "@/stores/authStore";
 
 export const useSocketInit = () => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);

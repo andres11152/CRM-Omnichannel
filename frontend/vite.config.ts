@@ -1,8 +1,7 @@
-// vite.config.ts
-
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -11,7 +10,7 @@ export default defineConfig({
     VitePWA({
       registerType: "prompt",
       devOptions: {
-        enabled: true, // Enable PWA in dev mode
+        enabled: false, // Disable PWA in dev mode to fix caching issues during refactor
         type: "module",
       },
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
@@ -81,7 +80,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": "/src",
+      "@": path.resolve(__dirname, "./src"),
     },
   },
   server: {

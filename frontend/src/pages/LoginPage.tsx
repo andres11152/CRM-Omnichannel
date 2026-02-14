@@ -6,12 +6,12 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast, Toaster } from "sonner";
 import { AxiosError } from "axios";
 
-import { useAuthStore } from "../stores/authStore";
-import { api } from "../lib/axios";
-import { ApiResponse } from "../types/common.types";
-import { LoginResponse } from "../types/auth.types";
-import { API_BASE_URL } from "../../services/apiConfig";
-import { PWAInstallPrompt } from "../components/PWAInstallPrompt";
+import { useAuthStore } from "@/stores/authStore";
+import { api } from "@/lib/axios";
+import { ApiResponse } from "@/types/common.types";
+import { LoginResponse } from "@/types/auth.types";
+import { API_BASE_URL } from "@/services/apiConfig";
+import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 
 // 📝 VALIDATION SCHEMA
 const loginSchema = z.object({
@@ -57,12 +57,12 @@ const FormInput = ({
           placeholder={placeholder}
           className={`
             block w-full px-4 py-3.5 rounded-xl border text-base transition-all duration-200
-            bg-gray-50 dark:bg-[#1a252d] text-gray-900 dark:text-white
+            bg-reply-bg dark:bg-reply-surface-dark text-reply-text-primary dark:text-reply-text-primary-dark
             placeholder-gray-400 dark:placeholder-gray-500
             ${
               error
                 ? "border-red-500 bg-red-50/50 dark:bg-red-900/10 focus:ring-red-200"
-                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 focus:border-reply-green focus:ring-4 focus:ring-reply-green/10"
+                : "border-reply-border dark:border-reply-border-dark hover:border-gray-300 dark:hover:border-gray-600 focus:border-reply-brand focus:ring-4 focus:ring-reply-brand/10"
             }
             focus:outline-none
           `}
@@ -231,14 +231,14 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-white dark:bg-[#0b141a] font-sans selection:bg-green-100 dark:selection:bg-green-900 relative">
+    <div className="flex min-h-screen bg-reply-surface dark:bg-reply-bg-dark font-sans selection:bg-reply-brand/10 dark:selection:bg-reply-brand/20 relative">
       <Toaster
         position="top-right"
         richColors
         toastOptions={{ style: { zIndex: 99999 } }}
       />
       {/* 🖼️ LEFT SIDE: ARTWORK & BRANDING */}
-      <div className="hidden lg:flex w-[48%] fixed inset-y-0 left-0 bg-gradient-to-br from-[#00a884] to-[#005c4b] items-center justify-center p-12 overflow-hidden z-0">
+      <div className="hidden lg:flex w-[48%] fixed inset-y-0 left-0 bg-gradient-to-br from-reply-brand to-reply-brand-dark items-center justify-center p-12 overflow-hidden z-0">
         {/* Background Patterns */}
         <div className="absolute inset-0 opacity-10 dark:opacity-20 bg-[radial-gradient(#ffffff33_1px,transparent_1px)] [background-size:24px_24px]"></div>
         <div className="absolute -top-32 -right-32 w-96 h-96 bg-white/10 rounded-full blur-[80px]"></div>
@@ -300,7 +300,7 @@ export const LoginPage = () => {
 
       {/* 🔐 RIGHT SIDE: LOGIN FORM */}
       {/* Changed to flex-1 with lg:ml-[48%] to accommodate fixed left side. Added py-12 for vertical spacing. */}
-      <div className="flex-1 lg:ml-[48%] flex flex-col justify-center items-center px-6 sm:px-12 xl:px-32 relative bg-white dark:bg-[#111b21] min-h-screen py-12">
+      <div className="flex-1 lg:ml-[48%] flex flex-col justify-center items-center px-6 sm:px-12 xl:px-32 relative bg-reply-surface dark:bg-reply-surface-dark min-h-screen py-12">
         {/* Theme Toggle (Absolute Top Right) */}
         <button
           onClick={() => setDarkMode(!darkMode)}
@@ -346,7 +346,7 @@ export const LoginPage = () => {
               <svg viewBox="0 0 100 100" fill="none" className="w-12 h-12">
                 <path
                   d="M25 65C25 51.19 36.19 40 50 40H60C62.76 40 65 42.24 65 45V65C65 78.81 53.81 90 40 90H25V65Z"
-                  className="fill-reply-green"
+                  className="fill-reply-brand"
                 />
                 <path
                   d="M40 50C40 36.19 51.19 25 65 25H75L90 10L85 50H75C72.24 50 70 52.24 70 55V60C70 68.28 63.28 75 55 75H40V50Z"
@@ -366,7 +366,7 @@ export const LoginPage = () => {
           <div className="mb-8">
             <a
               href={`${API_BASE_URL}/google/auth?action=login`}
-              className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1f2937] hover:bg-gray-50 dark:hover:bg-[#2d3748] hover:border-gray-300 transition-all shadow-sm group"
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border border-reply-border dark:border-reply-border-dark bg-reply-surface dark:bg-reply-panel-dark hover:bg-reply-bg dark:hover:bg-reply-border-dark hover:border-reply-border transition-all shadow-sm group"
             >
               <svg
                 className="w-5 h-5 group-hover:scale-110 transition-transform"
@@ -403,10 +403,10 @@ export const LoginPage = () => {
           {/* Divider */}
           <div className="relative mb-8">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+              <div className="w-full border-t border-gray-200 dark:border-reply-border-dark"></div>
             </div>
             <div className="relative flex justify-center">
-              <span className="px-4 bg-white dark:bg-[#111b21] text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+              <span className="px-4 bg-reply-surface dark:bg-reply-surface-dark text-xs font-semibold text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
                 O con tu email
               </span>
             </div>
@@ -446,7 +446,7 @@ export const LoginPage = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-4 bg-reply-green hover:bg-green-600 dark:bg-reply-green-dark dark:hover:bg-green-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+              className="w-full py-4 bg-reply-brand hover:bg-reply-brand-dark dark:bg-reply-brand dark:hover:bg-reply-brand-dark text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
             >
               {isSubmitting && (
                 <svg
@@ -474,7 +474,7 @@ export const LoginPage = () => {
           </form>
 
           {/* Footer */}
-          <div className="mt-10 pt-6 border-t border-gray-100 dark:border-gray-800 text-center">
+          <div className="mt-10 pt-6 border-t border-gray-100 dark:border-reply-border-dark text-center">
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               ¿Aún no tienes cuenta?{" "}
               <a
@@ -512,7 +512,7 @@ export const LoginPage = () => {
       {/* 🛑 BLOCKED USER MODAL */}
       {blockedStatus && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-[#1f2937] rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-red-100 dark:border-red-900/30 scale-100 animate-scale-in">
+          <div className="bg-reply-surface dark:bg-reply-panel-dark rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-red-100 dark:border-red-900/30 scale-100 animate-scale-in">
             <div className="p-8 flex flex-col items-center text-center">
               <div className="w-14 h-14 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-4 text-red-500">
                 <svg
@@ -558,3 +558,4 @@ export const LoginPage = () => {
     </div>
   );
 };
+

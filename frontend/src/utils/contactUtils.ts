@@ -1,4 +1,4 @@
-import { Contact } from "../../types";
+import { Contact } from "@/types";
 
 // 🏢 100-Year Solution: Flexible input type for resolving contact names
 // This allows various contact formats from sockets, DTOs, etc.

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 // Ajusta este path si mueves types.ts a src/types.ts
-import { User } from "../../types";
+import { User } from "@/types";
 
 interface AuthState {
   user: User | null;

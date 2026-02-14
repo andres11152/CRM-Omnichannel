@@ -1,6 +1,27 @@
 <!doctype html>
 <html lang="es">
   <head>
+    <script>
+      // 🚑 EMERGENCY: Force unregister all service workers immediately
+      // 🚑 EMERGENCY: Force unregister all service workers immediately
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then(function (registrations) {
+            let found = false;
+            for (let registration of registrations) {
+              console.log("Unregistering SW:", registration);
+              registration.unregister();
+              found = true;
+            }
+            // Force reload if we just killed a worker to clear cache
+            if (found && !sessionStorage.getItem("sw_killed")) {
+              sessionStorage.setItem("sw_killed", "true");
+              window.location.reload();
+            }
+          });
+      }
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Reply Software - Español</title>
@@ -50,39 +71,11 @@
         animation: flowAnimation 1s linear infinite;
       }
     </style>
-    <script type="importmap">
-      {
-        "imports": {
-          "react/": "https://aistudiocdn.com/react@^19.2.0/",
-          "react": "https://aistudiocdn.com/react@^19.2.0",
-          "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-          "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-          "socket.io": "https://aistudiocdn.com/socket.io@^4.8.1",
-          "express": "https://aistudiocdn.com/express@^5.1.0",
-          "http": "https://aistudiocdn.com/http@^0.0.1-security",
-          "winston": "https://aistudiocdn.com/winston@^3.18.3",
-          "redis": "https://aistudiocdn.com/redis@^5.9.0",
-          "@socket.io/redis-adapter": "https://aistudiocdn.com/@socket.io/redis-adapter@^8.3.0",
-          "@socket.io/redis-emitter": "https://aistudiocdn.com/@socket.io/redis-emitter@^5.1.0",
-          "fs": "https://aistudiocdn.com/fs@^0.0.1-security",
-          "path": "https://aistudiocdn.com/path@^0.12.7",
-          "buffer": "https://aistudiocdn.com/buffer@^6.0.3",
-          "@aws-sdk/client-s3": "https://aistudiocdn.com/@aws-sdk/client-s3@^3.933.0",
-          "@aws-sdk/s3-request-presigner": "https://aistudiocdn.com/@aws-sdk/s3-request-presigner@^3.933.0",
-          "crypto": "https://aistudiocdn.com/crypto@^1.0.1",
-          "stripe": "https://aistudiocdn.com/stripe@^14.10.0",
-          "vite": "https://aistudiocdn.com/vite@^7.2.2",
-          "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
-          "@google/generative-ai": "https://aistudiocdn.com/@google/generative-ai@^0.24.1"
-        }
-      }
-    </script>
-    <link rel="stylesheet" href="/index.css" />
   </head>
   <body
     class="bg-reply-bg text-reply-text dark:bg-reply-bg-dark dark:text-reply-text-dark antialiased transition-colors duration-200"
   >
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>

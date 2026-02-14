@@ -54,6 +54,9 @@ const updateUserSchema = z.object({
     profilePicUrl: z.string().optional(),
     preferences: z.any().optional(),
     queueIds: z.array(z.string()).optional(),
+    role: z.string().optional(),
+    maxConcurrency: z.number().int().min(0).max(100).optional(),
+    skills: z.array(z.string()).optional(),
   }),
 });
 

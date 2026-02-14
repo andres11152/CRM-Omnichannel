@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { type Message } from "../../../services/chatService";
+import { type Message } from "@/services/chatService";
 import { MessageBubble } from "./MessageBubble";
 
 interface MessageListProps {
@@ -29,7 +29,7 @@ export const MessageList: React.FC<MessageListProps> = ({
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-reply-brand mx-auto mb-4"></div>
           <p className="text-gray-500">Cargando mensajes...</p>
         </div>
       </div>
@@ -55,7 +55,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900"
+      className="flex-1 overflow-y-auto p-4 space-y-4 bg-reply-bg dark:bg-reply-bg-dark"
     >
       {messages.map((message, index) => {
         const showDateDivider =

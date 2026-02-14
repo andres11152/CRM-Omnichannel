@@ -150,52 +150,59 @@ export async function getPlanLimits(
  * Get current usage stats for a company
  */
 export async function getCurrentUsage(companyId: string): Promise<UsageStats> {
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // 🚀 PERFORMANCE: Cache usage stats for 60s to reduce parallel query spikes on Dashboard load
+  return cacheService.wrap(
+    `company:${companyId}:usage:v1`,
+    async () => {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [
-    users,
-    whatsappSessions,
-    queues,
-    ticketsThisMonth,
-    aiAssistants,
-    storageAgg,
-    contacts,
-    companies, // Assuming Account model implies 'Empresas' in CRM context
-    workflows,
-  ] = await Promise.all([
-    prisma.user.count({
-      where: {
-        companyId,
-        role: { in: ["AGENT", "ADMIN", "MASTER"] },
-      },
-    }),
-    prisma.whatsAppSession.count({ where: { companyId } }),
-    prisma.queue.count({ where: { companyId } }),
-    prisma.ticket.count({
-      where: {
-        companyId,
-        createdAt: { gte: startOfMonth },
-      },
-    }),
-    prisma.aIAssistant.count({ where: { companyId } }),
-    prisma.media.aggregate({ where: { companyId }, _sum: { size: true } }), // Using 'media' table size column
-    prisma.contact.count({ where: { companyId } }),
-    prisma.account.count({ where: { companyId } }), // CRM Companies/Accounts
-    prisma.workflow.count({ where: { companyId, isActive: true } }), // Active workflows only
-  ]);
+      const [
+        users,
+        whatsappSessions,
+        queues,
+        ticketsThisMonth,
+        aiAssistants,
+        storageAgg,
+        contacts,
+        companies,
+        workflows,
+      ] = await Promise.all([
+        prisma.user.count({
+          where: {
+            companyId,
+            role: { in: ["AGENT", "ADMIN", "MASTER"] },
+          },
+        }),
+        prisma.whatsAppSession.count({ where: { companyId } }),
+        prisma.queue.count({ where: { companyId } }),
+        prisma.ticket.count({
+          where: {
+            companyId,
+            createdAt: { gte: startOfMonth },
+          },
+        }),
+        prisma.aIAssistant.count({ where: { companyId } }),
+        prisma.media.aggregate({ where: { companyId }, _sum: { size: true } }),
+        prisma.contact.count({ where: { companyId } }),
+        prisma.account.count({ where: { companyId } }),
+        prisma.workflow.count({ where: { companyId, isActive: true } }),
+      ]);
 
-  return {
-    users,
-    whatsapp_sessions: whatsappSessions,
-    queues,
-    tickets_this_month: ticketsThisMonth,
-    ai_assistants: aiAssistants,
-    storage_bytes: storageAgg._sum.size || 0,
-    contacts,
-    companies,
-    workflows,
-  };
+      return {
+        users,
+        whatsapp_sessions: whatsappSessions,
+        queues,
+        tickets_this_month: ticketsThisMonth,
+        ai_assistants: aiAssistants,
+        storage_bytes: storageAgg._sum.size || 0,
+        contacts,
+        companies,
+        workflows,
+      };
+    },
+    60, // 1 minute TTL
+  );
 }
 
 /**

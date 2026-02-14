@@ -1,5 +1,5 @@
 import React from "react";
-import { type Message } from "../../../services/chatService";
+import { type Message } from "@/services/chatService";
 
 interface MessageBubbleProps {
   message: Message;
@@ -13,6 +13,12 @@ interface MessageBubbleProps {
 const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message }) => {
   const isAgent = message.sender === "agent";
   const isSystem = message.sender === "system";
+
+  // 🛡️ Detect dark mode for inline style fallback
+  const isDark =
+    (typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches) ||
+    document.documentElement.classList.contains("dark");
 
   // System messages (e.g., "Ticket resolved")
   if (isSystem) {
@@ -35,13 +41,26 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message }) => {
           </div>
         )}
 
-        {/* Message Bubble */}
+        {/* Message Bubble — 🛡️ 100-YEAR FIX: Inline styles guarantee visibility */}
         <div
-          className={`rounded-2xl px-4 py-2 ${
-            isAgent
-              ? "bg-indigo-600 text-white rounded-br-none"
-              : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-none"
+          className={`rounded-2xl px-4 py-2 shadow-md transition-all ${
+            isAgent ? "rounded-br-none" : "rounded-bl-none border"
           }`}
+          style={
+            isAgent
+              ? { backgroundColor: "#00a884", color: "#ffffff" }
+              : isDark
+                ? {
+                    backgroundColor: "#202c33",
+                    color: "#e9edef",
+                    borderColor: "#2a3942",
+                  }
+                : {
+                    backgroundColor: "#ffffff",
+                    color: "#111b21",
+                    borderColor: "#e9edef",
+                  }
+          }
         >
           {/* Media Content */}
           {message.type === "image" && message.mediaUrl && (

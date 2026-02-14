@@ -41,12 +41,11 @@ export class ConversationManager {
 
       const runInTransaction = async (tx: ExtendedTransactionClient) => {
         // 1. Try to find existing conversation
-        let conversation = await tx.conversation.findUnique({
+        // 🛡️ FIX: Use findFirst instead of findUnique to avoid Prisma Extension issues with composite keys
+        let conversation = await tx.conversation.findFirst({
           where: {
-            conversation_unique_channel: {
-              companyId,
-              channelId,
-            },
+            companyId,
+            channelId,
           },
           include: {
             participants: true,
@@ -128,12 +127,10 @@ export class ConversationManager {
               `[ConversationManager] Race condition detected for ${channelId}, fetching existing`,
             );
 
-            conversation = await tx.conversation.findUniqueOrThrow({
+            conversation = await tx.conversation.findFirstOrThrow({
               where: {
-                conversation_unique_channel: {
-                  companyId,
-                  channelId,
-                },
+                companyId,
+                channelId,
               },
               include: {
                 participants: true,

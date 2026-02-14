@@ -4,14 +4,19 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting database seed...");
+  console.log("🌱 Starting Clean Database Seed for Reply CRM...");
 
-  // 0. CREATE PLANS
-  const freePlan = await prisma.plan.upsert({
-    where: { id: "plan_free" },
+  // 1. CREATE PLANS (Para que los tenants puedan suscribirse)
+  // IDs uuid v4 para cumplir con validaciones del backend
+  const planFreeId = "11111111-1111-1111-1111-111111111111";
+  const planProId = "22222222-2222-2222-2222-222222222222";
+  const planEnterpriseId = "33333333-3333-3333-3333-333333333333";
+
+  await prisma.plan.upsert({
+    where: { id: planFreeId },
     update: {},
     create: {
-      id: "plan_free",
+      id: planFreeId,
       name: "Free",
       price: 0,
       config: {
@@ -27,10 +32,10 @@ async function main() {
   });
 
   const proPlan = await prisma.plan.upsert({
-    where: { id: "plan_pro" },
+    where: { id: planProId },
     update: {},
     create: {
-      id: "plan_pro",
+      id: planProId,
       name: "Pro",
       price: 49,
       config: {
@@ -46,61 +51,88 @@ async function main() {
     },
   });
 
-  console.log("✅ Plans seeded: Free & Pro");
+  await prisma.plan.upsert({
+    where: { id: planEnterpriseId },
+    update: {},
+    create: {
+      id: planEnterpriseId,
+      name: "Enterprise",
+      price: 199,
+      config: {
+        max_users: 50,
+        max_whatsapp_sessions: 20,
+        max_queues: 20,
+        enable_ai: true,
+        enable_api: true,
+        max_ai_assistants: 10,
+        max_workflows: 50,
+      },
+      storageLimitGb: 500,
+      maxContacts: 100000,
+      maxCompanies: 10,
+    },
+  });
 
-  // 1. CREATE SUPER ADMIN COMPANY
-  const superAdminCompany = await prisma.company.upsert({
-    where: { slug: "reply-admin" },
+  console.log("✅ Plans created");
+
+  // =========================================================================
+  // 1. MASTER ACCOUNT (Dueño del Software) - NO TIENE PLAN
+  // =========================================================================
+
+  const masterCompany = await prisma.company.upsert({
+    where: { slug: "reply-software" },
     update: {
-      planId: proPlan.id, // Ensure admin always has pro features
+      planId: null, // MASTER NO TIENE PLAN
     },
     create: {
-      name: "Reply CRM Admin",
-      slug: "reply-admin",
-      phone: "+1234567890",
-      timezone: "America/Los_Angeles",
-      planId: proPlan.id,
+      id: "99999999-9999-9999-9999-999999999999", // Fixed ID para identificarlo siempre
+      name: "Reply Software (Master)",
+      slug: "reply-software",
+      phone: "+573000000000",
+      timezone: "America/Bogota",
+      planId: null, // MASTER NO TIENE PLAN
       settings: {
         whatsappEnabled: true,
         emailEnabled: true,
-        smsEnabled: false,
+        smsEnabled: true,
       },
     },
   });
 
-  console.log(`✅ Created company: ${superAdminCompany.name}`);
+  const masterPassword = await bcrypt.hash("Master2025!", 10);
 
-  // 2. CREATE SUPER ADMIN USER
-  const hashedPassword = await bcrypt.hash("admin123", 10);
-
-  const superAdmin = await prisma.user.upsert({
-    where: { email: "admin@replycrm.com" },
+  const masterUser = await prisma.user.upsert({
+    where: { email: "master@reply.com" },
     update: {},
     create: {
-      email: "admin@replycrm.com",
-      name: "Super Admin",
-      password: hashedPassword,
+      email: "master@reply.com",
+      name: "Andres Betancourt",
+      password: masterPassword,
       role: "MASTER",
-      companyId: superAdminCompany.id,
+      companyId: masterCompany.id,
     },
   });
 
   console.log(
-    `✅ Created super admin: ${superAdmin.email} / password: admin123`,
+    `👑 MASTER Created: ${masterUser.email} (Company: ${masterCompany.name})`,
   );
 
-  // 3. CREATE DEMO COMPANY
-  const demoCompany = await prisma.company.upsert({
-    where: { slug: "demo-company" },
+  // =========================================================================
+  // 2. TENANT DE PRUEBAS (Cliente Simulado) - TIENE PLAN PRO
+  // =========================================================================
+
+  const tenantCompany = await prisma.company.upsert({
+    where: { slug: "reply-tenant-demo" },
     update: {
-      planId: proPlan.id, // 🛡️ 100-YEAR FIX: Enforce Plan on update
+      planId: proPlan.id,
     },
     create: {
-      name: "Demo Company",
-      slug: "demo-company",
-      phone: "+1234567891",
+      id: "88888888-8888-8888-8888-888888888888",
+      name: "Reply Tenant Demo",
+      slug: "reply-tenant-demo",
+      phone: "+1234567890",
       timezone: "America/New_York",
-      planId: proPlan.id, // Assign real plan
+      planId: proPlan.id, // ESTE SÍ PAGA / TIENE PLAN
       settings: {
         whatsappEnabled: true,
         emailEnabled: true,
@@ -109,133 +141,56 @@ async function main() {
     },
   });
 
-  console.log(`✅ Created demo company: ${demoCompany.name}`);
+  const tenantPassword = await bcrypt.hash("admin123", 10);
 
-  // 4. CREATE DEMO USER
-  const demoDemoHashedPassword = await bcrypt.hash("demo123", 10);
-
-  const demoUser = await prisma.user.upsert({
-    where: { email: "demo@replycrm.com" },
+  const tenantUser = await prisma.user.upsert({
+    where: { email: "admin@reply.com" },
     update: {},
     create: {
-      email: "demo@replycrm.com",
-      name: "Demo User",
-      password: demoDemoHashedPassword,
-      role: "ADMIN",
-      companyId: demoCompany.id,
+      email: "admin@reply.com",
+      name: "Admin Tenant",
+      password: tenantPassword,
+      role: "ADMIN", // Es ADMIN de su empresa, NO MASTER del sistema
+      companyId: tenantCompany.id,
     },
   });
 
-  console.log(`✅ Created demo user: ${demoUser.email} / password: demo123`);
+  console.log(
+    `🏢 TENANT Created: ${tenantUser.email} (Company: ${tenantCompany.name})`,
+  );
 
-  // 5. CREATE DEMO AGENT
-  const agentPassword = await bcrypt.hash("agent123", 10);
+  // =========================================================================
+  // 3. ASSETS INICIALES (Solo para que no estén vacíos al entrar)
+  // =========================================================================
 
-  const agent = await prisma.user.upsert({
-    where: { email: "agent@replycrm.com" },
-    update: {},
-    create: {
-      email: "agent@replycrm.com",
-      name: "Demo Agent",
-      password: agentPassword,
-      role: "AGENT",
-      companyId: demoCompany.id,
-    },
-  });
-
-  console.log(`✅ Created demo agent: ${agent.email} / password: agent123`);
-
-  // 6. CREATE DEMO PIPELINE (Default only)
-  const pipeline = await prisma.pipeline.upsert({
+  // Pipeline para el Tenant
+  await prisma.pipeline.upsert({
     where: {
-      companyId_isDefault: {
-        companyId: demoCompany.id,
-        isDefault: true,
-      },
+      companyId_isDefault: { companyId: tenantCompany.id, isDefault: true },
     },
     update: {},
     create: {
-      name: "Sales Pipeline",
+      name: "Ventas General",
       isDefault: true,
-      companyId: demoCompany.id,
+      companyId: tenantCompany.id,
+      stages: {
+        create: [
+          { name: "Nuevo Lead", color: "#3B82F6", order: 1 },
+          { name: "Contactado", color: "#F59E0B", order: 2 },
+          { name: "Cerrado Ganado", color: "#10B981", order: 3 },
+        ],
+      },
     },
   });
 
-  console.log(`✅ Created pipeline: ${pipeline.name}`);
+  console.log("✅ Default assets created for Tenant");
 
-  // 7. CREATE DEMO STAGES
-  const stages = [
-    { name: "Lead", color: "#3B82F6", order: 1 },
-    { name: "Qualified", color: "#10B981", order: 2 },
-    { name: "Proposal", color: "#F59E0B", order: 3 },
-    { name: "Negotiation", color: "#EF4444", order: 4 },
-    { name: "Won", color: "#22C55E", order: 5 },
-  ];
-
-  for (const stageData of stages) {
-    await prisma.stage.upsert({
-      where: {
-        pipelineId_order: {
-          pipelineId: pipeline.id,
-          order: stageData.order,
-        },
-      },
-      update: {},
-      create: {
-        ...stageData,
-        pipelineId: pipeline.id,
-      },
-    });
-  }
-
-  console.log(`✅ Created ${stages.length} stages`);
-
-  // 8. CREATE DEMO QUEUE
-  let queue = await prisma.queue.findFirst({
-    where: {
-      companyId: demoCompany.id,
-      name: "General Support",
-    },
-  });
-
-  if (!queue) {
-    queue = await prisma.queue.create({
-      data: {
-        name: "General Support",
-        description: "Default support queue",
-        companyId: demoCompany.id,
-      },
-    });
-  }
-
-  console.log(`✅ Created queue: ${queue.name}`);
-
-  // 9. CREATE DEMO CONTACT
-  const contact = await prisma.contact.upsert({
-    where: {
-      companyId_phone: {
-        companyId: demoCompany.id,
-        phone: "+1234567890",
-      },
-    },
-    update: {},
-    create: {
-      name: "John Doe",
-      email: "john@example.com",
-      phone: "+1234567890",
-      companyId: demoCompany.id,
-      tags: ["demo", "customer"],
-    },
-  });
-
-  console.log(`✅ Created contact: ${contact.name}`);
-
-  console.log("\n🎉 Database seeded successfully!\n");
+  console.log("\n🎉 Database Seed Completed Successfully!");
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Error seeding database:", e);
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {

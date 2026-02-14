@@ -426,16 +426,17 @@ export const messageProcessor = {
             }
 
             // Priority 2: First active queue (prefer AI-enabled)
-            if (!queueId) {
-              const queue = await tx.queue.findFirst({
-                where: { companyId, isActive: true },
-                orderBy: [
-                  { aiAssistantId: { sort: "desc", nulls: "last" } },
-                  { createdAt: "asc" },
-                ],
-              });
-              if (queue) queueId = queue.id;
-            }
+            // 🛑 REMOVED: User requested manual assignment only.
+            // if (!queueId) {
+            //   const queue = await tx.queue.findFirst({
+            //     where: { companyId, isActive: true },
+            //     orderBy: [
+            //       { aiAssistantId: { sort: "desc", nulls: "last" } },
+            //       { createdAt: "asc" },
+            //     ],
+            //   });
+            //   if (queue) queueId = queue.id;
+            // }
 
             Logger.info(
               `[MsgProcessor] 🎯 Assigned Queue: ${queueId || "None (Manual)"}`,

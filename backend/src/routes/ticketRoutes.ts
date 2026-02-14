@@ -3,7 +3,10 @@ import * as ticketController from "@/controllers/ticketController";
 import { protect } from "@/middleware/authMiddleware";
 import { auditLog } from "@/middleware/auditMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
-import { UpdateTicketSchema } from "@/schemas/ticket.schema";
+import {
+  UpdateTicketSchema,
+  CreateTicketSchema,
+} from "@/schemas/ticket.schema";
 
 const router = express.Router();
 
@@ -12,20 +15,21 @@ router.use(protect);
 
 router.route("/").get(ticketController.getAllTickets).post(
   auditLog("Ticket"), // Log creation
-  ticketController.createTicket
+  validate(CreateTicketSchema),
+  ticketController.createTicket,
 );
 
 router
   .route("/:id")
   .get(ticketController.getTicketById)
   .patch(
-    // validate(UpdateTicketSchema), // Controller handles flexible validation specifically for status updates
+    validate(UpdateTicketSchema), // Controller handles flexible validation specifically for status updates
     auditLog("Ticket", (req) => req.params.id), // Log updates (Resolve)
-    ticketController.updateTicket
+    ticketController.updateTicket,
   )
   .delete(
     auditLog("Ticket", (req) => req.params.id), // Log deletion
-    ticketController.deleteTicket
+    ticketController.deleteTicket,
   );
 
 export default router;

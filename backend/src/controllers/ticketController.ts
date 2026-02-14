@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { prisma } from "@/config/database";
+import { cacheService } from "@/services/cacheService";
 import { TicketPriority, TicketStatus, Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "@/types/types";
 import { gateway } from "@/gateways/socketGateway";
@@ -31,12 +32,42 @@ const enrichWithCrmData = async (
     if (t.contact.phone) phonesToFetch.add(t.contact.phone);
   });
 
-  // 📱 Fetch WhatsApp Sessions for this company (sorted by creation for consistent indexing)
-  const whatsappSessions = await prisma.whatsAppSession.findMany({
-    where: { companyId, status: "CONNECTED" },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, phone: true, sessionId: true, defaultQueueId: true },
-  });
+  // 📱 PERFORMANCE: Cache connected sessions for 60s (reduces DB hits on every ticket list refresh)
+  // 📱 PERFORMANCE: Cache connected sessions for 60s (reduces DB hits on every ticket list refresh)
+  let whatsappSessions;
+  try {
+    whatsappSessions = await cacheService.wrap(
+      `company:${companyId}:sessions:connected:v1`,
+      () =>
+        prisma.whatsAppSession.findMany({
+          where: { companyId, status: "CONNECTED" },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            phone: true,
+            sessionId: true,
+            defaultQueueId: true,
+          },
+        }),
+      5, // Short cache TTL (5s) for better real-time status
+    );
+  } catch (cacheError) {
+    // 🛡️ REDIS FALLBACK: If cache fails, query DB directly
+    console.warn(
+      "[TicketController] Cache failed, fetching directly:",
+      cacheError,
+    );
+    whatsappSessions = await prisma.whatsAppSession.findMany({
+      where: { companyId, status: "CONNECTED" },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        phone: true,
+        sessionId: true,
+        defaultQueueId: true,
+      },
+    });
+  }
 
   // Build maps for resolution
   const sessionIndexMap = new Map<string, number>(); // Phone -> Index
@@ -168,7 +199,11 @@ export const createTicket = catchAsync(
         createdBy: true,
         assignedTo: true,
         queue: true,
-        conversation: true,
+        conversation: {
+          include: {
+            participants: true,
+          },
+        },
       },
     });
 
@@ -207,8 +242,13 @@ export const createTicket = catchAsync(
  */
 export const getAllTickets = catchAsync(
   async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
+    const startTime = Date.now();
     const companyId = req.companyId || req.user?.companyId;
     const { status, priority, queueId, assignedToId } = req.query;
+
+    console.log(
+      `[TicketController] 🕒 Start getAllTickets for company: ${companyId}`,
+    );
 
     if (!companyId) {
       return res
@@ -223,44 +263,37 @@ export const getAllTickets = catchAsync(
     if (queueId) where.queueId = queueId as string;
     if (assignedToId) where.assignedToId = assignedToId as string;
 
-    // 🛡️ 100-YEAR ENTERPRISE FIX: Strict Role-Based Access Control (RBAC)
-    // Agents can ONLY see:
-    //   1. Tickets assigned TO THEM ("My Actives")
-    //   2. Tickets in THEIR ASSIGNED QUEUES ("My Queue")
-    //   3. NO WhatsApp Groups (Noise reduction)
     if (req.user?.role === "AGENT") {
-      // 1. Fetch Agent's Allowed Queues
+      const qStart = Date.now();
       const agent = await prisma.user.findUnique({
         where: { id: req.user.id },
         select: { queues: { select: { id: true } } },
       });
       const agentQueueIds = agent?.queues.map((q) => q.id) || [];
+      console.log(
+        `[TicketController] 🕒 Agent queues fetched in ${Date.now() - qStart}ms`,
+      );
 
       where.AND = [
-        // 🚫 NO GROUPS: Exclude WhatsApp group chats explicitly
         {
           OR: [
-            { conversation: { is: null } }, // Internal tickets ok
-            { conversation: { isGroup: false } }, // 1-on-1 chats ok
+            { conversation: { is: null } },
+            { conversation: { isGroup: false } },
           ],
         },
-        // 🔒 SCOPE: My Tickets OR My Queue
         {
           OR: [
-            { assignedToId: req.user.id }, // Assigned to me
+            { assignedToId: req.user.id },
             {
-              assignedToId: null, // Unassigned...
-              queueId: { in: agentQueueIds }, // ...but only in my queues
+              assignedToId: null,
+              queueId: { in: agentQueueIds },
             },
           ],
         },
       ];
-
-      console.info(
-        `[TicketController] 🔐 AGENT Access Scope: User=${req.user.id}, Queues=[${agentQueueIds.join(", ")}]`,
-      );
     }
 
+    const dbStart = Date.now();
     const tickets = await prisma.ticket.findMany({
       where,
       include: {
@@ -269,6 +302,7 @@ export const getAllTickets = catchAsync(
         queue: true,
         conversation: {
           include: {
+            participants: true,
             messages: {
               take: 1,
               orderBy: { createdAt: "desc" },
@@ -278,26 +312,45 @@ export const getAllTickets = catchAsync(
       },
       orderBy: { createdAt: "desc" },
     });
+    console.log(
+      `[TicketController] 🕒 DB tickets fetch took ${Date.now() - dbStart}ms (found ${tickets.length})`,
+    );
 
-    // 🔍 DEBUG: Log what we found for agents
-    if (req.user?.role === "AGENT") {
-      console.info(
-        `[TicketController] 🎯 AGENT Results: Found ${tickets.length} tickets for ${req.user.id}`,
-      );
-      tickets.forEach((t) => {
-        console.info(
-          `  - Ticket ${t.id} | assignedToId: ${t.assignedToId} | status: ${t.status}`,
-        );
-      });
-    }
-
-    // 1. Initial Mapping to DTO
+    const mapStart = Date.now();
     const baseDtos = tickets.map((t) =>
       toTicketDTO(t as unknown as TicketWithRelations),
     );
+    console.log(
+      `[TicketController] 🕒 Mapping to DTO took ${Date.now() - mapStart}ms`,
+    );
 
-    // 2. Enrich with CRM Data (Uses efficient batch fetching helper)
-    const finalTickets = await enrichWithCrmData(baseDtos, companyId);
+    const enrichStart = Date.now();
+    let finalTickets = baseDtos;
+
+    // 🛡️ CIRCUIT BREAKER: Prevent hanging request if enrichment fails (e.g. Redis timeout)
+    try {
+      const enrichmentPromise = enrichWithCrmData(baseDtos, companyId);
+      const timeoutPromise = new Promise<TicketDTO[]>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Enrichment timed out (>2000ms)")),
+          2000,
+        ),
+      );
+
+      finalTickets = await Promise.race([enrichmentPromise, timeoutPromise]);
+    } catch (enrichError) {
+      console.error(
+        `[TicketController] ⚠️ Enrichment skipped (returning base data): ${enrichError}`,
+      );
+      // Fallback: finalTickets remains baseDtos, so user sees tickets immediately
+    }
+    console.log(
+      `[TicketController] 🕒 Enrichment took ${Date.now() - enrichStart}ms`,
+    );
+
+    console.log(
+      `[TicketController] ✅ Total getAllTickets took ${Date.now() - startTime}ms`,
+    );
 
     res.status(200).json({
       status: "success",
@@ -323,6 +376,7 @@ export const getTicketById = catchAsync(
         queue: true,
         conversation: {
           include: {
+            participants: true,
             messages: {
               take: 1,
               orderBy: { createdAt: "desc" },
@@ -389,7 +443,28 @@ export const updateTicket = catchAsync(
 
     // First check existence and permission
     console.info(`[TicketController] 🛠️ Update Request for ID: '${id}'`); // Info level
-    const existingTicket = await prisma.ticket.findUnique({ where: { id } });
+
+    let targetId = id;
+    let existingTicket = await prisma.ticket.findUnique({
+      where: { id: targetId },
+    });
+
+    // 🛡️ 100-YEAR FIX: Smart ID Resolution
+    // If ticket not found by ID, try finding it by Conversation ID.
+    // This handles cases where frontend sends conversationId optimistically.
+    if (!existingTicket && companyId) {
+      const ticketByConv = await prisma.ticket.findFirst({
+        where: { conversationId: targetId, companyId },
+      });
+
+      if (ticketByConv) {
+        existingTicket = ticketByConv;
+        targetId = ticketByConv.id;
+        console.info(
+          `[TicketController] 🔄 Resolved Ticket ${targetId} via Conversation ID ${id}`,
+        );
+      }
+    }
 
     if (!existingTicket) {
       console.error(
@@ -465,7 +540,7 @@ export const updateTicket = catchAsync(
     let updatedTicket;
     try {
       updatedTicket = await prisma.ticket.update({
-        where: { id },
+        where: { id: targetId },
         data: updateData,
         include: {
           createdBy: true,
@@ -473,6 +548,7 @@ export const updateTicket = catchAsync(
           queue: true,
           conversation: {
             include: {
+              participants: true,
               messages: {
                 take: 1,
                 orderBy: { createdAt: "desc" },

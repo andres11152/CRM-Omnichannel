@@ -1,5 +1,5 @@
 import { X, Download, Share } from "lucide-react";
-import { usePWAInstall } from "../hooks/usePWAInstall";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
 
 export const PWAInstallPrompt = () => {
   const {
@@ -29,7 +29,7 @@ export const PWAInstallPrompt = () => {
             </div>
             <button
               onClick={installApp}
-              className="flex-shrink-0 px-4 py-2 bg-white text-teal-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors shadow-lg"
+              className="flex-shrink-0 px-4 py-2 bg-white text-teal-600 rounded-xl font-bold text-sm hover:bg-reply-bg transition-colors shadow-lg"
             >
               Instalar
             </button>
@@ -138,3 +138,4 @@ export const PWAInstallPrompt = () => {
 
   return null;
 };
+

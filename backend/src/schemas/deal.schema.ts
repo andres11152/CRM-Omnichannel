@@ -95,6 +95,22 @@ const baseDealFields = {
     .nonnegative("Order must be non-negative")
     .default(0)
     .optional(),
+
+  notes: z
+    .string()
+    .max(2000, "Notes are too long (max 2000 characters)")
+    .trim()
+    .optional()
+    .or(z.literal(""))
+    .transform((val) => (val === "" ? undefined : val)),
+
+  lostReason: z
+    .string()
+    .max(500, "Lost reason is too long (max 500 characters)")
+    .trim()
+    .optional()
+    .or(z.literal(""))
+    .transform((val) => (val === "" ? undefined : val)),
 };
 
 /**
@@ -113,6 +129,8 @@ export const CreateDealSchema = z.object({
     probability: baseDealFields.probability,
     expectedCloseDate: baseDealFields.expectedCloseDate,
     order: baseDealFields.order,
+    notes: baseDealFields.notes,
+    lostReason: baseDealFields.lostReason,
   }),
 });
 
@@ -137,6 +155,7 @@ export const UpdateDealSchema = z.object({
       probability: baseDealFields.probability,
       expectedCloseDate: baseDealFields.expectedCloseDate,
       order: baseDealFields.order,
+      lostReason: baseDealFields.lostReason,
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: "At least one field must be provided for update",

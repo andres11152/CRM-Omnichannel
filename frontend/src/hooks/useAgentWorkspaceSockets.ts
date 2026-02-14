@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { socketService } from "../../services/socketService";
-import { Ticket, User, Channel } from "../../types";
-import { resolveContactName } from "../utils/contactUtils";
-import { BASE_URL } from "../../services/apiConfig";
+import { socketService } from "@/services/socketService";
+import { Ticket, User, Channel } from "@/types";
+import { resolveContactName } from "@/utils/contactUtils";
+import { BASE_URL } from "@/services/apiConfig";
 
 // 🏢 100-Year Solution: Strict typing for socket payloads
 // Using flexible types for socket data that will be validated before use
@@ -533,3 +533,4 @@ export const useAgentWorkspaceSockets = ({
     };
   }, [user?.companyId]); // Depend on user.companyId
 };
+

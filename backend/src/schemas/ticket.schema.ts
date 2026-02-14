@@ -54,14 +54,16 @@ const baseTicketFields = {
     .cuid("Invalid user ID format")
     .optional()
     .or(z.literal(""))
-    .transform((val) => (val === "" ? undefined : val)),
+    .transform((val) => (val === "" ? null : val))
+    .nullable(),
 
   queueId: z
     .string()
     .cuid("Invalid queue ID format")
     .optional()
     .or(z.literal(""))
-    .transform((val) => (val === "" ? undefined : val)),
+    .transform((val) => (val === "" ? null : val))
+    .nullable(),
 
   conversationId: z
     .string()
@@ -135,7 +137,7 @@ export const UpdateTicketSchema = z.object({
         message:
           "Resolution type is required when closing or resolving a ticket",
         path: ["resolutionType"],
-      }
+      },
     ),
 });
 

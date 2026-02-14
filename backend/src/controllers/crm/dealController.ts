@@ -63,12 +63,13 @@ export const getDeal = catchAsync(
 export const createDeal = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const companyId = req.user?.companyId;
+    const userId = req.user?.id;
     if (!companyId) return next(new AppError("Company ID is missing", 400));
 
     // Validate body
     const { body } = CreateDealSchema.parse({ body: req.body });
 
-    const deal = await dealService.createDeal(companyId, body);
+    const deal = await dealService.createDeal(companyId, body, userId);
 
     res.status(201).json({
       status: "success",

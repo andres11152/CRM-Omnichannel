@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { teamService } from "../../services/teamService";
-import { type TeamAgent } from "../../components/team/types";
-import { socketService } from "../../services/socketService";
+import { teamService } from "@/services/teamService";
+import { type TeamAgent } from "@/components/team/types";
+import { socketService } from "@/services/socketService";
 
 // Interfaces
 export interface Department {
@@ -177,3 +177,4 @@ export const useTeamData = (): UseTeamDataReturn => {
     filterAgents,
   };
 };
+

@@ -11,6 +11,7 @@ import { AppError } from "../utils/AppError";
 import { workflowEngine } from "./workflowEngine";
 import { Prisma } from "@prisma/client";
 import { CreateDealInput, UpdateDealInput } from "../schemas/deal.schema";
+import { prisma } from "@/config/database";
 
 export class DealService {
   private dealRepo: DealRepository;
@@ -58,7 +59,7 @@ export class DealService {
     return deal;
   }
 
-  async createDeal(companyId: string, data: CreateDealInput) {
+  async createDeal(companyId: string, data: CreateDealInput, userId?: string) {
     const {
       title,
       value,
@@ -68,28 +69,24 @@ export class DealService {
       accountId,
       contactId,
       assignedToId,
+      notes,
+      lostReason,
     } = data;
 
-    // Default Pipeline resolution if pipelineId not provided
     const pipelineId = data.pipelineId;
     const stageId = data.stageId;
 
-    // Although schemas require pipelineId and stageId, this logic supports a scenario where they might not be
-    // but the schema I saw earlier had them as Required.
-    // Assuming Zod ensures they are present if they are not optional in schema.
-    // In deal.schema.ts: pipelineId: string (required), stageId: string (required).
-    // So we don't need 'if (!pipelineId)' logic unless we loosen schema later.
-    // BUT the schema uses baseDealFields.pipelineId which is required string.
-    // So data.pipelineId is string.
-
-    // Verify Stage (redundant check but good for business logic integrity)
+    // Verify Stage belongs to Pipeline
     const stage = await this.stageRepo.findById(stageId, pipelineId);
     if (!stage)
       throw new AppError("Stage does not belong to the selected pipeline", 400);
 
-    // Order
+    // Auto-calculate order (append to end of column)
     const maxOrder = await this.dealRepo.getMaxOrder(stageId);
     const newOrder = (maxOrder._max.order || 0) + 1;
+
+    // Detect if the stage is Won/Lost for auto-setting closedAt
+    const isWonOrLost = /ganado|won|perdido|lost/i.test(stage.name);
 
     const dealData: Prisma.DealCreateInput = {
       title,
@@ -97,16 +94,43 @@ export class DealService {
       pipeline: { connect: { id: pipelineId } },
       stage: { connect: { id: stageId } },
       value: value || 0,
-      currency: currency || "USD",
+      currency: currency || "COP",
       order: newOrder,
       probability: probability || 10,
       expectedCloseDate: expectedCloseDate ?? null,
+      lostReason: lostReason ?? null,
+      closedAt: isWonOrLost ? new Date() : null,
       account: accountId ? { connect: { id: accountId } } : undefined,
       contact: contactId ? { connect: { id: contactId } } : undefined,
       assignedTo: assignedToId ? { connect: { id: assignedToId } } : undefined,
     };
 
     const deal = await this.dealRepo.create(dealData);
+
+    // 📝 Auto-create initial Activity note if notes provided
+    if (notes && userId) {
+      try {
+        await prisma.activity.create({
+          data: {
+            companyId,
+            type: "NOTE",
+            subject: `Nota inicial: ${title}`,
+            description: notes,
+            status: "COMPLETED",
+            dealId: deal.id,
+            accountId: accountId ?? null,
+            contactId: contactId ?? null,
+            createdById: userId,
+          },
+        });
+      } catch (activityError) {
+        console.error(
+          "[DealService] Failed to create initial activity:",
+          activityError,
+        );
+        // Non-blocking: deal was created successfully, activity is supplementary
+      }
+    }
 
     workflowEngine.emit("DEAL_CREATED", {
       dealId: deal.id,
@@ -122,27 +146,52 @@ export class DealService {
     const deal = await this.dealRepo.findById(id, companyId);
     if (!deal) throw new AppError("Deal not found", 404);
 
-    const updateData: Prisma.DealUncheckedUpdateInput = { ...data };
+    const updateData: Prisma.DealUncheckedUpdateInput = {};
+
+    // Copy allowed fields (exclude computed fields)
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.value !== undefined) updateData.value = data.value;
+    if (data.currency !== undefined) updateData.currency = data.currency;
+    if (data.pipelineId !== undefined) updateData.pipelineId = data.pipelineId;
+    if (data.probability !== undefined)
+      updateData.probability = data.probability;
+    if (data.expectedCloseDate !== undefined)
+      updateData.expectedCloseDate = data.expectedCloseDate ?? null;
+    if (data.order !== undefined) updateData.order = data.order;
+    if (data.contactId !== undefined)
+      updateData.contactId = data.contactId ?? null;
+    if (data.accountId !== undefined)
+      updateData.accountId = data.accountId ?? null;
+    if (data.assignedToId !== undefined)
+      updateData.assignedToId = data.assignedToId ?? null;
+    if (data.lostReason !== undefined)
+      updateData.lostReason = data.lostReason ?? null;
 
     // Stage Change Logic
-    if (
-      updateData.stageId &&
-      typeof updateData.stageId === "string" &&
-      updateData.stageId !== deal.stageId
-    ) {
+    if (data.stageId && data.stageId !== deal.stageId) {
       const targetPipelineId =
-        (typeof updateData.pipelineId === "string"
-          ? updateData.pipelineId
-          : undefined) || deal.pipelineId;
+        (typeof data.pipelineId === "string" ? data.pipelineId : undefined) ||
+        deal.pipelineId;
       const newStage = await this.stageRepo.findById(
-        updateData.stageId,
+        data.stageId,
         targetPipelineId,
       );
       if (!newStage)
         throw new AppError("Target stage does not belong to the pipeline", 400);
 
-      const maxOrder = await this.dealRepo.getMaxOrder(updateData.stageId);
+      updateData.stageId = data.stageId;
+      const maxOrder = await this.dealRepo.getMaxOrder(data.stageId);
       updateData.order = (maxOrder._max.order || 0) + 1;
+
+      // Auto-set closedAt when moving to Won/Lost stages
+      const isClosingStage = /ganado|won|perdido|lost/i.test(newStage.name);
+      if (isClosingStage && !deal.closedAt) {
+        updateData.closedAt = new Date();
+      } else if (!isClosingStage && deal.closedAt) {
+        // Reopening a closed deal
+        updateData.closedAt = null;
+        updateData.lostReason = null;
+      }
     }
 
     const updatedDeal = await this.dealRepo.update(id, updateData);

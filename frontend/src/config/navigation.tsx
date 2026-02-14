@@ -40,7 +40,6 @@ export interface NavItem {
   )[];
   masterOnly?: boolean;
   agentOnly?: boolean;
-  hideForAgent?: boolean;
 }
 
 // Helper to render icon consistently with stroke width
@@ -51,8 +50,14 @@ export const NAV_ITEMS: NavItem[] = [
     id: "dashboard",
     title: "Panel de Control",
     path: "/dashboard",
-    allowedRoles: ["master", "company_admin", "MASTER", "ADMIN"],
-    hideForAgent: true,
+    allowedRoles: [
+      "master",
+      "company_admin",
+      "agent",
+      "MASTER",
+      "ADMIN",
+      "AGENT",
+    ],
     icon: <Icon I={LayoutDashboard} />,
   },
   {
@@ -66,28 +71,28 @@ export const NAV_ITEMS: NavItem[] = [
     id: "contacts",
     title: "Contactos",
     path: "/contacts",
-    allowedRoles: ["company_admin", "ADMIN"],
+    allowedRoles: ["company_admin", "agent", "ADMIN", "AGENT"],
     icon: <Icon I={Users} />,
   },
   {
     id: "accounts",
     title: "Empresas",
     path: "/accounts",
-    allowedRoles: ["company_admin", "ADMIN"],
+    allowedRoles: ["company_admin", "agent", "ADMIN", "AGENT"],
     icon: <Icon I={Building2} />,
   },
   {
     id: "deals",
     title: "Oportunidades",
     path: "/deals",
-    allowedRoles: ["company_admin", "ADMIN"],
+    allowedRoles: ["company_admin", "agent", "ADMIN", "AGENT"],
     icon: <Icon I={DollarSign} />,
   },
   {
     id: "activities",
     title: "Actividades",
     path: "/activities",
-    allowedRoles: ["company_admin", "ADMIN"],
+    allowedRoles: ["company_admin", "agent", "ADMIN", "AGENT"],
     icon: <Icon I={Calendar} />,
   },
   {
@@ -150,7 +155,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "media",
     title: "Archivos",
     path: "/media",
-    allowedRoles: ["company_admin", "ADMIN"],
+    allowedRoles: ["company_admin", "agent", "ADMIN", "AGENT"],
     icon: <Icon I={Image} />,
   },
   {

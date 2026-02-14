@@ -18,7 +18,7 @@ import {
   LoginForm,
   SignupForm,
   ApiResponse,
-} from "../types/domain";
+} from "@/types/domain";
 import {
   ConversationListResponseSchema,
   ConversationDetailSchema,
@@ -27,7 +27,7 @@ import {
   UserSchema,
   ApiResponseSchema,
   validateApiResponse,
-} from "../types/validation";
+} from "@/types/validation";
 
 // ============================================
 // API CLIENT CONFIGURATION

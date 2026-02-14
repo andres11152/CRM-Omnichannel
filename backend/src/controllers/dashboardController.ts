@@ -60,3 +60,20 @@ export const getDashboardOverview = catchAsync(
     });
   },
 );
+export const getAgentStats = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    const userId = req.user?.id;
+
+    if (!companyId || !userId) {
+      return res.status(400).json({ message: "Context required" });
+    }
+
+    const stats = await dashboardService.getAgentStats(companyId, userId);
+
+    res.status(200).json({
+      status: "success",
+      data: stats,
+    });
+  },
+);

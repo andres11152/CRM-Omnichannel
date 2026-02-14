@@ -12,29 +12,29 @@ import {
 } from "../core/events/WhatsAppEvents";
 import { prisma } from "@/config/database";
 import {
-  downloadMediaMessage,
   WAMessage,
-  AnyMessageContent,
   WAMessageUpdate,
   generateMessageID,
 } from "@whiskeysockets/baileys";
 import { gateway } from "@/gateways/socketGateway";
 import { TenantContextManager } from "@/config/tenantContext";
 import { SocketEventEmitter } from "@/services/socketEventEmitter";
-import { generateAIResponse } from "@/services/aiResponseService";
-import { storageService } from "@/services/storageService";
-import mime from "mime-types";
-import { Readable } from "stream";
-import { convertAudioToMP4, cleanupTempFile } from "@/utils/audioConverter";
-import fs from "fs";
+import { cleanupTempFile } from "@/utils/audioConverter";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 
 import { chatService } from "@/services/chatService";
-// import { contactService } from "@/services/contactService"; // Removed unused import
 import { SessionData, MessageMetadata } from "@/types/whatsapp.types";
 import { Conversation, Queue, MediaType, Prisma, User } from "@prisma/client";
-import { AIResponseSchema } from "@/types/ai.types";
-import { flowExecutor } from "@/services/flowExecutor";
+
+// 🏗️ SRP SERVICES (Extracted from this file)
+import { IdentityResolverService } from "../services/IdentityResolverService";
+import { AITriggerService } from "../services/AITriggerService";
+import { ProfilePictureService } from "../services/ProfilePictureService";
+import {
+  mediaProcessor,
+  MediaFileNotFoundError,
+} from "../services/MediaProcessorService";
+import { Logger } from "@/utils/logger";
 
 type ConversationWithQueue = Conversation & {
   queue: (Queue & { aiAssistantId: string | null }) | null;
@@ -42,18 +42,20 @@ type ConversationWithQueue = Conversation & {
   assignedTo: User | null;
 };
 
-const mapBaileysToMediaType = (baileysType: string): MediaType => {
-  const type = baileysType.toLowerCase();
-  if (type.includes("image")) return MediaType.IMAGE;
-  if (type.includes("video")) return MediaType.VIDEO;
-  if (type.includes("audio")) return MediaType.AUDIO;
-  return MediaType.DOCUMENT;
-};
-
 const prepareMetadataForDB = (meta: MessageMetadata): Prisma.InputJsonValue => {
   return JSON.parse(JSON.stringify(meta));
 };
 
+/**
+ * 🏗️ MESSAGE HANDLER (Refactored Orchestrator)
+ *
+ * Responsibilities: Event subscription, message routing, send/receive orchestration.
+ * Delegated: IdentityResolverService (LID resolution)
+ * Delegated: AITriggerService (Flow Bot + AI responses)
+ * Delegated: ProfilePictureService (avatar management)
+ *
+ * Target: < 500 lines ✅
+ */
 export class MessageHandler implements IMessageHandler {
   private eventBus: EventBus;
   private sessionCache = new Map<string, SessionData>();
@@ -62,9 +64,27 @@ export class MessageHandler implements IMessageHandler {
   private recentSentContent = new Set<string>();
   private socketEmitter: SocketEventEmitter;
 
+  // 🏗️ SRP: Delegated services
+  private identityResolver: IdentityResolverService;
+  private aiTrigger: AITriggerService;
+  private profilePicService: ProfilePictureService;
+
   constructor(private sessionManager: ISessionManager) {
     this.eventBus = EventBus.getInstance();
     this.socketEmitter = new SocketEventEmitter(gateway);
+
+    // Initialize SRP services
+    this.identityResolver = new IdentityResolverService(sessionManager);
+    this.profilePicService = new ProfilePictureService(sessionManager);
+    this.aiTrigger = new AITriggerService({
+      sendMessage: (to, content, options) =>
+        this.sendMessage(to, content, options),
+      sendMedia: (to, media, options) =>
+        this.sendMedia(to, media as MediaPayload, options),
+      sendPresenceUpdate: (to, type, companyId) =>
+        this.sendPresenceUpdate(to, type, companyId),
+    });
+
     this.subscribeToEvents();
   }
 
@@ -74,7 +94,7 @@ export class MessageHandler implements IMessageHandler {
     const resultPromise = previous
       .then(() => task())
       .catch((err) => {
-        console.error(`[Mutex] Critical task failure for ${key}:`, err);
+        Logger.error(`[Mutex] Critical task failure for ${key}:`, err);
         throw err;
       });
 
@@ -115,12 +135,15 @@ export class MessageHandler implements IMessageHandler {
     );
   }
 
+  // ────────────────────────────────────────────────
+  // PRESENCE UPDATE (Delegated to IdentityResolver)
+  // ────────────────────────────────────────────────
+
   async handlePresenceUpdate(
     data: WhatsAppEventData[WhatsAppEventType.PRESENCE_UPDATE],
     sessionId: string,
   ): Promise<void> {
     const { id: remoteJid, presences } = data;
-    // 🛡️ Safety: Ensure data integrity
     if (!remoteJid || !presences) return;
 
     const participant = Object.keys(presences)[0];
@@ -132,12 +155,11 @@ export class MessageHandler implements IMessageHandler {
       | "recording"
       | "paused";
 
-    // Debug Log: Presence Received
-    console.info(`[Presence] 📥 Event from ${remoteJid}: ${status}`);
+    Logger.info(`[Presence] 📥 Event from ${remoteJid}: ${status}`);
 
     const sessionData = await this.ensureSessionData(sessionId);
     if (!sessionData) {
-      console.warn(`[Presence] ⚠️ SessionData missing for ${sessionId}`);
+      Logger.warn(`[Presence] ⚠️ SessionData missing for ${sessionId}`);
       return;
     }
 
@@ -149,39 +171,21 @@ export class MessageHandler implements IMessageHandler {
       },
       async () => {
         const originalJid = WhatsAppIdUtils.getCleanJid(remoteJid);
-        let targetJid = originalJid;
+        const targetJid = await this.identityResolver.resolvePresenceJid(
+          originalJid,
+          sessionId,
+        );
 
-        // 🛡️ STRATEGY 1: Resolve LID to Phone (Primary)
-        if (WhatsAppIdUtils.isLid(originalJid)) {
-          console.info(`[Presence] 🔍 Resolving LID ${originalJid}...`);
-          // 🛡️ RETRY LOGIC FOR PRESENCE TOO
-          for (let i = 0; i < 5; i++) {
-            const resolved = this.sessionManager.findContactByLid(originalJid);
-            if (resolved?.id) {
-              const real = WhatsAppIdUtils.getCleanJid(resolved.id);
-              if (real && !WhatsAppIdUtils.isLid(real)) {
-                targetJid = real;
-                break;
-              }
-            }
-            // Wait briefly if not found immediately (though presence updates usually mean we have data)
-            await new Promise((r) => setTimeout(r, 200));
-          }
-        }
-
-        // 🛡️ DOUBLE LOOKUP: Try Phone First, Then Fallback to LID
         const chatUniqueId = targetJid.split("@")[0];
 
-        // Look up by Target JID (Phone)
         let conv = await chatService.findConversation(
           sessionData.companyId,
           chatUniqueId,
           `${chatUniqueId}@whatsapp.user`,
         );
 
-        // Look up by Original JID (LID) if different and first attempt failed
         if (!conv && targetJid !== originalJid) {
-          console.warn(
+          Logger.warn(
             `[Presence] ⚠️ Phone lookup failed for ${targetJid}, trying LID fallback...`,
           );
           const fallbackId = originalJid.split("@")[0];
@@ -193,16 +197,15 @@ export class MessageHandler implements IMessageHandler {
         }
 
         if (conv) {
-          console.info(`[Presence] 📡 Emitting ${status} to Chat ${conv.id}`);
-          // ✅ SUCCESS: Found conversation, emit using its ID
+          Logger.info(`[Presence] 📡 Emitting ${status} to Chat ${conv.id}`);
           this.socketEmitter.emitConversationTyping(
             conv.id,
             sessionData.companyId,
-            targetJid, // Send resolved JID if possible, or original
+            targetJid,
             status,
           );
         } else {
-          console.warn(
+          Logger.warn(
             `[Presence] ❌ Conversation NOT FOUND. Original: ${originalJid}, Target: ${targetJid}, Company: ${sessionData.companyId}`,
           );
         }
@@ -210,10 +213,14 @@ export class MessageHandler implements IMessageHandler {
     );
   }
 
+  // ────────────────────────────────────────────────
+  // INCOMING MESSAGE HANDLER
+  // ────────────────────────────────────────────────
+
   async handleIncoming(message: WAMessage, sessionId: string): Promise<void> {
     const messageId = message.key?.id;
     if (!message || !message.message || !messageId) {
-      console.warn(`[MessageHandler] Received invalid message structure`, {
+      Logger.warn(`[MessageHandler] Received invalid message structure`, {
         hasMessage: !!message,
         hasContent: !!message?.message,
         messageId,
@@ -230,12 +237,16 @@ export class MessageHandler implements IMessageHandler {
         await this.processIncomingMessage(message, sessionId, messageId);
       });
     } catch (error) {
-      console.error(
+      Logger.error(
         `[MessageHandler] Error processing incoming message ${messageId}:`,
         error,
       );
     }
   }
+
+  // ────────────────────────────────────────────────
+  // MESSAGE STATUS UPDATE
+  // ────────────────────────────────────────────────
 
   async handleMessageUpdate(
     whatsappMessageId: string,
@@ -284,12 +295,16 @@ export class MessageHandler implements IMessageHandler {
         newStatus,
       );
     } catch (error) {
-      console.error(
+      Logger.error(
         `[MessageHandler] Failed to update message status for ${whatsappMessageId}:`,
         error,
       );
     }
   }
+
+  // ────────────────────────────────────────────────
+  // PROCESS INCOMING MESSAGE (Core Orchestration)
+  // ────────────────────────────────────────────────
 
   private async processIncomingMessage(
     message: WAMessage,
@@ -312,124 +327,15 @@ export class MessageHandler implements IMessageHandler {
           return;
         }
 
-        const rawRemoteJid = message.key.remoteJid;
-        let cleanRemoteJid = WhatsAppIdUtils.getCleanJid(rawRemoteJid);
+        // 🔍 Identity Resolution (delegated to IdentityResolverService)
+        const { cleanRemoteJid } =
+          await this.identityResolver.resolveMessageJid(
+            message,
+            sessionId,
+            companyId,
+          );
 
-        if (!cleanRemoteJid) {
-          console.warn(`[MessageHandler] Invalid JID: ${rawRemoteJid}`);
-          return;
-        }
-
-        if (WhatsAppIdUtils.isLid(cleanRemoteJid)) {
-          console.info(`[MessageHandler] 🔍 LID Detected: ${cleanRemoteJid}`);
-
-          let resolved = false;
-
-          const messageKey = message.key as {
-            remoteJidAlt?: string;
-            senderPn?: string;
-          };
-
-          if (
-            messageKey.remoteJidAlt &&
-            messageKey.remoteJidAlt.includes("@s.whatsapp.net") &&
-            !messageKey.remoteJidAlt.includes("@lid")
-          ) {
-            cleanRemoteJid =
-              WhatsAppIdUtils.getCleanJid(messageKey.remoteJidAlt) ||
-              cleanRemoteJid;
-            resolved = true;
-          }
-
-          if (
-            !resolved &&
-            messageKey.senderPn &&
-            messageKey.senderPn.includes("@s.whatsapp.net") &&
-            !messageKey.senderPn.includes("@lid")
-          ) {
-            cleanRemoteJid =
-              WhatsAppIdUtils.getCleanJid(messageKey.senderPn) ||
-              cleanRemoteJid;
-            resolved = true;
-          }
-
-          const participant = message.key.participant;
-          if (!resolved && participant && !WhatsAppIdUtils.isLid(participant)) {
-            cleanRemoteJid =
-              WhatsAppIdUtils.getCleanJid(participant) || cleanRemoteJid;
-            resolved = true;
-          }
-
-          if (
-            !resolved &&
-            message.messageStubParameters &&
-            Array.isArray(message.messageStubParameters)
-          ) {
-            for (const param of message.messageStubParameters) {
-              if (
-                typeof param === "string" &&
-                param.includes("@s.whatsapp.net") &&
-                !param.includes("@lid")
-              ) {
-                cleanRemoteJid =
-                  WhatsAppIdUtils.getCleanJid(param) || cleanRemoteJid;
-                resolved = true;
-                break;
-              }
-            }
-          }
-
-          if (!resolved) {
-            const resolvedContact =
-              this.sessionManager.findContactByLid(cleanRemoteJid);
-            if (
-              resolvedContact?.id &&
-              !WhatsAppIdUtils.isLid(resolvedContact.id)
-            ) {
-              const realJid = WhatsAppIdUtils.getCleanJid(resolvedContact.id);
-              if (realJid) {
-                cleanRemoteJid = realJid;
-                resolved = true;
-              }
-            }
-          }
-
-          if (!resolved) {
-            // 🛡️ REINTRODUCING RETRY LOGIC FOR LID RESOLUTION
-            // Wait for history sync to populate SimpleStore
-            let realPhone = null;
-            for (let i = 0; i < 10; i++) {
-              realPhone = await this.sessionManager.resolveLidToPhone(
-                sessionId,
-                cleanRemoteJid,
-              );
-              if (realPhone) break;
-              await new Promise((r) => setTimeout(r, 500));
-            }
-
-            if (realPhone) {
-              // Extract original LID before overwriting cleanRemoteJid
-              const originalLidBase = cleanRemoteJid.split("@")[0];
-              cleanRemoteJid = `${realPhone}@s.whatsapp.net`;
-              resolved = true;
-              console.info(
-                `[MessageHandler] 🎯 Retried & Resolved LID ${cleanRemoteJid}`,
-              );
-              // 🛡️ PERSIST the LID -> Phone mapping for future lookups
-              await chatService.saveLidPhoneMapping(
-                companyId,
-                originalLidBase,
-                realPhone,
-              );
-            }
-          }
-
-          if (!resolved) {
-            console.warn(
-              `[MessageHandler] ⚠️ LID could not be resolved: ${cleanRemoteJid}`,
-            );
-          }
-        }
+        if (!cleanRemoteJid) return;
 
         const isGroup = WhatsAppIdUtils.isGroup(cleanRemoteJid);
         let isFromMe = message.key.fromMe || false;
@@ -460,28 +366,11 @@ export class MessageHandler implements IMessageHandler {
         const pushName = message.pushName;
 
         if (!isFromMe) {
-          let senderJid = WhatsAppIdUtils.getSenderJid(message);
-
-          if (
-            !isGroup &&
-            cleanRemoteJid &&
-            !WhatsAppIdUtils.isLid(cleanRemoteJid)
-          ) {
-            senderJid = cleanRemoteJid;
-          }
-
-          if (senderJid && WhatsAppIdUtils.isLid(senderJid)) {
-            const resolvedSender =
-              this.sessionManager.findContactByLid(senderJid);
-            if (resolvedSender?.id) {
-              const realSenderJid = WhatsAppIdUtils.getCleanJid(
-                resolvedSender.id,
-              );
-              if (realSenderJid && !WhatsAppIdUtils.isLid(realSenderJid)) {
-                senderJid = realSenderJid;
-              }
-            }
-          }
+          const senderJid = this.identityResolver.resolveSenderJid(
+            message,
+            cleanRemoteJid,
+            isGroup,
+          );
           const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
 
           if (senderJid) {
@@ -495,16 +384,14 @@ export class MessageHandler implements IMessageHandler {
               role: "USER",
             });
 
-            this.fetchAndPersistProfilePicture(
-              sessionId,
-              senderJid,
-              customerUser.id,
-            ).catch((err) =>
-              console.warn(
-                `[MessageHandler] Profile pic fetch failed for ${senderJid}:`,
-                err,
-              ),
-            );
+            this.profilePicService
+              .fetchAndPersist(sessionId, senderJid, customerUser.id)
+              .catch((err) =>
+                Logger.warn(
+                  `[MessageHandler] Profile pic fetch failed for ${senderJid}:`,
+                  err,
+                ),
+              );
           }
         } else {
           if (!isGroup) {
@@ -528,207 +415,19 @@ export class MessageHandler implements IMessageHandler {
             chatEmail,
           );
 
-          // 🛡️ 100-YEAR FIX: LID Unification
-          // If we have a LID and no conversation found, we need to:
-          // 1. Check if there's an existing conversation with the REAL phone number
-          // 2. If found, use that conversation instead of creating a duplicate
-          // 3. Store the LID -> Phone mapping for future lookups
+          // 🔍 LID Conversation Resolution (delegated to IdentityResolverService)
           if (!conv && WhatsAppIdUtils.isLid(cleanRemoteJid)) {
-            console.info(
+            Logger.info(
               `[MessageHandler] 🔍 LID Conversation not found, searching for real phone conversation...`,
             );
-
-            // Strategy 0: Base definition
-            const lidBase = chatUniqueId;
-
-            // Strategy 1: 🛡️ DATABASE LID LOOKUP (Most Reliable)
-            // Check if we have a LID -> Phone mapping stored in DB (survives restarts)
-            if (!conv) {
-              console.info(
-                `[MessageHandler] 🔍 Strategy 1: DB LID lookup for ${lidBase}`,
-              );
-              conv = await chatService.findConversationByLid(
-                companyId,
-                lidBase,
-              );
-              if (conv) {
-                console.info(
-                  `[MessageHandler] 🎯 Strategy 1 SUCCESS: Found conv ${conv.id} via persisted LID mapping`,
-                );
-              }
-            }
-
-            // Strategy 3: Try to actively resolve the LID one more time with direct query
-            if (!conv) {
-              console.info(
-                `[MessageHandler] 🔄 Final attempt to resolve LID ${lidBase} via active query...`,
-              );
-              const sock = this.sessionManager.getSession(sessionId);
-
-              if (sock) {
-                try {
-                  // Use Baileys' onWhatsApp to resolve the LID
-                  // Note: This might not work for LIDs directly, but worth trying
-                  const fullLidJid = `${lidBase}@lid`;
-                  const resolvedPhone =
-                    await this.sessionManager.resolveLidToPhone(
-                      sessionId,
-                      fullLidJid,
-                    );
-
-                  if (resolvedPhone) {
-                    console.info(
-                      `[MessageHandler] ✅ Actively resolved LID ${lidBase} -> ${resolvedPhone}`,
-                    );
-                    const realChannelId = resolvedPhone.replace(/\D/g, "");
-                    const realChatEmail = `${realChannelId}@whatsapp.user`;
-
-                    // 🛡️ PERSIST the LID -> Phone mapping for future lookups
-                    await chatService.saveLidPhoneMapping(
-                      companyId,
-                      lidBase,
-                      resolvedPhone,
-                    );
-
-                    // Now search for the real conversation
-                    conv = await chatService.findConversation(
-                      companyId,
-                      realChannelId,
-                      realChatEmail,
-                    );
-
-                    if (conv) {
-                      console.info(
-                        `[MessageHandler] 🎯 Found existing conversation ${conv.id} for resolved phone ${realChannelId}`,
-                      );
-                    }
-                  }
-                } catch (resErr) {
-                  console.warn(
-                    `[MessageHandler] ⚠️ Active LID resolution failed:`,
-                    resErr,
-                  );
-                }
-              }
-            }
-
-            // Strategy 4: Name Heuristic (Last Resort)
-            // If we have a pushName and the message is INBOUND (so pushName is the contact)
-            if (!conv && message.pushName && !isFromMe) {
-              console.info(
-                `[MessageHandler] 🔍 Trying Name Heuristic for LID: ${message.pushName}`,
-              );
-
-              // Find users with this name in the company
-              const possibleUsers = await prisma.user.findMany({
-                where: {
-                  companyId,
-                  name: { contains: message.pushName, mode: "insensitive" },
-                },
-                take: 5,
-              });
-
-              console.info(
-                `[MessageHandler] 🔍 Found ${possibleUsers.length} users matching name "${message.pushName}"`,
-              );
-
-              for (const user of possibleUsers) {
-                // Check if we have ANY conversation with this user (OPEN or CLOSED)
-                const userConv = await prisma.conversation.findFirst({
-                  where: {
-                    companyId,
-                    participants: { some: { id: user.id } },
-                    // Removed status: "OPEN" restriction to find historical chats too
-                  },
-                  orderBy: { updatedAt: "desc" },
-                });
-
-                if (userConv) {
-                  conv = await chatService.getFullConversation(userConv.id);
-                  console.info(
-                    `[MessageHandler] 🎯 Heuristic Match: Found conv ${conv.id} by name ${message.pushName}`,
-                  );
-                  break;
-                }
-              }
-            }
-
-            // Strategy 4.5: Brute Force Store Search
-            // Sometimes lidToPhone map is empty, but the Contact object exists in store with LID
-            // We iterate contacts to find one with this LID
-            if (!conv) {
-              // 🛡️ NO ANY ALLOWED: Strict Typing for Store Access
-              type ContactStore = {
-                contacts: Record<string, { lid?: string; id?: string }>;
-              };
-              const store = this.sessionManager.getSessionStore(
-                sessionId,
-              ) as ContactStore;
-
-              if (store && store.contacts) {
-                const storeContacts = store.contacts;
-                for (const jid in storeContacts) {
-                  const c = storeContacts[jid];
-                  if (
-                    c.lid === cleanRemoteJid ||
-                    (c.lid && c.lid.startsWith(lidBase))
-                  ) {
-                    // Found contact!
-                    const phoneJid = jid; // Key is phone JID
-                    if (phoneJid.includes("@s.whatsapp.net")) {
-                      const realChannelId = phoneJid.replace(/\D/g, "");
-                      const realChatEmail = `${realChannelId}@whatsapp.user`;
-                      console.info(
-                        `[MessageHandler] 🎯 Brute Force Store Match: ${cleanRemoteJid} -> ${phoneJid}`,
-                      );
-                      conv = await chatService.findConversation(
-                        companyId,
-                        realChannelId,
-                        realChatEmail,
-                      );
-                      if (conv) break;
-                    }
-                  }
-                }
-              }
-            }
-
-            // Strategy 5: UNIVERSAL LID FALLBACK
-            // For ANY message with unresolved LID, try to find the most recent active conversation.
-            // This prevents both duplicate creation AND message loss.
-            if (!conv) {
-              console.warn(
-                `[MessageHandler] 🚨 LID ${lidBase} completely unresolved. fromMe=${isFromMe}. Searching for recent conversation...`,
-              );
-
-              // Strategy 5a: Find the most recently active conversation for this company
-              const recentConv = await prisma.conversation.findFirst({
-                where: {
-                  companyId,
-                  isGroup: false,
-                  // 🛡️ REVISION: Removed 'status: OPEN' and increased lookback to 24h
-                  // This prevents "New Chat" creation for ongoing/recent dialogues,
-                  // complying with user requirement to "make it work like before".
-                  updatedAt: {
-                    gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-                  }, // Last 24 hours
-                },
-                orderBy: { updatedAt: "desc" },
-              });
-
-              if (recentConv) {
-                console.info(
-                  `[MessageHandler] 🎯 FALLBACK SUCCESS: Using conversation ${recentConv.id} for unresolved LID ${lidBase}`,
-                );
-                conv = await chatService.getFullConversation(recentConv.id);
-              } else {
-                console.warn(
-                  `[MessageHandler] ⚠️ No recent conversation found for LID ${lidBase}. Will create new (unavoidable).`,
-                );
-                // For inbound messages, we MUST create to not lose messages.
-                // For outbound, this is rare but acceptable as last resort.
-              }
-            }
+            conv = await this.identityResolver.findConversationByLid(
+              companyId,
+              cleanRemoteJid,
+              chatUniqueId,
+              sessionId,
+              message,
+              isFromMe,
+            );
           }
 
           if (!conv) {
@@ -759,18 +458,11 @@ export class MessageHandler implements IMessageHandler {
                   }
                 }
               } catch {
-                console.warn(
+                Logger.warn(
                   `[MessageHandler] Could not fetch group metadata for ${cleanRemoteJid}`,
                 );
               }
             }
-
-            // Note: Strategy 5 check removed here to be restored in its original position.
-
-            // Note: Inbound Strategy 5 remains disabled for safety.
-            // If we're here with !conv, create a NEW conversation.
-            // If we're here with !conv, it means Strategy 5 didn't find a recent conversation,
-            // so we MUST create one to not lose the message.
 
             conv = await chatService.createConversation({
               companyId,
@@ -804,9 +496,8 @@ export class MessageHandler implements IMessageHandler {
         let dbSenderId = customerUser?.id;
 
         if (isOutbound) {
-          // 🛡️ 100-YEAR FIX: Database-level Deduplication
-          // Prevents duplication when Baileys event ID mismatch occurs or race conditions persist
-          const recentThreshold = new Date(Date.now() - 10000); // 10 seconds lookback
+          // 🛡️ Database-level Deduplication
+          const recentThreshold = new Date(Date.now() - 10000);
           const existingDuplicate = await prisma.message.findFirst({
             where: {
               conversationId: conversation.id,
@@ -817,17 +508,17 @@ export class MessageHandler implements IMessageHandler {
           });
 
           if (existingDuplicate) {
-            console.info(
+            Logger.info(
               `[MessageHandler] 🛡️ Ignoring duplicate outbound message (DB Detect): ${messageId} | matches ${existingDuplicate.id}`,
             );
             return;
           }
 
-          // 🛡️ MEMORY DEDUP: Check Content Hash (Fastest Path)
+          // Memory Dedup
           if (textContent) {
             const dedupKey = this.getDedupKey(conversation.id, textContent);
             if (this.recentSentContent.has(dedupKey)) {
-              console.info(
+              Logger.info(
                 `[MessageHandler] 🛡️ Ignoring duplicate outbound message (Memory Content Detect): ${messageId}`,
               );
               return;
@@ -908,7 +599,7 @@ export class MessageHandler implements IMessageHandler {
                 ticketId = ticket?.id;
               }
             } catch (e) {
-              console.error("Ticket error", e);
+              Logger.error("Ticket error", e);
             }
 
             this.socketEmitter.emitMessageReceived(
@@ -917,137 +608,26 @@ export class MessageHandler implements IMessageHandler {
               ticketId,
             );
 
+            // 🤖 AI + Flow Bot (delegated to AITriggerService)
             if (textContent && !isGroup) {
-              let flowExecuted = false;
-              const flowPhone =
-                customerUser?.phone ||
-                WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
-
-              if (flowPhone) {
-                try {
-                  let contact = await prisma.contact.findFirst({
-                    where: { companyId, phone: flowPhone },
-                  });
-
-                  if (!contact) {
-                    try {
-                      contact = await prisma.contact.create({
-                        data: {
-                          companyId,
-                          phone: flowPhone,
-                          name: pushName || "Usuario WhatsApp",
-                          tags: ["WHATSAPP_LEAD", "AUTO_CREATED"],
-                        },
-                      });
-                    } catch (e) {
-                      contact = await prisma.contact.findFirst({
-                        where: { companyId, phone: flowPhone },
-                      });
-                    }
-                  }
-
-                  if (contact) {
-                    const flowResults = await flowExecutor.processMessage(
-                      contact.id,
-                      textContent,
-                      conversation.id,
-                      companyId,
-                    );
-
-                    if (flowResults && flowResults.length > 0) {
-                      flowExecuted = true;
-                      const botUser = await chatService.upsertWhatsAppUser({
-                        email: `bot_${companyId}@reply.bot`,
-                        name: "Flow Bot",
-                        companyId,
-                        role: "AGENT",
-                      });
-
-                      await TenantContextManager.run(
-                        { companyId, userId: botUser.id, requestId: "flow" },
-                        async () => {
-                          for (const result of flowResults) {
-                            if (typeof result === "string") {
-                              await this.sendMessage(
-                                conversation.channelId,
-                                result,
-                                {
-                                  companyId,
-                                  conversationId: conversation.id,
-                                  senderId: botUser.id,
-                                  metadata: { flowGenerated: true },
-                                },
-                              );
-                            } else if (
-                              result &&
-                              typeof result === "object" &&
-                              "type" in result
-                            ) {
-                              await this.sendMedia(
-                                conversation.channelId,
-                                {
-                                  type: result.type,
-                                  url: result.url,
-                                  caption: result.message,
-                                  mimetype:
-                                    mime.lookup(result.url) ||
-                                    "application/octet-stream",
-                                },
-                                {
-                                  companyId,
-                                  conversationId: conversation.id,
-                                  senderId: botUser.id,
-                                  metadata: { flowGenerated: true },
-                                },
-                              );
-                            }
-                          }
-                        },
-                      );
-                    }
-                  }
-                } catch (err) {
-                  console.error("[MessageHandler] Flow Execution Failed:", err);
-                }
-              }
-
-              if (flowExecuted) return;
-
-              const isAiEnabled = conversation.aiEnabled !== false;
-
-              if (!isAiEnabled) {
-                const lastIntervention = conversation.lastManualIntervention
-                  ? new Date(conversation.lastManualIntervention)
-                  : null;
-
-                const GRACE_PERIOD_MS = 10 * 60 * 1000;
-                const timeSinceIntervention = lastIntervention
-                  ? Date.now() - lastIntervention.getTime()
-                  : 0;
-
-                if (
-                  lastIntervention &&
-                  timeSinceIntervention < GRACE_PERIOD_MS
-                ) {
-                  return;
-                } else {
-                  await chatService.updateConversation(conversation.id, {
-                    aiEnabled: true,
-                  });
-                }
-              }
-
-              this.triggerAIResponse(
-                conversation,
+              await this.aiTrigger.processInboundTriggers(
+                conversation as ConversationWithQueue,
                 textContent,
                 companyId,
-              ).catch(() => {});
+                cleanRemoteJid,
+                customerUser,
+                pushName,
+              );
             }
           }
         }
       },
     );
   }
+
+  // ────────────────────────────────────────────────
+  // SESSION DATA CACHE
+  // ────────────────────────────────────────────────
 
   private async ensureSessionData(
     sessionId: string,
@@ -1070,6 +650,10 @@ export class MessageHandler implements IMessageHandler {
     return sessionData;
   }
 
+  // ────────────────────────────────────────────────
+  // MEDIA CONTENT EXTRACTION
+  // ────────────────────────────────────────────────
+
   private async extractMessageContent(
     message: WAMessage,
     messageId: string,
@@ -1079,180 +663,18 @@ export class MessageHandler implements IMessageHandler {
     mediaType?: MediaType | null;
     mediaSize?: number;
   } | null> {
-    let textContent = "";
-    let mediaUrl: string | undefined;
-    let mediaSize = 0;
-    let mediaType: MediaType | null = null;
-
-    const messageType = Object.keys(message.message || {})[0];
-    if (!messageType) return null;
-
-    const ignoredTypes = [
-      "protocolMessage",
-      "senderKeyDistributionMessage",
-      "reactionMessage",
-      "keepInChatMessage",
-      "pollUpdateMessage",
-    ];
-
-    if (ignoredTypes.includes(messageType)) {
-      return null;
-    }
-
-    if (messageType === "conversation") {
-      textContent = message.message?.conversation || "";
-    } else if (messageType === "extendedTextMessage") {
-      textContent = message.message?.extendedTextMessage?.text || "";
-    } else {
-      const supportedMedia = [
-        "imageMessage",
-        "videoMessage",
-        "audioMessage",
-        "documentMessage",
-        "stickerMessage",
-      ];
-      if (supportedMedia.includes(messageType)) {
-        try {
-          const stream = await downloadMediaMessage(message, "stream", {});
-          const content = message.message as unknown as Record<string, unknown>;
-          const msgObj = content[messageType] as
-            | Record<string, unknown>
-            | undefined;
-
-          textContent =
-            (msgObj?.caption as string) ||
-            (msgObj?.text as string) ||
-            (msgObj?.fileName as string) ||
-            `[${mapBaileysToMediaType(messageType)}]`;
-
-          if (stream) {
-            mediaType = mapBaileysToMediaType(messageType);
-            const mimetype: string =
-              (msgObj?.mimetype as string | undefined) ||
-              "application/octet-stream";
-            const ext = mime.extension(mimetype) || "bin";
-            const filename = `${messageId}.${ext}`;
-
-            const uploadResult = await storageService.uploadStream(
-              stream as Readable,
-              filename,
-              mimetype,
-            );
-            mediaUrl = uploadResult.url;
-            mediaSize = Number(
-              (msgObj?.fileLength as number | bigint | undefined) || 0,
-            );
-          }
-        } catch (e) {
-          console.error(`[media] Download failed for ${messageId}`, e);
-        }
-      } else {
-        const content = message.message as unknown as Record<string, unknown>;
-        const msgObj = content[messageType] as
-          | Record<string, unknown>
-          | undefined;
-        if (msgObj) {
-          textContent = `[${messageType}]`;
-        }
-      }
-    }
-
-    if (!textContent && !mediaUrl && !mediaType) {
-      return null;
-    }
-
-    return { textContent, mediaUrl, mediaType, mediaSize };
+    return mediaProcessor.extractMessageContent(message, messageId);
   }
 
-  private async triggerAIResponse(
-    conversation: ConversationWithQueue,
-    messageContent: string,
-    companyId: string,
-  ) {
-    if (!conversation?.queue?.aiAssistantId) return;
-
-    const thinkingTime = Math.floor(Math.random() * 1000) + 1000;
-    await new Promise((r) => setTimeout(r, thinkingTime));
-
-    const history = await prisma.message.findMany({
-      where: { conversationId: conversation.id },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    });
-
-    const formattedHistory = history.reverse().map((m) => ({
-      role: (m.direction === "INBOUND" ? "user" : "model") as "user" | "model",
-      parts: m.content,
-    }));
-
-    const rawResponse = await generateAIResponse(
-      companyId,
-      conversation.queue.aiAssistantId,
-      messageContent,
-      formattedHistory,
-    );
-
-    if (rawResponse) {
-      const validation = AIResponseSchema.safeParse(rawResponse);
-      if (!validation.success) return;
-
-      const cleanResponse = validation.data;
-
-      const typingTime = Math.min(
-        Math.max(cleanResponse.length * 50, 1500),
-        8000,
-      );
-
-      await this.sendPresenceUpdate(
-        conversation.channelId,
-        "composing",
-        companyId,
-      );
-
-      await new Promise((r) => setTimeout(r, typingTime));
-
-      const aiAssistant = await prisma.aIAssistant.findUnique({
-        where: { id: conversation.queue.aiAssistantId },
-        select: { name: true },
-      });
-      const botName = aiAssistant?.name || "AI Assistant";
-
-      const botEmail = `ai_${conversation.queue.aiAssistantId}@reply.bot`;
-      const botUser = await chatService.upsertWhatsAppUser({
-        email: botEmail,
-        name: botName,
-        companyId,
-        role: "AGENT",
-      });
-
-      await TenantContextManager.run(
-        { companyId, userId: botUser.id, requestId: "ai" },
-        async () => {
-          await this.sendPresenceUpdate(
-            conversation.channelId,
-            "paused",
-            companyId,
-          );
-
-          await this.sendMessage(conversation.channelId, cleanResponse, {
-            companyId,
-            conversationId: conversation.id,
-            senderId: botUser.id,
-            metadata: {
-              aiGenerated: true,
-              aiAssistantId: conversation.queue!.aiAssistantId,
-            },
-          });
-        },
-      );
-    }
-  }
+  // ────────────────────────────────────────────────
+  // SEND MESSAGE
+  // ────────────────────────────────────────────────
 
   async sendMessage(
     to: string,
     content: string,
     options: SendMessageOptions,
-    retries = 3, // 🛡️ 100-YEAR FIX: Retry attempts
+    retries = 3,
   ): Promise<MessagePayload> {
     const { companyId, conversationId, senderId, metadata } = options;
 
@@ -1266,11 +688,9 @@ export class MessageHandler implements IMessageHandler {
 
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
       const generatedId = generateMessageID();
-      // 🛡️ RACE CONDITION FIX: Track ID *before* sending to prevent duplicate processing by event handler
       this.recentSentMessageIds.add(generatedId);
       setTimeout(() => this.recentSentMessageIds.delete(generatedId), 10000);
 
-      // 🛡️ CONTENT DEDUP: Track content to handle ID mismatch Scenarios
       const dedupKey = this.getDedupKey(conversationId, content);
       this.recentSentContent.add(dedupKey);
       setTimeout(() => this.recentSentContent.delete(dedupKey), 10000);
@@ -1280,8 +700,6 @@ export class MessageHandler implements IMessageHandler {
         { text: content },
         { messageId: generatedId },
       );
-      // Note: sentMsg.key.id should match generatedId if Baileys respects it.
-      // If not, we track whatever it returns (but pre-tracking relies on respect).
 
       const mergedMeta: MessageMetadata = {
         messageId: sentMsg?.key?.id,
@@ -1308,14 +726,14 @@ export class MessageHandler implements IMessageHandler {
             aiEnabled: false,
             lastManualIntervention: new Date(),
           });
-          console.info(
+          Logger.info(
             `[HITL] ✅ AI muted for conversation ${conversationId} (human agent intervention)`,
           );
         } catch (err) {
-          console.error("[HITL] Failed to auto-mute AI:", err);
+          Logger.error("[HITL] Failed to auto-mute AI:", err);
         }
       } else {
-        console.info(
+        Logger.info(
           `[HITL] ⏩ Skipping AI mute - message is ${
             isAiGenerated ? "AI-generated" : "Flow-generated"
           }`,
@@ -1328,7 +746,6 @@ export class MessageHandler implements IMessageHandler {
 
       return savedMessage as unknown as MessagePayload;
     } catch (err: unknown) {
-      // 🛡️ RETRY LOGIC for Connection issues
       const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
       const isConnectionError =
         errorMsg.includes("Connection Closed") ||
@@ -1337,23 +754,27 @@ export class MessageHandler implements IMessageHandler {
         errorMsg.includes("Timed Out");
 
       if (isConnectionError && retries > 0) {
-        console.warn(
+        Logger.warn(
           `[MessageHandler] ⚠️ Send failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
         );
         await new Promise((resolve) => setTimeout(resolve, 2000));
         return this.sendMessage(to, content, options, retries - 1);
       }
 
-      console.error("[MessageHandler] ❌ sendMessage failed final:", err);
+      Logger.error("[MessageHandler] ❌ sendMessage failed final:", err);
       throw err;
     }
   }
+
+  // ────────────────────────────────────────────────
+  // SEND MEDIA
+  // ────────────────────────────────────────────────
 
   async sendMedia(
     to: string,
     media: MediaPayload,
     options: SendMessageOptions,
-    retries = 3, // 🛡️ 100-YEAR FIX: Retry attempts
+    retries = 3,
   ): Promise<MessagePayload> {
     const { companyId, conversationId, senderId } = options;
 
@@ -1365,168 +786,14 @@ export class MessageHandler implements IMessageHandler {
         throw new Error(`No active WhatsApp session for company: ${companyId}`);
       }
       const sock = activeSession.socket;
-
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
 
-      let messageContent: AnyMessageContent;
-      let metaType: "image" | "video" | "audio" | "document";
-      if (media.url && media.url.startsWith("/api/")) {
-        const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
-        const cleanBackendUrl = backendUrl.replace(/\/$/, "");
-        media.url = `${cleanBackendUrl}${media.url}`;
-      }
-
-      const isHttp =
-        media.url.startsWith("http://") || media.url.startsWith("https://");
-      const isData = media.url.startsWith("data:");
-
-      if (!isHttp && !isData) {
-        if (!fs.existsSync(media.url)) {
-          console.error(
-            `[MessageHandler] ❌ Local media file not found: ${media.url}`,
-          );
-          const warningContent = media.caption
-            ? `${media.caption}\n\n(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`
-            : `(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`;
-
-          return this.sendMessage(to, warningContent, options);
-        }
-      }
-
-      if (media.type === "image") {
-        messageContent = { image: { url: media.url }, caption: media.caption };
-        metaType = "image";
-      } else if (media.type === "video") {
-        messageContent = { video: { url: media.url }, caption: media.caption };
-        metaType = "video";
-      } else if (media.type === "document") {
-        messageContent = {
-          document: { url: media.url },
-          mimetype: media.mimetype || "application/octet-stream",
-          fileName: media.filename || "file",
-          caption: media.caption,
-        };
-        metaType = "document";
-      } else if (media.type === "audio") {
-        let realMimeType = media.mimetype;
-        const isBase64 = media.url.startsWith("data:");
-
-        const proxyMatch = !isBase64
-          ? media.url.match(/\/api\/media\/([^/]+)\/content/)
-          : null;
-        if (proxyMatch && proxyMatch[1]) {
-          try {
-            const mediaId = proxyMatch[1];
-            const dbMedia = await prisma.media.findUnique({
-              where: { id: mediaId },
-              select: { mimeType: true },
-            });
-            if (dbMedia?.mimeType) {
-              realMimeType = dbMedia.mimeType;
-            }
-          } catch (err) {
-            console.warn(
-              `[MessageHandler] ⚠️ Failed to resolve MIME from DB:`,
-              err,
-            );
-          }
-        }
-
-        const isWebM =
-          realMimeType === "audio/webm" ||
-          media.url.toLowerCase().endsWith(".webm");
-        const needsConversion = isBase64 || isWebM;
-
-        if (needsConversion) {
-          try {
-            const inputSource = media.url;
-            tempFilePath = await convertAudioToMP4(inputSource);
-            const audioBuffer = fs.readFileSync(tempFilePath);
-
-            messageContent = {
-              audio: audioBuffer,
-              mimetype: "audio/ogg; codecs=opus",
-              ptt: true,
-            };
-          } catch (error) {
-            console.error(
-              "[MessageHandler] ❌ Conversion failed, falling back to raw:",
-              error,
-            );
-            messageContent = {
-              audio: { url: media.url },
-              mimetype: realMimeType || "audio/ogg; codecs=opus",
-              ptt: true,
-            };
-          }
-        } else {
-          const isMp3 =
-            realMimeType === "audio/mpeg" ||
-            realMimeType === "audio/mp3" ||
-            media.url.toLowerCase().endsWith(".mp3");
-
-          let finalMime = "audio/ogg; codecs=opus";
-          let isPtt = true;
-
-          if (isMp3) {
-            finalMime = "audio/mpeg";
-            isPtt = false;
-          } else if (
-            realMimeType &&
-            realMimeType !== "application/octet-stream"
-          ) {
-            finalMime = realMimeType;
-            if (finalMime === "audio/ogg" && !finalMime.includes("codecs")) {
-              finalMime = "audio/ogg; codecs=opus";
-            }
-          }
-
-          messageContent = {
-            audio: { url: media.url },
-            mimetype: finalMime,
-            ptt: isPtt,
-          };
-        }
-
-        metaType = "audio";
-      } else if (media.type === "sticker") {
-        messageContent = { sticker: { url: media.url } };
-        metaType = "image";
-      } else if (media.type === "file" || media.type === "document") {
-        let docMime = "application/octet-stream";
-        let fileName = "document";
-
-        const proxyMatch = media.url.match(/\/api\/media\/([^/]+)\/content/);
-        if (proxyMatch && proxyMatch[1]) {
-          try {
-            const mediaId = proxyMatch[1];
-            const dbMedia = await prisma.media.findUnique({
-              where: { id: mediaId },
-              select: { mimeType: true, filename: true },
-            });
-            if (dbMedia?.mimeType) docMime = dbMedia.mimeType;
-            if (dbMedia?.filename) fileName = dbMedia.filename;
-          } catch (e) {
-            console.warn(
-              "[MessageHandler] Failed to resolve document metadata",
-              e,
-            );
-          }
-        }
-
-        messageContent = {
-          document: { url: media.url },
-          mimetype: docMime,
-          fileName: fileName,
-          caption: media.caption || "",
-        };
-        metaType = "document";
-      } else {
-        throw new Error(`Unsupported media type: ${media.type}`);
-      }
+      // 🏗️ SRP: All media preparation delegated to MediaProcessorService
+      const prepared = await mediaProcessor.prepareOutboundContent(media);
+      const { content: messageContent, metaType } = prepared;
+      tempFilePath = prepared.tempFilePath;
 
       const generatedId = generateMessageID();
-      // 🛡️ RACE CONDITION FIX: Track ID *before* sending media
       this.recentSentMessageIds.add(generatedId);
       setTimeout(() => this.recentSentMessageIds.delete(generatedId), 10000);
 
@@ -1551,9 +818,9 @@ export class MessageHandler implements IMessageHandler {
         metadata: prepareMetadataForDB(meta),
       });
 
-      const metadata = options.metadata;
-      const isAiGenerated = metadata?.aiGenerated === true;
-      const isFlowGenerated = metadata?.flowGenerated === true;
+      const optMetadata = options.metadata;
+      const isAiGenerated = optMetadata?.aiGenerated === true;
+      const isFlowGenerated = optMetadata?.flowGenerated === true;
 
       if (!isAiGenerated && !isFlowGenerated) {
         try {
@@ -1561,14 +828,14 @@ export class MessageHandler implements IMessageHandler {
             aiEnabled: false,
             lastManualIntervention: new Date(),
           });
-          console.info(
+          Logger.info(
             `[HITL] ✅ AI muted for conversation ${conversationId} (human agent sent media)`,
           );
         } catch (err) {
-          console.error("[HITL] Failed to auto-mute AI:", err);
+          Logger.error("[HITL] Failed to auto-mute AI:", err);
         }
       } else {
-        console.info(
+        Logger.info(
           `[HITL] ⏩ Skipping AI mute for media - ${
             isAiGenerated ? "AI-generated" : "Flow-generated"
           }`,
@@ -1581,7 +848,15 @@ export class MessageHandler implements IMessageHandler {
 
       return savedMessage as unknown as MessagePayload;
     } catch (err: unknown) {
-      // 🛡️ RETRY LOGIC for Connection issues
+      // 🛡️ Handle MediaFileNotFoundError gracefully
+      if (err instanceof MediaFileNotFoundError) {
+        Logger.error(`[MessageHandler] ❌ ${err.message}`);
+        const warningContent = err.caption
+          ? `${err.caption}\n\n(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`
+          : `(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`;
+        return this.sendMessage(to, warningContent, options);
+      }
+
       const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
       const isConnectionError =
         errorMsg.includes("Connection Closed") ||
@@ -1590,19 +865,16 @@ export class MessageHandler implements IMessageHandler {
         errorMsg.includes("Timed Out");
 
       if (isConnectionError && retries > 0) {
-        console.warn(
+        Logger.warn(
           `[MessageHandler] ⚠️ SendMedia failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
         );
         await new Promise((resolve) => setTimeout(resolve, 2000));
         if (tempFilePath) {
           try {
-            // Re-convert if needed or just pass same file?
-            // Actually recursion will re-do logic.
-            // Cleanup previous temp file to prevent leak
             await cleanupTempFile(tempFilePath);
-            tempFilePath = null; // ✅ Fix: Prevent double cleanup in finally block
+            tempFilePath = null;
           } catch (cleanupErr) {
-            console.warn(
+            Logger.warn(
               "[MessageHandler] ⚠️ Temp file cleanup failed during retry:",
               cleanupErr,
             );
@@ -1611,13 +883,13 @@ export class MessageHandler implements IMessageHandler {
         return this.sendMedia(to, media, options, retries - 1);
       }
 
-      console.error(`[MessageHandler] ❌ sendMedia failed unexpectedly:`, err);
+      Logger.error(`[MessageHandler] ❌ sendMedia failed unexpectedly:`, err);
       const warningContent = `(⚠️ Error enviando archivo multimedia: ${media.type})`;
       return this.sendMessage(to, warningContent, options);
     } finally {
       if (tempFilePath) {
         cleanupTempFile(tempFilePath).catch((err) =>
-          console.warn(
+          Logger.warn(
             `[MessageHandler] Cleanup failed for ${tempFilePath}:`,
             err,
           ),
@@ -1625,6 +897,10 @@ export class MessageHandler implements IMessageHandler {
       }
     }
   }
+
+  // ────────────────────────────────────────────────
+  // MARK AS READ
+  // ────────────────────────────────────────────────
 
   async markAsRead(messageId: string, sessionId: string): Promise<void> {
     const sock = this.sessionManager.getSession(sessionId);
@@ -1660,6 +936,10 @@ export class MessageHandler implements IMessageHandler {
     );
   }
 
+  // ────────────────────────────────────────────────
+  // PRESENCE UPDATE (Send)
+  // ────────────────────────────────────────────────
+
   async sendPresenceUpdate(
     to: string,
     type: "composing" | "recording" | "paused",
@@ -1671,83 +951,19 @@ export class MessageHandler implements IMessageHandler {
       if (!activeSession) return;
 
       const sock = activeSession.socket;
-      // 🛡️ Ensure socket is connected before trying to send presence
       if (!sock) return;
 
       let jid = to;
       if (!to.includes("@")) {
-        // 100-YEAR FIX: Sanitize phone number (remove +, spaces, dashes)
-        // Baileys expects pure digits for user JIDs
         const cleanPhone = to.replace(/\D/g, "");
         jid = `${cleanPhone}@s.whatsapp.net`;
       }
 
-      // 100-YEAR FIX: Wrap in try-catch per call to avoid unhandled rejections
       await sock.sendPresenceUpdate(type, jid).catch((err) => {
-        console.warn(`[Presence] Failed to send ${type} to ${jid}`, err);
+        Logger.warn(`[Presence] Failed to send ${type} to ${jid}`, err);
       });
     } catch (error) {
-      // Fail silently to avoid interrupting main flow
-      console.warn(`[Presence] Error in sendPresenceUpdate:`, error);
-    }
-  }
-
-  private async fetchAndPersistProfilePicture(
-    sessionId: string,
-    jid: string,
-    userId: string,
-  ): Promise<void> {
-    try {
-      const sock = this.sessionManager.getSession(sessionId);
-      if (!sock) {
-        console.warn(`[ProfilePic] No socket for session ${sessionId}`);
-        return;
-      }
-
-      const normalizedJid = jid.includes("@") ? jid : `${jid}@s.whatsapp.net`;
-
-      const existingUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { profilePicUrl: true },
-      });
-
-      if (
-        existingUser?.profilePicUrl &&
-        existingUser.profilePicUrl.startsWith("http")
-      ) {
-        return;
-      }
-
-      let profilePicUrl: string | undefined;
-
-      try {
-        profilePicUrl = await sock.profilePictureUrl(normalizedJid, "image");
-      } catch {
-        try {
-          profilePicUrl = await sock.profilePictureUrl(
-            normalizedJid,
-            "preview",
-          );
-        } catch {
-          console.info(
-            `[ProfilePic] No profile picture available for ${normalizedJid}`,
-          );
-          return;
-        }
-      }
-
-      if (!profilePicUrl) return;
-
-      await prisma.user.update({
-        where: { id: userId },
-        data: { profilePicUrl },
-      });
-
-      console.info(
-        `[ProfilePic] ✅ Saved profile picture for user ${userId}: ${profilePicUrl.slice(0, 60)}...`,
-      );
-    } catch (error) {
-      console.warn(`[ProfilePic] Failed to fetch/save profile pic:`, error);
+      Logger.warn(`[Presence] Error in sendPresenceUpdate:`, error);
     }
   }
 

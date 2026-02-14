@@ -97,7 +97,7 @@ class ResourceManager {
 
     const stats = this.getStats();
     Logger.info(
-      `[ResourceManager] Cleaning ${stats.timers} timers, ${stats.intervals} intervals, ${stats.cleanupFunctions} functions`
+      `[ResourceManager] Cleaning ${stats.timers} timers, ${stats.intervals} intervals, ${stats.cleanupFunctions} functions`,
     );
 
     // Clear all timers
@@ -144,7 +144,7 @@ export const resourceManager = new ResourceManager();
 export function tracked(
   target: any,
   propertyKey: string,
-  descriptor: PropertyDescriptor
+  descriptor: PropertyDescriptor,
 ) {
   const originalMethod = descriptor.value;
 
@@ -187,7 +187,7 @@ class MemoryMonitor {
     }, intervalMs);
 
     Logger.info(
-      `[MemoryMonitor] Started monitoring (interval: ${intervalMs}ms)`
+      `[MemoryMonitor] Started monitoring (interval: ${intervalMs}ms)`,
     );
   }
 
@@ -201,20 +201,9 @@ class MemoryMonitor {
 
   check(): void {
     const usage = process.memoryUsage();
-    // 🛡️ FIX: Compare against LIMIT, not current allocation
-    // V8 allocates heap lazily. 90% of a small allocation is fine.
-    // 90% of the 4GB limit is critical.
     const v8Stats = require("v8").getHeapStatistics();
     const heapLimit = v8Stats.heap_size_limit;
-
-    // Calculate real saturation percentage
     const heapPercent = usage.heapUsed / heapLimit;
-
-    // Optional: Log once if limits are mismatched
-    if (heapLimit < 500 * 1024 * 1024) {
-      // < 500MB
-      // This prevents spamming but warns if flag didn't work
-    }
 
     if (heapPercent >= this.CRITICAL_THRESHOLD) {
       Logger.error(
@@ -226,8 +215,11 @@ class MemoryMonitor {
           heapTotalAllocatedMB: Math.round(usage.heapTotal / 1024 / 1024),
           heapLimitMB: Math.round(heapLimit / 1024 / 1024),
           rssMB: Math.round(usage.rss / 1024 / 1024),
-        }
+        },
       );
+
+      // 🛡️ Memory is critical - GC will be forced below.
+      // Store pruning is handled automatically by SimpleInMemoryStore's caps.
 
       // Force garbage collection if available
       if (global.gc) {
@@ -236,7 +228,7 @@ class MemoryMonitor {
       }
     } else if (heapPercent >= this.WARNING_THRESHOLD) {
       Logger.warn(
-        `[MemoryMonitor] ⚠️ Memory usage at ${(heapPercent * 100).toFixed(1)}%`
+        `[MemoryMonitor] ⚠️ Memory usage at ${(heapPercent * 100).toFixed(1)}%`,
       );
     }
   }

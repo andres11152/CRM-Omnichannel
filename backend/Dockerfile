@@ -67,8 +67,10 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# 🔥 CRITICAL: Memory flags for Node.js
-ENV NODE_OPTIONS="--max-old-space-size=4096 --max-semi-space-size=128 --expose-gc"
+# 🔥 CRITICAL: Memory flags for Node.js (optimized for 4GB / 10 tenants)
+# Heap: 3072MB (leaves ~1GB for OS, Redis, Postgres sidecar)
+# Semi-space: 64MB (reduced for lower GC pause, sufficient for CRM workload)
+ENV NODE_OPTIONS="--max-old-space-size=3072 --max-semi-space-size=64 --expose-gc"
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]

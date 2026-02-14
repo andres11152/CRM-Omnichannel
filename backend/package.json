@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "npx rimraf dist && npx tsc",
-    "start": "node --max-old-space-size=4096 -r module-alias/register dist/server.js",
+    "start": "node --max-old-space-size=3072 -r module-alias/register dist/server.js",
     "test": "jest",
     "lint": "eslint src/**",
     "lint:strict": "eslint src/** --max-warnings=0",

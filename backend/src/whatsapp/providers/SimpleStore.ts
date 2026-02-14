@@ -6,82 +6,129 @@ import {
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ 100-YEAR FIX: Custom In-Memory Store
+ * 🛡️ MEMORY-OPTIMIZED IN-MEMORY STORE
+ *
  * Lightweight implementation focused on LID -> Phone mapping.
- * Listens to all relevant events including history sync and LID mappings.
+ *
+ * 🔧 MEMORY OPTIMIZATION (10 tenants / 4GB):
+ * - Messages capped at MAX_MESSAGES_PER_JID per chat.
+ * - Total contacts cap at MAX_CONTACTS.
+ * - Auto-pruning clears oldest entries when limits are reached.
+ * - Configurable via environment variables.
  */
+
+/** Memory budget configuration */
+const MAX_MESSAGES_PER_JID = parseInt(
+  process.env.WA_STORE_MAX_MESSAGES_PER_JID || "100",
+  10,
+);
+const MAX_TOTAL_CONTACTS = parseInt(
+  process.env.WA_STORE_MAX_CONTACTS || "10000",
+  10,
+);
+const MAX_TOTAL_CHATS = parseInt(process.env.WA_STORE_MAX_CHATS || "5000", 10);
+
 export class SimpleInMemoryStore {
   public contacts: { [jid: string]: Contact } = {};
-
-  // 🔄 CHAT SYNC: Store chats and messages for historical sync
   public chats: Map<string, unknown> = new Map();
   public messages: { [jid: string]: unknown[] } = {};
-
-  // 🛡️ Reverse mapping: LID -> Phone for quick lookups
   public lidToPhone: { [lid: string]: string } = {};
 
-  /**
-   * Internal helper to normalize and store contacts
-   */
+  // ────────────────────────────────────────────────
+  // INTERNAL HELPERS
+  // ────────────────────────────────────────────────
+
   private upsertContact(contact: Partial<Contact>) {
     if (!contact.id) return;
     const jid = jidNormalizedUser(contact.id);
 
+    // Prune contacts if we hit the cap
+    const contactKeys = Object.keys(this.contacts);
+    if (contactKeys.length >= MAX_TOTAL_CONTACTS && !this.contacts[jid]) {
+      // Evict the oldest 10% to avoid constant pruning
+      const evictCount = Math.floor(MAX_TOTAL_CONTACTS * 0.1);
+      const toEvict = contactKeys.slice(0, evictCount);
+      for (const key of toEvict) {
+        delete this.contacts[key];
+      }
+      Logger.debug(
+        `[Store] 🧹 Pruned ${evictCount} contacts (cap: ${MAX_TOTAL_CONTACTS})`,
+      );
+    }
+
     this.contacts[jid] = {
       ...(this.contacts[jid] || {}),
       ...contact,
-      id: jid, // Ensure normalized ID as key and property
+      id: jid,
     };
 
-    // 🛡️ Capture LID mapping if present
+    // Capture LID mapping
     if (contact.lid) {
       const lid = jidNormalizedUser(contact.lid);
       this.contacts[jid].lid = lid;
       const lidBase = lid.split("@")[0].split(":")[0];
       this.lidToPhone[lidBase] = jid;
-      Logger.info(`[Store] 🔗 LID Mapping: ${lidBase} → ${jid}`);
     }
 
-    // 🛡️ If this is a LID contact with phoneNumber field, create reverse mapping
+    // If LID contact with phoneNumber, build reverse mapping
     const contactWithPhone = contact as Contact & { phoneNumber?: string };
     if (contactWithPhone.phoneNumber) {
       const lidBase = jid.split("@")[0].split(":")[0];
       const phoneJid = `${contactWithPhone.phoneNumber}@s.whatsapp.net`;
       this.lidToPhone[lidBase] = phoneJid;
-      console.info(
-        `[Store] 🎯 Phone Discovery: LID ${lidBase} → Phone ${contactWithPhone.phoneNumber}`,
-      );
     }
   }
 
+  /**
+   * Append a message to a JID's message array with cap enforcement.
+   */
+  private appendMessage(jid: string, msg: unknown): void {
+    if (!this.messages[jid]) {
+      this.messages[jid] = [];
+    }
+
+    this.messages[jid].push(msg);
+
+    // Prune to cap (keep newest messages)
+    if (this.messages[jid].length > MAX_MESSAGES_PER_JID) {
+      const excess = this.messages[jid].length - MAX_MESSAGES_PER_JID;
+      this.messages[jid].splice(0, excess);
+    }
+  }
+
+  // ────────────────────────────────────────────────
+  // EVENT BINDING
+  // ────────────────────────────────────────────────
+
   public bind(ev: BaileysEventEmitter) {
-    // 1. Bulk History Sync (The most important for LID resolution)
+    // 1. History Sync (bulk load)
     ev.on("messaging-history.set", ({ contacts, messages, chats }) => {
-      // Store contacts
       if (contacts) {
-        console.info(
-          `[Store] 📥 Received history payload with ${contacts.length} contacts`,
-        );
+        Logger.info(`[Store] 📥 History sync: ${contacts.length} contacts`);
         for (const contact of contacts) {
           this.upsertContact(contact);
         }
-        console.info(
-          `[Store] 📚 History sync processed: Loaded ${contacts.length} contacts`,
-        );
       }
 
-      // 🔄 CHAT SYNC: Store chats for later sync
       if (chats) {
         for (const chat of chats) {
           if (chat.id) {
+            // Prune chats if cap reached
+            if (
+              this.chats.size >= MAX_TOTAL_CHATS &&
+              !this.chats.has(chat.id)
+            ) {
+              const firstKey = this.chats.keys().next().value;
+              if (firstKey) this.chats.delete(firstKey);
+            }
             this.chats.set(chat.id, chat);
           }
         }
-        console.info(`[Store] 📚 History sync: Loaded ${chats.length} chats`);
+        Logger.info(
+          `[Store] 📚 History sync: ${chats.length} chats (cap: ${MAX_TOTAL_CHATS})`,
+        );
       }
 
-      // 🔄 CHAT SYNC: Store messages for later sync
-      // Also extract LID -> Phone mappings from message metadata
       if (messages) {
         for (const msgObj of messages) {
           const msg = msgObj as {
@@ -95,51 +142,34 @@ export class SimpleInMemoryStore {
           };
           if (msg.key?.remoteJid && msg.message) {
             const jid = msg.key.remoteJid;
-            if (!this.messages[jid]) {
-              this.messages[jid] = [];
-            }
-            this.messages[jid].push(msg);
+            this.appendMessage(jid, msg);
 
-            // 🛡️ Extract LID -> Phone mappings from message metadata
-            // This is crucial for outbound messages sent from phone
+            // Extract LID -> Phone from message metadata
             if (jid.includes("@lid")) {
               const lidBase = jid.split("@")[0].split(":")[0];
-
-              // Check remoteJidAlt (alternative JID with real phone)
               if (
                 msg.key.remoteJidAlt &&
                 msg.key.remoteJidAlt.includes("@s.whatsapp.net")
               ) {
                 this.lidToPhone[lidBase] = msg.key.remoteJidAlt;
-                console.info(
-                  `[Store] 🎯 LID Mapping from remoteJidAlt: ${lidBase} → ${msg.key.remoteJidAlt}`,
-                );
               }
-
-              // Check senderPn (sender phone number)
               if (
                 msg.key.senderPn &&
                 msg.key.senderPn.includes("@s.whatsapp.net")
               ) {
                 this.lidToPhone[lidBase] = msg.key.senderPn;
-                console.info(
-                  `[Store] 🎯 LID Mapping from senderPn: ${lidBase} → ${msg.key.senderPn}`,
-                );
               }
             }
           }
         }
-        console.info(
-          `[Store] 📚 History sync: Loaded ${messages.length} messages`,
+        Logger.info(
+          `[Store] 📚 History sync: ${messages.length} messages (cap per JID: ${MAX_MESSAGES_PER_JID})`,
         );
       }
     });
 
     // 2. New Contacts
     ev.on("contacts.upsert", (contacts: Contact[]) => {
-      console.info(
-        `[Store] 📥 contacts.upsert received ${contacts.length} contacts`,
-      );
       for (const contact of contacts) {
         this.upsertContact(contact);
       }
@@ -152,8 +182,7 @@ export class SimpleInMemoryStore {
       }
     });
 
-    // 🛡️ NEW: Listen for real-time messages to extract LID mappings
-    // This catches outbound messages from phone that have LID + phone metadata
+    // 4. Real-time messages -> extract LID mappings
     ev.on("messages.upsert", ({ messages: msgs }) => {
       for (const msg of msgs) {
         const key = msg.key as {
@@ -168,27 +197,18 @@ export class SimpleInMemoryStore {
 
         const lidBase = jid.split("@")[0].split(":")[0];
 
-        // Extract phone from remoteJidAlt
         if (key.remoteJidAlt && key.remoteJidAlt.includes("@s.whatsapp.net")) {
           if (!this.lidToPhone[lidBase]) {
             this.lidToPhone[lidBase] = key.remoteJidAlt;
-            console.info(
-              `[Store] 🎯 RT LID Mapping (remoteJidAlt): ${lidBase} → ${key.remoteJidAlt}`,
-            );
           }
         }
 
-        // Extract phone from senderPn
         if (key.senderPn && key.senderPn.includes("@s.whatsapp.net")) {
           if (!this.lidToPhone[lidBase]) {
             this.lidToPhone[lidBase] = key.senderPn;
-            console.info(
-              `[Store] 🎯 RT LID Mapping (senderPn): ${lidBase} → ${key.senderPn}`,
-            );
           }
         }
 
-        // Check for phone in message stub parameters (e.g., for system messages)
         if (
           msg.messageStubParameters &&
           Array.isArray(msg.messageStubParameters)
@@ -201,9 +221,6 @@ export class SimpleInMemoryStore {
             ) {
               if (!this.lidToPhone[lidBase]) {
                 this.lidToPhone[lidBase] = param;
-                console.info(
-                  `[Store] 🎯 RT LID Mapping (stubParam): ${lidBase} → ${param}`,
-                );
               }
               break;
             }
@@ -212,8 +229,7 @@ export class SimpleInMemoryStore {
       }
     });
 
-    // 4. 🛡️ EXPERIMENTAL: LID Mapping Updates (Baileys experimental feature)
-    // This event may not exist in all Baileys versions
+    // 5. Experimental LID Mapping Updates
     (
       ev as unknown as {
         on: (event: string, cb: (data: unknown) => void) => void;
@@ -223,25 +239,59 @@ export class SimpleInMemoryStore {
         | Array<{ lid: string; number: string }>
         | undefined;
       if (!mappings) return;
-      console.info(`[Store] 🆕 LID Mapping Update event received!`);
       for (const mapping of mappings) {
         if (mapping.lid && mapping.number) {
           const lidBase = mapping.lid.split("@")[0].split(":")[0];
           const phoneJid = `${mapping.number}@s.whatsapp.net`;
           this.lidToPhone[lidBase] = phoneJid;
-          console.info(
-            `[Store] 🎯 LID Mapping: ${lidBase} → ${mapping.number}`,
-          );
         }
       }
     });
   }
 
-  /**
-   * 🛡️ Quick lookup: Get phone JID from LID
-   */
+  // ────────────────────────────────────────────────
+  // PUBLIC API
+  // ────────────────────────────────────────────────
+
   public getPhoneFromLid(lid: string): string | undefined {
     const lidBase = lid.split("@")[0].split(":")[0];
     return this.lidToPhone[lidBase];
+  }
+
+  /**
+   * 📊 Memory usage stats (useful for monitoring endpoint)
+   */
+  public getStats(): {
+    contacts: number;
+    chats: number;
+    messageJids: number;
+    totalMessages: number;
+    lidMappings: number;
+  } {
+    const totalMessages = Object.values(this.messages).reduce(
+      (acc, arr) => acc + arr.length,
+      0,
+    );
+    return {
+      contacts: Object.keys(this.contacts).length,
+      chats: this.chats.size,
+      messageJids: Object.keys(this.messages).length,
+      totalMessages,
+      lidMappings: Object.keys(this.lidToPhone).length,
+    };
+  }
+
+  /**
+   * 🧹 MANUAL FLUSH: Clear all non-essential data.
+   * Keeps only LID mappings. Called when memory is critical.
+   */
+  public flush(): void {
+    const lidMappingsBackup = { ...this.lidToPhone };
+    this.messages = {};
+    this.chats.clear();
+    this.lidToPhone = lidMappingsBackup;
+    Logger.warn(
+      "[Store] 🧹 FLUSH: Cleared messages & chats (LID mappings preserved).",
+    );
   }
 }

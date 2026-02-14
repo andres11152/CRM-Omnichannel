@@ -3,11 +3,11 @@
     {
       "name": "reply-crm-api",
       "script": "dist/server.js",
-      "instances": "max",
-      "exec_mode": "cluster",
+      "instances": 1,
+      "exec_mode": "fork",
       "node_args": [
-        "--max-old-space-size=4096",
-        "--max-semi-space-size=128",
+        "--max-old-space-size=3072",
+        "--max-semi-space-size=64",
         "--expose-gc"
       ],
       "env": {
@@ -29,7 +29,7 @@
       "autorestart": true,
       "max_restarts": 10,
       "min_uptime": "10s",
-      "max_memory_restart": "3500M",
+      "max_memory_restart": "3200M",
       "restart_delay": 4000,
       "kill_timeout": 5000,
       "listen_timeout": 3000,

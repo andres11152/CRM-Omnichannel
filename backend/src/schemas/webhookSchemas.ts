@@ -7,6 +7,7 @@ export const whatsappWebhookSchema = z.object({
   contactName: z.string().optional(),
   senderName: z.string().optional(),
   direction: z.enum(["inbound", "outbound"]).optional(),
+  messageId: z.string().optional(),
 });
 
 export type WhatsappWebhookDto = z.infer<typeof whatsappWebhookSchema>;

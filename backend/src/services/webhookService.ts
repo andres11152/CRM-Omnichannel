@@ -112,6 +112,9 @@ export const webhookService = {
         isOutbound: data.direction === "outbound",
         contactName: data.contactName,
         senderName: data.senderName,
+        messageId:
+          data.messageId ||
+          `webhook_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       });
 
       // Dispatch internal event

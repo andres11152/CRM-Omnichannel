@@ -233,6 +233,26 @@ export class AITriggerService {
   ): Promise<void> {
     if (!conversation?.queue?.aiAssistantId) return;
 
+    // 🛡️ RACE CONDITION GUARD: Prevent double AI response
+    // If an AI message was sent in the last 8 seconds for this conversation, skip to avoid spam.
+    const recentAiResponse = await prisma.message.findFirst({
+      where: {
+        conversationId: conversation.id,
+        createdAt: { gt: new Date(Date.now() - 8000) },
+        metadata: {
+          path: ["aiGenerated"],
+          equals: true,
+        },
+      },
+    });
+
+    if (recentAiResponse) {
+      Logger.warn(
+        `[AITrigger] 🛡️ Skipping duplicate AI response for conv ${conversation.id} (recent response found)`,
+      );
+      return;
+    }
+
     const thinkingTime = Math.floor(Math.random() * 1000) + 1000;
     await new Promise((r) => setTimeout(r, thinkingTime));
 

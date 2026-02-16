@@ -181,11 +181,19 @@ export const contactService = {
 
   /**
    * Internal Update with Zombie Recovery
+   * 🛡️ 100-YEAR FIX: Tags are MERGED (union), never overwritten blindly.
+   * This prevents WhatsApp auto-sync (`upsertWhatsAppUser` with `["Importado de Chat"]`)
+   * from destroying user-assigned CRM tags like ["VIP", "Lead Caliente"].
    */
   async updateExisting(
     existing: Contact,
     data: ContactUpsertParams & { companyId: string },
   ): Promise<ContactDTO> {
+    // 🛡️ TAG MERGE: Union of existing tags + incoming tags (no duplicates, no destruction)
+    const mergedTags = data.tags
+      ? [...new Set([...existing.tags, ...data.tags])]
+      : undefined;
+
     try {
       const updated = await prisma.contact.update({
         where: { id: existing.id },
@@ -193,7 +201,7 @@ export const contactService = {
           name: data.name || undefined,
           email: data.email,
           phone: data.phone,
-          tags: data.tags,
+          tags: mergedTags,
           notes: data.notes,
           customFields: data.customFields,
           avatarUrl: data.avatarUrl,
@@ -213,10 +221,7 @@ export const contactService = {
               data.email ? { email: data.email } : {},
             ].filter((o) => Object.keys(o).length > 0),
             NOT: { id: existing.id },
-            // We check if it's strictly a soft-deleted record causing conflict (unique constraints usually ignore soft-deleted if index includes deletedAt, but here index is [companyId, phone])
-            // If unique index doesn't include deletedAt, then soft-deleted record BLOCKS creation.
           },
-          // Logic assumes we prefer the LIVE record we are editing, so we nuke the zombie
         });
 
         if (zombie && zombie.deletedAt) {
@@ -229,14 +234,14 @@ export const contactService = {
               email: zombie.email ? `${zombie.email}_del_${Date.now()}` : null,
             },
           });
-          // Retry update
+          // Retry update (with merged tags)
           const retry = await prisma.contact.update({
             where: { id: existing.id },
             data: {
               name: data.name || undefined,
               email: data.email,
               phone: data.phone,
-              tags: data.tags,
+              tags: mergedTags,
               notes: data.notes,
               customFields: data.customFields,
               avatarUrl: data.avatarUrl,

@@ -11,6 +11,7 @@ import makeWASocket, {
   isJidBroadcast,
   proto,
   jidNormalizedUser,
+  WAMessage,
 } from "@whiskeysockets/baileys";
 import { SimpleInMemoryStore } from "./SimpleStore";
 import { ConnectionHealer } from "./ConnectionHealer";
@@ -21,6 +22,7 @@ import {
 
 import { prisma } from "@/config/database";
 import TenantContextManager from "@/config/tenantContext";
+import { chatSyncService } from "@/services/chatSyncService"; // Import ChatSyncService
 
 // 🛡️ Memory Store for Contact Resolution (LID -> Phone)
 const store = new SimpleInMemoryStore();
@@ -122,7 +124,7 @@ export class SessionManager implements ISessionManager {
       }
     }
 
-    logger.warn(`[SessionManager] ⚠️ LID Resolution Failed: ${lidBase}`);
+    logger.debug(`[SessionManager] ⚠️ LID Resolution Failed: ${lidBase}`);
     return undefined;
   }
 
@@ -211,6 +213,26 @@ export class SessionManager implements ISessionManager {
     companyId: string,
     saveCreds: () => Promise<void>,
   ) {
+    // 🔗 Bind Store (Memory Only for Baileys usage)
+    store.bind(sock.ev);
+
+    // 🚀 Enterprise Persistence: Ingest history to DB
+    sock.ev.on(
+      "messaging-history.set",
+      ({ messages }: { messages: WAMessage[] }) => {
+        if (messages && messages.length > 0) {
+          logger.info(
+            `[SessionManager] 📥 History Sync: Offloading ${messages.length} messages to DB persistence...`,
+          );
+          chatSyncService
+            .handleHistorySync(companyId, messages)
+            .catch((err) => {
+              logger.error(`[SessionManager] History ingest failed: ${err}`);
+            });
+        }
+      },
+    );
+
     sock.ev.on("creds.update", saveCreds);
 
     // Connection state
@@ -494,6 +516,7 @@ export class SessionManager implements ISessionManager {
       chats: store.chats,
       messages: store.messages,
       contacts: store.contacts,
+      lidToPhone: store.lidToPhone,
     };
   }
 }

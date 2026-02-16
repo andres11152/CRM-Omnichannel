@@ -165,6 +165,11 @@ model Contact {
   deletedAt DateTime?
   deletedBy String?
 
+  // 🚫 SPAM BLACKLIST (Enterprise Anti-Spam)
+  isBlocked     Boolean   @default(false)
+  blockedAt     DateTime?
+  blockedReason String?   // "SPAM", "MANUAL", "ABUSE"
+
   // CRM Relations
   accountId  String?
   account    Account?   @relation(fields: [accountId], references: [id])
@@ -188,6 +193,8 @@ model Contact {
   @@index([companyId, updatedAt(sort: Desc)])
   // 4. Name Autocomplete (Prefix search)
   @@index([companyId, name])
+  // 5. Blocked Contact Lookup (Critical for Spam Gate on incoming messages)
+  @@index([companyId, phone, isBlocked])
   @@map("contacts")
 }
 

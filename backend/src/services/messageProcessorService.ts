@@ -697,6 +697,10 @@ export const messageProcessor = {
       }
 
       if (!isOutbound && !flowHandled) {
+        // 🛡️ 100-YEAR FIX: Disable Legacy AI Trigger
+        // AI execution is now handled by the SRP-compliant MessageHandler -> AITriggerService pipeline.
+        // Keeping this enabled causes duplicate responses (Race Condition).
+        /*
         setImmediate(() => {
           this._handleAIAutoResponse(
             conversation!.id,
@@ -705,6 +709,7 @@ export const messageProcessor = {
             companyId,
           ).catch(Logger.error);
         });
+        */
       }
     } catch (error) {
       Logger.error(`[MsgProcessor] Fatal Error`, error);

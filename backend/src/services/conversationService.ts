@@ -1,5 +1,6 @@
 import { prisma } from "@/config/database";
 import { AppError } from "@/utils/AppError";
+import { chatSyncService } from "./chatSyncService";
 import { ConversationManager } from "./conversationManager";
 import { whatsappService, SendMessageOptions } from "@/whatsapp";
 import { gateway } from "@/gateways/socketGateway";
@@ -276,6 +277,25 @@ export const conversationService = {
       if (contact?.tags && contact.tags.length > 0) {
         resolvedTags = contact.tags;
       }
+    }
+
+    // 🚀 CONTEXT SYNC: Auto-backfill if conversation has few messages
+    // This is the JIT trigger — fires async, doesn't block the response
+    const CONTEXT_SYNC_THRESHOLD = 5;
+    const hasValidPhone =
+      conversation.channelId && /^\d{5,15}$/.test(conversation.channelId);
+
+    if (
+      messagesWithProps.length < CONTEXT_SYNC_THRESHOLD &&
+      hasValidPhone &&
+      !conversation.isGroup
+    ) {
+      // Fire-and-forget: don't await, don't block
+      chatSyncService
+        .contextSync(companyId, conversation.id, conversation.channelId!)
+        .catch((err) =>
+          Logger.warn(`[ConversationService] Context sync failed:`, err),
+        );
     }
 
     return {

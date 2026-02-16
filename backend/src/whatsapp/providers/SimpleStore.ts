@@ -9,6 +9,7 @@ import { Logger } from "@/utils/logger";
  * 🛡️ MEMORY-OPTIMIZED IN-MEMORY STORE
  *
  * Lightweight implementation focused on LID -> Phone mapping.
+ * Now with file system persistence support!
  *
  * 🔧 MEMORY OPTIMIZATION (10 tenants / 4GB):
  * - Messages capped at MAX_MESSAGES_PER_JID per chat.
@@ -281,6 +282,10 @@ export class SimpleInMemoryStore {
     };
   }
 
+  /**
+   * 🧹 MANUAL FLUSH: Clear all non-essential data.
+   * Keeps only LID mappings. Called when memory is critical.
+   */
   /**
    * 🧹 MANUAL FLUSH: Clear all non-essential data.
    * Keeps only LID mappings. Called when memory is critical.

@@ -33,7 +33,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <div className={`flex ${isAgent ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[70%] ${isAgent ? "items-end" : "items-start"}`}>
+      <div
+        className={`flex flex-col max-w-[85%] md:max-w-[70%] ${
+          isAgent ? "items-end" : "items-start"
+        }`}
+      >
         {/* Sender Name (only for customer messages) */}
         {!isAgent && message.senderName && (
           <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 ml-2">
@@ -43,7 +47,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message }) => {
 
         {/* Message Bubble — 🛡️ 100-YEAR FIX: Inline styles guarantee visibility */}
         <div
-          className={`rounded-2xl px-4 py-2 shadow-md transition-all ${
+          className={`rounded-2xl px-4 py-2 shadow-md transition-all relative group ${
             isAgent ? "rounded-br-none" : "rounded-bl-none border"
           }`}
           style={
@@ -110,7 +114,15 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message }) => {
 
           {/* Text Content */}
           {message.content && (
-            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+            <p
+              className="whitespace-pre-wrap"
+              style={{
+                wordBreak: "break-word",
+                overflowWrap: "anywhere", // 🛡️ Forces break on long strings like emails
+              }}
+            >
+              {message.content}
+            </p>
           )}
         </div>
 

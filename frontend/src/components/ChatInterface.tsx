@@ -602,6 +602,77 @@ export const ChatInterface: React.FC<Props> = ({
     socketService.on("agent.typing", handleAgentTyping);
     socketService.on("agent.stopped_typing", handleAgentStoppedTyping);
 
+    // 🚀 CONTEXT SYNC: Listen for JIT history backfill completion
+    const handleHistorySynced = (data: {
+      conversationId: string;
+      newMessages: number;
+    }) => {
+      if (data.conversationId === activeContact.id && data.newMessages > 0) {
+        console.log(
+          `[ContextSync] 🚀 ${data.newMessages} historical messages synced, reloading...`,
+        );
+        toast.info(`📜 ${data.newMessages} mensajes históricos cargados`, {
+          duration: 3000,
+        });
+        // Re-fetch conversation to get the new messages
+        const token = localStorage.getItem("token");
+        fetch(`${API_BASE_URL}/conversations/${activeContact.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.status === "success" && data.data.conversation) {
+              const conv = data.data.conversation;
+              const userParticipantId = conv.participants?.find(
+                (p: any) => p.role === "USER",
+              )?.id;
+
+              const history = conv.messages.map((m: any) => {
+                let type = SenderType.AGENT;
+                const dir = (m.direction || "").toUpperCase();
+                if (m.metadata?.aiGenerated) {
+                  type = SenderType.AGENT;
+                } else if (dir === "INBOUND") {
+                  type = SenderType.USER;
+                } else if (dir === "OUTBOUND") {
+                  type = SenderType.AGENT;
+                } else if (
+                  m.senderId === userParticipantId ||
+                  m.senderId === activeContact.id
+                ) {
+                  type = SenderType.USER;
+                }
+                return {
+                  id: m.id,
+                  ticketId: activeContact.id,
+                  companyId: activeContact.companyId,
+                  content: m.content,
+                  senderType: type,
+                  timestamp: m.createdAt,
+                  senderName:
+                    type === SenderType.USER
+                      ? activeContact.name
+                      : m.metadata?.aiAssistantName || "You",
+                  attachment:
+                    m.metadata?.media || m.attachment || m.metadata?.attachment,
+                };
+              });
+
+              const sorted = history.sort(
+                (a: any, b: any) =>
+                  new Date(a.timestamp).getTime() -
+                  new Date(b.timestamp).getTime(),
+              );
+              setMessages(sorted.filter((m: any) => m.id));
+            }
+          })
+          .catch((err) =>
+            console.error("[ContextSync] Failed to reload:", err),
+          );
+      }
+    };
+    socketService.on("conversation:history_synced", handleHistorySynced);
+
     // 7. Cleanup
     return () => {
       console.log(
@@ -610,9 +681,10 @@ export const ChatInterface: React.FC<Props> = ({
       socketService.off("conversation.new_message", handleIncomingMessage);
       socketService.off("connect", handleConnect);
       socketService.off("disconnect", handleDisconnect);
-      socketService.off("conversation:typing", handleConversationTyping); // ? CLEANUP
+      socketService.off("conversation:typing", handleConversationTyping);
       socketService.off("agent.typing", handleAgentTyping);
       socketService.off("agent.stopped_typing", handleAgentStoppedTyping);
+      socketService.off("conversation:history_synced", handleHistorySynced);
     };
   }, [activeContact.id]); // Re-run ONLY when activeContact.id changes
 
@@ -828,56 +900,6 @@ export const ChatInterface: React.FC<Props> = ({
 
     // ? UPDATE TIMER ON OUTBOUND
     setLastInteraction(new Date());
-  };
-
-  /**
-   *  SYNC HISTORY HANDLER
-   * Triggers on-demand history synchronization for this chat
-   */
-  const handleSyncHistory = async () => {
-    if (!activeContact.phone) {
-      toast.error("No se puede sincronizar: El contacto no tiene telï¿½fono");
-      return;
-    }
-
-    const toastId = toast.loading("Sincronizando historial...");
-
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${API_BASE_URL}/whatsapp/sync/conversation/${activeContact.phone.replace(/\D/g, "")}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Error al sincronizar");
-      }
-
-      const data = await res.json();
-      const count = data.data.synced || 0;
-
-      if (count > 0) {
-        toast.success(`Historial sincronizado: ${count} mensajes nuevos`, {
-          id: toastId,
-        });
-        // Reload to show new messages (Option B)
-        setTimeout(() => window.location.reload(), 1000);
-      } else {
-        toast.info("No se encontraron mensajes nuevos en el historial", {
-          id: toastId,
-        });
-      }
-    } catch (error) {
-      console.error("Sync failed", error);
-      toast.error("Error al sincronizar el historial", { id: toastId });
-    }
   };
 
   const handleSaveSticker = async (stickerUrl: string) => {
@@ -1639,7 +1661,6 @@ export const ChatInterface: React.FC<Props> = ({
                   : undefined
               }
               isParticipantsPanelVisible={showParticipantsPanel}
-              onSyncHistory={handleSyncHistory} //  WIRING UP
             />
           </div>
 

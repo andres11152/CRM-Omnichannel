@@ -14,7 +14,6 @@ import {
   Message,
   User,
   Conversation,
-  Contact,
   Prisma,
 } from "@prisma/client";
 
@@ -43,6 +42,7 @@ export interface IncomingMessagePayload {
   profilePicUrl?: string; // WhatsApp Profile Picture URL
   about?: string; // WhatsApp Status/About
   originalLid?: string; // Original, unresolved LID used for merging legacy contacts
+  messageId: string; // 🆔 WhatsApp Unique Message ID (msg.key.id)
 }
 
 // ============================================================================

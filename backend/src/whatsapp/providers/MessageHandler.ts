@@ -349,6 +349,30 @@ export class MessageHandler implements IMessageHandler {
           }
         }
 
+        // 🚫 SPAM GATE: Silently drop messages from blocked contacts
+        // This runs BEFORE any conversation or ticket creation.
+        // Uses indexed lookup: [companyId, phone, isBlocked]
+        if (!isFromMe && !isGroup) {
+          const senderPhone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
+          if (senderPhone) {
+            const blockedContact = await prisma.contact.findFirst({
+              where: {
+                companyId,
+                phone: senderPhone,
+                isBlocked: true,
+              },
+              select: { id: true },
+            });
+
+            if (blockedContact) {
+              Logger.info(
+                `[MessageHandler] 🚫 SPAM GATE: Blocked message from ${senderPhone} (Contact: ${blockedContact.id})`,
+              );
+              return; // Silent drop — no ticket, no notification, nothing
+            }
+          }
+        }
+
         const sock = this.sessionManager.getSession(sessionId);
         const myJidRaw = sock?.user?.id;
 
@@ -464,11 +488,22 @@ export class MessageHandler implements IMessageHandler {
               }
             }
 
+            // 🛡️ 100-YEAR FIX: Link conversation to CRM Contact from creation
+            let contactId: string | undefined;
+            if (!isGroup) {
+              const phone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
+              if (phone) {
+                const contact = await chatService.findContact(companyId, phone);
+                contactId = contact?.id;
+              }
+            }
+
             conv = await chatService.createConversation({
               companyId,
               channelId: chatUniqueId,
               subject: conversationSubject,
               userId: customerUser?.id || undefined,
+              contactId,
               isGroup,
               groupMetadata,
             });

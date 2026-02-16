@@ -256,7 +256,7 @@ export const getAllTickets = catchAsync(
         .json({ status: "success", results: 0, data: { tickets: [] } });
     }
 
-    const where: Prisma.TicketWhereInput = { companyId };
+    const where: Prisma.TicketWhereInput = { companyId, deletedAt: null };
 
     if (status) where.status = status as TicketStatus;
     if (priority) where.priority = priority as TicketPriority;
@@ -386,7 +386,7 @@ export const getTicketById = catchAsync(
       },
     });
 
-    if (!ticket) {
+    if (!ticket || ticket.deletedAt) {
       return next(new AppError("Ticket not found", 404));
     }
 
@@ -633,7 +633,69 @@ export const updateTicket = catchAsync(
       }
     }
 
-    // 🚀 ENTERPRISE: Real-time notifications for ticket updates
+    // � ENTERPRISE ANTI-SPAM: Auto-blacklist contact on SPAM resolution
+    // When an agent marks a ticket as SPAM, the contact is permanently blocked.
+    // Future messages from this contact will be silently dropped by the MessageHandler.
+    if (data.resolutionType === "SPAM" && updatedTicket.conversationId) {
+      try {
+        // Find the conversation to get the contactId
+        const conv = await prisma.conversation.findUnique({
+          where: { id: updatedTicket.conversationId },
+          select: { contactId: true, channelId: true },
+        });
+
+        if (conv?.contactId) {
+          await prisma.contact.update({
+            where: { id: conv.contactId },
+            data: {
+              isBlocked: true,
+              blockedAt: new Date(),
+              blockedReason: "SPAM",
+            },
+          });
+          console.info(
+            `[TicketController] 🚫 Contact ${conv.contactId} BLOCKED (SPAM) by user ${req.user?.id}`,
+          );
+        } else if (conv?.channelId) {
+          // Fallback: Find contact by phone if not linked via contactId
+          const contact = await prisma.contact.findFirst({
+            where: {
+              companyId: updatedTicket.companyId,
+              phone: conv.channelId,
+            },
+          });
+          if (contact) {
+            await prisma.contact.update({
+              where: { id: contact.id },
+              data: {
+                isBlocked: true,
+                blockedAt: new Date(),
+                blockedReason: "SPAM",
+              },
+            });
+            console.info(
+              `[TicketController] 🚫 Contact ${contact.id} BLOCKED (SPAM by phone) by user ${req.user?.id}`,
+            );
+          }
+        }
+
+        // Also soft-delete the ticket so it vanishes from all views
+        await prisma.ticket.update({
+          where: { id: updatedTicket.id },
+          data: {
+            deletedAt: new Date(),
+            deletedBy: req.user?.id || "system",
+          },
+        });
+      } catch (blockError) {
+        console.error(
+          "[TicketController] Failed to auto-block SPAM contact:",
+          blockError,
+        );
+      }
+    }
+
+    // �🚀 ENTERPRISE: Real-time notifications for ticket updates
     const ticketDto = toTicketDTO(
       updatedTicket as unknown as TicketWithRelations,
     );
@@ -736,31 +798,55 @@ export const updateTicket = catchAsync(
 );
 
 /**
- * DELETE TICKET
+ * DELETE TICKET (SOFT DELETE)
+ * Marks the ticket as deleted without removing it from the database.
+ * This preserves the full audit trail for compliance and analytics.
+ * The ticket becomes invisible in all list/detail queries via the `deletedAt: null` filter.
  */
 export const deleteTicket = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
+    const userId = req.user?.id;
 
     const ticket = await prisma.ticket.findUnique({ where: { id } });
-    if (!ticket) {
+    if (!ticket || ticket.deletedAt) {
       return next(new AppError("Ticket not found", 404));
     }
     if (companyId && ticket.companyId !== companyId) {
       return next(new AppError("Permission denied", 403));
     }
 
-    await prisma.ticket.delete({ where: { id } });
+    // 🗑️ SOFT DELETE: Mark as deleted, never destroy
+    await prisma.ticket.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        deletedBy: userId || "system",
+        status: "CLOSED", // Close the ticket on deletion for clean analytics
+      },
+    });
 
-    // 🚀 EMIT EVENT
+    // 🚀 EMIT EVENT (frontend removes from list)
     try {
       if (companyId) {
         gateway.emitToCompany(companyId, "ticket.deleted", { ticketId: id });
+
+        // Also notify the assigned agent directly (agents aren't in company room)
+        if (ticket.assignedToId) {
+          const io = gateway.getIO();
+          io.to(`agent:${ticket.assignedToId}`).emit("ticket.deleted", {
+            ticketId: id,
+          });
+        }
       }
     } catch (e) {
       console.error("[TicketController] Socket emit failed:", e);
     }
+
+    console.info(
+      `[TicketController] 🗑️ Soft-deleted ticket ${id} by user ${userId}`,
+    );
 
     res.status(204).send();
   },

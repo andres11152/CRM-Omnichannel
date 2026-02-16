@@ -240,13 +240,14 @@ export class ChatService {
 
   /**
    * Create new conversation (Atomic)
-   * 🛡️ 100-YEAR FIX: Now supports Group chats with metadata
+   * 🛡️ 100-YEAR FIX: Now supports Group chats with metadata + Contact linking
    */
   async createConversation(data: {
     companyId: string;
     channelId: string;
     subject: string;
     userId?: string;
+    contactId?: string;
     isGroup?: boolean;
     groupMetadata?: {
       groupName?: string;
@@ -263,6 +264,7 @@ export class ChatService {
         status: "OPEN",
         isGroup: data.isGroup ?? false,
         groupMetadata: data.groupMetadata ?? undefined,
+        contactId: data.contactId ?? undefined,
         participants: data.userId
           ? { connect: [{ id: data.userId }] }
           : undefined,
@@ -272,15 +274,41 @@ export class ChatService {
 
   /**
    * Update conversation status/timestamp
+   * 🛡️ 100-YEAR FIX: Self-healing Contact linking for orphaned conversations
    */
   async updateConversation(
     id: string,
     updates: Prisma.ConversationUncheckedUpdateInput,
   ) {
+    // Self-heal: Check if conversation is orphaned (no contactId) and link to Contact
+    const conv = await prisma.conversation.findUnique({
+      where: { id },
+      select: { contactId: true, channelId: true, companyId: true },
+    });
+
+    let contactLink: Record<string, string> = {};
+    if (conv && !conv.contactId && conv.channelId) {
+      const contact = await prisma.contact.findFirst({
+        where: {
+          companyId: conv.companyId,
+          phone: conv.channelId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (contact) {
+        contactLink = { contactId: contact.id };
+        Logger.info(
+          `[ChatService] 🔗 Self-healed: Linked conversation ${id} to contact ${contact.id}`,
+        );
+      }
+    }
+
     return prisma.conversation.update({
       where: { id },
       data: {
         ...updates,
+        ...contactLink,
         updatedAt: new Date(),
       },
     });

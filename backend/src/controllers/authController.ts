@@ -34,30 +34,21 @@ export const signToken = (payload: TokenPayload) => {
 };
 
 export const signup = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const { name, email, password, passwordConfirm, companyId } = req.body;
-
-    if (!email || !password) {
-      return next(
-        new AppError("Por favor, proporcione email y contraseña", 400),
-      );
-    }
-
-    if (password !== passwordConfirm) {
-      return next(new AppError("Las contraseñas no coinciden", 400));
-    }
+  async (req: Request, res: Response, _next: NextFunction) => {
+    // Body is validated by Route-level validationMiddleware
+    const { name, email, password, companyId } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const newUser = await (prisma.user.create({
+    const newUser = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
         companyId: companyId || undefined,
         role: companyId ? "AGENT" : "ADMIN",
-      } as any,
-    }) as Promise<any>);
+      },
+    });
 
     const token = signToken({
       id: newUser.id,
@@ -83,13 +74,8 @@ export const signup = catchAsync(
 
 export const login = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
+    // Body is validated by Route-level validationMiddleware
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return next(
-        new AppError("Por favor, proporcione email y contraseña", 400),
-      );
-    }
 
     Logger.info(`[Auth] Attempting login for email: ${email}`);
 
@@ -120,13 +106,14 @@ export const login = catchAsync(
       }
     }
 
-    const token = signToken({
+    const tokenPayload: TokenPayload = {
       id: user.id,
       role: user.role || "user",
       companyId: user.companyId,
       companyStatus: user.company?.status,
       planId: user.company?.planId,
-    } as any);
+    };
+    const token = signToken(tokenPayload);
 
     // 🔐 Send login notification email (async)
     const ipAddress = req.ip || req.socket.remoteAddress || "IP no disponible";
@@ -171,21 +158,10 @@ export const updatePassword = catchAsync(
     const user = await prisma.user.findUnique({ where: { id: req.user?.id } });
     if (!user) return next(new AppError("User not found", 404));
 
-    const { currentPassword, newPassword, confirmPassword } = req.body;
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      return next(
-        new AppError("Por favor provee todos los campos requeridos.", 400),
-      );
-    }
+    const { currentPassword, newPassword } = req.body;
 
     if (!(await bcrypt.compare(currentPassword, user.password))) {
       return next(new AppError("Tu contraseña actual es incorrecta.", 401));
-    }
-
-    if (newPassword !== confirmPassword) {
-      return next(
-        new AppError("Las confirmación de contraseña no coincide.", 400),
-      );
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -211,7 +187,6 @@ export const updatePassword = catchAsync(
 export const forgotPassword = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const { email } = req.body;
-    if (!email) return next(new AppError("Por favor provee tu email.", 400));
 
     const user = await TenantContextManager.runAsSystem(async () =>
       prisma.user.findUnique({ where: { email } }),
@@ -259,14 +234,15 @@ export const forgotPassword = catchAsync(
         status: "success",
         message: "Token enviado al correo.",
       });
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as Error & Partial<AppError>;
       await prisma.user.update({
         where: { id: user.id },
         data: { resetPasswordToken: null, resetPasswordExpires: null },
       });
       const errorMessage =
         err.message || "Hubo un error enviando el correo. Intenta de nuevo.";
-      return next(new AppError(errorMessage, 500));
+      return next(new AppError(errorMessage, err.statusCode || 500));
     }
   },
 );
@@ -292,13 +268,7 @@ export const resetPassword = catchAsync(
       return next(new AppError("Token inválido o expirado.", 400));
     }
 
-    const { password, passwordConfirm } = req.body;
-    if (!password || !passwordConfirm) {
-      return next(new AppError("Provee contraseña y confirmación.", 400));
-    }
-    if (password !== passwordConfirm) {
-      return next(new AppError("Las contraseñas no coinciden.", 400));
-    }
+    const { password } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 12);
 

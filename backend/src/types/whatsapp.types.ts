@@ -38,6 +38,7 @@ export interface SessionData {
   sessionId: string;
   status: "CONNECTED" | "DISCONNECTED" | "QR_READY";
   userId?: string; // JID of the bot
+  defaultQueueId?: string | null; // Auto-assignment queue
 }
 
 /**

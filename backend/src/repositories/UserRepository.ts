@@ -17,24 +17,25 @@ export class UserRepository {
     return this.db.user.findUnique({ where: { email } });
   }
 
+  async findUnique(args: Prisma.UserFindUniqueArgs) {
+    return this.db.user.findUnique(args);
+  }
+
+  async findFirst(args: Prisma.UserFindFirstArgs) {
+    return this.db.user.findFirst(args);
+  }
+
+  async findMany(args: Prisma.UserFindManyArgs) {
+    return this.db.user.findMany(args);
+  }
+
   async upsertShadowUser(params: ShadowUserParams): Promise<User> {
     const { email, name, phone, companyId, password, preferences } = params;
-
-    // We check existence logic inside service or here?
-    // Service passed explicit logic. Repository should handle the DB op.
-    // Logic: upsert.
 
     return this.db.user.upsert({
       where: { email },
       update: {
-        // If name implies generic, we update it. But repository shouldn't judge "generic".
-        // Service handles "decision" to update name.
-        // BUT upsert in Prisma requires 'update' payload.
-        // If we want conditional update, we might need separate operations or pass "updateData".
-        // For simplicity and 100% adherence to Service logic:
-        // Service should pass { name } to update if needed.
-        // I will make params fully detailed.
-        name: name, // This overwrites always? The service logic check "if generic".
+        name: name,
       },
       create: {
         email,
@@ -48,7 +49,6 @@ export class UserRepository {
     });
   }
 
-  // Refined: upsertWithConditionalUpdate
   async upsert(
     where: Prisma.UserWhereUniqueInput,
     create: Prisma.UserCreateInput,
@@ -57,3 +57,5 @@ export class UserRepository {
     return this.db.user.upsert({ where, create, update });
   }
 }
+
+export const userRepository = new UserRepository();

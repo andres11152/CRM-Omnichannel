@@ -630,6 +630,7 @@ export class MessageHandler implements IMessageHandler {
                   customerUser.id,
                   conversation.subject || "WhatsApp",
                   textContent || "Media",
+                  sessionData.defaultQueueId,
                 );
                 ticketId = ticket?.id;
               }
@@ -671,7 +672,7 @@ export class MessageHandler implements IMessageHandler {
     if (!sessionData) {
       const session = await prisma.whatsAppSession.findUnique({
         where: { sessionId },
-        select: { companyId: true, phone: true },
+        select: { companyId: true, phone: true, defaultQueueId: true },
       });
       if (!session) return null;
       sessionData = {
@@ -679,6 +680,7 @@ export class MessageHandler implements IMessageHandler {
         sessionId,
         status: "CONNECTED",
         userId: session.phone || undefined,
+        defaultQueueId: session.defaultQueueId,
       };
       this.sessionCache.set(sessionId, sessionData);
     }

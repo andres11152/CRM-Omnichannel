@@ -170,8 +170,8 @@ export class SessionManager implements ISessionManager {
       `[SessionManager] Using WA v${version.join(".")}, isLatest: ${isLatest}`,
     );
 
-    // 🛡️ MEMORY OPTIMIZATION: syncFullHistory controlled via env var
-    const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY !== "false";
+    // 🛡️ MEMORY OPTIMIZATION: Default to false unless explicitly enabled
+    const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
 
     const sock = makeWASocket({
       version,
@@ -302,6 +302,13 @@ export class SessionManager implements ISessionManager {
         logger.warn(
           `[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg}. Reconnect: ${resetConnection}`,
         );
+
+        // 🛑 Force kill the socket to prevent zombies
+        try {
+          sock.end(undefined);
+        } catch {
+          // Ignore end errors
+        }
 
         // Cleanup listeners
         sock.ev.removeAllListeners("connection.update");

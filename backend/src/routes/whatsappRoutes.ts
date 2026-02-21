@@ -1,8 +1,14 @@
 import { Router } from "express";
 import { protect } from "@/middleware/authMiddleware";
 import { checkPlanLimit } from "@/middleware/planLimitsMiddleware";
+import { validate } from "@/middleware/validationMiddleware";
 import * as whatsappController from "@/controllers/whatsappController";
 import * as chatSyncController from "@/controllers/chatSyncController";
+
+import {
+  TriggerSyncSchema,
+  SyncConversationSchema,
+} from "@/schemas/chatSync.schema";
 
 const router = Router();
 
@@ -22,9 +28,17 @@ router.post(
 );
 
 // 🔄 CHAT SYNC ROUTES
-router.post("/sync", chatSyncController.triggerSync);
+router.post(
+  "/sync",
+  validate(TriggerSyncSchema),
+  chatSyncController.triggerSync,
+);
 router.get("/sync/status", chatSyncController.getSyncStatus);
 router.post("/sync/quick", chatSyncController.quickSync);
-router.post("/sync/conversation/:phone", chatSyncController.syncConversation);
+router.post(
+  "/sync/conversation/:phone",
+  validate(SyncConversationSchema),
+  chatSyncController.syncConversation,
+);
 
 export default router;

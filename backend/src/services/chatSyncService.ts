@@ -204,6 +204,7 @@ class ChatSyncService {
                     channelId,
                     msg,
                     dryRun,
+                    userId,
                   );
 
                   if (result === "new") {
@@ -270,6 +271,29 @@ class ChatSyncService {
     } finally {
       this.activeSyncs.delete(companyId);
     }
+  }
+
+  /**
+   * 🕵️ Get a fallback sender ID (Admin/Master) for system messages.
+   */
+  private async getFallbackSenderId(companyId: string): Promise<string> {
+    const admin = await prisma.user.findFirst({
+      where: { companyId, role: { in: ["ADMIN", "MASTER"] } },
+      select: { id: true },
+    });
+    // If no admin, this will throw in processMessage or fallback to something else?
+    // We must return a valid ID or handle error upstream.
+    // Assuming at least one user exists for the company.
+    if (!admin) {
+      // Fallback: any user
+      const anyUser = await prisma.user.findFirst({
+        where: { companyId },
+        select: { id: true },
+      });
+      if (anyUser) return anyUser.id;
+      throw new Error(`No users found for company ${companyId}`);
+    }
+    return admin.id;
   }
 
   /**
@@ -411,6 +435,7 @@ class ChatSyncService {
     channelId: string,
     msg: WAMessage,
     dryRun: boolean,
+    fallbackSenderId: string,
   ): Promise<"new" | "duplicate" | "skipped"> {
     const whatsappMessageId = msg.key.id;
 
@@ -469,13 +494,22 @@ class ChatSyncService {
       textContent = "[Mensaje]";
     }
 
-    // 4. Determine direction
-    const direction: MessageDirection = msg.key.fromMe
+    const isFromMe = msg.key.fromMe === true;
+    const direction: MessageDirection = isFromMe
       ? MessageDirection.OUTBOUND
       : MessageDirection.INBOUND;
 
     // 5. Determine sender
-    const senderId = conversation.participants[0]?.id;
+    // If OUTBOUND: Sender is Us (Fallback ID)
+    // If INBOUND: Sender is Contact (Participant[0])
+    const contactUserId = conversation.participants[0]?.id;
+
+    // Logic:
+    // - If outbound, use fallbackSenderId (Agent/Admin)
+    // - If inbound, use contactUserId. ex: If contactUser missing, fallback to admin to avoid crash (though rare)
+    const senderId = isFromMe
+      ? fallbackSenderId
+      : contactUserId || fallbackSenderId;
 
     // 6. Create message
     const timestamp =
@@ -791,6 +825,9 @@ class ChatSyncService {
         return;
       }
 
+      // 3a. Get Fallback Sender (Admin)
+      const fallbackSenderId = await this.getFallbackSenderId(companyId);
+
       // 3. Extract messages for this JID only (no date limit, just take what's in store)
       const cleanPhone = channelId.replace(/\D/g, "");
       const targetJid = `${cleanPhone}@s.whatsapp.net`;
@@ -824,6 +861,7 @@ class ChatSyncService {
             cleanPhone,
             msg,
             false, // Not dry run
+            fallbackSenderId,
           );
 
           if (result === "new") newCount++;

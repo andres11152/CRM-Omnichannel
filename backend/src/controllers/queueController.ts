@@ -1,20 +1,14 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "@/types";
 import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
+import { Prisma } from "@prisma/client";
 
 export const createQueue = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const {
-      name,
-      departmentId,
-      description,
-      promptTemplateId,
-      type,
-      config,
-      aiAssistantId,
-    } = req.body;
+    // req.body is already validated by CreateQueueSchema middleware
+    const data = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
@@ -23,13 +17,14 @@ export const createQueue = catchAsync(
 
     const queue = await prisma.queue.create({
       data: {
-        name,
-        description,
-        type: type || "MANUAL",
-        config: config || {},
+        name: data.name,
+        description: data.description,
+        type: data.type,
+        config: data.config,
+        isActive: data.isActive,
         companyId,
-        departmentId: departmentId || null,
-        aiAssistantId: aiAssistantId || null,
+        departmentId: data.departmentId || null,
+        aiAssistantId: data.aiAssistantId || null,
       },
     });
 
@@ -63,16 +58,9 @@ export const getQueues = catchAsync(
 
 export const updateQueue = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // Both Params and Body are validated by UpdateQueueSchema
     const { id } = req.params;
-    const {
-      name,
-      description,
-      isActive,
-      type,
-      config,
-      departmentId,
-      aiAssistantId,
-    } = req.body;
+    const data = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     const queue = await prisma.queue.findFirst({
@@ -83,17 +71,23 @@ export const updateQueue = catchAsync(
       return next(new AppError("Queue not found", 404));
     }
 
+    const updateData: Prisma.QueueUncheckedUpdateInput = {};
+
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined)
+      updateData.description = data.description;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.type !== undefined) updateData.type = data.type;
+    if (data.config !== undefined)
+      updateData.config = data.config ?? Prisma.JsonNull;
+    if (data.departmentId !== undefined)
+      updateData.departmentId = data.departmentId;
+    if (data.aiAssistantId !== undefined)
+      updateData.aiAssistantId = data.aiAssistantId;
+
     const updatedQueue = await prisma.queue.update({
       where: { id },
-      data: {
-        name,
-        description,
-        isActive,
-        type,
-        config,
-        departmentId: departmentId || null,
-        aiAssistantId: aiAssistantId || null,
-      },
+      data: updateData,
     });
 
     res.status(200).json(updatedQueue);

@@ -8,6 +8,31 @@ export class TicketRepository {
     return this.db.ticket.findUnique({ where: { id } });
   }
 
+  async findUnique(args: Prisma.TicketFindUniqueArgs) {
+    return this.db.ticket.findUnique(args);
+  }
+
+  async findFirst(args: Prisma.TicketFindFirstArgs) {
+    return this.db.ticket.findFirst(args);
+  }
+
+  async findMany(args: Prisma.TicketFindManyArgs) {
+    return this.db.ticket.findMany(args);
+  }
+
+  async create(args: Prisma.TicketCreateArgs) {
+    return this.db.ticket.create(args);
+  }
+
+  async update(args: Prisma.TicketUpdateArgs) {
+    return this.db.ticket.update(args);
+  }
+
+  async count(args: Prisma.TicketCountArgs) {
+    return this.db.ticket.count(args);
+  }
+
+  // Backwards compatibility for existing codebase callers
   async findByIdWithCreator(id: string) {
     return this.db.ticket.findUnique({
       where: { id },
@@ -31,6 +56,7 @@ export class TicketRepository {
       data: { conversationId },
     });
   }
+
   async getTicketsForExport(companyId: string, start: Date, end: Date) {
     return this.db.ticket.findMany({
       where: { companyId, createdAt: { gte: start, lte: end } },
@@ -49,40 +75,6 @@ export class TicketRepository {
 
   async countByCompanyId(companyId: string): Promise<number> {
     return this.db.ticket.count({ where: { companyId } });
-  }
-
-  async create(data: {
-    companyId: string;
-    conversationId?: string;
-    subject: string;
-    status?: TicketStatus;
-    priority?: TicketPriority;
-    createdById: string;
-    assignedToId?: string;
-    queueId?: string;
-  }): Promise<Ticket> {
-    const lastTicket = await this.db.ticket.findFirst({
-      where: { companyId: data.companyId },
-      orderBy: { ticketNumber: "desc" },
-      select: { ticketNumber: true },
-    });
-
-    const ticketNumber = (lastTicket?.ticketNumber || 0) + 1;
-
-    return this.db.ticket.create({
-      data: {
-        ticketNumber,
-        companyId: data.companyId,
-        conversationId: data.conversationId,
-        subject: data.subject,
-        description: "Chat iniciado manualmente por agente",
-        status: data.status ?? TicketStatus.OPEN,
-        priority: data.priority ?? TicketPriority.MEDIUM,
-        createdById: data.createdById,
-        assignedToId: data.assignedToId,
-        queueId: data.queueId,
-      },
-    });
   }
 }
 export const ticketRepository = new TicketRepository();

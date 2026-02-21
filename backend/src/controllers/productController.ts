@@ -1,14 +1,15 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { prisma } from "../config/database";
 import { AppError } from "../utils/AppError";
 import { AuthenticatedRequest } from "../types/types";
+import { Logger } from "../utils/logger";
 
 class ProductController {
   // Get all products for the logged-in company
   getAllProducts = async (
     req: AuthenticatedRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) => {
     try {
       const companyId = req.user?.companyId;
@@ -35,53 +36,41 @@ class ProductController {
   createProduct = async (
     req: AuthenticatedRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) => {
     try {
       const companyId = req.user?.companyId;
-      const {
-        name,
-        sku,
-        price,
-        currency,
-        stock,
-        category,
-        type,
-        description,
-        imageUrl,
-        status,
-      } = req.body;
+      // Validated by CreateProductSchema
+      const data = req.body;
 
       if (!companyId) {
         return next(new AppError("User does not belong to a company", 403));
       }
 
-      // Optional: Check if SKU exists per company logic (not strict unique in DB but good logic)
-      if (sku) {
+      if (data.sku) {
         const existing = await prisma.product.findFirst({
-          where: { companyId, sku },
+          where: { companyId, sku: data.sku },
         });
         if (existing) {
-          // Just warn or block? Let's allow duplicates for now or Append unique ID if user insists, strict SaaS logic implies rejection.
-          // return next(new AppError("SKU already exists", 400));
+          return next(
+            new AppError("A product with this SKU already exists", 400),
+          );
         }
       }
-
-      console.log("[CreateProduct] Body received:", req.body);
 
       const product = await prisma.product.create({
         data: {
           companyId,
-          name,
-          sku: sku || undefined, // Avoid empty string unique constraint issues if any, though it's optional
-          price: parseFloat(String(price)),
-          currency: currency || "USD",
-          stock: stock ? parseInt(String(stock)) : 0,
-          category: category || "General",
-          type: type || "Physical",
-          description: description || null,
-          imageUrl: imageUrl || null,
-          status: status || "active",
+          name: data.name,
+          sku: data.sku,
+          price: data.price,
+          currency: data.currency,
+          stock: data.stock,
+          category: data.category,
+          type: data.type,
+          description: data.description,
+          imageUrl: data.imageUrl,
+          status: data.status,
         },
       });
 
@@ -90,7 +79,7 @@ class ProductController {
         data: product,
       });
     } catch (error) {
-      console.error("Error creating product:", error);
+      Logger.error("[ProductController] Error creating product:", error);
       next(error);
     }
   };
@@ -99,10 +88,12 @@ class ProductController {
   updateProduct = async (
     req: AuthenticatedRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) => {
     try {
+      // Validated by UpdateProductSchema
       const { id } = req.params;
+      const data = req.body;
       const companyId = req.user?.companyId;
 
       const product = await prisma.product.findFirst({
@@ -115,7 +106,7 @@ class ProductController {
 
       const updatedProduct = await prisma.product.update({
         where: { id },
-        data: req.body,
+        data,
       });
 
       res.status(200).json({
@@ -123,6 +114,7 @@ class ProductController {
         data: updatedProduct,
       });
     } catch (error) {
+      Logger.error("[ProductController] Error updating product:", error);
       next(error);
     }
   };
@@ -131,7 +123,7 @@ class ProductController {
   deleteProduct = async (
     req: AuthenticatedRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) => {
     try {
       const { id } = req.params;
@@ -154,6 +146,7 @@ class ProductController {
         data: null,
       });
     } catch (error) {
+      Logger.error("[ProductController] Error deleting product:", error);
       next(error);
     }
   };

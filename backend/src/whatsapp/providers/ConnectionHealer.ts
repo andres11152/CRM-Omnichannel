@@ -28,7 +28,7 @@ export interface ConnectionHealerConfig {
 const DEFAULT_CONFIG: Required<ConnectionHealerConfig> = {
   heartbeatIntervalMs: 300_000,
   defaultReconnectDelayMs: 5_000,
-  conflictReconnectDelayMs: 15_000,
+  conflictReconnectDelayMs: 30_000,
 };
 
 export class ConnectionHealer {

@@ -414,6 +414,7 @@ export class ChatService {
     customerId: string,
     subject: string,
     description: string,
+    queueId?: string | null,
   ) {
     let ticket = await prisma.ticket.findFirst({
       where: {
@@ -441,8 +442,21 @@ export class ChatService {
           companyId,
           createdById: customerId,
           conversationId,
+          queueId: queueId || null,
         },
       });
+    } else if (queueId && !ticket.queueId) {
+      // 🩹 100-YEAR FIX: Self-Healing for Existing Tickets
+      // If an active ticket exists but lacks a queue (e.g. from legacy session),
+      // we update it with the session's default queue.
+      // This ensures badges and routing work for ongoing chats immediately.
+      ticket = await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { queueId },
+      });
+      Logger.info(
+        `[ChatService] 🩹 Self-healed ticket ${ticket.id} with queueId ${queueId}`,
+      );
     }
     return ticket;
   }

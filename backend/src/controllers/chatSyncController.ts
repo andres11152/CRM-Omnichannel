@@ -6,7 +6,6 @@
  */
 
 import { Request, Response } from "express";
-import { z } from "zod";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import {
@@ -14,17 +13,6 @@ import {
   ChatSyncRequestSchema,
 } from "@/services/chatSyncService";
 import { whatsappService } from "@/whatsapp";
-
-// ========================
-// REQUEST SCHEMAS
-// ========================
-
-const TriggerSyncSchema = z.object({
-  sessionId: z.string().optional(),
-  sinceDate: z.string().datetime().optional(),
-  limit: z.number().int().positive().max(1000).default(500),
-  dryRun: z.boolean().default(false),
-});
 
 // ========================
 // CONTROLLER HANDLERS
@@ -42,8 +30,8 @@ export const triggerSync = catchAsync(async (req: Request, res: Response) => {
     throw new AppError("Authentication required", 401);
   }
 
-  // Validate request body
-  const body = TriggerSyncSchema.parse(req.body);
+  // Body is already validated by the routing middleware
+  const body = req.body;
 
   // Find session
   let sessionId = body.sessionId;

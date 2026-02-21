@@ -1,6 +1,5 @@
-import { Contact } from "@prisma/client";
+import { Contact, Prisma } from "@prisma/client";
 import { prisma, ExtendedPrismaClient } from "@/config/database";
-import { Logger } from "@/utils/logger";
 
 export class ContactRepository {
   constructor(private db: ExtendedPrismaClient = prisma) {}
@@ -18,6 +17,10 @@ export class ContactRepository {
     return this.db.contact.findFirst({
       where: { companyId, phone: lid },
     });
+  }
+
+  async findMany(args: Prisma.ContactFindManyArgs) {
+    return this.db.contact.findMany(args);
   }
 
   async create(
@@ -56,3 +59,5 @@ export class ContactRepository {
     });
   }
 }
+
+export const contactRepository = new ContactRepository();

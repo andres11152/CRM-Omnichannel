@@ -24,13 +24,14 @@ export const getDepartments = catchAsync(
     });
 
     res.status(200).json(departments);
-  }
+  },
 );
 
 // Create department
 export const createDepartment = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { name } = req.body;
+    // Validated by CreateDepartmentSchema
+    const data = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
@@ -38,7 +39,7 @@ export const createDepartment = catchAsync(
     }
 
     const existing = await prisma.department.findFirst({
-      where: { companyId, name: { equals: name, mode: "insensitive" } },
+      where: { companyId, name: { equals: data.name, mode: "insensitive" } },
     });
 
     if (existing) {
@@ -47,20 +48,21 @@ export const createDepartment = catchAsync(
 
     const department = await prisma.department.create({
       data: {
-        name,
+        name: data.name,
         companyId,
       },
     });
 
     res.status(201).json(department);
-  }
+  },
 );
 
 // Update department
 export const updateDepartment = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // Validated by UpdateDepartmentSchema
     const { id } = req.params;
-    const { name } = req.body;
+    const data = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
@@ -76,11 +78,11 @@ export const updateDepartment = catchAsync(
     }
 
     // Check if name is already taken by another department
-    if (name && name !== department.name) {
+    if (data.name && data.name !== department.name) {
       const existing = await prisma.department.findFirst({
         where: {
           companyId,
-          name: { equals: name, mode: "insensitive" },
+          name: { equals: data.name, mode: "insensitive" },
           id: { not: id },
         },
       });
@@ -92,11 +94,11 @@ export const updateDepartment = catchAsync(
 
     const updated = await prisma.department.update({
       where: { id },
-      data: { name },
+      data,
     });
 
     res.status(200).json(updated);
-  }
+  },
 );
 
 // Delete department
@@ -118,5 +120,5 @@ export const deleteDepartment = catchAsync(
     });
 
     res.status(204).json(null);
-  }
+  },
 );

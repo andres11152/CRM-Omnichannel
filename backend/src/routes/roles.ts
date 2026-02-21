@@ -8,6 +8,13 @@ import {
   assignRoleToUser,
 } from "../controllers/rolesController";
 import { protect } from "@/middleware/authMiddleware";
+import { validate } from "@/middleware/validationMiddleware";
+import {
+  CreateRoleSchema,
+  UpdateRoleSchema,
+  AssignRoleSchema,
+  RoleIdParamSchema,
+} from "@/schemas/role.schema";
 
 const router = express.Router();
 
@@ -20,18 +27,18 @@ const router = express.Router();
 router.get("/", protect, getRoles);
 
 // Get a specific role
-router.get("/:id", protect, getRole);
+router.get("/:id", protect, validate(RoleIdParamSchema), getRole);
 
 // Create a new role (Admin only)
-router.post("/", protect, createRole);
+router.post("/", protect, validate(CreateRoleSchema), createRole);
 
 // Update a role (Admin only)
-router.patch("/:id", protect, updateRole);
+router.patch("/:id", protect, validate(UpdateRoleSchema), updateRole);
 
 // Delete a role (Admin only)
-router.delete("/:id", protect, deleteRole);
+router.delete("/:id", protect, validate(RoleIdParamSchema), deleteRole);
 
 // Assign role to user (Admin only)
-router.post("/assign", protect, assignRoleToUser);
+router.post("/assign", protect, validate(AssignRoleSchema), assignRoleToUser);
 
 export default router;

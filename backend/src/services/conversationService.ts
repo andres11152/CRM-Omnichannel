@@ -113,13 +113,25 @@ export const conversationService = {
         existingTicket.status === TicketStatus.IN_PROGRESS);
 
     if (!isTicketActive) {
+      const lastTicket = await ticketRepository.findFirst({
+        where: { companyId },
+        orderBy: { ticketNumber: "desc" },
+        select: { ticketNumber: true },
+      });
+
+      const nextTicketNumber = (lastTicket?.ticketNumber || 0) + 1;
+
       await ticketRepository.create({
-        companyId,
-        conversationId: conversation.id,
-        subject: name || cleanPhone,
-        createdById: agentId,
-        assignedToId: agentId, // Auto-assign to the creator (Agent)
-        status: TicketStatus.IN_PROGRESS, // Active state
+        data: {
+          ticketNumber: nextTicketNumber,
+          companyId,
+          conversationId: conversation.id,
+          subject: name || cleanPhone,
+          description: message || "Chat importado o iniciado manualmente",
+          createdById: agentId,
+          assignedToId: agentId, // Auto-assign to the creator (Agent)
+          status: TicketStatus.IN_PROGRESS, // Active state
+        },
       });
     }
 

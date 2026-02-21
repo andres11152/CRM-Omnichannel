@@ -24,6 +24,25 @@ export class ConversationRepository {
     });
   }
 
+  async findByIdAndCompanyId(
+    id: string,
+    companyId: string,
+  ): Promise<Conversation | null> {
+    return this.db.conversation.findFirst({
+      where: { id, companyId },
+    });
+  }
+
+  async updateConversation(
+    id: string,
+    data: Prisma.ConversationUpdateInput,
+  ): Promise<Conversation> {
+    return this.db.conversation.update({
+      where: { id },
+      data,
+    });
+  }
+
   async update(
     id: string,
     data: Prisma.ConversationUpdateInput,
@@ -114,3 +133,5 @@ export class ConversationRepository {
     });
   }
 }
+
+export const conversationRepository = new ConversationRepository();

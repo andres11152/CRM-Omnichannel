@@ -79,6 +79,10 @@ export class WhatsAppSessionRepository {
     return prisma.whatsAppSession.findMany({ where });
   }
 
+  async findMany(args: Prisma.WhatsAppSessionFindManyArgs) {
+    return prisma.whatsAppSession.findMany(args);
+  }
+
   /**
    * Delete many sessions (useful for cleanup)
    */
@@ -88,3 +92,5 @@ export class WhatsAppSessionRepository {
     return prisma.whatsAppSession.deleteMany({ where });
   }
 }
+
+export const whatsappSessionRepository = new WhatsAppSessionRepository();

@@ -92,7 +92,7 @@ export const FlowBuilder: React.FC = () => {
 
     // Calculate offset within the node
     const rect = (e.target as HTMLElement)
-      .closest(".flow-node")
+      .closestá(".flow-node")
       ?.getBoundingClientRect();
     if (rect) {
       setDragOffset({

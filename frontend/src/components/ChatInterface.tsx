@@ -1,4 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+  memo,
+} from "react";
+import { debounce } from "lodash";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { jwtDecode } from "jwt-decode";
@@ -128,6 +136,7 @@ export const ChatInterface: React.FC<Props> = ({
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isRemoteTyping, setIsRemoteTyping] = useState(false); // ? Added
   const [sentiment, setSentiment] = useState<string>("Neutral");
@@ -146,6 +155,29 @@ export const ChatInterface: React.FC<Props> = ({
 
   // Local state for contact display to support immediate updates
   const [displayContact, setDisplayContact] = useState<Contact>(activeContact);
+
+  /**
+   * 🚀 100-YEAR FIX: Scroll to origin message when clicking a quote
+   * Includes brief visual highlighting to guide the user
+   */
+  const scrollToMessage = useCallback((messageId: string) => {
+    if (!messageId) return;
+
+    const element = document.getElementById(`msg-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      element.classList.add("ring-2", "ring-indigo-500", "ring-offset-4");
+      element.classList.add("scale-[1.02]");
+
+      setTimeout(() => {
+        element.classList.remove("ring-2", "ring-indigo-500", "ring-offset-4");
+        element.classList.remove("scale-[1.02]");
+      }, 1500);
+    } else {
+      toast.info("No se encontrï¿½ el mensaje original (puede ser antiguo)");
+    }
+  }, []);
 
   useEffect(() => {
     setDisplayContact((prev) => {
@@ -191,7 +223,7 @@ export const ChatInterface: React.FC<Props> = ({
   >([]);
   const [isCopied, setIsCopied] = useState(false);
 
-  // New Features State
+  // New Features-EState
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -367,6 +399,7 @@ export const ChatInterface: React.FC<Props> = ({
                   : m.metadata?.aiAssistantName || "You",
               attachment:
                 m.metadata?.media || m.attachment || m.metadata?.attachment,
+              metadata: m.metadata,
             };
           });
 
@@ -672,6 +705,7 @@ export const ChatInterface: React.FC<Props> = ({
                       : m.metadata?.aiAssistantName || "You",
                   attachment:
                     m.metadata?.media || m.attachment || m.metadata?.attachment,
+                  metadata: m.metadata,
                 };
               });
 
@@ -774,6 +808,16 @@ export const ChatInterface: React.FC<Props> = ({
     setInputValue("");
     const fileToSend = selectedFile;
     setSelectedFile(null);
+    const quoteContext = replyingTo
+      ? {
+          quotedMessageId: replyingTo.id,
+          quotedContent:
+            replyingTo.content ||
+            (replyingTo as any).attachment?.name ||
+            "Mensaje multimedia",
+        }
+      : {};
+    setReplyingTo(null);
 
     // Prepare attachment promise
     let attachmentPromise: Promise<any> | null = null;
@@ -817,6 +861,7 @@ export const ChatInterface: React.FC<Props> = ({
       timestamp: new Date(),
       senderName: "You",
       attachment: optimisticAttachment,
+      metadata: Object.keys(quoteContext).length > 0 ? quoteContext : undefined,
     };
     setMessages((prev) => [...prev, optimisticMessage]);
 
@@ -846,6 +891,7 @@ export const ChatInterface: React.FC<Props> = ({
             content: content,
             channel: "WHATSAPP",
             attachment: finalAttachment,
+            ...quoteContext,
           }),
         },
       );
@@ -1193,37 +1239,40 @@ export const ChatInterface: React.FC<Props> = ({
     }
   };
 
-  const handleTypingIndicator = () => {
-    //  Emit typing event to backend for WhatsApp Sync
-    const token = localStorage.getItem("token");
+  // ? 100-YEAR PERFORMANCE FIX: Debounce typing indicator to prevent socket flooding
+  const debouncedTypingEmit = useMemo(
+    () =>
+      debounce(
+        (remoteId: string) => {
+          socketService.emit("conversation:typing", {
+            to: remoteId,
+            status: "composing",
+          });
+        },
+        2000,
+        { leading: true, trailing: false },
+      ),
+    [],
+  );
 
-    // Determine the remote ID (phone number)
-    // If channelId looks like a phone/JID, use it. Otherwise try 'phone' property if exists.
-    // Assuming activeContact is a Contact/Ticket object.
+  const handleTypingIndicator = useCallback(() => {
     const remoteId = (activeContact as any).phone || activeContact.channelId;
+    if (!remoteId) return;
 
-    if (token && remoteId) {
-      socketService.emit("conversation:typing", {
-        to: remoteId,
-        status: "composing",
-      });
-    }
+    debouncedTypingEmit(remoteId);
 
-    // Clear existing timeout
+    // Clear existing timeout for "paused"
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set timeout to emit "stopped typing" after 3 seconds of inactivity
     typingTimeoutRef.current = setTimeout(() => {
-      if (token && remoteId) {
-        socketService.emit("conversation:typing", {
-          to: remoteId,
-          status: "paused",
-        });
-      }
+      socketService.emit("conversation:typing", {
+        to: remoteId,
+        status: "paused",
+      });
     }, 3000);
-  };
+  }, [activeContact.id, debouncedTypingEmit]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1763,385 +1812,442 @@ export const ChatInterface: React.FC<Props> = ({
             </div>
           )}
 
-          {/* âœ… LEVEL 3B: Chat Messages Area - flex: 1, overflow-y: auto (scroll independiente) */}
+          {/* ✅ LEVEL 3B: Chat Messages Area - flex: 1, overflow-y: auto (scroll independiente) */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden bg-reply-bg dark:bg-reply-bg-dark">
             <div className="p-3 sm:p-4 space-y-2">
-              {messages.map((msg, index) => {
-                const isUser =
-                  msg.senderType === SenderType.USER &&
-                  msg.direction !== "OUTBOUND";
-                const isBot = msg.senderType === SenderType.BOT;
-                const isAgent = msg.senderType === SenderType.AGENT;
-                const isOutgoing =
-                  isAgent || isBot || msg.direction === "OUTBOUND";
+              {useMemo(
+                () =>
+                  messages.map((msg, index) => {
+                    const isUser =
+                      msg.senderType === SenderType.USER &&
+                      msg.direction !== "OUTBOUND";
+                    const isBot = msg.senderType === SenderType.BOT;
+                    const isAgent = msg.senderType === SenderType.AGENT;
+                    const isOutgoing =
+                      isAgent || isBot || msg.direction === "OUTBOUND";
 
-                return (
-                  <div
-                    key={`${msg.id}-${index}`}
-                    className={`flex ${isOutgoing ? "justify-end" : "justify-start"} mb-1.5`}
-                  >
-                    <div
-                      className={`max-w-[70%] rounded-xl px-3 py-2 relative shadow-sm text-sm leading-relaxed
+                    return (
+                      <div
+                        key={`${msg.id}-${index}`}
+                        id={`msg-${msg.id}`}
+                        className={`flex ${isOutgoing ? "justify-end" : "justify-start"} mb-1.5 group/msg transition-all duration-300`}
+                      >
+                        <div
+                          className={`max-w-[70%] rounded-xl px-3 py-2 relative shadow-sm text-sm leading-relaxed
                     ${
                       isOutgoing
                         ? "bg-reply-green dark:bg-reply-green-dark text-white rounded-tr-none"
                         : "bg-white dark:bg-reply-panel-dark text-reply-text dark:text-reply-text-dark rounded-tl-none border border-gray-100 dark:border-reply-border-dark"
                     }
                   `}
-                      style={
-                        isOutgoing
-                          ? { backgroundColor: "#00a884", color: "#ffffff" }
-                          : undefined
-                      }
-                    >
-                      {isBot && (
-                        <div className="text-[10px] text-white/80 font-bold mb-1 flex items-center gap-1">
-                          ï¿½ï¿½ Agente IA
-                        </div>
-                      )}
-
-                      {/* Attachment Render */}
-                      {msg.attachment && (
-                        <div className="mb-2 mt-1">
-                          {msg.attachment.type === "image" ? (
-                            <img
-                              src={
-                                msg.attachment.url?.startsWith("http") ||
-                                msg.attachment.url?.startsWith("data:") ||
-                                msg.attachment.url?.startsWith("blob:")
-                                  ? msg.attachment.url
-                                  : `${BASE_URL}${msg.attachment.url || ""}`
-                              }
-                              alt="Adjunto"
-                              onClick={() => {
-                                if (msg.attachment?.url) {
-                                  setSelectedImage(
-                                    msg.attachment.url.startsWith("http") ||
-                                      msg.attachment.url.startsWith("data:") ||
-                                      msg.attachment.url.startsWith("blob:")
-                                      ? msg.attachment.url
-                                      : `${BASE_URL}${msg.attachment.url}`,
-                                  );
-                                }
-                              }}
-                              className="rounded-lg max-h-64 object-cover border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
-                            />
-                          ) : msg.attachment.type === "video" ? (
-                            <video
-                              src={
-                                msg.attachment.url?.startsWith("http") ||
-                                msg.attachment.url?.startsWith("data:") ||
-                                msg.attachment.url?.startsWith("blob:")
-                                  ? msg.attachment.url
-                                  : `${BASE_URL}${msg.attachment.url || ""}`
-                              }
-                              controls
-                              className="rounded-lg max-h-64 border border-white/20"
-                            />
-                          ) : msg.attachment.type === "audio" ? (
+                          style={
+                            isOutgoing
+                              ? { backgroundColor: "#00a884", color: "#ffffff" }
+                              : undefined
+                          }
+                        >
+                          {/* Quoted Message (Reply) */}
+                          {msg.metadata?.quotedMessageId && (
                             <div
-                              className={
-                                isAgent
-                                  ? "bg-emerald-100 dark:bg-emerald-900/40 rounded-lg"
-                                  : "bg-gray-100 dark:bg-gray-700/50 rounded-lg"
+                              onClick={() =>
+                                scrollToMessage(msg.metadata.quotedMessageId)
                               }
+                              className={`mb-2 p-2 rounded-lg border-l-4 bg-black/5 dark:bg-white/5 backdrop-blur-sm cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${isOutgoing ? "border-white/40" : "border-indigo-500"}`}
                             >
-                              <VoiceNotePlayer
-                                src={
-                                  msg.attachment.url?.startsWith("http") ||
-                                  msg.attachment.url?.startsWith("data:") ||
-                                  msg.attachment.url?.startsWith("blob:")
-                                    ? msg.attachment.url
-                                    : `${BASE_URL}${msg.attachment.url || ""}`
-                                }
-                                variant={isAgent ? "sent" : "received"}
-                              />
-                            </div>
-                          ) : msg.attachment.type === "sticker" ? (
-                            <div className="relative group inline-block">
-                              <img
-                                src={
-                                  msg.attachment.url?.startsWith("http") ||
-                                  msg.attachment.url?.startsWith("data:") ||
-                                  msg.attachment.url?.startsWith("blob:")
-                                    ? msg.attachment.url
-                                    : `${BASE_URL}${msg.attachment.url || ""}`
-                                }
-                                alt="Sticker"
-                                className="w-32 h-32 object-contain select-none filter drop-shadow-sm"
-                                onContextMenu={(e) => {
-                                  e.preventDefault(); /* Maybe custom menu later */
-                                }}
-                              />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (msg.attachment?.url)
-                                    handleSaveSticker(msg.attachment.url);
-                                }}
-                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-white/80 hover:bg-white text-yellow-500 rounded-full p-1 shadow-sm transition-opacity"
-                                title="Guardar Sticker"
+                              <div
+                                className={`text-[10px] font-bold mb-0.5 ${isOutgoing ? "text-white/80" : "text-indigo-600 dark:text-indigo-400"}`}
                               >
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                                </svg>
-                              </button>
-                            </div>
-                          ) : msg.attachment.type === "location" ? (
-                            <div className="bg-white/95 dark:bg-gray-800 p-3 rounded-lg min-w-[220px] border border-gray-200 dark:border-gray-600 shadow-sm text-left">
-                              <div className="flex items-center gap-2 mb-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
-                                <span className="text-xl"></span>
-                                <span className="font-bold text-gray-800 dark:text-gray-100 text-sm">
-                                  Ubicaciï¿½n
-                                </span>
+                                {msg.metadata.quotedContent
+                                  ? "Respondiendo a:"
+                                  : "Respondiendo a mensaje multimedia"}
                               </div>
-                              {(msg.attachment as any).name && (
-                                <div className="font-bold text-sm text-gray-800 dark:text-gray-100 mb-0.5">
-                                  {(msg.attachment as any).name}
-                                </div>
-                              )}
-                              {(msg.attachment as any).address && (
-                                <div className="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-tight">
-                                  {(msg.attachment as any).address}
-                                </div>
-                              )}
-
-                              <a
-                                href={`https://maps.google.com/?q=${(msg.attachment as any).latitude},${(msg.attachment as any).longitude}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block text-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-md transition-colors flex items-center justify-center gap-2 shadow-sm"
+                              <div
+                                className={`text-xs italic line-clamp-2 ${isOutgoing ? "text-white/70" : "text-gray-500 dark:text-gray-400"}`}
                               >
-                                <svg
-                                  className="w-3 h-3"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                                Ver en Google Maps
-                              </a>
-                            </div>
-                          ) : msg.attachment.type === "contact" ? (
-                            <div className="bg-white/95 dark:bg-gray-800 p-3 rounded-lg min-w-[250px] flex items-center gap-3 border border-gray-200 dark:border-gray-600 shadow-sm text-left">
-                              <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-2xl"></div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate">
-                                  {(msg.attachment as any).displayName ||
-                                    "Contacto"}
-                                </div>
-                                <div className="text-xs text-blue-500 dark:text-blue-400 cursor-pointer hover:underline mt-0.5 flex items-center gap-1">
-                                  VCard Adjunto
-                                </div>
+                                {msg.metadata.quotedContent ||
+                                  "Haga clic para ver el original"}
                               </div>
-                            </div>
-                          ) : (
-                            <div className="bg-black/10 p-2 rounded flex items-center gap-2">
-                              <span className="text-2xl"></span>
-                              <span className="text-xs font-medium underline truncate max-w-[150px]">
-                                {msg.attachment.name || "Documento"}
-                              </span>
                             </div>
                           )}
-                        </div>
-                      )}
 
-                      {/* Message Content - Hide redundant filenames for audios */}
-                      {/* Message Content - Hide redundant filenames or placeholders */}
-                      {msg.content &&
-                        // 100-Year Solution: Robust Regex to hide all media placeholders (Case Insensitive)
-                        !/^\[(image|video|audio|record|document|sticker)\]$/i.test(
-                          msg.content.trim(),
-                        ) &&
-                        // Also hide if content is just the type name (e.g. "image", "video")
-                        ![
-                          "image",
-                          "video",
-                          "audio",
-                          "record",
-                          "document",
-                          "sticker",
-                        ].includes(msg.content.trim().toLowerCase()) &&
-                        !msg.content.includes("Imagen adjunta") &&
-                        !msg.content.includes("Ubicació³n compartida") &&
-                        !(
-                          msg.content.includes("Contacto:") &&
-                          msg.attachment?.type === "contact"
-                        ) &&
-                        !(
-                          msg.attachment && msg.content === msg.attachment.name
-                        ) &&
-                        !(
-                          msg.attachment &&
-                          msg.content === `Archivo: ${msg.attachment.name}`
-                        ) &&
-                        !(
-                          msg.attachment?.type === "audio" &&
-                          (msg.content.includes("Archivo:") ||
-                            msg.content.includes("voice-note") ||
-                            msg.content.includes("Nota de voz"))
-                        ) &&
-                        (() => {
-                          const content = msg.content;
-                          // Special Renderers
-                          if (
-                            content.includes("MENSAJE PROGRAMADO:") ||
-                            ["SCHEDULED", "scheduled", "pending"].includes(
-                              msg.status || "",
-                            )
-                          ) {
-                            let realMsg = content;
-                            let dateDisplay = "Programado";
+                          {isBot && (
+                            <div className="text-[10px] text-white/80 font-bold mb-1 flex items-center gap-1">
+                              ï¿½ï¿½ Agente IA
+                            </div>
+                          )}
 
-                            if (content.includes("MENSAJE PROGRAMADO:")) {
-                              // Optimistic Format
-                              const lines = content.split("\n\n");
-                              realMsg = lines[1] || "";
-                              dateDisplay =
-                                lines[2]
-                                  ?.replace("Para: ", "")
-                                  .replace(" ", "") || "";
-                            } else {
-                              // Persisted DB Format
-                              realMsg = content;
-                              if (msg.metadata?.scheduledAt) {
-                                try {
-                                  dateDisplay = new Date(
-                                    msg.metadata.scheduledAt,
-                                  ).toLocaleString();
-                                } catch (e) {
-                                  console.error("Date parse error", e);
-                                }
-                              }
-                            }
-
-                            return (
-                              <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-200 dark:border-amber-800/50 my-1 relative overflow-hidden">
-                                {/* Background Pattern */}
-                                <div className="absolute -right-6 -top-6 text-amber-100 dark:text-amber-900/20 opacity-50">
-                                  <svg
-                                    className="w-24 h-24"
-                                    fill="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
-                                  </svg>
+                          {/* Attachment Render */}
+                          {msg.attachment && (
+                            <div className="mb-2 mt-1">
+                              {msg.attachment.type === "image" ? (
+                                <img
+                                  src={
+                                    msg.attachment.url?.startsWith("http") ||
+                                    msg.attachment.url?.startsWith("data:") ||
+                                    msg.attachment.url?.startsWith("blob:")
+                                      ? msg.attachment.url
+                                      : `${BASE_URL}${msg.attachment.url || ""}`
+                                  }
+                                  alt="Adjunto"
+                                  onClick={() => {
+                                    if (msg.attachment?.url) {
+                                      setSelectedImage(
+                                        msg.attachment.url.startsWith("http") ||
+                                          msg.attachment.url.startsWith(
+                                            "data:",
+                                          ) ||
+                                          msg.attachment.url.startsWith("blob:")
+                                          ? msg.attachment.url
+                                          : `${BASE_URL}${msg.attachment.url}`,
+                                      );
+                                    }
+                                  }}
+                                  className="rounded-lg max-h-64 object-cover border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
+                                />
+                              ) : msg.attachment.type === "video" ? (
+                                <video
+                                  src={
+                                    msg.attachment.url?.startsWith("http") ||
+                                    msg.attachment.url?.startsWith("data:") ||
+                                    msg.attachment.url?.startsWith("blob:")
+                                      ? msg.attachment.url
+                                      : `${BASE_URL}${msg.attachment.url || ""}`
+                                  }
+                                  controls
+                                  className="rounded-lg max-h-64 border border-white/20"
+                                />
+                              ) : msg.attachment.type === "audio" ? (
+                                <div
+                                  className={
+                                    isAgent
+                                      ? "bg-emerald-100 dark:bg-emerald-900/40 rounded-lg"
+                                      : "bg-gray-100 dark:bg-gray-700/50 rounded-lg"
+                                  }
+                                >
+                                  <VoiceNotePlayer
+                                    src={
+                                      msg.attachment.url?.startsWith("http") ||
+                                      msg.attachment.url?.startsWith("data:") ||
+                                      msg.attachment.url?.startsWith("blob:")
+                                        ? msg.attachment.url
+                                        : `${BASE_URL}${msg.attachment.url || ""}`
+                                    }
+                                    variant={isAgent ? "sent" : "received"}
+                                  />
                                 </div>
-
-                                <div className="relative z-10">
-                                  <div className="flex items-center gap-2 mb-3 border-b border-amber-200 dark:border-amber-800 pb-2">
-                                    <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-pulse" />
-                                    <h4 className="font-bold text-amber-800 dark:text-amber-200 text-xs uppercase tracking-wide">
-                                      Mensaje Programado
-                                    </h4>
-                                  </div>
-                                  <p className="text-gray-800 dark:text-gray-200 font-medium text-sm italic mb-3">
-                                    "{realMsg}"
-                                  </p>
-                                  <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded w-fit">
-                                    <Clock className="w-3.5 h-3.5" />
-                                    <span className="font-semibold">
-                                      {dateDisplay}
+                              ) : msg.attachment.type === "sticker" ? (
+                                <div className="relative group inline-block">
+                                  <img
+                                    src={
+                                      msg.attachment.url?.startsWith("http") ||
+                                      msg.attachment.url?.startsWith("data:") ||
+                                      msg.attachment.url?.startsWith("blob:")
+                                        ? msg.attachment.url
+                                        : `${BASE_URL}${msg.attachment.url || ""}`
+                                    }
+                                    alt="Sticker"
+                                    className="w-32 h-32 object-contain select-none filter drop-shadow-sm"
+                                    onContextMenu={(e) => {
+                                      e.preventDefault(); /* Maybe custom menu later */
+                                    }}
+                                  />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (msg.attachment?.url)
+                                        handleSaveSticker(msg.attachment.url);
+                                    }}
+                                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-white/80 hover:bg-white text-yellow-500 rounded-full p-1 shadow-sm transition-opacity"
+                                    title="Guardar Sticker"
+                                  >
+                                    <svg
+                                      className="w-4 h-4"
+                                      fill="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ) : msg.attachment.type === "location" ? (
+                                <div className="bg-white/95 dark:bg-gray-800 p-3 rounded-lg min-w-[220px] border border-gray-200 dark:border-gray-600 shadow-sm text-left">
+                                  <div className="flex items-center gap-2 mb-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
+                                    <span className="text-xl"></span>
+                                    <span className="font-bold text-gray-800 dark:text-gray-100 text-sm">
+                                      Ubicaciï¿½n
                                     </span>
                                   </div>
-                                </div>
-                              </div>
-                            );
-                          }
-                          if (content.includes(" *SOLICITUD DE PAGO*")) {
-                            return (
-                              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm my-1 min-w-[200px] border border-gray-100 dark:border-gray-600">
-                                <div className="flex items-center gap-2 mb-3 border-b border-gray-100 dark:border-reply-border-dark pb-2">
-                                  <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600">
-                                    <CreditCard className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                      Solicitud de Pago
+                                  {(msg.attachment as any).name && (
+                                    <div className="font-bold text-sm text-gray-800 dark:text-gray-100 mb-0.5">
+                                      {(msg.attachment as any).name}
                                     </div>
-                                    <div className="text-sm font-bold text-gray-900 dark:text-white">
-                                      Reply Pay
+                                  )}
+                                  {(msg.attachment as any).address && (
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-tight">
+                                      {(msg.attachment as any).address}
+                                    </div>
+                                  )}
+
+                                  <a
+                                    href={`https://maps.google.com/?q=${(msg.attachment as any).latitude},${(msg.attachment as any).longitude}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block text-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-md transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                  >
+                                    <svg
+                                      className="w-3 h-3"
+                                      fill="currentColor"
+                                      viewBox="0 0 20 20"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                                        clipRule="evenodd"
+                                      />
+                                    </svg>
+                                    Ver en Google Maps
+                                  </a>
+                                </div>
+                              ) : msg.attachment.type === "contact" ? (
+                                <div className="bg-white/95 dark:bg-gray-800 p-3 rounded-lg min-w-[250px] flex items-center gap-3 border border-gray-200 dark:border-gray-600 shadow-sm text-left">
+                                  <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-2xl"></div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate">
+                                      {(msg.attachment as any).displayName ||
+                                        "Contacto"}
+                                    </div>
+                                    <div className="text-xs text-blue-500 dark:text-blue-400 cursor-pointer hover:underline mt-0.5 flex items-center gap-1">
+                                      VCard Adjunto
                                     </div>
                                   </div>
                                 </div>
-                                <div className="whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300 mb-4">
-                                  {content
-                                    .replace(" *SOLICITUD DE PAGO*", "")
-                                    .split("")[0]
-                                    .trim()}
-                                </div>
-                                <button
-                                  onClick={() =>
-                                    window.open(
-                                      `https://buy.stripe.com/test_token?amount=${content.replace(" *SOLICITUD DE PAGO*", "").split("Total:")[1]?.split("\n")[0]?.replace("$", "").trim() || "29.99"}`,
-                                      "_blank",
-                                    )
-                                  }
-                                  className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm transition-colors shadow-sm active:scale-95 transform"
-                                >
-                                  Pagar Ahora
-                                </button>
-                              </div>
-                            );
-                          }
-                          if (content.includes(" *SOLICITUD DE DATOS*")) {
-                            return (
-                              <div className="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-lg border border-teal-100 dark:border-teal-800 my-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <FileText className="w-5 h-5 text-teal-600" />
-                                  <span className="font-bold text-teal-800 dark:text-teal-200">
-                                    Datos Requeridos
+                              ) : (
+                                <div className="bg-black/10 p-2 rounded flex items-center gap-2">
+                                  <span className="text-2xl"></span>
+                                  <span className="text-xs font-medium underline truncate max-w-[150px]">
+                                    {msg.attachment.name || "Documento"}
                                   </span>
                                 </div>
-                                <div className="whitespace-pre-wrap text-gray-700 dark:text-gray-300">
-                                  {content
-                                    .replace(" *SOLICITUD DE DATOS*", "")
-                                    .trim()}
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          // Default Text
-                          return (
-                            <div className="whitespace-pre-wrap leading-relaxed">
-                              {content}
+                              )}
                             </div>
-                          );
-                        })()}
-                      <div
-                        className={`flex justify-end items-center gap-1 mt-1 text-[10px] ${isOutgoing ? "text-white/70" : "text-gray-400"}`}
-                      >
-                        <span>
-                          {(() => {
-                            try {
-                              const date = new Date(msg.timestamp);
-                              return isNaN(date.getTime())
-                                ? ""
-                                : new Intl.DateTimeFormat("es-ES", {
-                                    hour: "numeric",
-                                    minute: "numeric",
-                                    hour12: true,
-                                  }).format(date);
-                            } catch (e) {
-                              return "";
-                            }
-                          })()}
-                        </span>
-                        {isOutgoing && <CheckCheck className="w-3 h-3" />}
+                          )}
+
+                          {/* Message Content - Hide redundant filenames for audios */}
+                          {/* Message Content - Hide redundant filenames or placeholders */}
+                          {msg.content &&
+                            // 100-Year Solution: Robust Regex to hide all media placeholders (Case Insensitive)
+                            !/^\[(image|video|audio|record|document|sticker)\]$/i.test(
+                              msg.content.trim(),
+                            ) &&
+                            // Also hide if content is just the type name (e.g. "image", "video")
+                            ![
+                              "image",
+                              "video",
+                              "audio",
+                              "record",
+                              "document",
+                              "sticker",
+                            ].includes(msg.content.trim().toLowerCase()) &&
+                            !msg.content.includes("Imagen adjunta") &&
+                            !msg.content.includes("Ubicació³n compartida") &&
+                            !(
+                              msg.content.includes("Contacto:") &&
+                              msg.attachment?.type === "contact"
+                            ) &&
+                            !(
+                              msg.attachment &&
+                              msg.content === msg.attachment.name
+                            ) &&
+                            !(
+                              msg.attachment &&
+                              msg.content === `Archivo: ${msg.attachment.name}`
+                            ) &&
+                            !(
+                              msg.attachment?.type === "audio" &&
+                              (msg.content.includes("Archivo:") ||
+                                msg.content.includes("voice-note") ||
+                                msg.content.includes("Nota de voz"))
+                            ) &&
+                            (() => {
+                              const content = msg.content;
+                              // Special Renderers
+                              if (
+                                content.includes("MENSAJE PROGRAMADO:") ||
+                                ["SCHEDULED", "scheduled", "pending"].includes(
+                                  msg.status || "",
+                                )
+                              ) {
+                                let realMsg = content;
+                                let dateDisplay = "Programado";
+
+                                if (content.includes("MENSAJE PROGRAMADO:")) {
+                                  // Optimistic Format
+                                  const lines = content.split("\n\n");
+                                  realMsg = lines[1] || "";
+                                  dateDisplay =
+                                    lines[2]
+                                      ?.replace("Para: ", "")
+                                      .replace(" ", "") || "";
+                                } else {
+                                  // Persisted DB Format
+                                  realMsg = content;
+                                  if (msg.metadata?.scheduledAt) {
+                                    try {
+                                      dateDisplay = new Date(
+                                        msg.metadata.scheduledAt,
+                                      ).toLocaleString();
+                                    } catch (e) {
+                                      console.error("Date parse error", e);
+                                    }
+                                  }
+                                }
+
+                                return (
+                                  <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-200 dark:border-amber-800/50 my-1 relative overflow-hidden">
+                                    {/* Background Pattern */}
+                                    <div className="absolute -right-6 -top-6 text-amber-100 dark:text-amber-900/20 opacity-50">
+                                      <svg
+                                        className="w-24 h-24"
+                                        fill="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                                      </svg>
+                                    </div>
+
+                                    <div className="relative z-10">
+                                      <div className="flex items-center gap-2 mb-3 border-b border-amber-200 dark:border-amber-800 pb-2">
+                                        <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-pulse" />
+                                        <h4 className="font-bold text-amber-800 dark:text-amber-200 text-xs uppercase tracking-wide">
+                                          Mensaje Programado
+                                        </h4>
+                                      </div>
+                                      <p className="text-gray-800 dark:text-gray-200 font-medium text-sm italic mb-3">
+                                        "{realMsg}"
+                                      </p>
+                                      <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded w-fit">
+                                        <Clock className="w-3.5 h-3.5" />
+                                        <span className="font-semibold">
+                                          {dateDisplay}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              if (content.includes(" *SOLICITUD DE PAGO*")) {
+                                return (
+                                  <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm my-1 min-w-[200px] border border-gray-100 dark:border-gray-600">
+                                    <div className="flex items-center gap-2 mb-3 border-b border-gray-100 dark:border-reply-border-dark pb-2">
+                                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600">
+                                        <CreditCard className="w-4 h-4" />
+                                      </div>
+                                      <div>
+                                        <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                          Solicitud de Pago
+                                        </div>
+                                        <div className="text-sm font-bold text-gray-900 dark:text-white">
+                                          Reply Pay
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                      {content
+                                        .replace(" *SOLICITUD DE PAGO*", "")
+                                        .split("")[0]
+                                        .trim()}
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        window.open(
+                                          `https://buy.stripe.com/testá_token?amount=${content.replace(" *SOLICITUD DE PAGO*", "").split("Total:")[1]?.split("\n")[0]?.replace("$", "").trim() || "29.99"}`,
+                                          "_blank",
+                                        )
+                                      }
+                                      className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm transition-colors shadow-sm active:scale-95 transform"
+                                    >
+                                      Pagar Ahora
+                                    </button>
+                                  </div>
+                                );
+                              }
+                              if (content.includes(" *SOLICITUD DE DATOS*")) {
+                                return (
+                                  <div className="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-lg border border-teal-100 dark:border-teal-800 my-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <FileText className="w-5 h-5 text-teal-600" />
+                                      <span className="font-bold text-teal-800 dark:text-teal-200">
+                                        Datos Requeridos
+                                      </span>
+                                    </div>
+                                    <div className="whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                                      {content
+                                        .replace(" *SOLICITUD DE DATOS*", "")
+                                        .trim()}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              // Default Text
+                              return (
+                                <div className="whitespace-pre-wrap leading-relaxed">
+                                  {content}
+                                </div>
+                              );
+                            })()}
+                          <div
+                            className={`flex justify-end items-center gap-1 mt-1 text-[10px] ${isOutgoing ? "text-white/70" : "text-gray-400"}`}
+                          >
+                            <span>
+                              {(() => {
+                                try {
+                                  const date = new Date(msg.timestamp);
+                                  return isNaN(date.getTime())
+                                    ? ""
+                                    : new Intl.DateTimeFormat("es-ES", {
+                                        hour: "numeric",
+                                        minute: "numeric",
+                                        hour12: true,
+                                      }).format(date);
+                                } catch (e) {
+                                  return "";
+                                }
+                              })()}
+                            </span>
+                            {isOutgoing && <CheckCheck className="w-3 h-3" />}
+                          </div>
+                        </div>
+
+                        {/* Reply Button Action (on hover) */}
+                        <div
+                          className={`flex items-center opacity-0 group-hover/msg:opacity-100 transition-opacity px-2 ${isOutgoing ? "order-first" : "order-last"}`}
+                        >
+                          <button
+                            onClick={() => setReplyingTo(msg)}
+                            className="p-1.5 bg-white dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full shadow-md border border-gray-100 dark:border-gray-600 transition-all active:scale-90"
+                            title="Responder"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                              />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  }),
+                [messages, activeContact.name, scrollToMessage],
+              )}
               {(isTyping || isRemoteTyping) && (
                 <div className="flex justify-start animate-in slide-in-from-bottom-2 duration-300">
                   <div className="bg-white dark:bg-reply-panel-dark px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm border border-gray-100 dark:border-reply-border-dark flex items-center gap-2">
@@ -2187,7 +2293,7 @@ export const ChatInterface: React.FC<Props> = ({
                       </div>
                       <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
                         {otherAgentsTyping.map((a) => a.agentName).join(", ")}{" "}
-                        {otherAgentsTyping.length === 1 ? "estï¿½" : "estï¿½n"}{" "}
+                        {otherAgentsTyping.length === 1 ? "estáï¿½" : "estáï¿½n"}{" "}
                         escribiendo...
                       </span>
                     </div>
@@ -2202,7 +2308,7 @@ export const ChatInterface: React.FC<Props> = ({
           {readOnly ? (
             <div className="bg-gray-100 dark:bg-gray-800 px-4 py-3 border-t border-gray-200 dark:border-reply-border-dark text-center flex-shrink-0">
               <p className="text-sm text-gray-500 dark:text-gray-400 italic">
-                ï¿½ï¿½ El chat estï¿½ en modo solo lectura.
+                ï¿½ï¿½ El chat estáï¿½ en modo solo lectura.
               </p>
             </div>
           ) : (
@@ -2296,33 +2402,41 @@ export const ChatInterface: React.FC<Props> = ({
 
               <SmartComposer
                 inputValue={inputValue}
-                onInputChange={(value) => {
-                  setInputValue(value);
-                  handleTypingIndicator();
+                onInputChange={useCallback(
+                  (value: string) => {
+                    setInputValue(value);
+                    handleTypingIndicator();
 
-                  // ? SLASH LOGIC
-                  if (value.startsWith("/")) {
-                    const query = value.slice(1).toLowerCase();
-                    const matches = quickRepliesData.filter(
-                      (r) =>
-                        r.title.toLowerCase().includes(query) ||
-                        r.shortcut?.toLowerCase().includes(query),
-                    );
-                    setSlashFiltered(matches);
-                    setShowSlashMenu(true);
-                  } else {
-                    setShowSlashMenu(false);
-                  }
-                }}
+                    if (value.startsWith("/")) {
+                      const query = value.slice(1).toLowerCase();
+                      const matches = quickRepliesData.filter(
+                        (r) =>
+                          r.title.toLowerCase().includes(query) ||
+                          r.shortcut?.toLowerCase().includes(query),
+                      );
+                      setSlashFiltered(matches);
+                      setShowSlashMenu(true);
+                    } else {
+                      setShowSlashMenu(false);
+                    }
+                  },
+                  [handleTypingIndicator, quickRepliesData],
+                )}
                 onSend={handleSendMessage}
-                onQuickRepliesClick={() =>
-                  setShowQuickReplies(!showQuickReplies)
-                }
-                onMediaLibraryClick={() => setShowMediaLibrary(true)}
-                onAttachmentClick={() => fileInputRef.current?.click()}
-                onVoiceNoteClick={() => {
+                onQuickRepliesClick={useCallback(
+                  () => setShowQuickReplies((prev) => !prev),
+                  [],
+                )}
+                onMediaLibraryClick={useCallback(
+                  () => setShowMediaLibrary(true),
+                  [],
+                )}
+                onAttachmentClick={useCallback(
+                  () => fileInputRef.current?.click(),
+                  [],
+                )}
+                onVoiceNoteClick={useCallback(() => {
                   setIsRecording(true);
-                  //  Emit 'recording' status
                   const remoteId =
                     (activeContact as any).phone || activeContact.channelId;
                   if (remoteId) {
@@ -2331,9 +2445,27 @@ export const ChatInterface: React.FC<Props> = ({
                       status: "recording",
                     });
                   }
-                }}
-                onStickerClick={() => setShowStickerPicker(!showStickerPicker)}
-                // âœ… Action Menu Handlers
+                }, [activeContact])}
+                onStickerClick={useCallback(
+                  () => setShowStickerPicker((prev) => !prev),
+                  [],
+                )}
+                replyingTo={useMemo(
+                  () =>
+                    replyingTo
+                      ? {
+                          id: replyingTo.id,
+                          content: replyingTo.content,
+                          senderName:
+                            replyingTo.senderType === SenderType.USER
+                              ? activeContact.name
+                              : replyingTo.senderName || "Agente",
+                        }
+                      : null,
+                  [replyingTo, activeContact],
+                )}
+                onClearReply={useCallback(() => setReplyingTo(null), [])}
+                // ✅ Action Menu Handlers
                 onSchedule={() => setActionModalType("SCHEDULE")}
                 onProduct={() => setActionModalType("PRODUCT")}
                 onRequestData={() => setActionModalType("DATA")}

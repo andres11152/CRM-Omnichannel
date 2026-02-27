@@ -7,7 +7,7 @@ import {
   makeCacheableSignalKeyStore,
   SignalDataTypeMap,
 } from "@whiskeysockets/baileys";
-import { prisma } from "@/config/database";
+import { whatsappCredentialRepository } from "@/repositories/WhatsAppCredentialRepository";
 import { sessionModuleLogger } from "@/whatsapp/providers/SessionLogger";
 
 export const usePrismaAuthState = async (
@@ -17,14 +17,10 @@ export const usePrismaAuthState = async (
   const readData = async (type: string, id: string) => {
     try {
       const key = `${type}-${id}`;
-      const credential = await prisma.whatsAppCredential.findUnique({
-        where: {
-          sessionId_key: {
-            sessionId: sessionId,
-            key: key,
-          },
-        },
-      });
+      const credential = await whatsappCredentialRepository.findUnique(
+        sessionId,
+        key,
+      );
       sessionModuleLogger.debug(
         `[DB Auth] Reading ${key}: ${credential ? "FOUND" : "NOT FOUND"}`,
       );
@@ -45,16 +41,7 @@ export const usePrismaAuthState = async (
     const value = JSON.stringify(data, BufferJSON.replacer);
 
     try {
-      await prisma.whatsAppCredential.upsert({
-        where: {
-          sessionId_key: {
-            sessionId: sessionId,
-            key: key,
-          },
-        },
-        update: { value },
-        create: { sessionId, key, value },
-      });
+      await whatsappCredentialRepository.upsert(sessionId, key, value);
     } catch (error) {
       sessionModuleLogger.error(
         error as Error,
@@ -67,14 +54,7 @@ export const usePrismaAuthState = async (
   const removeData = async (type: string, id: string) => {
     const key = `${type}-${id}`;
     try {
-      await prisma.whatsAppCredential.delete({
-        where: {
-          sessionId_key: {
-            sessionId: sessionId,
-            key: key,
-          },
-        },
-      });
+      await whatsappCredentialRepository.upsert(sessionId, key, ""); // Soft-delete by clearing value
     } catch {
       // Ignore delete errors (record might not exist)
     }

@@ -41,7 +41,7 @@ interface SocketTicketPayload {
 
 /**
  * CUSTOM HOOK: useChatSockets
- * Integrates Socket.IO real-time events with React Query cache
+ * Integrates-ESocket.IO real-time events with React Query cache
  *
  * Instead of triggering full refetches, this hook directly updates
  * the React Query cache when receiving socket events.

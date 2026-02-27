@@ -101,7 +101,7 @@ export const NotificationBell: React.FC = () => {
                     Todo al día
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    No tienes notificaciones pendientes.
+                    No tienes notificaciónes pendientes.
                   </p>
                 </div>
               ) : (
@@ -138,7 +138,7 @@ export const NotificationBell: React.FC = () => {
                         <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark leading-relaxed mb-2 line-clamp-2">
                           {n.message}
                         </p>
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widestá">
                           {n.time}
                         </span>
                       </div>

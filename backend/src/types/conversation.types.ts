@@ -38,6 +38,8 @@ export interface ReplyDTO {
   attachment?: Attachment;
   metadata?: Metadata;
   scheduledAt?: string | Date;
+  quotedMessageId?: string; // ID of the message being replied to
+  quotedContent?: string; // Optional preview snippet of the quoted message
 }
 
 export interface ConversationListItem {
@@ -60,6 +62,7 @@ export interface SendMessageOptions {
   senderId: string;
   media?: Attachment;
   metadata?: Metadata;
+  quotedMessageId?: string;
 }
 
 // 📦 MANAGER TYPES

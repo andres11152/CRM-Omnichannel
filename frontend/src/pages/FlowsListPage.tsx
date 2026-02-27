@@ -86,7 +86,7 @@ export const FlowsListPage: React.FC = () => {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Estás seguro de eliminar este flujo?")) return;
+    if (!confirm("¿Ests seguro de eliminar este flujo?")) return;
 
     try {
       const token = localStorage.getItem("token");

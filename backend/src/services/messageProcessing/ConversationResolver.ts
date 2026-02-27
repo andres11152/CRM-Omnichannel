@@ -1,4 +1,6 @@
 import { Conversation, Prisma } from "@prisma/client";
+// ⚠️ ARCHITECTURAL NOTE: `prisma` is imported ONLY for `$transaction` in createNew().
+// All standard queries use `conversationRepository`. This is the Unit of Work pattern.
 import { prisma } from "@/config/database";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { Logger } from "@/utils/logger";

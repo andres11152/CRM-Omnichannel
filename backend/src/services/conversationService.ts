@@ -1,3 +1,6 @@
+// ⚠️ ARCHITECTURAL NOTE: `prisma` is imported here ONLY to inject into ConversationManager
+// as a Unit of Work (Transaction Client). This is NOT a leakage — the Manager uses $transaction
+// for atomic findOrCreate operations. All other DB access uses repositories.
 import { prisma } from "@/config/database";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { AppError } from "@/utils/AppError";
@@ -34,7 +37,7 @@ const messageRepository = new MessageRepository();
 const ticketRepository = new TicketRepository();
 const conversationRepository = new ConversationRepository();
 
-// Instantiate Manager
+// Instantiate Manager (receives prisma for $transaction — Unit of Work pattern)
 const conversationManager = new ConversationManager(prisma, {
   onCreated: (conv) => {
     gateway.emitToCompany(conv.companyId, "conversation:new", conv);
@@ -337,6 +340,8 @@ export const conversationService = {
       attachment,
       metadata,
       scheduledAt,
+      quotedMessageId,
+      quotedContent,
     } = dto;
 
     let resolvedConv =
@@ -380,6 +385,8 @@ export const conversationService = {
             ? scheduledAt
             : scheduledAt.toISOString(),
         attachment,
+        quotedMessageId,
+        quotedContent,
       };
 
       return await messageRepository.create({
@@ -411,7 +418,12 @@ export const conversationService = {
               caption: attachment.name,
             }
           : undefined,
-        metadata,
+        metadata: {
+          ...metadata,
+          quotedMessageId,
+          quotedContent,
+        },
+        quotedMessageId,
       };
 
       const sentMessage = await whatsappService.sendMessage(

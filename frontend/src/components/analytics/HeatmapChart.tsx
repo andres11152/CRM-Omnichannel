@@ -17,7 +17,7 @@ interface Props {
 }
 
 export const HeatmapChart: React.FC<Props> = ({ data }) => {
-  const days = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  const days = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sb"];
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   // Transform data for scatter plot simulation of heatmap

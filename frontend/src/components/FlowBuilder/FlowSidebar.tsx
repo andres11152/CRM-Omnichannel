@@ -23,7 +23,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
         onClick={() => onAddNode('send_message')} 
         icon="💬" 
         label="Enviar Mensaje" 
-        description="Envía un mensaje de texto al usuario y continúa automáticamente"
+        description="Envía un mensaje de texto al usuario y continúa automticamente"
         activeTooltip={activeTooltip}
         setActiveTooltip={setActiveTooltip}
       />
@@ -41,7 +41,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
         onClick={() => onAddNode('send_video')} 
         icon="🎥" 
         label="Enviar Video" 
-        description="Envía un video al usuario automáticamente"
+        description="Envía un video al usuario automticamente"
         activeTooltip={activeTooltip}
         setActiveTooltip={setActiveTooltip}
       />
@@ -97,13 +97,13 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       
       <div className="w-8 h-[1px] bg-gray-300 dark:bg-gray-600 my-1"></div>
       
-      {/* Acciones CRM */}
+      {/* Acciónes CRM */}
       <TooltipTool 
         id="create_deal"
         onClick={() => onAddNode('create_deal')} 
         icon="💰" 
         label="Crear Deal" 
-        description="Crea un nuevo deal automáticamente en el CRM"
+        description="Crea un nuevo deal automticamente en el CRM"
         activeTooltip={activeTooltip}
         setActiveTooltip={setActiveTooltip}
       />

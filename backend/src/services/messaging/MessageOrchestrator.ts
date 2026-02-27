@@ -1,12 +1,13 @@
 import { ContactRepository } from "@/repositories/ContactRepository";
 import { ConversationRepository } from "@/repositories/ConversationRepository";
 import { MessageRepository } from "@/repositories/MessageRepository";
+import { UserRepository } from "@/repositories/UserRepository";
+import { TicketRepository } from "@/repositories/TicketRepository";
 import { DomainEventBus, DomainEventType } from "@/events/DomainEventBus";
 import { IncomingMessagePayload } from "@/types/message.types";
 import { Logger } from "@/utils/logger";
 import { ContactStrategy } from "@/utils/contactStrategy";
 import { Channel, MessageDirection, UserRole, Prisma } from "@prisma/client";
-import { prisma } from "@/config/database"; // Still used for User ops (could be Repo too)
 import bcrypt from "bcryptjs";
 
 export class MessageOrchestrator {
@@ -14,6 +15,8 @@ export class MessageOrchestrator {
     private contactRepo: ContactRepository,
     private conversationRepo: ConversationRepository,
     private messageRepo: MessageRepository,
+    private userRepo: UserRepository,
+    private ticketRepo: TicketRepository,
     private eventBus: DomainEventBus,
   ) {}
 
@@ -40,24 +43,22 @@ export class MessageOrchestrator {
       );
     }
 
-    // 3. Handle User (Direct Prisma for now, candidate for UserRepository)
+    // 3. Handle User (via UserRepository — no direct Prisma)
     const userEmail = `${remoteJid}@whatsapp.user`;
-    const user = await prisma.user.upsert({
-      where: { email: userEmail },
-      update: {
-        // 100-YEAR FIX: Update name if we have a better one from payload (PushName)
-        // Only update if existing name is just the phone number or empty
-        name: identity.subjectDisplayName,
-      },
-      create: {
-        companyId,
+    const user = await this.userRepo.upsert(
+      { email: userEmail },
+      {
         email: userEmail,
         name: identity.subjectDisplayName,
         phone: remoteJid,
         role: UserRole.USER,
         password: await bcrypt.hash(remoteJid, 10),
+        company: { connect: { id: companyId } },
       },
-    });
+      {
+        name: identity.subjectDisplayName,
+      },
+    );
 
     // 4. Handle Conversation (Repository)
     let conversation = await this.conversationRepo.findByChannelId(
@@ -75,8 +76,7 @@ export class MessageOrchestrator {
     }
 
     // 4.1. Ensure Active Ticket (Auto-Create for new conversations or re-opens)
-    // Legacy parity: ChatService.findOrCreateTicket logic
-    let ticket = await prisma.ticket.findFirst({
+    let ticket = await this.ticketRepo.findFirst({
       where: {
         conversationId: conversation.id,
         status: { not: "CLOSED" },
@@ -86,14 +86,15 @@ export class MessageOrchestrator {
 
     if (!ticket) {
       // Need to create a new ticket
-      const lastTicket = await prisma.ticket.findFirst({
+      const lastTicket = await this.ticketRepo.findFirst({
         where: { companyId },
         orderBy: { ticketNumber: "desc" },
         select: { ticketNumber: true },
       });
-      const nextNumber = (lastTicket?.ticketNumber || 0) + 1;
+      const nextNumber =
+        ((lastTicket as { ticketNumber?: number })?.ticketNumber || 0) + 1;
 
-      ticket = await prisma.ticket.create({
+      ticket = await this.ticketRepo.create({
         data: {
           companyId,
           conversationId: conversation.id,
@@ -106,7 +107,7 @@ export class MessageOrchestrator {
             remoteJid,
           description: text.substring(0, 100),
           ticketNumber: nextNumber,
-          createdById: user.id, // The customer "created" it by messaging
+          createdById: user.id,
         },
       });
       Logger.info(
@@ -167,5 +168,7 @@ export const messageOrchestrator = new MessageOrchestrator(
   new ContactRepository(),
   new ConversationRepository(),
   new MessageRepository(),
+  new UserRepository(),
+  new TicketRepository(),
   DomainEventBus.getInstance(),
 );

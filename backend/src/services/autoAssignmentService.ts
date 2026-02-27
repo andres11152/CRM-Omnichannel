@@ -1,5 +1,13 @@
-import { prisma } from "@/config/database";
 import { Logger } from "@/utils/logger";
+import { queueRepository } from "@/repositories/QueueRepository";
+import { ticketRepository } from "@/repositories/TicketRepository";
+import type {
+  Queue,
+  Ticket,
+  Conversation,
+  Message,
+  User,
+} from "@prisma/client";
 
 export const assignTicketToAgent = async (
   ticketId: string,
@@ -7,14 +15,14 @@ export const assignTicketToAgent = async (
 ) => {
   try {
     // 1. Obtener configuración de la cola y sus agentes ONLINE
-    const queue = await prisma.queue.findUnique({
+    const queue = (await queueRepository.findUnique({
       where: { id: queueId },
       include: {
         agents: {
-          where: { isOnline: true }, // Filter by ONLINE status only
+          where: { isOnline: true },
         },
       },
-    });
+    })) as (Queue & { agents: User[] }) | null;
 
     if (!queue) {
       Logger.warn(`[AutoAssign] Queue ${queueId} not found.`);
@@ -28,7 +36,7 @@ export const assignTicketToAgent = async (
         `[AutoAssign] 🤖 Queue ${queue.name} is AI-managed. Triggering bot...`,
       );
 
-      const ticket = await prisma.ticket.findUnique({
+      const ticket = (await ticketRepository.findUnique({
         where: { id: ticketId },
         include: {
           conversation: {
@@ -40,7 +48,7 @@ export const assignTicketToAgent = async (
             },
           },
         },
-      });
+      })) as Ticket & { conversation: Conversation & { messages: Message[] } };
 
       if (ticket?.conversation?.messages?.[0]) {
         const lastMsg = ticket.conversation.messages[0];
@@ -95,10 +103,6 @@ export const assignTicketToAgent = async (
         const hasAllSkills = requiredSkills.every((req) =>
           agentSkills.includes(req),
         );
-
-        if (!hasAllSkills) {
-          // Logger.debug(`[AutoAssign] Skipping ${agent.name} (Missing skills for ${queue.name})`);
-        }
         return hasAllSkills;
       });
 
@@ -114,8 +118,8 @@ export const assignTicketToAgent = async (
     const eligibleAgents = [];
 
     for (const agent of candidates) {
-      // Get current active load
-      const currentLoad = await prisma.ticket.count({
+      // Get current active load via repository
+      const currentLoad = await ticketRepository.count({
         where: {
           assignedToId: agent.id,
           status: { in: ["OPEN", "IN_PROGRESS"] },
@@ -157,7 +161,7 @@ export const assignTicketToAgent = async (
         `[AutoAssign] Assigning ticket ${ticketId} to ${candidate.name} (Load: ${candidate.load}/${candidate.maxCapacity})`,
       );
 
-      await prisma.ticket.update({
+      await ticketRepository.update({
         where: { id: ticketId },
         data: {
           assignedToId: candidate.agentId,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSound } from "./SoundContext";
-import "../styles/SoundSettings.css";
+import "../styles-ESoundSettings.css";
 
 /**
  * 🔊 PROFESSIONAL SOUND SETTINGS PANEL
@@ -161,7 +161,7 @@ export const SoundSettings: React.FC = () => {
           <div>
             <h2>Configuración de Sonido</h2>
             <p className="subtitle">
-              Personaliza las notificaciones de audio del CRM
+              Personaliza las notificaciónes de audio del CRM
             </p>
           </div>
         </div>
@@ -263,7 +263,7 @@ export const SoundSettings: React.FC = () => {
             <div className="setting-card">
               <div className="setting-info">
                 <h3>Volumen</h3>
-                <p>Ajusta el volumen de las notificaciones de audio</p>
+                <p>Ajusta el volumen de las notificaciónes de audio</p>
               </div>
               <div className="volume-control">
                 <div className="volume-icons">
@@ -319,9 +319,9 @@ export const SoundSettings: React.FC = () => {
                 <h3>Probar Sonidos</h3>
                 <p>Reproduce sonidos de ejemplo para verificar el volumen</p>
               </div>
-              <div className="sound-test-buttons">
+              <div className="sound-testá-buttons">
                 <button
-                  className={`test-button ${
+                  className={`testá-button ${
                     testingSound === "message" ? "testing" : ""
                   }`}
                   onClick={() => testSound("message")}
@@ -343,7 +343,7 @@ export const SoundSettings: React.FC = () => {
                   Mensaje
                 </button>
                 <button
-                  className={`test-button ${
+                  className={`testá-button ${
                     testingSound === "success" ? "testing" : ""
                   }`}
                   onClick={() => testSound("success")}
@@ -365,7 +365,7 @@ export const SoundSettings: React.FC = () => {
                   Éxito
                 </button>
                 <button
-                  className={`test-button ${
+                  className={`testá-button ${
                     testingSound === "error" ? "testing" : ""
                   }`}
                   onClick={() => testSound("error")}
@@ -387,7 +387,7 @@ export const SoundSettings: React.FC = () => {
                   Error
                 </button>
                 <button
-                  className={`test-button ${
+                  className={`testá-button ${
                     testingSound === "pop" ? "testing" : ""
                   }`}
                   onClick={() => testSound("pop")}
@@ -497,8 +497,8 @@ export const SoundSettings: React.FC = () => {
                 />
               </svg>
               <p>
-                Los sonidos personalizados se aplicarán a todos los tipos de
-                notificaciones
+                Los sonidos personalizados se aplicarn a todos los tipos de
+                notificaciónes
               </p>
             </div>
           </div>
@@ -761,7 +761,7 @@ export const SoundSettings: React.FC = () => {
               d="M5 13l4 4L19 7"
             />
           </svg>
-          <span>Cambios guardados automáticamente</span>
+          <span>Cambios guardados automticamente</span>
         </div>
       </div>
     </div>

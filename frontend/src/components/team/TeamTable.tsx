@@ -35,7 +35,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
       <div className="text-center py-20 bg-white dark:bg-reply-panel-dark rounded-xl border border-dashed border-gray-300 dark:border-reply-border-dark">
         <div className="text-4xl mb-4">👋</div>
         <h3 className="text-xl font-bold text-gray-800 dark:text-white">
-          Tu equipo está vacío
+          Tu equipo estáá vacío
         </h3>
         <p className="text-gray-500 mb-6">
           Agrega tu primer agente para comenzar a atender tickets.
@@ -64,7 +64,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
               <th className="px-6 py-4">Conectado</th>
               <th className="px-6 py-4">Tiempo Total (Hoy)</th>
               <th className="px-6 py-4">Velocidad (FRT)</th>
-              <th className="px-6 py-4 text-right">Acciones</th>
+              <th className="px-6 py-4 text-right">Acciónes</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">

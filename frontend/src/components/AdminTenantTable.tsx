@@ -51,7 +51,7 @@ export const AdminTenantTable: React.FC<Props> = ({
             <th className="px-6 py-3">Plan Actual</th>
             <th className="px-6 py-3">Estado (Ciclo de Vida)</th>
             <th className="px-6 py-3">Fin Suscripción</th>
-            <th className="px-6 py-3 text-right">Acciones Rápidas</th>
+            <th className="px-6 py-3 text-right">Acciónes Rpidas</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">

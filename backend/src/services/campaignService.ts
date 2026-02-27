@@ -1,5 +1,4 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/config/database";
 import { whatsappService } from "@/whatsapp";
 import { renderTemplate, componentsToText } from "./templateService";
 import { getErrorMessage } from "@/utils/errorHelpers";
@@ -12,6 +11,10 @@ import {
   AudienceContact,
   AudienceFilter,
 } from "@/types/campaign.types";
+import { campaignRepository } from "@/repositories/CampaignRepository";
+import { contactRepository } from "@/repositories/ContactRepository";
+import { conversationRepository } from "@/repositories/ConversationRepository";
+import { userRepository } from "@/repositories/UserRepository";
 
 /**
  * 🚀 CAMPAIGN EXECUTION ENGINE
@@ -22,6 +25,9 @@ import {
  * - Rate limit handling
  * - Retry logic
  * - Real-time metrics tracking
+ *
+ * 🛡️ ARCHITECTURE: Zero direct Prisma calls.
+ * All DB access goes through repositories.
  */
 
 // 🛡️ THROTTLING CONFIGURATION
@@ -72,7 +78,7 @@ export const campaignService = {
       delivered: 0,
       failed: 0,
     };
-    return await prisma.campaign.create({
+    return await campaignRepository.create({
       data: {
         companyId,
         name: data.name,
@@ -99,7 +105,7 @@ export const campaignService = {
         { messageContent: { contains: search as string, mode: "insensitive" } },
       ];
     }
-    return await prisma.campaign.findMany({
+    return await campaignRepository.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: limit ? parseInt(limit as string) : 50,
@@ -108,7 +114,7 @@ export const campaignService = {
   },
 
   async getCampaign(id: string, companyId: string) {
-    return await prisma.campaign.findFirst({
+    return await campaignRepository.findFirst({
       where: { id, companyId },
       include: {
         createdBy: {
@@ -123,7 +129,7 @@ export const campaignService = {
     companyId: string,
     data: UpdateCampaignInput,
   ) {
-    return await prisma.campaign.update({
+    return await campaignRepository.update({
       where: { id },
       data: {
         name: data.name,
@@ -141,13 +147,11 @@ export const campaignService = {
   },
 
   async deleteCampaign(id: string) {
-    return await prisma.campaign.delete({
-      where: { id },
-    });
+    return await campaignRepository.delete(id);
   },
 
   async launchCampaign(id: string, companyId: string) {
-    const campaign = await prisma.campaign.findFirst({
+    const campaign = await campaignRepository.findFirst({
       where: { id, companyId },
     });
 
@@ -168,7 +172,7 @@ export const campaignService = {
 
     Logger.info(`[Campaign] Launching campaign: ${campaign.name} (${id})`);
 
-    await prisma.campaign.update({
+    await campaignRepository.update({
       where: { id },
       data: {
         status: "sending",
@@ -194,10 +198,10 @@ export const campaignService = {
 
     try {
       // 1. Fetch Campaign (Optimized Select)
-      const rawCampaign = (await prisma.campaign.findFirst({
+      const rawCampaign = (await campaignRepository.findFirst({
         where: { id: campaignId, companyId },
         include: {
-          template: true, // Fetch template eagerly
+          template: true,
         },
       })) as unknown as Prisma.CampaignGetPayload<{
         include: { template: true };
@@ -236,7 +240,7 @@ export const campaignService = {
           message: "No contacts found for target tags",
         };
 
-        await prisma.campaign.update({
+        await campaignRepository.update({
           where: { id: campaignId },
           data: {
             status: "completed",
@@ -254,7 +258,7 @@ export const campaignService = {
         startedAt: new Date().toISOString(),
       };
 
-      await prisma.campaign.update({
+      await campaignRepository.update({
         where: { id: campaignId },
         data: {
           status: "sending",
@@ -263,17 +267,17 @@ export const campaignService = {
       });
 
       // 🔁 PREPARATION: Resolve System User ONCE (Optimization)
-      let systemUser = await prisma.user.findFirst({
+      let systemUser = await userRepository.findFirst({
         where: { companyId, email: "campaigns@system.bot" },
         select: { id: true },
       });
 
       if (!systemUser) {
         Logger.info("[Campaign] Creating System User for campaigns...");
-        systemUser = await prisma.user.create({
+        systemUser = await userRepository.create({
           data: {
             email: "campaigns@system.bot",
-            companyId,
+            company: { connect: { id: companyId } },
             name: "Campaign System",
             role: "AGENT",
             password: await hash("system", 10),
@@ -300,7 +304,7 @@ export const campaignService = {
             rawCampaign.messageContent,
             companyId,
             campaignId,
-            systemUser.id, // Pass resolved sender ID
+            systemUser.id,
           );
 
           stats.sent++;
@@ -336,7 +340,7 @@ export const campaignService = {
 
         // Periodic DB Update
         if ((i + 1) % BATCH_UPDATE_SIZE === 0) {
-          await prisma.campaign.update({
+          await campaignRepository.update({
             where: { id: campaignId },
             data: { stats: stats as unknown as Prisma.InputJsonValue },
           });
@@ -356,7 +360,7 @@ export const campaignService = {
         successRate: ((stats.sent / contacts.length) * 100).toFixed(2) + "%",
       };
 
-      await prisma.campaign.update({
+      await campaignRepository.update({
         where: { id: campaignId },
         data: {
           status: stats.failed > 0 && stats.sent === 0 ? "failed" : "completed",
@@ -371,7 +375,7 @@ export const campaignService = {
       const errorMsg = getErrorMessage(error);
       Logger.error(`[Campaign] ❌ Critical Error: ${errorMsg}`);
 
-      await prisma.campaign.update({
+      await campaignRepository.update({
         where: { id: campaignId },
         data: {
           status: "failed",
@@ -403,7 +407,7 @@ export const campaignService = {
       };
     }
 
-    const contacts = await prisma.contact.findMany({
+    const contacts = await contactRepository.findMany({
       where,
       select: {
         id: true,
@@ -434,7 +438,7 @@ export const campaignService = {
     defaultMessageContent: string | null,
     companyId: string,
     campaignId: string,
-    senderId: string, // Injected dependency
+    senderId: string,
   ): Promise<void> {
     const phone = contact.phone;
     if (!phone) {
@@ -479,8 +483,8 @@ export const campaignService = {
       }
     }
 
-    // Reuse existing conversation
-    let conversation = await prisma.conversation.findFirst({
+    // Reuse existing conversation via repository
+    let conversation = await conversationRepository.findFirst({
       where: {
         companyId,
         channelId: contact.phone,
@@ -489,21 +493,20 @@ export const campaignService = {
     });
 
     if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: {
-          companyId,
-          channelId: contact.phone,
-          status: "OPEN",
-        },
+      conversation = await conversationRepository.create({
+        companyId,
+        channelId: contact.phone!,
+        status: "OPEN",
+        subject: contact.name || contact.phone!,
+        userId: senderId,
       });
     }
 
     // Use injected senderId instead of redundant DB lookup
-
     await whatsappService.sendMessage(phone, messageContent, {
       companyId,
       conversationId: conversation.id,
-      senderId: senderId, // Use injected ID
+      senderId: senderId,
       metadata: {
         campaignId,
         campaignName,
@@ -514,4 +517,3 @@ export const campaignService = {
     });
   },
 };
-

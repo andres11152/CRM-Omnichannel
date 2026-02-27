@@ -511,7 +511,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   // ??? 100-YEAR ENTERPRISE: Queue Visibility
   // Requirements:
   // - ONLY tickets that are OPEN AND have NO assignedToId (unassigned)
-  // - EXCLUDE GROUPS (User Request: "no le debe salir los grupos a los agentes en 'cola de espera'")
+  // - EXCLUDE GROUPS (User Requestá: "no le debe salir los grupos a los agentes en 'cola de espera'")
   // - Future: Filter by queues the agent has access to (for multi-department orgs)
   const queueTickets = curatedTickets.filter((t) => {
     // Must be OPEN and UNASSIGNED
@@ -796,7 +796,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          content: `????? El agente *${user.name}* se ha unido al chat`,
+          content: `✅ El agente *${user.name}* se ha unido al chat`,
           senderType: "SYSTEM",
           direction: "OUTBOUND",
         }),
@@ -819,7 +819,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       // 4. Switch to My Chats view
       setActiveTab("my_chats");
 
-      toast.success(`Ticket asignado. �Puedes comenzar a chatear!`);
+      toast.success(`Ticket asignado. ¡Puedes comenzar a chatear!`);
     } catch (error: unknown) {
       console.error("Failed to pick ticket", error);
       const msg =
@@ -1270,7 +1270,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                     <div>
                       <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
                         <MessageSquare className="w-4 h-4" />
-                        �ltimo Mensaje
+                        �ÚÚÚÚltimo Mensaje
                       </p>
                       <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-[#111b21] dark:to-[#1a2730] p-4 rounded-xl border border-gray-200 dark:border-reply-border-dark">
                         <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed line-clamp-3">
@@ -1305,7 +1305,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                   {isRestricted ? (
                     <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-bold text-center border border-red-200 dark:border-red-800 flex items-center justify-center gap-2">
                       <AlertCircle className="w-6 h-6" />
-                      Acci�n no disponible en modo restringido
+                      Acción no disponible en modo restringido
                     </div>
                   ) : (
                     <button
@@ -1343,15 +1343,15 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                     ? "Cola de Espera"
                     : activeTab === "resolved"
                       ? "Historial de Tickets"
-                      : "Selecciona una Conversaci�n"}
+                      : "Selecciona una Conversación"}
                 </h3>
 
                 {/* Description */}
                 <p className="text-gray-500 dark:text-gray-400 mb-6">
                   {activeTab === "queue"
-                    ? "Revisa los tickets pendientes y as�gnatelos para comenzar a atender."
+                    ? "Revisa los tickets pendientes y asígnatelos para comenzar a atender."
                     : activeTab === "resolved"
-                      ? "Consulta el historial de tickets resueltos y sus m�tricas."
+                      ? "Consulta el historial de tickets resueltos y sus métricas."
                       : "Elige un chat de tu bandeja para comenzar a responder."}
                 </p>
 

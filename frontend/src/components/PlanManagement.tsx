@@ -15,7 +15,7 @@ const FEATURE_META: Record<
   }
 > = {
   max_users: {
-    label: "Usuarios/Agentes Máximos",
+    label: "Usuarios/Agentes Mximos",
     description: "Cantidad total de miembros del equipo permitidos.",
     icon: (
       <svg
@@ -76,7 +76,7 @@ const FEATURE_META: Record<
   },
   enable_ai: {
     label: "Motor de IA (Bots)",
-    description: "Acceso a asistentes inteligentes y respuestas automáticas.",
+    description: "Acceso a asistentes inteligentes y respuestas automticas.",
     icon: (
       <svg
         className="w-6 h-6"
@@ -115,7 +115,7 @@ const FEATURE_META: Record<
     type: "boolean",
   },
   max_ai_assistants: {
-    label: "Asistentes IA Máximos",
+    label: "Asistentes IA Mximos",
     description: "Cantidad de personalidades de IA configurables.",
     icon: (
       <svg
@@ -136,7 +136,7 @@ const FEATURE_META: Record<
   },
   max_workflows: {
     label: "Workflows Activos",
-    description: "Automatizaciones de marketing simultáneas.",
+    description: "Automatizaciones de marketing simultneas.",
     icon: (
       <svg
         className="w-6 h-6"
@@ -175,8 +175,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   max_contacts: {
-    label: "Contactos Máximos",
-    description: "Número máximo de personas permitidas en el CRM.",
+    label: "Contactos Mximos",
+    description: "Número mximo de personas permitidas en el CRM.",
     icon: (
       <svg
         className="w-6 h-6"
@@ -195,8 +195,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   max_companies: {
-    label: "Empresas Máximas",
-    description: "Número máximo de organizaciones permitidas (Multi-tenant).",
+    label: "Empresas Mximas",
+    description: "Número mximo de organizaciones permitidas (Multi-tenant).",
     icon: (
       <svg
         className="w-6 h-6"
@@ -331,7 +331,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
       }
     } catch (error) {
       console.error("Failed to fetch plans", error);
-      toast.error("Error al cargar los planes. Por favor recarga la página.");
+      toast.error("Error al cargar los planes. Por favor recarga la pgina.");
     } finally {
       setIsLoading(false);
     }
@@ -447,7 +447,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
 
     if (
       window.confirm(
-        `¿Estás seguro de que deseas eliminar el plan "${formData.name}"? Esta acción no se puede deshacer.`,
+        `¿Ests seguro de que deseas eliminar el plan "${formData.name}"? Esta acción no se puede deshacer.`,
       )
     ) {
       setIsDeleting(true);
@@ -867,7 +867,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                   </p>
                                   {key === "storage_limit_gb" && (
                                     <p className="text-[10px] text-indigo-500 font-medium mt-1">
-                                      💡 1 GB ≈ 500 imágenes de alta calidad
+                                      💡 1 GB ≈ 500 imgenes de alta calidad
                                     </p>
                                   )}
                                 </div>

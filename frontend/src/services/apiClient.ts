@@ -88,7 +88,7 @@ apiClient.interceptors.response.use(
 
         case 500:
           toast.error(
-            "Error del servidor. Por favor, intenta de nuevo más tarde.",
+            "Error del servidor. Por favor, intenta de nuevo ms tarde.",
           );
           break;
 

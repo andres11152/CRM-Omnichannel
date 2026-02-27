@@ -269,11 +269,11 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               <div className="bg-reply-bg dark:bg-reply-surface-dark p-5 rounded-xl border border-gray-100 dark:border-reply-border-dark">
                 <div className="flex justify-between mb-4">
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
-                    Chats Simultáneos
+                    Chats Simultneos
                   </label>
                   <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 font-bold px-2 py-0.5 rounded text-sm">
                     {formData.maxConcurrency === 0
-                      ? "Sin Asignación Automática"
+                      ? "Sin Asignación Automtica"
                       : formData.maxConcurrency}
                   </span>
                 </div>

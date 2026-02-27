@@ -31,6 +31,26 @@ export class MediaRepository {
   async findMany(args: Prisma.MediaFindManyArgs) {
     return this.db.media.findMany(args);
   }
+
+  async findFirst(args: Prisma.MediaFindFirstArgs) {
+    return this.db.media.findFirst(args);
+  }
+
+  async update(args: Prisma.MediaUpdateArgs) {
+    return this.db.media.update(args);
+  }
+
+  async delete(id: string) {
+    return this.db.media.delete({ where: { id } });
+  }
+
+  async count(args: Prisma.MediaCountArgs) {
+    return this.db.media.count(args);
+  }
+
+  async createFull(args: Prisma.MediaCreateArgs) {
+    return this.db.media.create(args);
+  }
 }
 
 export const mediaRepository = new MediaRepository();

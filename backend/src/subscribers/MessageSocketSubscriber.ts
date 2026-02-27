@@ -6,7 +6,8 @@ import {
 import { gateway } from "@/gateways/socketGateway";
 import { Logger } from "@/utils/logger";
 import { SocketEventEmitter } from "@/services/socketEventEmitter";
-import { prisma } from "@/config/database";
+import { messageRepository } from "@/repositories/MessageRepository";
+import { conversationRepository } from "@/repositories/ConversationRepository";
 
 export class MessageSocketSubscriber {
   private socketEmitter: SocketEventEmitter;
@@ -31,12 +32,12 @@ export class MessageSocketSubscriber {
       Logger.debug(`[SocketSubscriber] Handling message ${message.id}`);
 
       // 1. Fetch relations required for Frontend (Sender, Participants)
-      const fullMessage = await prisma.message.findUnique({
+      const fullMessage = await messageRepository.findFirst({
         where: { id: message.id },
         include: { sender: true },
       });
 
-      const fullConversation = await prisma.conversation.findUnique({
+      const fullConversation = await conversationRepository.findFirst({
         where: { id: conversationId },
         include: {
           participants: true,
@@ -46,7 +47,7 @@ export class MessageSocketSubscriber {
             orderBy: { createdAt: "desc" },
           },
           tickets: {
-            where: { status: { not: "CLOSED" } }, // Fetch active key ticket
+            where: { status: { not: "CLOSED" } },
             take: 1,
             orderBy: { createdAt: "desc" },
           },

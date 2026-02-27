@@ -123,7 +123,7 @@ const QueuesConfig: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (
       !confirm(
-        "¿Estás seguro de eliminar esta cola? Esta acción no se puede deshacer.",
+        "¿Ests seguro de eliminar esta cola? Esta acción no se puede deshacer.",
       )
     )
       return;
@@ -228,7 +228,7 @@ const QueuesConfig: React.FC = () => {
                     Asistente IA
                   </th>
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase text-right">
-                    Acciones
+                    Acciónes
                   </th>
                 </tr>
               </thead>
@@ -451,7 +451,7 @@ const QueuesConfig: React.FC = () => {
                   >
                     <option value="MANUAL">Manual</option>
                     <option value="ROUND_ROBIN">
-                      Automática (Round Robin)
+                      Automtica (Round Robin)
                     </option>
                   </select>
                 </div>
@@ -535,7 +535,7 @@ const QueuesConfig: React.FC = () => {
                   />
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-1">
-                  El sistema solo asignará chats a agentes que tengan{" "}
+                  El sistema solo asignar chats a agentes que tengan{" "}
                   <b>TODOS</b> estos skills.
                 </p>
               </div>

@@ -97,7 +97,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     id: "products",
-    title: "Catálogo",
+    title: "Catlogo",
     path: "/products",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={Package} />,

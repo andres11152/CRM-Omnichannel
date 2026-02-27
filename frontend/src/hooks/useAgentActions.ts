@@ -46,7 +46,7 @@ export const useAgentActions = (
     // Confirmation dialog
     if (
       !confirm(
-        `¿Estás seguro de eliminar a ${name}? Esta acción no se puede deshacer.`
+        `¿Ests seguro de eliminar a ${name}? Esta acción no se puede deshacer.`
       )
     ) {
       return false;

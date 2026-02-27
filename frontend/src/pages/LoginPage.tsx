@@ -15,7 +15,7 @@ import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 
 // 📝 VALIDATION SCHEMA
 const loginSchema = z.object({
-  email: z.string().min(1, "El email es requerido").email("Email inválido"),
+  email: z.string().min(1, "El email es requerido").email("Email invlido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
@@ -169,7 +169,7 @@ export const LoginPage = () => {
 
       if (!token || !user) {
         throw new Error(
-          "Respuesta inválida del servidor (Falta token o usuario)",
+          "Respuesta invlida del servidor (Falta token o usuario)",
         );
       }
 
@@ -406,7 +406,7 @@ export const LoginPage = () => {
               <div className="w-full border-t border-gray-200 dark:border-reply-border-dark"></div>
             </div>
             <div className="relative flex justify-center">
-              <span className="px-4 bg-reply-surface dark:bg-reply-surface-dark text-xs font-semibold text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
+              <span className="px-4 bg-reply-surface dark:bg-reply-surface-dark text-xs font-semibold text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widestá">
                 O con tu email
               </span>
             </div>
@@ -438,7 +438,7 @@ export const LoginPage = () => {
                   to="/forgot-password"
                   className="text-sm font-semibold text-reply-green hover:text-green-700 dark:hover:text-green-400 transition-colors"
                 >
-                  ¿Olvidaste tu contraseña?
+                  ¿¿Olvidaste tu contraseña?
                 </Link>
               </div>
             </div>

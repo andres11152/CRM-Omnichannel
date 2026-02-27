@@ -350,7 +350,7 @@ export const QueueDashboard: React.FC = () => {
     if (agent.currentLoad >= agent.maxCapacity) {
       showAlert(
         "Agente Saturado",
-        `El agente ${agent.name} ha alcanzado su capacidad máxima de chats.`,
+        `El agente ${agent.name} ha alcanzado su capacidad mxima de chats.`,
       );
       return;
     }

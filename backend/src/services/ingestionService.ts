@@ -1,7 +1,9 @@
-import { prisma } from "@/config/database";
 import { Logger } from "@/utils/logger";
 import { AppError } from "@/utils/AppError";
 import { Channel } from "@prisma/client";
+import { userRepository } from "@/repositories/UserRepository";
+import { conversationRepository } from "@/repositories/ConversationRepository";
+import { messageRepository } from "@/repositories/MessageRepository";
 
 export class IngestionService {
   public static async ingestMessage(
@@ -13,7 +15,7 @@ export class IngestionService {
     subject?: string,
   ) {
     try {
-      let user = await prisma.user.findUnique({
+      let user = await userRepository.findFirst({
         where: { email: customerEmail },
       });
 
@@ -33,7 +35,7 @@ export class IngestionService {
       }
 
       if (!user) {
-        user = await prisma.user.create({
+        user = await userRepository.create({
           data: {
             email: customerEmail,
             name: customerName,
@@ -44,7 +46,7 @@ export class IngestionService {
         });
       }
 
-      let conversation = await prisma.conversation.findFirst({
+      let conversation = await conversationRepository.findFirst({
         where: {
           companyId,
           participants: { some: { id: user.id } },
@@ -52,19 +54,16 @@ export class IngestionService {
       });
 
       if (!conversation) {
-        conversation = await prisma.conversation.create({
-          data: {
-            companyId,
-            subject: subject || `Conversation with ${customerName}`,
-            status: "OPEN",
-            participants: {
-              connect: { id: user.id },
-            },
-          },
+        conversation = await conversationRepository.create({
+          companyId,
+          subject: subject || `Conversation with ${customerName}`,
+          status: "OPEN",
+          channelId: `email_${user.id}`,
+          userId: user.id,
         });
       }
 
-      const message = await prisma.message.create({
+      const message = await messageRepository.create({
         data: {
           content,
           channel,

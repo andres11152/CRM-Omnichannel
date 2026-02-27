@@ -43,14 +43,14 @@ export const ScheduleModal: React.FC<{ onClose: () => void; onConfirm: (date: Da
             <div className="space-y-4">
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-start gap-3">
                     <span className="text-xl">🕒</span>
-                    <p className="text-sm text-blue-700 dark:text-blue-200">El sistema enviará este mensaje automáticamente en la fecha seleccionada.</p>
+                    <p className="text-sm text-blue-700 dark:text-blue-200">El sistema enviar este mensaje automticamente en la fecha seleccionada.</p>
                 </div>
                 
                 <div className="space-y-1">
                     <label className="text-xs font-semibold text-gray-500 uppercase">Mensaje</label>
                     <textarea 
                         className="w-full p-3 bg-reply-bg dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-reply-border-dark focus:ring-2 focus:ring-purple-500 outline-none resize-none h-24 text-sm"
-                        placeholder="Escribe aquí el mensaje a enviar..."
+                        placeholder="Escribe aquíí el mensaje a enviar..."
                         value={message}
                         onChange={e => setMessage(e.target.value)}
                         autoFocus
@@ -133,7 +133,7 @@ export const ProductPicker: React.FC<{ onClose: () => void; onSelect: (product: 
                 ) : products.length === 0 ? (
                     <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                         <p className="font-medium">No hay productos disponibles</p>
-                        <p className="text-sm mt-1">Crea productos en el catálogo primero</p>
+                        <p className="text-sm mt-1">Crea productos en el catlogo primero</p>
                     </div>
                 ) : (
                     products.map(p => (

@@ -46,11 +46,11 @@ export const SyncMessagesModal: React.FC<Props> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="bg-reply-brand/5 dark:bg-reply-brand/10 p-4 rounded-lg text-sm text-reply-brand dark:text-reply-brand">
             <p>
-              Esta herramienta buscará mensajes antiguos en tus chats de
-              WhatsApp activos y los importará al CRM.
+              Esta herramienta buscar mensajes antiguos en tus chats de
+              WhatsApp activos y los importar al CRM.
             </p>
             <p className="mt-2 font-medium">
-              Nota: Solo se importarán los últimos 50 mensajes de cada chat que
+              Nota: Solo se importarn los úÚÚÚltimos 50 mensajes de cada chat que
               sean posteriores a la fecha seleccionada.
             </p>
           </div>
@@ -68,7 +68,7 @@ export const SyncMessagesModal: React.FC<Props> = ({
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              Se importarán mensajes desde esta fecha en adelante.
+              Se importarn mensajes desde esta fecha en adelante.
             </p>
           </div>
 

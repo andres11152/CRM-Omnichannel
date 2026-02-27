@@ -26,7 +26,7 @@ interface Props {
   className?: string;
 }
 
-export const InternalNotes: React.FC<Props> = ({
+const InternalNotesComponent: React.FC<Props> = ({
   contactId,
   contactName,
   contactPhone,
@@ -373,7 +373,7 @@ export const InternalNotes: React.FC<Props> = ({
       <ConfirmationModal
         isOpen={!!noteToDelete}
         title="¿Eliminar Nota Interna?"
-        message="Esta acción no se puede deshacer. La nota será eliminada permanentemente del historial del cliente."
+        message="Esta acción no se puede deshacer. La nota ser eliminada permanentemente del historial del cliente."
         confirmText="Eliminar Nota"
         cancelText="Cancelar"
         variant="danger"
@@ -385,4 +385,4 @@ export const InternalNotes: React.FC<Props> = ({
   );
 };
 
-
+export const InternalNotes = React.memo(InternalNotesComponent);

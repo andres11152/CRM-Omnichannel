@@ -314,7 +314,7 @@ export const ResolvedView: React.FC<ResolvedViewProps> = ({
           <div className="flex items-center gap-1.5">
             <Star className="w-3.5 h-3.5 text-yellow-500" />
             <span className="text-[10px] text-gray-600 dark:text-gray-300">
-              Rápidos: <strong>{stats.fastRate}%</strong>
+              Rpidos: <strong>{stats.fastRate}%</strong>
             </span>
           </div>
         </div>

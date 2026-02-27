@@ -38,6 +38,8 @@ export interface SendMessageInput {
   type?: "text" | "image" | "video" | "audio" | "document";
   mediaUrl?: string;
   metadata?: any;
+  quotedMessageId?: string;
+  quotedContent?: string;
 }
 
 export interface ResolveTicketInput {
@@ -67,7 +69,7 @@ export const getConversations = async (params?: {
  */
 export const getMessages = async (ticketId: string): Promise<Message[]> => {
   const response = await apiClient.get<Message[]>(
-    `/conversations/${ticketId}/messages`
+    `/conversations/${ticketId}/messages`,
   );
   return response.data;
 };
@@ -78,11 +80,11 @@ export const getMessages = async (ticketId: string): Promise<Message[]> => {
  */
 export const sendMessage = async (
   ticketId: string,
-  input: SendMessageInput
+  input: SendMessageInput,
 ): Promise<Message> => {
   const response = await apiClient.post<Message>(
     `/conversations/${ticketId}/messages`,
-    input
+    input,
   );
   return response.data;
 };
@@ -93,7 +95,7 @@ export const sendMessage = async (
  */
 export const resolveTicket = async (
   ticketId: string,
-  input: ResolveTicketInput
+  input: ResolveTicketInput,
 ): Promise<void> => {
   await apiClient.patch(`/conversations/${ticketId}/resolve`, input);
 };
@@ -104,7 +106,7 @@ export const resolveTicket = async (
  */
 export const pickNextTicket = async (): Promise<Conversation | null> => {
   const response = await apiClient.post<{ conversation: Conversation | null }>(
-    "/conversations/pick-next"
+    "/conversations/pick-next",
   );
   return response.data.conversation;
 };
@@ -137,7 +139,7 @@ export const createNewChat = async (input: {
 }): Promise<Conversation> => {
   const response = await apiClient.post<Conversation>(
     "/conversations/create",
-    input
+    input,
   );
   return response.data;
 };

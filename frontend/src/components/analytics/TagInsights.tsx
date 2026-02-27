@@ -19,7 +19,7 @@ export const TagInsights: React.FC<Props> = ({ data }) => {
   return (
     <div className="h-80 bg-white dark:bg-reply-surface-dark rounded-xl p-4 border border-gray-100 dark:border-reply-border-dark">
       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-        <span className="text-xl">🏷️</span> Etiquetas Más Usadas
+        <span className="text-xl">🏷️</span> Etiquetas Ms Usadas
       </h3>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart

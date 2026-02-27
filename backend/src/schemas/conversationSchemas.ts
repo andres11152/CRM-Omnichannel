@@ -26,6 +26,8 @@ export const ReplyToConversationSchema = z.object({
       attachment: z.any().optional(),
       metadata: z.record(z.any()).optional(),
       scheduledAt: z.string().datetime().optional(),
+      quotedMessageId: z.string().optional(),
+      quotedContent: z.string().optional(),
     })
     .refine(
       (data) => (data.content && data.content.length > 0) || data.attachment,

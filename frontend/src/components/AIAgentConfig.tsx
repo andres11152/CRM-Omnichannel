@@ -137,7 +137,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
   };
 
   const handleDeleteAssistant = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar este asistente?")) return;
+    if (!confirm("¿Ests seguro de eliminar este asistente?")) return;
     try {
       await deleteAssistant(id);
       loadData();
@@ -490,7 +490,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
 
                         <div>
                           <div className="flex justify-between mb-3">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widestá">
                               Creatividad
                             </label>
                             <span className="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">

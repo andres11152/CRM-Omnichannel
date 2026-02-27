@@ -213,7 +213,7 @@ export const BillingOpsPage = () => {
                   <th className="px-6 py-3">Concepto / Plan</th>
                   <th className="px-6 py-3">Fecha</th>
                   <th className="px-6 py-3 text-right">Monto</th>
-                  <th className="px-6 py-3 text-right">Acciones</th>
+                  <th className="px-6 py-3 text-right">Acciónes</th>
                 </tr>
               </thead>
               <tbody className="text-sm divide-y divide-slate-100 dark:divide-slate-800">

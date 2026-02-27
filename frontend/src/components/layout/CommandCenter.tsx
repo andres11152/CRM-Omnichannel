@@ -86,7 +86,7 @@ export const CommandCenter: React.FC = () => {
           <Search className="text-gray-400 dark:text-gray-500" size={24} />
           <input
             type="text"
-            placeholder="¿Qué estás buscando? (Acciones, clientes, flujos...)"
+            placeholder="¿Qué estáás buscando? (Acciónes, clientes, flujos...)"
             className="flex-1 bg-transparent border-none outline-none text-xl font-medium text-reply-text-primary dark:text-reply-text-primary-dark placeholder-gray-400 dark:placeholder-gray-600"
             autoFocus
             value={search}
@@ -110,7 +110,7 @@ export const CommandCenter: React.FC = () => {
             <div className="space-y-6 p-4">
               <div>
                 <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2">
-                  Acciones Rápidas
+                  Acciónes Rpidas
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {quickActions.map((action) => (
@@ -145,7 +145,7 @@ export const CommandCenter: React.FC = () => {
                 No hay resultados para "{search}"
               </p>
               <p className="text-xs text-gray-400 mt-2">
-                Intenta buscar algo más general o utiliza las acciones rápidas.
+                Intenta buscar algo ms general o utiliza las acciones rpidas.
               </p>
             </div>
           )}

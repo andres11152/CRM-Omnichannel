@@ -59,7 +59,7 @@ export type ValidatedMessageKey = z.infer<typeof MessageKeySchema>;
 export const WAMessageSchema = z
   .object({
     key: MessageKeySchema,
-    message: z.record(z.unknown()).optional().nullable(),
+    message: z.any().optional().nullable(),
     messageTimestamp: z.union([z.number(), z.bigint(), z.string()]).optional(),
     pushName: z.string().optional().nullable(),
     broadcast: z.boolean().optional().nullable(),

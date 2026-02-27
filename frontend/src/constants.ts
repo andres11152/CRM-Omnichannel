@@ -64,7 +64,7 @@ export const DB_SCHEMA: TableSchema[] = [
       {
         name: "content_vector",
         type: "VECTOR(1536)",
-        description: "Embedding para búsqueda semántica",
+        description: "Embedding para búsqueda semntica",
       },
     ],
   },

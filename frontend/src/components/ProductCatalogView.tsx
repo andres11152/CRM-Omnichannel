@@ -127,7 +127,7 @@ export const ProductCatalogView: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden">
       <ModuleHeader
-        title="Catálogo de Productos"
+        title="Catlogo de Productos"
         description="Gestiona tu inventario de productos y servicios."
         icon={<Package className="w-8 h-8 text-white" />}
         gradient="from-emerald-600 to-teal-600 dark:from-emerald-800 dark:to-teal-800"
@@ -185,12 +185,12 @@ export const ProductCatalogView: React.FC = () => {
                 <Package className="w-10 h-10 text-gray-300" />
               </div>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                Catálogo vacío
+                Catlogo vacío
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
                 {searchQuery
                   ? `No encontramos productos que coincidan con "${searchQuery}"`
-                  : "Comienza agregando tu primer producto o servicio al catálogo."}
+                  : "Comienza agregando tu primer producto o servicio al catlogo."}
               </p>
             </div>
           ) : (
@@ -250,7 +250,7 @@ export const ProductCatalogView: React.FC = () => {
 
                     <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-6 flex-1">
                       {product.description ||
-                        "Este producto no tiene una descripción detallada en el catálogo."}
+                        "Este producto no tiene una descripción detallada en el catlogo."}
                     </p>
 
                     <div className="grid grid-cols-2 gap-4 mb-6">

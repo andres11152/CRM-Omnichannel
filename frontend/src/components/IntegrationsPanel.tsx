@@ -540,7 +540,7 @@ export const IntegrationsPanel: React.FC = () => {
           <section>
             <div className="flex items-center gap-3 mb-6">
               <h2 className="text-xl font-bold text-gray-800 dark:text-white">
-                Descubrir Más Canales
+                Descubrir Ms Canales
               </h2>
               <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 text-xs font-bold border border-indigo-200 dark:border-indigo-800">
                 Próximamente
@@ -588,7 +588,7 @@ export const IntegrationsPanel: React.FC = () => {
               />
               <IntegrationCard
                 title="Shopify / WooCommerce"
-                desc="Integra tu catálogo y pedidos."
+                desc="Integra tu catlogo y pedidos."
                 icon={<span className="text-2xl">🛍️</span>}
               />
             </div>
@@ -700,7 +700,7 @@ export const IntegrationsPanel: React.FC = () => {
                   },
                   {
                     title: "Escanea el QR",
-                    desc: "Apunta la cámara al código",
+                    desc: "Apunta la cmara al código",
                     icon: "📸",
                   },
                 ].map((step, i) => (
@@ -802,7 +802,7 @@ export const IntegrationsPanel: React.FC = () => {
                 onClick={() => setShowUpgradeModal(false)}
                 className="w-full py-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium transition-colors"
               >
-                Quizás más tarde
+                Quizs ms tarde
               </button>
             </div>
           </div>

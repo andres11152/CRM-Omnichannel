@@ -265,12 +265,12 @@ export const MessageListResponseSchema = z.object({
 // ============================================
 
 export const LoginFormSchema = z.object({
-  email: z.string().email("Email inválido"),
+  email: z.string().email("Email invlido"),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
 });
 
 export const SignupFormSchema = z.object({
-  email: z.string().email("Email inválido"),
+  email: z.string().email("Email invlido"),
   password: z
     .string()
     .min(8, "La contraseña debe tener al menos 8 caracteres")

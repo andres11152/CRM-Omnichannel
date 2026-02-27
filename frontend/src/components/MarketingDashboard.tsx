@@ -53,7 +53,7 @@ export const MarketingDashboard: React.FC = () => {
   // HISTORY FILTERS STATE
   const [historyFilter, setHistoryFilter] = useState("all");
   const [historySearch, setHistorySearch] = useState("");
-  const [historySort, setHistorySort] = useState<"newest" | "oldest">("newest");
+  const [historySort, setHistorySort] = useState<"newestá" | "oldestá">("newestá");
 
   // CAMPAIGN FORM STATE
   const [campaignName, setCampaignName] = useState("");
@@ -112,7 +112,7 @@ export const MarketingDashboard: React.FC = () => {
       setNewTemplate((t) => ({ ...t, content: prev }));
       setHistoryIndex(historyIndex - 1);
     } else {
-      toast.info("Nada más que deshacer");
+      toast.info("Nada ms que deshacer");
     }
   };
 
@@ -122,7 +122,7 @@ export const MarketingDashboard: React.FC = () => {
       setNewTemplate((t) => ({ ...t, content: next }));
       setHistoryIndex(historyIndex + 1);
     } else {
-      toast.info("Nada más que rehacer");
+      toast.info("Nada ms que rehacer");
     }
   };
 
@@ -342,7 +342,7 @@ export const MarketingDashboard: React.FC = () => {
   };
 
   const handleDeleteCampaign = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar esta campaña?")) return;
+    if (!confirm("¿Ests seguro de eliminar esta campaña?")) return;
     try {
       await marketingService.deleteCampaign(id);
       setCampaigns((prev) => prev.filter((c) => c.id !== id));
@@ -652,7 +652,7 @@ export const MarketingDashboard: React.FC = () => {
                         <div className="text-5xl font-black text-rose-600 dark:text-rose-400 mb-2 tracking-tighter">
                           {audienceCount}
                         </div>
-                        <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                        <div className="text-[10px] font-black text-gray-500 uppercase tracking-widestá">
                           Contactos Estimados en Audiencia
                         </div>
                       </div>
@@ -679,7 +679,7 @@ export const MarketingDashboard: React.FC = () => {
                           <div className="bg-emerald-50 dark:bg-emerald-500/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/20 flex items-center gap-3">
                             <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                             <div>
-                              <p className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
+                              <p className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widestá">
                                 {excelFileName}
                               </p>
                               <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
@@ -764,7 +764,7 @@ export const MarketingDashboard: React.FC = () => {
                       />
                       <div className="flex justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest mt-4">
                         <span>Lento (Seguro)</span>
-                        <span>Rápido (Agresivo)</span>
+                        <span>Rpido (Agresivo)</span>
                       </div>
                     </div>
                   </div>
@@ -842,7 +842,7 @@ export const MarketingDashboard: React.FC = () => {
                       })()}
                     </div>
                   ) : (
-                    <div className="text-center text-gray-300 py-16 italic text-[10px] font-medium animate-pulse uppercase tracking-widest">
+                    <div className="text-center text-gray-300 py-16 italic text-[10px] font-medium animate-pulse uppercase tracking-widestá">
                       Selecciona una plantilla
                     </div>
                   )}
@@ -888,7 +888,7 @@ export const MarketingDashboard: React.FC = () => {
                   🎨
                 </div>
                 <h4 className="text-xl font-black text-gray-900 dark:text-white mb-2">
-                  Tu Galería está Vacía
+                  Tu Galería estáá Vacía
                 </h4>
                 <p className="text-sm text-gray-500 max-w-xs uppercase tracking-widest font-bold leading-relaxed">
                   Crea tu primer diseño profesional para empezar a impactar
@@ -1441,7 +1441,7 @@ export const MarketingDashboard: React.FC = () => {
                             }}
                           >
                             <option value="">
-                              Insertar Variable Dinámica...
+                              Insertar Variable Dinmica...
                             </option>
                             <option value="contact.firstName">
                               👤 Nombre del Contacto
@@ -1547,7 +1547,7 @@ export const MarketingDashboard: React.FC = () => {
                     }
                     className="flex-1 w-full bg-[#1e1e1e] text-[#d4d4d4] font-mono text-xs p-4 focus:outline-none resize-none leading-relaxed selection:bg-indigo-500/30"
                     spellCheck={false}
-                    placeholder="<!-- El código HTML generado aparecerá aquí -->"
+                    placeholder="<!-- El código HTML generado aparecer aquíí -->"
                   />
                 </div>
               </div>
@@ -1626,7 +1626,7 @@ export const MarketingDashboard: React.FC = () => {
                       Programación / Fecha
                     </th>
                     <th className="py-3 px-4 text-right">Entregados</th>
-                    <th className="py-3 px-4 text-right">Acciones</th>
+                    <th className="py-3 px-4 text-right">Acciónes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">

@@ -51,7 +51,7 @@ export const ForgotPassword: React.FC = () => {
             </div>
             <h1 className="text-4xl font-bold mb-6 tracking-tight">Recuperación de Cuenta</h1>
             <p className="text-lg text-green-100 max-w-md mx-auto leading-relaxed">
-              No te preocupes, te ayudaremos a recuperar el acceso a tu cuenta rápidamente.
+              No te preocupes, te ayudaremos a recuperar el acceso a tu cuenta rpidamente.
             </p>
          </div>
       </div>
@@ -64,7 +64,7 @@ export const ForgotPassword: React.FC = () => {
                     &larr; Volver al inicio de sesión
                 </Link>
                 <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
-                   ¿Olvidaste tu contraseña?
+                   ¿¿Olvidaste tu contraseña?
                 </h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                    Ingresa tu correo electrónico y te enviaremos un enlace para restablecerla.

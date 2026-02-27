@@ -24,7 +24,7 @@ export const PWAInstallPrompt = () => {
                 Instalar Aplicación
               </h3>
               <p className="text-white/90 text-xs">
-                Acceso rápido desde tu pantalla de inicio
+                Acceso rpido desde tu pantalla de inicio
               </p>
             </div>
             <button
@@ -58,7 +58,7 @@ export const PWAInstallPrompt = () => {
               </div>
               <h2 className="text-white font-bold text-xl">Instalar OmniCRM</h2>
               <p className="text-white/90 text-sm mt-1">
-                Acceso rápido desde tu iPhone
+                Acceso rpido desde tu iPhone
               </p>
             </div>
           </div>
@@ -116,7 +116,7 @@ export const PWAInstallPrompt = () => {
                   Confirma para instalar
                 </p>
                 <p className="mt-1 text-gray-600 dark:text-gray-400 text-xs">
-                  La app aparecerá en tu pantalla de inicio
+                  La app aparecer en tu pantalla de inicio
                 </p>
               </div>
             </div>

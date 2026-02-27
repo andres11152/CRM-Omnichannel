@@ -85,7 +85,7 @@ export const SalesDashboard: React.FC = () => {
                     {/* LEADERBOARD */}
                     <div className="lg:col-span-2 bg-white dark:bg-reply-panel-dark p-6 rounded-xl border border-gray-200 dark:border-reply-border-dark shadow-sm">
                         <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                            <span>🏆</span> Ránking de Actividad (Este Mes)
+                            <span>🏆</span> Rnking de Actividad (Este Mes)
                         </h3>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
@@ -131,7 +131,7 @@ export const SalesDashboard: React.FC = () => {
                             <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
                                 <h4 className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-1">💡 Consejo de Venta</h4>
                                 <p className="text-sm text-blue-700 dark:text-blue-400">
-                                    Tu tasa de cierre del {stats?.conversionRate || 0}% está {stats?.conversionRate > 20 ? 'por encima' : 'por debajo'} del promedio de la industria (20%). 
+                                    Tu tasa de cierre del {stats?.conversionRate || 0}% estáá {stats?.conversionRate > 20 ? 'por encima' : 'por debajo'} del promedio de la industria (20%). 
                                     {stats?.conversionRate < 20 && " Intenta calificar mejor a los leads antes de convertirlos en oportunidades."}
                                 </p>
                             </div>

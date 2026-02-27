@@ -68,7 +68,15 @@ export const replyToConversation = catchAsync(
     if (!req.user || !req.companyId) throw new AppError("Not authorized", 401);
 
     try {
-      const { content, channel, attachment, metadata, scheduledAt } = req.body;
+      const {
+        content,
+        channel,
+        attachment,
+        metadata,
+        scheduledAt,
+        quotedMessageId,
+        quotedContent,
+      } = req.body;
 
       Logger.info(`[ConversationController] Replying to ${req.params.id}`, {
         contentSample: content?.substring(0, 50),
@@ -90,6 +98,8 @@ export const replyToConversation = catchAsync(
         attachment,
         metadata,
         scheduledAt,
+        quotedMessageId,
+        quotedContent,
       });
 
       res.status(201).json({

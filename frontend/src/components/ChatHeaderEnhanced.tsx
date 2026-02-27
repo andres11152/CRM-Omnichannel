@@ -36,7 +36,7 @@ interface ChatHeaderEnhancedProps {
   isTyping?: boolean;
 }
 
-export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
+const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
   contact,
   onBack,
   onEditContact,
@@ -290,7 +290,7 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-reply-border-dark transition-all hover:shadow-sm active:scale-95"
-          title="M�s Acciones"
+          title="M�s Acciónes"
         >
           <svg
             className="w-5 h-5"
@@ -764,3 +764,4 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
     </div>
   );
 };
+export const ChatHeaderEnhanced = React.memo(ChatHeaderEnhancedComponent);

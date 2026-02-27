@@ -93,7 +93,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
   const handleAddAll = async () => {
     if (!data || data.addableCount === 0) return;
     const confirm = window.confirm(
-      `¿Estás seguro de añadir ${data.addableCount} contactos al CRM?`,
+      `¿Ests seguro de añadir ${data.addableCount} contactos al CRM?`,
     );
     if (!confirm) return;
 
@@ -267,7 +267,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
                 </button>
               ) : (
                 <span
-                  title="No se puede añadir (Número inválido o LID)"
+                  title="No se puede añadir (Número invlido o LID)"
                   className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400"
                 >
                   <svg

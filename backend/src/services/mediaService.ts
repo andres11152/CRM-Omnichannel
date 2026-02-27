@@ -1,4 +1,3 @@
-import { prisma } from "@/config/database";
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { storageProvider } from "@/providers/StorageProvider";
@@ -9,6 +8,7 @@ import { Media, MediaType, Prisma } from "@prisma/client";
 import { Readable } from "stream";
 import { MediaCategory } from "@/constants/mediaCategories";
 import { Logger } from "@/utils/logger";
+import { mediaRepository } from "@/repositories/MediaRepository";
 
 // Helper to map string types to Prisma Enum safely
 const toMediaType = (type: string): MediaType => {
@@ -31,11 +31,11 @@ interface UploadMediaParams {
 interface MediaFilterParams {
   type?: string;
   category?: string;
-  categories?: string[]; // Support filtering by multiple categories
+  categories?: string[];
   search?: string;
   page: number;
   limit: number;
-  excludeCategories?: string[]; // For excluding voice-notes, etc.
+  excludeCategories?: string[];
 }
 
 export const mediaService = {
@@ -101,9 +101,9 @@ export const mediaService = {
       }
     }
 
-    // 5. Save to DB
+    // 5. Save to DB via Repository
     Logger.info("[MediaService] Saving to DB...");
-    const media = await prisma.media.create({
+    const media = await mediaRepository.createFull({
       data: {
         companyId,
         filename: uploadResult.filename,
@@ -132,9 +132,6 @@ export const mediaService = {
 
   /**
    * List media for library view
-   *
-   * By default, excludes voice-notes and chat-attachments to keep
-   * the library clean and focused on reusable assets.
    */
   async list(companyId: string, params: MediaFilterParams) {
     const {
@@ -155,21 +152,16 @@ export const mediaService = {
     let categoryFilter: Prisma.MediaWhereInput = {};
 
     if (category) {
-      // Single category filter
       categoryFilter = { category };
     } else if (categories && categories.length > 0) {
-      // Multiple categories filter (OR)
       categoryFilter = { category: { in: categories } };
     }
 
-    // Build exclusion filter (voice-notes, chat-attachments by default)
+    // Build exclusion filter
     let exclusionFilter: Prisma.MediaWhereInput = {};
     if (excludeCategories && excludeCategories.length > 0) {
       exclusionFilter = {
-        OR: [
-          { category: { notIn: excludeCategories } },
-          { category: null }, // Include items without category (legacy)
-        ],
+        OR: [{ category: { notIn: excludeCategories } }, { category: null }],
       };
     }
 
@@ -188,7 +180,7 @@ export const mediaService = {
     };
 
     const [mediaList, total] = await Promise.all([
-      prisma.media.findMany({
+      mediaRepository.findMany({
         where,
         include: {
           uploadedBy: { select: { id: true, name: true, email: true } },
@@ -197,7 +189,7 @@ export const mediaService = {
         skip,
         take: limit,
       }),
-      prisma.media.count({ where }),
+      mediaRepository.count({ where }),
     ]);
 
     // Resolve URLs for list
@@ -218,7 +210,7 @@ export const mediaService = {
    * Get single media
    */
   async get(companyId: string, mediaId: string): Promise<MediaDTO> {
-    const media = await prisma.media.findFirst({
+    const media = await mediaRepository.findFirst({
       where: { id: mediaId, companyId },
       include: {
         uploadedBy: { select: { id: true, name: true, email: true } },
@@ -235,7 +227,7 @@ export const mediaService = {
    * Delete media
    */
   async delete(companyId: string, mediaId: string): Promise<void> {
-    const media = await prisma.media.findFirst({
+    const media = await mediaRepository.findFirst({
       where: { id: mediaId, companyId },
     });
     if (!media) throw new AppError("Media not found", HTTP_STATUS.NOT_FOUND);
@@ -243,8 +235,8 @@ export const mediaService = {
     // Delete from storage
     await storageProvider.delete(media.key);
 
-    // Delete from DB
-    await prisma.media.delete({ where: { id: mediaId } });
+    // Delete from DB via repository
+    await mediaRepository.delete(mediaId);
   },
 
   /**
@@ -255,12 +247,12 @@ export const mediaService = {
     mediaId: string,
     data: { category?: string; description?: string; tags?: string[] },
   ): Promise<MediaDTO> {
-    const media = await prisma.media.findFirst({
+    const media = await mediaRepository.findFirst({
       where: { id: mediaId, companyId },
     });
     if (!media) throw new AppError("Media not found", HTTP_STATUS.NOT_FOUND);
 
-    const updated = await prisma.media.update({
+    const updated = await mediaRepository.update({
       where: { id: mediaId },
       data,
       include: {
@@ -274,29 +266,17 @@ export const mediaService = {
 
   /**
    * Helper: Resolve URL (Always use proxy for reliability)
-   *
-   * IMPORTANT: We return RELATIVE URLs (not absolute) because:
-   * 1. In development, Vite proxies /api/* to the backend (localhost:4000)
-   * 2. In production, frontend/backend are typically on same domain
-   * 3. Relative URLs avoid CORS issues entirely
-   *
-   * The frontend receives "/api/media/xxx/content" which the browser
-   * loads from the same origin, and it gets proxied appropriately.
    */
   async resolveUrl(media: Media): Promise<string> {
-    // Always use the content proxy endpoint for S3 files AND local files
-    // Key structure: companyId/type/filename (contains slashes or backslashes on Windows)
     if (
       media.url.includes("s3.amazonaws.com") ||
       media.key.includes("/") ||
       media.key.includes("\\")
     ) {
-      // Return RELATIVE URL - works with Vite proxy and production
       const proxyUrl = `/api/media/${media.id}/content`;
       Logger.info(`[MediaService] resolveUrl: ${media.id} -> ${proxyUrl}`);
       return proxyUrl;
     }
-    // For external URLs (e.g. ui-avatars, google profile pics)
     return media.url;
   },
 
@@ -310,7 +290,7 @@ export const mediaService = {
     const where: { id: string; companyId?: string } = { id: mediaId };
     if (companyId) where.companyId = companyId;
 
-    const media = await prisma.media.findFirst({ where });
+    const media = await mediaRepository.findFirst({ where });
     if (!media) throw new AppError("Media not found", HTTP_STATUS.NOT_FOUND);
 
     const stream = await storageProvider.getStream(media.key);

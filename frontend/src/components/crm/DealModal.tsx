@@ -524,7 +524,7 @@ export const DealModal: React.FC<Props> = ({
                     placeholder="Ej. Cliente referido por Juan, interesado en plan Enterprise. Presupuesto aprobado para Q1."
                   />
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
-                    Se registrará como primera actividad del deal
+                    Se registrar como primera actividad del deal
                   </p>
                 </div>
               )}
@@ -535,7 +535,7 @@ export const DealModal: React.FC<Props> = ({
                     onClick={async () => {
                       if (
                         window.confirm(
-                          "¿Estás seguro de eliminar este deal? Esta acción no se puede deshacer.",
+                          "¿Ests seguro de eliminar este deal? Esta acción no se puede deshacer.",
                         )
                       ) {
                         setLoading(true);

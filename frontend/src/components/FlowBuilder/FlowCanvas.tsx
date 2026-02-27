@@ -150,7 +150,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         return "📅";
 
       default:
-        return "📦"; // Icono de paquete en lugar de texto
+        return "📦"; // Icono de paquíete en lugar de texto
     }
   };
 

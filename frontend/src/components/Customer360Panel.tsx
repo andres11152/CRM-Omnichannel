@@ -28,7 +28,7 @@ interface Customer360PanelProps {
   onScheduleMeeting?: () => void;
 }
 
-export const Customer360Panel: React.FC<Customer360PanelProps> = ({
+const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
   contact,
   onEditContact,
   onCreateTask,
@@ -214,7 +214,7 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
             <div className="flex items-center gap-2 mb-1 text-gray-400">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
               <span className="text-[10px] font-bold uppercase tracking-wider">
-                Acciones Rápidas
+                Acciónes Rpidas
               </span>
             </div>
 
@@ -266,7 +266,7 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
             <div className="flex items-center gap-2 mb-3 text-gray-400">
               <Building2 className="w-3.5 h-3.5" />
               <span className="text-[10px] font-bold uppercase tracking-wider">
-                Bitácora Interna
+                Bitcora Interna
               </span>
             </div>
             <InternalNotes
@@ -290,3 +290,5 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
     </div>
   );
 };
+
+export const Customer360Panel = React.memo(Customer360PanelComponent);

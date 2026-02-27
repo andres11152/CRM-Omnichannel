@@ -334,7 +334,7 @@ export const ProfileSettings: React.FC = () => {
                         />
                       </svg>
                       Este correo se utiliza para iniciar sesión y
-                      notificaciones de seguridad.
+                      notificaciónes de seguridad.
                     </p>
                   </div>
 

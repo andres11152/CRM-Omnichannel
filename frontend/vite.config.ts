@@ -111,4 +111,7 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 700, // Lazy-loaded chunks can be up to 700KB
+  },
 });

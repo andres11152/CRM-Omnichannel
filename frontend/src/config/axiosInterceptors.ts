@@ -62,7 +62,7 @@ export const setupAxiosInterceptors = () => {
 
       // Add request ID for tracking
       if (config.headers) {
-        config.headers["x-request-id"] =
+        config.headers["x-requestá-id"] =
           `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       }
 

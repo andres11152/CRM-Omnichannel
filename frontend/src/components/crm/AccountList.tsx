@@ -31,7 +31,7 @@ export const AccountList: React.FC = () => {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("¿Estás seguro de eliminar esta empresa?")) {
+    if (window.confirm("¿Ests seguro de eliminar esta empresa?")) {
       try {
         await deleteAccount(id);
         fetchAccounts();
@@ -170,7 +170,7 @@ export const AccountList: React.FC = () => {
                           <div
                             className={`w-1.5 h-1.5 rounded-full ${account.status === "ACTIVE" ? "bg-emerald-500" : "bg-gray-400"}`}
                           />
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widestá">
                             {account.status}
                           </span>
                         </div>
@@ -243,7 +243,7 @@ export const AccountList: React.FC = () => {
                       <th className="px-6 py-8">Industria & Tamaño</th>
                       <th className="px-6 py-8">Estado</th>
                       <th className="px-6 py-8 text-center">Métricas CRM</th>
-                      <th className="px-10 py-8 text-right">Acciones</th>
+                      <th className="px-10 py-8 text-right">Acciónes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">

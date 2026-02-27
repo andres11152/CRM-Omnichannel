@@ -61,7 +61,7 @@ export const LoginScreen: React.FC<Props> = ({
       onLogin(user);
     } catch (e) {
       console.error("Invalid token from URL", e);
-      setError("Token inválido recibido.");
+      setError("Token invlido recibido.");
     }
   };
 
@@ -319,7 +319,7 @@ export const LoginScreen: React.FC<Props> = ({
                 to="/forgot-password"
                 className="text-sm font-medium text-reply-green hover:underline dark:text-reply-green-dark"
               >
-                ¿Olvidaste tu contraseña?
+                ¿¿Olvidaste tu contraseña?
               </Link>
             </div>
 

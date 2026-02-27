@@ -41,6 +41,8 @@ export interface SendMessageOptions {
   senderId: string;
   media?: MediaPayload;
   metadata?: Record<string, unknown>;
+  /** WhatsApp message ID to quote/reply to */
+  quotedMessageId?: string;
 }
 
 export interface TemplateComponent {

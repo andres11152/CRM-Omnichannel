@@ -66,6 +66,27 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message }) => {
                   }
           }
         >
+          {/* Quoted Message (Reply Context) */}
+          {message.metadata?.quotedMessageId && (
+            <div
+              className={`mb-2 p-2 rounded-lg border-l-4 bg-black/5 dark:bg-white/5 ${isAgent ? "border-white/40" : "border-indigo-500"}`}
+            >
+              <div
+                className={`text-[10px] font-bold mb-0.5 ${isAgent ? "text-white/80" : "text-indigo-600 dark:text-indigo-400"}`}
+              >
+                {message.metadata.quotedContent
+                  ? "Respondiendo a:"
+                  : "Respondiendo a mensaje multimedia"}
+              </div>
+              <div
+                className={`text-xs italic line-clamp-2 ${isAgent ? "text-white/70" : "text-gray-500 dark:text-gray-400"}`}
+              >
+                {message.metadata.quotedContent ||
+                  "Haga clic para ver el original"}
+              </div>
+            </div>
+          )}
+
           {/* Media Content */}
           {message.type === "image" && message.mediaUrl && (
             <img

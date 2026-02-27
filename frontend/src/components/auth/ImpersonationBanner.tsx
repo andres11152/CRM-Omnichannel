@@ -63,7 +63,7 @@ export const ImpersonationBanner = () => {
                 <ShieldAlert className="w-4 h-4 animate-pulse" />
                 <span>MODO DE IMPERSONACIÓN ACTIVO</span>
                 <span className="opacity-75 text-xs hidden md:inline">
-                    - Estás viendo el sistema como <strong>{currentUser?.email || 'el usuario'}</strong>
+                    - Ests viendo el sistema como <strong>{currentUser?.email || 'el usuario'}</strong>
                 </span>
             </div>
             <button 

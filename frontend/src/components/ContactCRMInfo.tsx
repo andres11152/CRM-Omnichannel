@@ -21,7 +21,7 @@ interface Props {
   onOpenTimeline?: () => void;
 }
 
-export const ContactCRMInfo: React.FC<Props> = ({
+const ContactCRMInfoComponent: React.FC<Props> = ({
   contact,
   onOpenTimeline,
 }) => {
@@ -258,4 +258,4 @@ export const ContactCRMInfo: React.FC<Props> = ({
   );
 };
 
-
+export const ContactCRMInfo = React.memo(ContactCRMInfoComponent);

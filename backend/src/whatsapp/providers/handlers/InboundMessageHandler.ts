@@ -431,6 +431,39 @@ export class InboundMessageHandler {
               : undefined,
           origin: isOutbound ? "phone_sync" : "whatsapp",
           isGroup,
+          quotedMessageId:
+            message.message?.extendedTextMessage?.contextInfo?.stanzaId ||
+            message.message?.imageMessage?.contextInfo?.stanzaId ||
+            message.message?.videoMessage?.contextInfo?.stanzaId ||
+            message.message?.audioMessage?.contextInfo?.stanzaId ||
+            message.message?.documentMessage?.contextInfo?.stanzaId ||
+            message.message?.buttonsMessage?.contextInfo?.stanzaId ||
+            message.message?.templateMessage?.contextInfo?.stanzaId ||
+            undefined,
+          quotedContent:
+            message.message?.extendedTextMessage?.contextInfo?.quotedMessage
+              ?.conversation ||
+            message.message?.extendedTextMessage?.contextInfo?.quotedMessage
+              ?.extendedTextMessage?.text ||
+            message.message?.extendedTextMessage?.contextInfo?.quotedMessage
+              ?.imageMessage?.caption ||
+            message.message?.extendedTextMessage?.contextInfo?.quotedMessage
+              ?.videoMessage?.caption ||
+            message.message?.extendedTextMessage?.contextInfo?.quotedMessage
+              ?.documentMessage?.caption ||
+            message.message?.imageMessage?.contextInfo?.quotedMessage
+              ?.conversation ||
+            message.message?.imageMessage?.contextInfo?.quotedMessage
+              ?.extendedTextMessage?.text ||
+            message.message?.videoMessage?.contextInfo?.quotedMessage
+              ?.conversation ||
+            message.message?.audioMessage?.contextInfo?.quotedMessage
+              ?.conversation ||
+            message.message?.buttonsMessage?.contextInfo?.quotedMessage
+              ?.conversation ||
+            message.message?.templateMessage?.contextInfo?.quotedMessage
+              ?.conversation ||
+            undefined,
         };
 
         const savedMessage = await chatService.upsertMessage({

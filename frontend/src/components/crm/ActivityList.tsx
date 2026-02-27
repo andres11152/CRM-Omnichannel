@@ -48,7 +48,7 @@ export const ActivityList: React.FC = () => {
   }, []);
 
   const handleDelete = (id: string) => {
-    toast("¿Estás seguro de eliminar esta actividad?", {
+    toast("¿Ests seguro de eliminar esta actividad?", {
       description: "Esta acción no se puede deshacer",
       action: {
         label: "Eliminar",
@@ -359,7 +359,7 @@ export const ActivityList: React.FC = () => {
                             <span className="text-orange-500">
                               {getTypeIcon(activity.type)}
                             </span>
-                            <span className="text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase tracking-widest">
+                            <span className="text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase tracking-widestá">
                               {getTypeLabel(activity.type)}
                             </span>
                           </div>

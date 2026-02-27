@@ -347,10 +347,10 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
               </svg>
             </div>
             <p className="text-xl font-medium text-gray-600 dark:text-gray-300">
-              Tu biblioteca está vacía
+              Tu biblioteca estáá vacía
             </p>
             <p className="text-sm mt-2">
-              Arrastra archivos aquí o usa el botón de subir
+              Arrastra archivos aquíí o usa el botón de subir
             </p>
           </div>
         ) : (
@@ -507,9 +507,9 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
               />
             </svg>
-            <h2 className="text-3xl font-bold">Suelta tus archivos aquí</h2>
+            <h2 className="text-3xl font-bold">Suelta tus archivos aquíí</h2>
             <p className="text-lg opacity-80 mt-2">
-              Se subirán instantáneamente a tu nube
+              Se subirn instantneamente a tu nube
             </p>
           </div>
         </div>
@@ -703,7 +703,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
                 ¿Eliminar archivo permanentemente?
               </h3>
               <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                Esta acción no se puede deshacer. El archivo desaparecerá de tu
+                Esta acción no se puede deshacer. El archivo desaparecer de tu
                 biblioteca y de cualquier chat donde se haya compartido mediante
                 enlace.
               </p>

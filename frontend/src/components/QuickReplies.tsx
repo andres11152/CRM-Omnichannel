@@ -151,7 +151,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
           <div>
             <h3 className="font-bold text-gray-900 dark:text-white text-base leading-tight">
               {view === "LIST"
-                ? "Respuestas Rápidas"
+                ? "Respuestas Rpidas"
                 : view === "CREATE"
                   ? "Nueva Respuesta"
                   : "Editar Respuesta"}
@@ -231,7 +231,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
                 <p className="text-xs mt-1 max-w-[200px] opacity-75">
                   {searchTerm
                     ? "Intenta con otro término de búsqueda."
-                    : "Crea tu primera respuesta rápida para agilizar el chat."}
+                    : "Crea tu primera respuesta rpida para agilizar el chat."}
                 </p>
               </div>
             ) : (
@@ -328,7 +328,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
             </label>
             <textarea
               className="w-full px-4 py-3 bg-reply-bg dark:bg-gray-800 border border-gray-200 dark:border-reply-border-dark rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[140px] resize-none leading-relaxed placeholder:font-normal"
-              placeholder="Escribe el mensaje aquí..."
+              placeholder="Escribe el mensaje aquíí..."
               value={formData.content}
               onChange={(e) =>
                 setFormData({ ...formData, content: e.target.value })
@@ -389,7 +389,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
             ¿Eliminar respuesta?
           </h4>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 max-w-[200px] leading-relaxed">
-            Esta acción es irreversible y la eliminará de tu lista.
+            Esta acción es irreversible y la eliminar de tu lista.
           </p>
           <div className="flex gap-3 w-full">
             <button

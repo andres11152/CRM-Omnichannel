@@ -83,7 +83,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({
           }
           disabled:opacity-50 disabled:cursor-not-allowed
         `}
-        title="Acciones Rápidas"
+        title="Acciónes Rpidas"
       >
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -114,7 +114,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({
               </div>
               <div>
                 <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Programar Envío</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">Enviar mensaje más tarde</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">Enviar mensaje ms tarde</div>
               </div>
             </button>
 
@@ -129,7 +129,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({
               </div>
               <div>
                 <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Enviar Producto</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">Catálogo o Item singular</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">Catlogo o Item singular</div>
               </div>
             </button>
 
@@ -144,7 +144,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({
               </div>
               <div>
                 <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Solicitar Datos</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">Formulario rápido</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">Formulario rpido</div>
               </div>
             </button>
 

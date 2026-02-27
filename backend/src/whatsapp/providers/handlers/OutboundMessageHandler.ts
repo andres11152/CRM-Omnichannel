@@ -1,13 +1,19 @@
-
 import { ISessionManager } from "../../core/interfaces/ISessionManager";
-import { SendMessageOptions, MediaPayload, MessagePayload } from "../../core/types/whatsapp.types";
+import {
+  SendMessageOptions,
+  MediaPayload,
+  MessagePayload,
+} from "../../core/types/whatsapp.types";
 import { MessageMetadata } from "@/types/whatsapp.types";
 import { generateMessageID } from "@whiskeysockets/baileys";
 import { Logger } from "@/utils/logger";
 import { deduplicationService } from "../../services/DeduplicationService";
 import { chatService } from "@/services/chatService";
 import { cleanupTempFile } from "@/utils/audioConverter";
-import { mediaProcessor, MediaFileNotFoundError } from "../../services/MediaProcessorService";
+import {
+  mediaProcessor,
+  MediaFileNotFoundError,
+} from "../../services/MediaProcessorService";
 import { SocketEventEmitter } from "@/services/socketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
@@ -50,7 +56,21 @@ export class OutboundMessageHandler {
       const sentMsg = await sock.sendMessage(
         jid,
         { text: content },
-        { messageId: generatedId },
+        {
+          messageId: generatedId,
+          quoted: options.quotedMessageId
+            ? {
+                key: {
+                  remoteJid: jid,
+                  id: options.quotedMessageId,
+                },
+                message: {
+                  conversation:
+                    (metadata?.quotedContent as string) || "Mensaje original",
+                },
+              }
+            : undefined,
+        },
       );
 
       const mergedMeta: MessageMetadata = {
@@ -150,6 +170,19 @@ export class OutboundMessageHandler {
 
       const sentMsg = await sock.sendMessage(jid, messageContent, {
         messageId: generatedId,
+        quoted: options.quotedMessageId
+          ? {
+              key: {
+                remoteJid: jid,
+                id: options.quotedMessageId,
+              },
+              message: {
+                conversation:
+                  (options.metadata?.quotedContent as string) ||
+                  "Media original",
+              },
+            }
+          : undefined,
       });
       const content = media.caption || `[${media.type}]`;
 
@@ -311,5 +344,4 @@ export class OutboundMessageHandler {
       Logger.warn(`[Presence] Error in sendPresenceUpdate:`, error);
     }
   }
-
 }

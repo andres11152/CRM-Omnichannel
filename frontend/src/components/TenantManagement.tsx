@@ -105,7 +105,7 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
 
   const handleImpersonate = async (id: string) => {
     const confirmed = window.confirm(
-      "⚠️ SEGURIDAD: Estás a punto de entrar en la cuenta del cliente. Todas tus acciones quedarán registradas. ¿Continuar?",
+      "⚠️ SEGURIDAD: Ests a punto de entrar en la cuenta del cliente. Todas tus acciones quedarn registradas. ¿Continuar?",
     );
     if (confirmed) {
       try {
@@ -664,7 +664,7 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
                     <div className="space-y-3">
                       <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
                         <div className="text-xs text-gray-500 mb-1">
-                          Último Login Admin
+                          ÚÚÚÚltimo Login Admin
                         </div>
                         <div className="text-sm font-medium text-gray-800 dark:text-white">
                           {metrics.engagement?.lastAdminLogin
@@ -676,7 +676,7 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
                       </div>
                       <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
                         <div className="text-xs text-gray-500 mb-1">
-                          Conversaciones
+                          Conversaciónes
                         </div>
                         <div className="text-2xl font-bold text-purple-600">
                           {metrics.engagement?.conversationsThisMonth || 0}

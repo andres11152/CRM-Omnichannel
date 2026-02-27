@@ -193,7 +193,7 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
                 <h2 className="text-xl font-bold text-white">
                   {activity ? 'Editar Actividad' : 'Nueva Actividad'}
                 </h2>
-                <p className="text-white/80 text-sm">{isMeeting && '📅 Se sincronizará con Google Calendar'}</p>
+                <p className="text-white/80 text-sm">{isMeeting && '📅 Se sincronizar con Google Calendar'}</p>
               </div>
             </div>
             <button 
@@ -320,7 +320,7 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
             {isMeeting && formData.dueDate && (
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
                 <Info className="w-4 h-4" />
-                Esta reunión se sincronizará automáticamente con Google Calendar
+                Esta reunión se sincronizar automticamente con Google Calendar
               </p>
             )}
           </div>
@@ -367,7 +367,7 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
                         <span className="text-sm text-gray-700 dark:text-gray-300">{user.name}</span>
                       </label>
                    ))}
-                   {users.filter(u => u.id !== formData.assignedToId && !u.name.toLowerCase().includes('admin')).length === 0 && <p className="text-xs text-gray-500 italic p-1">No hay más agentes disponibles</p>}
+                   {users.filter(u => u.id !== formData.assignedToId && !u.name.toLowerCase().includes('admin')).length === 0 && <p className="text-xs text-gray-500 italic p-1">No hay ms agentes disponibles</p>}
                 </div>
               </div>
             )}

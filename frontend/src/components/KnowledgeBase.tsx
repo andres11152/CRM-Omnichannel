@@ -92,7 +92,7 @@ export const KnowledgeBase: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (
       !confirm(
-        "¿Estás seguro de eliminar este documento de la base de conocimiento?",
+        "¿Ests seguro de eliminar este documento de la base de conocimiento?",
       )
     )
       return;
@@ -165,7 +165,7 @@ export const KnowledgeBase: React.FC = () => {
                 </svg>
               </div>
               <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
-                Arrastra y suelta archivos aquí, o haz clic para seleccionar
+                Arrastra y suelta archivos aquíí, o haz clic para seleccionar
               </p>
               <p className="text-xs text-gray-400">
                 Soportado: PDF, TXT, DOCX (Max 50MB)
@@ -205,7 +205,7 @@ export const KnowledgeBase: React.FC = () => {
           <div className="space-y-3">
             {documents.length === 0 && (
               <div className="text-center py-10 text-gray-400 italic bg-reply-bg dark:bg-reply-surface-dark rounded-lg border border-dashed border-gray-300 dark:border-reply-border-dark">
-                No hay documentos subidos. El bot usará solo conocimiento
+                No hay documentos subidos. El bot usar solo conocimiento
                 general.
               </div>
             )}

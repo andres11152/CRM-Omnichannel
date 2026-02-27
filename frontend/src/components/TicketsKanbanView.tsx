@@ -155,7 +155,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
       <div className={`flex-1 overflow-x-auto ${isWidget ? 'p-2' : 'p-8'}`}>
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-6 h-full min-w-max">
-            {Object.values(STATUS_COLUMNS).map((column) => (
+            {Object.values-ESTATUS_COLUMNS).map((column) => (
               <div key={column.id} className="w-80 flex flex-col h-full bg-gray-100/50 dark:bg-reply-surface-dark/50 rounded-xl border border-gray-200 dark:border-reply-border-dark/50">
                 <div className={`p-3 border-b border-gray-200 dark:border-reply-border-dark bg-white dark:bg-reply-panel-dark rounded-t-xl sticky top-0 z-10 border-t-4 ${
                   column.id === 'OPEN' ? 'border-t-blue-500' :
@@ -407,7 +407,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
 
                 {selectedTicket.lastMessage && (
                   <div>
-                    <label className="text-sm font-semibold text-gray-600 dark:text-gray-400">Último Mensaje</label>
+                    <label className="text-sm font-semibold text-gray-600 dark:text-gray-400">ÚÚÚÚÚltimo Mensaje</label>
                     <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 mt-1">
                       <p className="text-gray-800 dark:text-white">{selectedTicket.lastMessage}</p>
                     </div>

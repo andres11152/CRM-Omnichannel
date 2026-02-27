@@ -284,7 +284,7 @@ const MasterAdminDashboard: React.FC<{ onNavigate?: (tab: any) => void }> = ({
         <div className="mt-6 bg-white dark:bg-reply-panel-dark rounded-xl shadow-sm border border-slate-200 dark:border-reply-border-dark p-6">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
             <Activity className="w-5 h-5" />
-            Acciones Rápidas
+            Acciónes Rpidas
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
@@ -576,7 +576,7 @@ const AgentDashboard: React.FC<{
             </div>
           </div>
 
-          {/* Messages Sent (Output) */}
+          {/* Messages-ESent (Output) */}
           <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border-l-4 border-blue-500 shadow-sm hover:shadow-md transition-all">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600 dark:text-blue-400">
@@ -830,7 +830,7 @@ const CompanyAdminDashboard: React.FC<{
               </div>
               <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
                 <Activity className="w-3 h-3" />
-                Promedio últimos 7 días
+                Promedio úÚÚÚltimos 7 días
               </p>
             </div>
           </div>
@@ -855,7 +855,7 @@ const CompanyAdminDashboard: React.FC<{
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                Tickets cerrados automáticamente
+                Tickets cerrados automticamente
               </p>
             </div>
           </div>

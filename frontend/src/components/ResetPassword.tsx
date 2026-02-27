@@ -44,7 +44,7 @@ export const ResetPassword: React.FC = () => {
            setTimeout(() => navigate('/'), 2000);
         }
       } else {
-        setMessage({ text: data.message || 'El enlace es inválido o ha expirado.', type: 'error' });
+        setMessage({ text: data.message || 'El enlace es invlido o ha expirado.', type: 'error' });
       }
     } catch (error) {
        setMessage({ text: 'Error de conexión. Intente nuevamente.', type: 'error' });

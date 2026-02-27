@@ -167,7 +167,7 @@ export const ContactsPage: React.FC = () => {
     console.log("API_BASE_URL:", API_BASE_URL);
 
     // Temp: Bypass confirm to test event firing
-    // if (!confirm(`¿Estás seguro de eliminar a ${name}?`)) return;
+    // if (!confirm(`¿Ests seguro de eliminar a ${name}?`)) return;
 
     const toastId = toast.loading(`Eliminando a ${name}...`);
 
@@ -202,7 +202,7 @@ export const ContactsPage: React.FC = () => {
 
   const handleOpenChat = async (contact: Contact) => {
     if (!contact.phone) {
-      toast.error("Este contacto no tiene un teléfono válido");
+      toast.error("Este contacto no tiene un teléfono vlido");
       return;
     }
 
@@ -350,7 +350,7 @@ export const ContactsPage: React.FC = () => {
                 <User className="w-10 h-10 text-gray-300" />
               </div>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                {searchTerm ? "Sin resultados" : "Tu lista está vacía"}
+                {searchTerm ? "Sin resultados" : "Tu lista estáá vacía"}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
                 {searchTerm
@@ -498,7 +498,7 @@ export const ContactsPage: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widestá">
                                   {contact.channel || "Cliente"}
                                 </span>
                               </div>
@@ -792,7 +792,7 @@ export const ContactsPage: React.FC = () => {
                           {allTags.filter((t) => !selectedTagIds.includes(t.id))
                             .length === 0 && (
                             <span className="text-gray-400 text-xs italic">
-                              No hay más etiquetas disponibles
+                              No hay ms etiquetas disponibles
                             </span>
                           )}
                         </div>

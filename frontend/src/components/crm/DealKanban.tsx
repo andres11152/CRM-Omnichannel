@@ -127,7 +127,7 @@ export const DealKanban: React.FC = () => {
       return true;
     } catch (e: any) {
       const msg = e.response?.data?.message || e.message;
-      if (msg?.includes("ya está en uso") || msg?.includes("already exists")) {
+      if (msg?.includes("ya estáá en uso") || msg?.includes("already exists")) {
         return true;
       }
       console.error("[Pipeline] Failed to create default", e);
@@ -492,7 +492,7 @@ export const DealKanban: React.FC = () => {
                               <div className="flex flex-col items-center justify-center py-12 text-gray-300 dark:text-gray-600">
                                 <Target className="w-8 h-8 mb-2 opacity-40" />
                                 <p className="text-xs font-medium">
-                                  Arrastra deals aquí
+                                  Arrastra deals aquíí
                                 </p>
                               </div>
                             )}

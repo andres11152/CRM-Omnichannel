@@ -4,6 +4,8 @@ import { z } from "zod";
 import { TenantContextManager } from "@/config/tenantContext";
 import { userRepository } from "@/repositories/UserRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
+import axios from "axios";
+import { storageService } from "@/services/storageService";
 
 const FetchProfilePicSchema = z.object({
   sessionId: z.string().min(1, "Session ID is required"),
@@ -73,7 +75,9 @@ export class ProfilePictureService {
 
           if (
             existingUser?.profilePicUrl &&
-            existingUser.profilePicUrl.startsWith("http")
+            (existingUser.profilePicUrl.includes("amazonaws.com") ||
+              existingUser.profilePicUrl.includes("storage.googleapis.com") ||
+              !existingUser.profilePicUrl.includes("pps.whatsapp.net"))
           ) {
             return;
           }
@@ -100,6 +104,32 @@ export class ProfilePictureService {
           }
 
           if (!profilePicUrl) return;
+
+          // 🛡️ 100-YEAR FIX: Download and persist the image to avoid 403 errors (PPS links expire)
+          try {
+            const response = await axios.get(profilePicUrl, {
+              responseType: "arraybuffer",
+            });
+            const buffer = Buffer.from(response.data);
+            const mimeType = response.headers["content-type"] || "image/jpeg";
+            const filename = `profile_${userId}_${Date.now()}.jpg`;
+
+            const uploadResult = await storageService.uploadFile(
+              buffer,
+              filename,
+              mimeType,
+            );
+            profilePicUrl = uploadResult.url;
+
+            Logger.info(
+              `[ProfilePic] 📦 Persisted profile picture for ${userId} to storage: ${profilePicUrl}`,
+            );
+          } catch (uploadErr) {
+            Logger.warn(
+              `[ProfilePic] Failed to persist image to storage, using original URL:`,
+              uploadErr,
+            );
+          }
 
           await userRepository.update({
             where: { id: userId },

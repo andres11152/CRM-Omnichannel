@@ -231,7 +231,7 @@ interface Props {
   onToggleTag?: (tagId: string) => void;
 }
 
-export const ContactList: React.FC<Props> = ({
+const ContactListComponent: React.FC<Props> = ({
   contacts,
   groups,
   activeContactId,
@@ -423,7 +423,7 @@ export const ContactList: React.FC<Props> = ({
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-reply-bg dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
                       >
-                        <span>Más Recientes</span>
+                        <span>Ms Recientes</span>
                         {sortOrder === "date_desc" && (
                           <Check className="w-4 h-4 text-green-500" />
                         )}
@@ -435,7 +435,7 @@ export const ContactList: React.FC<Props> = ({
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-reply-bg dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
                       >
-                        <span>Más Antiguos</span>
+                        <span>Ms Antiguos</span>
                         {sortOrder === "date_asc" && (
                           <Check className="w-4 h-4 text-green-500" />
                         )}
@@ -801,3 +801,5 @@ export const ContactList: React.FC<Props> = ({
     </>
   );
 };
+
+export const ContactList = React.memo(ContactListComponent);

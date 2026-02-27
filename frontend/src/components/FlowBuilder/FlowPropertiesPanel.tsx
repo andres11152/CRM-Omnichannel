@@ -143,7 +143,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
               value={node.data.content || ""}
               onChange={(e) => onUpdate("content", e.target.value)}
               className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="Escribe el mensaje que se enviará al usuario..."
+              placeholder="Escribe el mensaje que se enviar al usuario..."
             />
             <p className="text-xs text-gray-400 mt-1">
               Puedes usar variables como {"{{nombre}}"}.
@@ -163,7 +163,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 value={node.data.content || ""}
                 onChange={(e) => onUpdate("content", e.target.value)}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                placeholder="¿Cuál es tu correo?"
+                placeholder="¿Cul es tu correo?"
               />
             </div>
             <div>
@@ -465,7 +465,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-gray-500 outline-none"
               />
               <p className="text-xs text-gray-400 mt-1">
-                El nombre que verá el usuario al descargar
+                El nombre que ver el usuario al descargar
               </p>
             </div>
           </>
@@ -489,7 +489,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
               </label>
               <textarea
                 rows={4}
-                placeholder="Escribe el mensaje que se enviará..."
+                placeholder="Escribe el mensaje que se enviar..."
                 value={node.data.message || node.data.content || ""}
                 onChange={(e) => onUpdate("message", e.target.value)}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -522,7 +522,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
               </label>
               <textarea
                 rows={2}
-                placeholder="¿Cuál es tu nombre completo?"
+                placeholder="¿Cul es tu nombre completo?"
                 value={node.data.question || node.data.content || ""}
                 onChange={(e) => onUpdate("question", e.target.value)}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-orange-500 outline-none"
@@ -684,7 +684,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                       Agente no seleccionado
                     </p>
                     <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                      El flujo no funcionará hasta que selecciones un agente IA.
+                      El flujo no funcionar hasta que selecciones un agente IA.
                     </p>
                   </div>
                 </div>
@@ -698,7 +698,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           <>
             <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-200 dark:border-orange-800 mb-2">
               <p className="text-xs text-orange-800 dark:text-orange-300">
-                Este nodo transferirá la conversación a un agente humano.
+                Este nodo transferir la conversación a un agente humano.
               </p>
             </div>
             <div>
@@ -782,8 +782,8 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <p className="text-xs text-blue-800 dark:text-blue-300">
                 💡 <strong>Cómo funciona:</strong> Conecta diferentes nodos a
-                este nodo de condición. Si la condición es verdadera, seguirá un
-                camino. Si es falsa, seguirá otro.
+                este nodo de condición. Si la condición es verdadera, seguir un
+                camino. Si es falsa, seguir otro.
               </p>
             </div>
           </>
@@ -800,7 +800,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 </p>
               </div>
               <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                Crea automáticamente un nuevo negocio en el CRM
+                Crea automticamente un nuevo negocio en el CRM
               </p>
             </div>
 
@@ -845,7 +845,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Si está vacío, usará el pipeline por defecto
+                Si estáá vacío, usar el pipeline por defecto
               </p>
             </div>
           </>
@@ -898,7 +898,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="{{telefono}}"
+                placeholder="{{teléfono}}"
                 value={node.data.phone || ""}
                 onChange={(e) => onUpdate("phone", e.target.value)}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -990,7 +990,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                   </select>
                 )}
                 <p className="text-xs text-gray-400 mt-1">
-                  El chat se asignará directamente a este usuario.
+                  El chat se asignar directamente a este usuario.
                 </p>
               </div>
             )}
@@ -1018,7 +1018,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                   </select>
                 )}
                 <p className="text-xs text-gray-400 mt-1">
-                  El chat esperará en esta cola hasta que un agente lo tome.
+                  El chat esperar en esta cola hasta que un agente lo tome.
                 </p>
               </div>
             )}
@@ -1039,7 +1039,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
             <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg flex gap-2">
               <span className="text-lg">⚠️</span>
               <p className="text-xs text-orange-800 dark:text-orange-300">
-                El bot se <strong>detendrá</strong> y el chat pasará a estado{" "}
+                El bot se <strong>detendrá</strong> y el chat pasar a estado{" "}
                 {node.data.assignmentType === "queue"
                   ? "PENDIENTE"
                   : "ASIGNADO"}
@@ -1091,7 +1091,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
 
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <p className="text-xs text-blue-800 dark:text-blue-300">
-                💡 El flujo continuará automáticamente después del tiempo
+                💡 El flujo continuar automticamente después del tiempo
                 especificado
               </p>
             </div>
@@ -1128,7 +1128,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
 
             <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
               <p className="text-xs text-green-800 dark:text-green-300">
-                ✅ El flujo se detendrá completamente después de este nodo
+                ✅ El flujo se detendr completamente después de este nodo
               </p>
             </div>
           </>
@@ -1139,7 +1139,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           <>
             <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-200 dark:border-orange-800 mb-2">
               <p className="text-xs text-orange-800 dark:text-orange-300">
-                Este nodo transferirá la conversación a un agente humano.
+                Este nodo transferir la conversación a un agente humano.
               </p>
             </div>
             <div>
@@ -1228,7 +1228,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 </p>
               </div>
               <p className="text-xs text-red-600 dark:text-red-300">
-                Este nodo enviará opciones de horario disponibles o un link de
+                Este nodo enviar opciones de horario disponibles o un link de
                 agendamiento al usuario.
               </p>
             </div>
@@ -1284,7 +1284,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-red-500 outline-none"
               />
               <p className="text-[10px] text-gray-400 mt-1">
-                Si se deja vacío, se usará la integración nativa de Google
+                Si se deja vacío, se usar la integración nativa de Google
                 Calendar.
               </p>
             </div>

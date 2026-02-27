@@ -243,7 +243,7 @@ export const TagsManager: React.FC = () => {
                 <div className="relative group min-w-[300px]">
                   <input
                     type="text"
-                    placeholder="Filtro rápido..."
+                    placeholder="Filtro rpido..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="w-full pl-12 pr-6 py-3.5 bg-white dark:bg-reply-surface-dark rounded-2xl border border-gray-100 dark:border-reply-border-dark shadow-sm focus:shado-xl focus:border-indigo-500 transition-all outline-none font-medium"
@@ -322,7 +322,7 @@ export const TagsManager: React.FC = () => {
                           </h4>
                           <div className="flex items-center gap-2 mt-1">
                             <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widestá">
                               {new Date(
                                 tag.createdAt || Date.now(),
                               ).toLocaleDateString("es-ES", {

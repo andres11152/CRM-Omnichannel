@@ -293,9 +293,9 @@ export const CompanySettings: React.FC = () => {
     try {
       // Use current logged in user email as recipient
       const targetEmail =
-        user?.email || settings.smtp.senderEmail || "test@example.com";
+        user?.email || settings.smtp.senderEmail || "testá@example.com";
 
-      await api.post("/emails/test-connection", {
+      await api.post("/emails/testá-connection", {
         host: settings.smtp.host,
         port: settings.smtp.port,
         user: settings.smtp.user,
@@ -585,7 +585,7 @@ export const CompanySettings: React.FC = () => {
                       }
                       className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-reply-surface-dark rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none appearance-none"
                     >
-                      <option value="America/Bogota">Bogotá (GMT-5)</option>
+                      <option value="America/Bogota">Bogot (GMT-5)</option>
                       <option value="America/Mexico_City">CDMX (GMT-6)</option>
                       <option value="America/New_York">New York (GMT-5)</option>
                       <option value="UTC">UTC (GMT+0)</option>
@@ -622,7 +622,7 @@ export const CompanySettings: React.FC = () => {
                     Horario de Atención
                   </h3>
                   <p className="text-sm text-gray-500 mt-1">
-                    Define cuándo tu equipo está disponible para responder.
+                    Define cundo tu equipo estáá disponible para responder.
                   </p>
                 </div>
                 <label className="inline-flex items-center cursor-pointer group">
@@ -660,7 +660,7 @@ export const CompanySettings: React.FC = () => {
                       wed: "Miércoles",
                       thu: "Jueves",
                       fri: "Viernes",
-                      sat: "Sábado",
+                      sat: "Sbado",
                       sun: "Domingo",
                     };
 
@@ -758,7 +758,7 @@ export const CompanySettings: React.FC = () => {
                 </h3>
               </div>
               <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-                Este mensaje se enviará automáticamente a nuevos contactos o
+                Este mensaje se enviar automticamente a nuevos contactos o
                 tras 24h de inactividad.
               </p>
               <textarea
@@ -809,7 +809,7 @@ export const CompanySettings: React.FC = () => {
                 </span>
               </div>
               <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-                Se envía automáticamente cuando un cliente escribe fuera de tu
+                Se envía automticamente cuando un cliente escribe fuera de tu
                 horario laboral configurado.
               </p>
               <textarea
@@ -839,7 +839,7 @@ export const CompanySettings: React.FC = () => {
                 )}
               </div>
               <p className="text-sm text-gray-500 mb-4">
-                Sincroniza automáticamente tus reuniones del CRM con Google
+                Sincroniza automticamente tus reuniones del CRM con Google
                 Calendar.
               </p>
               {googleCalendarConnected ? (
@@ -966,7 +966,7 @@ export const CompanySettings: React.FC = () => {
                           Gmail require "Contraseña de Aplicación"
                         </div>
                         <p className="mb-2">
-                          Tu contraseña normal NO funcionará. Debes generar una
+                          Tu contraseña normal NO funcionar. Debes generar una
                           contraseña especial de 16 caracteres.
                         </p>
                         <ul className="list-disc list-inside space-y-1 text-xs mb-3">
@@ -1678,15 +1678,15 @@ export const CompanySettings: React.FC = () => {
                           </svg>
                         </div>
                         <p className="text-white/90 text-sm leading-relaxed mb-3">
-                          Pronto podrás vincular tu tarjeta para pagos
-                          automáticos y gestión de suscripciones sin
+                          Pronto podrs vincular tu tarjeta para pagos
+                          automticos y gestión de suscripciones sin
                           interrupciones.
                         </p>
                         <button
                           className="w-full py-2 bg-white text-[#635BFF] rounded-lg font-bold text-sm hover:bg-reply-bg transition-colors shadow-sm cursor-not-allowed opacity-80"
                           disabled
                         >
-                          Notificarme cuando esté listo
+                          Notificarme cuando estáé listo
                         </button>
                       </div>
                     </div>
@@ -1859,7 +1859,7 @@ export const CompanySettings: React.FC = () => {
 
                         <div className="mt-6 pt-4 border-t border-gray-100 dark:border-reply-border-dark text-center">
                           <p className="text-xs text-gray-500 mb-2">
-                            ¿Necesitas más capacidad?
+                            ¿Necesitas ms capacidad?
                           </p>
                           <button className="text-indigo-600 dark:text-indigo-400 font-bold text-sm hover:underline">
                             Contactar Ventas

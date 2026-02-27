@@ -175,7 +175,7 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({ isOp
                 <div className="p-6 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-reply-panel-dark">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">Nuevo Producto</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Agrega un item a tu catálogo</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Agrega un item a tu catlogo</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500">
                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

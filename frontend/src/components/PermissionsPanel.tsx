@@ -56,7 +56,7 @@ interface PermissionModule {
 const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "CONVERSATIONS",
-    name: "Conversaciones",
+    name: "Conversaciónes",
     icon: "💬",
     description: "Gestión de conversaciones y mensajería",
     permissions: [
@@ -257,8 +257,8 @@ const PERMISSION_MODULES: PermissionModule[] = [
       {
         action: "VIEW",
         resource: "basic",
-        label: "Ver básicos",
-        description: "Ver reportes básicos",
+        label: "Ver bsicos",
+        description: "Ver reportes bsicos",
       },
       {
         action: "VIEW",
@@ -549,7 +549,7 @@ export const PermissionsPanel: React.FC = () => {
   const handleDeleteRole = async (roleId: string) => {
     if (
       !confirm(
-        "¿Estás seguro de eliminar este rol? Los usuarios con este rol perderán sus permisos personalizados.",
+        "¿Ests seguro de eliminar este rol? Los usuarios con este rol perdern sus permisos personalizados.",
       )
     ) {
       return;

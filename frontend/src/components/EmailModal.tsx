@@ -261,7 +261,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Escribe el contenido de tu correo aquí..."
+              placeholder="Escribe el contenido de tu correo aquíí..."
               className="w-full h-full min-h-[200px] px-4 py-3 bg-white dark:bg-reply-border-dark border border-gray-300 dark:border-gray-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-inner resize-y leading-relaxed"
             />
           </div>

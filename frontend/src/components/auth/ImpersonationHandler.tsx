@@ -64,7 +64,7 @@ export const ImpersonationHandler = () => {
                 }
             } catch (e) {
                 console.error("❌ Fallo al procesar token de impersonation", e);
-                toast.error("Token de acceso inválido.");
+                toast.error("Token de acceso invlido.");
             }
         }
     }, [login, navigate]);

@@ -379,8 +379,8 @@ export type NodeType =
   | "ask_data" // Solicitar datos del usuario (INPUT)
   | "condition" // Condición / Branching
   | "ai_agent" // Agente IA (OpenAI/Gemini)
-  // Acciones CRM
-  | "create_deal" // Crear deal automáticamente
+  // Acciónes CRM
+  | "create_deal" // Crear deal automticamente
   | "update_contact" // Actualizar campos del contacto
   // Asignación
   | "assign_agent" // Asignar a agente humano
@@ -557,4 +557,3 @@ export interface TransferTicketDTO {
   queueId?: string | null;
   status: "OPEN";
 }
-

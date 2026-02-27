@@ -18,7 +18,7 @@ export const useSocketInit = () => {
       toast.info(`Ticket ${payload.ticketId} asignado a ${payload.agentName}`, {
         description: "Nueva asignación desde la cola.",
       });
-      // Play sound if needed (requires SoundContext hook)
+      // Play sound if needed (requires-ESoundContext hook)
     };
 
     socketService.on("agent_assigned", handleAgentAssigned);

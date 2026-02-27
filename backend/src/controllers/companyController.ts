@@ -1,9 +1,16 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
-import { prisma } from "@/config/database";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
+import { companySettingsService } from "@/services/companySettingsService";
+
+/**
+ * 🏢 COMPANY CONTROLLER
+ *
+ * HTTP orchestrator for company/tenant settings.
+ * All data access delegated to companySettingsService (SRP).
+ */
 
 export const getCompanySettings = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
@@ -13,45 +20,13 @@ export const getCompanySettings = catchAsync(
       throw new AppError("Usuario no tiene compañía asignada", 400);
     }
 
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-      // getCompanySettings modifications
-      select: {
-        name: true,
-        slug: true,
-        logoUrl: true,
-        address: true,
-        phone: true,
-        website: true,
-        timezone: true,
-        settings: true,
-        // SMTP Fields
-        emailProvider: true,
-        smtpHost: true,
-        smtpPort: true,
-        smtpUser: true,
-        smtpPassword: true,
-        smtpSecure: true,
-        defaultSenderEmail: true,
-        defaultSenderName: true,
-        plan: {
-          select: {
-            id: true,
-            name: true,
-            price: true,
-            config: true,
-          },
-        },
-        subscriptionEndsAt: true,
-      },
-    });
+    const company = (await companySettingsService.getSettings(
+      companyId,
+    )) as Awaited<ReturnType<typeof companySettingsService.getSettings>> & {
+      plan?: { id: string; name: string; price: number; config: unknown };
+    };
 
-    if (!company) {
-      throw new AppError("Compañía no encontrada", 404);
-    }
-
-    // Parse JSON settings or default
-    const jsonSettings: any = company.settings || {};
+    const jsonSettings = (company.settings as Record<string, unknown>) || {};
 
     const responseData = {
       general: {
@@ -72,13 +47,15 @@ export const getCompanySettings = catchAsync(
         host: company.smtpHost || "",
         port: company.smtpPort || 587,
         user: company.smtpUser || "",
-        // Security: Never return real password to frontend
         hasPassword: !!company.smtpPassword,
         secure: company.smtpSecure ?? true,
         senderEmail: company.defaultSenderEmail || "",
         senderName: company.defaultSenderName || "",
       },
-      businessHours: jsonSettings.businessHours || {
+      businessHours: (jsonSettings.businessHours as Record<
+        string,
+        unknown
+      >) || {
         enabled: true,
         schedule: {
           mon: { open: "08:00", close: "18:00", active: true },
@@ -90,7 +67,7 @@ export const getCompanySettings = catchAsync(
           sun: { open: "00:00", close: "00:00", active: false },
         },
       },
-      automation: jsonSettings.automation || {
+      automation: (jsonSettings.automation as Record<string, unknown>) || {
         welcomeMessage:
           "¡Hola! Gracias por escribirnos. Un agente te atenderá pronto.",
         welcomeEnabled: true,
@@ -105,7 +82,7 @@ export const getCompanySettings = catchAsync(
     };
 
     res.json(responseData);
-  }
+  },
 );
 
 export const updateCompanySettings = catchAsync(
@@ -117,63 +94,15 @@ export const updateCompanySettings = catchAsync(
       throw new AppError("Usuario no tiene compañía asignada", 400);
     }
 
-    // 1. Update Core Fields if 'general' is provided
-    let updateData: any = {};
-    if (general) {
-      if (general.name) updateData.name = general.name;
-      if (general.logo) updateData.logoUrl = general.logo;
-      if (general.address) updateData.address = general.address;
-      if (general.phone) updateData.phone = general.phone;
-      if (general.website) updateData.website = general.website;
-      if (general.timezone) updateData.timezone = general.timezone;
-    }
-
-    // 2. Update SMTP Settings
-    if (smtp) {
-      if (smtp.host !== undefined) updateData.smtpHost = smtp.host;
-      if (smtp.port !== undefined) updateData.smtpPort = parseInt(smtp.port);
-      if (smtp.user !== undefined) updateData.smtpUser = smtp.user;
-      // Only update password if provided and not empty/masked
-      if (smtp.password && smtp.password !== "********") {
-        updateData.smtpPassword = smtp.password; // TODO: Encrypt here
-      }
-      if (smtp.secure !== undefined) updateData.smtpSecure = smtp.secure;
-      if (smtp.senderEmail !== undefined)
-        updateData.defaultSenderEmail = smtp.senderEmail;
-      if (smtp.senderName !== undefined)
-        updateData.defaultSenderName = smtp.senderName;
-      if (smtp.provider !== undefined) updateData.emailProvider = smtp.provider;
-    }
-
-    // 3. Update JSON Settings (Merge with existing)
-    if (businessHours || automation) {
-      // Fetch current settings first to merge deeply if needed,
-      // but for now we expect the frontend to send the full block for each section
-      const currentCompany = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { settings: true },
-      });
-
-      const currentSettings: any = currentCompany?.settings || {};
-
-      const newSettings = {
-        ...currentSettings,
-        ...(businessHours ? { businessHours } : {}),
-        ...(automation ? { automation } : {}),
-      };
-
-      updateData.settings = newSettings;
-    }
-
-    const updatedCompany = await prisma.company.update({
-      where: { id: companyId },
-      data: updateData,
-    });
+    const updatedCompany = await companySettingsService.updateSettings(
+      companyId,
+      { general, businessHours, automation, smtp },
+    );
 
     Logger.info(
-      `[Company] Settings updated for ${companyId} by ${req.user?.email}`
+      `[Company] Settings updated for ${companyId} by ${req.user?.email}`,
     );
 
     res.json({ status: "success", data: updatedCompany });
-  }
+  },
 );

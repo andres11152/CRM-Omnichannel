@@ -8,6 +8,7 @@ import { toMediaDTO, MediaDTO } from "@/types/media.types";
 import { Media, MediaType, Prisma } from "@prisma/client";
 import { Readable } from "stream";
 import { MediaCategory } from "@/constants/mediaCategories";
+import { Logger } from "@/utils/logger";
 
 // Helper to map string types to Prisma Enum safely
 const toMediaType = (type: string): MediaType => {
@@ -78,15 +79,15 @@ export const mediaService = {
     const mediaType = toMediaType(typeValidation.type!);
 
     // 3. Upload to Storage
-    console.info("[MediaService] Uploading to Storage...");
+    Logger.info("[MediaService] Uploading to Storage...");
     const uploadResult = await storageProvider.upload(file, {
       companyId,
       type: mediaType,
     });
-    console.info("[MediaService] Storage upload complete.");
+    Logger.info("[MediaService] Storage upload complete.");
 
     // 4. Parse Tags
-    console.info("[MediaService] Parse Tags...");
+    Logger.info("[MediaService] Parse Tags...");
     let tagArray: string[] = [];
     if (tags) {
       if (Array.isArray(tags)) tagArray = tags;
@@ -101,7 +102,7 @@ export const mediaService = {
     }
 
     // 5. Save to DB
-    console.info("[MediaService] Saving to DB...");
+    Logger.info("[MediaService] Saving to DB...");
     const media = await prisma.media.create({
       data: {
         companyId,
@@ -121,7 +122,7 @@ export const mediaService = {
         uploadedBy: { select: { id: true, name: true, email: true } },
       },
     });
-    console.info("[MediaService] Database entry created.");
+    Logger.info("[MediaService] Database entry created.");
 
     // 6. Sign URL if needed (Abstraction)
     const viewUrl = await this.resolveUrl(media);
@@ -292,7 +293,7 @@ export const mediaService = {
     ) {
       // Return RELATIVE URL - works with Vite proxy and production
       const proxyUrl = `/api/media/${media.id}/content`;
-      console.info(`[MediaService] resolveUrl: ${media.id} -> ${proxyUrl}`);
+      Logger.info(`[MediaService] resolveUrl: ${media.id} -> ${proxyUrl}`);
       return proxyUrl;
     }
     // For external URLs (e.g. ui-avatars, google profile pics)
@@ -304,8 +305,12 @@ export const mediaService = {
    */
   async getStream(
     mediaId: string,
+    companyId?: string,
   ): Promise<{ stream: Readable; mimeType: string }> {
-    const media = await prisma.media.findUnique({ where: { id: mediaId } });
+    const where: { id: string; companyId?: string } = { id: mediaId };
+    if (companyId) where.companyId = companyId;
+
+    const media = await prisma.media.findFirst({ where });
     if (!media) throw new AppError("Media not found", HTTP_STATUS.NOT_FOUND);
 
     const stream = await storageProvider.getStream(media.key);

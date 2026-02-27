@@ -14,6 +14,10 @@ export class ConversationRepository {
     });
   }
 
+  async upsert(args: Prisma.ConversationUpsertArgs) {
+    return this.db.conversation.upsert(args);
+  }
+
   async findByContactId(
     companyId: string,
     contactId: string,
@@ -77,6 +81,10 @@ export class ConversationRepository {
 
   // Extended Methods for Service
 
+  async count(args: Prisma.ConversationCountArgs): Promise<number> {
+    return this.db.conversation.count(args);
+  }
+
   async findAll(
     where: Prisma.ConversationWhereInput,
     options?: { take?: number; skip?: number },
@@ -101,6 +109,21 @@ export class ConversationRepository {
         participants: true,
         assignedTo: true,
         messages: { orderBy: { createdAt: "asc" } },
+      },
+    });
+  }
+
+  /**
+   * Find conversation with participants, assignedTo, and queue (with AI assistant).
+   * Used by chatService.getFullConversation for message processing context.
+   */
+  async findByIdWithQueueAndParticipants(id: string) {
+    return this.db.conversation.findUnique({
+      where: { id },
+      include: {
+        participants: true,
+        assignedTo: true,
+        queue: { include: { aiAssistant: true } },
       },
     });
   }
@@ -131,6 +154,34 @@ export class ConversationRepository {
         // updatedAt is usually NOT updated on read, to preserve sort order by last message
       },
     });
+  }
+
+  /**
+   * Generic findFirst with full Prisma args.
+   */
+  async findFirst(args: Prisma.ConversationFindFirstArgs) {
+    return this.db.conversation.findFirst(args);
+  }
+
+  /**
+   * Generic create with full Prisma args (for unchecked creates with raw fields).
+   */
+  async createRaw(args: Prisma.ConversationCreateArgs) {
+    return this.db.conversation.create(args);
+  }
+
+  /**
+   * Generic findUnique with full Prisma args.
+   */
+  async findUnique(args: Prisma.ConversationFindUniqueArgs) {
+    return this.db.conversation.findUnique(args);
+  }
+
+  /**
+   * Generic findMany with full Prisma args.
+   */
+  async findMany(args: Prisma.ConversationFindManyArgs) {
+    return this.db.conversation.findMany(args);
   }
 }
 

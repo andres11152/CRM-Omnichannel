@@ -53,23 +53,25 @@ export const initSocketGateway = async (httpServer: Server) => {
     });
   });
 
-  // 🔥 Propagate incoming messages to frontend in REAL-TIME
-  eventBus.subscribe(WhatsAppEventType.MESSAGE_RECEIVED, (event) => {
-    Logger.debug(
-      `[Loader] 📨 Propagating message to company ${event.companyId}`,
-    );
-    gateway.emitToCompany(event.companyId, "message.received", {
-      message: event.data.message,
-      timestamp: event.timestamp,
-    });
+  // 🔥 Legacy direct message propagation removed (Handled gracefully via SocketEventEmitter now)
+  eventBus.subscribe(WhatsAppEventType.MESSAGE_RECEIVED, (_event) => {
+    // We strictly use `socketEventEmitter.sendMessageReceived(...)` dynamically from chatService
+    // instead of dumping raw Bailey's Protobuf objects onto the Redis Socket bridge which crashed it.
   });
 
   // 🟢 PRESENCE UPDATES (Typing indicators)
   eventBus.subscribe(WhatsAppEventType.PRESENCE_UPDATE, (event) => {
-    gateway.emitToCompany(event.companyId, "presence.update", {
-      id: event.data.id,
-      presences: event.data.presences,
-    });
+    try {
+      const sanitized = JSON.parse(
+        JSON.stringify({
+          id: event.data.id,
+          presences: event.data.presences,
+        }),
+      );
+      gateway.emitToCompany(event.companyId, "presence.update", sanitized);
+    } catch (err) {
+      Logger.error(`[Loader] ❌ Failed to serialize presence for socket`, err);
+    }
   });
 
   Logger.info("[Loader] ✅ Event Bridge established");

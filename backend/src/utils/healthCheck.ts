@@ -5,8 +5,22 @@ import { Logger } from "@/utils/logger";
 
 /**
  * 🏥 COMPREHENSIVE HEALTH CHECK SYSTEM
- * Checks all critical services and returns detailed status
+ * Checks all critical services and returns detailed status.
+ *
+ * 🛡️ PERFORMANCE: DB and Redis checks are cached for HEALTH_CACHE_TTL_MS
+ * to prevent connection pool exhaustion under concurrent load (e.g., K8s probes,
+ * load balancers, or stress tests hitting /health simultaneously).
  */
+
+const HEALTH_CACHE_TTL_MS = 3000; // 3 seconds
+
+interface CachedResult<T> {
+  data: T;
+  expiresAt: number;
+}
+
+let dbCache: CachedResult<ServiceStatus> | null = null;
+let redisCache: CachedResult<ServiceStatus> | null = null;
 
 interface HealthCheckResult {
   status: "healthy" | "degraded" | "unhealthy";
@@ -44,7 +58,7 @@ interface MemoryStatus extends ServiceStatus {
  */
 export const healthCheckHandler = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const startTime = Date.now();
   let overallStatus: "healthy" | "degraded" | "unhealthy" = "healthy";
@@ -90,89 +104,108 @@ export const healthCheckHandler = async (
   };
 
   // Set appropriate HTTP status code
-  const httpStatus =
-    overallStatus === "healthy"
-      ? 200
-      : overallStatus === "degraded"
-      ? 503
-      : 503;
+  // 🛡️ FIX: "degraded" means the service works but with warnings — NOT a 503.
+  // Only "unhealthy" should return 503 (Service Unavailable).
+  const httpStatus = overallStatus === "unhealthy" ? 503 : 200;
 
   res.status(httpStatus).json(result);
 };
 
 /**
- * 🔍 Check Database Connection
+ * 🔍 Check Database Connection (with TTL cache)
+ * Prevents connection pool exhaustion under concurrent health probes.
  */
 async function checkDatabase(): Promise<ServiceStatus> {
+  // Return cached result if still valid
+  if (dbCache && Date.now() < dbCache.expiresAt) {
+    return dbCache.data;
+  }
+
   const start = Date.now();
   try {
     await prisma.$queryRaw`SELECT 1`;
     const latency = Date.now() - start;
 
+    let result: ServiceStatus;
     if (latency > 1000) {
       Logger.warn(`[Health] Database latency high: ${latency}ms`);
-      return {
+      result = {
         status: "degraded",
         latency,
         message: "Database responding slowly",
       };
+    } else {
+      result = { status: "up", latency };
     }
 
-    return {
-      status: "up",
-      latency,
-    };
-  } catch (error: any) {
+    dbCache = { data: result, expiresAt: Date.now() + HEALTH_CACHE_TTL_MS };
+    return result;
+  } catch (error: unknown) {
     Logger.error("[Health] Database check failed:", error);
-    return {
+    const result: ServiceStatus = {
       status: "down",
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       message: "Database connection failed",
     };
+    // Cache failures for a shorter TTL to retry sooner
+    dbCache = { data: result, expiresAt: Date.now() + 1000 };
+    return result;
   }
 }
 
 /**
- * 🔍 Check Redis Connection
+ * 🔍 Check Redis Connection (with TTL cache)
+ * Prevents Redis ping flood under concurrent health probes.
  */
 async function checkRedis(): Promise<ServiceStatus> {
+  // Return cached result if still valid
+  if (redisCache && Date.now() < redisCache.expiresAt) {
+    return redisCache.data;
+  }
+
   const start = Date.now();
   try {
     if (!redisClient || !redisClient.isOpen) {
       Logger.warn(
-        "[Health] Redis client not connected - Running in fallback mode"
+        "[Health] Redis client not connected - Running in fallback mode",
       );
-      return {
+      const result: ServiceStatus = {
         status: "degraded",
         message: "Redis unavailable - Using fallback mode",
       };
+      redisCache = {
+        data: result,
+        expiresAt: Date.now() + HEALTH_CACHE_TTL_MS,
+      };
+      return result;
     }
 
     await redisClient.ping();
     const latency = Date.now() - start;
 
+    let result: ServiceStatus;
     if (latency > 500) {
       Logger.warn(`[Health] Redis latency high: ${latency}ms`);
-      return {
+      result = {
         status: "degraded",
         latency,
         message: "Redis responding slowly",
       };
+    } else {
+      result = { status: "up", latency };
     }
 
-    return {
-      status: "up",
-      latency,
-    };
-  } catch (error: any) {
+    redisCache = { data: result, expiresAt: Date.now() + HEALTH_CACHE_TTL_MS };
+    return result;
+  } catch (error: unknown) {
     Logger.error("[Health] Redis check failed:", error);
-
-    // Redis failure is not critical - we have fallback
-    return {
+    const result: ServiceStatus = {
       status: "degraded",
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       message: "Redis connection failed - Using fallback mode",
     };
+    redisCache = { data: result, expiresAt: Date.now() + 1000 };
+    return result;
   }
 }
 
@@ -208,20 +241,29 @@ export const livenessProbe = (req: Request, res: Response): void => {
 
 /**
  * 🏥 Readiness Probe (for Kubernetes)
+ * Uses the cached DB check to avoid pool exhaustion.
  */
 export const readinessProbe = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
-    // Check if critical services are ready
-    await prisma.$queryRaw`SELECT 1`;
+    const dbStatus = await checkDatabase();
+    if (dbStatus.status === "down") {
+      res.status(503).json({
+        status: "not_ready",
+        timestamp: new Date().toISOString(),
+        error: dbStatus.error || "Database not ready",
+      });
+      return;
+    }
 
     res.status(200).json({
       status: "ready",
       timestamp: new Date().toISOString(),
+      dbLatency: dbStatus.latency,
     });
-  } catch (error) {
+  } catch {
     res.status(503).json({
       status: "not_ready",
       timestamp: new Date().toISOString(),

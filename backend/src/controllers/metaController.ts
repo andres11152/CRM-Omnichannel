@@ -7,13 +7,15 @@ import { webhookDispatcher } from "@/services/webhookDispatcher";
 import type { Message } from "@prisma/client";
 import { MessageDirection, Channel } from "@prisma/client";
 
+import type { Request, Response } from "express";
+
 // Configuration Constants
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
 
 /**
  * 1. WEBHOOK VERIFICATION (Handshake)
  */
-export const verifyWebhook = (req: any, res: any) => {
+export const verifyWebhook = (req: Request, res: Response) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
@@ -34,7 +36,7 @@ export const verifyWebhook = (req: any, res: any) => {
  * 2. PROCESS INCOMING WEBHOOK (Entry Point)
  * Receives the POST from Meta, saves to DB, and notifies the agent via Socket.
  */
-export const handleIncomingWebhook = async (req: any, res: any) => {
+export const handleIncomingWebhook = async (req: Request, res: Response) => {
   try {
     const body = req.body;
 
@@ -74,7 +76,6 @@ export const handleIncomingWebhook = async (req: any, res: any) => {
 
     // 4. ASYNC AI PROCESSING
     // Instead of calling AI directly, we push to queue for scalability
-    // @ts-ignore - Legacy code, messageId type mismatch
     queueProducer.addAITaskToQueue({
       messageId: messageToSave.id,
       text: messageToSave.content,
@@ -99,8 +100,32 @@ export const handleIncomingWebhook = async (req: any, res: any) => {
   }
 };
 
+interface MetaWebhookBody {
+  object?: string;
+  entry?: Array<{
+    changes?: Array<{
+      value: {
+        messages?: Array<{
+          id: string;
+          from: string;
+          timestamp: string;
+          type: string;
+          text?: { body: string };
+          image?: { id: string; caption?: string };
+          video?: { id: string; caption?: string };
+          audio?: { id: string };
+          document?: { id: string; filename?: string; caption?: string };
+          [key: string]: unknown;
+        }>;
+        contacts?: Array<{ profile: { name: string } }>;
+        metadata?: { phone_number_id?: string };
+      };
+    }>;
+  }>;
+}
+
 // Helper to extract data and PROCESS MEDIA
-const processMetaJSON = async (body: any) => {
+const processMetaJSON = async (body: MetaWebhookBody) => {
   if (body.object) {
     if (
       body.entry &&
@@ -124,23 +149,30 @@ const processMetaJSON = async (body: any) => {
       }
       // HANDLE MEDIA (Image, Audio, Video, Document)
       else if (["image", "video", "audio", "document"].includes(type)) {
-        const mediaObj = message[type];
-        content = mediaObj.caption || `[${type.toUpperCase()}]`;
+        const mediaObj = message[type as keyof typeof message] as {
+          id: string;
+          caption?: string;
+          filename?: string;
+          mime_type?: string;
+        };
+        content = mediaObj?.caption || `[${type.toUpperCase()}]`;
 
         // --- DOWNLOAD FROM META & UPLOAD TO S3 ---
         try {
-          const s3Result = await metaMediaService.processMedia(
-            mediaObj.id,
-            companyId,
-          );
+          if (mediaObj?.id) {
+            const s3Result = await metaMediaService.processMedia(
+              mediaObj.id,
+              companyId,
+            );
 
-          attachment = {
-            id: mediaObj.id,
-            type: s3Result.type,
-            url: s3Result.url, // The S3 URL!
-            name: mediaObj.filename || `${type}_${mediaObj.id}`,
-            mimeType: mediaObj.mime_type,
-          };
+            attachment = {
+              id: mediaObj.id,
+              type: s3Result.type,
+              url: s3Result.url, // The S3 URL!
+              name: mediaObj.filename || `${type}_${mediaObj.id}`,
+              mimeType: mediaObj.mime_type || `${type}/unknown`,
+            };
+          }
         } catch (e) {
           Logger.error("Error processing media:", e);
           content = `[ERROR DOWNLOADING ${type}]`;
@@ -169,7 +201,6 @@ const processMetaJSON = async (body: any) => {
  */
 export const sendWhatsAppMessage = async (to: string, messageBody: string) => {
   // Call the producer to enqueue
-  // @ts-ignore - Legacy code, 'to' type mismatch
   await queueProducer.addMessageToQueue({
     to,
     text: messageBody,

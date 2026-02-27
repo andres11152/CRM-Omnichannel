@@ -133,7 +133,7 @@ export const securityMiddleware = (app: Express) => {
 
       // Log rejected origins in production for monitoring
       if (!isDevelopment) {
-        console.warn(`[CORS] ⚠️ Rejected origin: ${origin}`);
+        Logger.warn(`[CORS] ⚠️ Rejected origin: ${origin}`);
       }
 
       // In production: strict enforcement

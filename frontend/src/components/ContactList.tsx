@@ -16,6 +16,7 @@ import {
   Minus,
 } from "lucide-react";
 import { ContactTimelineView } from "./crm/ContactTimelineView";
+import { Avatar } from "@/components/common/Avatar";
 
 // 🎨 100-Year Solution: Omnichannel Badge Component
 // Displays the channel icon with session number for multi-account support
@@ -570,38 +571,11 @@ export const ContactList: React.FC<Props> = ({
 
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
-                  {contact.profilePicUrl || contact.avatarUrl ? (
-                    <img
-                      src={contact.profilePicUrl || contact.avatarUrl}
-                      alt={contact.name}
-                      className={`${viewMode === "compact" ? "w-8 h-8" : "w-10 h-10"} rounded-full object-cover shadow-sm transition-all`}
-                      onError={(e) => {
-                        // Fallback to initials if image fails to load
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = "none";
-                        const fallback =
-                          target.nextElementSibling as HTMLElement;
-                        if (fallback) fallback.style.display = "flex";
-                      }}
-                    />
-                  ) : null}
-                  {/* Fallback: Initials Circle */}
-                  <div
-                    className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-sm`}
-                    style={{
-                      display:
-                        contact.profilePicUrl || contact.avatarUrl
-                          ? "none"
-                          : "flex",
-                    }}
-                  >
-                    {contact.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")
-                      .toUpperCase()
-                      .slice(0, 2)}
-                  </div>
+                  <Avatar
+                    src={contact.profilePicUrl || contact.avatarUrl || null}
+                    name={contact.name || ""}
+                    className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} shadow-sm`}
+                  />
                   {/* Bot Indicator */}
                   {contact.assignedMode === "bot" && (
                     <div
@@ -777,11 +751,11 @@ export const ContactList: React.FC<Props> = ({
                   `}
                   >
                     <div className="relative flex-shrink-0">
-                      <div
-                        className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white font-bold shadow-sm`}
-                      >
-                        {contact.name.slice(0, 2).toUpperCase()}
-                      </div>
+                      <Avatar
+                        src={contact.profilePicUrl || contact.avatarUrl || null}
+                        name={contact.name || ""}
+                        className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} shadow-sm`}
+                      />
                       <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full border border-gray-100 p-0.5">
                         <User className="w-3 h-3 text-orange-500" />
                       </div>
@@ -827,5 +801,3 @@ export const ContactList: React.FC<Props> = ({
     </>
   );
 };
-
-

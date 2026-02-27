@@ -2,34 +2,35 @@ import { Response, NextFunction } from "express";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
-import { prisma } from "../../config/database";
-import { planLimitsService } from "../../services/planLimitsService";
+import {
+  accountService,
+  CreateAccountDTO,
+} from "../../services/accountService";
+
+/**
+ * 🏢 ACCOUNT CONTROLLER
+ *
+ * HTTP orchestrator for CRM accounts.
+ * All data access delegated to accountService (SRP).
+ */
 
 // Get all accounts for a company
 export const getAccounts = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     const companyId = req.user?.companyId;
 
     if (!companyId) {
-      return next(new AppError("Company ID is missing", 400));
+      return _next(new AppError("Company ID is missing", 400));
     }
 
-    const accounts = await prisma.account.findMany({
-      where: { companyId },
-      include: {
-        _count: {
-          select: { contacts: true, deals: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
+    const accounts = await accountService.findAll(companyId);
 
     res.status(200).json({
       status: "success",
       results: accounts.length,
       data: { accounts },
     });
-  }
+  },
 );
 
 // Get single account
@@ -38,18 +39,11 @@ export const getAccount = catchAsync(
     const { id } = req.params;
     const companyId = req.user?.companyId;
 
-    const account = await prisma.account.findFirst({
-      where: { id, companyId },
-      include: {
-        contacts: true,
-        deals: true,
-        activities: {
-          orderBy: { createdAt: "desc" },
-          take: 10,
-          include: { createdBy: { select: { name: true, email: true } } },
-        },
-      },
-    });
+    if (!companyId) {
+      return next(new AppError("Company ID is missing", 400));
+    }
+
+    const account = await accountService.findOne(id, companyId);
 
     if (!account) {
       return next(new AppError("Account not found", 404));
@@ -59,50 +53,28 @@ export const getAccount = catchAsync(
       status: "success",
       data: { account },
     });
-  }
+  },
 );
 
 // Create account
 export const createAccount = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const companyId = req.user?.companyId;
-    const { name, industry, website, size, address, status } = req.body;
 
     if (!companyId) {
       return next(new AppError("Company ID is missing", 400));
     }
 
-    // 🔴 ENFORCE COMPANIES/ACCOUNTS LIMIT
-    const canCreate = await planLimitsService.canCreateResource(
+    const account = await accountService.create(
       companyId,
-      "companies"
+      req.body as CreateAccountDTO,
     );
-    if (!canCreate) {
-      return next(
-        new AppError(
-          "Has alcanzado el límite de empresas/cuentas de tu plan",
-          403
-        )
-      );
-    }
-
-    const account = await prisma.account.create({
-      data: {
-        companyId,
-        name,
-        industry,
-        website,
-        size,
-        address,
-        status: status || "ACTIVE",
-      },
-    });
 
     res.status(201).json({
       status: "success",
       data: { account },
     });
-  }
+  },
 );
 
 // Update account
@@ -111,24 +83,17 @@ export const updateAccount = catchAsync(
     const { id } = req.params;
     const companyId = req.user?.companyId;
 
-    const account = await prisma.account.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!account) {
-      return next(new AppError("Account not found", 404));
+    if (!companyId) {
+      return next(new AppError("Company ID is missing", 400));
     }
 
-    const updatedAccount = await prisma.account.update({
-      where: { id },
-      data: req.body,
-    });
+    const updatedAccount = await accountService.update(id, companyId, req.body);
 
     res.status(200).json({
       status: "success",
       data: { account: updatedAccount },
     });
-  }
+  },
 );
 
 // Delete account
@@ -137,19 +102,15 @@ export const deleteAccount = catchAsync(
     const { id } = req.params;
     const companyId = req.user?.companyId;
 
-    const account = await prisma.account.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!account) {
-      return next(new AppError("Account not found", 404));
+    if (!companyId) {
+      return next(new AppError("Company ID is missing", 400));
     }
 
-    await prisma.account.delete({ where: { id } });
+    await accountService.delete(id, companyId);
 
     res.status(204).json({
       status: "success",
       data: null,
     });
-  }
+  },
 );

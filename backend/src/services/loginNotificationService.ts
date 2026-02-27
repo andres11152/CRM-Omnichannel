@@ -1,4 +1,5 @@
 import { emailService } from "./emailService";
+import { Logger } from "@/utils/logger";
 
 interface LoginNotificationData {
   userEmail: string;
@@ -14,7 +15,7 @@ interface LoginNotificationData {
  * Estándar de la industria para CRM/SaaS (similar a Google, AWS, etc.)
  */
 export async function sendLoginNotification(
-  data: LoginNotificationData
+  data: LoginNotificationData,
 ): Promise<void> {
   const { userEmail, userName, ipAddress, userAgent, timestamp, location } =
     data;
@@ -206,12 +207,12 @@ export async function sendLoginNotification(
       }`,
       html: htmlContent,
     });
-    console.log(`[LoginNotification] ✅ Security email sent to ${userEmail}`);
+    Logger.info(`[LoginNotification] ✅ Security email sent to ${userEmail}`);
   } catch (error) {
     // No lanzamos error para no bloquear el login si el email falla
-    console.error(
+    Logger.error(
       `[LoginNotification] ❌ Failed to send security email to ${userEmail}:`,
-      error
+      error,
     );
   }
 }

@@ -1,6 +1,5 @@
 import {
   AuthenticationState,
-  SignalDataTypeMap,
   AuthenticationCreds,
 } from "@whiskeysockets/baileys";
 

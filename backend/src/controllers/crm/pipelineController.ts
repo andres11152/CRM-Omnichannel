@@ -3,12 +3,13 @@ import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
 import { pipelineService } from "../../services/pipelineService";
+import { Logger } from "../../utils/logger";
 import {
   CreatePipelineBodySchema,
   UpdatePipelineBodySchema,
   DuplicatePipelineBodySchema,
   PipelineParamsSchema,
-} from "../../schemas/pipeline.schema";
+} from "../../schemas/pipelineSchema";
 
 export const getPipelines = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -17,8 +18,8 @@ export const getPipelines = catchAsync(
 
     const pipelines = await pipelineService.getPipelines(companyId);
 
-    console.log(
-      `[DEBUG] getPipelines for company ${companyId}: Found ${pipelines.length}`,
+    Logger.debug(
+      `getPipelines for company ${companyId}: Found ${pipelines.length}`,
     );
 
     res.status(200).json({
@@ -115,3 +116,4 @@ export const duplicatePipeline = catchAsync(
     });
   },
 );
+

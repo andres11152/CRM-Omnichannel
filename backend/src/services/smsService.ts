@@ -1,4 +1,5 @@
 import { AppError } from "@/utils/AppError";
+import { Logger } from "@/utils/logger";
 
 interface SmsOptions {
   to: string;
@@ -15,7 +16,7 @@ export class SmsService {
 
   async sendSms(options: SmsOptions): Promise<void> {
     try {
-      console.log(`[MOCK SMS] Sending to ${options.to}: ${options.message}`);
+      Logger.info(`[MOCK SMS] Sending to ${options.to}: ${options.message}`);
 
       // Real implementation example:
       // await this.client.messages.create({
@@ -27,7 +28,7 @@ export class SmsService {
       // For now, we just log it to simulate success
       return Promise.resolve();
     } catch (error) {
-      console.error("Error sending SMS:", error);
+      Logger.error("Error sending SMS:", error);
       throw new AppError("Failed to send SMS", 500);
     }
   }

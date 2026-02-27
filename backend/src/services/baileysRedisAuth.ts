@@ -4,9 +4,9 @@ import {
   SignalDataTypeMap,
   initAuthCreds,
   BufferJSON,
-  proto,
 } from "@whiskeysockets/baileys";
-import redisClient from "@/config/redis";
+import redisClient from "../config/redis";
+import { Logger } from "@/utils/logger";
 
 /**
  * Custom Auth Adapter for Baileys using Redis.
@@ -17,7 +17,7 @@ import redisClient from "@/config/redis";
  *   - "type:id": JSON string of signal keys (mimicking file structure)
  */
 export const useRedisAuthState = async (
-  sessionId: string
+  sessionId: string,
 ): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> => {
   // Check if Redis is actually usable
   const isRedisReady = redisClient && redisClient.isOpen;
@@ -28,7 +28,7 @@ export const useRedisAuthState = async (
     const path = await import("path");
 
     const sessionDir = path.join(process.cwd(), "sessions", sessionId);
-    // console.log(`[Auth] Using File System for session ${sessionId} at ${sessionDir}`);
+    // Logger.debug(`[Auth] Using File System for session ${sessionId} at ${sessionDir}`);
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     return { state, saveCreds };
@@ -48,16 +48,16 @@ export const useRedisAuthState = async (
     } catch (error) {
       // CRITICAL: Propagate error on infrastructure failure
       // If we return null here, Baileys will create a NEW session, overwriting the old one!
-      console.error(
+      Logger.error(
         `[RedisAuth] 💥 CRITICAL REDIS ERROR reading ${field}:`,
-        error
+        error as Error,
       );
       throw error;
     }
   };
 
   // 2. Helper to write JSON to Redis
-  const writeData = async (data: Record<string, any>) => {
+  const writeData = async (data: Record<string, unknown>) => {
     if (!redisClient?.isOpen) return;
 
     try {
@@ -75,24 +75,7 @@ export const useRedisAuthState = async (
         await redisClient.hSet(REDIS_KEY, entries);
       }
     } catch (err) {
-      console.warn(
-        "[RedisAuth] Failed to write data (non-critical):",
-        err.message
-      );
-    }
-  };
-
-  // 3. Helper to delete from Redis (Unused internally but good for cleanup)
-  const removeData = async (fields: string[]) => {
-    if (redisClient?.isOpen && fields.length > 0) {
-      try {
-        await redisClient.hDel(REDIS_KEY, fields);
-      } catch (err) {
-        console.warn(
-          "[RedisAuth] Failed to delete data (non-critical):",
-          err.message
-        );
-      }
+      Logger.warn("[RedisAuth] Failed to write data (non-critical):", err);
     }
   };
 
@@ -119,12 +102,13 @@ export const useRedisAuthState = async (
               if (value) {
                 data[id] = value;
               }
-            })
+            }),
           );
           return data;
         },
-        set: async (data) => {
-          const tasks: Record<string, any> = {};
+
+        set: async (data: Record<string, Record<string, unknown>>) => {
+          const tasks: Record<string, unknown> = {};
           for (const category in data) {
             for (const id in data[category]) {
               const value = data[category][id];

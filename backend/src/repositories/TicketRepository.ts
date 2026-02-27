@@ -1,4 +1,4 @@
-import { Ticket, Prisma, TicketStatus, TicketPriority } from "@prisma/client";
+import { Ticket, Prisma } from "@prisma/client";
 import { prisma, ExtendedPrismaClient } from "@/config/database";
 
 export class TicketRepository {

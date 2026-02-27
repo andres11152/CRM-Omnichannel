@@ -2,13 +2,10 @@ import { Request, Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/database";
-import bcrypt from "bcryptjs";
 import jwt, { SignOptions } from "jsonwebtoken";
-import TenantContextManager from "@/config/tenantContext";
 import { Logger } from "@/utils/logger";
-import crypto from "crypto";
 import { emailService } from "@/services/emailService";
+import { authCrudService } from "@/services/authCrudService";
 
 export interface TokenPayload {
   id: string;
@@ -35,19 +32,13 @@ export const signToken = (payload: TokenPayload) => {
 
 export const signup = catchAsync(
   async (req: Request, res: Response, _next: NextFunction) => {
-    // Body is validated by Route-level validationMiddleware
     const { name, email, password, companyId } = req.body;
 
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        companyId: companyId || undefined,
-        role: companyId ? "AGENT" : "ADMIN",
-      },
+    const newUser = await authCrudService.createUser({
+      name,
+      email,
+      password,
+      companyId,
     });
 
     const token = signToken({
@@ -74,32 +65,30 @@ export const signup = catchAsync(
 
 export const login = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    // Body is validated by Route-level validationMiddleware
     const { email, password } = req.body;
 
     Logger.info(`[Auth] Attempting login for email: ${email}`);
 
-    const user = await TenantContextManager.runAsSystem(async () =>
-      prisma.user.findUnique({
-        where: { email },
-        include: {
-          company: {
-            include: { plan: true },
-          },
-        },
-      }),
-    );
+    const user = await authCrudService.findUserByEmail(email);
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (
+      !user ||
+      !(await authCrudService.verifyPassword(password, user.password))
+    ) {
       return next(new AppError("Email o contraseña incorrectos", 401));
     }
 
-    if (user.company) {
+    // Cast safely using intersection
+    const userWithCompany = user as unknown as typeof user & {
+      company?: { status: string; planId?: string };
+    };
+
+    if (userWithCompany.company) {
       const restrictedStatuses = ["BANNED"];
-      if (restrictedStatuses.includes(user.company.status)) {
+      if (restrictedStatuses.includes(userWithCompany.company.status)) {
         return next(
           new AppError(
-            `Acceso denegado: Su cuenta está en estado ${user.company.status}. Contacte a soporte.`,
+            `Acceso denegado: Su cuenta está en estado ${userWithCompany.company.status}. Contacte a soporte.`,
             403,
           ),
         );
@@ -110,12 +99,12 @@ export const login = catchAsync(
       id: user.id,
       role: user.role || "user",
       companyId: user.companyId,
-      companyStatus: user.company?.status,
-      planId: user.company?.planId,
+      companyStatus: userWithCompany.company?.status,
+      planId: userWithCompany.company?.planId,
     };
     const token = signToken(tokenPayload);
 
-    // 🔐 Send login notification email (async)
+    // 🔐 Send login notification email (async, fire-and-forget)
     const ipAddress = req.ip || req.socket.remoteAddress || "IP no disponible";
     const userAgent = req.get("user-agent") || "User-Agent no disponible";
 
@@ -143,7 +132,7 @@ export const login = catchAsync(
           email: user.email,
           role: user.role,
           companyId: user.companyId,
-          company: user.company,
+          company: userWithCompany.company,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
           preferences: user.preferences,
@@ -155,20 +144,18 @@ export const login = catchAsync(
 
 export const updatePassword = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const user = await prisma.user.findUnique({ where: { id: req.user?.id } });
+    const user = await authCrudService.findUserById(req.user?.id || "");
     if (!user) return next(new AppError("User not found", 404));
 
     const { currentPassword, newPassword } = req.body;
 
-    if (!(await bcrypt.compare(currentPassword, user.password))) {
+    if (
+      !(await authCrudService.verifyPassword(currentPassword, user.password))
+    ) {
       return next(new AppError("Tu contraseña actual es incorrecta.", 401));
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword },
-    });
+    await authCrudService.updatePassword(user.id, newPassword);
 
     const token = signToken({
       id: user.id,
@@ -188,27 +175,8 @@ export const forgotPassword = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const { email } = req.body;
 
-    const user = await TenantContextManager.runAsSystem(async () =>
-      prisma.user.findUnique({ where: { email } }),
-    );
-    if (!user) {
-      return next(new AppError("No existe usuario con ese email.", 404));
-    }
-
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    const passwordResetToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
-    const passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetPasswordToken: passwordResetToken,
-        resetPasswordExpires: passwordResetExpires,
-      },
-    });
+    const { user, resetToken } =
+      await authCrudService.generateResetToken(email);
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
@@ -236,10 +204,7 @@ export const forgotPassword = catchAsync(
       });
     } catch (error: unknown) {
       const err = error as Error & Partial<AppError>;
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { resetPasswordToken: null, resetPasswordExpires: null },
-      });
+      await authCrudService.clearResetToken(user.id);
       const errorMessage =
         err.message || "Hubo un error enviando el correo. Intenta de nuevo.";
       return next(new AppError(errorMessage, err.statusCode || 500));
@@ -248,45 +213,25 @@ export const forgotPassword = catchAsync(
 );
 
 export const resetPassword = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(req.params.token)
-      .digest("hex");
-
-    const user = await TenantContextManager.runAsSystem(async () =>
-      prisma.user.findFirst({
-        where: {
-          resetPasswordToken: hashedToken,
-          resetPasswordExpires: { gt: new Date() },
-        },
-        include: { company: true },
-      }),
-    );
-
-    if (!user) {
-      return next(new AppError("Token inválido o expirado.", 400));
-    }
-
+  async (req: Request, res: Response, _next: NextFunction) => {
     const { password } = req.body;
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const user = await authCrudService.resetPasswordWithToken(
+      req.params.token,
+      password,
+    );
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        resetPasswordToken: null,
-        resetPasswordExpires: null,
-      },
-    });
+    // Cast safely using intersection
+    const userWithCompany = user as unknown as typeof user & {
+      company?: { status: string; planId?: string };
+    };
 
     const token = signToken({
       id: user.id,
       role: user.role,
       companyId: user.companyId,
-      companyStatus: user.company?.status,
-      planId: user.company?.planId,
+      companyStatus: userWithCompany.company?.status,
+      planId: userWithCompany.company?.planId,
     });
 
     res.status(200).json({

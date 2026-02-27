@@ -9,7 +9,7 @@ import {
   ReorderStagesBodySchema,
   StageParamsSchema,
   ReorderStagesInput,
-} from "../../schemas/pipeline.schema";
+} from "../../schemas/pipelineSchema";
 
 export const getStages = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -120,3 +120,4 @@ export const deleteStage = catchAsync(
     });
   },
 );
+

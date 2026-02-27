@@ -72,11 +72,19 @@ const sendErrorProd = (err: AppError, res: Response) => {
   });
 };
 
+export interface CustomError extends Error {
+  statusCode?: number;
+  status?: string;
+  isOperational?: boolean;
+  code?: string;
+  meta?: Record<string, unknown>;
+}
+
 export const globalErrorHandler = (
-  err: any,
+  err: CustomError,
   req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ) => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || "error";
@@ -100,8 +108,8 @@ export const globalErrorHandler = (
   }
 
   if (process.env.NODE_ENV === "development") {
-    sendErrorDev(error, res);
+    sendErrorDev(error as AppError, res);
   } else {
-    sendErrorProd(error, res);
+    sendErrorProd(error as AppError, res);
   }
 };

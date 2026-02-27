@@ -1,7 +1,8 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { trace, SpanStatusCode } from "@opentelemetry/api";
+import { trace, SpanStatusCode, Span, Attributes } from "@opentelemetry/api";
+import { Logger } from "@/utils/logger";
 
 /**
  * 🔍 OPENTELEMETRY DISTRIBUTED TRACING
@@ -40,14 +41,14 @@ const sdk = new NodeSDK({
 export const startTracing = async (): Promise<void> => {
   try {
     await sdk.start();
-    console.log("[OpenTelemetry] 🔍 Tracing initialized");
-    console.log(
+    Logger.info("[OpenTelemetry] 🔍 Tracing initialized");
+    Logger.info(
       `[OpenTelemetry] Exporting to: ${
         process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "http://localhost:4318"
-      }`
+      }`,
     );
   } catch (error) {
-    console.error("[OpenTelemetry] Failed to start:", error);
+    Logger.error("[OpenTelemetry] Failed to start:", error);
     // Don't throw - we want the app to work even if tracing fails
   }
 };
@@ -58,9 +59,9 @@ export const startTracing = async (): Promise<void> => {
 export const stopTracing = async (): Promise<void> => {
   try {
     await sdk.shutdown();
-    console.log("[OpenTelemetry] 🛑 Tracing shut down");
+    Logger.info("[OpenTelemetry] 🛑 Tracing shut down");
   } catch (error) {
-    console.error("[OpenTelemetry] Shutdown error:", error);
+    Logger.error("[OpenTelemetry] Shutdown error:", error);
   }
 };
 
@@ -69,7 +70,7 @@ export const stopTracing = async (): Promise<void> => {
  */
 export const createSpan = (
   name: string,
-  fn: (span: any) => Promise<any> | any
+  fn: (span: Span) => Promise<unknown> | unknown,
 ) => {
   const tracer = trace.getTracer("reply-crm-api");
   return tracer.startActiveSpan(name, async (span) => {
@@ -93,7 +94,7 @@ export const createSpan = (
  * 🎯 Utility: Add attributes to current span
  */
 export const addSpanAttributes = (
-  attributes: Record<string, string | number | boolean>
+  attributes: Record<string, string | number | boolean>,
 ) => {
   const span = trace.getActiveSpan();
   if (span) {
@@ -104,10 +105,7 @@ export const addSpanAttributes = (
 /**
  * 🎯 Utility: Add event to current span
  */
-export const addSpanEvent = (
-  name: string,
-  attributes?: Record<string, any>
-) => {
+export const addSpanEvent = (name: string, attributes?: Attributes) => {
   const span = trace.getActiveSpan();
   if (span) {
     span.addEvent(name, attributes);

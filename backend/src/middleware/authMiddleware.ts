@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
@@ -7,6 +7,7 @@ import { AuthenticatedRequest } from "@/types/types";
 // 🛡️ SECURITY: Use TenantContextManager for Row-Level Security
 import TenantContextManager from "@/config/tenantContext";
 import redisClient from "@/config/redis";
+import { Logger } from "@/utils/logger";
 
 export const protect = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -14,7 +15,7 @@ export const protect = catchAsync(
     if (req.headers["x-api-key"]) {
       const apiKey = req.headers["x-api-key"] as string;
       // Import crypto dynamically
-      const crypto = require("crypto");
+      const crypto = await import("crypto");
       const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
 
       const storedKey = await prisma.apiKey.findUnique({
@@ -31,7 +32,7 @@ export const protect = catchAsync(
           where: { id: storedKey.id },
           data: { lastUsedAt: new Date() },
         })
-        .catch(console.error);
+        .catch((err) => Logger.error("Failed to update API key", err));
 
       req.companyId = storedKey.companyId;
       req.user = {
@@ -65,8 +66,8 @@ export const protect = catchAsync(
 
     // Uncomment for detailed auth debugging
     /*
-    console.log(`[AuthDebug] Method: ${req.method} Url: ${req.originalUrl}`);
-    console.log(`[AuthDebug] Token found: ${token ? "Yes" : "No"}`);
+    Logger.debug(`[AuthDebug] Method: ${req.method} Url: ${req.originalUrl}`);
+    Logger.debug(`[AuthDebug] Token found: ${token ? "Yes" : "No"}`);
     */
 
     if (!token) {
@@ -83,7 +84,7 @@ export const protect = catchAsync(
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
     } catch (error) {
-      console.error("[Auth] Token verification failed:", error);
+      Logger.error("[Auth] Token verification failed:", error as Error);
       return next(new AppError("Token inválido o expirado", 401));
     }
 
@@ -98,16 +99,16 @@ export const protect = catchAsync(
         if (cachedUser) {
           currentUser = JSON.parse(cachedUser);
         }
-      } catch (err) {
+      } catch {
         // Fallback silencioso a DB si Redis falla
-        console.warn("[Auth] Redis lookup failed, falling back to DB");
+        Logger.warn("[Auth] Redis lookup failed, falling back to DB");
       }
     }
 
     // B. Si no está en caché, consultar DB (Cache Miss)
     if (!currentUser) {
       if (!prisma) {
-        console.error("[Auth] CRITICAL: Prisma client is undefined!");
+        Logger.error("[Auth] CRITICAL: Prisma client is undefined!");
         return next(new AppError("Database connection error", 500));
       }
 
@@ -122,12 +123,12 @@ export const protect = catchAsync(
             await redisClient.set(cacheKey, JSON.stringify(currentUser), {
               EX: 300,
             });
-          } catch (err) {
-            console.warn("[Auth] Failed to cache user in Redis");
+          } catch {
+            Logger.warn("[Auth] Failed to cache user in Redis");
           }
         }
       } catch (dbError) {
-        console.error("[Auth] DB Connection Failed:", dbError);
+        Logger.error("[Auth] DB Connection Failed:", dbError as Error);
         return next(
           new AppError(
             "Error de conexión con base de datos. Intente más tarde.",
@@ -180,7 +181,7 @@ export const protect = catchAsync(
       );
     } else {
       // If system user (super admin) or broken state
-      console.error(
+      Logger.error(
         `[Auth] 🚨 SECURITY: User ${req.user.id} has no companyId! Blocking request to prevent data leak.`,
       );
       return next(

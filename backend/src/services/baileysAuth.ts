@@ -4,12 +4,14 @@ import {
   BufferJSON,
   initAuthCreds,
   proto,
+  makeCacheableSignalKeyStore,
   SignalDataTypeMap,
 } from "@whiskeysockets/baileys";
 import { prisma } from "@/config/database";
+import { sessionModuleLogger } from "@/whatsapp/providers/SessionLogger";
 
 export const usePrismaAuthState = async (
-  sessionId: string
+  sessionId: string,
 ): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> => {
   // Helper to read data from DB
   const readData = async (type: string, id: string) => {
@@ -23,19 +25,22 @@ export const usePrismaAuthState = async (
           },
         },
       });
-      console.log(
-        `[DB Auth] Reading ${key}: ${credential ? "FOUND" : "NOT FOUND"}`
+      sessionModuleLogger.debug(
+        `[DB Auth] Reading ${key}: ${credential ? "FOUND" : "NOT FOUND"}`,
       );
       if (!credential) return null;
       return JSON.parse(credential.value, BufferJSON.reviver);
     } catch (error) {
-      console.error(`[DB Auth] Error reading ${type}-${id}`, error);
+      sessionModuleLogger.error(
+        error as Error,
+        `[DB Auth] Error reading ${type}-${id}`,
+      );
       return null;
     }
   };
 
   // Helper to write data to DB
-  const writeData = async (type: string, id: string, data: any) => {
+  const writeData = async (type: string, id: string, data: unknown) => {
     const key = `${type}-${id}`;
     const value = JSON.stringify(data, BufferJSON.replacer);
 
@@ -51,7 +56,10 @@ export const usePrismaAuthState = async (
         create: { sessionId, key, value },
       });
     } catch (error) {
-      console.error(`[DB Auth] Error writing ${key}`, error);
+      sessionModuleLogger.error(
+        error as Error,
+        `[DB Auth] Error writing ${key}`,
+      );
     }
   };
 
@@ -67,7 +75,7 @@ export const usePrismaAuthState = async (
           },
         },
       });
-    } catch (error) {
+    } catch {
       // Ignore delete errors (record might not exist)
     }
   };
@@ -79,35 +87,41 @@ export const usePrismaAuthState = async (
   return {
     state: {
       creds,
-      keys: {
-        get: async (type, ids: string[]) => {
-          const data: any = {};
-          await Promise.all(
-            ids.map(async (id) => {
-              let value = await readData(type, id);
-              if (type === "app-state-sync-key" && value) {
-                value = proto.Message.AppStateSyncKeyData.fromObject(value);
-              }
-              data[id] = value;
-            })
-          );
-          return data;
-        },
-        set: async (data: any) => {
-          const tasks: Promise<void>[] = [];
-          for (const category in data) {
-            for (const id in data[category]) {
-              const value = data[category][id];
-              if (value) {
-                tasks.push(writeData(category, id, value));
-              } else {
-                tasks.push(removeData(category, id));
+      keys: makeCacheableSignalKeyStore(
+        {
+          get: async <T extends keyof SignalDataTypeMap>(
+            type: T,
+            ids: string[],
+          ) => {
+            const data: { [id: string]: SignalDataTypeMap[T] } = {};
+            await Promise.all(
+              ids.map(async (id) => {
+                let value = await readData(type, id);
+                if (type === "app-state-sync-key" && value) {
+                  value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                }
+                data[id] = value as SignalDataTypeMap[T];
+              }),
+            );
+            return data;
+          },
+          set: async (data: Record<string, Record<string, unknown>>) => {
+            const tasks: Promise<void>[] = [];
+            for (const category in data) {
+              for (const id in data[category]) {
+                const value = data[category][id];
+                if (value) {
+                  tasks.push(writeData(category, id, value));
+                } else {
+                  tasks.push(removeData(category, id));
+                }
               }
             }
-          }
-          await Promise.all(tasks);
+            await Promise.allSettled(tasks);
+          },
         },
-      },
+        sessionModuleLogger.child({ session: sessionId }),
+      ),
     },
     saveCreds: async () => {
       await writeData("creds", "base", creds);

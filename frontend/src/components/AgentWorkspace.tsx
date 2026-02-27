@@ -36,6 +36,7 @@ import { TransferModal } from "./TransferModal";
 import { QueueView } from "./QueueView";
 import { ResolvedView } from "./ResolvedView";
 import { API_BASE_URL, BASE_URL } from "@/services/apiConfig";
+import { Avatar } from "@/components/common/Avatar";
 
 import { resolveContactName, getInitials } from "@/utils/contactUtils";
 import { useAgentWorkspaceSockets } from "@/hooks/useAgentWorkspaceSockets";
@@ -878,12 +879,13 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ fromDate: dateStr }),
+        body: JSON.stringify({ sinceDate: dateStr }),
       });
       const data = await res.json();
-      toast.success(data.message || "Sincronizaci�n iniciada");
+      toast.success(data.message || "Sincronización iniciada");
+      fetchData(); // Trigger list refresh
     } catch (e) {
-      toast.error("Error al iniciar sincronizaci�n");
+      toast.error("Error al iniciar sincronización");
     }
   };
 
@@ -1122,7 +1124,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               </div>
             )}
 
-            {/* Sync Button (Disabled for now)
+            {/* Sync Button */}
             <button
               onClick={() => setIsSyncModalOpen(true)}
               className="hidden md:flex p-2.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-all border border-transparent hover:border-blue-100 dark:hover:border-blue-800"
@@ -1130,7 +1132,6 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
             >
               <RefreshCw className="w-5 h-5" />
             </button>
-            */}
 
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -1235,23 +1236,15 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                   {/* Header with Avatar */}
                   <div className="text-center pb-6 border-b border-gray-200 dark:border-reply-border-dark">
                     <div className="relative inline-block">
-                      {activeTicket.contact.profilePicUrl ||
-                      activeTicket.contact.avatarUrl ? (
-                        <img
-                          src={
-                            activeTicket.contact.profilePicUrl ||
-                            activeTicket.contact.avatarUrl
-                          }
-                          alt={activeTicket.contact.name}
-                          className="w-24 h-24 rounded-full mx-auto border-4 border-white dark:border-gray-600 shadow-lg object-cover"
-                        />
-                      ) : (
-                        <div className="w-24 h-24 rounded-full mx-auto border-4 border-white dark:border-gray-600 shadow-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                          <span className="text-white text-3xl font-bold">
-                            {activeTicket.contact.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
+                      <Avatar
+                        src={
+                          activeTicket.contact.profilePicUrl ||
+                          activeTicket.contact.avatarUrl ||
+                          null
+                        }
+                        name={activeTicket.contact.name || ""}
+                        className="w-24 h-24 border-4 border-white dark:border-gray-600 shadow-lg object-cover"
+                      />
                       {/* Status Badge */}
                       <div className="absolute bottom-0 right-0 w-8 h-8 bg-orange-500 rounded-full border-4 border-white dark:border-reply-border-dark flex items-center justify-center shadow-sm">
                         <Clock className="w-4 h-4 text-white" />

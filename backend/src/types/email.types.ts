@@ -1,4 +1,4 @@
-import { EmailStatus, EmailType } from "@prisma/client";
+import { EmailStatus } from "@prisma/client";
 
 // ===================================
 // EMAIL PROVIDER INTERFACES

@@ -3,7 +3,7 @@ import { createTag, getTags, deleteTag } from "@/controllers/tagController";
 import { protect } from "@/middleware/authMiddleware";
 import { restrictTo } from "@/middleware/restrictTo";
 import { validate } from "@/middleware/validationMiddleware";
-import { CreateTagSchema, DeleteTagSchema } from "@/schemas/tag.schema";
+import { CreateTagSchema, DeleteTagSchema } from "@/schemas/tagSchema";
 
 const router = express.Router();
 
@@ -27,3 +27,4 @@ router.delete(
 );
 
 export default router;
+

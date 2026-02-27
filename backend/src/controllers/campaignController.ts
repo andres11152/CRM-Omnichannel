@@ -1,7 +1,6 @@
 import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/database";
 import { AuthenticatedRequest } from "@/types/types";
 import { campaignService } from "@/services/campaignService";
 import { Logger } from "@/utils/logger";
@@ -18,48 +17,22 @@ import { Logger } from "@/utils/logger";
  */
 export const createCampaign = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const {
-      name,
-      messageContent,
-      targetTags,
-      config,
-      templateId,
-      channel,
-      subject,
-      status,
-    } = req.body;
+    const data = req.body;
     const companyId = req.companyId || req.user?.companyId;
     const userId = req.user?.id;
 
-    if (!companyId) {
-      return next(new AppError("Company ID missing", 400));
+    if (!companyId || !userId) {
+      return next(new AppError("Company ID or User ID missing", 400));
     }
 
-    const initialStats = {
-      targetAudienceSize: 0,
-      sent: 0,
-      delivered: 0,
-      failed: 0,
-    };
-
-    const campaign = await prisma.campaign.create({
-      data: {
-        companyId,
-        name,
-        messageContent: messageContent || "",
-        targetTags: targetTags || [],
-        config: config || {},
-        templateId: templateId || undefined,
-        status: status || "draft",
-        stats: initialStats,
-        channel: channel || "WHATSAPP",
-        subject: subject || undefined,
-        createdById: userId || undefined,
-      },
-    });
+    const campaign = await campaignService.createCampaign(
+      companyId,
+      userId,
+      data,
+    );
 
     Logger.info(
-      `[Campaign] Created new campaign: ${campaign.name} (${campaign.id})`
+      `[Campaign] Created new campaign: ${campaign.name} (${campaign.id})`,
     );
 
     res.status(201).json({
@@ -68,17 +41,17 @@ export const createCampaign = catchAsync(
     });
 
     // Auto-execute if status is 'sending'
-    if (status === "sending") {
+    if (campaign.status === "sending") {
       Logger.info(
-        `[Campaign] Auto-launching campaign ${campaign.id} (status=sending)`
+        `[Campaign] Auto-launching campaign ${campaign.id} (status=sending)`,
       );
       campaignService
         .executeCampaign(campaign.id, companyId)
-        .catch((err: any) => {
+        .catch((err: unknown) => {
           Logger.error(`[Campaign] Auto-launch error for ${campaign.id}:`, err);
         });
     }
-  }
+  },
 );
 
 /**
@@ -86,7 +59,7 @@ export const createCampaign = catchAsync(
  * List all campaigns for company
  */
 export const getCampaigns = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
@@ -95,31 +68,18 @@ export const getCampaigns = catchAsync(
         .json({ status: "success", results: 0, data: { campaigns: [] } });
     }
 
-    const { status, search, limit, offset } = req.query as any;
-
-    const where: any = { companyId };
-
-    if (status) where.status = status;
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { messageContent: { contains: search, mode: "insensitive" } },
-      ];
-    }
-
-    const campaigns = await prisma.campaign.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: limit ? parseInt(limit) : 50,
-      skip: offset ? parseInt(offset) : 0,
-    });
+    // Rely on Zod schema to validate req.query
+    const campaigns = await campaignService.getCampaigns(
+      companyId,
+      req.query as Record<string, string | undefined>,
+    );
 
     res.status(200).json({
       status: "success",
       results: campaigns.length,
       data: { campaigns },
     });
-  }
+  },
 );
 
 /**
@@ -135,28 +95,20 @@ export const getCampaign = catchAsync(
       return next(new AppError("Company ID missing", 400));
     }
 
-    const campaign = await prisma.campaign.findFirst({
-      where: { id, companyId },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
+    const campaign = await campaignService.getCampaign(id, companyId);
 
     if (!campaign) {
       return next(new AppError("Campaign not found", 404));
     }
 
-    // Calculate performance metrics
-    const stats = (campaign.stats as any) || {};
-    const sent = stats.sent || 0;
-    const failed = stats.failed || 0;
-    const targetAudienceSize = stats.targetAudienceSize || 0;
+    // Calculate performance metrics securely mapping unknown type dynamically
+    const stats: Record<string, unknown> =
+      campaign.stats && typeof campaign.stats === "object"
+        ? (campaign.stats as Record<string, unknown>)
+        : {};
+    const sent = Number(stats.sent) || 0;
+    const failed = Number(stats.failed) || 0;
+    const targetAudienceSize = Number(stats.targetAudienceSize) || 0;
 
     const performance = {
       // Delivery rate: % of successful sends vs failures
@@ -193,7 +145,7 @@ export const getCampaign = catchAsync(
         },
       },
     });
-  }
+  },
 );
 
 /**
@@ -211,9 +163,7 @@ export const updateCampaign = catchAsync(
     }
 
     // Verify campaign exists
-    const existing = await prisma.campaign.findFirst({
-      where: { id, companyId },
-    });
+    const existing = await campaignService.getCampaign(id, companyId);
 
     if (!existing) {
       return next(new AppError("Campaign not found", 404));
@@ -223,22 +173,10 @@ export const updateCampaign = catchAsync(
     const isLaunching =
       data.status === "sending" && existing.status !== "sending";
 
-    const campaign = await prisma.campaign.update({
-      where: { id },
-      data: {
-        name: data.name,
-        messageContent: data.messageContent,
-        targetTags: data.targetTags,
-        config: data.config,
-        status: data.status,
-        templateId: data.templateId,
-        channel: data.channel,
-        subject: data.subject,
-      },
-    });
+    const campaign = await campaignService.updateCampaign(id, companyId, data);
 
     Logger.info(
-      `[Campaign] Updated campaign: ${campaign.name} (${campaign.id})`
+      `[Campaign] Updated campaign: ${campaign.name} (${campaign.id})`,
     );
 
     res.status(200).json({
@@ -249,13 +187,13 @@ export const updateCampaign = catchAsync(
     // Auto-execute if status changed to 'sending'
     if (isLaunching) {
       Logger.info(
-        `[Campaign] Launching campaign ${campaign.id} (status updated to sending)`
+        `[Campaign] Launching campaign ${campaign.id} (status updated to sending)`,
       );
-      campaignService.executeCampaign(id, companyId).catch((err: any) => {
+      campaignService.executeCampaign(id, companyId).catch((err: unknown) => {
         Logger.error(`[Campaign] Launch error for ${id}:`, err);
       });
     }
-  }
+  },
 );
 
 /**
@@ -272,23 +210,18 @@ export const deleteCampaign = catchAsync(
     }
 
     // Verify campaign exists
-    const existing = await prisma.campaign.findFirst({
-      where: { id, companyId },
-    });
+    const existing = await campaignService.getCampaign(id, companyId);
 
     if (!existing) {
       return next(new AppError("Campaign not found", 404));
     }
 
-    // Soft delete will be handled by Prisma middleware
-    await prisma.campaign.delete({
-      where: { id },
-    });
+    await campaignService.deleteCampaign(id);
 
     Logger.info(`[Campaign] Deleted campaign: ${existing.name} (${id})`);
 
     res.status(204).send();
-  }
+  },
 );
 
 /**
@@ -307,47 +240,7 @@ export const launchCampaign = catchAsync(
       return next(new AppError("Company ID missing", 400));
     }
 
-    // Verify campaign exists
-    const campaign = await prisma.campaign.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!campaign) {
-      return next(new AppError("Campaign not found", 404));
-    }
-
-    // Check if campaign can be launched
-    if (campaign.status === "sending") {
-      return next(new AppError("Campaign is already running", 400));
-    }
-
-    if (campaign.status === "completed") {
-      return next(
-        new AppError(
-          "Campaign already completed. Create a new campaign to send again.",
-          400
-        )
-      );
-    }
-
-    Logger.info(`[Campaign] Launching campaign: ${campaign.name} (${id})`);
-
-    // Update status to sending (optimistic)
-    await prisma.campaign.update({
-      where: { id },
-      data: {
-        status: "sending",
-        stats: {
-          ...((campaign.stats as any) || {}),
-          launchedAt: new Date().toISOString(),
-        },
-      },
-    });
-
-    // Execute in background (don't await - respond immediately)
-    campaignService.executeCampaign(id, companyId).catch((err: any) => {
-      Logger.error(`[Campaign] Launch error for ${id}:`, err);
-    });
+    const campaign = await campaignService.launchCampaign(id, companyId);
 
     // Respond immediately (campaign running in background)
     res.status(200).json({
@@ -361,5 +254,5 @@ export const launchCampaign = catchAsync(
           "Campaign is now running in the background. Check stats for progress.",
       },
     });
-  }
+  },
 );

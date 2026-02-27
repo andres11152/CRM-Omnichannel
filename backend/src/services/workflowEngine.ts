@@ -1,7 +1,12 @@
 import { EventEmitter } from "events";
-import { prisma } from "@/config/database";
 import { Logger } from "@/utils/logger";
 import { emailService } from "./email/emailService";
+import { workflowRepository } from "@/repositories/WorkflowRepository";
+import { workflowExecutionRepository } from "@/repositories/WorkflowExecutionRepository";
+import { userRepository } from "@/repositories/UserRepository";
+import { dealRepository } from "@/repositories/DealRepository";
+import { contactRepository } from "@/repositories/ContactRepository";
+import { activityRepository } from "@/repositories/ActivityRepository";
 import {
   DealPayload,
   WorkflowNode,
@@ -41,7 +46,7 @@ class WorkflowEngine extends EventEmitter {
   private async processEvent(eventName: string, payload: DealPayload) {
     try {
       // Find workflows triggered by this event
-      const workflows = await prisma.workflow.findMany({
+      const workflows = await workflowRepository.findMany({
         where: {
           companyId: payload.companyId,
           isActive: true,
@@ -95,7 +100,7 @@ class WorkflowEngine extends EventEmitter {
     );
 
     // Create Execution Log
-    const execution = await prisma.workflowExecution.create({
+    const execution = await workflowExecutionRepository.create({
       data: {
         workflowId: workflow.id,
         status: "PENDING",
@@ -113,7 +118,7 @@ class WorkflowEngine extends EventEmitter {
       }
 
       // Find a valid user to be the "creator" (System or First Admin)
-      const systemUser = await prisma.user.findFirst({
+      const systemUser = await userRepository.findFirst({
         where: { companyId: workflow.companyId },
         orderBy: { createdAt: "asc" }, // Usually the owner/first user
       });
@@ -145,7 +150,7 @@ class WorkflowEngine extends EventEmitter {
         }
       }
 
-      await prisma.workflowExecution.update({
+      await workflowExecutionRepository.update({
         where: { id: execution.id },
         data: { status: "SUCCESS", completedAt: new Date() },
       });
@@ -154,7 +159,7 @@ class WorkflowEngine extends EventEmitter {
         error instanceof Error ? error.message : "Unknown error";
       Logger.error(`[WorkflowEngine] Execution Failed: ${errorMessage}`);
 
-      await prisma.workflowExecution.update({
+      await workflowExecutionRepository.update({
         where: { id: execution.id },
         data: {
           status: "FAILED",
@@ -182,10 +187,7 @@ class WorkflowEngine extends EventEmitter {
 
     if (recipientOption === "Cliente" || !recipientOption) {
       // Fetch Deal to get Contact
-      const deal = await prisma.deal.findUnique({
-        where: { id: payload.dealId },
-        include: { contact: true },
-      });
+      const deal = await dealRepository.findById(payload.dealId, companyId);
       if (deal?.contact?.email) {
         targetEmail = deal.contact.email;
         targetContactId = deal.contact.id;
@@ -198,7 +200,7 @@ class WorkflowEngine extends EventEmitter {
     } else if (recipientOption.includes("@")) {
       targetEmail = recipientOption;
       // Optionally try to find contact by email to link history
-      const contact = await prisma.contact.findFirst({
+      const contact = await contactRepository.findFirst({
         where: { email: targetEmail, companyId },
       });
       if (contact) targetContactId = contact.id;
@@ -221,7 +223,7 @@ class WorkflowEngine extends EventEmitter {
       });
 
       // 3. Log email as an Activity in the CRM
-      await prisma.activity
+      await activityRepository
         .create({
           data: {
             companyId,
@@ -247,7 +249,7 @@ class WorkflowEngine extends EventEmitter {
     Logger.info(`[WorkflowEngine] Action: Creating Task for ${payload.dealId}`);
 
     // Implement task creation logic here
-    await prisma.activity
+    await activityRepository
       .create({
         data: {
           companyId,

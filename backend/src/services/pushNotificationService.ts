@@ -1,5 +1,6 @@
 import webpush from "web-push";
-import { prisma } from "@/config/database";
+import { pushSubscriptionRepository } from "@/repositories/PushSubscriptionRepository";
+import { userRepository } from "@/repositories/UserRepository";
 import { Logger } from "@/utils/logger";
 
 /**
@@ -71,7 +72,7 @@ class PushNotificationService {
    */
   async subscribe(subscription: PushSubscription): Promise<void> {
     try {
-      await prisma.pushSubscription.upsert({
+      await pushSubscriptionRepository.upsert({
         where: {
           userId_endpoint: {
             userId: subscription.userId,
@@ -109,7 +110,7 @@ class PushNotificationService {
    */
   async unsubscribe(userId: string, endpoint: string): Promise<void> {
     try {
-      await prisma.pushSubscription.delete({
+      await pushSubscriptionRepository.delete({
         where: {
           userId_endpoint: {
             userId,
@@ -132,7 +133,7 @@ class PushNotificationService {
     payload: PushNotificationPayload,
   ): Promise<void> {
     try {
-      const subscriptions = await prisma.pushSubscription.findMany({
+      const subscriptions = await pushSubscriptionRepository.findMany({
         where: { userId },
       });
 
@@ -189,7 +190,7 @@ class PushNotificationService {
     payload: PushNotificationPayload,
   ): Promise<void> {
     try {
-      const subscriptions = await prisma.pushSubscription.findMany({
+      const subscriptions = await pushSubscriptionRepository.findMany({
         where: { companyId },
       });
 
@@ -235,7 +236,7 @@ class PushNotificationService {
     payload: PushNotificationPayload,
   ): Promise<void> {
     try {
-      const subscriptions = await prisma.pushSubscription.findMany({
+      const subscriptions = await pushSubscriptionRepository.findMany({
         where: {
           userId: { in: userIds },
         },
@@ -365,8 +366,7 @@ class PushNotificationService {
     quotaType: string,
     percentage: number,
   ): Promise<void> {
-    // Send to all admins
-    const admins = await prisma.user.findMany({
+    const admins = await userRepository.findMany({
       where: {
         companyId,
         role: { in: ["ADMIN", "MASTER"] },
@@ -400,7 +400,7 @@ class PushNotificationService {
     companyId: string,
     sessionId: string,
   ): Promise<void> {
-    const admins = await prisma.user.findMany({
+    const admins = await userRepository.findMany({
       where: {
         companyId,
         role: { in: ["ADMIN", "MASTER"] },

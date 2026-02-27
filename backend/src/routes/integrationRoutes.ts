@@ -4,6 +4,7 @@ import { whatsappService } from "@/whatsapp";
 import { AuthenticatedRequest } from "@/types/types";
 import { protect } from "@/middleware/authMiddleware";
 import * as integrationController from "@/controllers/integrationController";
+import { Logger } from "@/utils/logger";
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ router.get("/", async (req: express.Request, res: express.Response) => {
 
     // For now, we only support one session per company in the UI logic,
     // but the backend supports multiple. We'll map them.
-    const integrations = sessions.map((session: any, index: number) => ({
+    const integrations = sessions.map((session) => ({
       id: session.sessionId,
       companyId: session.companyId,
       type: "whatsapp_cloud", // Using this type for compatibility with frontend filter
@@ -39,7 +40,7 @@ router.get("/", async (req: express.Request, res: express.Response) => {
 
     res.status(200).json(integrations);
   } catch (error) {
-    console.error("List integrations error:", error);
+    Logger.error("List integrations error:", error as Error);
     res.status(500).json({ message: "Failed to list integrations" });
   }
 });
@@ -65,7 +66,7 @@ router.get(
       }
 
       res.status(200).json(session);
-    } catch (error) {
+    } catch {
       res.status(500).json({ message: "Failed to get session status" });
     }
   },
@@ -90,7 +91,7 @@ router.get(
       }
 
       res.status(200).json(session);
-    } catch (error) {
+    } catch {
       res.status(500).json({ message: "Failed to get session status" });
     }
   },
@@ -109,7 +110,7 @@ router.post(
 
       // Check if session exists
       const sessions = await whatsappService.listSessions(companyId);
-      let existingSession = sessions[0];
+      const existingSession = sessions[0];
       let sessionId: string;
 
       if (!existingSession) {
@@ -161,7 +162,7 @@ router.post(
         }
       }, 500);
     } catch (error) {
-      console.error("Init session error:", error);
+      Logger.error("Init session error:", error as Error);
       res.status(500).json({ message: "Failed to init session" });
     }
   },
@@ -184,7 +185,7 @@ router.delete(
       }
 
       res.status(200).json({ message: "Logged out successfully" });
-    } catch (error) {
+    } catch {
       res.status(500).json({ message: "Failed to logout" });
     }
   },

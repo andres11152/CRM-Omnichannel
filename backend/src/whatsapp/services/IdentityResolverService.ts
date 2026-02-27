@@ -1,5 +1,6 @@
 import { WAMessage } from "@whiskeysockets/baileys";
-import { prisma } from "@/config/database";
+import { userRepository } from "@/repositories/UserRepository";
+import { conversationRepository } from "@/repositories/ConversationRepository";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 import { chatService } from "@/services/chatService";
@@ -254,7 +255,7 @@ export class IdentityResolverService {
         `[IdentityResolver] 🔍 Trying Name Heuristic for LID: ${message.pushName}`,
       );
 
-      const possibleUsers = await prisma.user.findMany({
+      const possibleUsers = await userRepository.findMany({
         where: {
           companyId,
           name: { contains: message.pushName, mode: "insensitive" },
@@ -267,7 +268,7 @@ export class IdentityResolverService {
       );
 
       for (const user of possibleUsers) {
-        const userConv = await prisma.conversation.findFirst({
+        const userConv = await conversationRepository.findFirst({
           where: {
             companyId,
             participants: { some: { id: user.id } },
@@ -321,7 +322,7 @@ export class IdentityResolverService {
       `[IdentityResolver] 🚨 LID ${lidBase} completely unresolved. fromMe=${isFromMe}. Searching for recent conversation...`,
     );
 
-    const recentConv = await prisma.conversation.findFirst({
+    const recentConv = await conversationRepository.findFirst({
       where: {
         companyId,
         isGroup: false,

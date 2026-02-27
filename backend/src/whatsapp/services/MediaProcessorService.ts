@@ -4,7 +4,7 @@ import {
   AnyMessageContent,
 } from "@whiskeysockets/baileys";
 import { MediaType } from "@prisma/client";
-import { prisma } from "@/config/database";
+import { mediaRepository } from "@/repositories/MediaRepository";
 import { storageService } from "@/services/storageService";
 import { Logger } from "@/utils/logger";
 import { Readable } from "stream";
@@ -116,8 +116,17 @@ export class MediaProcessorService {
               (msgObj?.fileLength as number | bigint | undefined) || 0,
             );
           }
-        } catch (e) {
-          Logger.error(`[MediaProcessor] Download failed for ${messageId}`, e);
+        } catch (e: unknown) {
+          if ((e as Error)?.name === "InvalidAccessKeyId") {
+            Logger.error(
+              `[MediaProcessor] Download failed for ${messageId}: Invalid AWS S3 Access Key ID.`,
+            );
+          } else {
+            Logger.error(
+              `[MediaProcessor] Download failed for ${messageId}`,
+              e,
+            );
+          }
         }
       } else {
         const content = message.message as unknown as Record<string, unknown>;
@@ -241,9 +250,8 @@ export class MediaProcessorService {
     if (proxyMatch && proxyMatch[1]) {
       try {
         const mediaId = proxyMatch[1];
-        const dbMedia = await prisma.media.findUnique({
-          where: { id: mediaId },
-          select: { mimeType: true },
+        const dbMedia = await mediaRepository.findById(mediaId, {
+          mimeType: true,
         });
         if (dbMedia?.mimeType) {
           realMimeType = dbMedia.mimeType;
@@ -333,9 +341,9 @@ export class MediaProcessorService {
     if (proxyMatch && proxyMatch[1]) {
       try {
         const mediaId = proxyMatch[1];
-        const dbMedia = await prisma.media.findUnique({
-          where: { id: mediaId },
-          select: { mimeType: true, filename: true },
+        const dbMedia = await mediaRepository.findById(mediaId, {
+          mimeType: true,
+          filename: true,
         });
         if (dbMedia?.mimeType) docMime = dbMedia.mimeType;
         if (dbMedia?.filename) fileName = dbMedia.filename;

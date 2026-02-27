@@ -12,7 +12,7 @@ import { auditService } from "@/services/auditService";
  */
 export const auditLog = (
   entity: string,
-  getEntityId: (req: any) => string = (req) => req.params.id
+  getEntityId: (req: AuthenticatedRequest) => string = (req) => req.params.id,
 ) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     // Only audit mutating methods (POST, PATCH, PUT, DELETE)

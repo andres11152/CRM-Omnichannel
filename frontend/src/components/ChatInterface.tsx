@@ -450,6 +450,12 @@ export const ChatInterface: React.FC<Props> = ({
             ? SenderType.AGENT
             : SenderType.USER),
         companyId: msg.companyId || activeContact.companyId,
+        // 🛡️ FIX: Map attachment from metadata.media (matches history loading logic)
+        // Without this, Socket.IO replaces the optimistic message and the image disappears.
+        attachment:
+          msg.attachment ||
+          (msg as any).metadata?.media ||
+          (msg as any).metadata?.attachment,
       };
 
       setMessages((prev) => {
@@ -561,7 +567,12 @@ export const ChatInterface: React.FC<Props> = ({
       status: "composing" | "recording" | "paused";
     }) => {
       // Robust check: Ensure event belongs to this conversation
-      if (data.conversationId === activeContact.id) {
+      // We check the raw phone string inside `data.from` (JID) because conversationId (UUID) mismatch
+      if (
+        data.conversationId === activeContact.id ||
+        (activeContact.phone && data.from.includes(activeContact.phone)) ||
+        (activeContact.channelId && data.from.includes(activeContact.channelId))
+      ) {
         if (data.status === "composing" || data.status === "recording") {
           setIsRemoteTyping(true);
           // Safety timeout (clears if no 'paused' event received)
@@ -605,9 +616,15 @@ export const ChatInterface: React.FC<Props> = ({
     // 🚀 CONTEXT SYNC: Listen for JIT history backfill completion
     const handleHistorySynced = (data: {
       conversationId: string;
+      channelId?: string;
       newMessages: number;
     }) => {
-      if (data.conversationId === activeContact.id && data.newMessages > 0) {
+      if (
+        (data.conversationId === activeContact.id ||
+          data.channelId === activeContact.phone ||
+          data.channelId === activeContact.channelId) &&
+        data.newMessages > 0
+      ) {
         console.log(
           `[ContextSync] 🚀 ${data.newMessages} historical messages synced, reloading...`,
         );

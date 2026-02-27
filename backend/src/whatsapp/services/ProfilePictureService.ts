@@ -1,6 +1,16 @@
-import { prisma } from "@/config/database";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { Logger } from "@/utils/logger";
+import { z } from "zod";
+import { TenantContextManager } from "@/config/tenantContext";
+import { userRepository } from "@/repositories/UserRepository";
+import { contactRepository } from "@/repositories/ContactRepository";
+
+const FetchProfilePicSchema = z.object({
+  sessionId: z.string().min(1, "Session ID is required"),
+  jid: z.string().min(1, "JID is required"),
+  userId: z.string().min(1, "User ID is required"),
+  companyId: z.string().min(1, "Company ID is required"),
+});
 
 /**
  * 📸 PROFILE PICTURE SERVICE
@@ -19,61 +29,105 @@ export class ProfilePictureService {
    * This is a fire-and-forget operation — errors are logged but never thrown.
    */
   async fetchAndPersist(
-    sessionId: string,
-    jid: string,
-    userId: string,
+    sessionIdParam: string,
+    jidParam: string,
+    userIdParam: string,
+    companyIdParam: string,
   ): Promise<void> {
     try {
-      const sock = this.sessionManager.getSession(sessionId);
-      if (!sock) {
-        Logger.warn(`[ProfilePic] No socket for session ${sessionId}`);
-        return;
-      }
+      // 🛡️ Fail-Safe Validation: strictly validate incoming parameters
+      const { sessionId, jid, userId, companyId } = FetchProfilePicSchema.parse(
+        {
+          sessionId: sessionIdParam,
+          jid: jidParam,
+          userId: userIdParam,
+          companyId: companyIdParam,
+        },
+      );
 
-      const normalizedJid = jid.includes("@") ? jid : `${jid}@s.whatsapp.net`;
+      // 🛡️ Multi-tenant Scope: Ensure code execution is contextualized
+      await TenantContextManager.run(
+        { companyId, userId: "system", requestId: `profile-pic:${userId}` },
+        async () => {
+          const sock = this.sessionManager.getSession(sessionId);
+          if (!sock) {
+            Logger.warn(
+              `[ProfilePic] No socket for session ${sessionId} - CompanyId: ${companyId}`,
+            );
+            return;
+          }
 
-      const existingUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { profilePicUrl: true },
-      });
+          const normalizedJid = jid.includes("@")
+            ? jid
+            : `${jid}@s.whatsapp.net`;
 
-      if (
-        existingUser?.profilePicUrl &&
-        existingUser.profilePicUrl.startsWith("http")
-      ) {
-        return;
-      }
+          const existingUser = await userRepository.findFirst({
+            where: { id: userId, companyId },
+            select: {
+              profilePicUrl: true,
+              phone: true,
+              companyId: true,
+              role: true,
+            },
+          });
 
-      let profilePicUrl: string | undefined;
+          if (
+            existingUser?.profilePicUrl &&
+            existingUser.profilePicUrl.startsWith("http")
+          ) {
+            return;
+          }
 
-      try {
-        profilePicUrl = await sock.profilePictureUrl(normalizedJid, "image");
-      } catch {
-        try {
-          profilePicUrl = await sock.profilePictureUrl(
-            normalizedJid,
-            "preview",
-          );
-        } catch {
+          let profilePicUrl: string | undefined;
+
+          try {
+            profilePicUrl = await sock.profilePictureUrl(
+              normalizedJid,
+              "image",
+            );
+          } catch {
+            try {
+              profilePicUrl = await sock.profilePictureUrl(
+                normalizedJid,
+                "preview",
+              );
+            } catch {
+              Logger.info(
+                `[ProfilePic] No profile picture available for ${normalizedJid} - CompanyId: ${companyId}`,
+              );
+              return;
+            }
+          }
+
+          if (!profilePicUrl) return;
+
+          await userRepository.update({
+            where: { id: userId },
+            data: { profilePicUrl },
+          });
+
+          // Also update the associated CRM Contact if it exists
+          if (existingUser?.phone) {
+            await contactRepository.updateMany({
+              where: {
+                companyId,
+                phone: existingUser.phone,
+              },
+              data: { profilePicUrl },
+            });
+          }
+
           Logger.info(
-            `[ProfilePic] No profile picture available for ${normalizedJid}`,
+            `[ProfilePic] ✅ Saved profile picture for user & contact ${userId}: ${profilePicUrl.slice(0, 60)}... - CompanyId: ${companyId}`,
           );
-          return;
-        }
-      }
-
-      if (!profilePicUrl) return;
-
-      await prisma.user.update({
-        where: { id: userId },
-        data: { profilePicUrl },
-      });
-
-      Logger.info(
-        `[ProfilePic] ✅ Saved profile picture for user ${userId}: ${profilePicUrl.slice(0, 60)}...`,
+        },
       );
     } catch (error) {
-      Logger.warn(`[ProfilePic] Failed to fetch/save profile pic:`, error);
+      // 🛡️ 100-YEAR FIX: Centralized logging with full stack trace and context
+      Logger.error(
+        `[ProfilePic] Failed to fetch/save profile pic for user ${userIdParam} in company ${companyIdParam}. SessionId: ${sessionIdParam}:`,
+        error instanceof Error ? error.stack || error.message : error,
+      );
     }
   }
 }

@@ -7,13 +7,13 @@ const WEBHOOK_CONFIGS: Record<string, string> = {
   default: "https://webhook.site/26e3c162-8e1c-43f6-b184-5f504d6074d2",
 };
 
-const DELIVERY_LOGS: any[] = [];
+const DELIVERY_LOGS: Record<string, unknown>[] = [];
 
 export const webhookDispatcher = {
   /**
    * Dispatches a standardized webhook event to the tenant's configured URL.
    */
-  async dispatch(tenantId: string, eventType: string, payload: any) {
+  async dispatch(tenantId: string, eventType: string, payload: unknown) {
     // 1. Get Tenant Config
     const webhookUrl = WEBHOOK_CONFIGS[tenantId] || WEBHOOK_CONFIGS["default"];
     const apiSecret = "whsec_rEply_SuP3r_sEcr3t_K3y_8823"; // Mock Secret
@@ -57,9 +57,10 @@ export const webhookDispatcher = {
         timeout: 5000,
       });
       Logger.info(`✅ [Webhook] Delivered ${eventType} to ${webhookUrl}`);
-    } catch (err: any) {
-      status = err.response?.status || 500;
-      errorMessage = err.message;
+    } catch (err: unknown) {
+      status =
+        (err as { response?: { status: number } }).response?.status || 500;
+      errorMessage = err instanceof Error ? err.message : String(err);
       Logger.error(`❌ [Webhook] Delivery Failed: ${status}`, {
         error: errorMessage,
       });
@@ -80,11 +81,11 @@ export const webhookDispatcher = {
     if (DELIVERY_LOGS.length > 50) DELIVERY_LOGS.pop();
   },
 
-  getLogs(tenantId: string) {
+  getLogs(_tenantId: string) {
     return DELIVERY_LOGS.slice(0, 10);
   },
 
-  getSigningSecret(tenantId: string) {
+  getSigningSecret(_tenantId: string) {
     return "whsec_rEply_SuP3r_sEcr3t_K3y_8823";
   },
 };

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { prisma } from "@/config/database";
+import { healthRepository } from "@/repositories/HealthRepository";
 import redisClient from "@/config/redis";
 import { HealthStatus, ServiceHealth, MemoryHealth } from "@/types/health";
 
@@ -50,7 +50,7 @@ export const healthCheck = async (req: Request, res: Response) => {
 async function checkDatabase(): Promise<ServiceHealth> {
   const start = Date.now();
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await healthRepository.checkDatabaseLiveness();
     return {
       status: "up",
       responseTime: Date.now() - start,
@@ -110,7 +110,7 @@ function checkMemory(): MemoryHealth {
 export const readinessCheck = async (req: Request, res: Response) => {
   try {
     // Quick database ping
-    await prisma.$queryRaw`SELECT 1`;
+    await healthRepository.checkDatabaseLiveness();
     res.status(200).json({ ready: true });
   } catch {
     res.status(503).json({ ready: false });

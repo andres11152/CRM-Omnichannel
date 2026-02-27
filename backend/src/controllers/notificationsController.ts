@@ -1,8 +1,7 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
-import { prisma } from "@/config/database";
-import { Prisma } from "@prisma/client";
+import { notificationService } from "@/services/notificationService";
 
 /**
  * 🔔 NOTIFICATIONS CONTROLLER
@@ -13,36 +12,20 @@ import { Prisma } from "@prisma/client";
 export const getNotifications = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
-
     if (!userId) {
-      return res.status(401).json({
-        status: "error",
-        message: "User ID not found",
-      });
+      return res
+        .status(401)
+        .json({ status: "error", message: "User ID not found" });
     }
 
     const { limit = "20", unreadOnly = "false" } = req.query;
 
-    const where: Prisma.NotificationWhereInput = { userId };
-    if (unreadOnly === "true") {
-      where.read = false;
-    }
-
-    const notifications = await prisma.notification.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: parseInt(limit as string, 10),
+    const data = await notificationService.findAll(userId, {
+      limit: parseInt(limit as string, 10),
+      unreadOnly: unreadOnly === "true",
     });
 
-    res.json({
-      status: "success",
-      data: {
-        notifications,
-        unreadCount: await prisma.notification.count({
-          where: { userId, read: false },
-        }),
-      },
-    });
+    res.json({ status: "success", data });
   },
 );
 
@@ -53,32 +36,14 @@ export const markAsRead = catchAsync(
     const { id } = req.params;
 
     if (!userId) {
-      return res.status(401).json({
-        status: "error",
-        message: "User ID not found",
-      });
+      return res
+        .status(401)
+        .json({ status: "error", message: "User ID not found" });
     }
 
-    const notification = await prisma.notification.findFirst({
-      where: { id, userId },
-    });
+    await notificationService.markAsRead(id, userId);
 
-    if (!notification) {
-      return res.status(404).json({
-        status: "error",
-        message: "Notification not found",
-      });
-    }
-
-    await prisma.notification.update({
-      where: { id },
-      data: { read: true },
-    });
-
-    res.json({
-      status: "success",
-      message: "Notification marked as read",
-    });
+    res.json({ status: "success", message: "Notification marked as read" });
   },
 );
 
@@ -86,18 +51,13 @@ export const markAsRead = catchAsync(
 export const markAllAsRead = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
-
     if (!userId) {
-      return res.status(401).json({
-        status: "error",
-        message: "User ID not found",
-      });
+      return res
+        .status(401)
+        .json({ status: "error", message: "User ID not found" });
     }
 
-    await prisma.notification.updateMany({
-      where: { userId, read: false },
-      data: { read: true },
-    });
+    await notificationService.markAllAsRead(userId);
 
     res.json({
       status: "success",
@@ -113,30 +73,13 @@ export const deleteNotification = catchAsync(
     const { id } = req.params;
 
     if (!userId) {
-      return res.status(401).json({
-        status: "error",
-        message: "User ID not found",
-      });
+      return res
+        .status(401)
+        .json({ status: "error", message: "User ID not found" });
     }
 
-    const notification = await prisma.notification.findFirst({
-      where: { id, userId },
-    });
+    await notificationService.delete(id, userId);
 
-    if (!notification) {
-      return res.status(404).json({
-        status: "error",
-        message: "Notification not found",
-      });
-    }
-
-    await prisma.notification.delete({
-      where: { id },
-    });
-
-    res.json({
-      status: "success",
-      message: "Notification deleted",
-    });
+    res.json({ status: "success", message: "Notification deleted" });
   },
 );

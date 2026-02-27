@@ -25,7 +25,10 @@ export const handleWhatsappWebhook = catchAsync(
     const payload = whatsappWebhookSchema.safeParse(req.body);
 
     if (!payload.success) {
-      Logger.warn(`[Webhook] Invalid payload`, payload.error);
+      Logger.warn(
+        `[Webhook] Invalid payload`,
+        payload.error.format() as unknown as Record<string, unknown>,
+      );
       return res.status(400).json({
         status: "error",
         message: "Invalid payload",

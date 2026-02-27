@@ -77,7 +77,12 @@ export class WhatsAppBackupService {
       const backupPath = path.join(BACKUP_DIR, `backup-${timestamp}.json`);
 
       // Fetch all keys data
-      const backupData: Record<string, any> = {
+      const backupData: {
+        timestamp: string;
+        version: string;
+        keysCount: number;
+        keys: Record<string, unknown>;
+      } = {
         timestamp: new Date().toISOString(),
         version: "1.0",
         keysCount: allKeys.length,
@@ -99,7 +104,7 @@ export class WhatsAppBackupService {
       await fs.writeFile(
         backupPath,
         JSON.stringify(backupData, null, 2),
-        "utf-8"
+        "utf-8",
       );
 
       // Compress backup for storage efficiency
@@ -110,7 +115,7 @@ export class WhatsAppBackupService {
 
       const duration = Date.now() - startTime;
       Logger.info(
-        `[WhatsApp Backup] ✅ Backup completed: ${allKeys.length} keys in ${duration}ms`
+        `[WhatsApp Backup] ✅ Backup completed: ${allKeys.length} keys in ${duration}ms`,
       );
     } catch (error) {
       Logger.error("[WhatsApp Backup] ❌ Backup failed:", error);
@@ -128,7 +133,7 @@ export class WhatsAppBackupService {
     } catch (error) {
       Logger.warn(
         "[WhatsApp Backup] Compression failed, keeping uncompressed:",
-        error
+        error,
       );
     }
   }
@@ -163,7 +168,7 @@ export class WhatsAppBackupService {
   async restoreSession(sessionId: string): Promise<boolean> {
     try {
       Logger.info(
-        `[WhatsApp Backup] Attempting to restore session ${sessionId}`
+        `[WhatsApp Backup] Attempting to restore session ${sessionId}`,
       );
 
       if (!redisClient || !redisClient.isOpen) {
@@ -177,7 +182,7 @@ export class WhatsAppBackupService {
         .filter(
           (f) =>
             f.startsWith("backup-") &&
-            (f.endsWith(".json") || f.endsWith(".json.gz"))
+            (f.endsWith(".json") || f.endsWith(".json.gz")),
         )
         .sort()
         .reverse();
@@ -212,7 +217,7 @@ export class WhatsAppBackupService {
             } catch (error) {
               Logger.warn(
                 `[WhatsApp Backup] Failed to restore key ${key}:`,
-                error
+                error,
               );
             }
           }
@@ -220,7 +225,7 @@ export class WhatsAppBackupService {
 
         if (restored > 0) {
           Logger.info(
-            `[WhatsApp Backup] ✅ Restored ${restored} keys for session ${sessionId}`
+            `[WhatsApp Backup] ✅ Restored ${restored} keys for session ${sessionId}`,
           );
           return true;
         }

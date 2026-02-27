@@ -2,7 +2,7 @@ import { Queue, Worker, Job } from "bullmq";
 import { connection } from "@/config/bullmq";
 import { whatsappService } from "@/whatsapp";
 import { Logger } from "@/utils/logger";
-import { prisma } from "@/config/database";
+import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { TenantContextManager } from "@/config/tenantContext";
 import { SendMessageOptions } from "../core/types/whatsapp.types";
 
@@ -45,11 +45,8 @@ class WhatsAppQueueManager {
     const { sessionId, priority } = data;
 
     // 1. Calculate Reputation / Age
-    // New sessions (< 24h) get harsher delays
-    const session = await prisma.whatsAppSession.findUnique({
-      where: { sessionId },
-      select: { createdAt: true },
-    });
+    // New sessions (<24h) get harsher delays
+    const session = await whatsappSessionRepository.findOne(sessionId);
 
     let delay = 0;
     if (session) {

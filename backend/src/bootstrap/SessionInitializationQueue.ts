@@ -105,7 +105,7 @@ export class SessionInitializationQueue {
   private async processSessionInit(
     job: Job<SessionInitJobData>,
   ): Promise<void> {
-    const { sessionId, companyId, authDir } = job.data;
+    const { sessionId, companyId } = job.data;
 
     logger.info(
       { sessionId, companyId, attempt: job.attemptsMade },

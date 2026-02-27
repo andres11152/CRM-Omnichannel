@@ -1,36 +1,34 @@
-import { PrismaClient } from "@prisma/client";
+import { contactRepository } from "@/repositories/ContactRepository";
+import { conversationRepository } from "@/repositories/ConversationRepository";
+import { Logger } from "@/utils/logger";
 import { parsePhoneNumber } from "libphonenumber-js";
-
-const prisma = new PrismaClient();
+import { Prisma } from "@prisma/client";
+import { WAMessage } from "@whiskeysockets/baileys";
 
 export class WhatsAppIngestService {
-  /**
-   * Procesa el mensaje entrante.
-   * Fusión de lógica V2 (Arquitectura) + Lógica Legacy (Smart Extraction).
-   */
-  async handleIngestion(msg: any, companyId: string) {
+  async handleIngestion(msg: WAMessage, companyId: string) {
     // 🕵️ LOG VERBOSO PARA DEPURACIÓN
-    const remoteJid = msg.key.remoteJid;
-    const participant = msg.key.participant;
-    console.log("\n📨 [INGEST] INCOMING MSG:");
-    console.log(`   - Chat (RemoteJid): ${remoteJid}`);
-    console.log(`   - Sender (Participant): ${participant || "N/A"}`);
-    console.log(`   - PushName: ${msg.pushName}`);
+    const remoteJid = msg.key?.remoteJid;
+    const participant = msg.key?.participant;
+    Logger.info("\n📨 [INGEST] INCOMING MSG:");
+    Logger.info(`   - Chat (RemoteJid): ${remoteJid}`);
+    Logger.info(`   - Sender (Participant): ${participant || "N/A"}`);
+    Logger.info(`   - PushName: ${msg.pushName}`);
 
     try {
       // 1. EXTRACCIÓN DE IDENTIDAD (Lógica Fusionada)
       const identity = await this.resolveIdentity(msg, companyId);
 
       if (identity.isZombie && !identity.e164Phone) {
-        console.warn(
-          `⚠️ [INGEST] ZOMBIE REJECTED: ID Técnico ${identity.originalId} sin resolución.`
+        Logger.warn(
+          `⚠️ [INGEST] ZOMBIE REJECTED: ID Técnico ${identity.originalId} sin resolución.`,
         );
         return;
       }
 
       const finalPhone = identity.e164Phone!;
-      console.log(
-        `🔍 [INGEST] IDENTIDAD RESUELTA: ${finalPhone} (Origen: ${identity.source})`
+      Logger.info(
+        `🔍 [INGEST] IDENTIDAD RESUELTA: ${finalPhone} (Origen: ${identity.source})`,
       );
 
       // 2. PERSISTENCIA DE MAPPING (Auto-Learn Legacy)
@@ -43,62 +41,64 @@ export class WhatsAppIngestService {
         await this.persistLidMapping(
           companyId,
           finalPhone,
-          identity.originalId
+          identity.originalId,
         );
       }
 
-      // 3. UPSERT CONTACTO
-      const contact = await prisma.contact.upsert({
-        where: {
-          companyId_phone: { companyId, phone: finalPhone },
-        },
-        update: {
-          name: msg.pushName || undefined,
-          // lastActive removed (not in schema)
-          // Si descubrimos un LID nuevo, actualizamos customFields sin borrar los existentes
-          ...(identity.originalId.includes("@lid")
-            ? {
-                customFields: {
-                  upsert: {
-                    update: { lid: identity.originalId },
-                    set: { lid: identity.originalId }, // Para JSONB simple
-                  },
-                },
-              }
-            : {}),
-        },
-        create: {
-          companyId,
-          phone: finalPhone,
-          name: msg.pushName || `~${finalPhone}`,
-          // channel removed (not in schema)
-          customFields: identity.originalId.includes("@lid")
-            ? { lid: identity.originalId }
-            : {},
-        },
+      let contact = await contactRepository.findUnique({
+        where: { companyId_phone: { companyId, phone: finalPhone } },
       });
 
-      console.log(`✅ [INGEST] CONTACTO: ${contact.name} (${contact.phone})`);
+      const customFieldsUpdate = identity.originalId.includes("@lid")
+        ? { lid: identity.originalId }
+        : {};
 
-      // 4. VINCULAR CHAT (Siempre usamos el remoteJid técnico para el ID del chat)
-      const chat = await prisma.conversation.upsert({
+      if (contact) {
+        // Prepare the update payload for JSONB explicitly casting lid to the generic `Record<string, unknown>` format
+        const existingFields =
+          (contact.customFields as Record<string, unknown>) || {};
+        const combinedFields = { ...existingFields, ...customFieldsUpdate };
+
+        contact = await contactRepository.update(contact.id, {
+          name: msg.pushName || contact.name,
+          customFields: combinedFields as unknown as Prisma.JsonValue,
+        });
+      } else {
+        contact = await contactRepository.createRaw({
+          data: {
+            companyId,
+            phone: finalPhone,
+            name: msg.pushName || `~${finalPhone}`,
+            customFields: customFieldsUpdate as Prisma.InputJsonObject,
+          },
+        });
+      }
+
+      Logger.info(`✅ [INGEST] CONTACTO: ${contact.name} (${contact.phone})`);
+
+      let chat = await conversationRepository.findUnique({
         where: { id: remoteJid },
-        update: {
-          contactId: contact.id,
-          // lastMessageAt/unreadCount removed
-        },
-        create: {
-          id: remoteJid,
-          companyId,
-          contactId: contact.id,
-          // channel removed (not in schema)
-          // lastMessageAt/unreadCount removed
-        },
       });
+
+      if (chat) {
+        chat = await conversationRepository.update(chat.id, {
+          contact: { connect: { id: contact.id } },
+        });
+      } else {
+        chat = await conversationRepository.createRaw({
+          data: {
+            id: remoteJid,
+            companyId,
+            channelId: remoteJid,
+            contactId: contact.id,
+            subject: remoteJid,
+          },
+        });
+      }
 
       return { contact, chat };
     } catch (error) {
-      console.error("❌ [INGEST] CRITICAL ERROR:", error);
+      Logger.error(`❌ [INGEST] CRITICAL ERROR: ${error}`);
     }
   }
 
@@ -107,8 +107,8 @@ export class WhatsAppIngestService {
    * Busca el teléfono real en todas las propiedades posibles del mensaje.
    */
   private async resolveIdentity(
-    msg: any,
-    companyId: string
+    msg: WAMessage & { key: { remoteJidAlt?: string } },
+    companyId: string,
   ): Promise<{
     e164Phone: string | null;
     isZombie: boolean;
@@ -158,8 +158,7 @@ export class WhatsAppIngestService {
       const lidToSearch = participant || remoteJid;
       const cleanLid = lidToSearch.replace(/@.*$/, "");
 
-      // Buscar en Contactos existentes
-      const found = await prisma.contact.findFirst({
+      const found = await contactRepository.findFirst({
         where: {
           companyId,
           OR: [
@@ -204,7 +203,7 @@ export class WhatsAppIngestService {
       try {
         // Parsing estricto con libphonenumber
         const parsed = parsePhoneNumber(
-          candidate.startsWith("+") ? candidate : `+${candidate}`
+          candidate.startsWith("+") ? candidate : `+${candidate}`,
         );
         if (parsed && parsed.isValid()) {
           return {
@@ -214,7 +213,7 @@ export class WhatsAppIngestService {
             source,
           };
         }
-      } catch (e) {
+      } catch {
         // Si falla el parser pero parece válido (lógica legacy manual)
         if (/^\d{10,15}$/.test(candidate)) {
           return {
@@ -242,31 +241,32 @@ export class WhatsAppIngestService {
   private async persistLidMapping(
     companyId: string,
     phone: string,
-    lid: string
+    lid: string,
   ) {
     try {
       const cleanLid = lid.replace(/@.*$/, "");
       // No guardar basura
       if (phone === cleanLid) return;
 
-      const contact = await prisma.contact.findFirst({
+      const contact = await contactRepository.findFirst({
         where: { companyId, phone },
       });
 
       if (contact) {
-        const currentFields = (contact.customFields as any) || {};
+        const currentFields =
+          (contact.customFields as Record<string, unknown>) || {};
         if (currentFields.lid !== cleanLid) {
-          await prisma.contact.update({
-            where: { id: contact.id },
-            data: {
-              customFields: { ...currentFields, lid: cleanLid },
-            },
+          await contactRepository.update(contact.id, {
+            customFields: {
+              ...currentFields,
+              lid: cleanLid,
+            } as unknown as Prisma.JsonValue,
           });
-          console.log(`💾 [INGEST] MAPPING GUARDADO: ${phone} <-> ${cleanLid}`);
+          Logger.info(`💾 [INGEST] MAPPING GUARDADO: ${phone} <-> ${cleanLid}`);
         }
       }
     } catch (e) {
-      console.warn("⚠️ [INGEST] Fallo al guardar mapping LID:", e);
+      Logger.warn(`⚠️ [INGEST] Fallo al guardar mapping LID: ${e}`);
     }
   }
 }

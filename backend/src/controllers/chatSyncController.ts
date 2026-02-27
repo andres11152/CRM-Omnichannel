@@ -13,6 +13,7 @@ import {
   ChatSyncRequestSchema,
 } from "@/services/chatSyncService";
 import { whatsappService } from "@/whatsapp";
+import { Logger } from "@/utils/logger";
 
 // ========================
 // CONTROLLER HANDLERS
@@ -158,7 +159,7 @@ export const syncConversation = catchAsync(
       throw new AppError("No active WhatsApp session found", 404);
     }
 
-    console.info(`[ChatSync] 🔄 On-Demand Sync for ${phone} (User: ${userId})`);
+    Logger.info(`[ChatSync] 🔄 On-Demand Sync for ${phone} (User: ${userId})`);
 
     // 2. Execute Targeted Sync
     // We use a generous lookback (30 days) but limit by count (limit=50)

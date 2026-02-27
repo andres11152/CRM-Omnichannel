@@ -3,6 +3,7 @@ import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
 import { dealService } from "../../services/dealService";
+import { Logger } from "../../utils/logger";
 import {
   CreateDealSchema,
   UpdateDealSchema,
@@ -10,38 +11,32 @@ import {
   GetDealsSchema,
   GetDealSchema,
   DeleteDealSchema,
-} from "../../schemas/deal.schema";
+} from "../../schemas/dealSchema";
 
 export const getDeals = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    console.log("DEBUG: Entered getDeals controller. Query:", req.query);
+    Logger.debug("Entered getDeals controller", {
+      query: req.query as Record<string, unknown>,
+    });
     const companyId = req.user?.companyId;
     if (!companyId) return next(new AppError("Company ID is missing", 400));
 
-    try {
-      // Validate query params
-      console.log("DEBUG: Parsing schema...");
-      const { query } = GetDealsSchema.parse({ query: req.query });
-      console.log("DEBUG: Schema parsed:", query);
+    const { query } = GetDealsSchema.parse({ query: req.query });
 
-      const deals = await dealService.getDeals(companyId, {
-        pipelineId: query.pipelineId,
-        stageId: query.stageId,
-        accountId: query.accountId,
-        contactId: query.contactId,
-      });
+    const deals = await dealService.getDeals(companyId, {
+      pipelineId: query.pipelineId,
+      stageId: query.stageId,
+      accountId: query.accountId,
+      contactId: query.contactId,
+    });
 
-      console.log("DEBUG: Service returned deals:", deals.length);
+    Logger.debug("Service returned deals", { count: deals.length });
 
-      res.status(200).json({
-        status: "success",
-        results: deals.length,
-        data: { deals },
-      });
-    } catch (error) {
-      console.error("DEBUG: getDeals CRASHED:", error);
-      throw error;
-    }
+    res.status(200).json({
+      status: "success",
+      results: deals.length,
+      data: { deals },
+    });
   },
 );
 
@@ -133,3 +128,4 @@ export const deleteDeal = catchAsync(
     });
   },
 );
+

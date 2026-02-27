@@ -1,11 +1,4 @@
-import {
-  Contact,
-  Deal,
-  Activity,
-  Ticket,
-  Conversation,
-  Message,
-} from "@prisma/client";
+import { Contact } from "@prisma/client";
 
 /**
  * 📦 CONTACT DTOs
@@ -33,7 +26,7 @@ export interface TimelineItemDTO {
   subtitle: string;
   icon: string;
   color: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ContactTimelineResponseDTO {

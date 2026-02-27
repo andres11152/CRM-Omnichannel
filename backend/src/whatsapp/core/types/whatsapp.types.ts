@@ -27,10 +27,12 @@ export interface MediaPayload {
 
 export interface SessionStatus {
   sessionId: string;
+  companyId?: string;
   status: "CONNECTED" | "DISCONNECTED" | "CONNECTING" | "FAILED";
   phone?: string;
   qrCode?: string;
   error?: string;
+  updatedAt?: Date;
 }
 
 export interface SendMessageOptions {

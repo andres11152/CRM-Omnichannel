@@ -1,9 +1,10 @@
-import { prisma } from "@/config/database";
 import { Prisma } from "@prisma/client"; // Prisma namespace for types like Prisma.UserUpdateInput
 import { AppError } from "@/utils/AppError";
 import bcrypt from "bcryptjs";
 import { UserRole } from "@prisma/client";
+import { Logger } from "@/utils/logger";
 import redisClient from "@/config/redis"; // 100-Year Fix: For cache invalidation
+import { userRepository } from "@/repositories/UserRepository";
 
 // ==================== TYPES & INTERFACES ====================
 
@@ -53,7 +54,7 @@ export const userService = {
   async findUsers(filters: UserFilters) {
     const where = this.buildWhereClause(filters);
 
-    return prisma.user.findMany({
+    return userRepository.findMany({
       where,
       select: this.getUserSelectFields(),
     });
@@ -64,7 +65,7 @@ export const userService = {
    * Obtiene un usuario específico por ID
    */
   async findUserById(id: string) {
-    const user = await prisma.user.findUnique({
+    const user = await userRepository.findUnique({
       where: { id },
     });
 
@@ -86,9 +87,7 @@ export const userService = {
     this.validateRoleCreation(currentUserRole, requestedRole);
 
     // Verificar si el email ya existe
-    const existingUser = await prisma.user.findUnique({
-      where: { email: input.email },
-    });
+    const existingUser = await userRepository.findByEmail(input.email);
 
     if (existingUser) {
       throw new AppError("El email ya está registrado.", 400);
@@ -98,7 +97,7 @@ export const userService = {
     const hashedPassword = await bcrypt.hash(input.password, 12);
 
     // Crear usuario
-    const newUser = await prisma.user.create({
+    const newUser = await userRepository.create({
       data: {
         name: input.name,
         email: input.email,
@@ -147,7 +146,7 @@ export const userService = {
     }
 
     // Obtener usuario actual para merge de preferences
-    const currentUser = await prisma.user.findUnique({ where: { id } });
+    const currentUser = await userRepository.findUnique({ where: { id } });
 
     // Merge preferences si existen
     let mergedPreferences = preferences;
@@ -168,7 +167,7 @@ export const userService = {
     );
 
     // Update user
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await userRepository.update({
       where: { id },
       data: {
         ...restData,
@@ -192,7 +191,7 @@ export const userService = {
       try {
         await redisClient.del(`auth:user:${id}`);
       } catch (cacheError) {
-        console.warn(
+        Logger.warn(
           `[UserService] Failed to invalidate cache for user ${id}:`,
           cacheError,
         );
@@ -211,7 +210,7 @@ export const userService = {
 
     // Solo ADMIN puede eliminar usuarios de su compañía
     if (currentUserRole === "ADMIN") {
-      const targetUser = await prisma.user.findUnique({
+      const targetUser = await userRepository.findUnique({
         where: { id: userId },
       });
 
@@ -237,11 +236,9 @@ export const userService = {
 
       // 🛡️ SECURITY: Last Man Standing (Anti-Lockout)
       if (targetUser.role === "ADMIN" || targetUser.role === "MASTER") {
-        const adminCount = await prisma.user.count({
-          where: {
-            companyId,
-            role: { in: ["ADMIN", "MASTER"] },
-          },
+        const adminCount = await userRepository.count({
+          companyId,
+          role: { in: ["ADMIN", "MASTER"] as UserRole[] },
         });
 
         if (adminCount <= 1) {
@@ -253,12 +250,11 @@ export const userService = {
       }
 
       // Eliminar usuario
-      await prisma.user.delete({ where: { id: userId } });
+      await userRepository.delete(userId);
       return;
     }
 
     // Fallback: Si no es ADMIN, solo puede eliminarse a sí mismo
-    // (Esta lógica podría estar en middleware de autorización)
     throw new AppError("No tienes permiso para eliminar usuarios.", 403);
   },
 
@@ -290,14 +286,12 @@ export const userService = {
       where.role = filters.role as UserRole;
     } else {
       // 🛡️ 100-YEAR FIX: Global MASTER Exclusion
-      // Master users (God Mode) should never appear in standard lists (transfer, admin views, etc.)
       where.role = { not: UserRole.MASTER };
     }
 
     // 🛡️ 100-YEAR FIX: Exclude System Bots (Flow/AI Agents)
-    // These internal accounts should never be selectable for assignment or displayed in lists.
     where.email = {
-      ...((where.email as Prisma.StringFilter) || {}), // Preserve existing email filters if any (future proof)
+      ...((where.email as Prisma.StringFilter) || {}),
       not: {
         endsWith: "@reply.bot",
       },
@@ -404,7 +398,7 @@ export const userService = {
 
     // Permitir si es ADMIN editando AGENT o SUPERVISOR de su compañía
     if (currentUserRole === "ADMIN" && companyId) {
-      const targetUser = await prisma.user.findUnique({
+      const targetUser = await userRepository.findUnique({
         where: { id: targetUserId },
       });
 
@@ -433,7 +427,7 @@ export const userService = {
     if (targetUserId === currentUserId) return false;
 
     // Validar que el usuario objetivo está en la misma compañía
-    const targetUser = await prisma.user.findUnique({
+    const targetUser = await userRepository.findUnique({
       where: { id: targetUserId },
     });
 

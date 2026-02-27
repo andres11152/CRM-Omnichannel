@@ -15,11 +15,14 @@ export function sanitizeString(input: unknown): string {
     return String(input || "");
   }
 
-  return input
-    .replace(/\0/g, "") // Remove null bytes
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove control characters
-    .trim()
-    .slice(0, 10000); // Max 10k chars to prevent memory issues
+  return (
+    input
+      .replace(/\0/g, "") // Remove null bytes
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove control characters
+      .trim()
+      .slice(0, 10000)
+  ); // Max 10k chars to prevent memory issues
 }
 
 /**
@@ -74,14 +77,14 @@ export function validateUrl(url: unknown): string | null {
  *
  * Parses JSON without throwing. Returns null on failure.
  */
-export function safeJsonParse<T = any>(input: unknown): T | null {
+export function safeJsonParse<T = unknown>(input: unknown): T | null {
   if (typeof input !== "string") {
     return null;
   }
 
   try {
     return JSON.parse(input) as T;
-  } catch (error) {
+  } catch {
     Logger.warn("[Validator] Failed to parse JSON:", {
       snippet: String(input).slice(0, 100),
     });
@@ -103,11 +106,11 @@ export interface ValidatedWhatsAppMessage {
 }
 
 export function validateWhatsAppPayload(
-  payload: any
+  payload: Record<string, unknown> | null | undefined,
 ): ValidatedWhatsAppMessage | null {
   // Required: phone and text
   const phone = validatePhone(
-    payload?.phone || payload?.remoteJid || payload?.from
+    payload?.phone || payload?.remoteJid || payload?.from,
   );
   if (!phone) {
     Logger.warn("[Validator] Invalid WhatsApp payload - missing valid phone");
@@ -115,11 +118,11 @@ export function validateWhatsAppPayload(
   }
 
   const text = sanitizeString(
-    payload?.text || payload?.message || payload?.body
+    payload?.text || payload?.message || payload?.body,
   );
   if (!text && !payload?.hasMedia) {
     Logger.warn(
-      "[Validator] Invalid WhatsApp payload - missing text and media"
+      "[Validator] Invalid WhatsApp payload - missing text and media",
     );
     return null;
   }
@@ -132,16 +135,20 @@ export function validateWhatsAppPayload(
   // Optional fields
   if (payload?.name || payload?.pushName || payload?.notifyName) {
     result.name = sanitizeString(
-      payload.name || payload.pushName || payload.notifyName
+      payload.name || payload.pushName || payload.notifyName,
     );
   }
 
-  if (payload?.media?.url || payload?.mediaUrl) {
-    const mediaUrl = validateUrl(payload.media?.url || payload.mediaUrl);
+  if ((payload?.media as Record<string, unknown>)?.url || payload?.mediaUrl) {
+    const mediaUrl = validateUrl(
+      (payload.media as Record<string, unknown>)?.url || payload.mediaUrl,
+    );
     if (mediaUrl) {
       result.mediaUrl = mediaUrl;
       result.mediaType = sanitizeString(
-        payload.media?.type || payload.mediaType || "unknown"
+        (payload.media as Record<string, unknown>)?.type ||
+          payload.mediaType ||
+          "unknown",
       );
     }
   }
@@ -156,12 +163,12 @@ export function validateWhatsAppPayload(
  */
 export interface ValidatedWebhookPayload {
   event: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   timestamp: number;
 }
 
 export function validateWebhookPayload(
-  payload: any
+  payload: Record<string, unknown> | null | undefined,
 ): ValidatedWebhookPayload | null {
   if (!payload || typeof payload !== "object") {
     Logger.warn("[Validator] Invalid webhook payload - not an object");
@@ -171,14 +178,15 @@ export function validateWebhookPayload(
   const event = sanitizeString(payload.event);
   if (!event || event.length > 100) {
     Logger.warn(
-      "[Validator] Invalid webhook payload - missing or invalid event"
+      "[Validator] Invalid webhook payload - missing or invalid event",
     );
     return null;
   }
 
   // Ensure data is an object
-  const data =
-    payload.data && typeof payload.data === "object" ? payload.data : {};
+  const data = (
+    payload.data && typeof payload.data === "object" ? payload.data : {}
+  ) as Record<string, unknown>;
 
   const timestamp =
     typeof payload.timestamp === "number" && payload.timestamp > 0
@@ -199,7 +207,7 @@ export function validateWebhookPayload(
  */
 export function createRateLimitKey(
   namespace: string,
-  identifier: unknown
+  identifier: unknown,
 ): string {
   const cleaned = sanitizeString(identifier)
     .replace(/[^a-zA-Z0-9-_]/g, "") // Only alphanumeric, dash, underscore

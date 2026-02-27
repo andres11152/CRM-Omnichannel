@@ -5,7 +5,7 @@ export interface ISessionManager {
   initializeSession(config: SessionConfig): Promise<WASocket>;
   getSession(sessionId: string): WASocket | undefined;
   getSessionStatus(sessionId: string): SessionStatus;
-  terminateSession(sessionId: string): Promise<void>;
+  terminateSession(sessionId: string, clearAuth?: boolean): Promise<void>;
   listSessions(companyId: string): SessionStatus[];
   reconnectSession(sessionId: string): Promise<void>;
 

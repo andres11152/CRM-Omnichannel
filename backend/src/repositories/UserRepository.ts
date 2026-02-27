@@ -56,6 +56,22 @@ export class UserRepository {
   ): Promise<User> {
     return this.db.user.upsert({ where, create, update });
   }
+
+  async update(args: Prisma.UserUpdateArgs) {
+    return this.db.user.update(args);
+  }
+
+  async create(args: Prisma.UserCreateArgs): Promise<User> {
+    return this.db.user.create(args);
+  }
+
+  async count(where: Prisma.UserWhereInput): Promise<number> {
+    return this.db.user.count({ where });
+  }
+
+  async delete(id: string): Promise<User> {
+    return this.db.user.delete({ where: { id } });
+  }
 }
 
 export const userRepository = new UserRepository();

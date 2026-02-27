@@ -1,7 +1,6 @@
 import Stripe from "stripe";
-import { prisma } from "@/config/database";
+import { companyRepository } from "@/repositories/CompanyRepository";
 import { AppError } from "@/utils/AppError";
-import { Logger } from "@/utils/logger";
 
 /**
  * STRIPE SERVICE
@@ -22,11 +21,9 @@ export const stripeService = {
    */
   async findOrCreateStripeCustomerId(
     companyId: string,
-    userEmail: string
+    userEmail: string,
   ): Promise<string> {
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-    });
+    const company = await companyRepository.findById(companyId);
     if (!company) throw new AppError("Compañía no encontrada.", 404);
 
     if (company.stripeCustomerId) {
@@ -41,9 +38,8 @@ export const stripeService = {
     });
 
     // Guardamos el nuevo ID en nuestra base de datos
-    await prisma.company.update({
-      where: { id: companyId },
-      data: { stripeCustomerId: customer.id },
+    await companyRepository.update(companyId, {
+      stripeCustomerId: customer.id,
     });
 
     return customer.id;
@@ -52,11 +48,11 @@ export const stripeService = {
   async createCheckoutSession(
     companyId: string,
     priceId: string,
-    userEmail: string
+    userEmail: string,
   ): Promise<string> {
     const customerId = await this.findOrCreateStripeCustomerId(
       companyId,
-      userEmail
+      userEmail,
     );
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -71,13 +67,11 @@ export const stripeService = {
   },
 
   async createPortalSession(companyId: string): Promise<string> {
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-    });
+    const company = await companyRepository.findById(companyId);
     if (!company || !company.stripeCustomerId) {
       throw new AppError(
         "ID de cliente de Stripe no encontrado para esta compañía.",
-        404
+        404,
       );
     }
     const session = await stripe.billingPortal.sessions.create({
@@ -87,12 +81,12 @@ export const stripeService = {
     return session.url!;
   },
 
-  async handleWebhook(signature: string, rawBody: any) {
+  async handleWebhook(signature: string, rawBody: Buffer | string) {
     // ... (la lógica del webhook permanece igual)
-    const event = stripe.webhooks.constructEvent(
+    stripe.webhooks.constructEvent(
       rawBody,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      process.env.STRIPE_WEBHOOK_SECRET!,
     );
     // ...
   },

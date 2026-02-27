@@ -17,7 +17,7 @@ import { AppError } from "@/utils/AppError";
  * ```
  */
 export const validate =
-  (schema: z.ZodObject<any> | z.ZodEffects<any>) =>
+  (schema: z.ZodTypeAny) =>
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       // Validate and transform data

@@ -1,4 +1,5 @@
 import { prisma } from "@/config/database";
+import { Logger } from "@/utils/logger";
 
 export const assignTicketToAgent = async (
   ticketId: string,
@@ -16,14 +17,14 @@ export const assignTicketToAgent = async (
     });
 
     if (!queue) {
-      console.warn(`[AutoAssign] Queue ${queueId} not found.`);
+      Logger.warn(`[AutoAssign] Queue ${queueId} not found.`);
       return;
     }
 
     // 🧠 100-YEAR FIX: AI QUEUE HANDLING
     // If Queue is AI-managed, trigger the bot immediately
     if (queue.type === "AI" && queue.aiAssistantId) {
-      console.info(
+      Logger.info(
         `[AutoAssign] 🤖 Queue ${queue.name} is AI-managed. Triggering bot...`,
       );
 
@@ -56,26 +57,26 @@ export const assignTicketToAgent = async (
               lastMsg.content,
               queue.companyId,
             );
-            console.info(`[AutoAssign] ✅ AI Response Triggered successfully`);
+            Logger.info(`[AutoAssign] ✅ AI Response Triggered successfully`);
           } catch (err) {
-            console.error(`[AutoAssign] ❌ Failed to trigger AI response`, err);
+            Logger.error(`[AutoAssign] ❌ Failed to trigger AI response`, err);
           }
         } else {
-          console.info(`[AutoAssign] ⏩ Skipped AI: Last message was OUTBOUND`);
+          Logger.info(`[AutoAssign] ⏩ Skipped AI: Last message was OUTBOUND`);
         }
       }
       return; // Stop here, no agent assignment needed
     }
 
     if (queue.type !== "ROUND_ROBIN") {
-      console.warn(
+      Logger.warn(
         `[AutoAssign] Queue ${queue.name} is MANUAL (or unknown type). Skipping auto-assign.`,
       );
       return;
     }
 
     if (queue.agents.length === 0) {
-      console.warn(`[AutoAssign] No ONLINE agents in queue ${queue.name}`);
+      Logger.warn(`[AutoAssign] No ONLINE agents in queue ${queue.name}`);
       return;
     }
 
@@ -96,13 +97,13 @@ export const assignTicketToAgent = async (
         );
 
         if (!hasAllSkills) {
-          // console.log(`[AutoAssign] Skipping ${agent.name} (Missing skills for ${queue.name})`);
+          // Logger.debug(`[AutoAssign] Skipping ${agent.name} (Missing skills for ${queue.name})`);
         }
         return hasAllSkills;
       });
 
       if (candidates.length === 0) {
-        console.warn(
+        Logger.warn(
           `[AutoAssign] No agents in ${queue.name} match required skills: ${requiredSkills.join(", ")}`,
         );
         return;
@@ -140,7 +141,7 @@ export const assignTicketToAgent = async (
     }
 
     if (eligibleAgents.length === 0) {
-      console.warn(
+      Logger.warn(
         `[AutoAssign] All agents in queue ${queue.name} are at full capacity.`,
       );
       return;
@@ -152,7 +153,7 @@ export const assignTicketToAgent = async (
     const candidate = eligibleAgents[0];
 
     if (candidate) {
-      console.info(
+      Logger.info(
         `[AutoAssign] Assigning ticket ${ticketId} to ${candidate.name} (Load: ${candidate.load}/${candidate.maxCapacity})`,
       );
 
@@ -165,6 +166,6 @@ export const assignTicketToAgent = async (
       });
     }
   } catch (error) {
-    console.error("[AutoAssign] Error assigning ticket:", error);
+    Logger.error("[AutoAssign] Error assigning ticket:", error);
   }
 };

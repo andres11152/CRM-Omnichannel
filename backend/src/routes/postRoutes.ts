@@ -8,7 +8,7 @@ import {
 } from "@/controllers/postsController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
-import { CreatePostSchema, UpdatePostSchema } from "@/schemas/post.schema";
+import { CreatePostSchema, UpdatePostSchema } from "@/schemas/postSchema";
 
 const router = express.Router();
 
@@ -24,3 +24,4 @@ router
   .delete(deletePost);
 
 export default router;
+

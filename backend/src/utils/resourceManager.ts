@@ -1,4 +1,5 @@
 import { Logger } from "./logger";
+import v8 from "v8";
 
 /**
  * 🛡️ RESOURCE CLEANUP MANAGER
@@ -142,20 +143,20 @@ export const resourceManager = new ResourceManager();
  * Automatically cleans up resources when a class instance is destroyed
  */
 export function tracked(
-  target: any,
+  target: unknown,
   propertyKey: string,
   descriptor: PropertyDescriptor,
 ) {
   const originalMethod = descriptor.value;
 
-  descriptor.value = function (...args: any[]) {
+  descriptor.value = function (...args: unknown[]) {
     const result = originalMethod.apply(this, args);
 
     // If result is a timer, track it
     if (result && typeof result === "object" && "ref" in result) {
       resourceManager.onCleanup(() => {
         if ("unref" in result) {
-          (result as any).unref();
+          (result as { unref: () => void }).unref();
         }
       });
     }
@@ -201,7 +202,7 @@ class MemoryMonitor {
 
   check(): void {
     const usage = process.memoryUsage();
-    const v8Stats = require("v8").getHeapStatistics();
+    const v8Stats = v8.getHeapStatistics();
     const heapLimit = v8Stats.heap_size_limit;
     const heapPercent = usage.heapUsed / heapLimit;
 

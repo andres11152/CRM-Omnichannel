@@ -44,6 +44,12 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    // 🛡️ FormData Detection: Let axios auto-generate multipart boundary
+    // If we keep "application/json" for FormData uploads, the server can't parse the file.
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    }
+
     return config;
   },
   (error) => {

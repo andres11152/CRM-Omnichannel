@@ -4,58 +4,53 @@ import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { contactService } from "@/services/contactService";
 import { planLimitsService } from "@/services/planLimitsService";
-import { prisma } from "@/config/database";
+import { AuthenticatedRequest } from "@/types/types";
 
 export const contactController = {
-  // Create or Update a contact based on ID, phone or email
   upsertContact: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as any).companyId;
-    const contact = await contactService.upsert(companyId, req.body);
+    const companyId = (req as AuthenticatedRequest).companyId;
+    const contact = await contactService.upsert(companyId!, req.body);
     res.status(HTTP_STATUS.OK).json(contact);
   }),
 
   getContacts: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as any).companyId;
+    const companyId = (req as AuthenticatedRequest).companyId;
     const query = {
       search: req.query.search as string,
       page: Number(req.query.page) || 1,
       limit: Number(req.query.limit) || 100,
     };
 
-    const result = await contactService.findAll(companyId, query);
-    res.status(HTTP_STATUS.OK).json(result.data); // Maintaining API contract (array response expected by generic components usually, but ideally should return {data, meta})
-    // NOTE: If frontend expects array directly, returning result.data. The service returns { data, meta }.
-    // Examining original controller: it returned `contacts` array directly.
-    // I will return `result.data`.
+    const result = await contactService.findAll(companyId!, query);
+    res.status(HTTP_STATUS.OK).json(result.data);
   }),
 
   getContactDetail: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as any).companyId;
+    const companyId = (req as AuthenticatedRequest).companyId;
     const { id, phone } = req.query;
 
-    const contact = await contactService.findOne(companyId, {
+    const contact = await contactService.findOne(companyId!, {
       id: id as string,
       phone: phone as string,
     });
 
-    // Original controller returned null with 200 OK.
     if (!contact) return res.status(200).json(null);
     res.status(HTTP_STATUS.OK).json(contact);
   }),
 
   deleteContact: catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const companyId = (req as any).companyId;
+    const companyId = (req as AuthenticatedRequest).companyId;
 
-    await contactService.delete(companyId, id);
+    await contactService.delete(companyId!, id);
     res.status(HTTP_STATUS.OK).json({ status: "success" });
   }),
 
   getContactTimeline: catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const companyId = (req as any).companyId;
+    const companyId = (req as AuthenticatedRequest).companyId;
 
-    const result = await contactService.getTimeline(companyId, id);
+    const result = await contactService.getTimeline(companyId!, id);
     res.status(HTTP_STATUS.OK).json({
       status: "success",
       data: result,
@@ -63,20 +58,21 @@ export const contactController = {
   }),
 
   importContacts: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as any).companyId;
-    const file = (req as any).file as Express.Multer.File;
+    const companyId = (req as AuthenticatedRequest).companyId!;
+    const file = (req as AuthenticatedRequest & { file?: Express.Multer.File })
+      .file;
 
     if (!file) throw new AppError("No file uploaded", 400);
 
     const { parseFile, normalizeRows } =
       await import("../services/csvParserService");
-    const { CreateContactSchema } = await import("../schemas/contact.schema");
+    const { CreateContactSchema } = await import("../schemas/contactSchema");
 
     const { rows, totalRows } = parseFile(file);
     if (totalRows === 0) throw new AppError("File is empty", 400);
 
     const normalizedRows = normalizeRows(rows);
-    const validContacts: any[] = [];
+    const validContacts: Record<string, unknown>[] = [];
     const errors: string[] = [];
     const duplicates: string[] = [];
     const seenPhones = new Set<string>();
@@ -99,18 +95,13 @@ export const contactController = {
           continue;
         }
 
-        // Quick duplication check (Should ideally use service bulk check but keeping logic here for now)
-        const exists = await prisma.contact.findFirst({
-          where: {
-            companyId,
-            OR: [
-              phone ? { phone: { endsWith: phone.slice(-10) } } : {},
-              email ? { email } : {},
-            ].filter((o) => Object.keys(o).length > 0),
-          },
-        });
+        const isDuplicate = await contactService.checkDuplicate(
+          companyId,
+          phone,
+          email,
+        );
 
-        if (exists) {
+        if (isDuplicate) {
           duplicates.push(`Row ${rowNum}: Duplicate in database`);
           continue;
         }
@@ -119,8 +110,9 @@ export const contactController = {
         if (email) seenEmails.add(email);
 
         validContacts.push({ ...validated, companyId });
-      } catch (e: any) {
-        errors.push(`Row ${rowNum}: ${e.message}`);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Validation error";
+        errors.push(`Row ${rowNum}: ${msg}`);
       }
     }
 
@@ -131,12 +123,7 @@ export const contactController = {
     );
     if (!canCreate) throw new AppError("Plan limit exceeded", 403);
 
-    if (validContacts.length > 0) {
-      // Bulk create via transaction
-      await prisma.$transaction(
-        validContacts.map((c) => prisma.contact.create({ data: c })),
-      );
-    }
+    await contactService.bulkCreate(validContacts);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -154,3 +141,4 @@ export const contactController = {
     });
   }),
 };
+

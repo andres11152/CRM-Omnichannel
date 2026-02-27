@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import { contextStorage } from "../context/requestContext";
-import { AppError } from "@/utils/AppError";
 
 // Extend Express Request to match your previous Auth middleware
 interface AuthRequest extends Request {
@@ -8,7 +7,7 @@ interface AuthRequest extends Request {
     id: string;
     companyId: string;
     role: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 

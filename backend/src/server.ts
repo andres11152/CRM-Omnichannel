@@ -16,7 +16,6 @@ import { createApp } from "@/app/app";
 import { initSocketGateway } from "@/loaders/socketLoader";
 import { initWorkers } from "@/loaders/workerLoader";
 import { whatsappService } from "@/whatsapp";
-import { initScheduler } from "@/services/schedulerService";
 import { memoryMonitor } from "@/utils/resourceManager";
 
 // 🛡️ VALIDATE ENV
@@ -56,7 +55,6 @@ const bootstrap = async () => {
 
     // 4. Background Services
     memoryMonitor.start(60000);
-    initScheduler();
     await initWorkers();
 
     // 5. Start Server

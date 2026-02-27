@@ -44,9 +44,10 @@ export const uploadMedia = async (data: UploadMediaData): Promise<Media> => {
   }
 
   const response = await api.post("/media/upload", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
+    // ⚠️ No Content-Type header here!
+    // Axios auto-generates "multipart/form-data; boundary=..." when it detects FormData.
+    // Setting it manually breaks the boundary and causes parse errors on the backend.
+    timeout: 60000, // 60s for large file uploads
   });
 
   return response.data.data.media;
@@ -124,4 +125,3 @@ export const getKnowledgeDocs = async (): Promise<Media[]> => {
   });
   return result.media;
 };
-

@@ -11,7 +11,7 @@ import { Logger } from "@/utils/logger";
 export const handleImpersonation = (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const impersonationToken = req.headers["x-impersonation-token"] as string;
 
@@ -27,15 +27,20 @@ export const handleImpersonation = (
     }
 
     // Verify the impersonation token
-    const decoded = verify(impersonationToken, secret) as any;
+    const decoded = verify(impersonationToken, secret) as {
+      id: string;
+      email: string;
+      role: string;
+      companyId: string;
+    };
 
     // Log impersonation for audit trail
     Logger.warn(
-      `[Security] Impersonation active: User ${decoded.id} (${decoded.email}) via token`
+      `[Security] Impersonation active: User ${decoded.id} (${decoded.email}) via token`,
     );
 
     // Attach decoded user to request
-    (req as any).user = {
+    (req as unknown as { user: unknown }).user = {
       id: decoded.id,
       email: decoded.email,
       role: decoded.role,
@@ -44,8 +49,9 @@ export const handleImpersonation = (
     };
 
     next();
-  } catch (error: any) {
-    Logger.error("[Security] Invalid impersonation token:", error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    Logger.error("[Security] Invalid impersonation token:", message);
     throw new AppError("Invalid or expired impersonation token", 401);
   }
 };

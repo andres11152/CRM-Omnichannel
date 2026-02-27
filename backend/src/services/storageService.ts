@@ -7,11 +7,10 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { UploadResult } from "../types/index";
 import { Logger } from "../utils/logger";
-import fs from "fs";
-import path from "path";
 import { Buffer } from "buffer";
 import { Readable } from "stream";
 import { Upload } from "@aws-sdk/lib-storage"; // Better for streaming
+import { AppError } from "../utils/AppError";
 
 // INTERFACE: The Contract
 export interface IStorageService {
@@ -48,15 +47,30 @@ class S3StorageService implements IStorageService {
       process.env.AWS_S3_BUCKET ||
       "omnicrm-media";
 
-    // In Node.js, AWS SDK automatically loads credentials from process.env.AWS_ACCESS_KEY_ID, etc.
-    this.client = new S3Client({ region });
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+
+    if (!accessKeyId || !secretAccessKey) {
+      Logger.warn("[StorageService] AWS Credentials missing. S3 will fail.");
+    }
+
+    this.client = new S3Client({
+      region,
+      credentials:
+        accessKeyId && secretAccessKey
+          ? {
+              accessKeyId,
+              secretAccessKey,
+            }
+          : undefined,
+    });
   }
 
   async uploadFile(
     buffer: Buffer,
     filename: string,
     mimeType: string,
-    isPrivate: boolean = false,
+    _isPrivate: boolean = false,
   ): Promise<UploadResult> {
     const key = `uploads/${Date.now()}_${filename}`;
 
@@ -65,7 +79,6 @@ class S3StorageService implements IStorageService {
       Key: key,
       Body: buffer,
       ContentType: mimeType,
-      // Note: Bucket Policy handles public access, not ACL
     });
 
     try {
@@ -73,7 +86,7 @@ class S3StorageService implements IStorageService {
       return this.generateResult(key, mimeType);
     } catch (error) {
       Logger.error("S3 Upload Failed", error);
-      throw error;
+      throw new AppError("S3 Upload Failed", 500);
     }
   }
 
@@ -81,12 +94,11 @@ class S3StorageService implements IStorageService {
     stream: Readable,
     filename: string,
     mimeType: string,
-    isPrivate: boolean = false,
+    _isPrivate: boolean = false,
   ): Promise<UploadResult> {
     const key = `uploads/${Date.now()}_${filename}`;
 
     try {
-      // Use @aws-sdk/lib-storage Upload for robust streaming (multipart)
       const upload = new Upload({
         client: this.client,
         params: {
@@ -99,9 +111,9 @@ class S3StorageService implements IStorageService {
 
       await upload.done();
       return this.generateResult(key, mimeType);
-    } catch (error) {
+    } catch (error: unknown) {
       Logger.error("S3 Stream Upload Failed", error);
-      throw error;
+      throw new AppError("S3 Stream Upload Failed", 500);
     }
   }
 
@@ -115,9 +127,6 @@ class S3StorageService implements IStorageService {
       mimeType.startsWith("video/") ||
       mimeType.startsWith("image/")
     ) {
-      // Generate signed URL (valid for 24 hours) as default
-      // Or if public is wanted, use public URL.
-      // Assuming secure by default
       url = await this.getSignedUrl(key, 86400);
     } else {
       url = `https://${this.bucket}.s3.amazonaws.com/${key}`;
@@ -133,7 +142,6 @@ class S3StorageService implements IStorageService {
       Bucket: this.bucket,
       Key: key,
     });
-    // Generate a temporary URL valid for 15 mins (900s)
     return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
   }
 
@@ -145,73 +153,12 @@ class S3StorageService implements IStorageService {
 }
 
 /**
- * LOCAL IMPLEMENTATION (Mock)
- * For development when no Internet or AWS Keys are available.
- */
-class LocalStorageService implements IStorageService {
-  private uploadDir = path.resolve("public", "uploads"); // Root uploads dir
-
-  constructor() {
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true });
-    }
-  }
-
-  async uploadFile(
-    buffer: Buffer,
-    filename: string,
-    mimeType: string,
-  ): Promise<UploadResult> {
-    const key = `${Date.now()}_${filename}`;
-    const filePath = path.join(this.uploadDir, key);
-
-    fs.writeFileSync(filePath, buffer);
-
-    // Return absolute URL for frontend
-    const baseUrl = process.env.BACKEND_URL || "http://localhost:4000";
-    return { url: `${baseUrl}/uploads/${key}`, key, provider: "local" };
-  }
-
-  async uploadStream(
-    stream: Readable,
-    filename: string,
-    mimeType: string,
-  ): Promise<UploadResult> {
-    const key = `${Date.now()}_${filename}`;
-    const filePath = path.join(this.uploadDir, key);
-    const writeStream = fs.createWriteStream(filePath);
-
-    return new Promise((resolve, reject) => {
-      stream.pipe(writeStream);
-      writeStream.on("finish", () => {
-        const baseUrl = process.env.BACKEND_URL || "http://localhost:4000";
-        resolve({ url: `${baseUrl}/uploads/${key}`, key, provider: "local" });
-      });
-      writeStream.on("error", reject);
-      stream.on("error", reject);
-    });
-  }
-
-  async getSignedUrl(key: string): Promise<string> {
-    const baseUrl = process.env.BACKEND_URL || "http://localhost:4000";
-    return `${baseUrl}/uploads/${key}`; // Local doesn't support signing
-  }
-
-  async deleteFile(key: string): Promise<void> {
-    const filePath = path.join(this.uploadDir, key);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  }
-}
-
-/**
  * FACTORY
  * Returns the correct service based on environment.
+ * Forcing S3 as per requirements.
  */
 export const getStorageService = (): IStorageService => {
-  if (process.env.STORAGE_PROVIDER === "s3") {
-    return new S3StorageService();
-  }
-  return new LocalStorageService();
+  return new S3StorageService();
 };
 
 export const storageService = getStorageService();

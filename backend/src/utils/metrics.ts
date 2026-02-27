@@ -1,5 +1,5 @@
 import client from "prom-client";
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 
 /**
  * 📊 PROMETHEUS METRICS INTEGRATION
@@ -115,7 +115,7 @@ export const metricsHandler = async (req: Request, res: Response) => {
 export const metricsMiddleware = (
   req: Request,
   res: Response,
-  next: Function
+  next: NextFunction,
 ) => {
   const start = Date.now();
 
@@ -129,7 +129,7 @@ export const metricsMiddleware = (
 
     httpRequestDuration.observe(
       { method, route, status_code: statusCode },
-      duration
+      duration,
     );
     httpRequestTotal.inc({ method, route, status_code: statusCode });
     activeConnections.dec();
@@ -163,7 +163,7 @@ export const metrics = {
 
   trackWhatsAppMessage: (
     direction: "inbound" | "outbound",
-    success: boolean
+    success: boolean,
   ) => {
     whatsappMessages.inc({
       direction,

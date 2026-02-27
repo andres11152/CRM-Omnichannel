@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 import { AppError } from "@/utils/AppError";
+import { Logger } from "@/utils/logger";
+import { decrypt } from "@/utils/encryption";
 
 interface EmailOptions {
   to: string;
@@ -19,8 +21,8 @@ export class EmailService {
       !process.env.SMTP_USER ||
       !(process.env.SMTP_PASS || process.env.SMTP_PASSWORD)
     ) {
-      console.warn(
-        "SMTP credentials missing. Email service will not send real emails."
+      Logger.warn(
+        "SMTP credentials missing. Email service will not send real emails.",
       );
     }
 
@@ -30,10 +32,8 @@ export class EmailService {
       // Lazy load decryption to avoid circular deps or init issues
       // Note: real implementation might import at top if safe
       try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { decrypt } = require("@/utils/encryption");
         smtpPass = decrypt(smtpPass);
-      } catch (e) {
+      } catch {
         // Ignore if util not found/fails, assume plaintext
       }
     }
@@ -58,7 +58,7 @@ export class EmailService {
     ) {
       const errorMsg =
         "SMTP no configurado. Configure las variables SMTP_HOST, SMTP_USER, SMTP_PASS (o SMTP_PASSWORD) en el archivo .env";
-      console.error(`[EmailService] ❌ ${errorMsg}`);
+      Logger.error(`[EmailService] ❌ ${errorMsg}`);
       throw new AppError(errorMsg, 500);
     }
 
@@ -75,11 +75,12 @@ export class EmailService {
       };
 
       const info = await this.transporter.sendMail(mailOptions);
-      console.log("Message sent: %s", info.messageId);
-    } catch (error: any) {
-      console.error("[EmailService] Error sending email:", error);
+      Logger.info(`Message sent: ${info.messageId}`);
+    } catch (error: unknown) {
+      Logger.error("[EmailService] Error sending email:", error);
       // Preserve the original error message from nodemailer
-      const errorMsg = error.message || "Failed to send email";
+      const errorMsg =
+        error instanceof Error ? error.message : "Failed to send email";
       throw new AppError(`Error SMTP: ${errorMsg}`, 500);
     }
   }

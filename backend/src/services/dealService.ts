@@ -1,17 +1,12 @@
-import { dealRepository, DealRepository } from "../repositories/DealRepository";
-import {
-  pipelineRepository,
-  PipelineRepository,
-} from "../repositories/PipelineRepository";
-import {
-  stageRepository,
-  StageRepository,
-} from "../repositories/StageRepository";
+import { DealRepository } from "../repositories/DealRepository";
+import { PipelineRepository } from "../repositories/PipelineRepository";
+import { StageRepository } from "../repositories/StageRepository";
 import { AppError } from "../utils/AppError";
 import { workflowEngine } from "./workflowEngine";
 import { Prisma } from "@prisma/client";
-import { CreateDealInput, UpdateDealInput } from "../schemas/deal.schema";
-import { prisma } from "@/config/database";
+import { CreateDealInput, UpdateDealInput } from "../schemas/dealSchema";
+import { activityRepository } from "@/repositories/ActivityRepository";
+import { Logger } from "@/utils/logger";
 
 export class DealService {
   private dealRepo: DealRepository;
@@ -40,15 +35,15 @@ export class DealService {
     if (filters.contactId) where.contactId = filters.contactId;
 
     try {
-      console.log("DEBUG: getDeals query:", JSON.stringify(where));
+      Logger.debug("DEBUG: getDeals query:", { where });
       const deals = await this.dealRepo.findMany(where, [
         { stageId: "asc" },
         { order: "asc" },
       ]);
-      console.log("DEBUG: getDeals result count:", deals.length);
+      Logger.debug("DEBUG: getDeals result count: " + deals.length);
       return deals;
     } catch (error) {
-      console.error("DEBUG: getDeals ERROR:", error);
+      Logger.error("DEBUG: getDeals ERROR:", error);
       throw error;
     }
   }
@@ -110,7 +105,7 @@ export class DealService {
     // 📝 Auto-create initial Activity note if notes provided
     if (notes && userId) {
       try {
-        await prisma.activity.create({
+        await activityRepository.create({
           data: {
             companyId,
             type: "NOTE",
@@ -124,7 +119,7 @@ export class DealService {
           },
         });
       } catch (activityError) {
-        console.error(
+        Logger.error(
           "[DealService] Failed to create initial activity:",
           activityError,
         );
@@ -252,3 +247,4 @@ export class DealService {
 }
 
 export const dealService = new DealService();
+

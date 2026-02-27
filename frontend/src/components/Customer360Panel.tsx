@@ -19,6 +19,7 @@ import { Contact } from "@/types";
 import { InternalNotes } from "./InternalNotes";
 import { toast } from "sonner";
 import { ImageLightbox } from "./ImageLightbox";
+import { Avatar } from "@/components/common/Avatar";
 
 interface Customer360PanelProps {
   contact: Contact;
@@ -73,27 +74,10 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
             <div
               className={`absolute -inset-0.5 ${isGroup ? "bg-gradient-to-r from-green-500 to-emerald-500" : "bg-gradient-to-r from-blue-500 to-indigo-500"} rounded-full opacity-30 group-hover:opacity-60 transition duration-500 blur`}
             ></div>
-            <img
-              src={
-                contact.profilePicUrl ||
-                contact.avatarUrl ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=${isGroup ? "22c55e" : "random"}`
-              }
-              alt={contact.name}
-              className="relative w-24 h-24 rounded-full mx-auto border-2 border-white dark:border-gray-900 shadow-xl object-cover transform transition-transform group-hover:scale-[1.02] cursor-pointer"
-              onClick={() =>
-                setLightboxImage({
-                  url:
-                    contact.profilePicUrl ||
-                    contact.avatarUrl ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=${isGroup ? "22c55e" : "random"}`,
-                  alt: contact.name,
-                })
-              }
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=${isGroup ? "22c55e" : "random"}`;
-              }}
+            <Avatar
+              src={contact.profilePicUrl || contact.avatarUrl || null}
+              name={contact.name || ""}
+              className="relative w-24 h-24 border-2 border-white dark:border-gray-900 shadow-xl transform transition-transform group-hover:scale-[1.02] cursor-pointer"
             />
             <div
               className={`absolute bottom-1 right-1 w-6 h-6 ${isGroup ? "bg-green-500" : "bg-white dark:bg-reply-panel-dark"} p-1 rounded-full shadow-lg flex items-center justify-center border border-gray-100 dark:border-reply-border-dark`}
@@ -306,5 +290,3 @@ export const Customer360Panel: React.FC<Customer360PanelProps> = ({
     </div>
   );
 };
-
-

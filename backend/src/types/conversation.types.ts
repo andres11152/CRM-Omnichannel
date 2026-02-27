@@ -1,6 +1,5 @@
 import {
   Channel,
-  Message,
   Conversation,
   User,
   ConversationStatus,
@@ -11,6 +10,7 @@ export interface Attachment {
   type: "image" | "video" | "document" | "audio";
   url: string;
   mimeType?: string;
+  mimetype?: string; // Frontend may send lowercase variant
   size?: number;
 }
 

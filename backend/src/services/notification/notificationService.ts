@@ -1,10 +1,9 @@
-import { prisma } from "@/config/database";
+import { notificationRepository } from "@/repositories/NotificationRepository";
+import { userRepository } from "@/repositories/UserRepository";
+import { companyRepository } from "@/repositories/CompanyRepository";
 import { emailService } from "@/services/email/emailService";
 import { Logger } from "@/utils/logger";
-import {
-  NotificationAdmin,
-  NotificationType,
-} from "@/types/notification.types";
+import { NotificationAdmin } from "@/types/notification.types";
 import { NotificationTemplates } from "./notificationTemplates";
 import { CreateEmailDTO } from "@/types/email.types";
 
@@ -108,15 +107,8 @@ export class NotificationService {
    */
 
   async sendTicketAssigned(ticketId: string, userId: string) {
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: {
-        assignedTo: { select: { name: true, email: true } },
-        conversation: {
-          select: { contact: { select: { name: true } } },
-        },
-      },
-    });
+    const ticket =
+      await notificationRepository.getTicketWithAssigneeAndContact(ticketId);
 
     if (!ticket || !ticket.assignedTo) return;
 
@@ -144,15 +136,8 @@ export class NotificationService {
   }
 
   async sendTicketReply(ticketId: string, replyBy: string) {
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: {
-        assignedTo: { select: { name: true, email: true } },
-        conversation: {
-          select: { contact: { select: { name: true } } },
-        },
-      },
-    });
+    const ticket =
+      await notificationRepository.getTicketWithAssigneeAndContact(ticketId);
 
     if (!ticket || !ticket.assignedTo) return;
     const contactName = ticket.conversation?.contact?.name || "Unknown Contact";
@@ -205,17 +190,8 @@ export class NotificationService {
     campaignId: string,
     stats: { sent: number; failed: number; total: number },
   ) {
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: {
-        id: true,
-        name: true,
-        companyId: true,
-        createdBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+    const campaign =
+      await notificationRepository.getCampaignWithCreator(campaignId);
 
     if (!campaign || !campaign.createdBy) return;
 
@@ -328,7 +304,7 @@ export class NotificationService {
    */
 
   private async getCompany(companyId: string) {
-    const company = await prisma.company.findUnique({
+    const company = await companyRepository.findUnique({
       where: { id: companyId },
       select: { name: true },
     });
@@ -339,13 +315,13 @@ export class NotificationService {
   private async getCompanyAdmins(
     companyId: string,
   ): Promise<NotificationAdmin[]> {
-    return await prisma.user.findMany({
+    return (await userRepository.findMany({
       where: {
         companyId,
         role: { in: ["ADMIN", "MASTER"] },
       },
       select: { id: true, email: true, name: true },
-    });
+    })) as NotificationAdmin[];
   }
 
   private async sendToAdmins(

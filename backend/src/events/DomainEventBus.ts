@@ -28,7 +28,7 @@ export class DomainEventBus extends EventEmitter {
     return DomainEventBus.instance;
   }
 
-  publish(event: DomainEventType, payload: any) {
+  publish(event: DomainEventType, payload: unknown) {
     this.emit(event, payload);
   }
 }

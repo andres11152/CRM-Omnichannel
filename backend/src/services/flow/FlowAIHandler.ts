@@ -1,0 +1,353 @@
+/**
+ * 🤖 FLOW AI HANDLER
+ *
+ * AI Agent node execution logic:
+ * - handleAIAgentNode: Orchestrates AI interaction (BYOK, history, variable extraction, termination)
+ * - callGemini: Google Gemini API integration (multimodal support)
+ * - callOpenAI: OpenAI API integration
+ */
+
+import { flowSessionRepository } from "@/repositories/FlowSessionRepository";
+import { messageRepository } from "@/repositories/MessageRepository";
+import { Logger } from "@/utils/logger";
+import { getErrorMessage } from "@/utils/errorHelpers";
+import OpenAI from "openai";
+import { GoogleGenerativeAI, Part, Content } from "@google/generative-ai";
+import type {
+  FlowSessionState,
+  FlowVariables,
+  FlowNode,
+  FlowStructure,
+} from "@/types/flow.types";
+
+export class FlowAIHandler {
+  private openai: OpenAI | null = null;
+
+  constructor() {
+    if (process.env.OPENAI_API_KEY) {
+      this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    }
+  }
+
+  // ────────────────────────────────────────────────
+  // AI AGENT NODE (OpenAI / Gemini)
+  // ────────────────────────────────────────────────
+
+  async handleAIAgentNode(
+    node: FlowNode,
+    session: FlowSessionState,
+    userMessage: string,
+    flowStructure: FlowStructure,
+    moveToNextNode: (
+      sessionId: string,
+      currentNodeId: string,
+      flowStructure: FlowStructure,
+      variables?: FlowVariables,
+    ) => Promise<void>,
+  ): Promise<string> {
+    const aiAssistantId = node.data.aiAssistantId;
+
+    if (!aiAssistantId) {
+      Logger.error("[FlowExecutor] AI_AGENT node without aiAssistantId");
+      await moveToNextNode(session.id, node.id, flowStructure);
+      return "Lo siento, el agente IA no está configurado. Por favor contacta a soporte.";
+    }
+
+    const agent = await flowSessionRepository.findAIAssistant(aiAssistantId);
+
+    if (!agent) {
+      Logger.error(
+        `[FlowExecutor] AI Assistant ${aiAssistantId} not found or inactive`,
+      );
+      await moveToNextNode(session.id, node.id, flowStructure);
+      return "El agente IA no está disponible en este momento. Estamos trabajando para solucionarlo.";
+    }
+
+    try {
+      let systemPrompt =
+        agent.systemPrompt || "Eres un asistente virtual útil y amigable.";
+      systemPrompt = this.replaceVariables(systemPrompt, session.variables);
+
+      // Conversational Memory
+      const recentMessages = await messageRepository.findMany({
+        where: { conversationId: session.conversationId },
+        orderBy: { createdAt: "desc" },
+        take: 6,
+      });
+
+      const historyContext = recentMessages.reverse().map((msg) => ({
+        role: (msg.direction === "INBOUND" ? "user" : "assistant") as
+          | "user"
+          | "assistant",
+        content: msg.content,
+      }));
+
+      const messages: Array<{
+        role: "system" | "user" | "assistant";
+        content: string;
+      }> = [{ role: "system", content: systemPrompt }];
+      messages.push(...historyContext);
+
+      const lastHistoryMsg = historyContext[historyContext.length - 1];
+      if (!lastHistoryMsg || lastHistoryMsg.content !== userMessage) {
+        messages.push({ role: "user", content: userMessage });
+      }
+
+      // BYOK (Bring Your Own Key)
+      const aiConfig = await flowSessionRepository.findAIConfig(
+        session.companyId,
+      );
+
+      const geminiKey =
+        aiConfig?.geminiKey ||
+        process.env.GEMINI_API_KEY ||
+        process.env.GOOGLE_API_KEY;
+
+      const isGeminiModel = agent.modelName?.includes("gemini");
+      const shouldUseGemini = !!geminiKey && isGeminiModel;
+
+      let aiResponse = "";
+
+      if (shouldUseGemini && geminiKey) {
+        aiResponse = await this.callGemini(
+          geminiKey,
+          agent,
+          systemPrompt,
+          historyContext,
+          userMessage,
+          recentMessages,
+        );
+      } else {
+        aiResponse = await this.callOpenAI(
+          aiConfig?.openaiKey,
+          agent,
+          messages,
+        );
+      }
+
+      // AI Variable Extraction
+      let extractedVariables: Record<string, unknown> = {};
+      const dataRegex = /\[DATA:\s*({.*?})\]/s;
+      const match = aiResponse.match(dataRegex);
+      let finalAIResponse = aiResponse;
+
+      if (match && match[1]) {
+        try {
+          const parsed = JSON.parse(match[1]);
+          if (typeof parsed === "object" && parsed !== null) {
+            extractedVariables = parsed;
+            finalAIResponse = aiResponse.replace(dataRegex, "").trim();
+            Logger.info(
+              `[FlowExecutor] AI extracted variables: ${Object.keys(extractedVariables).join(", ")}`,
+            );
+          }
+        } catch (error) {
+          Logger.warn(
+            `[FlowExecutor] AI returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+
+      // Termination Keyword Detection
+      const TERMINATION_KEYWORD = "TERMINAR";
+      const shouldTerminate = finalAIResponse.includes(TERMINATION_KEYWORD);
+
+      if (shouldTerminate) {
+        finalAIResponse = finalAIResponse
+          .replace(TERMINATION_KEYWORD, "")
+          .trim();
+        Logger.info(
+          `[FlowExecutor] 🛑 AI Termination Triggered. Advancing Flow.`,
+        );
+      }
+
+      const updatedVariables: FlowVariables = {
+        ...session.variables,
+        ...(extractedVariables as Record<string, string | number | boolean>),
+        ai_response: finalAIResponse,
+        last_ai_agent_id: agent.id,
+        last_ai_agent_name: agent.name,
+      };
+
+      await flowSessionRepository.updateSession(session.id, {
+        variables: updatedVariables,
+        isPaused: shouldTerminate ? false : session.isPaused,
+      });
+
+      if (shouldTerminate) {
+        await moveToNextNode(
+          session.id,
+          node.id,
+          flowStructure,
+          updatedVariables,
+        );
+      }
+
+      Logger.info(
+        `[FlowExecutor] AI Agent "${agent.name}" responded successfully`,
+      );
+      return finalAIResponse;
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
+      const errorObj = error instanceof Error ? error : new Error(errorMsg);
+
+      Logger.error(
+        `[FlowExecutor] OpenAI error with agent ${agent.name}:`,
+        errorMsg,
+      );
+
+      if ("code" in errorObj && errorObj.code === "insufficient_quota") {
+        return "El servicio de IA ha alcanzado su límite. Por favor intenta más tarde.";
+      } else if (
+        "code" in errorObj &&
+        errorObj.code === "rate_limit_exceeded"
+      ) {
+        return "Demasiadas solicitudes. Por favor espera un momento e intenta de nuevo.";
+      } else {
+        return "Lo siento, hubo un error al procesar tu solicitud. Nuestro equipo ha sido notificado.";
+      }
+    }
+  }
+
+  // ────────────────────────────────────────────────
+  // GEMINI PROVIDER
+  // ────────────────────────────────────────────────
+
+  private async callGemini(
+    geminiKey: string,
+    agent: { modelName?: string | null; systemPrompt?: string | null },
+    systemPrompt: string,
+    historyContext: Array<{ role: "user" | "assistant"; content: string }>,
+    userMessage: string,
+    recentMessages: Array<{
+      content: string;
+      direction: string;
+      metadata: unknown;
+    }>,
+  ): Promise<string> {
+    try {
+      const genAI = new GoogleGenerativeAI(geminiKey);
+      const modelName = agent.modelName?.includes("gemini")
+        ? agent.modelName
+        : "gemini-1.5-flash";
+
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemPrompt,
+      });
+
+      let geminiHistory: Content[] = historyContext.map((msg) => ({
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content || "" }],
+      }));
+
+      const firstUserIndex = geminiHistory.findIndex((m) => m.role === "user");
+      if (firstUserIndex === -1) {
+        geminiHistory = [];
+      } else if (firstUserIndex > 0) {
+        geminiHistory = geminiHistory.slice(firstUserIndex);
+      }
+
+      // Multimodal Image Detection
+      const triggeringMsg = recentMessages.find(
+        (m) =>
+          m.content === userMessage && m.direction === "INBOUND" && m.metadata,
+      );
+
+      const promptParts: Part[] = [{ text: userMessage }];
+
+      if (triggeringMsg && triggeringMsg.metadata) {
+        interface MediaMetadata {
+          url?: string;
+          publicUrl?: string;
+          fileUrl?: string;
+          mimetype?: string;
+        }
+        const meta = triggeringMsg.metadata as unknown as MediaMetadata;
+        const mediaUrl = meta.url || meta.publicUrl || meta.fileUrl;
+
+        if (mediaUrl) {
+          try {
+            Logger.info(
+              `[FlowExecutor] Downloading image for Gemini Vision: ${mediaUrl}`,
+            );
+            const imgRes = await fetch(mediaUrl);
+            if (imgRes.ok) {
+              const arrayBuffer = await imgRes.arrayBuffer();
+              const base64Image = Buffer.from(arrayBuffer).toString("base64");
+              promptParts.push({
+                inlineData: {
+                  data: base64Image,
+                  mimeType: meta.mimetype || "image/jpeg",
+                },
+              });
+            }
+          } catch (imgErr) {
+            Logger.warn(
+              `[FlowExecutor] Failed to download image for analysis: ${imgErr}`,
+            );
+          }
+        }
+      }
+
+      const chat = model.startChat({ history: geminiHistory });
+      const result = await chat.sendMessage(promptParts);
+      return result.response.text();
+    } catch (geminiError) {
+      Logger.error("[FlowExecutor] Gemini API Error:", geminiError);
+      return "Lo siento, tuve un problema analizando tu solicitud visual.";
+    }
+  }
+
+  // ────────────────────────────────────────────────
+  // OPENAI PROVIDER
+  // ────────────────────────────────────────────────
+
+  private async callOpenAI(
+    openaiKey: string | undefined | null,
+    agent: { modelName?: string | null; temperature?: number | null },
+    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  ): Promise<string> {
+    let openaiClient = this.openai;
+
+    if (openaiKey) {
+      openaiClient = new OpenAI({ apiKey: openaiKey });
+    }
+
+    if (openaiClient) {
+      try {
+        const completion = await openaiClient.chat.completions.create({
+          model: agent.modelName || "gpt-3.5-turbo",
+          messages: messages,
+          temperature: agent.temperature || 0.7,
+          max_tokens: 500,
+        });
+        return (
+          completion.choices[0]?.message?.content ||
+          "Lo siento, no pude generar una respuesta."
+        );
+      } catch (openaiErr) {
+        Logger.error("[FlowExecutor] OpenAI Error:", openaiErr);
+        return "Lo siento, hubo un error con el servicio de IA.";
+      }
+    }
+
+    Logger.error(
+      "[FlowExecutor] No AI Provider configured (Gemini or OpenAI missing).",
+    );
+    return "Error de configuración: No hay servicios de IA disponibles. Por favor configura tus credenciales.";
+  }
+
+  // ────────────────────────────────────────────────
+  // UTILITY
+  // ────────────────────────────────────────────────
+
+  private replaceVariables(text: string, variables: FlowVariables): string {
+    let result = text;
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`{{${key}}}`, "g");
+      result = result.replace(regex, String(value));
+    }
+    return result;
+  }
+}

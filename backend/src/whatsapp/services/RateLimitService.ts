@@ -1,6 +1,8 @@
 import { EventBus } from "../core/events/EventBus";
 import { WhatsAppEventType } from "../core/events/WhatsAppEvents";
-import { prisma } from "@/config/database";
+import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
+import redisClient from "@/config/redis";
+import { Logger } from "@/utils/logger";
 
 interface RateLimitConfig {
   maxMessages: number;
@@ -8,7 +10,6 @@ interface RateLimitConfig {
 }
 
 export class RateLimitService {
-  private rateLimits: Map<string, { count: number; resetAt: Date }> = new Map();
   private eventBus: EventBus;
   private config: RateLimitConfig;
 
@@ -17,88 +18,130 @@ export class RateLimitService {
     this.config = {
       maxMessages:
         config?.maxMessages ||
-        parseInt(process.env.WA_RATE_LIMIT_MAX_MESSAGES || "100"),
+        parseInt(process.env.WA_RATE_LIMIT_MAX_MESSAGES || "100", 10),
       windowSeconds:
         config?.windowSeconds ||
-        parseInt(process.env.WA_RATE_LIMIT_WINDOW_SECONDS || "3600"),
+        parseInt(process.env.WA_RATE_LIMIT_WINDOW_SECONDS || "3600", 10),
     };
 
     this.subscribeToEvents();
   }
 
   private subscribeToEvents(): void {
+    // Note: Increment happens AFTER message is sent in background
     this.eventBus.subscribe(WhatsAppEventType.MESSAGE_SENT, (event) => {
-      this.incrementCount(event.sessionId);
+      this.incrementCount(event.sessionId).catch((err) =>
+        Logger.error(
+          `[RateLimitService] Failed to increment count for ${event.sessionId}:`,
+          err,
+        ),
+      );
     });
   }
 
-  async checkLimit(sessionId: string): Promise<boolean> {
-    const limit = this.rateLimits.get(sessionId);
-    const now = new Date();
-
-    if (!limit || now > limit.resetAt) {
-      this.rateLimits.set(sessionId, {
-        count: 0,
-        resetAt: new Date(now.getTime() + this.config.windowSeconds * 1000),
-      });
-      return true;
-    }
-
-    if (limit.count >= this.config.maxMessages) {
-      const session = await prisma.whatsAppSession.findUnique({
-        where: { sessionId },
-      });
-
-      if (session) {
-        this.eventBus.publish({
-          type: WhatsAppEventType.RATE_LIMIT_EXCEEDED,
-          sessionId,
-          companyId: session.companyId,
-          timestamp: new Date(),
-          data: {
-            limit: this.config.maxMessages,
-            current: limit.count,
-          },
-        });
-      }
-
-      return false;
-    }
-
-    return true;
+  private getRedisKey(sessionId: string): string {
+    return `wa:ratelimit:${sessionId}`;
   }
 
-  private incrementCount(sessionId: string): void {
-    const limit = this.rateLimits.get(sessionId);
-    if (limit) {
-      limit.count++;
+  async checkLimit(sessionId: string): Promise<boolean> {
+    if (!redisClient?.isOpen) {
+      Logger.warn("[RateLimitService] Redis not connected. Bypassing check.");
+      return true; // Fail open for resilience
+    }
+
+    const key = this.getRedisKey(sessionId);
+    try {
+      const countStr = await redisClient.get(key);
+      const count = countStr ? parseInt(countStr, 10) : 0;
+
+      if (count >= this.config.maxMessages) {
+        // Find session in the background
+        whatsappSessionRepository
+          .findOne(sessionId)
+          .then((session) => {
+            if (session) {
+              this.eventBus.publish({
+                type: WhatsAppEventType.RATE_LIMIT_EXCEEDED,
+                sessionId,
+                companyId: session.companyId,
+                timestamp: new Date(),
+                data: {
+                  limit: this.config.maxMessages,
+                  current: count,
+                },
+              });
+            }
+          })
+          .catch(() => null);
+
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      Logger.error(`[RateLimitService] Check limit error for ${sessionId}:`, e);
+      return true; // Fail open
+    }
+  }
+
+  private async incrementCount(sessionId: string): Promise<void> {
+    if (!redisClient?.isOpen) return;
+
+    const key = this.getRedisKey(sessionId);
+    const multi = redisClient.multi();
+
+    // INCR creates the key if it doesn't exist
+    multi.incr(key);
+
+    // Execute and then set TTL if it's currently -1 (no expiration)
+    const results = await multi.exec();
+
+    if (results && results[0]) {
+      const pttl = await redisClient.pTTL(key);
+      if (pttl === -1) {
+        await redisClient.expire(key, this.config.windowSeconds);
+      }
     }
   }
 
   async enforceLimit(sessionId: string): Promise<void> {
     const allowed = await this.checkLimit(sessionId);
     if (!allowed) {
-      const limit = this.rateLimits.get(sessionId);
-      throw new Error(
-        `Rate limit exceeded for session ${sessionId}. Reset at: ${limit?.resetAt.toISOString()}`,
-      );
+      if (redisClient?.isOpen) {
+        const key = this.getRedisKey(sessionId);
+        const ttlSeconds = await redisClient.ttl(key);
+        throw new Error(
+          `Rate limit exceeded for session ${sessionId}. Try again in ${ttlSeconds > 0 ? ttlSeconds : "a few"} seconds.`,
+        );
+      } else {
+        throw new Error(`Rate limit exceeded for session ${sessionId}.`);
+      }
     }
   }
 
-  resetLimit(sessionId: string): void {
-    this.rateLimits.delete(sessionId);
+  async resetLimit(sessionId: string): Promise<void> {
+    if (redisClient?.isOpen) {
+      await redisClient.del(this.getRedisKey(sessionId));
+    }
   }
 
-  getStats(sessionId: string): {
+  async getStats(sessionId: string): Promise<{
     count: number;
     limit: number;
     resetAt: Date | null;
-  } {
-    const limit = this.rateLimits.get(sessionId);
+  }> {
+    if (!redisClient?.isOpen) {
+      return { count: 0, limit: this.config.maxMessages, resetAt: null };
+    }
+
+    const key = this.getRedisKey(sessionId);
+    const countStr = await redisClient.get(key);
+    const ttlSeconds = await redisClient.ttl(key);
+
     return {
-      count: limit?.count || 0,
+      count: countStr ? parseInt(countStr, 10) : 0,
       limit: this.config.maxMessages,
-      resetAt: limit?.resetAt || null,
+      resetAt: ttlSeconds > 0 ? new Date(Date.now() + ttlSeconds * 1000) : null,
     };
   }
 }

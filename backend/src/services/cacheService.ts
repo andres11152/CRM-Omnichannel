@@ -67,7 +67,7 @@ class CacheService {
   /**
    * Set value in cache with TTL (seconds)
    */
-  async set(key: string, value: any, ttl: number = 300): Promise<void> {
+  async set(key: string, value: unknown, ttl: number = 300): Promise<void> {
     if (!this.client || !this.isConnected) return;
 
     try {
@@ -130,7 +130,7 @@ class CacheService {
   async wrap<T>(
     key: string,
     fetchFn: () => Promise<T>,
-    ttl: number = 300
+    ttl: number = 300,
   ): Promise<T> {
     // Try cache first
     const cached = await this.get<T>(key);

@@ -51,7 +51,7 @@ const createRateLimiter = (
         try {
           const result = await redisClient!.sendCommand(args);
           return result as unknown as string;
-        } catch (e) {
+        } catch {
           return null;
         }
       },

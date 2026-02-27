@@ -11,7 +11,7 @@ import {
   CreateDepartmentSchema,
   UpdateDepartmentSchema,
   DepartmentIdParamSchema,
-} from "@/schemas/department.schema";
+} from "@/schemas/departmentSchema";
 
 const router = Router();
 
@@ -23,3 +23,4 @@ router.put("/:id", validate(UpdateDepartmentSchema), updateDepartment);
 router.delete("/:id", validate(DepartmentIdParamSchema), deleteDepartment);
 
 export default router;
+

@@ -1,7 +1,6 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { stripeService } from "@/services/stripeService";
-import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 
@@ -23,11 +22,11 @@ export const createCheckoutSession = catchAsync(
     const url = await stripeService.createCheckoutSession(
       companyId,
       priceId,
-      userEmail
+      userEmail,
     );
 
     res.status(200).json({ url });
-  }
+  },
 );
 
 // POST /api/create-portal-session
@@ -43,15 +42,15 @@ export const createPortalSession = catchAsync(
     const url = await stripeService.createPortalSession(companyId);
 
     res.status(200).json({ url });
-  }
+  },
 );
 
 // POST /webhook/stripe
 // Note: This route needs 'express.raw({type: "application/json"})' middleware in server.ts
-export const stripeWebhook = catchAsync(async (req: any, res: Response) => {
-  const sig = req.headers["stripe-signature"];
+export const stripeWebhook = catchAsync(async (req: Request, res: Response) => {
+  const sig = req.headers["stripe-signature"] as string | string[] | undefined;
 
-  await stripeService.handleWebhook(sig, req.body);
+  await stripeService.handleWebhook(sig as string, req.body);
 
   res.json({ received: true });
 });

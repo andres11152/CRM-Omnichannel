@@ -1,7 +1,7 @@
-
-import { RequestHandler, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/types/types';
-import { AppError } from '@/utils/AppError';
+import { RequestHandler } from "express";
+import { AuthenticatedRequest } from "@/types/types";
+import { AppError } from "@/utils/AppError";
+import { Logger } from "@/utils/logger";
 
 /**
  * SUPER ADMIN GUARD MIDDLEWARE
@@ -11,10 +11,17 @@ export const superAdminGuard: RequestHandler = (req, res, next) => {
   // Cast to AuthenticatedRequest internally so function matches Express handlers
   const authReq = req as AuthenticatedRequest;
   // We assume authentication middleware has already populated authReq.user
-  if (authReq.user?.role !== 'MASTER') {
-    return next(new AppError('Acceso Denegado: Esta acción requiere privilegios de Super Administrador.', 403));
+  if (authReq.user?.role !== "MASTER") {
+    return next(
+      new AppError(
+        "Acceso Denegado: Esta acción requiere privilegios de Super Administrador.",
+        403,
+      ),
+    );
   }
 
-  console.log(`[SuperAdminGuard] 🛡️ Access granted for Master user: ${authReq.user?.email}`);
+  Logger.info(
+    `[SuperAdminGuard] 🛡️ Access granted for Master user: ${authReq.user?.email}`,
+  );
   next();
 };

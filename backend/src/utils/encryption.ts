@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { Logger } from "@/utils/logger";
 
 const ALGORITHM = "aes-256-cbc";
 // Usar una clave fija derivada del JWT_SECRET o una variable de entorno específica
@@ -6,7 +7,7 @@ const ALGORITHM = "aes-256-cbc";
 const ENCRYPTION_KEY = crypto.scryptSync(
   process.env.JWT_SECRET || "secret-fallback-key-do-not-use-prod",
   "salt",
-  32
+  32,
 );
 const IV_LENGTH = 16;
 
@@ -34,7 +35,7 @@ export const decrypt = (text: string): string => {
     return decrypted.toString();
   } catch (error) {
     // Si falla la desencriptación, devolver texto original o string vacío para no romper la app
-    console.error("[Encryption] Failed to decrypt value", error);
+    Logger.error("[Encryption] Failed to decrypt value", error);
     return text;
   }
 };

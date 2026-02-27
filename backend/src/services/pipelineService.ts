@@ -1,17 +1,10 @@
-import {
-  pipelineRepository,
-  PipelineRepository,
-} from "../repositories/PipelineRepository";
-import {
-  stageRepository,
-  StageRepository,
-} from "../repositories/StageRepository";
+import { PipelineRepository } from "../repositories/PipelineRepository";
+import { StageRepository } from "../repositories/StageRepository";
 import { AppError } from "../utils/AppError";
-import { Prisma } from "@prisma/client";
 import {
   CreatePipelineInput,
   UpdatePipelineInput,
-} from "../schemas/pipeline.schema";
+} from "../schemas/pipelineSchema";
 
 export class PipelineService {
   private pipelineRepo: PipelineRepository;
@@ -150,3 +143,4 @@ export class PipelineService {
 }
 
 export const pipelineService = new PipelineService();
+

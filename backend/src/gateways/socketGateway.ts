@@ -338,7 +338,7 @@ class WebSocketGateway {
 
       // 🟢 TYPING INDICATOR (100-YEAR FIX)
       socket.on("conversation:typing", async (data) => {
-        console.info(
+        Logger.info(
           `[Gateway] 📥 Received typing event: ${JSON.stringify(data)} from ${user.id}`,
         );
         if (!user.companyId || !data.to || !data.status) return;
@@ -443,18 +443,44 @@ class WebSocketGateway {
       return;
     }
     const room = `company:${companyId}`;
-    this.io.to(room).emit(event, data);
+    // 🛡️ CRITICAL: Sanitize data to strip protobuf class methods (Baileys WAMessage).
+    // notepack.io (Redis adapter) crashes on protobuf's toJSON() → toObject() chain.
+    try {
+      const safe = JSON.parse(JSON.stringify(data));
+      this.io.to(room).emit(event, safe);
+    } catch (err) {
+      Logger.error(
+        `[Gateway] ❌ Failed to serialize data for event ${event}`,
+        err,
+      );
+    }
   }
 
   public emitToRoom(room: string, event: string, data: unknown): void {
     if (!this.io) return;
-    this.io.to(room).emit(event, data);
+    try {
+      const safe = JSON.parse(JSON.stringify(data));
+      this.io.to(room).emit(event, safe);
+    } catch (err) {
+      Logger.error(
+        `[Gateway] ❌ Failed to serialize data for room ${room}`,
+        err,
+      );
+    }
   }
 
   public emitToUser(userId: string, event: string, data: unknown): void {
     if (!this.io) return;
     const room = `agent:${userId}`;
-    this.io.to(room).emit(event, data);
+    try {
+      const safe = JSON.parse(JSON.stringify(data));
+      this.io.to(room).emit(event, safe);
+    } catch (err) {
+      Logger.error(
+        `[Gateway] ❌ Failed to serialize data for user ${userId}`,
+        err,
+      );
+    }
   }
 
   public isRedisConnected(): boolean {

@@ -7,7 +7,7 @@ import {
   AuthenticationCreds,
   SignalKeyStore,
 } from "@whiskeysockets/baileys";
-import { prisma } from "@/config/database";
+import { whatsappCredentialRepository } from "@/repositories/WhatsAppCredentialRepository";
 import redisClient from "@/config/redis";
 import { encrypt, decrypt } from "@/utils/cryptoUtils";
 import { Logger } from "@/utils/logger";
@@ -64,12 +64,10 @@ export class DatabaseAuthProvider implements IAuthProvider {
 
         // 2. Fetch missing keys from DB (Batch Query)
         if (missingKeys.length > 0) {
-          const dbCredentials = await prisma.whatsAppCredential.findMany({
-            where: {
-              sessionId,
-              key: { in: missingKeys },
-            },
-          });
+          const dbCredentials = await whatsappCredentialRepository.findMany(
+            sessionId,
+            missingKeys,
+          );
 
           for (const cred of dbCredentials) {
             // cred.key format: "type-id" -> extract id
@@ -139,17 +137,9 @@ export class DatabaseAuthProvider implements IAuthProvider {
         }
 
         // Execute DB Transaction
-        const dbOps = dbData.map((d) =>
-          prisma.whatsAppCredential.upsert({
-            where: { sessionId_key: { sessionId, key: d.key } },
-            create: d,
-            update: { value: d.value },
-          }),
-        );
-
         ops.push(
-          prisma
-            .$transaction(dbOps)
+          whatsappCredentialRepository
+            .upsertMany(dbData)
             .catch((e) =>
               Logger.error(
                 `[AuthProvider] DB Transaction failed for ${sessionId}`,
@@ -198,9 +188,7 @@ export class DatabaseAuthProvider implements IAuthProvider {
     }
 
     // 2. Try DB
-    const cred = await prisma.whatsAppCredential.findUnique({
-      where: { sessionId_key: { sessionId, key } },
-    });
+    const cred = await whatsappCredentialRepository.findUnique(sessionId, key);
 
     if (!cred || !cred.value) return null;
 
@@ -246,13 +234,7 @@ export class DatabaseAuthProvider implements IAuthProvider {
     }
 
     // DB
-    ops.push(
-      prisma.whatsAppCredential.upsert({
-        where: { sessionId_key: { sessionId, key } },
-        create: { sessionId, key, value: encrypted },
-        update: { value: encrypted },
-      }),
-    );
+    ops.push(whatsappCredentialRepository.upsert(sessionId, key, encrypted));
 
     await Promise.all(ops);
   }
@@ -271,7 +253,7 @@ export class DatabaseAuthProvider implements IAuthProvider {
       );
     }
 
-    ops.push(prisma.whatsAppCredential.deleteMany({ where: { sessionId } }));
+    ops.push(whatsappCredentialRepository.deleteMany(sessionId));
 
     await Promise.all(ops);
   }

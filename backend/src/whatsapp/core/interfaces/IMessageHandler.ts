@@ -5,7 +5,10 @@ import {
 } from "../types/whatsapp.types";
 
 export interface IMessageHandler {
-  handleIncoming(message: unknown, sessionId: string): Promise<void>;
+  handleIncoming(
+    payload: { message: unknown } | unknown,
+    sessionId: string,
+  ): Promise<void>;
   sendMessage(
     to: string,
     content: string,

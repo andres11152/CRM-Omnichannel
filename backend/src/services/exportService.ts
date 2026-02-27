@@ -2,17 +2,21 @@ import { createObjectCsvWriter } from "csv-writer";
 import PDFDocument from "pdfkit";
 import { promises as fs } from "fs";
 import path from "path";
+import os from "os";
+import * as fsSync from "fs";
 import { Logger } from "@/utils/logger";
+import { storageService } from "@/services/storageService";
 
 /**
  * 📊 EXPORT SERVICE
  * Genera reportes en CSV y PDF para analytics
  * Enterprise-grade con validación y error handling
+ * Almacenamiento en S3 (Stateless)
  */
 
 interface ExportData {
   headers: Array<{ id: string; title: string }>;
-  records: Array<Record<string, any>>;
+  records: Array<Record<string, unknown>>;
   metadata?: {
     title?: string;
     companyName?: string;
@@ -25,68 +29,81 @@ interface ExportData {
 export const exportService = {
   /**
    * 📄 Generate CSV Export
-   * Creates a CSV file with proper formatting
+   * Creates a CSV file and uploads to S3
    */
   async generateCSV(
     data: ExportData,
-    filename: string
+    filename: string,
   ): Promise<{ filePath: string; success: boolean }> {
+    const timestamp = Date.now();
+    const sanitizedFilename = filename.replace(/[^a-z0-9_-]/gi, "_");
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(
+      tempDir,
+      `${sanitizedFilename}_${timestamp}.csv`,
+    );
+
     try {
-      // Ensure exports directory exists
-      const exportsDir = path.join(process.cwd(), "public", "exports");
-      await fs.mkdir(exportsDir, { recursive: true });
-
-      const timestamp = Date.now();
-      const sanitizedFilename = filename.replace(/[^a-z0-9_-]/gi, "_");
-      const filePath = path.join(
-        exportsDir,
-        `${sanitizedFilename}_${timestamp}.csv`
-      );
-
       // Create CSV writer
       const csvWriter = createObjectCsvWriter({
-        path: filePath,
+        path: tempFilePath,
         header: data.headers,
       });
 
       // Write records
       await csvWriter.writeRecords(data.records);
 
-      Logger.info(`[ExportService] CSV generated: ${filePath}`);
+      // Upload to S3
+      const fileBuffer = await fs.readFile(tempFilePath);
+      const uploadResult = await storageService.uploadFile(
+        fileBuffer,
+        `${sanitizedFilename}_${timestamp}.csv`,
+        "text/csv",
+      );
+
+      Logger.info(
+        `[ExportService] CSV generated and uploaded to S3: ${uploadResult.url}`,
+      );
+
+      // Cleanup temp file
+      await fs
+        .unlink(tempFilePath)
+        .catch((e) => Logger.warn("Error deleting temp CSV", e));
 
       return {
-        filePath: `/exports/${sanitizedFilename}_${timestamp}.csv`,
+        filePath: uploadResult.url,
         success: true,
       };
     } catch (error) {
       Logger.error("[ExportService] CSV generation failed:", error);
+      // Ensure temp file is cleaned up on error
+      if (fsSync.existsSync(tempFilePath)) {
+        await fs.unlink(tempFilePath).catch(() => {});
+      }
       throw new Error("Failed to generate CSV export");
     }
   },
 
   /**
    * 📕 Generate PDF Export
-   * Creates a professional PDF report with branding
+   * Creates a professional PDF report and uploads to S3
    */
   async generatePDF(
     data: ExportData,
-    filename: string
+    filename: string,
   ): Promise<{ filePath: string; success: boolean }> {
+    const timestamp = Date.now();
+    const sanitizedFilename = filename.replace(/[^a-z0-9_-]/gi, "_");
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(
+      tempDir,
+      `${sanitizedFilename}_${timestamp}.pdf`,
+    );
+
     try {
-      // Ensure exports directory exists
-      const exportsDir = path.join(process.cwd(), "public", "exports");
-      await fs.mkdir(exportsDir, { recursive: true });
-
-      const timestamp = Date.now();
-      const sanitizedFilename = filename.replace(/[^a-z0-9_-]/gi, "_");
-      const filePath = path.join(
-        exportsDir,
-        `${sanitizedFilename}_${timestamp}.pdf`
-      );
-
       // Create PDF document
       const doc = new PDFDocument({ margin: 50 });
-      const writeStream = require("fs").createWriteStream(filePath);
+      const writeStream = fsSync.createWriteStream(tempFilePath);
 
       doc.pipe(writeStream);
 
@@ -194,7 +211,7 @@ export const exportService = {
               width: columnWidth - 10,
               align: "left",
               continued: colIndex < data.headers.length - 1,
-            }
+            },
           );
         });
 
@@ -219,7 +236,7 @@ export const exportService = {
           .fillColor("#9CA3AF")
           .text(
             `Mostrando ${maxRows} de ${data.records.length} registros. Descarga CSV para ver todos.`,
-            { align: "center" }
+            { align: "center" },
           );
       }
 
@@ -227,46 +244,47 @@ export const exportService = {
       doc.end();
 
       // Wait for write to complete
-      await new Promise((resolve, reject) => {
-        writeStream.on("finish", resolve);
+      await new Promise<void>((resolve, reject) => {
+        writeStream.on("finish", () => resolve());
         writeStream.on("error", reject);
       });
 
-      Logger.info(`[ExportService] PDF generated: ${filePath}`);
+      // Upload to S3
+      const fileBuffer = await fs.readFile(tempFilePath);
+      const uploadResult = await storageService.uploadFile(
+        fileBuffer,
+        `${sanitizedFilename}_${timestamp}.pdf`,
+        "application/pdf",
+      );
+
+      Logger.info(
+        `[ExportService] PDF generated and uploaded to S3: ${uploadResult.url}`,
+      );
+
+      // Cleanup temp file
+      await fs
+        .unlink(tempFilePath)
+        .catch((e) => Logger.warn("Error deleting temp PDF", e));
 
       return {
-        filePath: `/exports/${sanitizedFilename}_${timestamp}.pdf`,
+        filePath: uploadResult.url,
         success: true,
       };
     } catch (error) {
       Logger.error("[ExportService] PDF generation failed:", error);
+      // Ensure temp file is cleaned up on error
+      if (fsSync.existsSync(tempFilePath)) {
+        await fs.unlink(tempFilePath).catch(() => {});
+      }
       throw new Error("Failed to generate PDF export");
     }
   },
 
   /**
-   * 🧹 Cleanup old export files (Cron job helper)
-   * Deletes files older than 24 hours to save space
+   * 🧹 Cleanup (No longer needed for local files, S3 handles persistence)
    */
   async cleanupOldExports(): Promise<void> {
-    try {
-      const exportsDir = path.join(process.cwd(), "public", "exports");
-
-      const files = await fs.readdir(exportsDir);
-      const now = Date.now();
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-
-      for (const file of files) {
-        const filePath = path.join(exportsDir, file);
-        const stats = await fs.stat(filePath);
-
-        if (now - stats.mtimeMs > maxAge) {
-          await fs.unlink(filePath);
-          Logger.info(`[ExportService] Deleted old export: ${file}`);
-        }
-      }
-    } catch (error) {
-      Logger.error("[ExportService] Cleanup failed:", error);
-    }
+    // S3 lifecycle policies handle this more efficiently
+    Logger.info("[ExportService] S3 Lifecycle policy handles cleanup.");
   },
 };

@@ -1,4 +1,6 @@
-import { prisma } from "@/config/database";
+import { contactRepository } from "@/repositories/ContactRepository";
+import { messageRepository } from "@/repositories/MessageRepository";
+import { aiAssistantRepository } from "@/repositories/AIAssistantRepository";
 import { chatService } from "@/services/chatService";
 import { generateAIResponse } from "@/services/aiResponseService";
 import { flowExecutor } from "@/services/flowExecutor";
@@ -137,24 +139,17 @@ export class AITriggerService {
     if (!flowPhone) return false;
 
     try {
-      let contact = await prisma.contact.findFirst({
-        where: { companyId, phone: flowPhone },
-      });
+      let contact = await contactRepository.findByPhone(companyId, flowPhone);
 
       if (!contact) {
         try {
-          contact = await prisma.contact.create({
-            data: {
-              companyId,
-              phone: flowPhone,
-              name: pushName || "Usuario WhatsApp",
-              tags: ["WHATSAPP_LEAD", "AUTO_CREATED"],
-            },
-          });
+          contact = await contactRepository.create(
+            companyId,
+            flowPhone,
+            pushName || "Usuario WhatsApp",
+          );
         } catch {
-          contact = await prisma.contact.findFirst({
-            where: { companyId, phone: flowPhone },
-          });
+          contact = await contactRepository.findByPhone(companyId, flowPhone);
         }
       }
 
@@ -235,16 +230,9 @@ export class AITriggerService {
 
     // 🛡️ RACE CONDITION GUARD: Prevent double AI response
     // If an AI message was sent in the last 8 seconds for this conversation, skip to avoid spam.
-    const recentAiResponse = await prisma.message.findFirst({
-      where: {
-        conversationId: conversation.id,
-        createdAt: { gt: new Date(Date.now() - 8000) },
-        metadata: {
-          path: ["aiGenerated"],
-          equals: true,
-        },
-      },
-    });
+    const recentAiResponse = await messageRepository.findRecentAIResponse(
+      conversation.id,
+    );
 
     if (recentAiResponse) {
       Logger.warn(
@@ -256,11 +244,10 @@ export class AITriggerService {
     const thinkingTime = Math.floor(Math.random() * 1000) + 1000;
     await new Promise((r) => setTimeout(r, thinkingTime));
 
-    const history = await prisma.message.findMany({
-      where: { conversationId: conversation.id },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    });
+    const history = await messageRepository.getConversationHistory(
+      conversation.id,
+      10,
+    );
 
     const formattedHistory = history.reverse().map((m) => ({
       role: (m.direction === "INBOUND" ? "user" : "model") as "user" | "model",
@@ -294,10 +281,10 @@ export class AITriggerService {
 
     await new Promise((r) => setTimeout(r, typingTime));
 
-    const aiAssistant = await prisma.aIAssistant.findUnique({
-      where: { id: conversation.queue.aiAssistantId },
-      select: { name: true },
-    });
+    const aiAssistant = await aiAssistantRepository.findById(
+      conversation.queue.aiAssistantId,
+      { name: true },
+    );
     const botName = aiAssistant?.name || "AI Assistant";
 
     const botEmail = `ai_${conversation.queue.aiAssistantId}@reply.bot`;

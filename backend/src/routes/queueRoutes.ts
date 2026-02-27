@@ -12,7 +12,7 @@ import {
   CreateQueueSchema,
   UpdateQueueSchema,
   QueueIdParamSchema,
-} from "@/schemas/queue.schema";
+} from "@/schemas/queueSchema";
 
 const router = express.Router();
 
@@ -29,3 +29,4 @@ router
   .delete(validate(QueueIdParamSchema), deleteQueue);
 
 export default router;
+

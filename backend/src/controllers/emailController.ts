@@ -5,14 +5,15 @@ import { timelineService } from "../services/timelineService";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
 import { CreateEmailDTO } from "../types/email.types";
-import { prisma } from "../config/database";
+import { companySettingsService } from "../services/companySettingsService";
 import {
   sendEmailSchema,
   testEmailConnectionSchema,
-} from "../schemas/email.schema";
+} from "../schemas/emailSchema";
 import { EmailProviderFactory } from "../services/email/email.provider";
 
 // ===================================
+
 // CONTROLLERS
 // ===================================
 
@@ -28,46 +29,21 @@ export const sendEmail = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
-    // Validate input
     const validatedData = sendEmailSchema.parse(req.body);
 
-    // 🔧 MULTI-TENANT FIX: Get company's corporate sender email
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: {
-        defaultSenderEmail: true,
-        defaultSenderName: true,
-        smtpUser: true, // Fallback si no hay defaultSenderEmail
-      },
-    });
-
-    if (!company) {
-      return next(new AppError("Company not found", 404));
-    }
-
-    // Use company's configured sender email (CORPORATE EMAIL)
-    // Priority: defaultSenderEmail > smtpUser > system fallback
-    const fromEmail =
-      company.defaultSenderEmail ||
-      company.smtpUser ||
-      process.env.DEFAULT_SENDER_EMAIL ||
-      "noreply@replycrm.com";
-
-    const fromName =
-      company.defaultSenderName ||
-      company.smtpUser?.split("@")[0] ||
-      "Reply CRM";
+    const { fromEmail, fromName } =
+      await companySettingsService.getSenderConfig(companyId);
 
     const dto: CreateEmailDTO = {
       companyId,
-      from: `${fromName} <${fromEmail}>`, // Format: "Company Name <email@company.com>"
+      from: `${fromName} <${fromEmail}>`,
       to: validatedData.to,
       cc: validatedData.cc,
       bcc: validatedData.bcc,
       subject: validatedData.subject,
       bodyHtml: validatedData.bodyHtml,
       bodyText: validatedData.bodyText,
-      replyTo: validatedData.replyTo || fromEmail, // Reply to company email
+      replyTo: validatedData.replyTo || fromEmail,
       contactId: validatedData.contactId,
       ticketId: validatedData.ticketId,
       enableTracking: validatedData.enableTracking ?? true,
@@ -83,18 +59,13 @@ export const sendEmail = catchAsync(
 );
 
 /**
- * Receive incoming email webhook (e.g., from SendGrid, Mailgun)
+ * Receive incoming email webhook
  * POST /api/emails/webhook
  */
 export const receiveWebhook = catchAsync(
   async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
-    const body = req.body;
-    const headers = req.headers;
+    await emailService.processWebhook(req.body, req.headers);
 
-    // Process webhook (update email status or save inbound email)
-    await emailService.processWebhook(body, headers);
-
-    // Respond immediately (webhooks should be fast)
     res.status(200).json({
       status: "success",
       message: "Webhook processed",
@@ -212,7 +183,6 @@ export const testEmailConnection = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
-    // Parse and validate with new schema
     const { host, port, user, password, secure, toEmail, senderEmail } =
       testEmailConnectionSchema.parse(req.body);
 
@@ -222,24 +192,19 @@ export const testEmailConnection = catchAsync(
       );
     }
 
-    // Intelligent Security Configuration
     let useSecure = secure;
-    // port is already a Number from schema transform
     if (port === 587) useSecure = false;
     if (port === 465) useSecure = true;
 
-    // Attempt to verify connection using a temporary Provider via Factory
     try {
-      // Create provider instance using the Factory
       const tempProvider = EmailProviderFactory.createProvider("nodemailer", {
         host,
         port,
         secure: useSecure,
         user,
-        pass: password, // nodemon config usually expects 'pass' in NodeMailerConfig
+        pass: password,
       });
 
-      // Send Test Email
       const result = await tempProvider.sendEmail({
         from: senderEmail || user,
         to: [toEmail],
@@ -280,3 +245,4 @@ export const testEmailConnection = catchAsync(
     }
   },
 );
+

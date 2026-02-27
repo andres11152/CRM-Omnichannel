@@ -18,6 +18,8 @@ import {
   adminRateLimiter,
 } from "@/middleware/advancedRateLimiter";
 import { superAdminGuard } from "@/middleware/superAdminMiddleware";
+import { validate } from "@/middleware/validationMiddleware";
+import { metaIncomingWebhookSchema } from "@/schemas/webhookSchemas";
 
 // Route Imports
 import onboardingRouter from "@/routes/onboardingRoutes";
@@ -58,6 +60,7 @@ import pushNotificationsRoutes from "@/routes/pushNotifications";
 import rolesRouter from "@/routes/roles";
 import searchRouter from "@/routes/searchRoutes";
 import notificationsRouter from "@/routes/notificationsRoutes";
+import paymentRouter from "@/routes/paymentRoutes";
 
 const router = Router();
 
@@ -80,7 +83,11 @@ router.get("/api/csrf-token", protect, getCsrfTokenHandler);
 router.use("/api/onboarding", advancedAuthLimiter, onboardingRouter);
 router.use("/api/auth", advancedAuthLimiter, authRouter);
 router.get("/webhook", verifyWebhook);
-router.post("/webhook", handleIncomingWebhook);
+router.post(
+  "/webhook",
+  validate(metaIncomingWebhookSchema),
+  handleIncomingWebhook,
+);
 
 // ==================== PROTECTED ROUTES ====================
 
@@ -138,6 +145,7 @@ router.use(
 );
 router.use("/api/activities", apiLimiter, protect, activityRouter);
 router.use("/api/products", apiLimiter, protect, productRouter);
+router.use("/api/payments", paymentRouter);
 
 // Support & Ticketing
 router.use("/api/tickets", apiLimiter, protect, ticketRouter);

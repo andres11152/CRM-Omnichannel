@@ -19,6 +19,10 @@ export class DealRepository {
     });
   }
 
+  async findUnique(args: Prisma.DealFindUniqueArgs) {
+    return prisma.deal.findUnique(args);
+  }
+
   async findById(id: string, companyId: string) {
     return prisma.deal.findFirst({
       where: { id, companyId },

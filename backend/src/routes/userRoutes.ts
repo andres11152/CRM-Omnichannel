@@ -11,7 +11,7 @@ import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
 import { checkPlanLimit } from "@/middleware/planLimitsMiddleware";
 import { AuthenticatedRequest } from "@/types/types";
-import { UpdateUserSchema, CreateUserSchema } from "@/schemas/user.schema";
+import { UpdateUserSchema, CreateUserSchema } from "@/schemas/userSchema";
 
 const router = Router();
 
@@ -55,3 +55,4 @@ router
   .delete(deleteUser);
 
 export default router;
+

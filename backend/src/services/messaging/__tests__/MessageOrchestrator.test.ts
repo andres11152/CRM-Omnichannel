@@ -5,7 +5,7 @@ import { MessageRepository } from "@/repositories/MessageRepository";
 import { DomainEventBus, DomainEventType } from "@/events/DomainEventBus";
 import { IncomingMessagePayload } from "@/services/interfaces/MessageTypes";
 import { prisma } from "@/config/database";
-import { Logger } from "@/utils/logger";
+import { prisma } from "@/config/database";
 
 // 🎭 MOCKS
 jest.mock("@/repositories/ContactRepository");
@@ -40,7 +40,7 @@ describe("MessageOrchestrator", () => {
   let mockContactRepo: jest.Mocked<ContactRepository>;
   let mockConversationRepo: jest.Mocked<ConversationRepository>;
   let mockMessageRepo: jest.Mocked<MessageRepository>;
-  let mockEventBus: any;
+  let mockEventBus: unknown;
 
   // Base Payload
   const basePayload: IncomingMessagePayload = {
@@ -52,7 +52,7 @@ describe("MessageOrchestrator", () => {
     senderName: "Juan Perez",
     messageTimestamp: Date.now(),
     sessionId: "sess_1",
-  } as any; // Cast as any because some props might be missing in partial mock
+  } as unknown as IncomingMessagePayload; // Cast as any because some props might be missing in partial mock
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -63,8 +63,8 @@ describe("MessageOrchestrator", () => {
       new ConversationRepository() as jest.Mocked<ConversationRepository>;
     mockMessageRepo = new MessageRepository() as jest.Mocked<MessageRepository>;
 
-    // Get the singleton mock
-    // @ts-ignore
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-expect-error
     mockEventBus = DomainEventBus.getInstance();
 
     orchestrator = new MessageOrchestrator(
@@ -82,7 +82,7 @@ describe("MessageOrchestrator", () => {
     mockContactRepo.create.mockResolvedValue({
       id: "new_contact_id",
       name: "Juan Perez",
-    } as any);
+    } as unknown as never);
 
     (prisma.user.upsert as jest.Mock).mockResolvedValue({
       id: "user_1",
@@ -91,9 +91,11 @@ describe("MessageOrchestrator", () => {
 
     mockConversationRepo.findByChannelId.mockResolvedValue({
       id: "conv_1",
-    } as any);
+    } as unknown as never);
     mockMessageRepo.findDuplicate.mockResolvedValue(null);
-    mockMessageRepo.create.mockResolvedValue({ id: "msg_1" } as any);
+    mockMessageRepo.create.mockResolvedValue({
+      id: "msg_1",
+    } as unknown as never);
 
     // Act
     await orchestrator.processIncoming(basePayload);
@@ -122,13 +124,15 @@ describe("MessageOrchestrator", () => {
     mockContactRepo.findByPhone.mockResolvedValue({
       id: "existing_contact_id",
       name: "Old Name",
-    } as any);
+    } as unknown as never);
 
     (prisma.user.upsert as jest.Mock).mockResolvedValue({ id: "user_1" });
     mockConversationRepo.findByChannelId.mockResolvedValue({
       id: "conv_1",
-    } as any);
-    mockMessageRepo.create.mockResolvedValue({ id: "msg_2" } as any);
+    } as unknown as never);
+    mockMessageRepo.create.mockResolvedValue({
+      id: "msg_2",
+    } as unknown as never);
 
     // Act
     await orchestrator.processIncoming(basePayload);

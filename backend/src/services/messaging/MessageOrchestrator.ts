@@ -125,18 +125,20 @@ export class MessageOrchestrator {
     }
 
     const message = await this.messageRepo.create({
-      companyId,
-      conversationId: conversation.id,
-      content: text,
-      direction: isOutbound
-        ? MessageDirection.OUTBOUND
-        : MessageDirection.INBOUND,
-      senderId: user.id,
-      channel: Channel.WHATSAPP,
-      metadata:
-        payload.hasMedia && payload.media
-          ? { media: payload.media as unknown as Prisma.InputJsonObject }
-          : undefined,
+      data: {
+        companyId,
+        conversationId: conversation.id,
+        content: text,
+        direction: isOutbound
+          ? MessageDirection.OUTBOUND
+          : MessageDirection.INBOUND,
+        senderId: user.id,
+        channel: Channel.WHATSAPP,
+        metadata:
+          payload.hasMedia && payload.media
+            ? { media: payload.media as unknown as Prisma.InputJsonObject }
+            : undefined,
+      },
     });
 
     // 5.1. Update Conversation Stats (Unread Badge + Sorting)

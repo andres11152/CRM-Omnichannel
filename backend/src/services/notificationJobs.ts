@@ -1,4 +1,8 @@
-import { prisma } from "@/config/database";
+import { companyRepository } from "@/repositories/CompanyRepository";
+import { ticketRepository } from "@/repositories/TicketRepository";
+import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
+import { messageRepository } from "@/repositories/MessageRepository";
+import { statsRepository } from "@/repositories/StatsRepository";
 import { notificationService } from "./notification/notificationService";
 import { Logger } from "@/utils/logger";
 import TenantContextManager from "@/config/tenantContext";
@@ -19,8 +23,8 @@ export class NotificationJobs {
     Logger.info("[NotificationJobs] Starting billing and quota checks");
 
     // 🛡️ SYSTEM MODE: Cron job needs access to all companies
-    const companies = await TenantContextManager.runAsSystem(async () =>
-      prisma.company.findMany({
+    const companiesOutput = await TenantContextManager.runAsSystem(async () =>
+      companyRepository.findMany({
         where: {
           status: { in: ["ACTIVE", "TRIAL"] },
         },
@@ -29,6 +33,7 @@ export class NotificationJobs {
         },
       }),
     );
+    const companies = companiesOutput as unknown as CompanyWithPlan[];
 
     for (const company of companies) {
       try {
@@ -63,17 +68,22 @@ export class NotificationJobs {
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
     // 🛡️ SYSTEM MODE: Cron job needs access to all tickets across tenants
-    const inactiveTickets = await TenantContextManager.runAsSystem(async () =>
-      prisma.ticket.findMany({
-        where: {
-          status: "OPEN",
-          updatedAt: { lt: twoDaysAgo },
-        },
-        include: {
-          assignedTo: true,
-        },
-      }),
+    const inactiveTicketsOutput = await TenantContextManager.runAsSystem(
+      async () =>
+        ticketRepository.findMany({
+          where: {
+            status: "OPEN",
+            updatedAt: { lt: twoDaysAgo },
+          },
+          include: {
+            assignedTo: true,
+          },
+        }),
     );
+    const inactiveTickets =
+      inactiveTicketsOutput as ((typeof inactiveTicketsOutput)[0] & {
+        assignedTo: unknown;
+      })[];
 
     for (const ticket of inactiveTickets) {
       if (ticket.assignedTo) {
@@ -91,7 +101,7 @@ export class NotificationJobs {
 
     // 🛡️ SYSTEM MODE: Cron job needs access to all WhatsApp sessions
     const sessions = await TenantContextManager.runAsSystem(async () =>
-      prisma.whatsAppSession.findMany({
+      whatsappSessionRepository.findMany({
         where: {
           status: "DISCONNECTED",
           // Only notify once per disconnection
@@ -109,7 +119,7 @@ export class NotificationJobs {
 
         // Mark as notified - needs system context too
         await TenantContextManager.runAsSystem(async () =>
-          prisma.whatsAppSession.update({
+          whatsappSessionRepository.updateRaw({
             where: { id: session.id },
             data: { notifiedAt: new Date() },
           }),
@@ -153,10 +163,7 @@ export class NotificationJobs {
     if (daysRemaining <= 0) {
       // 🛡️ SYSTEM MODE: Update company status
       await TenantContextManager.runAsSystem(async () =>
-        prisma.company.update({
-          where: { id: company.id },
-          data: { status: "INACTIVE" },
-        }),
+        companyRepository.update(company.id, { status: "INACTIVE" }),
       );
       await notificationService.sendSubscriptionExpiring(
         company.id,
@@ -185,10 +192,7 @@ export class NotificationJobs {
     if (daysRemaining <= 0) {
       // 🛡️ SYSTEM MODE: Update company status
       await TenantContextManager.runAsSystem(async () =>
-        prisma.company.update({
-          where: { id: company.id },
-          data: { status: "OVERDUE" },
-        }),
+        companyRepository.update(company.id, { status: "OVERDUE" }),
       );
     }
   }
@@ -209,7 +213,7 @@ export class NotificationJobs {
 
     // 🛡️ SYSTEM MODE: Count messages for quota check
     const messageCount = await TenantContextManager.runAsSystem(async () =>
-      prisma.message.count({
+      messageRepository.count({
         where: {
           conversation: {
             companyId: company.id,
@@ -245,7 +249,7 @@ export class NotificationJobs {
 
     // 🛡️ SYSTEM MODE: Count contacts for quota check
     const contactCount = await TenantContextManager.runAsSystem(async () =>
-      prisma.contact.count({
+      statsRepository.countContacts({
         where: { companyId: company.id },
       }),
     );
@@ -279,14 +283,11 @@ export class NotificationJobs {
 
     // Calculate total storage used
     // 🛡️ SYSTEM MODE: Aggregate media size for quota check
-    const media = await TenantContextManager.runAsSystem(async () =>
-      prisma.media.aggregate({
-        where: { companyId: company.id },
-        _sum: { size: true },
-      }),
+    const mediaSize = await TenantContextManager.runAsSystem(async () =>
+      statsRepository.sumMediaSize(company.id),
     );
 
-    const used = Number(media._sum.size || 0);
+    const used = Number(mediaSize || 0);
     const percentage = (used / limit) * 100;
 
     if (percentage >= 100) {

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 // ♻️ REFACTOR: Unified Service
 import { whatsappService } from "@/whatsapp";
 import { AuthenticatedRequest } from "@/types/types";
+import { Logger } from "@/utils/logger";
 
 export const syncMessages = async (req: Request, res: Response) => {
   try {
@@ -27,7 +28,7 @@ export const syncMessages = async (req: Request, res: Response) => {
       stats: result,
     });
   } catch (error) {
-    console.error("Sync error:", error);
+    Logger.error("Sync error:", error);
     res.status(500).json({ message: "Failed to sync messages" });
   }
 };

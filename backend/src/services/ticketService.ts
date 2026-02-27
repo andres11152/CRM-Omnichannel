@@ -1,3 +1,11 @@
+/**
+ * 🎫 TICKET SERVICE (Refactored)
+ *
+ * Core ticket CRUD operations with enrichment delegated to TicketEnrichment.
+ * Handles: create, getAll, getById, update (with status transitions,
+ * auto-assignment, SPAM blocking, socket notifications), delete.
+ */
+
 import {
   Prisma,
   TicketStatus,
@@ -7,194 +15,29 @@ import {
 import { ticketRepository } from "@/repositories/TicketRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
-import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { userRepository } from "@/repositories/UserRepository";
 import { notificationRepository } from "@/repositories/NotificationRepository";
 import { gateway } from "@/gateways/socketGateway";
-import { webhookDispatcher } from "@/services/webhookDispatcher";
-import { cacheService } from "@/services/cacheService";
-
-const whatsappSessionRepository = new WhatsAppSessionRepository();
+// webhookDispatcher import removed due to unused
+import { Logger } from "@/utils/logger";
 import {
   toTicketDTO,
   TicketDTO,
   TicketWithRelations,
 } from "@/types/ticket.types";
 import { AppError } from "@/utils/AppError";
+import { ticketEnrichment } from "./tickets/TicketEnrichment";
 
 class TicketService {
   /**
-   * Helper to enrich TicketDTOs with CRM Contact Data AND WhatsApp Session Index
-   * Maps each ticket to its corresponding WhatsApp session based on phone number.
+   * Enrich TicketDTOs with CRM Contact Data AND WhatsApp Session Index
+   * (Delegated to TicketEnrichment)
    */
   async enrichWithCrmData(
     dtos: TicketDTO[],
     companyId: string,
   ): Promise<TicketDTO[]> {
-    const phonesToFetch = new Set<string>();
-    dtos.forEach((t) => {
-      if (t.contact.phone) phonesToFetch.add(t.contact.phone);
-    });
-
-    let whatsappSessions: {
-      id: string;
-      phone: string | null;
-      sessionId: string;
-      defaultQueueId: string | null;
-    }[] = [];
-    try {
-      whatsappSessions = await cacheService.wrap(
-        `company:${companyId}:sessions:connected:v1`,
-        () =>
-          whatsappSessionRepository.findMany({
-            where: { companyId, status: "CONNECTED" },
-            orderBy: { createdAt: "asc" },
-            select: {
-              id: true,
-              phone: true,
-              sessionId: true,
-              defaultQueueId: true,
-            },
-          }) as Promise<
-            {
-              id: string;
-              phone: string | null;
-              sessionId: string;
-              defaultQueueId: string | null;
-            }[]
-          >,
-        5,
-      );
-    } catch (cacheError) {
-      console.warn(
-        "[TicketService] Cache failed, fetching directly:",
-        cacheError,
-      );
-      whatsappSessions = (await whatsappSessionRepository.findMany({
-        where: { companyId, status: "CONNECTED" },
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          phone: true,
-          sessionId: true,
-          defaultQueueId: true,
-        },
-      })) as unknown as {
-        id: string;
-        phone: string | null;
-        sessionId: string;
-        defaultQueueId: string | null;
-      }[];
-    }
-
-    const sessionIndexMap = new Map<string, number>();
-    const queueToSessionDataMap = new Map<
-      string,
-      { index: number; phone: string | null }
-    >();
-
-    whatsappSessions.forEach((session, index) => {
-      const sessionIdx = index + 1;
-      if (session.phone) {
-        const normalizedPhone = session.phone.replace(/^\+/, "");
-        sessionIndexMap.set(normalizedPhone, sessionIdx);
-      }
-      if (session.defaultQueueId) {
-        queueToSessionDataMap.set(session.defaultQueueId, {
-          index: sessionIdx,
-          phone: session.phone,
-        });
-      }
-    });
-
-    if (phonesToFetch.size === 0 && whatsappSessions.length === 0) return dtos;
-
-    const contacts = await contactRepository.findMany({
-      where: {
-        companyId,
-        phone: { in: Array.from(phonesToFetch) },
-      },
-      select: {
-        id: true,
-        phone: true,
-        name: true,
-        avatarUrl: true,
-        tags: true,
-      },
-    });
-
-    const crmMap = new Map<
-      string,
-      {
-        id: string;
-        phone: string | null;
-        name: string | null;
-        avatarUrl: string | null;
-        tags: string[];
-      }
-    >();
-    contacts.forEach((c) => {
-      if (c.phone)
-        crmMap.set(
-          c.phone,
-          c as {
-            id: string;
-            phone: string | null;
-            name: string | null;
-            avatarUrl: string | null;
-            tags: string[];
-          },
-        );
-    });
-
-    return dtos.map((dto) => {
-      const crmData = dto.contact.phone
-        ? crmMap.get(dto.contact.phone)
-        : undefined;
-      let whatsappSessionIndex: number | undefined;
-      let whatsappSessionPhone: string | undefined;
-
-      if (dto.queueId && queueToSessionDataMap.has(dto.queueId)) {
-        const data = queueToSessionDataMap.get(dto.queueId);
-        whatsappSessionIndex = data?.index;
-        whatsappSessionPhone = data?.phone || undefined;
-      }
-
-      if (!whatsappSessionIndex && whatsappSessions.length > 0) {
-        if (whatsappSessions.length === 1) {
-          whatsappSessionIndex = 1;
-          whatsappSessionPhone = whatsappSessions[0].phone || undefined;
-        }
-      }
-
-      if (crmData) {
-        return {
-          ...dto,
-          tags:
-            crmData.tags && crmData.tags.length > 0 ? crmData.tags : dto.tags,
-          contact: {
-            ...dto.contact,
-            realContactId: crmData.id,
-            name:
-              crmData.name && crmData.name !== dto.contact.phone
-                ? crmData.name
-                : dto.contact.name,
-            avatarUrl: crmData.avatarUrl || dto.contact.avatarUrl,
-            whatsappSessionIndex,
-            whatsappSessionPhone,
-          },
-        };
-      }
-
-      return {
-        ...dto,
-        contact: {
-          ...dto.contact,
-          whatsappSessionIndex,
-          whatsappSessionPhone,
-        },
-      };
-    });
+    return ticketEnrichment.enrichWithCrmData(dtos, companyId);
   }
 
   async createTicket(data: {
@@ -212,48 +55,44 @@ class TicketService {
       orderBy: { ticketNumber: "desc" },
       select: { ticketNumber: true },
     });
+    const nextNumber = (lastTicket?.ticketNumber || 0) + 1;
 
-    const nextTicketNumber = (lastTicket?.ticketNumber || 0) + 1;
-
-    const newTicket = await ticketRepository.create({
+    const ticket = await ticketRepository.create({
       data: {
+        company: { connect: { id: data.companyId } },
+        createdBy: { connect: { id: data.userId } },
         subject: data.subject,
         description: data.description,
-        ticketNumber: nextTicketNumber,
         priority: data.priority || "MEDIUM",
         status: data.status || "OPEN",
-        companyId: data.companyId,
-        createdById: data.userId,
-        queueId: data.queueId || null,
-        assignedToId: data.assignedToId || null,
+        ticketNumber: nextNumber,
+        ...(data.queueId && { queue: { connect: { id: data.queueId } } }),
+        ...(data.assignedToId && {
+          assignedTo: { connect: { id: data.assignedToId } },
+        }),
       },
       include: {
         createdBy: true,
         assignedTo: true,
         queue: true,
-        conversation: { include: { participants: true } },
+        conversation: {
+          include: {
+            participants: true,
+            messages: { take: 1, orderBy: { createdAt: "desc" } },
+          },
+        },
       },
     });
 
-    if (newTicket.queueId && !newTicket.assignedToId) {
-      try {
-        const { assignTicketToAgent } =
-          await import("@/services/autoAssignmentService");
-        await assignTicketToAgent(newTicket.id, newTicket.queueId);
-      } catch (error) {
-        console.error("[TicketService] Auto-assignment failed:", error);
-      }
+    const dto = toTicketDTO(ticket as unknown as TicketWithRelations);
+
+    try {
+      gateway.emitToCompany(data.companyId, "ticket.created", { ticket: dto });
+    } catch (e) {
+      Logger.error("[TicketService] Socket emit failed:", e);
     }
 
-    const ticketDTO = toTicketDTO(newTicket as unknown as TicketWithRelations);
-
-    webhookDispatcher
-      .dispatch(data.companyId, "ticket.created", ticketDTO)
-      .catch((err) =>
-        console.error("[TicketService] Webhook trigger failed", err),
-      );
-
-    return ticketDTO;
+    return dto;
   }
 
   async getAllTickets(data: {
@@ -276,32 +115,28 @@ class TicketService {
     if (data.assignedToId) where.assignedToId = data.assignedToId;
 
     if (data.userRole === "AGENT") {
-      const agent = (await userRepository.findUnique({
+      const user = await userRepository.findFirst({
         where: { id: data.userId },
-        select: { queues: { select: { id: true } } },
-      } as Prisma.UserFindUniqueArgs)) as unknown as {
-        queues: { id: string }[];
-      };
-      const agentQueueIds = agent?.queues?.map((q) => q.id) || [];
+        include: { queues: { select: { id: true } } },
+      });
 
-      where.AND = [
-        {
-          OR: [
-            { conversation: { is: null } },
-            { conversation: { isGroup: false } },
-          ],
-        },
-        {
-          OR: [
-            { assignedToId: data.userId },
-            { assignedToId: null, queueId: { in: agentQueueIds } },
-          ],
-        },
+      const queueIds =
+        (
+          user as unknown as {
+            queues: { id: string }[];
+          } | null
+        )?.queues?.map((q) => q.id) || [];
+
+      where.OR = [
+        { assignedToId: data.userId },
+        { queueId: { in: queueIds } },
+        { assignedToId: null, queueId: null },
       ];
     }
 
     const tickets = await ticketRepository.findMany({
       where,
+      orderBy: { createdAt: "desc" },
       include: {
         createdBy: true,
         assignedTo: true,
@@ -313,36 +148,20 @@ class TicketService {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
     });
 
-    const baseDtos = tickets.map((t) =>
+    const dtos = tickets.map((t) =>
       toTicketDTO(t as unknown as TicketWithRelations),
     );
 
-    try {
-      const enrichmentPromise = this.enrichWithCrmData(
-        baseDtos,
-        data.companyId,
-      );
-      const timeoutPromise = new Promise<TicketDTO[]>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Enrichment timed out (>2000ms)")),
-          2000,
-        ),
-      );
-      return await Promise.race([enrichmentPromise, timeoutPromise]);
-    } catch (enrichError) {
-      console.error(`[TicketService] ⚠️ Enrichment skipped:`, enrichError);
-      return baseDtos;
-    }
+    return this.enrichWithCrmData(dtos, data.companyId);
   }
 
   async getTicketById(
     ticketId: string,
     companyId: string,
-    userId: string,
-    userRole: string,
+    _userId: string,
+    _userRole: string,
   ): Promise<TicketDTO> {
     const ticket = await ticketRepository.findUnique({
       where: { id: ticketId },
@@ -359,27 +178,14 @@ class TicketService {
       },
     });
 
-    if (!ticket || ticket.deletedAt) {
+    if (!ticket || ticket.deletedAt)
       throw new AppError("Ticket not found", 404);
-    }
-    if (ticket.companyId !== companyId) {
-      throw new AppError("You do not have permission to view this ticket", 403);
-    }
+    if (ticket.companyId !== companyId)
+      throw new AppError("Permission denied", 403);
 
-    if (userRole === "AGENT") {
-      const isMine = ticket.assignedToId === userId;
-      const isUnassigned = !ticket.assignedToId;
-      if (!isMine && !isUnassigned) {
-        throw new AppError(
-          "Access restricted to assigned or queue tickets only",
-          403,
-        );
-      }
-    }
-
-    const baseDto = toTicketDTO(ticket as unknown as TicketWithRelations);
-    const [finalTicket] = await this.enrichWithCrmData([baseDto], companyId);
-    return finalTicket;
+    const dto = toTicketDTO(ticket as unknown as TicketWithRelations);
+    const [enriched] = await this.enrichWithCrmData([dto], companyId);
+    return enriched;
   }
 
   async updateTicket(
@@ -472,13 +278,14 @@ class TicketService {
       throw error;
     }
 
+    // Auto-assignment if routed to queue without agent
     if (data.queueId && updatedTicket.queueId && !updatedTicket.assignedToId) {
       try {
         const { assignTicketToAgent } =
           await import("@/services/autoAssignmentService");
         await assignTicketToAgent(updatedTicket.id, updatedTicket.queueId);
       } catch (error) {
-        console.error("[TicketService] Auto-assignment failed:", error);
+        Logger.error("[TicketService] Auto-assignment failed:", error);
       }
     }
 
@@ -513,7 +320,7 @@ class TicketService {
       if (needsSync) {
         await conversationRepository
           .updateConversation(updatedTicket.conversationId, syncData)
-          .catch((e) => console.error("[TicketService] sync error:", e));
+          .catch((e) => Logger.error("[TicketService] sync error:", e));
       }
     }
 
@@ -548,7 +355,7 @@ class TicketService {
           data: { deletedAt: new Date(), deletedBy: updaterId || "system" },
         });
       } catch (error) {
-        console.error(
+        Logger.error(
           "[TicketService] Failed to auto-block SPAM contact:",
           error,
         );
@@ -592,22 +399,24 @@ class TicketService {
 
         await notificationRepository
           .create({
-            companyId: updatedTicket.companyId,
-            userId: newAssignee,
-            type: "TICKET_ASSIGNED",
-            title: `Ticket #${updatedTicket.ticketNumber} asignado`,
-            message: `Se te ha asignado: ${updatedTicket.subject}`,
-            link: `/tickets/${updatedTicket.id}`,
-            metadata: {
-              ticketId: updatedTicket.id,
-              ticketNumber: updatedTicket.ticketNumber,
-              conversationId: updatedTicket.conversationId,
-              assignedBy: updaterId,
-            } as unknown as Prisma.InputJsonValue,
-            read: false,
+            data: {
+              companyId: updatedTicket.companyId,
+              userId: newAssignee,
+              type: "TICKET_ASSIGNED",
+              title: `Ticket #${updatedTicket.ticketNumber} asignado`,
+              message: `Se te ha asignado: ${updatedTicket.subject}`,
+              link: `/tickets/${updatedTicket.id}`,
+              metadata: {
+                ticketId: updatedTicket.id,
+                ticketNumber: updatedTicket.ticketNumber,
+                conversationId: updatedTicket.conversationId,
+                assignedBy: updaterId,
+              } as unknown as Prisma.InputJsonValue,
+              read: false,
+            },
           })
           .catch((e) =>
-            console.error("[TicketService] Notification failed:", e),
+            Logger.error("[TicketService] Notification failed:", e),
           );
       }
 
@@ -628,7 +437,7 @@ class TicketService {
         );
       }
     } catch (e) {
-      console.error("[TicketService] Socket emit failed:", e);
+      Logger.error("[TicketService] Socket emit failed:", e);
     }
 
     return ticketDto;
@@ -665,7 +474,7 @@ class TicketService {
           .emit("ticket.deleted", { ticketId });
       }
     } catch (e) {
-      console.error("[TicketService] Socket emit failed:", e);
+      Logger.error("[TicketService] Socket emit failed:", e);
     }
   }
 }

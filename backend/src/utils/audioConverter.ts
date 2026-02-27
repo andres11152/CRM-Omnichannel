@@ -3,6 +3,7 @@ import ffmpegPath from "ffmpeg-static";
 import { promises as fs } from "fs";
 import * as path from "path";
 import { Buffer } from "buffer";
+import { Logger } from "@/utils/logger";
 
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
@@ -39,7 +40,7 @@ export async function convertAudioToMP4(inputSource: string): Promise<string> {
       } else {
         // If it starts with data: but regex fails, it might be malformed, but we'll try passing it or throw?
         // Let's assume if it fails regex, it's invalid base64.
-        console.warn(
+        Logger.warn(
           "[AudioConverter] Malformed data URI, trying as is or failing.",
         );
       }
@@ -52,11 +53,11 @@ export async function convertAudioToMP4(inputSource: string): Promise<string> {
         .audioCodec("libopus")
         .format("ogg")
         .on("end", () => {
-          console.info("[AudioConverter] Conversion completed successfully");
+          Logger.info("[AudioConverter] Conversion completed successfully");
           resolve();
         })
         .on("error", (err: Error) => {
-          console.error("[AudioConverter] Conversion error:", err);
+          Logger.error("[AudioConverter] Conversion error:", err);
           reject(err);
         })
         .save(outputFile);
@@ -83,9 +84,9 @@ export async function convertAudioToMP4(inputSource: string): Promise<string> {
 export async function cleanupTempFile(filePath: string): Promise<void> {
   try {
     await fs.unlink(filePath);
-    console.info(`[AudioConverter] Cleaned up temp file: ${filePath}`);
+    Logger.info(`[AudioConverter] Cleaned up temp file: ${filePath}`);
   } catch (error) {
-    console.warn(
+    Logger.warn(
       `[AudioConverter] Failed to cleanup temp file: ${filePath}`,
       error,
     );

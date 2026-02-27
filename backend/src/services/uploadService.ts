@@ -4,20 +4,14 @@ import {
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl as awsGetSignedUrl } from "@aws-sdk/s3-request-presigner";
-import {
-  s3Client,
-  BUCKET_NAME,
-  USE_S3,
-  LOCAL_UPLOAD_DIR,
-  LOCAL_BASE_URL,
-} from "../config/s3";
-import fs from "fs";
-import path from "path";
+import { s3Client, BUCKET_NAME, USE_S3 } from "../config/s3";
 import crypto from "crypto";
+import path from "path";
 
 import sharp from "sharp";
 import { getErrorMessage } from "../utils/errorHelpers";
 import { AppError } from "../utils/AppError";
+import { Logger } from "@/utils/logger";
 
 export interface UploadResult {
   url: string;
@@ -76,7 +70,7 @@ const compressImage = async (
     return buffer;
   } catch (error: unknown) {
     const errorMsg = getErrorMessage(error);
-    console.error("Error compressing image:", errorMsg);
+    Logger.error("Error compressing image:", errorMsg);
     // Return original buffer if compression fails
     return buffer;
   }
@@ -139,98 +133,50 @@ export const uploadFile = async (
       fileSize = fileBuffer.length;
     }
 
-    console.info(`[UploadService] Uploading file. USE_S3: ${USE_S3}`);
+    Logger.info(`[UploadService] Uploading file. USE_S3: ${USE_S3}`);
 
-    if (USE_S3 && s3Client) {
-      try {
-        console.info("[UploadService] Attempting S3 upload...");
-        const command = new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: key,
-          Body: fileBuffer,
-          ContentType: file.mimetype,
-          ACL: "private",
-        });
-
-        // 🛡️ 100-YEAR FIX: Race against timeout to prevent hanging requests
-        // If S3 takes >5s, fail fast and fall back to local storage
-        await Promise.race([
-          s3Client.send(command),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("S3 Upload Timeout (5s)")), 5000),
-          ),
-        ]);
-
-        console.info("[UploadService] S3 upload successful");
-
-        const url = `https://${BUCKET_NAME}.s3.amazonaws.com/${key}`;
-
-        return {
-          url,
-          key,
-          filename,
-          size: fileSize,
-          mimeType: file.mimetype,
-        };
-      } catch (error: unknown) {
-        const errorMsg = getErrorMessage(error);
-        console.error(
-          "[UploadService] S3 upload failed, falling back to local storage:",
-          errorMsg,
-        );
-      }
+    if (!USE_S3 || !s3Client) {
+      throw new AppError("S3 is not configured. Upload failed.", 500);
     }
 
-    console.info("[UploadService] Using local storage...");
-    // Fallback to local storage
-    const uploadDir = path.join(
-      LOCAL_UPLOAD_DIR,
-      options.companyId,
-      options.type.toLowerCase(),
-    );
-
-    console.info(`[UploadService] Local upload dir: ${uploadDir}`);
-
-    // Ensure directory exists
-    if (!fs.existsSync(uploadDir)) {
-      try {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      } catch (err: unknown) {
-        const errMsg = getErrorMessage(err);
-        console.error(
-          `[UploadService] Failed to create directory: ${uploadDir}`,
-          errMsg,
-        );
-        throw new AppError(`Failed to create upload directory: ${errMsg}`, 500);
-      }
-    }
-
-    const localPath = path.join(uploadDir, filename);
     try {
-      fs.writeFileSync(localPath, fileBuffer);
-    } catch (err: unknown) {
-      const errMsg = getErrorMessage(err);
-      console.error(
-        `[UploadService] Failed to write file: ${localPath}`,
-        errMsg,
-      );
-      throw new AppError(`Failed to save file locally: ${errMsg}`, 500);
+      Logger.info("[UploadService] Attempting S3 upload...");
+      const command = new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+        Body: fileBuffer,
+        ContentType: file.mimetype,
+        // Using Bucket Policies instead of ACL
+      });
+
+      // 🛡️ 100-YEAR FIX: Race against timeout to prevent hanging requests
+      // If S3 takes >10s, throw timeout error
+      await Promise.race([
+        s3Client.send(command),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("S3 Upload Timeout (10s)")), 10000),
+        ),
+      ]);
+
+      Logger.info("[UploadService] S3 upload successful");
+
+      const url = `https://${BUCKET_NAME}.s3.amazonaws.com/${key}`;
+
+      return {
+        url,
+        key,
+        filename,
+        size: fileSize,
+        mimeType: file.mimetype,
+      };
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error);
+      Logger.error("[UploadService] S3 upload failed:", errorMsg);
+      throw new AppError(`S3 Upload failed: ${errorMsg}`, 500);
     }
-
-    const url = `${LOCAL_BASE_URL}/uploads/${
-      options.companyId
-    }/${options.type.toLowerCase()}/${filename}`;
-
-    return {
-      url,
-      key: localPath,
-      filename,
-      size: fileSize,
-      mimeType: file.mimetype,
-    };
   } catch (error: unknown) {
     const errorMsg = getErrorMessage(error);
-    console.error(`[UploadService] Fatal Upload Error:`, errorMsg);
+    Logger.error(`[UploadService] Fatal Upload Error:`, errorMsg);
     if (error instanceof AppError) throw error;
     throw new AppError(`Upload failed: ${errorMsg}`, 500);
   }
@@ -240,41 +186,38 @@ export const uploadFile = async (
  * Delete file from S3 or local storage
  */
 export const deleteFile = async (key: string): Promise<void> => {
-  if (USE_S3 && s3Client) {
-    // Delete from S3
-    const command = new DeleteObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: key,
-    });
-
-    await s3Client.send(command);
-  } else {
-    // Delete from local storage
-    if (fs.existsSync(key)) {
-      fs.unlinkSync(key);
-    }
+  if (!USE_S3 || !s3Client) {
+    throw new AppError("S3 is not configured. Cannot delete file.", 500);
   }
+
+  // Delete from S3
+  const command = new DeleteObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+
+  await s3Client.send(command);
 };
 
 /**
  * Get Signed URL for private S3 file
  */
 export const getSignedUrl = async (key: string): Promise<string> => {
-  if (USE_S3 && s3Client) {
-    try {
-      const command = new GetObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-      });
-      // URL valid for 1 hour
-      return await awsGetSignedUrl(s3Client, command, { expiresIn: 3600 });
-    } catch (error: unknown) {
-      console.error("Error generating signed URL:", error);
-      return "";
-    }
+  if (!USE_S3 || !s3Client) {
+    throw new AppError("S3 is not configured. Cannot get signed URL.", 500);
   }
-  // Local fallback
-  return `${LOCAL_BASE_URL}/${key}`; // Assuming key is relative path for local
+
+  try {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+    // URL valid for 1 hour
+    return await awsGetSignedUrl(s3Client, command, { expiresIn: 3600 });
+  } catch (error: unknown) {
+    Logger.error("Error generating signed URL:", error);
+    return "";
+  }
 };
 
 /**
@@ -282,55 +225,49 @@ export const getSignedUrl = async (key: string): Promise<string> => {
  * AWS SDK v3 requires special handling for streams
  */
 export const getFileStream = async (key: string): Promise<Readable> => {
-  if (USE_S3 && s3Client) {
-    try {
-      const command = new GetObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-      });
-      const response = await s3Client.send(command);
+  if (!USE_S3 || !s3Client) {
+    throw new AppError("S3 is not configured. Cannot get file stream.", 500);
+  }
 
-      if (!response.Body) {
-        throw new AppError(`File not found in S3: ${key}`, 404);
-      }
+  try {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+    const response = await s3Client.send(command);
 
-      // AWS SDK v3 returns a special stream type
-      // We need to convert it to a Node.js Readable stream
-      const sdkStream = response.Body;
-
-      // If it's already a Readable stream, return it
-      if (sdkStream instanceof Readable) {
-        return sdkStream;
-      }
-
-      // If it has transformToWebStream method (AWS SDK v3), convert it
-      if (
-        typeof (
-          sdkStream as { transformToByteArray?: () => Promise<Uint8Array> }
-        ).transformToByteArray === "function"
-      ) {
-        const bytes = await (
-          sdkStream as { transformToByteArray: () => Promise<Uint8Array> }
-        ).transformToByteArray();
-        const readable = new Readable();
-        readable.push(Buffer.from(bytes));
-        readable.push(null);
-        return readable;
-      }
-
-      // Fallback: try to use it as-is (may work for some stream types)
-      return sdkStream as unknown as Readable;
-    } catch (error) {
-      console.error(`[getFileStream] S3 error for key ${key}:`, error);
-      throw new AppError(`Failed to get file from S3: ${key}`, 500);
+    if (!response.Body) {
+      throw new AppError(`File not found in S3: ${key}`, 404);
     }
-  } else {
-    // Local path logic
-    // Key is full path in local mode as per uploadFile implementation
-    if (fs.existsSync(key)) {
-      return fs.createReadStream(key);
+
+    // AWS SDK v3 returns a special stream type
+    // We need to convert it to a Node.js Readable stream
+    const sdkStream = response.Body;
+
+    // If it's already a Readable stream, return it
+    if (sdkStream instanceof Readable) {
+      return sdkStream;
     }
-    throw new AppError(`File not found locally: ${key}`, 404);
+
+    // If it has transformToWebStream method (AWS SDK v3), convert it
+    if (
+      typeof (sdkStream as { transformToByteArray?: () => Promise<Uint8Array> })
+        .transformToByteArray === "function"
+    ) {
+      const bytes = await (
+        sdkStream as { transformToByteArray: () => Promise<Uint8Array> }
+      ).transformToByteArray();
+      const readable = new Readable();
+      readable.push(Buffer.from(bytes));
+      readable.push(null);
+      return readable;
+    }
+
+    // Fallback: try to use it as-is (may work for some stream types)
+    return sdkStream as unknown as Readable;
+  } catch (error) {
+    Logger.error(`[getFileStream] S3 error for key ${key}:`, error);
+    throw new AppError(`Failed to get file from S3: ${key}`, 500);
   }
 };
 

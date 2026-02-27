@@ -27,7 +27,7 @@ export class WhatsAppSessionRepository {
   }
 
   /**
-   * Update session data
+   * Update session data by sessionId natively for easy usage
    */
   async update(
     sessionId: string,
@@ -37,6 +37,22 @@ export class WhatsAppSessionRepository {
       where: { sessionId },
       data,
     });
+  }
+
+  /**
+   * Generic update with Prisma args
+   */
+  async updateRaw(
+    args: Prisma.WhatsAppSessionUpdateArgs,
+  ): Promise<WhatsAppSession> {
+    return prisma.whatsAppSession.update(args);
+  }
+
+  /**
+   * Count sessions
+   */
+  async count(args: Prisma.WhatsAppSessionCountArgs): Promise<number> {
+    return prisma.whatsAppSession.count(args);
   }
 
   /**

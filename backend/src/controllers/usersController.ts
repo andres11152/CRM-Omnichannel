@@ -184,7 +184,7 @@ export const createUser = catchAsync(
  * Obtiene un usuario específico por ID
  */
 export const getUser = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     // 1. Extraer ID de params
     const { id } = req.params;
 
@@ -206,7 +206,7 @@ export const getUser = catchAsync(
  * Actualiza un usuario existente
  */
 export const updateUser = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     // 1. Extraer datos de la request
     const { id } = req.params;
     const {

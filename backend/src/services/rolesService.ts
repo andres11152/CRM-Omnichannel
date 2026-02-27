@@ -1,4 +1,3 @@
-import { prisma } from "@/config/database";
 import { UserRole } from "@prisma/client";
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
@@ -9,6 +8,8 @@ import {
   PermissionAction,
   PermissionDTO,
 } from "@/types/role.types";
+import { roleRepository } from "@/repositories/RoleRepository";
+import { userRepository } from "@/repositories/UserRepository";
 
 interface CreateRoleParams {
   name: string;
@@ -30,7 +31,7 @@ export const rolesService = {
    * Get all roles for a company
    */
   async findAll(companyId: string): Promise<RoleDTO[]> {
-    const roles = await prisma.role.findMany({
+    const roles = await roleRepository.findMany({
       where: { companyId },
       include: {
         permissions: { include: { permission: true } },
@@ -39,14 +40,16 @@ export const rolesService = {
       orderBy: [{ isSystem: "desc" }, { createdAt: "desc" }],
     });
 
-    return roles.map(toRoleDTO);
+    return (roles as unknown as Parameters<typeof toRoleDTO>[0][]).map(
+      toRoleDTO,
+    );
   },
 
   /**
    * Get single role
    */
   async findOne(companyId: string, roleId: string): Promise<RoleDTO> {
-    const role = await prisma.role.findFirst({
+    const role = await roleRepository.findFirst({
       where: { id: roleId, companyId },
       include: {
         permissions: { include: { permission: true } },
@@ -55,7 +58,7 @@ export const rolesService = {
     });
 
     if (!role) throw new AppError("Role not found", HTTP_STATUS.NOT_FOUND);
-    return toRoleDTO(role);
+    return toRoleDTO(role as unknown as Parameters<typeof toRoleDTO>[0]);
   },
 
   /**
@@ -66,7 +69,7 @@ export const rolesService = {
       throw new AppError("Name and baseRole required", HTTP_STATUS.BAD_REQUEST);
     }
 
-    const exists = await prisma.role.findFirst({
+    const exists = await roleRepository.findFirst({
       where: { companyId, name: data.name },
     });
 
@@ -74,7 +77,7 @@ export const rolesService = {
       throw new AppError("Role name already exists", HTTP_STATUS.BAD_REQUEST);
     }
 
-    const role = await prisma.role.create({
+    const role = await roleRepository.create({
       data: {
         companyId,
         name: data.name,
@@ -100,7 +103,7 @@ export const rolesService = {
     roleId: string,
     data: UpdateRoleParams,
   ): Promise<RoleDTO> {
-    const role = await prisma.role.findFirst({
+    const role = await roleRepository.findFirst({
       where: { id: roleId, companyId },
     });
 
@@ -110,7 +113,7 @@ export const rolesService = {
     }
 
     if (data.name && data.name !== role.name) {
-      const conflict = await prisma.role.findFirst({
+      const conflict = await roleRepository.findFirst({
         where: { companyId, name: data.name, id: { not: roleId } },
       });
       if (conflict) {
@@ -118,7 +121,7 @@ export const rolesService = {
       }
     }
 
-    await prisma.role.update({
+    await roleRepository.update({
       where: { id: roleId },
       data: {
         name: data.name,
@@ -129,7 +132,7 @@ export const rolesService = {
     });
 
     if (data.permissions) {
-      await prisma.rolePermission.deleteMany({ where: { roleId } });
+      await roleRepository.deleteRolePermissions(roleId);
       await this.syncPermissions(roleId, data.permissions);
     }
 
@@ -140,10 +143,14 @@ export const rolesService = {
    * Delete role
    */
   async delete(companyId: string, roleId: string): Promise<void> {
-    const role = await prisma.role.findFirst({
+    const role = (await roleRepository.findFirst({
       where: { id: roleId, companyId },
       include: { _count: { select: { users: true } } },
-    });
+    })) as unknown as {
+      id: string;
+      isSystem: boolean;
+      _count: { users: number };
+    } | null;
 
     if (!role) throw new AppError("Role not found", HTTP_STATUS.NOT_FOUND);
     if (role.isSystem) {
@@ -156,7 +163,7 @@ export const rolesService = {
       );
     }
 
-    await prisma.role.delete({ where: { id: roleId } });
+    await roleRepository.delete(roleId);
   },
 
   /**
@@ -167,17 +174,17 @@ export const rolesService = {
     userId: string,
     roleId: string,
   ): Promise<void> {
-    const role = await prisma.role.findFirst({
+    const role = await roleRepository.findFirst({
       where: { id: roleId, companyId },
     });
     if (!role) throw new AppError("Role not found", HTTP_STATUS.NOT_FOUND);
 
-    const user = await prisma.user.findFirst({
+    const user = await userRepository.findFirst({
       where: { id: userId, companyId },
     });
     if (!user) throw new AppError("User not found", HTTP_STATUS.NOT_FOUND);
 
-    await prisma.user.update({
+    await userRepository.update({
       where: { id: userId },
       data: { customRoleId: roleId },
     });
@@ -192,7 +199,7 @@ export const rolesService = {
     action: PermissionAction,
     resource: string,
   ): Promise<boolean> {
-    const user = await prisma.user.findUnique({
+    const user = (await userRepository.findUnique({
       where: { id: userId },
       include: {
         customRole: {
@@ -201,7 +208,14 @@ export const rolesService = {
           },
         },
       },
-    });
+    })) as unknown as {
+      role: string;
+      customRole?: {
+        permissions: Array<{
+          permission: { module: string; action: string; resource: string };
+        }>;
+      };
+    } | null;
 
     if (!user) return false;
 
@@ -232,9 +246,7 @@ export const rolesService = {
    */
   async syncPermissions(roleId: string, permissions: PermissionDTO[]) {
     for (const perm of permissions) {
-      // Find or create permission
-      // Optimization: Could be cached in memory
-      let permission = await prisma.permission.findFirst({
+      let permission = await roleRepository.findPermission({
         where: {
           module: perm.module,
           action: perm.action,
@@ -243,7 +255,7 @@ export const rolesService = {
       });
 
       if (!permission) {
-        permission = await prisma.permission.create({
+        permission = await roleRepository.createPermission({
           data: {
             module: perm.module,
             action: perm.action,
@@ -252,7 +264,7 @@ export const rolesService = {
         });
       }
 
-      await prisma.rolePermission.create({
+      await roleRepository.createRolePermission({
         data: {
           roleId,
           permissionId: permission.id,

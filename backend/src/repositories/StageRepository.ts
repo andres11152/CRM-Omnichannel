@@ -1,4 +1,4 @@
-import { Prisma, Stage } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 
 export class StageRepository {

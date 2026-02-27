@@ -6,7 +6,7 @@ import {
   CreateProductSchema,
   UpdateProductSchema,
   ProductIdParamSchema,
-} from "../schemas/product.schema";
+} from "../schemas/productSchema";
 
 const router = Router();
 
@@ -31,3 +31,4 @@ router.delete(
 );
 
 export default router;
+

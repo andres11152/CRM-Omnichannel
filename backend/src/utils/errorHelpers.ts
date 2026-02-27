@@ -13,7 +13,7 @@ export function normalizeError(candidate: unknown): Error {
   }
 
   if (candidate && typeof candidate === "object" && "message" in candidate) {
-    return new Error(String((candidate as any).message));
+    return new Error(String((candidate as Record<string, unknown>).message));
   }
 
   return new Error(String(candidate));

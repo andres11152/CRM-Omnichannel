@@ -25,7 +25,8 @@ router.get("/vapid-public-key", (req: Request, res: Response) => {
 router.post(
   "/subscribe",
   catchAsync(async (req: Request, res: Response) => {
-    const user = (req as any).user;
+    const user = (req as unknown as { user: { id: string; companyId: string } })
+      .user;
     const { subscription } = req.body;
 
     if (!subscription || !subscription.endpoint || !subscription.keys) {
@@ -54,7 +55,7 @@ router.post(
       success: true,
       message: "Subscribed successfully",
     });
-  })
+  }),
 );
 
 /**
@@ -63,7 +64,8 @@ router.post(
 router.post(
   "/unsubscribe",
   catchAsync(async (req: Request, res: Response) => {
-    const user = (req as any).user;
+    const user = (req as unknown as { user: { id: string; companyId: string } })
+      .user;
     const { endpoint } = req.body;
 
     if (!endpoint) {
@@ -83,7 +85,7 @@ router.post(
       success: true,
       message: "Unsubscribed successfully",
     });
-  })
+  }),
 );
 
 /**
@@ -93,7 +95,9 @@ if (process.env.NODE_ENV === "development") {
   router.post(
     "/test",
     catchAsync(async (req: Request, res: Response) => {
-      const user = (req as any).user;
+      const user = (
+        req as unknown as { user: { id: string; companyId: string } }
+      ).user;
 
       await pushNotificationService.sendToUser(user.id, {
         title: "🔔 Test Notification",
@@ -108,7 +112,7 @@ if (process.env.NODE_ENV === "development") {
         success: true,
         message: "Test notification sent",
       });
-    })
+    }),
   );
 }
 

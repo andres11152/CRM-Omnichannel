@@ -1,160 +1,55 @@
-import { planLimitsService } from "@/services/planLimitsService"; // Added Import
-import { cacheService } from "@/services/cacheService";
-
 import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/database";
 import { AuthenticatedRequest } from "@/types/types";
+import { flowService } from "@/services/flowService";
+
+/**
+ * ⚡ FLOW CONTROLLER
+ *
+ * HTTP orchestrator for automation workflows.
+ * All data access delegated to flowService (SRP).
+ */
 
 export const createFlow = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { name, triggerType, triggerConfig, nodes, edges, isActive } =
-      req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
       return next(new AppError("Company ID missing", 400));
     }
 
-    // 🔴 ENFORCE WORKFLOW LIMIT (Only for active flows)
-    const initActive = isActive !== undefined ? isActive : true;
-    if (initActive) {
-      const canCreate = await planLimitsService.canCreateResource(
-        companyId,
-        "workflows",
-      );
-      if (!canCreate) {
-        return next(
-          new AppError(
-            "Has alcanzado el límite de workflows activos de tu plan",
-            403,
-          ),
-        );
-      }
-    }
-
-    try {
-      // Use Prisma Client instead of raw SQL
-      const flow = await prisma.workflow.create({
-        data: {
-          companyId,
-          name,
-          triggerType: triggerType || "KEYWORD",
-          triggerConfig: triggerConfig || {},
-          nodes: nodes || [],
-          edges: edges || [],
-          isActive: isActive !== undefined ? isActive : true,
-        },
-      });
-
-      res.status(201).json(flow);
-    } catch (error) {
-      console.error("Error creating flow:", error);
-      return next(new AppError("Failed to create flow", 500));
-    }
+    const flow = await flowService.create(
+      companyId,
+      req.body as Parameters<typeof flowService.create>[1],
+    );
+    res.status(201).json(flow);
   },
 );
 
 export const getFlows = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
       return res.status(200).json([]);
     }
 
-    try {
-      const flows = await prisma.workflow.findMany({
-        where: { companyId },
-        orderBy: { createdAt: "desc" },
-      });
-      res.status(200).json(flows);
-    } catch (error) {
-      console.error("Error fetching flows:", error);
-      return next(new AppError("Failed to fetch flows", 500));
-    }
+    const flows = await flowService.findAll(companyId);
+    res.status(200).json(flows);
   },
 );
 
-export const updateFlow = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
-    const companyId = req.companyId || req.user?.companyId;
-    const data = req.body;
-
-    // Verify ownership
-    const existing = await prisma.workflow.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!existing) {
-      return next(new AppError("Flow not found", 404));
-    }
-
-    try {
-      const updatedFlow = await prisma.workflow.update({
-        where: { id },
-        data: {
-          name: data.name,
-          triggerType: data.triggerType,
-          triggerConfig: data.triggerConfig,
-          nodes: data.nodes,
-          edges: data.edges,
-          isActive: data.isActive,
-        },
-      });
-
-      // 🧹 Invalidate Cache
-      await cacheService.delete(`workflow:${id}`);
-
-      res.status(200).json(updatedFlow);
-    } catch (error) {
-      console.error("Error updating flow:", error);
-      return next(new AppError("Failed to update flow", 500));
-    }
-  },
-);
-
-export const deleteFlow = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
-    const companyId = req.companyId || req.user?.companyId;
-
-    const existing = await prisma.workflow.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!existing) {
-      return next(new AppError("Flow not found", 404));
-    }
-
-    try {
-      await prisma.workflow.delete({ where: { id } });
-
-      // 🧹 Invalidate Cache
-      await cacheService.delete(`workflow:${id}`);
-
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting flow:", error);
-      return next(new AppError("Failed to delete flow", 500));
-    }
-  },
-);
-
-/**
- * GET /api/flows/:id
- * Obtiene un flujo específico por ID
- */
 export const getFlowById = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
 
-    const flow = await prisma.workflow.findFirst({
-      where: { id, companyId },
-    });
+    if (!companyId) {
+      return next(new AppError("Company ID missing", 400));
+    }
+
+    const flow = await flowService.findOne(id, companyId);
 
     if (!flow) {
       return next(new AppError("Flow not found", 404));
@@ -164,90 +59,58 @@ export const getFlowById = catchAsync(
   },
 );
 
-/**
- * PATCH /api/flows/:id/toggle
- * Activa/Desactiva un flujo
- */
+export const updateFlow = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const companyId = req.companyId || req.user?.companyId;
+
+    if (!companyId) {
+      return next(new AppError("Company ID missing", 400));
+    }
+
+    const updatedFlow = await flowService.update(id, companyId, req.body);
+    res.status(200).json(updatedFlow);
+  },
+);
+
+export const deleteFlow = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const companyId = req.companyId || req.user?.companyId;
+
+    if (!companyId) {
+      return next(new AppError("Company ID missing", 400));
+    }
+
+    await flowService.delete(id, companyId);
+    res.status(204).send();
+  },
+);
+
 export const toggleFlow = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
 
-    const flow = await prisma.workflow.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!flow) {
-      return next(new AppError("Flow not found", 404));
+    if (!companyId) {
+      return next(new AppError("Company ID missing", 400));
     }
 
-    try {
-      // 🔴 ENFORCE LIMIT WHEN ACTIVATING
-      if (!flow.isActive) {
-        const canActivate = await planLimitsService.canCreateResource(
-          companyId,
-          "workflows",
-        );
-        if (!canActivate) {
-          return next(
-            new AppError(
-              "Has alcanzado el límite de workflows activos de tu plan",
-              403,
-            ),
-          );
-        }
-      }
-
-      const updated = await prisma.workflow.update({
-        where: { id },
-        data: { isActive: !flow.isActive },
-      });
-
-      // 🧹 Invalidate Cache
-      await cacheService.delete(`workflow:${id}`);
-
-      res.status(200).json(updated);
-    } catch (error) {
-      console.error("Error toggling flow:", error);
-      return next(new AppError("Failed to toggle flow", 500));
-    }
+    const updated = await flowService.toggle(id, companyId);
+    res.status(200).json(updated);
   },
 );
 
-/**
- * POST /api/flows/:id/duplicate
- * Duplica un flujo existente
- */
 export const duplicateFlow = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
 
-    const original = await prisma.workflow.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!original) {
-      return next(new AppError("Flow not found", 404));
+    if (!companyId) {
+      return next(new AppError("Company ID missing", 400));
     }
 
-    try {
-      const duplicate = await prisma.workflow.create({
-        data: {
-          companyId,
-          name: `${original.name} (Copia)`,
-          triggerType: original.triggerType,
-          triggerConfig: original.triggerConfig,
-          nodes: original.nodes,
-          edges: original.edges,
-          isActive: false,
-        },
-      });
-
-      res.status(201).json(duplicate);
-    } catch (error) {
-      console.error("Error duplicating flow:", error);
-      return next(new AppError("Failed to duplicate flow", 500));
-    }
+    const duplicate = await flowService.duplicate(id, companyId);
+    res.status(201).json(duplicate);
   },
 );

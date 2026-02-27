@@ -1,4 +1,4 @@
-import { prisma } from "@/config/database";
+import { searchRepository } from "@/repositories/SearchRepository";
 
 /**
  * 🔍 GLOBAL SEARCH SERVICE
@@ -48,64 +48,13 @@ export const searchService = {
     // Parallel search for performance (Promise.all)
     const [contacts, tickets, deals] = await Promise.all([
       // 1. Search Contacts
-      prisma.contact.findMany({
-        where: {
-          companyId,
-          OR: [
-            { name: { contains: searchTerm, mode: "insensitive" } },
-            { phone: { contains: searchTerm, mode: "insensitive" } },
-            { email: { contains: searchTerm, mode: "insensitive" } },
-          ],
-        },
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          email: true,
-        },
-        take: 5,
-        orderBy: { updatedAt: "desc" }, // Most recent interactions first
-      }),
+      searchRepository.searchContacts(companyId, searchTerm),
 
       // 2. Search Tickets
-      prisma.ticket.findMany({
-        where: {
-          companyId,
-          OR: [
-            { subject: { contains: searchTerm, mode: "insensitive" } },
-            // ticketNumber is Int, so we check if searchTerm is numeric
-            ...(isNaN(Number(searchTerm))
-              ? []
-              : [{ ticketNumber: Number(searchTerm) }]),
-          ],
-        },
-        select: {
-          id: true,
-          subject: true,
-          ticketNumber: true,
-          status: true,
-        },
-        take: 5,
-        orderBy: { createdAt: "desc" },
-      }),
+      searchRepository.searchTickets(companyId, searchTerm),
 
       // 3. Search Deals (CRM Module)
-      prisma.deal.findMany({
-        where: {
-          companyId,
-          title: { contains: searchTerm, mode: "insensitive" },
-        },
-        select: {
-          id: true,
-          title: true,
-          value: true,
-          stage: {
-            select: { name: true },
-          },
-        },
-        take: 5,
-        orderBy: { updatedAt: "desc" },
-      }),
+      searchRepository.searchDeals(companyId, searchTerm),
     ]);
 
     // Transform and type-tag results

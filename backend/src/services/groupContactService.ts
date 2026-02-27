@@ -1,4 +1,6 @@
-import { prisma } from "@/config/database";
+import { conversationRepository } from "@/repositories/ConversationRepository";
+import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
+import { contactRepository } from "@/repositories/ContactRepository";
 import { contactService } from "@/services/contactService";
 import { whatsappService } from "@/whatsapp";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
@@ -77,7 +79,7 @@ export const groupContactService = {
     conversationId: string,
   ): Promise<GroupParticipantsResponse> {
     // 1. Get conversation to validate it's a group
-    const conversation = await prisma.conversation.findFirst({
+    const conversation = await conversationRepository.findFirst({
       where: { id: conversationId, companyId },
     });
 
@@ -94,7 +96,7 @@ export const groupContactService = {
 
     // 2. 🛡️ 100-YEAR FIX: Multi-Session Resilience
     // Fetch ALL connected sessions. If one fails (e.g. not in group), try others.
-    const sessions = await prisma.whatsAppSession.findMany({
+    const sessions = await whatsappSessionRepository.findMany({
       where: { companyId, status: "CONNECTED" },
     });
 
@@ -203,7 +205,7 @@ export const groupContactService = {
     let existingCount = 0;
 
     // Get all existing contacts for this company (for fast lookup)
-    const existingContacts = await prisma.contact.findMany({
+    const existingContacts = await contactRepository.findMany({
       where: { companyId, deletedAt: null },
       select: { id: true, phone: true },
     });
@@ -276,7 +278,7 @@ export const groupContactService = {
     params: AddParticipantParams,
   ): Promise<AddParticipantResult> {
     // Validate conversation belongs to company
-    const conversation = await prisma.conversation.findFirst({
+    const conversation = await conversationRepository.findFirst({
       where: { id: conversationId, companyId },
     });
 
@@ -295,7 +297,7 @@ export const groupContactService = {
     }
 
     // Check if already exists
-    const existing = await prisma.contact.findFirst({
+    const existing = await contactRepository.findFirst({
       where: { companyId, phone, deletedAt: null },
     });
 

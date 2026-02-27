@@ -1,19 +1,36 @@
 import { prisma } from "@/config/database";
+import { Logger } from "@/utils/logger";
 import { AppError } from "@/utils/AppError";
+import { Channel } from "@prisma/client";
 
 export class IngestionService {
   public static async ingestMessage(
     companyId: string,
     customerEmail: string,
     customerName: string,
-    channel: any,
+    channel: Channel,
     content: string,
-    subject?: string
+    subject?: string,
   ) {
     try {
       let user = await prisma.user.findUnique({
         where: { email: customerEmail },
       });
+
+      if (user && user.companyId !== companyId) {
+        // 🚨 ARCHITECTURAL LIMITATION: User.email is globally unique @unique.
+        // If a "contact" uses the same email across two companies that use our CRM,
+        // the DB schema links them to the First Company's User record.
+        // For now, we block cross-tenant ingestion to prevent data crossover.
+        // FUTURE FIX: Migrate senderId in Message to use Contact instead of User for external ends.
+        Logger.error(
+          `[Ingestion] Cross-tenant leakage blocked: User ${customerEmail} belongs to company ${user.companyId}, but tried to ingest into ${companyId}`,
+        );
+        throw new AppError(
+          "El usuario ya está registrado en otra instancia de la plataforma.",
+          403,
+        );
+      }
 
       if (!user) {
         user = await prisma.user.create({
@@ -58,7 +75,7 @@ export class IngestionService {
       });
 
       return { conversation, message };
-    } catch (error) {
+    } catch {
       throw new AppError("Error ingesting message", 500);
     }
   }

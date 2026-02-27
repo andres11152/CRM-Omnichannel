@@ -43,11 +43,12 @@ const getDatabaseUrl = (): string => {
   const baseUrl = process.env.DATABASE_URL || "";
   const separator = baseUrl.includes("?") ? "&" : "?";
   // 🚀 PERFORMANCE FIX: Increased connection limit for better concurrency.
-  // 10 was too low for parallel Promise.all queries in dashboard/stats.
+  // 25 was still too low for burst traffic (health probes + API calls + background jobs).
+  // pool_timeout reduced to 30s to release stale connections faster under load.
   const poolParams = [
-    "connection_limit=25",
-    "pool_timeout=60",
-    "connect_timeout=60",
+    "connection_limit=40",
+    "pool_timeout=30",
+    "connect_timeout=30",
   ].join("&");
   return `${baseUrl}${separator}${poolParams}`;
 };
@@ -86,38 +87,102 @@ const createExtendedClient = () => {
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
-          // --- 1. SOFT DELETE LOGIC ---
-          const argsObj = args as Record<string, unknown>;
+          // --- 1. GLOBAL BYPASS ---
+          if (GLOBAL_MODELS.includes(model)) {
+            return query(args);
+          }
+
+          // --- 2. RLS & SECURITY CONTEXT ---
+          const store = contextStorage.getStore();
+          if (!store) {
+            if (process.env.SKIP_SECURITY_CHECK === "true") return query(args);
+            throw new Error(
+              `❌ SECURITY VIOLATION: Access to ${model} denied.`,
+            );
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const argsObj = args as any;
+          const isSystem = store.companyId === "__SYSTEM__";
+          const companyId = isSystem ? null : getCompanyId();
+
+          // Inject companyId into args if not system
+          if (companyId) {
+            const injectCompanyId = (target: unknown) => {
+              if (target && typeof target === "object" && target !== null) {
+                const record = target as Record<string, unknown>;
+                if (!record.company) record.companyId = companyId;
+              }
+            };
+
+            if (operation === "create") {
+              if (!argsObj.data) argsObj.data = {};
+              injectCompanyId(argsObj.data);
+            } else if (operation === "createMany") {
+              if (Array.isArray(argsObj.data)) {
+                argsObj.data.forEach((d: unknown) => injectCompanyId(d));
+              }
+            } else if (operation === "upsert") {
+              if (argsObj.where) argsObj.where.companyId = companyId;
+              if (argsObj.create) argsObj.create.companyId = companyId;
+            } else if (
+              [
+                "findMany",
+                "findFirst",
+                "count",
+                "delete",
+                "deleteMany",
+                "update",
+                "updateMany",
+                "groupBy",
+                "aggregate",
+              ].includes(operation)
+            ) {
+              argsObj.where = { ...argsObj.where, companyId };
+            }
+          }
+
+          // --- 3. SOFT DELETE LOGIC ---
+          const isSoftDeleteModel = SOFT_DELETE_MODELS.includes(model);
           const includeDeleted = argsObj?.includeDeleted === true;
 
-          if (argsObj && "includeDeleted" in argsObj) {
+          if ("includeDeleted" in argsObj) {
             delete argsObj.includeDeleted;
           }
 
-          if (SOFT_DELETE_MODELS.includes(model)) {
+          if (isSoftDeleteModel) {
             const delegateName = model.charAt(0).toLowerCase() + model.slice(1);
             const prismaUnknown = basePrisma as unknown as MyPrismaAny;
             const delegate = prismaUnknown[delegateName];
 
+            // Turn DELETE into UPDATE with deletedAt (using base delegate)
             if (delegate) {
               if (operation === "delete") {
+                // For 'delete', basePrisma allows where id etc. Even if we mutated argsObj.where above to include companyId,
+                // delegate.update on basePrisma will respect it, securing the soft delete!
+                const deleteWhere = companyId
+                  ? { ...argsObj.where, companyId }
+                  : argsObj.where;
                 return delegate.update({
-                  where: args.where,
+                  where: deleteWhere,
                   data: { deletedAt: new Date() },
                 });
               }
               if (operation === "deleteMany") {
+                const deleteWhere = companyId
+                  ? { ...argsObj.where, companyId }
+                  : argsObj.where;
                 return delegate.updateMany({
-                  where: args.where,
+                  where: deleteWhere,
                   data: { deletedAt: new Date() },
                 });
               }
             }
 
+            // Exclude soft-deleted rows from READs
             if (!includeDeleted) {
               if (
                 [
-                  "findUnique",
                   "findFirst",
                   "findMany",
                   "count",
@@ -125,95 +190,39 @@ const createExtendedClient = () => {
                   "groupBy",
                 ].includes(operation)
               ) {
-                const safeArgs = args as { where?: Record<string, unknown> };
-                safeArgs.where = {
-                  ...safeArgs.where,
-                  deletedAt: null,
-                };
+                argsObj.where = { ...argsObj.where, deletedAt: null };
               }
             }
           }
 
-          // --- 2. GLOBAL BYPASS ---
-          if (GLOBAL_MODELS.includes(model)) {
-            return query(args);
-          }
-
-          // --- 3. SECURITY CHECK & RLS ---
-          const store = contextStorage.getStore();
-
-          if (!store) {
-            // Logger.error(`🚨 SECURITY BLOCK: ${model}.${operation} no context`);
-            // Allow bypass in development scripts if needed, but for server it's strict.
-            if (process.env.SKIP_SECURITY_CHECK === "true") return query(args);
-            throw new Error(
-              `❌ SECURITY VIOLATION: Access to ${model} denied.`,
-            );
-          }
-
-          if (store.companyId === "__SYSTEM__") {
-            return query(args);
-          }
-
-          const companyId = getCompanyId();
-
-          const injectCompanyId = (target: unknown) => {
-            if (target && typeof target === "object" && target !== null) {
-              const record = target as Record<string, unknown>;
-              if (!record.company) {
-                record.companyId = companyId;
-              }
-            }
-          };
-
-          if (operation === "create") {
-            const typedArgs = args as { data?: Record<string, unknown> };
-            if (!typedArgs.data) typedArgs.data = {};
-            injectCompanyId(typedArgs.data);
-          } else if (operation === "createMany") {
-            if (Array.isArray(args.data)) {
-              args.data.forEach((d: unknown) => injectCompanyId(d));
-            }
-          } else if (operation === "findUnique") {
+          // --- 4. FIND UNIQUE HANDLER ---
+          // Because 'findUnique' requires strictly unique criteria (like 'id'), we cannot easily add 'companyId' or 'deletedAt'
+          // to its 'where' object without Prisma complaining. Therefore, we convert findUnique -> findFirst using the base delegate.
+          if (operation === "findUnique" || operation === "findUniqueOrThrow") {
             const delegateName = model.charAt(0).toLowerCase() + model.slice(1);
             const prismaUnknown = basePrisma as unknown as MyPrismaAny;
             const delegate = prismaUnknown[delegateName];
 
             if (delegate?.findFirst) {
-              return delegate.findFirst({
-                ...args,
-                where: { ...args.where, companyId },
+              const findFirstWhere = { ...argsObj.where };
+              if (companyId) findFirstWhere.companyId = companyId;
+              if (isSoftDeleteModel && !includeDeleted)
+                findFirstWhere.deletedAt = null;
+
+              const result = await delegate.findFirst({
+                ...argsObj,
+                where: findFirstWhere,
               });
+
+              if (!result && operation === "findUniqueOrThrow") {
+                throw new Error(`Record not found for model ${model}`);
+              }
+              return result;
             }
-          } else if (operation === "upsert") {
-            const upsertArgs = args as {
-              where?: Record<string, unknown>;
-              create?: Record<string, unknown>;
-              update?: Record<string, unknown>;
-            };
-            if (upsertArgs.where) upsertArgs.where.companyId = companyId;
-            if (upsertArgs.create) upsertArgs.create.companyId = companyId;
-          } else if (
-            [
-              "findMany",
-              "findFirst",
-              "count",
-              "delete",
-              "deleteMany",
-              "update",
-              "updateMany",
-              "groupBy",
-              "aggregate",
-            ].includes(operation)
-          ) {
-            const safeArgs = args as { where?: Record<string, unknown> };
-            safeArgs.where = {
-              ...safeArgs.where,
-              companyId,
-            };
           }
 
-          return query(args);
+          // All other standard queries fall through
+          return query(argsObj);
         },
       },
     },

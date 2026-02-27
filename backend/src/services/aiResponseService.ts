@@ -1,12 +1,12 @@
-import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
-import { prisma } from "@/config/database";
+import { aiConfigRepository } from "@/repositories/AiConfigRepository";
+import { aiAssistantRepository } from "@/repositories/AIAssistantRepository";
+import { mediaRepository } from "@/repositories/MediaRepository";
 import { USE_S3, s3Client, BUCKET_NAME } from "@/config/s3";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { AIHistoryMessage } from "@/types/ai.types";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: pdf-parse might lack types in strict mode
+import { Logger } from "@/utils/logger";
 import pdfParse from "pdf-parse";
 
 // 🧠 HELPERS: S3 Support
@@ -25,7 +25,7 @@ const extractTextFromPDF = async (dataBuffer: Buffer): Promise<string> => {
     const data = await pdfParse(dataBuffer);
     return data.text;
   } catch (error) {
-    console.error(`[RAG] Error parsing PDF buffer:`, error);
+    Logger.error(`[RAG] Error parsing PDF buffer:`, error);
     return "";
   }
 };
@@ -34,7 +34,7 @@ const extractTextFromPDF = async (dataBuffer: Buffer): Promise<string> => {
 const getKnowledgeBaseContext = async (companyId: string): Promise<string> => {
   try {
     // 1. Fetch relevant documents
-    const documents = await prisma.media.findMany({
+    const documents = await mediaRepository.findMany({
       where: {
         companyId,
         type: "DOCUMENT",
@@ -62,29 +62,6 @@ const getKnowledgeBaseContext = async (companyId: string): Promise<string> => {
             // Safe cast to Readable for Node env
             fileBuffer = await streamToBuffer(response.Body as Readable);
           }
-        } else {
-          // Local fallback
-          const localUploadsDir = path.join(process.cwd(), "public", "uploads");
-          let filePath = "";
-
-          if (doc.key) {
-            const p1 = path.join(localUploadsDir, doc.key);
-            if (fs.existsSync(p1)) filePath = p1;
-          }
-
-          if (!filePath && doc.filename) {
-            const p2 = path.join(
-              localUploadsDir,
-              companyId,
-              "document",
-              doc.filename,
-            );
-            if (fs.existsSync(p2)) filePath = p2;
-          }
-
-          if (filePath && fs.existsSync(filePath)) {
-            fileBuffer = fs.readFileSync(filePath);
-          }
         }
 
         if (fileBuffer) {
@@ -101,7 +78,7 @@ const getKnowledgeBaseContext = async (companyId: string): Promise<string> => {
           }
         }
       } catch (err) {
-        console.error(
+        Logger.error(
           `[RAG] Failed to process document ${doc.originalName}:`,
           err,
         );
@@ -111,7 +88,7 @@ const getKnowledgeBaseContext = async (companyId: string): Promise<string> => {
     context += "--- END OF KNOWLEDGE BASE ---\n";
     return context;
   } catch (error) {
-    console.error("[RAG] Failed to build context:", error);
+    Logger.error("[RAG] Failed to build context:", error);
     return "";
   }
 };
@@ -124,13 +101,15 @@ export const generateAIResponse = async (
 ): Promise<string | null> => {
   try {
     // 1. Get Config (API Key)
-    const config = await prisma.aIConfig.findUnique({ where: { companyId } });
+    const config = await aiConfigRepository.findUnique({
+      where: { companyId },
+    });
     if (!config?.geminiKey) {
       return null; // Silent fail if no key
     }
 
     // 2. Get Assistant (System Prompt)
-    const assistant = await prisma.aIAssistant.findUnique({
+    const assistant = await aiAssistantRepository.findUnique({
       where: { id: assistantId },
     });
     if (!assistant) {
@@ -189,14 +168,14 @@ export const generateAIResponse = async (
 
     if (!response.ok) {
       const err = await response.text();
-      console.error(`[AI] Gemini API Error ${response.status}: ${err}`);
+      Logger.error(`[AI] Gemini API Error ${response.status}: ${err}`);
       return null;
     }
 
     const data = await response.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (error) {
-    console.error("[AI] Error generating response:", error);
+    Logger.error("[AI] Error generating response:", error);
     return null;
   }
 };
@@ -208,7 +187,9 @@ export const generateRawAIResponse = async (
   modelName: string = "gemini-2.5-flash",
 ): Promise<string | null> => {
   try {
-    const config = await prisma.aIConfig.findUnique({ where: { companyId } });
+    const config = await aiConfigRepository.findUnique({
+      where: { companyId },
+    });
     if (!config?.geminiKey) return null;
 
     const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent`;
@@ -232,7 +213,7 @@ export const generateRawAIResponse = async (
     const data = await response.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (error) {
-    console.error("[AI] Raw generation error:", error);
+    Logger.error("[AI] Raw generation error:", error);
     return null;
   }
 };

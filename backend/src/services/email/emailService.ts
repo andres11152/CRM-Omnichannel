@@ -1,4 +1,15 @@
-import { prisma } from "../../config/database";
+/**
+ * 📧 EMAIL SERVICE (Refactored — ORM-Free)
+ *
+ * Business logic for email operations:
+ * - Send and persist outbound emails
+ * - Save inbound emails (webhook / IMAP)
+ * - Update email status from webhooks
+ * - Query emails by contact/ticket
+ *
+ * All data access delegated to EmailRepository.
+ */
+
 import { EmailStatus, EmailType, Prisma } from "@prisma/client";
 import {
   CreateEmailDTO,
@@ -10,6 +21,7 @@ import { EmailProviderFactory } from "./email.provider";
 import { Logger } from "../../utils/logger";
 import { AppError } from "../../utils/AppError";
 import { CircuitBreaker } from "../../utils/resilience";
+import { emailRepository } from "@/repositories/EmailRepository";
 
 // Helper to strip undefined values for JSON B storage
 const sanitizeForJson = (data: unknown): Prisma.InputJsonValue => {
@@ -39,17 +51,7 @@ export class EmailService {
     companyId: string,
   ): Promise<IEmailProvider> {
     try {
-      const company = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: {
-          emailProvider: true,
-          smtpHost: true,
-          smtpPort: true,
-          smtpUser: true,
-          smtpPassword: true,
-          smtpSecure: true,
-        },
-      });
+      const company = await emailRepository.findCompanySmtpConfig(companyId);
 
       // If company has Custom SMTP configured, use it
       if (
@@ -116,10 +118,10 @@ export class EmailService {
         throw new AppError(`Failed to send email: ${errorMsg}`, 500);
       }
 
-      // 2. Save to database
-      const email = await prisma.email.create({
-        data: {
-          companyId: dto.companyId,
+      // 2. Save to database via repository
+      const email = await emailRepository.create(
+        {
+          company: { connect: { id: dto.companyId } },
           messageId: result.messageId,
           from: dto.from,
           to: dto.to,
@@ -131,18 +133,20 @@ export class EmailService {
           replyTo: dto.replyTo,
           type: EmailType.OUTBOUND,
           status: EmailStatus.SENT,
-          contactId: dto.contactId,
-          ticketId: dto.ticketId,
+          contact: dto.contactId
+            ? { connect: { id: dto.contactId } }
+            : undefined,
+          ticket: dto.ticketId ? { connect: { id: dto.ticketId } } : undefined,
           attachments: dto.attachments
             ? (sanitizeForJson(dto.attachments) as Prisma.InputJsonValue)
             : undefined,
           sentAt: new Date(),
         },
-        include: {
+        {
           contact: { select: { name: true, email: true } },
           ticket: { select: { ticketNumber: true } },
         },
-      });
+      );
 
       Logger.info(`[EmailService] Email saved to DB: ${email.id}`);
 
@@ -168,30 +172,26 @@ export class EmailService {
       const senderEmail = dto.from;
 
       if (senderEmail) {
-        contact = await prisma.contact.findFirst({
-          where: {
-            companyId: dto.companyId,
-            email: senderEmail,
-          },
-        });
+        contact = await emailRepository.findContactByEmail(
+          dto.companyId,
+          senderEmail,
+        );
 
         // Auto-create contact if not exists
         if (!contact) {
-          contact = await prisma.contact.create({
-            data: {
-              companyId: dto.companyId,
-              email: senderEmail,
-              name: senderEmail.split("@")[0], // Use email prefix as name
-            },
+          contact = await emailRepository.createContact({
+            companyId: dto.companyId,
+            email: senderEmail,
+            name: senderEmail.split("@")[0],
           });
           Logger.info(`[EmailService] Auto-created contact: ${contact.id}`);
         }
       }
 
-      // Save email
-      const email = await prisma.email.create({
-        data: {
-          companyId: dto.companyId,
+      // Save email via repository
+      const email = await emailRepository.create(
+        {
+          company: { connect: { id: dto.companyId } },
           messageId: dto.messageId,
           from: dto.from,
           to: dto.to,
@@ -202,16 +202,16 @@ export class EmailService {
           bodyText: dto.bodyText,
           type: EmailType.INBOUND,
           status: EmailStatus.DELIVERED,
-          contactId: contact?.id,
-          ticketId: dto.ticketId,
+          contact: contact ? { connect: { id: contact.id } } : undefined,
+          ticket: dto.ticketId ? { connect: { id: dto.ticketId } } : undefined,
           attachments: dto.attachments
             ? (sanitizeForJson(dto.attachments) as Prisma.InputJsonValue)
             : undefined,
         },
-        include: {
+        {
           contact: { select: { name: true, email: true } },
         },
-      });
+      );
 
       Logger.info(`[EmailService] Inbound email saved: ${email.id}`);
 
@@ -230,9 +230,7 @@ export class EmailService {
    */
   async updateEmailStatus(dto: UpdateEmailStatusDTO) {
     try {
-      const email = await prisma.email.findUnique({
-        where: { messageId: dto.messageId },
-      });
+      const email = await emailRepository.findByMessageId(dto.messageId);
 
       if (!email) {
         Logger.warn(
@@ -241,14 +239,11 @@ export class EmailService {
         return null;
       }
 
-      const updated = await prisma.email.update({
-        where: { id: email.id },
-        data: {
-          status: dto.status,
-          errorMessage: dto.errorMessage,
-          openedAt: dto.openedAt,
-          clickedAt: dto.clickedAt,
-        },
+      const updated = await emailRepository.update(email.id, {
+        status: dto.status,
+        errorMessage: dto.errorMessage,
+        openedAt: dto.openedAt,
+        clickedAt: dto.clickedAt,
       });
 
       Logger.info(
@@ -266,27 +261,14 @@ export class EmailService {
    * Get emails by contact
    */
   async getEmailsByContact(contactId: string, companyId: string) {
-    return prisma.email.findMany({
-      where: {
-        contactId,
-        companyId,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
+    return emailRepository.findByContact(contactId, companyId);
   }
 
   /**
    * Get emails by ticket
    */
   async getEmailsByTicket(ticketId: string, companyId: string) {
-    return prisma.email.findMany({
-      where: {
-        ticketId,
-        companyId,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    return emailRepository.findByTicket(ticketId, companyId);
   }
 
   /**

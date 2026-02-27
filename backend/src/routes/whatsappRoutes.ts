@@ -8,7 +8,7 @@ import * as chatSyncController from "@/controllers/chatSyncController";
 import {
   TriggerSyncSchema,
   SyncConversationSchema,
-} from "@/schemas/chatSync.schema";
+} from "@/schemas/chatSyncSchema";
 
 const router = Router();
 
@@ -42,3 +42,4 @@ router.post(
 );
 
 export default router;
+

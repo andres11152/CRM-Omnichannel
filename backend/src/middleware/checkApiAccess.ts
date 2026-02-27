@@ -1,14 +1,15 @@
 import { Response, NextFunction } from "express";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
+import { AuthenticatedRequest } from "@/types/types";
 
 export const checkApiAccess = catchAsync(
-  async (req: any, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     // 🛡️ API ACCESS GUARD
     // Verifies if the authenticated tenant has API access enabled in their plan.
 
-    // Assumes req.user or req.tenant is populated by previous auth middleware
-    const tenant = req.tenant || req.user?.company;
+    // Assumes req.tenant is populated by previous auth middleware
+    const tenant = req.tenant;
 
     if (!tenant) {
       // Context missing - likely an auth issue, but let's be strict for API routes

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { Logger } from "@/utils/logger";
 
 // Use a consistent key based on environment variable
 // Ensure your SESSION_SECRET is strong and kept secret!
@@ -44,7 +45,7 @@ export const decrypt = (text: string): string | null => {
 
     return decrypted;
   } catch (error) {
-    console.error("[Crypto] Decryption failed:", error);
+    Logger.error("[Crypto] Decryption failed:", error);
     return null;
   }
 };

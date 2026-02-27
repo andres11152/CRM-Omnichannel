@@ -1,4 +1,5 @@
-import { prisma } from "@/config/database";
+import { queueRepository } from "@/repositories/QueueRepository";
+import { ticketRepository } from "@/repositories/TicketRepository";
 import { Logger } from "@/utils/logger";
 
 /**
@@ -12,10 +13,13 @@ export const assignTicketToAgent = async (
     `[AutoAssignment] Attempting to assign ticket ${ticketId} in queue ${queueId}`,
   );
 
-  const queue = await prisma.queue.findUnique({
+  const queueOutput = await queueRepository.findUnique({
     where: { id: queueId },
     include: { agents: true },
   });
+  const queue = queueOutput as typeof queueOutput & {
+    agents: { id: string; name: string }[];
+  };
 
   if (!queue) {
     Logger.error(`[AutoAssignment] Queue ${queueId} not found`);
@@ -39,7 +43,7 @@ export const assignTicketToAgent = async (
   // Calculate Load for each agent
   const agentsWithLoad = await Promise.all(
     agents.map(async (agent) => {
-      const load = await prisma.ticket.count({
+      const load = await ticketRepository.count({
         where: {
           assignedToId: agent.id,
           status: {
@@ -61,7 +65,7 @@ export const assignTicketToAgent = async (
     `[AutoAssignment] Assigning to ${bestAgent.name} (Load: ${currentLoad})`,
   );
 
-  await prisma.ticket.update({
+  await ticketRepository.update({
     where: { id: ticketId },
     data: {
       assignedToId: bestAgent.id,

@@ -1,20 +1,19 @@
 import { Request, Response } from "express";
 import { google } from "googleapis";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { signToken } from "./authController";
+import { Logger } from "@/utils/logger";
+import { googleAuthCrudService } from "@/services/googleAuthCrudService";
 
-// Environment Variables Check
+// Environment Variables
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const BACKEND_URL = process.env.BACKEND_URL;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-// Fail fast or warn if critical config is missing
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !BACKEND_URL) {
-  console.error(
+  Logger.error(
     "❌ CRITICAL: Missing Google Auth Environment Variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, BACKEND_URL)",
   );
 }
@@ -25,7 +24,6 @@ const oauth2Client = new google.auth.OAuth2(
   `${BACKEND_URL}/api/google/callback`,
 );
 
-// Scopes
 const CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 const LOGIN_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.profile",
@@ -40,8 +38,6 @@ interface StateData {
 export const googleAuthController = {
   /**
    * Initiate OAuth flow
-   * Action: 'login' | 'calendar'
-   * Security: 'calendar' requires authenticated session.
    */
   initiateAuth: catchAsync(async (req: AuthenticatedRequest, res: Response) => {
     const actionQuery = req.query.action;
@@ -52,7 +48,6 @@ export const googleAuthController = {
     let stateData: StateData = { action: "login" };
 
     if (action === "calendar") {
-      // 🛡️ SECURITY: Calendar connection REQUIRES authenticated session
       if (!userId) {
         return res.status(401).json({
           message:
@@ -67,7 +62,7 @@ export const googleAuthController = {
       access_type: "offline",
       scope: SCOPES,
       state: JSON.stringify(stateData),
-      prompt: "consent", // Force consent to ensure refresh token is returned
+      prompt: "consent",
     });
 
     res.redirect(authUrl);
@@ -84,7 +79,6 @@ export const googleAuthController = {
     }
 
     try {
-      // Decode state
       let stateData: StateData;
       try {
         stateData = JSON.parse(state);
@@ -92,7 +86,6 @@ export const googleAuthController = {
         return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
       }
 
-      // Exchange code for tokens
       const { tokens } = await oauth2Client.getToken(code);
       oauth2Client.setCredentials(tokens);
 
@@ -106,55 +99,24 @@ export const googleAuthController = {
           return res.redirect(`${FRONTEND_URL}/login?error=no_email`);
         }
 
-        // Find or Create User (Transactional with Company)
-        let user = await prisma.user.findUnique({
-          where: { email },
-          include: { company: true },
-        });
+        let user = await googleAuthCrudService.findUserByEmail(email);
 
         if (!user) {
-          // New User: Create User + Company (Trial)
-          // 🛡️ 100-YEAR SOLUTION: Every user belongs to a Tenant (Company).
-          const randomPassword =
-            Math.random().toString(36).slice(-8) +
-            Math.random().toString(36).slice(-8);
-          const hashedPassword = await bcrypt.hash(randomPassword, 12);
-
-          user = await prisma.user.create({
-            data: {
-              email,
-              name: name || "Google User",
-              password: hashedPassword,
-              profilePicUrl: picture || null,
-              role: "ADMIN",
-              preferences: { googleAuth: true },
-              company: {
-                create: {
-                  name: `${name || "User"}'s Workspace`,
-                  status: "TRIAL",
-                  emailProvider: "SMTP", // Explicit default
-                },
-              },
-            },
-            include: { company: true },
+          user = await googleAuthCrudService.createGoogleUser({
+            email,
+            name: name || "Google User",
+            picture,
           });
         } else {
-          // Existing User: Update ID if missing
           if (!user.profilePicUrl && picture) {
-            // Update profile pic asynchronously/independently of company logic
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { profilePicUrl: picture },
-            });
+            await googleAuthCrudService.updateProfilePic(user.id, picture);
           }
         }
 
-        // Integrity check
         if (!user.companyId || !user.company) {
           return res.redirect(`${FRONTEND_URL}/login?error=no_company`);
         }
 
-        // Generate JWT
         const token = signToken({
           id: user.id,
           role: user.role,
@@ -168,27 +130,22 @@ export const googleAuthController = {
 
       // === FLOW: CALENDAR ===
       if (stateData.action === "calendar" && stateData.userId) {
-        // Verify user exists
-        const user = await prisma.user.findUnique({
-          where: { id: stateData.userId },
-        });
+        const user = await googleAuthCrudService.saveCalendarTokens(
+          stateData.userId,
+          tokens.access_token || null,
+          tokens.refresh_token || null,
+        );
+
         if (!user) {
           return res.redirect(`${FRONTEND_URL}/settings?error=user_not_found`);
         }
 
-        await prisma.user.update({
-          where: { id: stateData.userId },
-          data: {
-            googleCalendarToken: tokens.access_token || null,
-            googleCalendarRefreshToken: tokens.refresh_token || null,
-          },
-        });
         return res.redirect(`${FRONTEND_URL}/settings?calendar=connected`);
       }
 
       return res.redirect(`${FRONTEND_URL}/login?error=invalid_action`);
     } catch (error) {
-      console.error("[GoogleAuth] Error:", error);
+      Logger.error("[GoogleAuth] Error:", error);
       res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
     }
   }),
@@ -203,13 +160,7 @@ export const googleAuthController = {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        googleCalendarToken: null,
-        googleCalendarRefreshToken: null,
-      },
-    });
+    await googleAuthCrudService.disconnectCalendar(userId);
 
     res
       .status(200)
@@ -226,17 +177,7 @@ export const googleAuthController = {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        googleCalendarToken: true,
-        googleCalendarRefreshToken: true,
-      },
-    });
-
-    const isConnected = !!(
-      user?.googleCalendarToken || user?.googleCalendarRefreshToken
-    );
+    const isConnected = await googleAuthCrudService.getCalendarStatus(userId);
 
     res.status(200).json({ connected: isConnected });
   }),

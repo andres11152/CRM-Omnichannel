@@ -1,12 +1,19 @@
-import { prisma } from "@/config/database";
 import { Prisma } from "@prisma/client";
 import { contactService } from "@/services/contactService";
 import { Logger } from "@/utils/logger";
+import { userRepository } from "@/repositories/UserRepository";
+import { conversationRepository } from "@/repositories/ConversationRepository";
+import { contactRepository } from "@/repositories/ContactRepository";
+import { messageRepository } from "@/repositories/MessageRepository";
+import { ticketRepository } from "@/repositories/TicketRepository";
+import { DistributedLock } from "@/utils/distributedLock";
 
 /**
  * 💬 CHAT SERVICE
  * Handles low-level DB persistence for conversations and messages.
  * Extracted from MessageHandler to follow SRP.
+ *
+ * 🏗️ REFACTORED: All direct prisma calls replaced with repository pattern.
  */
 export class ChatService {
   /**
@@ -20,7 +27,7 @@ export class ChatService {
     if (!phone) return null;
     const nationalNumber = phone.length > 10 ? phone.slice(-10) : phone;
 
-    return prisma.user.findFirst({
+    return userRepository.findFirst({
       where: {
         companyId,
         OR: [{ phone: phone }, { phone: { endsWith: nationalNumber } }],
@@ -33,7 +40,7 @@ export class ChatService {
    * Find user by Name (LID strategy)
    */
   async findUserByName(companyId: string, name: string) {
-    return prisma.user.findFirst({
+    return userRepository.findFirst({
       where: {
         companyId,
         name: name,
@@ -58,7 +65,7 @@ export class ChatService {
     // which happens when WhatsApp messages arrive without a pushName.
 
     let nameToPersist = params.name;
-    const existingUser = await prisma.user.findUnique({
+    const existingUser = await userRepository.findUnique({
       where: { email: params.email },
       select: { name: true },
     });
@@ -74,32 +81,24 @@ export class ChatService {
     }
 
     // 1. Upsert System User (Authentication/Chat Identity)
-    const user = await prisma.user.upsert({
-      where: { email: params.email },
-      update: {
-        name: nameToPersist,
-        ...(params.phone && { phone: params.phone }),
-        updatedAt: new Date(),
-      },
-      create: {
+    const user = await userRepository.upsert(
+      { email: params.email },
+      {
         email: params.email,
         name: nameToPersist,
         password: "$2a$10$DummyHashForWhatsAppUser",
         role: params.role || "USER",
-        companyId: params.companyId,
+        company: { connect: { id: params.companyId } },
         phone: params.phone,
       },
-    });
+      {
+        name: nameToPersist,
+        ...(params.phone && { phone: params.phone }),
+        updatedAt: new Date(),
+      },
+    );
 
     // 2. 🛡️ 100-YEAR ENTERPRISE FIX: CRM Contact Sync with Real Phone Validation
-    // Requirements:
-    //   1. ONLY sync USER roles (customers), never groups
-    //   2. ONLY sync if we have a REAL phone number (not LID, not fake)
-    //   3. NEVER create garbage contacts that pollute the CRM
-    //
-    // If phone is null/undefined, the contact had a LID that couldn't be resolved.
-    // In that case, we DO NOT create a CRM contact (it would be useless).
-
     const isGroup = params.email.includes("@g.us");
     const hasRealPhone =
       params.phone && params.phone.length >= 7 && params.phone.length <= 15;
@@ -108,7 +107,6 @@ export class ChatService {
       try {
         await contactService.upsert(params.companyId, {
           phone: params.phone,
-          // 🛡️ Use the Persisted Name (which preserves history), not the raw param
           name: user.name,
           email: null,
           customFields: {
@@ -122,14 +120,12 @@ export class ChatService {
           `[ChatService] ✅ CRM Contact synced for real phone: ${params.phone}`,
         );
       } catch (error) {
-        // CRM Sync should be non-blocking. Log and continue.
         Logger.warn(
           `[ChatService] Failed to sync CRM contact for ${params.email}`,
           { error },
         );
       }
     } else {
-      // Log why we skipped CRM sync
       if (isGroup) {
         Logger.info(`[ChatService] ⏩ Skipped CRM sync: Group chat`);
       } else if (!hasRealPhone) {
@@ -150,7 +146,7 @@ export class ChatService {
     channelId: string,
     userEmail: string,
   ) {
-    return prisma.conversation.findFirst({
+    return conversationRepository.findFirst({
       where: {
         OR: [
           { companyId, channelId },
@@ -165,27 +161,24 @@ export class ChatService {
    * Find CRM Contact by Phone (Helper for MessageHandler)
    */
   async findContact(companyId: string, phone: string) {
-    return prisma.contact.findFirst({
+    return contactRepository.findFirst({
       where: { companyId, phone, deletedAt: null },
     });
   }
 
   /**
    * 🛡️ 100-YEAR FIX: Save LID -> Phone mapping in Contact's customFields
-   * This persists the mapping so it survives session restarts
    */
   async saveLidPhoneMapping(companyId: string, lid: string, phone: string) {
     try {
-      // Find contact by phone
-      const contact = await prisma.contact.findFirst({
+      const contact = await contactRepository.findFirst({
         where: { companyId, phone, deletedAt: null },
       });
 
       if (contact) {
-        // Update customFields to include the LID
         const currentFields =
           (contact.customFields as Record<string, unknown>) || {};
-        await prisma.contact.update({
+        await contactRepository.updateByArgs({
           where: { id: contact.id },
           data: {
             customFields: {
@@ -207,8 +200,7 @@ export class ChatService {
    * 🛡️ 100-YEAR FIX: Find Contact by LID stored in customFields
    */
   async findContactByLid(companyId: string, lid: string) {
-    // Search for contact with this LID in customFields
-    const contact = await prisma.contact.findFirst({
+    return contactRepository.findFirst({
       where: {
         companyId,
         deletedAt: null,
@@ -218,18 +210,15 @@ export class ChatService {
         },
       },
     });
-    return contact;
   }
 
   /**
    * 🛡️ 100-YEAR FIX: Find Conversation by Contact's LID
-   * Used when we can't resolve LID from store but have it persisted in DB
    */
   async findConversationByLid(companyId: string, lid: string) {
     const contact = await this.findContactByLid(companyId, lid);
     if (!contact || !contact.phone) return null;
 
-    // Search for conversation with this phone's channelId
     const phoneChannelId = contact.phone.replace(/\D/g, "");
     return this.findConversation(
       companyId,
@@ -256,7 +245,7 @@ export class ChatService {
       groupPicUrl?: string | null;
     };
   }) {
-    return prisma.conversation.create({
+    return conversationRepository.createRaw({
       data: {
         companyId: data.companyId,
         channelId: data.channelId,
@@ -281,14 +270,14 @@ export class ChatService {
     updates: Prisma.ConversationUncheckedUpdateInput,
   ) {
     // Self-heal: Check if conversation is orphaned (no contactId) and link to Contact
-    const conv = await prisma.conversation.findUnique({
+    const conv = await conversationRepository.findFirst({
       where: { id },
       select: { contactId: true, channelId: true, companyId: true },
     });
 
     let contactLink: Record<string, string> = {};
     if (conv && !conv.contactId && conv.channelId) {
-      const contact = await prisma.contact.findFirst({
+      const contact = await contactRepository.findFirst({
         where: {
           companyId: conv.companyId,
           phone: conv.channelId,
@@ -304,13 +293,10 @@ export class ChatService {
       }
     }
 
-    return prisma.conversation.update({
-      where: { id },
-      data: {
-        ...updates,
-        ...contactLink,
-        updatedAt: new Date(),
-      },
+    return conversationRepository.update(id, {
+      ...updates,
+      ...contactLink,
+      updatedAt: new Date(),
     });
   }
 
@@ -318,7 +304,7 @@ export class ChatService {
    * Find Ghost Conversation (for merging)
    */
   async findGhostConversation(companyId: string) {
-    return prisma.conversation.findFirst({
+    return conversationRepository.findFirst({
       where: {
         companyId,
         updatedAt: { gt: new Date(Date.now() - 45000) },
@@ -335,24 +321,21 @@ export class ChatService {
     oldUserId: string,
     newUserId: string,
   ) {
-    await prisma.message.updateMany({
+    await messageRepository.updateMany({
       where: { conversationId, senderId: oldUserId },
       data: { senderId: newUserId },
     });
-    // Update participants
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data: {
-        participants: {
-          disconnect: { id: oldUserId },
-          connect: { id: newUserId },
-        },
+
+    await conversationRepository.update(conversationId, {
+      participants: {
+        disconnect: { id: oldUserId },
+        connect: { id: newUserId },
       },
     });
   }
 
   async doesMessageExist(whatsappMessageId: string) {
-    const exists = await prisma.message.findUnique({
+    const exists = await messageRepository.findUnique({
       where: { whatsappMessageId },
       select: { id: true },
     });
@@ -373,7 +356,7 @@ export class ChatService {
     metadata: Prisma.InputJsonValue;
     createdAt?: Date;
   }) {
-    return prisma.message.upsert({
+    return messageRepository.upsert({
       where: { whatsappMessageId: data.whatsappMessageId },
       create: {
         companyId: data.companyId,
@@ -396,14 +379,7 @@ export class ChatService {
    * Fetch Full Conversation Context for Events
    */
   async getFullConversation(id: string) {
-    return prisma.conversation.findUnique({
-      where: { id },
-      include: {
-        participants: true,
-        assignedTo: true,
-        queue: { include: { aiAssistant: true } },
-      },
-    });
+    return conversationRepository.findByIdWithQueueAndParticipants(id);
   }
 
   // --- Ticket Methods ---
@@ -416,65 +392,71 @@ export class ChatService {
     description: string,
     queueId?: string | null,
   ) {
-    let ticket = await prisma.ticket.findFirst({
-      where: {
-        companyId,
-        conversationId,
-        status: { in: ["OPEN", "IN_PROGRESS"] },
+    const lockKey = `ticket_create:${conversationId}`;
+    return await DistributedLock.run(
+      lockKey,
+      async () => {
+        let ticket = await ticketRepository.findFirst({
+          where: {
+            companyId,
+            conversationId,
+            status: { in: ["OPEN", "IN_PROGRESS"] },
+          },
+        });
+
+        if (!ticket) {
+          const lastTicket = await ticketRepository.findFirst({
+            where: { companyId },
+            orderBy: { ticketNumber: "desc" },
+            select: { ticketNumber: true },
+          });
+          const nextNum = (lastTicket?.ticketNumber || 0) + 1;
+
+          ticket = await ticketRepository.create({
+            data: {
+              ticketNumber: nextNum,
+              subject,
+              description: description.substring(0, 100),
+              status: "OPEN",
+              priority: "MEDIUM",
+              companyId,
+              createdById: customerId,
+              conversationId,
+              queueId: queueId || null,
+            },
+          });
+        } else if (queueId && !ticket.queueId) {
+          ticket = await ticketRepository.update({
+            where: { id: ticket.id },
+            data: { queueId },
+          });
+          Logger.info(
+            `[ChatService] 🩹 Self-healed ticket ${ticket.id} with queueId ${queueId}`,
+          );
+        }
+
+        return ticket;
       },
-    });
-
-    if (!ticket) {
-      const lastTicket = await prisma.ticket.findFirst({
-        where: { companyId },
-        orderBy: { ticketNumber: "desc" },
-        select: { ticketNumber: true },
-      });
-      const nextNum = (lastTicket?.ticketNumber || 0) + 1;
-
-      ticket = await prisma.ticket.create({
-        data: {
-          ticketNumber: nextNum,
-          subject,
-          description: description.substring(0, 100),
-          status: "OPEN",
-          priority: "MEDIUM",
-          companyId,
-          createdById: customerId,
-          conversationId,
-          queueId: queueId || null,
-        },
-      });
-    } else if (queueId && !ticket.queueId) {
-      // 🩹 100-YEAR FIX: Self-Healing for Existing Tickets
-      // If an active ticket exists but lacks a queue (e.g. from legacy session),
-      // we update it with the session's default queue.
-      // This ensures badges and routing work for ongoing chats immediately.
-      ticket = await prisma.ticket.update({
-        where: { id: ticket.id },
-        data: { queueId },
-      });
-      Logger.info(
-        `[ChatService] 🩹 Self-healed ticket ${ticket.id} with queueId ${queueId}`,
-      );
-    }
-    return ticket;
+      5000,
+      10000,
+    );
   }
 
   /**
    * Update message status (DELIVERED, READ, FAILED)
    */
   async updateMessageStatus(whatsappMessageId: string, status: string) {
-    return prisma.message.update({
+    return messageRepository.updateMany({
       where: { whatsappMessageId },
       data: { status },
     });
   }
+
   /**
    * Update user profile picture
    */
   async updateUserProfilePic(userId: string, url: string) {
-    return prisma.user.update({
+    return userRepository.update({
       where: { id: userId },
       data: { profilePicUrl: url },
     });

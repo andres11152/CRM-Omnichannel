@@ -14,7 +14,7 @@ import {
   UpdateRoleSchema,
   AssignRoleSchema,
   RoleIdParamSchema,
-} from "@/schemas/role.schema";
+} from "@/schemas/roleSchema";
 
 const router = express.Router();
 
@@ -42,3 +42,4 @@ router.delete("/:id", protect, validate(RoleIdParamSchema), deleteRole);
 router.post("/assign", protect, validate(AssignRoleSchema), assignRoleToUser);
 
 export default router;
+

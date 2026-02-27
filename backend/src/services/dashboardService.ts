@@ -1,6 +1,7 @@
 import { dashboardRepository } from "@/repositories/DashboardRepository";
 import { cacheService } from "@/services/cacheService";
 import { planLimitsService } from "@/services/planLimitsService";
+import { Logger } from "@/utils/logger";
 
 // --- DTOs ---
 
@@ -367,7 +368,7 @@ export class DashboardService {
         60,
       );
     } catch (cacheError) {
-      console.warn(
+      Logger.warn(
         "[DashboardService] Cache failed, computing stats directly:",
         cacheError,
       );

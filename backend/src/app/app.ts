@@ -1,5 +1,4 @@
 import express from "express";
-import path from "path";
 import {
   requestTimeout,
   slowRequestLogger,
@@ -23,11 +22,7 @@ export const createApp = (): express.Application => {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-  // 3. Static Files
-  app.use(
-    "/uploads",
-    express.static(path.join(process.cwd(), "public", "uploads")),
-  );
+  // 3. Static Files (S3 handles uploads)
 
   // 4. Observability & Monitoring
   app.use(requestTimeout({ timeout: 30000 })); // 30s timeout protection

@@ -1,17 +1,20 @@
 import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/database";
 import { AuthenticatedRequest } from "@/types/types";
-// ♻️ REFACTOR: Unified Service
 import { whatsappService } from "@/whatsapp";
 import { Logger } from "@/utils/logger";
+import {
+  templateCrudService,
+  CreateTemplateDTO,
+  UpdateTemplateDTO,
+} from "@/services/templateCrudService";
 
 /**
  * 📝 TEMPLATE CONTROLLER
  *
- * Handles CRUD operations for WhatsApp message templates
- * and template testing/sending functionality
+ * HTTP orchestrator for WhatsApp message templates.
+ * All data access is delegated to templateCrudService (SRP).
  */
 
 /**
@@ -19,7 +22,7 @@ import { Logger } from "@/utils/logger";
  * List all templates for company
  */
 export const getTemplates = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
@@ -29,26 +32,15 @@ export const getTemplates = catchAsync(
     }
 
     const { category, channel, status, search, limit, offset } =
-      req.query as any;
+      req.query as Record<string, string | undefined>;
 
-    // Build where clause
-    const where: any = { companyId };
-
-    if (category) where.category = category;
-    if (channel) where.channel = channel;
-    if (status) where.status = status;
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { subject: { contains: search, mode: "insensitive" } },
-      ];
-    }
-
-    const templates = await prisma.messageTemplate.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: limit ? parseInt(limit) : 50,
-      skip: offset ? parseInt(offset) : 0,
+    const templates = await templateCrudService.findAll(companyId, {
+      category,
+      channel,
+      status,
+      search,
+      limit: limit ? parseInt(limit) : undefined,
+      offset: offset ? parseInt(offset) : undefined,
     });
 
     res.status(200).json({
@@ -72,9 +64,7 @@ export const getTemplate = catchAsync(
       return next(new AppError("Company ID missing", 400));
     }
 
-    const template = await prisma.messageTemplate.findFirst({
-      where: { id, companyId },
-    });
+    const template = await templateCrudService.findOne(id, companyId);
 
     if (!template) {
       return next(new AppError("Template not found", 404));
@@ -93,43 +83,15 @@ export const getTemplate = catchAsync(
  */
 export const createTemplate = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { name, category, components, language, channel, subject, status } =
-      req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
       return next(new AppError("Company ID missing", 400));
     }
 
-    // Check for duplicate template name
-    const existing = await prisma.messageTemplate.findFirst({
-      where: {
-        companyId,
-        name,
-      },
-    });
-
-    if (existing) {
-      return next(
-        new AppError(`Template with name "${name}" already exists`, 400),
-      );
-    }
-
-    const template = await prisma.messageTemplate.create({
-      data: {
-        companyId,
-        name,
-        category: category || "MARKETING",
-        components: components || [],
-        language: language || "es",
-        channel: channel || "WHATSAPP",
-        subject: subject || undefined,
-        status: status || "approved",
-      },
-    });
-
-    Logger.info(
-      `[Template] Created new template: ${template.name} (${template.id})`,
+    const template = await templateCrudService.create(
+      companyId,
+      req.body as CreateTemplateDTO,
     );
 
     res.status(201).json({
@@ -146,53 +108,16 @@ export const createTemplate = catchAsync(
 export const updateTemplate = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const { name, category, components, language, subject, status } = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
       return next(new AppError("Company ID missing", 400));
     }
 
-    // Verify template exists
-    const existing = await prisma.messageTemplate.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!existing) {
-      return next(new AppError("Template not found", 404));
-    }
-
-    // Check for duplicate name if changing name
-    if (name && name !== existing.name) {
-      const duplicate = await prisma.messageTemplate.findFirst({
-        where: {
-          companyId,
-          name,
-          id: { not: id },
-        },
-      });
-
-      if (duplicate) {
-        return next(
-          new AppError(`Template with name "${name}" already exists`, 400),
-        );
-      }
-    }
-
-    const template = await prisma.messageTemplate.update({
-      where: { id },
-      data: {
-        name,
-        category,
-        components,
-        language,
-        subject,
-        status,
-      },
-    });
-
-    Logger.info(
-      `[Template] Updated template: ${template.name} (${template.id})`,
+    const template = await templateCrudService.update(
+      id,
+      companyId,
+      req.body as UpdateTemplateDTO,
     );
 
     res.status(200).json({
@@ -215,20 +140,7 @@ export const deleteTemplate = catchAsync(
       return next(new AppError("Company ID missing", 400));
     }
 
-    // Verify template exists
-    const existing = await prisma.messageTemplate.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!existing) {
-      return next(new AppError("Template not found", 404));
-    }
-
-    await prisma.messageTemplate.delete({
-      where: { id },
-    });
-
-    Logger.info(`[Template] Deleted template: ${existing.name} (${id})`);
+    await templateCrudService.delete(id, companyId);
 
     res.status(204).send();
   },
@@ -249,10 +161,7 @@ export const testTemplateSend = catchAsync(
       return next(new AppError("Company ID missing", 400));
     }
 
-    // Verify template exists
-    const template = await prisma.messageTemplate.findFirst({
-      where: { id, companyId },
-    });
+    const template = await templateCrudService.findOne(id, companyId);
 
     if (!template) {
       return next(new AppError("Template not found", 404));
@@ -264,7 +173,6 @@ export const testTemplateSend = catchAsync(
     );
 
     try {
-      // Send template message using WhatsAppService
       const result = await whatsappService.sendTemplate(
         to,
         id,
@@ -287,11 +195,10 @@ export const testTemplateSend = catchAsync(
           result,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
       Logger.error("[Template Test] Error sending template:", error);
-      return next(
-        new AppError(`Failed to send template: ${error.message}`, 500),
-      );
+      return next(new AppError(`Failed to send template: ${errMsg}`, 500));
     }
   },
 );

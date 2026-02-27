@@ -46,14 +46,14 @@ export interface TemplateParameters {
  */
 export function renderTemplate(
   content: string,
-  parameters: TemplateParameters = {}
+  parameters: TemplateParameters = {},
 ): string {
   try {
     // Track which parameters were used
     const usedParams: Set<string> = new Set();
 
     // Replace all {{variable}} patterns with their values
-    let rendered = content.replace(
+    const rendered = content.replace(
       /\{\{([a-zA-Z0-9_]+)\}\}/g,
       (match, variableName) => {
         // Mark parameter as used
@@ -69,23 +69,23 @@ export function renderTemplate(
 
         // Log warning for missing parameter
         Logger.warn(
-          `[Template] Missing parameter: ${variableName} in template. Keeping placeholder.`
+          `[Template] Missing parameter: ${variableName} in template. Keeping placeholder.`,
         );
 
         return match; // Keep original {{variable}} if no value provided
-      }
+      },
     );
 
     // Log unused parameters (might indicate typos)
     const unusedParams = Object.keys(parameters).filter(
-      (key) => !usedParams.has(key)
+      (key) => !usedParams.has(key),
     );
 
     if (unusedParams.length > 0) {
       Logger.warn(
         `[Template] Unused parameters: ${unusedParams.join(
-          ", "
-        )}. Check for typos.`
+          ", ",
+        )}. Check for typos.`,
       );
     }
 
@@ -133,7 +133,7 @@ export function extractVariables(content: string): string[] {
  */
 export function validateParameters(
   content: string,
-  parameters: TemplateParameters
+  parameters: TemplateParameters,
 ): {
   valid: boolean;
   missing: string[];
@@ -143,11 +143,11 @@ export function validateParameters(
   const providedVariables = Object.keys(parameters);
 
   const missing = requiredVariables.filter(
-    (variable) => !(variable in parameters)
+    (variable) => !(variable in parameters),
   );
 
   const extra = providedVariables.filter(
-    (variable) => !requiredVariables.includes(variable)
+    (variable) => !requiredVariables.includes(variable),
   );
 
   return {
@@ -165,15 +165,15 @@ export function validateParameters(
  * @returns Rendered components
  */
 export function renderTemplateComponents(
-  components: any[],
-  parameters: TemplateParameters = {}
-): any[] {
+  components: Record<string, unknown>[],
+  parameters: TemplateParameters = {},
+): Record<string, unknown>[] {
   return components.map((component) => {
     // Only render text-based components
     if (component.text) {
       return {
         ...component,
-        text: renderTemplate(component.text, parameters),
+        text: renderTemplate(String(component.text), parameters),
       };
     }
 
@@ -195,7 +195,7 @@ export function renderTemplateComponents(
  */
 export function getTemplatePreview(
   content: string,
-  sampleData?: TemplateParameters
+  sampleData?: TemplateParameters,
 ): string {
   if (sampleData) {
     return renderTemplate(content, sampleData);
@@ -212,14 +212,16 @@ export function getTemplatePreview(
  * @param components - Template components
  * @returns Combined text from all components
  */
-export function componentsToText(components: any[]): string {
+export function componentsToText(
+  components: Record<string, unknown>[],
+): string {
   const texts: string[] = [];
 
   for (const component of components) {
     if (component.type === "HEADER" && component.text) {
       texts.push(`*${component.text}*`); // Bold header
     } else if (component.type === "BODY" && component.text) {
-      texts.push(component.text);
+      texts.push(component.text as string);
     } else if (component.type === "FOOTER" && component.text) {
       texts.push(`_${component.text}_`); // Italic footer
     }

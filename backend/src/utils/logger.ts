@@ -1,5 +1,5 @@
 import winston from "winston";
-import { trace, context, SpanStatusCode } from "@opentelemetry/api";
+import { trace, SpanStatusCode, Attributes } from "@opentelemetry/api";
 
 /**
  * 📊 ENTERPRISE-GRADE STRUCTURED LOGGING
@@ -40,7 +40,7 @@ const sensitiveKeys = [
   /ssn/i,
 ];
 
-const maskSensitiveData = (obj: any): any => {
+const maskSensitiveData = (obj: unknown): unknown => {
   if (!obj || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(maskSensitiveData);
 
@@ -86,9 +86,9 @@ const jsonFormat = winston.format.combine(
     info.pid = process.pid;
 
     // Mask sensitive data
-    info = maskSensitiveData(info);
+    info = maskSensitiveData(info) as winston.Logform.TransformableInfo;
     return info;
-  })()
+  })(),
 );
 
 /**
@@ -118,7 +118,7 @@ const prettyFormat = winston.format.combine(
     }
 
     return msg;
-  })
+  }),
 );
 
 /**
@@ -130,7 +130,7 @@ const transports: winston.transport[] = [];
 transports.push(
   new winston.transports.Console({
     format: process.env.NODE_ENV === "production" ? jsonFormat : prettyFormat,
-  })
+  }),
 );
 
 // File transports (production only)
@@ -158,7 +158,7 @@ if (process.env.NODE_ENV === "production") {
       maxsize: 10485760, // 10MB
       maxFiles: 3,
       tailable: true,
-    })
+    }),
   );
 }
 
@@ -184,7 +184,7 @@ export class Logger {
   static error(
     message: string,
     error?: Error | unknown,
-    meta?: Record<string, any>
+    meta?: Record<string, unknown>,
   ) {
     const span = trace.getActiveSpan();
 
@@ -211,28 +211,28 @@ export class Logger {
   /**
    * Warning: Issues that should be addressed but aren't critical
    */
-  static warn(message: string, meta?: Record<string, any>) {
+  static warn(message: string, meta?: Record<string, unknown>) {
     logger.warn(message, meta);
   }
 
   /**
    * Info: General informational messages
    */
-  static info(message: string, meta?: Record<string, any>) {
+  static info(message: string, meta?: Record<string, unknown>) {
     logger.info(message, meta);
   }
 
   /**
    * HTTP: HTTP request/response logging
    */
-  static http(message: string, meta?: Record<string, any>) {
+  static http(message: string, meta?: Record<string, unknown>) {
     logger.http(message, meta);
   }
 
   /**
    * Debug: Detailed debug information
    */
-  static debug(message: string, meta?: Record<string, any>) {
+  static debug(message: string, meta?: Record<string, unknown>) {
     logger.debug(message, meta);
   }
 
@@ -242,13 +242,13 @@ export class Logger {
   static trace(
     spanName: string,
     fn: () => void | Promise<void>,
-    meta?: Record<string, any>
+    meta?: Record<string, unknown>,
   ) {
     const tracer = trace.getTracer("reply-crm-logger");
     return tracer.startActiveSpan(spanName, async (span) => {
       try {
         if (meta) {
-          span.setAttributes(meta as any);
+          span.setAttributes(meta as Attributes);
         }
         await fn();
         span.setStatus({ code: SpanStatusCode.OK });
@@ -270,10 +270,10 @@ export class Logger {
   /**
    * 📊 Log with performance timing
    */
-  static timed(operation: string, meta?: Record<string, any>) {
+  static timed(operation: string, meta?: Record<string, unknown>) {
     const start = Date.now();
     return {
-      end: (additionalMeta?: Record<string, any>) => {
+      end: (additionalMeta?: Record<string, unknown>) => {
         const duration = Date.now() - start;
         logger.info(`[Performance] ${operation}`, {
           duration_ms: duration,

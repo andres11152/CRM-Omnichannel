@@ -51,6 +51,18 @@ export class EventBus extends EventEmitter {
     event: WhatsAppEvent<T>,
   ): Promise<void> {
     const handlers = this.listeners(event.type) as Array<EventHandler<T>>;
-    await Promise.all(handlers.map((handler) => handler(event)));
+    const results = await Promise.allSettled(
+      handlers.map(async (handler) => handler(event)),
+    );
+
+    // Provide robust logging to catch isolated subsystem failures
+    results.forEach((result, idx) => {
+      if (result.status === "rejected") {
+        console.error(
+          `[EventBus] 🚨 Handler at index ${idx} failed for event ${event.type}:`,
+          result.reason,
+        );
+      }
+    });
   }
 }

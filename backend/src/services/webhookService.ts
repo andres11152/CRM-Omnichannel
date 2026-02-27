@@ -1,4 +1,4 @@
-import { prisma } from "@/config/database";
+import { webhookRepository } from "@/repositories/WebhookRepository";
 import { AppError } from "@/utils/AppError";
 import { messageProcessor } from "@/services/messageProcessorService";
 import { webhookDispatcher } from "@/services/webhookDispatcher";
@@ -14,60 +14,44 @@ export const webhookService = {
    * List webhooks for a company
    */
   async listWebhooks(companyId: string) {
-    return prisma.webhook.findMany({
-      where: { companyId },
-      orderBy: { createdAt: "desc" },
-    });
+    return webhookRepository.findManyByCompanyId(companyId);
   },
 
   /**
    * Create a new webhook
    */
   async createWebhook(companyId: string, data: CreateWebhookDto) {
-    return prisma.webhook.create({
-      data: {
-        companyId,
-        url: data.url,
-        events: data.events,
-        secretKey: data.secretKey || null,
-        isActive: true,
-      },
-    });
+    return webhookRepository.create(
+      companyId,
+      data.url,
+      data.events,
+      data.secretKey || null,
+    );
   },
 
   /**
    * Delete a webhook strictly ensuring ownership
    */
   async deleteWebhook(id: string, companyId: string) {
-    const count = await prisma.webhook.count({
-      where: { id, companyId },
-    });
+    // 🛡️ Use deleteMany with compound where for strict tenant isolation
+    const deleted = await webhookRepository.deleteMany(id, companyId);
 
-    if (count === 0) {
+    if (deleted.count === 0) {
       throw new AppError("Webhook not found", 404);
     }
-
-    await prisma.webhook.delete({
-      where: { id },
-    });
   },
 
   /**
    * Toggle webhook active state
    */
   async toggleWebhook(id: string, companyId: string) {
-    const webhook = await prisma.webhook.findFirst({
-      where: { id, companyId },
-    });
+    const webhook = await webhookRepository.findFirstActive(id, companyId);
 
     if (!webhook) {
       throw new AppError("Webhook not found", 404);
     }
 
-    return prisma.webhook.update({
-      where: { id },
-      data: { isActive: !webhook.isActive },
-    });
+    return webhookRepository.updateActiveStatus(id, !webhook.isActive);
   },
 
   /**

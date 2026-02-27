@@ -14,7 +14,7 @@ import {
   UpdateCampaignSchema,
   GetCampaignsSchema,
   DeleteCampaignSchema,
-} from "@/schemas/campaign.schema";
+} from "@/schemas/campaignSchema";
 
 import { auditLog } from "@/middleware/auditMiddleware";
 
@@ -60,3 +60,4 @@ router.route("/:id/launch").post(
 );
 
 export default router;
+

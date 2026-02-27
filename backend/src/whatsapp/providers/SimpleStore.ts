@@ -4,21 +4,20 @@ import {
   jidNormalizedUser,
 } from "@whiskeysockets/baileys";
 import { Logger } from "@/utils/logger";
+import redisClient from "@/config/redis";
 
 /**
- * 🛡️ MEMORY-OPTIMIZED IN-MEMORY STORE
+ * 🛡️ MEMORY-OPTIMIZED IN-MEMORY STORE + REDIS PERSISTENCE
  *
  * Lightweight implementation focused on LID -> Phone mapping.
- * Now with file system persistence support!
+ * Uses Redis cluster-friendly persistence.
  *
- * 🔧 MEMORY OPTIMIZATION (10 tenants / 4GB):
+ * 🔧 MEMORY OPTIMIZATION:
  * - Messages capped at MAX_MESSAGES_PER_JID per chat.
  * - Total contacts cap at MAX_CONTACTS.
  * - Auto-pruning clears oldest entries when limits are reached.
- * - Configurable via environment variables.
  */
 
-/** Memory budget configuration */
 const MAX_MESSAGES_PER_JID = parseInt(
   process.env.WA_STORE_MAX_MESSAGES_PER_JID || "100",
   10,
@@ -46,7 +45,6 @@ export class SimpleInMemoryStore {
     // Prune contacts if we hit the cap
     const contactKeys = Object.keys(this.contacts);
     if (contactKeys.length >= MAX_TOTAL_CONTACTS && !this.contacts[jid]) {
-      // Evict the oldest 10% to avoid constant pruning
       const evictCount = Math.floor(MAX_TOTAL_CONTACTS * 0.1);
       const toEvict = contactKeys.slice(0, evictCount);
       for (const key of toEvict) {
@@ -63,7 +61,6 @@ export class SimpleInMemoryStore {
       id: jid,
     };
 
-    // Capture LID mapping
     if (contact.lid) {
       const lid = jidNormalizedUser(contact.lid);
       this.contacts[jid].lid = lid;
@@ -71,7 +68,6 @@ export class SimpleInMemoryStore {
       this.lidToPhone[lidBase] = jid;
     }
 
-    // If LID contact with phoneNumber, build reverse mapping
     const contactWithPhone = contact as Contact & { phoneNumber?: string };
     if (contactWithPhone.phoneNumber) {
       const lidBase = jid.split("@")[0].split(":")[0];
@@ -80,17 +76,11 @@ export class SimpleInMemoryStore {
     }
   }
 
-  /**
-   * Append a message to a JID's message array with cap enforcement.
-   */
   private appendMessage(jid: string, msg: unknown): void {
     if (!this.messages[jid]) {
       this.messages[jid] = [];
     }
-
     this.messages[jid].push(msg);
-
-    // Prune to cap (keep newest messages)
     if (this.messages[jid].length > MAX_MESSAGES_PER_JID) {
       const excess = this.messages[jid].length - MAX_MESSAGES_PER_JID;
       this.messages[jid].splice(0, excess);
@@ -102,19 +92,13 @@ export class SimpleInMemoryStore {
   // ────────────────────────────────────────────────
 
   public bind(ev: BaileysEventEmitter) {
-    // 1. History Sync (bulk load)
     ev.on("messaging-history.set", ({ contacts, messages, chats }) => {
       if (contacts) {
-        Logger.info(`[Store] 📥 History sync: ${contacts.length} contacts`);
-        for (const contact of contacts) {
-          this.upsertContact(contact);
-        }
+        for (const contact of contacts) this.upsertContact(contact);
       }
-
       if (chats) {
         for (const chat of chats) {
           if (chat.id) {
-            // Prune chats if cap reached
             if (
               this.chats.size >= MAX_TOTAL_CHATS &&
               !this.chats.has(chat.id)
@@ -125,11 +109,7 @@ export class SimpleInMemoryStore {
             this.chats.set(chat.id, chat);
           }
         }
-        Logger.info(
-          `[Store] 📚 History sync: ${chats.length} chats (cap: ${MAX_TOTAL_CHATS})`,
-        );
       }
-
       if (messages) {
         for (const msgObj of messages) {
           const msg = msgObj as {
@@ -144,8 +124,6 @@ export class SimpleInMemoryStore {
           if (msg.key?.remoteJid && msg.message) {
             const jid = msg.key.remoteJid;
             this.appendMessage(jid, msg);
-
-            // Extract LID -> Phone from message metadata
             if (jid.includes("@lid")) {
               const lidBase = jid.split("@")[0].split(":")[0];
               if (
@@ -163,51 +141,41 @@ export class SimpleInMemoryStore {
             }
           }
         }
-        Logger.info(
-          `[Store] 📚 History sync: ${messages.length} messages (cap per JID: ${MAX_MESSAGES_PER_JID})`,
-        );
       }
     });
 
-    // 2. New Contacts
     ev.on("contacts.upsert", (contacts: Contact[]) => {
-      for (const contact of contacts) {
-        this.upsertContact(contact);
-      }
+      for (const contact of contacts) this.upsertContact(contact);
     });
 
-    // 3. Contact Updates
     ev.on("contacts.update", (updates: Partial<Contact>[]) => {
-      for (const update of updates) {
-        this.upsertContact(update);
-      }
+      for (const update of updates) this.upsertContact(update);
     });
 
-    // 4. Real-time messages -> extract LID mappings
     ev.on("messages.upsert", ({ messages: msgs }) => {
       for (const msg of msgs) {
-        const key = msg.key as {
-          remoteJid?: string;
+        const key = msg.key as typeof msg.key & {
           remoteJidAlt?: string;
           senderPn?: string;
-          participant?: string;
         };
-
         const jid = key.remoteJid;
+
+        if (jid && msg.message) {
+          this.appendMessage(jid, msg);
+        }
+
         if (!jid || !jid.includes("@lid")) continue;
 
         const lidBase = jid.split("@")[0].split(":")[0];
 
         if (key.remoteJidAlt && key.remoteJidAlt.includes("@s.whatsapp.net")) {
-          if (!this.lidToPhone[lidBase]) {
+          if (!this.lidToPhone[lidBase])
             this.lidToPhone[lidBase] = key.remoteJidAlt;
-          }
         }
 
         if (key.senderPn && key.senderPn.includes("@s.whatsapp.net")) {
-          if (!this.lidToPhone[lidBase]) {
+          if (!this.lidToPhone[lidBase])
             this.lidToPhone[lidBase] = key.senderPn;
-          }
         }
 
         if (
@@ -220,9 +188,7 @@ export class SimpleInMemoryStore {
               param.includes("@s.whatsapp.net") &&
               !param.includes("@lid")
             ) {
-              if (!this.lidToPhone[lidBase]) {
-                this.lidToPhone[lidBase] = param;
-              }
+              if (!this.lidToPhone[lidBase]) this.lidToPhone[lidBase] = param;
               break;
             }
           }
@@ -230,7 +196,6 @@ export class SimpleInMemoryStore {
       }
     });
 
-    // 5. Experimental LID Mapping Updates
     (
       ev as unknown as {
         on: (event: string, cb: (data: unknown) => void) => void;
@@ -259,16 +224,7 @@ export class SimpleInMemoryStore {
     return this.lidToPhone[lidBase];
   }
 
-  /**
-   * 📊 Memory usage stats (useful for monitoring endpoint)
-   */
-  public getStats(): {
-    contacts: number;
-    chats: number;
-    messageJids: number;
-    totalMessages: number;
-    lidMappings: number;
-  } {
+  public getStats() {
     const totalMessages = Object.values(this.messages).reduce(
       (acc, arr) => acc + arr.length,
       0,
@@ -282,14 +238,6 @@ export class SimpleInMemoryStore {
     };
   }
 
-  /**
-   * 🧹 MANUAL FLUSH: Clear all non-essential data.
-   * Keeps only LID mappings. Called when memory is critical.
-   */
-  /**
-   * 🧹 MANUAL FLUSH: Clear all non-essential data.
-   * Keeps only LID mappings. Called when memory is critical.
-   */
   public flush(): void {
     const lidMappingsBackup = { ...this.lidToPhone };
     this.messages = {};
@@ -297,6 +245,67 @@ export class SimpleInMemoryStore {
     this.lidToPhone = lidMappingsBackup;
     Logger.warn(
       "[Store] 🧹 FLUSH: Cleared messages & chats (LID mappings preserved).",
+    );
+  }
+
+  // ────────────────────────────────────────────────
+  // REDIS PERSISTENCE
+  // ────────────────────────────────────────────────
+
+  private backupInterval?: NodeJS.Timeout;
+
+  public async writeToRedis(redisKey: string): Promise<void> {
+    if (!redisClient?.isOpen) return;
+
+    const data = {
+      contacts: this.contacts,
+      chats: Array.from(this.chats.entries()),
+      messages: this.messages,
+      lidToPhone: this.lidToPhone,
+    };
+
+    try {
+      await redisClient.set(`wa:store:${redisKey}`, JSON.stringify(data));
+      Logger.debug(
+        `[Store] 💾 Wrote memory store to Redis (Key: wa:store:${redisKey})`,
+      );
+    } catch (e) {
+      Logger.error(`[Store] ❌ Failed to write store to Redis`, e);
+    }
+  }
+
+  public async readFromRedis(redisKey: string): Promise<void> {
+    if (!redisClient?.isOpen) return;
+
+    try {
+      const dataStr = await redisClient.get(`wa:store:${redisKey}`);
+      if (dataStr) {
+        const data = JSON.parse(dataStr);
+        this.contacts = data.contacts || {};
+        this.chats = new Map(data.chats || []);
+        this.messages = data.messages || {};
+        this.lidToPhone = data.lidToPhone || {};
+        Logger.info(
+          `[Store] 📂 Loaded memory store from Redis (Key: wa:store:${redisKey})`,
+        );
+      }
+    } catch (e) {
+      Logger.error(`[Store] ❌ Failed to read store from Redis`, e);
+    }
+  }
+
+  public async enablePersistence(
+    redisKey: string,
+    writeIntervalMs = 60000,
+  ): Promise<void> {
+    await this.readFromRedis(redisKey);
+    if (this.backupInterval) clearInterval(this.backupInterval);
+    this.backupInterval = setInterval(
+      () => this.writeToRedis(redisKey),
+      writeIntervalMs,
+    );
+    Logger.info(
+      `[Store] 💾 Redis Persistence enabled with interval ${writeIntervalMs}ms`,
     );
   }
 }

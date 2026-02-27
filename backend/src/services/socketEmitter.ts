@@ -61,7 +61,7 @@ export const SocketEmitter = {
   /**
    * Send a message to a specific Agent Room via Redis
    */
-  toAgent: (agentId: string, event: string, data: any) => {
+  toAgent: (agentId: string, event: string, data: unknown) => {
     const io = emitter || initializeEmitter();
     if (io) {
       io.to(`agent:${agentId}`).emit(event, data);
@@ -71,7 +71,7 @@ export const SocketEmitter = {
   /**
    * Broadcast to all users
    */
-  broadcast: (event: string, data: any) => {
+  broadcast: (event: string, data: unknown) => {
     const io = emitter || initializeEmitter();
     if (io) {
       io.emit(event, data);
@@ -92,7 +92,7 @@ export const emitMentionNotification = (
     activityId: string;
     createdBy: string;
     timestamp: string;
-  }
+  },
 ) => {
   const io = emitter || initializeEmitter();
   if (io) {

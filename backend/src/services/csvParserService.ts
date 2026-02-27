@@ -11,7 +11,7 @@ import { Logger } from "@/utils/logger";
  */
 
 export interface ParsedRow {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ParseResult {
@@ -34,7 +34,7 @@ export function parseCSV(buffer: Buffer): ParseResult {
       cast_date: false, // Don't auto-parse dates
       relax_quotes: true, // Handle quotes flexibly
       relax_column_count: true, // Allow variable column counts
-    });
+    }) as ParsedRow[];
 
     Logger.info(`[CSV Parser] Parsed ${rows.length} rows`);
 
@@ -46,7 +46,7 @@ export function parseCSV(buffer: Buffer): ParseResult {
     Logger.error("[CSV Parser] Parse error:", error);
     throw new AppError(
       "Failed to parse CSV file. Please ensure it is properly formatted.",
-      400
+      400,
     );
   }
 }
@@ -74,7 +74,7 @@ export function parseExcel(buffer: Buffer): ParseResult {
     });
 
     Logger.info(
-      `[Excel Parser] Parsed ${rows.length} rows from sheet: ${sheetName}`
+      `[Excel Parser] Parsed ${rows.length} rows from sheet: ${sheetName}`,
     );
 
     return {
@@ -87,7 +87,7 @@ export function parseExcel(buffer: Buffer): ParseResult {
     Logger.error("[Excel Parser] Parse error:", error);
     throw new AppError(
       "Failed to parse Excel file. Please ensure it is a valid .xls or .xlsx file.",
-      400
+      400,
     );
   }
 }
@@ -116,7 +116,7 @@ export function parseFile(file: Express.Multer.File): ParseResult {
 
   throw new AppError(
     "Unsupported file type. Please upload a CSV or Excel file.",
-    400
+    400,
   );
 }
 

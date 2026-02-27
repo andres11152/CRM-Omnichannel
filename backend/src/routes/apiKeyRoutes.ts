@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "@/middleware/authMiddleware"; // Asegurar que el path es correcto, en server.ts es '@/middleware/authMiddleware'
+// Note: protect middleware is applied at server.ts mount level
 import {
   listApiKeys,
   createApiKey,

@@ -30,8 +30,8 @@ export function requestTimeout(options: TimeoutOptions = {}) {
           `[Timeout] Request exceeded ${timeout}ms: ${req.method} ${req.path}`,
           {
             ip: req.ip,
-            userId: (req as any).user?.id,
-          }
+            userId: (req as unknown as { user?: { id?: string } }).user?.id,
+          },
         );
 
         if (options.onTimeout) {
@@ -75,7 +75,7 @@ export function slowRequestLogger(thresholdMs: number = 1000) {
             statusCode: res.statusCode,
             duration,
             query: req.query,
-          }
+          },
         );
       }
     });

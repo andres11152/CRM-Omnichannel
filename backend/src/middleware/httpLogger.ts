@@ -27,13 +27,16 @@ export const httpLogger = (req: Request, res: Response, next: NextFunction) => {
     "http.method": req.method,
     "http.url": req.url,
     "http.user_agent": req.get("user-agent") || "unknown",
-    "user.id": (req as any).user?.id || "anonymous",
-    "user.role": (req as any).user?.role || "anonymous",
+    "user.id":
+      (req as unknown as { user?: { id?: string } }).user?.id || "anonymous",
+    "user.role":
+      (req as unknown as { user?: { role?: string } }).user?.role ||
+      "anonymous",
   });
 
   // Capture response
   const originalSend = res.send;
-  res.send = function (data: any) {
+  res.send = function (data: unknown) {
     res.send = originalSend;
 
     const duration = Date.now() - start;
@@ -46,8 +49,8 @@ export const httpLogger = (req: Request, res: Response, next: NextFunction) => {
       logLevel === "error"
         ? Logger.error
         : logLevel === "warn"
-        ? Logger.warn
-        : Logger.http;
+          ? Logger.warn
+          : Logger.http;
 
     logMethod(`HTTP Response [${statusCode}]`, {
       method: req.method,
@@ -78,7 +81,7 @@ export const errorLogger = (
   err: Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const traceId = getCurrentTraceId();
 
@@ -86,7 +89,7 @@ export const errorLogger = (
     method: req.method,
     url: req.url,
     status_code: res.statusCode,
-    user_id: (req as any).user?.id,
+    user_id: (req as unknown as { user?: { id?: string } }).user?.id,
     trace_id: traceId,
     request_body: req.body,
   });

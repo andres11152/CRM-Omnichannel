@@ -13,7 +13,7 @@ const getClientIp = (req: Request): string => {
 
 // Clave personalizada para identificar a los usuarios: por ID de usuario si está autenticado, o por IP si no.
 // USAMOS UNA FUNCIÓN DEFENSIVA QUE YA NO DEPENDE DE ipKeyGenerator
-const keyGenerator = (req: Request, res: Response): string => {
+const keyGenerator = (req: Request, _res: Response): string => {
   // 1. Intentamos obtener el ID de usuario autenticado
   const userId = (req as AuthenticatedRequest).user?.id;
 
@@ -66,8 +66,7 @@ export const authLimiter = rateLimit({
   // Envolvemos `ipKeyGenerator` en una función anónima para resolver la
   // incompatibilidad de tipos que detecta TypeScript, y al mismo tiempo
   // cumplimos con la recomendación de seguridad de la librería.
-  // Usamos `as any` para forzar la compatibilidad de tipos, resolviendo el conflicto
-  // entre el `req` de rate-limit y el que espera `ipKeyGenerator`.
+  // cumplimos con la recomendación de seguridad de la librería.
   keyGenerator: getClientIp,
   standardHeaders: true,
   legacyHeaders: false,

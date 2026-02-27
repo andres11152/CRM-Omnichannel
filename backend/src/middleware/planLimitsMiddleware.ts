@@ -3,6 +3,7 @@ import { AuthenticatedRequest } from "@/types/types";
 import { AppError } from "@/utils/AppError";
 import { planLimitsService } from "@/services/planLimitsService";
 import TenantContextManager from "@/config/tenantContext";
+import { Logger } from "@/utils/logger";
 
 type ResourceType = "users" | "whatsapp_sessions" | "queues" | "ai_assistants";
 
@@ -19,12 +20,12 @@ export const checkPlanLimit = (resourceType: ResourceType) => {
     try {
       const companyId = req.companyId || req.user?.companyId;
 
-      console.log(
+      Logger.debug(
         `[PlanLimit] Checking limit for ${resourceType}. CompanyId: ${companyId}`,
       );
 
       if (!companyId) {
-        console.log("[PlanLimit] No companyId, skipping check.");
+        Logger.debug("[PlanLimit] No companyId, skipping check.");
         // No company = MASTER user or special case, allow
         return next();
       }
@@ -37,15 +38,15 @@ export const checkPlanLimit = (resourceType: ResourceType) => {
           requestId: "check-plan-limit",
         },
         async () => {
-          console.log("[PlanLimit] Can create resource?");
+          Logger.debug("[PlanLimit] Can create resource?");
           const canCreate = await planLimitsService.canCreateResource(
             companyId,
             resourceType,
           );
-          console.log(`[PlanLimit] Can create: ${canCreate}`);
+          Logger.debug(`[PlanLimit] Can create: ${canCreate}`);
 
           if (!canCreate) {
-            console.log("[PlanLimit] Limit reached, fetching details...");
+            Logger.debug("[PlanLimit] Limit reached, fetching details...");
             const { limit, current } = await planLimitsService.checkPlanLimit(
               companyId,
               resourceType,
@@ -66,7 +67,7 @@ export const checkPlanLimit = (resourceType: ResourceType) => {
         },
       );
     } catch (error) {
-      console.error("[PlanLimit] Error checking limit:", error);
+      Logger.error("[PlanLimit] Error checking limit:", error);
       next(error);
     }
   };

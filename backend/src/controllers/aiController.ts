@@ -1,28 +1,23 @@
 import { Response, NextFunction } from "express";
-import { prisma } from "@/config/database";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { AppError } from "@/utils/AppError";
+import { aiCrudService } from "@/services/aiCrudService";
+
+/**
+ * AI CONTROLLER
+ *
+ * HTTP orchestrator for AI Config and AI Assistants.
+ * All data access delegated to aiCrudService (SRP).
+ */
 
 // --- AI CONFIG (API KEYS) ---
 
 export const getAIConfig = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     const companyId = req.companyId || req.user?.companyId;
 
-    const config = await prisma.aIConfig.findUnique({
-      where: { companyId },
-    });
-
-    // Mask keys for security
-    if (config) {
-      config.openaiKey = config.openaiKey
-        ? `${config.openaiKey.substring(0, 3)}...${config.openaiKey.slice(-4)}`
-        : null;
-      config.geminiKey = config.geminiKey
-        ? `${config.geminiKey.substring(0, 3)}...${config.geminiKey.slice(-4)}`
-        : null;
-    }
+    const config = await aiCrudService.getConfig(companyId!);
 
     res.status(200).json(config || {});
   },
@@ -35,19 +30,7 @@ export const updateAIConfig = catchAsync(
 
     if (!companyId) return next(new AppError("Company ID missing", 400));
 
-    // Upsert config
-    const config = await prisma.aIConfig.upsert({
-      where: { companyId },
-      update: {
-        openaiKey: openaiKey === "" ? null : openaiKey || undefined,
-        geminiKey: geminiKey === "" ? null : geminiKey || undefined,
-      },
-      create: {
-        companyId,
-        openaiKey: openaiKey || null,
-        geminiKey: geminiKey || null,
-      },
-    });
+    await aiCrudService.upsertConfig(companyId, { openaiKey, geminiKey });
 
     res.status(200).json({ status: "success", message: "AI Config updated" });
   },
@@ -56,16 +39,10 @@ export const updateAIConfig = catchAsync(
 // --- AI ASSISTANTS (PERSONAS) ---
 
 export const getAssistants = catchAsync(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     const companyId = req.companyId || req.user?.companyId;
 
-    const assistants = await prisma.aIAssistant.findMany({
-      where: { companyId },
-      orderBy: { createdAt: "desc" },
-      include: {
-        _count: { select: { queues: true } },
-      },
-    });
+    const assistants = await aiCrudService.findAllAssistants(companyId!);
 
     res.status(200).json(assistants);
   },
@@ -73,72 +50,30 @@ export const getAssistants = catchAsync(
 
 export const createAssistant = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const {
-      name,
-      description,
-      modelProvider,
-      modelName,
-      systemPrompt,
-      temperature,
-    } = req.body;
-    // 🛡️ ENFORCE TENANT CONTEXT (Double-check for stability)
-    await import("@/config/tenantContext").then(
-      ({ default: TenantContextManager }) => {
-        // Validar companyId otra vez por seguridad
-        const ctxCompanyId = req.companyId || req.user?.companyId;
-        if (!ctxCompanyId) throw new AppError("Company ID missing", 400);
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId) return next(new AppError("Company ID missing", 400));
 
-        return TenantContextManager.run(
-          {
-            companyId: ctxCompanyId,
-            userId: req.user?.id || "unknown",
-            requestId:
-              (req.headers["x-request-id"] as string) || "create-assistant",
-          },
-          async () => {
-            const assistant = await prisma.aIAssistant.create({
-              data: {
-                companyId: ctxCompanyId,
-                name,
-                description,
-                modelProvider,
-                modelName,
-                systemPrompt,
-                temperature: temperature || 0.7,
-              },
-            });
-
-            res.status(201).json(assistant);
-          },
-        );
-      },
+    const assistant = await aiCrudService.createAssistant(
+      companyId,
+      req.body as Parameters<typeof aiCrudService.createAssistant>[1],
     );
+
+    res.status(201).json(assistant);
   },
 );
 
 export const updateAssistant = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const data = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
-    // Verify ownership
-    const existing = await prisma.aIAssistant.findFirst({
-      where: { id, companyId },
-    });
-    if (!existing) return next(new AppError("Assistant not found", 404));
+    if (!companyId) return next(new AppError("Company ID missing", 400));
 
-    const assistant = await prisma.aIAssistant.update({
-      where: { id },
-      data: {
-        name: data.name,
-        description: data.description,
-        modelProvider: data.modelProvider,
-        modelName: data.modelName,
-        systemPrompt: data.systemPrompt,
-        temperature: data.temperature,
-      },
-    });
+    const assistant = await aiCrudService.updateAssistant(
+      id,
+      companyId,
+      req.body,
+    );
 
     res.status(200).json(assistant);
   },
@@ -149,12 +84,9 @@ export const deleteAssistant = catchAsync(
     const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
 
-    const existing = await prisma.aIAssistant.findFirst({
-      where: { id, companyId },
-    });
-    if (!existing) return next(new AppError("Assistant not found", 404));
+    if (!companyId) return next(new AppError("Company ID missing", 400));
 
-    await prisma.aIAssistant.delete({ where: { id } });
+    await aiCrudService.deleteAssistant(id, companyId);
 
     res.status(204).send();
   },

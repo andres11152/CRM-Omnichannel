@@ -3,7 +3,7 @@ import { mediaService } from "@/services/mediaService";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
-import Logger from "@/utils/logger"; // Assuming generalized Logger
+import { Logger } from "@/utils/logger";
 
 /**
  * 🎨 MEDIA CONTROLLER
@@ -143,7 +143,7 @@ export const mediaController = {
   getMediaContent: catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    console.info(`[MediaController] Streaming content for media ID: ${id}`);
+    Logger.info(`[MediaController] Streaming content for media ID: ${id}`);
 
     const { stream, mimeType } = await mediaService.getStream(id);
 
@@ -159,7 +159,7 @@ export const mediaController = {
 
     // Handle stream errors
     stream.on("error", (err) => {
-      console.error(`[MediaController] Stream error for ${id}:`, err);
+      Logger.error(`[MediaController] Stream error for ${id}:`, err);
       if (!res.headersSent) {
         res.status(500).end();
       }

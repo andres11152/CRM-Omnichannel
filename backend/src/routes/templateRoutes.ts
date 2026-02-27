@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "@/middleware/authMiddleware";
+// Note: protect middleware is applied at server.ts mount level
 import { validate } from "@/middleware/validationMiddleware";
 import {
   getTemplates,
@@ -16,7 +16,7 @@ import {
   GetTemplateSchema,
   DeleteTemplateSchema,
   TestTemplateSendSchema,
-} from "@/schemas/template.schema";
+} from "@/schemas/templateSchema";
 
 const router = Router();
 
@@ -50,3 +50,4 @@ router
   .post(validate(TestTemplateSendSchema), testTemplateSend);
 
 export default router;
+

@@ -66,16 +66,37 @@ export const useAgentWorkspaceSockets = ({
     null,
   );
 
-  // 🔔 NOTIFICATION SOUND (Base64 for reliability)
+  // 🔔 NOTIFICATION SOUND (Synthesized Pop - Zero Latency, No CORS issues)
   const playNotificationSound = () => {
     try {
-      const audio = new Audio(
-        "https://cdn.freesound.org/previews/536/536108_11585250-lq.mp3",
-      ); // Subtle 'Pop' sound
-      audio.volume = 0.5;
-      audio.play().catch((e) => console.warn("Audio play blocked", e));
+      const audioCtx = new (
+        window.AudioContext || (window as any).webkitAudioContext
+      )();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = "sine";
+      // Start at a higher pitch and quickly sweep down (pop effect)
+      oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        100,
+        audioCtx.currentTime + 0.1,
+      );
+
+      // Volume envelope (quick fade out)
+      gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioCtx.currentTime + 0.1,
+      );
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.1);
     } catch (e) {
-      console.error("Audio error", e);
+      console.warn("Audio synthesis blocked or not supported", e);
     }
   };
 
@@ -533,4 +554,3 @@ export const useAgentWorkspaceSockets = ({
     };
   }, [user?.companyId]); // Depend on user.companyId
 };
-

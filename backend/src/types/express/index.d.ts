@@ -9,13 +9,13 @@ declare global {
         role: UserRole | string;
         email?: string;
         name?: string | null;
-        preferences?: any;
+        preferences?: Record<string, unknown>;
         phone?: string;
         about?: string;
         profilePicUrl?: string;
       };
-      file?: any;
-      files?: any;
+      file?: Express.Multer.File;
+      files?: Express.Multer.File[];
     }
   }
 }

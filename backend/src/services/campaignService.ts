@@ -3,6 +3,7 @@ import { prisma } from "@/config/database";
 import { whatsappService } from "@/whatsapp";
 import { renderTemplate, componentsToText } from "./templateService";
 import { getErrorMessage } from "@/utils/errorHelpers";
+import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { sleep, getRandomDelay } from "@/utils/timeUtils";
 import { hash } from "bcryptjs";
@@ -54,7 +55,137 @@ function normalizeCustomFields(
   return json as Record<string, unknown>;
 }
 
+import {
+  CreateCampaignInput,
+  UpdateCampaignInput,
+} from "@/schemas/campaignSchema";
+
 export const campaignService = {
+  async createCampaign(
+    companyId: string,
+    userId: string,
+    data: CreateCampaignInput,
+  ) {
+    const initialStats = {
+      targetAudienceSize: 0,
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+    };
+    return await prisma.campaign.create({
+      data: {
+        companyId,
+        name: data.name,
+        messageContent: data.messageContent || "",
+        targetTags: data.targetTags || [],
+        config: data.config || {},
+        templateId: data.templateId || undefined,
+        status: data.status || "draft",
+        stats: initialStats,
+        channel: data.channel || "WHATSAPP",
+        subject: data.subject || undefined,
+        createdById: userId || undefined,
+      },
+    });
+  },
+
+  async getCampaigns(companyId: string, filters: Record<string, unknown>) {
+    const { status, search, limit, offset } = filters;
+    const where: Prisma.CampaignWhereInput = { companyId };
+    if (status) where.status = status as string;
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: "insensitive" } },
+        { messageContent: { contains: search as string, mode: "insensitive" } },
+      ];
+    }
+    return await prisma.campaign.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit ? parseInt(limit as string) : 50,
+      skip: offset ? parseInt(offset as string) : 0,
+    });
+  },
+
+  async getCampaign(id: string, companyId: string) {
+    return await prisma.campaign.findFirst({
+      where: { id, companyId },
+      include: {
+        createdBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+  },
+
+  async updateCampaign(
+    id: string,
+    companyId: string,
+    data: UpdateCampaignInput,
+  ) {
+    return await prisma.campaign.update({
+      where: { id },
+      data: {
+        name: data.name,
+        messageContent: data.messageContent,
+        targetTags: data.targetTags,
+        config: data.config
+          ? (data.config as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        status: data.status,
+        templateId: data.templateId,
+        channel: data.channel,
+        subject: data.subject,
+      },
+    });
+  },
+
+  async deleteCampaign(id: string) {
+    return await prisma.campaign.delete({
+      where: { id },
+    });
+  },
+
+  async launchCampaign(id: string, companyId: string) {
+    const campaign = await prisma.campaign.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!campaign) {
+      throw new AppError("Campaign not found", 404);
+    }
+
+    if (campaign.status === "sending") {
+      throw new AppError("Campaign is already running", 400);
+    }
+
+    if (campaign.status === "completed") {
+      throw new AppError(
+        "Campaign already completed. Create a new campaign to send again.",
+        400,
+      );
+    }
+
+    Logger.info(`[Campaign] Launching campaign: ${campaign.name} (${id})`);
+
+    await prisma.campaign.update({
+      where: { id },
+      data: {
+        status: "sending",
+        stats: {
+          ...((campaign.stats as Record<string, unknown>) || {}),
+          launchedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    this.executeCampaign(id, companyId).catch((err: unknown) => {
+      Logger.error(`[Campaign] Launch error for ${id}:`, err);
+    });
+
+    return campaign;
+  },
+
   /**
    * Execute campaign with intelligent throttling and error handling
    */
@@ -315,9 +446,9 @@ export const campaignService = {
     if (template) {
       try {
         // Safe cast for components list
-        const componentsList = Array.isArray(template.components)
-          ? template.components
-          : [];
+        const componentsList = (
+          Array.isArray(template.components) ? template.components : []
+        ) as Record<string, unknown>[];
 
         const templateText = componentsToText(componentsList);
 
@@ -383,3 +514,4 @@ export const campaignService = {
     });
   },
 };
+

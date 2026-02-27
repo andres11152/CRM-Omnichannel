@@ -1,12 +1,23 @@
+/**
+ * 📅 GOOGLE CALENDAR SERVICE (Refactored — ORM-Free)
+ *
+ * Google Calendar API integration for meeting activities:
+ * - Create calendar events with Google Meet links
+ * - Delete/update calendar events
+ * - Auto-refresh OAuth tokens
+ *
+ * All data access delegated to UserRepository.
+ */
+
 import { google, calendar_v3 } from "googleapis";
-import { prisma } from "../config/database";
 import { Logger } from "../utils/logger";
 import { getErrorMessage } from "../utils/errorHelpers";
+import { userRepository } from "@/repositories/UserRepository";
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  `${process.env.BACKEND_URL || "http://localhost:4000"}/api/google/callback`
+  `${process.env.BACKEND_URL || "http://localhost:4000"}/api/google/callback`,
 );
 
 interface ActivityData {
@@ -24,13 +35,11 @@ export class GoogleCalendarService {
   private static async getParticipantEmails(ids: string[]): Promise<string[]> {
     if (!ids || ids.length === 0) return [];
 
-    // Fetch users (participants)
-    const participants = await prisma.user.findMany({
+    const participants = await userRepository.findMany({
       where: { id: { in: ids } },
       select: { email: true },
     });
 
-    // Filter valid emails
     return participants
       .map((p) => p.email)
       .filter((email) => email && email.includes("@"));
@@ -41,11 +50,11 @@ export class GoogleCalendarService {
    */
   static async createMeetingEvent(
     userId: string,
-    activity: ActivityData
+    activity: ActivityData,
   ): Promise<string | null> {
     try {
-      // 1. Fetch user's Google tokens
-      const user = await prisma.user.findUnique({
+      // 1. Fetch user's Google tokens via repository
+      const user = await userRepository.findUnique({
         where: { id: userId },
         select: {
           googleCalendarToken: true,
@@ -56,9 +65,9 @@ export class GoogleCalendarService {
 
       if (!user?.googleCalendarRefreshToken) {
         Logger.info(
-          `[GoogleCalendar] User ${userId} has no Google Calendar connection`
+          `[GoogleCalendar] User ${userId} has no Google Calendar connection`,
         );
-        return null; // Silently skip if not connected
+        return null;
       }
 
       // 2. Set credentials
@@ -72,7 +81,7 @@ export class GoogleCalendarService {
 
       // Get attendees emails
       const attendeeEmails = await this.getParticipantEmails(
-        activity.participantIds || []
+        activity.participantIds || [],
       );
       const attendees = attendeeEmails.map((email) => ({ email }));
 
@@ -86,11 +95,11 @@ export class GoogleCalendarService {
         },
         end: {
           dateTime: new Date(
-            activity.dueDate.getTime() + 60 * 60 * 1000
-          ).toISOString(), // +1 hour
+            activity.dueDate.getTime() + 60 * 60 * 1000,
+          ).toISOString(),
           timeZone: "America/Bogota",
         },
-        attendees, // Add attendees
+        attendees,
         conferenceData: {
           createRequest: {
             requestId: `meeting-${Date.now()}`,
@@ -112,15 +121,15 @@ export class GoogleCalendarService {
       const response = await calendar.events.insert({
         calendarId: "primary",
         requestBody: event,
-        conferenceDataVersion: 1, // Crucial for creating Meet link
+        conferenceDataVersion: 1,
       });
 
       Logger.info(`[GoogleCalendar] Event created: ${response.data.htmlLink}`);
 
-      // 6. If token was refreshed, update it in DB
+      // 6. If token was refreshed, update it via repository
       const newAccessToken = oauth2Client.credentials.access_token;
       if (newAccessToken && newAccessToken !== user.googleCalendarToken) {
-        await prisma.user.update({
+        await userRepository.update({
           where: { id: userId },
           data: { googleCalendarToken: newAccessToken },
         });
@@ -131,12 +140,12 @@ export class GoogleCalendarService {
       const msg = getErrorMessage(error);
       Logger.error(`[GoogleCalendar] Failed to create event:`, msg);
 
-      // If token is invalid, clear it from DB
+      // If token is invalid, clear it via repository
       if (
         msg.includes("invalid_grant") ||
         msg.includes("Token has been expired")
       ) {
-        await prisma.user.update({
+        await userRepository.update({
           where: { id: userId },
           data: {
             googleCalendarToken: null,
@@ -144,7 +153,7 @@ export class GoogleCalendarService {
           },
         });
         Logger.warn(
-          `[GoogleCalendar] Cleared invalid tokens for user ${userId}`
+          `[GoogleCalendar] Cleared invalid tokens for user ${userId}`,
         );
       }
       return null;
@@ -156,11 +165,10 @@ export class GoogleCalendarService {
    */
   static async deleteMeetingEvent(
     userId: string,
-    eventId: string
+    eventId: string,
   ): Promise<void> {
     try {
-      // 1. Fetch user's Google tokens
-      const user = await prisma.user.findUnique({
+      const user = await userRepository.findUnique({
         where: { id: userId },
         select: {
           googleCalendarToken: true,
@@ -170,16 +178,13 @@ export class GoogleCalendarService {
 
       if (!user?.googleCalendarRefreshToken) return;
 
-      // 2. Set credentials
       oauth2Client.setCredentials({
         access_token: user.googleCalendarToken,
         refresh_token: user.googleCalendarRefreshToken,
       });
 
-      // 3. Initialize Calendar API
       const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
-      // 4. Delete event
       await calendar.events.delete({
         calendarId: "primary",
         eventId: eventId,
@@ -189,7 +194,7 @@ export class GoogleCalendarService {
     } catch (error: unknown) {
       Logger.error(
         `[GoogleCalendar] Failed to delete event:`,
-        getErrorMessage(error)
+        getErrorMessage(error),
       );
     }
   }
@@ -200,11 +205,10 @@ export class GoogleCalendarService {
   static async updateMeetingEvent(
     userId: string,
     eventId: string,
-    activity: ActivityData
+    activity: ActivityData,
   ): Promise<void> {
     try {
-      // 1. Fetch user's Google tokens
-      const user = await prisma.user.findUnique({
+      const user = await userRepository.findUnique({
         where: { id: userId },
         select: {
           googleCalendarToken: true,
@@ -214,22 +218,18 @@ export class GoogleCalendarService {
 
       if (!user?.googleCalendarRefreshToken) return;
 
-      // 2. Set credentials
       oauth2Client.setCredentials({
         access_token: user.googleCalendarToken,
         refresh_token: user.googleCalendarRefreshToken,
       });
 
-      // 3. Initialize Calendar API
       const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
-      // Get attendees emails
       const attendeeEmails = await this.getParticipantEmails(
-        activity.participantIds || []
+        activity.participantIds || [],
       );
       const attendees = attendeeEmails.map((email) => ({ email }));
 
-      // 4. Prepare event data (similar to create)
       const event: calendar_v3.Schema$Event = {
         summary: activity.subject,
         description: activity.description || "Updated from CRM",
@@ -239,14 +239,13 @@ export class GoogleCalendarService {
         },
         end: {
           dateTime: new Date(
-            activity.dueDate.getTime() + 60 * 60 * 1000
-          ).toISOString(), // +1 hour
+            activity.dueDate.getTime() + 60 * 60 * 1000,
+          ).toISOString(),
           timeZone: "America/Bogota",
         },
-        attendees, // Update attendees
+        attendees,
       };
 
-      // 5. Update event
       await calendar.events.patch({
         calendarId: "primary",
         eventId: eventId,
@@ -257,7 +256,7 @@ export class GoogleCalendarService {
     } catch (error: unknown) {
       Logger.error(
         `[GoogleCalendar] Failed to update event:`,
-        getErrorMessage(error)
+        getErrorMessage(error),
       );
     }
   }

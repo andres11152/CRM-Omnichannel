@@ -6,14 +6,17 @@ import { AppError } from "@/utils/AppError";
 const csrfTokens = new Map<string, { token: string; expiresAt: number }>();
 
 // Cleanup expired tokens every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [userId, data] of csrfTokens.entries()) {
-    if (data.expiresAt < now) {
-      csrfTokens.delete(userId);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [userId, data] of csrfTokens.entries()) {
+      if (data.expiresAt < now) {
+        csrfTokens.delete(userId);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  },
+  5 * 60 * 1000,
+);
 
 /**
  * 🛡️ CSRF Token Generator
@@ -34,7 +37,7 @@ export const generateCsrfToken = (userId: string): string => {
 export const validateCsrfToken = (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   // Skip CSRF for GET, HEAD, OPTIONS
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
@@ -51,7 +54,7 @@ export const validateCsrfToken = (
     return next();
   }
 
-  const userId = (req as any).user?.id;
+  const userId = (req as unknown as { user?: { id?: string } }).user?.id;
   if (!userId) {
     throw new AppError("Authentication required for CSRF validation", 401);
   }
@@ -87,7 +90,7 @@ export const validateCsrfToken = (
  * GET /api/csrf-token - Returns a fresh CSRF token for the authenticated user
  */
 export const getCsrfTokenHandler = (req: Request, res: Response) => {
-  const userId = (req as any).user?.id;
+  const userId = (req as unknown as { user?: { id?: string } }).user?.id;
   if (!userId) {
     throw new AppError("Authentication required", 401);
   }

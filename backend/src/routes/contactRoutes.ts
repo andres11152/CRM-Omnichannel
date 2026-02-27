@@ -4,11 +4,10 @@ import { protect } from "../middleware/authMiddleware";
 import { validate } from "../middleware/validationMiddleware";
 import {
   CreateContactSchema,
-  UpdateContactSchema,
   GetContactDetailSchema,
   GetContactsSchema,
   DeleteContactSchema,
-} from "../schemas/contact.schema";
+} from "../schemas/contactSchema";
 
 import { auditLog } from "../middleware/auditMiddleware";
 
@@ -27,7 +26,7 @@ router.use(protect);
 router.get(
   "/detail",
   validate(GetContactDetailSchema),
-  contactController.getContactDetail
+  contactController.getContactDetail,
 );
 
 // GET /contacts?search=xxx&limit=50&offset=0
@@ -40,7 +39,7 @@ router.post(
   "/",
   validate(CreateContactSchema),
   auditLog("Contact", (req) => req.body.phone || req.body.email || "unknown"), // Log Upsert intent
-  contactController.upsertContact
+  contactController.upsertContact,
 );
 
 // GET /contacts/:id/timeline
@@ -48,7 +47,7 @@ router.post(
 router.get(
   "/:id/timeline",
   // No validation needed - simple ID param (handled by controller)
-  contactController.getContactTimeline
+  contactController.getContactTimeline,
 );
 
 // DELETE /contacts/:id
@@ -57,7 +56,7 @@ router.delete(
   "/:id",
   validate(DeleteContactSchema),
   auditLog("Contact"), // Log Deletion
-  contactController.deleteContact
+  contactController.deleteContact,
 );
 
 // POST /contacts/import
@@ -68,9 +67,8 @@ router.post(
   auditLog("Contact_Import", () => "bulk_operation"), // Log Bulk Import action
   async (req, res, next) => {
     // Dynamic import of upload middleware
-    const { uploadSingle, handleMulterError } = await import(
-      "../middleware/uploadMiddleware"
-    );
+    const { uploadSingle, handleMulterError } =
+      await import("../middleware/uploadMiddleware");
     uploadSingle(req, res, (err) => {
       if (err) {
         return handleMulterError(err, req, res, next);
@@ -78,7 +76,8 @@ router.post(
       next();
     });
   },
-  contactController.importContacts
+  contactController.importContacts,
 );
 
 export const contactRouter = router;
+

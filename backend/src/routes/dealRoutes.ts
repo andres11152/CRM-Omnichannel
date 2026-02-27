@@ -15,7 +15,7 @@ import {
   GetDealsSchema,
   GetDealSchema,
   DeleteDealSchema,
-} from "../schemas/deal.schema";
+} from "../schemas/dealSchema";
 
 const router = express.Router();
 
@@ -47,3 +47,4 @@ router
   .patch(validate(UpdateDealOrderSchema), updateDealOrder);
 
 export default router;
+

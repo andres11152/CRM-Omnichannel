@@ -1,4 +1,5 @@
-import { prisma } from "@/config/database";
+import { companyRepository } from "@/repositories/CompanyRepository";
+import { statsRepository } from "@/repositories/StatsRepository";
 import { cacheService } from "@/services/cacheService";
 import { Logger } from "@/utils/logger";
 
@@ -48,10 +49,19 @@ export async function getPlanLimits(
   return cacheService.wrap(
     `company:${companyId}:plan:v2`,
     async () => {
-      const company = await prisma.company.findUnique({
+      const companyOutput = await companyRepository.findUnique({
         where: { id: companyId },
         include: { plan: true },
       });
+      const company = companyOutput as typeof companyOutput & {
+        plan?: {
+          config: unknown;
+          storageLimitGb: number | null;
+          maxContacts: number | null;
+          maxCompanies: number | null;
+          maxWorkflows: number | null;
+        };
+      };
 
       if (!company?.plan) {
         return null;
@@ -168,25 +178,27 @@ export async function getCurrentUsage(companyId: string): Promise<UsageStats> {
         companies,
         workflows,
       ] = await Promise.all([
-        prisma.user.count({
+        statsRepository.countUsers({
           where: {
             companyId,
             role: { in: ["AGENT", "ADMIN", "MASTER"] },
           },
         }),
-        prisma.whatsAppSession.count({ where: { companyId } }),
-        prisma.queue.count({ where: { companyId } }),
-        prisma.ticket.count({
+        statsRepository.countWhatsAppSessions({ where: { companyId } }),
+        statsRepository.countQueues({ where: { companyId } }),
+        statsRepository.countTickets({
           where: {
             companyId,
             createdAt: { gte: startOfMonth },
           },
         }),
-        prisma.aIAssistant.count({ where: { companyId } }),
-        prisma.media.aggregate({ where: { companyId }, _sum: { size: true } }),
-        prisma.contact.count({ where: { companyId } }),
-        prisma.account.count({ where: { companyId } }),
-        prisma.workflow.count({ where: { companyId, isActive: true } }),
+        statsRepository.countAIAssistants({ where: { companyId } }),
+        statsRepository.sumMediaSize(companyId),
+        statsRepository.countContacts({ where: { companyId } }),
+        statsRepository.countAccounts({ where: { companyId } }),
+        statsRepository.countWorkflows({
+          where: { companyId, isActive: true },
+        }),
       ]);
 
       return {
@@ -195,7 +207,7 @@ export async function getCurrentUsage(companyId: string): Promise<UsageStats> {
         queues,
         tickets_this_month: ticketsThisMonth,
         ai_assistants: aiAssistants,
-        storage_bytes: storageAgg._sum.size || 0,
+        storage_bytes: storageAgg,
         contacts,
         companies,
         workflows,

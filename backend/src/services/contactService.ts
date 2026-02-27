@@ -1,4 +1,3 @@
-import { prisma } from "@/config/database";
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { Logger } from "@/utils/logger";
@@ -10,6 +9,10 @@ import {
   TimelineItemDTO,
   ContactTimelineResponseDTO,
 } from "@/types/contact.types";
+import { contactRepository } from "@/repositories/ContactRepository";
+import { dealRepository } from "@/repositories/DealRepository";
+import { ticketRepository } from "@/repositories/TicketRepository";
+import { conversationRepository } from "@/repositories/ConversationRepository";
 
 interface ContactUpsertParams {
   id?: string;
@@ -50,8 +53,8 @@ export const contactService = {
     }
 
     const [total, contacts] = await Promise.all([
-      prisma.contact.count({ where }),
-      prisma.contact.findMany({
+      contactRepository.count(where),
+      contactRepository.findMany({
         where,
         orderBy: { createdAt: "desc" },
         skip,
@@ -98,7 +101,7 @@ export const contactService = {
     if (!identifier.id && !identifier.phone)
       throw new AppError("ID or Phone required", 400);
 
-    const contact = await prisma.contact.findFirst({
+    const contact = await contactRepository.findFirst({
       where: {
         companyId,
         ...(identifier.id
@@ -123,9 +126,6 @@ export const contactService = {
     const phone = data.phone?.replace(/\D/g, "") || null;
 
     // 🛡️ 100-YEAR FIX: Handle WhatsApp Internal Emails
-    // If email is an internal WhatsApp identifier (@whatsapp.user, @c.us),
-    // we ONLY nullify it if we have a real phone number to use instead.
-    // If phone is unavailable (LID scenario), keep the email as internal identifier.
     const isInternalEmail =
       email &&
       (email.includes("@whatsapp.user") ||
@@ -133,10 +133,8 @@ export const contactService = {
         email.includes("@lid"));
 
     if (isInternalEmail && phone) {
-      // We have a real phone, so we can safely discard the internal email
       email = null;
     }
-    // If isInternalEmail && !phone, we KEEP the email as our only identifier
 
     if (!phone && !email && !data.id) {
       throw new AppError(
@@ -149,14 +147,14 @@ export const contactService = {
     let existingContact: Contact | null = null;
 
     if (data.id) {
-      existingContact = await prisma.contact.findUnique({
+      existingContact = await contactRepository.findFirst({
         where: { id: data.id },
       });
       if (existingContact?.companyId !== companyId) existingContact = null;
     }
 
     if (!existingContact) {
-      existingContact = await prisma.contact.findFirst({
+      existingContact = await contactRepository.findFirst({
         where: {
           companyId,
           OR: [phone ? { phone } : {}, email ? { email } : {}].filter(
@@ -182,8 +180,6 @@ export const contactService = {
   /**
    * Internal Update with Zombie Recovery
    * 🛡️ 100-YEAR FIX: Tags are MERGED (union), never overwritten blindly.
-   * This prevents WhatsApp auto-sync (`upsertWhatsAppUser` with `["Importado de Chat"]`)
-   * from destroying user-assigned CRM tags like ["VIP", "Lead Caliente"].
    */
   async updateExisting(
     existing: Contact,
@@ -195,25 +191,22 @@ export const contactService = {
       : undefined;
 
     try {
-      const updated = await prisma.contact.update({
-        where: { id: existing.id },
-        data: {
-          name: data.name || undefined,
-          email: data.email,
-          phone: data.phone,
-          tags: mergedTags,
-          notes: data.notes,
-          customFields: data.customFields,
-          avatarUrl: data.avatarUrl,
-        },
-      });
+      const updated = await contactRepository.update(existing.id, {
+        name: data.name || undefined,
+        email: data.email,
+        phone: data.phone,
+        tags: mergedTags,
+        notes: data.notes,
+        customFields: data.customFields,
+        avatarUrl: data.avatarUrl,
+      } as Partial<Contact>);
       return toContactDTO(updated);
     } catch (error: unknown) {
       // 🛡️ TYPE-SAFE ERROR HANDLING: Prisma P2002 = Unique constraint violation
       const prismaError = error as { code?: string };
       if (prismaError.code === "P2002") {
         // Zombie logic
-        const zombie = await prisma.contact.findFirst({
+        const zombie = await contactRepository.findFirst({
           where: {
             companyId: data.companyId,
             OR: [
@@ -227,26 +220,20 @@ export const contactService = {
         if (zombie && zombie.deletedAt) {
           Logger.info(`[Contacts] 🧟 Recovering zombie contact ${zombie.id}`);
           // Anonymize zombie to free up phone/email
-          await prisma.contact.update({
-            where: { id: zombie.id },
-            data: {
-              phone: zombie.phone ? `${zombie.phone}_del_${Date.now()}` : null,
-              email: zombie.email ? `${zombie.email}_del_${Date.now()}` : null,
-            },
-          });
+          await contactRepository.update(zombie.id, {
+            phone: zombie.phone ? `${zombie.phone}_del_${Date.now()}` : null,
+            email: zombie.email ? `${zombie.email}_del_${Date.now()}` : null,
+          } as Partial<Contact>);
           // Retry update (with merged tags)
-          const retry = await prisma.contact.update({
-            where: { id: existing.id },
-            data: {
-              name: data.name || undefined,
-              email: data.email,
-              phone: data.phone,
-              tags: mergedTags,
-              notes: data.notes,
-              customFields: data.customFields,
-              avatarUrl: data.avatarUrl,
-            },
-          });
+          const retry = await contactRepository.update(existing.id, {
+            name: data.name || undefined,
+            email: data.email,
+            phone: data.phone,
+            tags: mergedTags,
+            notes: data.notes,
+            customFields: data.customFields,
+            avatarUrl: data.avatarUrl,
+          } as Partial<Contact>);
           return toContactDTO(retry);
         }
         throw new AppError(
@@ -273,60 +260,59 @@ export const contactService = {
       throw new AppError("Plan limit exceeded", HTTP_STATUS.FORBIDDEN);
 
     // 🛡️ 100-YEAR FIX: Use atomic upsert to prevent P2002 errors and race conditions
-    // Contact has unique constraint on (companyId, phone)
     if (data.phone) {
       // Phone-based upsert (atomic, prevents duplicates)
-      const contact = await prisma.contact.upsert({
-        where: {
-          companyId_phone: { companyId, phone: data.phone },
-        },
-        update: {
-          // Only update if incoming data is better (non-empty)
-          ...(data.name && { name: data.name }),
-          ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
-        },
-        create: {
-          companyId,
-          name: data.name || "New Contact",
+      const contact = await contactRepository.upsertByPhone(
+        companyId,
+        data.phone,
+        {
+          name: data.name,
+          avatarUrl: data.avatarUrl,
           email: data.email,
-          phone: data.phone,
           tags: data.tags || [],
           notes: data.notes,
           customFields: data.customFields || {},
-          avatarUrl: data.avatarUrl,
         },
-      });
+      );
       return toContactDTO(contact);
     }
 
     // Email-only fallback (no unique constraint, use find+create pattern)
     if (data.email) {
-      const existing = await prisma.contact.findFirst({
+      const existing = await contactRepository.findFirst({
         where: { companyId, email: data.email },
       });
 
       if (existing) {
-        const updated = await prisma.contact.update({
-          where: { id: existing.id },
-          data: {
-            ...(data.name && { name: data.name }),
-            ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
-          },
-        });
+        const updated = await contactRepository.update(existing.id, {
+          ...(data.name && { name: data.name }),
+          ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
+        } as Partial<Contact>);
         return toContactDTO(updated);
       }
 
-      const created = await prisma.contact.create({
-        data: {
-          companyId,
-          name: data.name || "New Contact",
+      const created = await contactRepository.create(
+        companyId,
+        "", // No phone
+        data.name || "New Contact",
+      );
+      // Update with additional fields if present
+      if (
+        data.email ||
+        data.tags ||
+        data.notes ||
+        data.customFields ||
+        data.avatarUrl
+      ) {
+        const withExtras = await contactRepository.update(created.id, {
           email: data.email,
           tags: data.tags || [],
           notes: data.notes,
           customFields: data.customFields || {},
           avatarUrl: data.avatarUrl,
-        },
-      });
+        } as Partial<Contact>);
+        return toContactDTO(withExtras);
+      }
       return toContactDTO(created);
     }
 
@@ -337,31 +323,14 @@ export const contactService = {
   },
 
   async delete(companyId: string, id: string) {
-    const contact = await prisma.contact.findFirst({
+    const contact = await contactRepository.findFirst({
       where: { id, companyId },
     });
     if (!contact)
       throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
 
-    // Clean relations
-    await prisma.$transaction([
-      prisma.deal.updateMany({
-        where: { contactId: id },
-        data: { contactId: null },
-      }),
-      prisma.activity.updateMany({
-        where: { contactId: id },
-        data: { contactId: null },
-      }),
-      prisma.contact.update({
-        where: { id },
-        data: {
-          deletedAt: new Date(),
-          phone: contact.phone ? `${contact.phone}_del_${Date.now()}` : null, // Free up phone
-          email: contact.email ? `${contact.email}_del_${Date.now()}` : null, // Free up email
-        },
-      }),
-    ]);
+    // Clean relations and soft-delete in transaction
+    await contactRepository.softDeleteWithCleanup(id, contact);
   },
 
   /**
@@ -372,24 +341,21 @@ export const contactService = {
     id: string,
     data: Partial<ContactUpsertParams>,
   ): Promise<ContactDTO> {
-    const contact = await prisma.contact.findFirst({
+    const contact = await contactRepository.findFirst({
       where: { id, companyId },
     });
     if (!contact)
       throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
 
-    const updated = await prisma.contact.update({
-      where: { id },
-      data: {
-        ...(data.name && { name: data.name }),
-        ...(data.email && { email: data.email }),
-        ...(data.phone && { phone: data.phone }),
-        ...(data.tags && { tags: data.tags }),
-        ...(data.notes && { notes: data.notes }),
-        ...(data.customFields && { customFields: data.customFields }),
-        ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
-      },
-    });
+    const updated = await contactRepository.update(contact.id, {
+      ...(data.name && { name: data.name }),
+      ...(data.email && { email: data.email }),
+      ...(data.phone && { phone: data.phone }),
+      ...(data.tags && { tags: data.tags }),
+      ...(data.notes && { notes: data.notes }),
+      ...(data.customFields && { customFields: data.customFields }),
+      ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
+    } as Partial<Contact>);
 
     return toContactDTO(updated);
   },
@@ -398,34 +364,29 @@ export const contactService = {
     companyId: string,
     id: string,
   ): Promise<ContactTimelineResponseDTO> {
-    const contact = await prisma.contact.findFirst({
+    const contact = await contactRepository.findFirst({
       where: { id, companyId },
     });
     if (!contact)
       throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
 
     // 🛡️100-YEAR FIX: Fetch related data for timeline.
-    // Note: tickets and conversations are fetched for potential future use in timeline expansion.
     const [deals, activities, tickets, conversations] = await Promise.all([
-      prisma.deal.findMany({
-        where: { contactId: id },
-        include: { stage: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.activity.findMany({
-        where: { contactId: id },
-        include: { createdBy: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.ticket.findMany({
+      dealRepository.findMany({ contactId: id }, [{ createdAt: "desc" }]),
+      contactRepository.findActivities(id),
+      ticketRepository.findMany({
         where: { companyId, createdById: id },
         orderBy: { createdAt: "desc" },
-      }), // Reserved for future timeline integration
+      }),
       contact.phone
-        ? prisma.conversation.findMany({
-            where: { companyId, channelId: contact.phone },
-            include: { messages: { take: 1, orderBy: { createdAt: "desc" } } },
-          })
+        ? conversationRepository
+            .findFirst({
+              where: { companyId, channelId: contact.phone },
+              include: {
+                messages: { take: 1, orderBy: { createdAt: "desc" } },
+              },
+            })
+            .then((c) => (c ? [c] : []))
         : Promise.resolve([]),
     ]);
 
@@ -462,7 +423,9 @@ export const contactService = {
         id: c.id,
         date: c.createdAt.toISOString(),
         title: "Chat Iniciado",
-        subtitle: c.messages[0]?.content || "Sin mensajes",
+        subtitle:
+          (c as { messages?: Array<{ content: string }> }).messages?.[0]
+            ?.content || "Sin mensajes",
         icon: "💬",
         color: "blue",
       })),
@@ -472,5 +435,40 @@ export const contactService = {
       contact: toContactDTO(contact),
       timeline,
     };
+  },
+
+  /**
+   * Check if a contact with a given phone or email already exists in the company
+   */
+  async checkDuplicate(
+    companyId: string,
+    phone?: string | null,
+    email?: string | null,
+  ): Promise<boolean> {
+    const orConditions = [
+      phone ? { phone: { endsWith: phone.slice(-10) } } : {},
+      email ? { email } : {},
+    ].filter((o) => Object.keys(o).length > 0);
+
+    if (orConditions.length === 0) return false;
+
+    const exists = await contactRepository.findFirst({
+      where: {
+        companyId,
+        OR: orConditions,
+      },
+    });
+
+    return !!exists;
+  },
+
+  /**
+   * Bulk create contacts via transaction
+   */
+  async bulkCreate(contacts: Array<Record<string, unknown>>) {
+    if (contacts.length === 0) return;
+    await contactRepository.bulkCreate(
+      contacts as Array<Prisma.ContactCreateInput>,
+    );
   },
 };

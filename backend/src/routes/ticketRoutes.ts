@@ -9,7 +9,7 @@ import {
   GetTicketsSchema,
   GetTicketSchema,
   DeleteTicketSchema,
-} from "@/schemas/ticket.schema";
+} from "@/schemas/ticketSchema";
 
 const router = express.Router();
 
@@ -40,3 +40,4 @@ router
   );
 
 export default router;
+

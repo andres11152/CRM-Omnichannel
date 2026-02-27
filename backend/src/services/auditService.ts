@@ -1,4 +1,5 @@
-import { prisma } from "@/config/database";
+import { Prisma } from "@prisma/client";
+import { auditLogRepository } from "@/repositories/AuditLogRepository";
 import { Logger } from "@/utils/logger";
 
 export interface IAuditLogData {
@@ -14,7 +15,7 @@ export interface IAuditLogData {
     | string;
   entity: string;
   entityId: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
 }
@@ -36,21 +37,21 @@ export const auditService = {
       try {
         const sanitizedDetails = sanitizeDetails(data.details);
 
-        await prisma.auditLog.create({
+        await auditLogRepository.create({
           data: {
             companyId: data.companyId,
             userId: data.userId,
             action: data.action,
             entity: data.entity,
             entityId: data.entityId,
-            details: sanitizedDetails, // Clean sensitive data
+            details: sanitizedDetails as unknown as Prisma.InputJsonObject, // Clean sensitive data
             ipAddress: data.ipAddress,
             userAgent: data.userAgent,
           },
         });
 
         // Low-level debug log
-        // console.log(`[Audit] Logged ${data.action} on ${data.entity}`);
+        // Logger.debug(`[Audit] Logged ${data.action} on ${data.entity}`);
       } catch (error) {
         // Failing to log should NEVER crash the app, but should be reported
         Logger.error("[Audit] FAILED TO LOG ACTION:", error);
@@ -70,8 +71,8 @@ export const auditService = {
  * before saving them to the database loop.
  */
 function sanitizeDetails(
-  details?: Record<string, any>
-): Record<string, any> | undefined {
+  details?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   if (!details) return undefined;
 
   const sensitiveKeys = [
@@ -84,14 +85,16 @@ function sanitizeDetails(
     "authorization",
   ];
 
-  const sanitized: Record<string, any> = { ...details };
+  const sanitized: Record<string, unknown> = { ...details };
 
   for (const key of Object.keys(sanitized)) {
     if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) {
       sanitized[key] = "[REDACTED]";
     } else if (typeof sanitized[key] === "object" && sanitized[key] !== null) {
       // Recursive sanitization for nested objects
-      sanitized[key] = sanitizeDetails(sanitized[key]);
+      sanitized[key] = sanitizeDetails(
+        sanitized[key] as Record<string, unknown>,
+      );
     }
   }
 

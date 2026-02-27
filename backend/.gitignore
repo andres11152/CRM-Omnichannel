@@ -43,3 +43,33 @@ manual_migrations_reference.sql
 
 # Logs directory
 logs/*.log
+*.log
+
+# Lint and Audit Reports
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!nodemon.json
+!ecosystem.config.json
+!lint-staged.config.json
+!*.schema.json
+eslint-*.txt
+lint_results.txt
+
+# Stress Tests Results
+k6-tests/results*.txt
+k6-tests/*.js
+!k6-tests/stress-test.js
+
+# Temporary / Utility Scripts
+cleanKeys*.ts
+check-*.ts
+measure-*.ts
+debug_*.ts
+test-*.ts
+test-*.js
+
+# OS files
+.DS_Store
+Thumbs.db

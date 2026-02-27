@@ -26,7 +26,7 @@ export class ContactStrategy {
   static resolveName(
     phone: string,
     pushName?: string,
-    isOutbound: boolean = false
+    _isOutbound: boolean = false,
   ): IdentityResult {
     const cleanPushName = this.sanitize(pushName, phone);
 
@@ -56,7 +56,7 @@ export class ContactStrategy {
    */
   private static sanitize(
     name: string | undefined,
-    phone: string
+    phone: string,
   ): string | null {
     if (!name) return null;
     const trimmed = name.trim();

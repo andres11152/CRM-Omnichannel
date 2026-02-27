@@ -1,4 +1,6 @@
-import { prisma } from "@/config/database";
+import { companyRepository } from "@/repositories/CompanyRepository";
+import { queueRepository } from "@/repositories/QueueRepository";
+import { Logger } from "@/utils/logger";
 
 /**
  * 🎛️ ROUTING CONFIGURATION SERVICE
@@ -45,32 +47,33 @@ export class RoutingConfigService {
    */
   async getConfig(companyId: string): Promise<RoutingConfig> {
     try {
-      const company = await prisma.company.findUnique({
+      const company = await companyRepository.findUnique({
         where: { id: companyId },
         select: { settings: true },
       });
 
       if (!company?.settings) {
-        console.log(
-          `[RoutingConfig] No settings found for company ${companyId}, using defaults`
+        Logger.info(
+          `[RoutingConfig] No settings found for company ${companyId}, using defaults`,
         );
         return DEFAULT_CONFIG;
       }
 
-      const settings = company.settings as any;
-      const routingConfig = settings.conversationRouting || DEFAULT_CONFIG;
+      const settings = company.settings as Record<string, unknown>;
+      const routingConfig = (settings.conversationRouting ||
+        DEFAULT_CONFIG) as Record<string, unknown>;
 
       // Validate config structure
       return {
-        enabled: routingConfig.enabled ?? true,
-        defaultQueueId: routingConfig.defaultQueueId ?? null,
-        aiAutoResponse: routingConfig.aiAutoResponse ?? true,
+        enabled: (routingConfig.enabled as boolean) ?? true,
+        defaultQueueId: (routingConfig.defaultQueueId as string | null) ?? null,
+        aiAutoResponse: (routingConfig.aiAutoResponse as boolean) ?? true,
         rules: Array.isArray(routingConfig.rules) ? routingConfig.rules : [],
       };
     } catch (error) {
-      console.error(
+      Logger.error(
         `[RoutingConfig] Error getting config for ${companyId}:`,
-        error
+        error,
       );
       return DEFAULT_CONFIG;
     }
@@ -81,52 +84,46 @@ export class RoutingConfigService {
    */
   async updateConfig(
     companyId: string,
-    config: Partial<RoutingConfig>
+    config: Partial<RoutingConfig>,
   ): Promise<void> {
     try {
-      const currentSettings = await prisma.company.findUnique({
+      const currentSettings = await companyRepository.findUnique({
         where: { id: companyId },
         select: { settings: true },
       });
 
-      const settings = (currentSettings?.settings as any) || {};
+      const settings =
+        (currentSettings?.settings as Record<string, unknown>) || {};
 
       settings.conversationRouting = {
         ...DEFAULT_CONFIG,
-        ...(settings.conversationRouting || {}),
+        ...((settings.conversationRouting || {}) as Record<string, unknown>),
         ...config,
       };
 
-      await prisma.company.update({
-        where: { id: companyId },
-        data: { settings },
-      });
+      await companyRepository.update(companyId, { settings });
 
-      console.log(`[RoutingConfig] ✓ Updated config for company ${companyId}`);
+      Logger.info(`[RoutingConfig] ✓ Updated config for company ${companyId}`);
     } catch (error) {
-      console.error(`[RoutingConfig] Error updating config:`, error);
+      Logger.error(`[RoutingConfig] Error updating config:`, error);
       throw error;
     }
   }
 
   /**
    * Find the best queue for a conversation based on routing rules
-   * @param companyId - Company ID
-   * @param channel - Communication channel
-   * @param preferAI - Prefer queues with AI assistants
-   * @returns Queue ID or null
    */
   async findBestQueue(
     companyId: string,
     channel: "WHATSAPP" | "EMAIL" | "SMS",
-    preferAI: boolean = true
+    preferAI: boolean = true,
   ): Promise<string | null> {
     try {
       const config = await this.getConfig(companyId);
 
       if (!config.enabled) {
-        console.log(
-          `[RoutingConfig] Routing disabled for company ${companyId}`
+        Logger.info(
+          `[RoutingConfig] Routing disabled for company ${companyId}`,
         );
         return null;
       }
@@ -137,8 +134,8 @@ export class RoutingConfigService {
         .sort((a, b) => a.priority - b.priority);
 
       for (const rule of applicableRules) {
-        // Validate que exists and is active
-        const queue = await prisma.queue.findFirst({
+        // Validate queue exists and is active
+        const queue = await queueRepository.findFirst({
           where: {
             id: rule.queueId,
             companyId,
@@ -152,17 +149,17 @@ export class RoutingConfigService {
         if (queue) {
           // If preferring AI, check if this queue has AI
           if (preferAI && config.aiAutoResponse) {
-            if (queue.aiAssistant) {
-              console.log(
-                `[RoutingConfig] ✓ Matched rule: Queue "${queue.name}" (has AI)`
+            if ((queue as unknown as { aiAssistant: unknown }).aiAssistant) {
+              Logger.info(
+                `[RoutingConfig] ✓ Matched rule: Queue "${queue.name}" (has AI)`,
               );
               return queue.id;
             }
             // Skip this queue if it doesn't have AI and we prefer AI
             continue;
           } else {
-            console.log(
-              `[RoutingConfig] ✓ Matched rule: Queue "${queue.name}"`
+            Logger.info(
+              `[RoutingConfig] ✓ Matched rule: Queue "${queue.name}"`,
             );
             return queue.id;
           }
@@ -171,7 +168,7 @@ export class RoutingConfigService {
 
       // 2. Try default queue
       if (config.defaultQueueId) {
-        const defaultQueue = await prisma.queue.findFirst({
+        const defaultQueue = await queueRepository.findFirst({
           where: {
             id: config.defaultQueueId,
             companyId,
@@ -180,8 +177,8 @@ export class RoutingConfigService {
         });
 
         if (defaultQueue) {
-          console.log(
-            `[RoutingConfig] Using default queue: "${defaultQueue.name}"`
+          Logger.info(
+            `[RoutingConfig] Using default queue: "${defaultQueue.name}"`,
           );
           return defaultQueue.id;
         }
@@ -189,7 +186,7 @@ export class RoutingConfigService {
 
       // 3. Fallback: Find any active queue (prefer with AI if enabled)
       if (preferAI && config.aiAutoResponse) {
-        const aiQueue = await prisma.queue.findFirst({
+        const aiQueue = await queueRepository.findFirst({
           where: {
             companyId,
             isActive: true,
@@ -201,15 +198,15 @@ export class RoutingConfigService {
         });
 
         if (aiQueue) {
-          console.log(
-            `[RoutingConfig] Fallback to first AI queue: "${aiQueue.name}"`
+          Logger.info(
+            `[RoutingConfig] Fallback to first AI queue: "${aiQueue.name}"`,
           );
           return aiQueue.id;
         }
       }
 
       // 4. Ultimate fallback: First active queue
-      const anyQueue = await prisma.queue.findFirst({
+      const anyQueue = await queueRepository.findFirst({
         where: {
           companyId,
           isActive: true,
@@ -218,16 +215,16 @@ export class RoutingConfigService {
       });
 
       if (anyQueue) {
-        console.log(`[RoutingConfig] Ultimate fallback: "${anyQueue.name}"`);
+        Logger.info(`[RoutingConfig] Ultimate fallback: "${anyQueue.name}"`);
         return anyQueue.id;
       }
 
-      console.warn(
-        `[RoutingConfig] No suitable queue found for company ${companyId}`
+      Logger.warn(
+        `[RoutingConfig] No suitable queue found for company ${companyId}`,
       );
       return null;
     } catch (error) {
-      console.error(`[RoutingConfig] Error finding queue:`, error);
+      Logger.error(`[RoutingConfig] Error finding queue:`, error);
       return null;
     }
   }

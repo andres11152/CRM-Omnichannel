@@ -1,4 +1,4 @@
-import { prisma } from "@/config/database";
+import { agentSessionRepository } from "@/repositories/AgentSessionRepository";
 import { Logger } from "@/utils/logger";
 
 interface StartSessionParams {
@@ -18,7 +18,7 @@ export const agentSessionService = {
   startSession: async ({ userId, companyId, socketId }: StartSessionParams) => {
     try {
       // 1. Force close any stale open sessions for this user (prevent "stuck online" bug)
-      await prisma.agentSession.updateMany({
+      await agentSessionRepository.updateMany({
         where: {
           userId,
           disconnectedAt: null,
@@ -30,7 +30,7 @@ export const agentSessionService = {
         },
       });
 
-      const session = await prisma.agentSession.create({
+      const session = await agentSessionRepository.create({
         data: {
           userId,
           companyId,
@@ -61,7 +61,7 @@ export const agentSessionService = {
       // Find the active session for this socket
       // We look for one that is NOT already disconnected, ideally.
       // But filtering by socketId should be enough if unique per connection.
-      const activeSession = await prisma.agentSession.findFirst({
+      const activeSession = await agentSessionRepository.findFirst({
         where: {
           socketId,
           disconnectedAt: null,
@@ -81,7 +81,7 @@ export const agentSessionService = {
         (now.getTime() - activeSession.connectedAt.getTime()) / 1000,
       );
 
-      const updatedSession = await prisma.agentSession.update({
+      const updatedSession = await agentSessionRepository.update({
         where: { id: activeSession.id },
         data: {
           disconnectedAt: now,

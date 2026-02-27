@@ -1,6 +1,5 @@
-import { prisma } from "@/config/database";
+import { gdprCleanupRepository } from "@/repositories/GdprCleanupRepository";
 import { Logger } from "@/utils/logger";
-import { Prisma } from "@prisma/client";
 
 const RETENTION_DAYS = 30;
 
@@ -8,38 +7,6 @@ function getRetentionCutoffDate(): Date {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
   return cutoff;
-}
-
-// 🛡️ TYPE DEFINITION: Safe Interface for Middleware-Extended Models
-// Replaces 'as any' with a strictly defined contract
-interface ExtendedSoftDeleteDelegate {
-  deleteMany(args: {
-    where: { companyId: string; [key: string]: any }; // Enforce companyId in arguments
-    includeDeleted?: boolean;
-  }): Promise<Prisma.BatchPayload>;
-
-  count(args: {
-    where: { companyId: string; [key: string]: any };
-    includeDeleted?: boolean;
-  }): Promise<number>;
-}
-
-/**
- * Helper to get model safely
- */
-function getModel(modelName: "contact" | "deal" | "ticket" | "campaign") {
-  switch (modelName) {
-    case "contact":
-      return prisma.contact;
-    case "deal":
-      return prisma.deal;
-    case "ticket":
-      return prisma.ticket;
-    case "campaign":
-      return prisma.campaign;
-    default:
-      return null;
-  }
 }
 
 /**
@@ -53,9 +20,6 @@ async function safelyDeleteRecords(
   companyId: string,
   cutoffDate: Date,
 ): Promise<number> {
-  const model = getModel(modelName);
-  if (!model) return 0;
-
   // 🛡️ TENANT ISOLATION: companyId is MANDATORY in the WHERE clause
   const whereClause = {
     companyId: companyId,
@@ -66,20 +30,17 @@ async function safelyDeleteRecords(
   };
 
   try {
-    // Safe cast to interface defining the middleware method 'includeDeleted'
-    const delegate = model as unknown as ExtendedSoftDeleteDelegate;
+    const count = await gdprCleanupRepository.safelyDeleteRecords(
+      modelName,
+      whereClause,
+    );
 
-    const result = await delegate.deleteMany({
-      where: whereClause,
-      includeDeleted: true,
-    });
-
-    if (result.count > 0) {
+    if (count > 0) {
       Logger.info(
-        `[GDPR Cleanup] 🗑️ Hard deleted ${result.count} ${modelName}s for Company ${companyId}`,
+        `[GDPR Cleanup] 🗑️ Hard deleted ${count} ${modelName}s for Company ${companyId}`,
       );
     }
-    return result.count;
+    return count;
   } catch (error: unknown) {
     // 🛡️ Safe Error Handling
     const errorMessage =
@@ -100,10 +61,10 @@ async function safelyCountRecords(
   companyId: string,
   cutoffDate?: Date,
 ): Promise<number> {
-  const model = getModel(modelName);
-  if (!model) return 0;
-
-  const whereClause: any = {
+  const whereClause: {
+    companyId: string;
+    deletedAt: { not: null; lt?: Date };
+  } = {
     companyId,
     deletedAt: { not: null },
   };
@@ -113,11 +74,10 @@ async function safelyCountRecords(
   }
 
   try {
-    const delegate = model as unknown as ExtendedSoftDeleteDelegate;
-    return await delegate.count({
-      where: whereClause,
-      includeDeleted: true,
-    });
+    return await gdprCleanupRepository.safelyCountRecords(
+      modelName,
+      whereClause,
+    );
   } catch {
     return 0;
   }
@@ -159,10 +119,7 @@ export async function runGDPRCleanup(): Promise<{
 
   try {
     // 1. Fetch all companies (id only)
-    const companies = await prisma.company.findMany({
-      select: { id: true },
-      where: { status: { not: "BANNED" } }, // Optional optimization
-    });
+    const companies = await gdprCleanupRepository.getCompaniesForCleanup();
 
     Logger.info(`[GDPR Cleanup] Processing ${companies.length} companies...`);
 
@@ -213,7 +170,7 @@ export async function getSoftDeleteStats(): Promise<{
   };
 
   try {
-    const companies = await prisma.company.findMany({ select: { id: true } });
+    const companies = await gdprCleanupRepository.getAllCompanyIds();
 
     for (const company of companies) {
       const [tc, td, tt, tca] = await Promise.all([

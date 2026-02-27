@@ -6,7 +6,7 @@ import {
 import { getEmailConfig } from "@/controllers/companyEmailConfigController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
-import { UpdateCompanySettingsSchema } from "@/schemas/company.schema";
+import { UpdateCompanySettingsSchema } from "@/schemas/companySchema";
 
 const router = Router();
 
@@ -21,3 +21,4 @@ router.patch(
 router.get("/email-config", getEmailConfig);
 
 export default router;
+

@@ -1,4 +1,5 @@
-import { prisma } from "@/config/database";
+import { userRepository } from "@/repositories/UserRepository";
+import { notificationRepository } from "@/repositories/NotificationRepository";
 import { Logger } from "@/utils/logger";
 
 /**
@@ -70,7 +71,7 @@ export const mentionService = {
     try {
       // Buscar usuarios en la base de datos
       // Estrategia: Buscar por nombre O por email (antes del @)
-      const users = await prisma.user.findMany({
+      const users = await userRepository.findMany({
         where: {
           companyId,
           OR: usernames.flatMap((username) => [
@@ -162,7 +163,7 @@ export const mentionService = {
 
     try {
       // 1. Obtener info del creador (quien mencionó)
-      const creator = await prisma.user.findUnique({
+      const creator = await userRepository.findUnique({
         where: { id: createdByUserId },
         select: { name: true, email: true },
       });
@@ -180,7 +181,7 @@ export const mentionService = {
         }${context.contactName ? ` sobre ${context.contactName}` : ""}`;
 
         // Crear notificación en DB (🛡️ 100-YEAR FIX: Include companyId and strict metadata typing)
-        await prisma.notification.create({
+        await notificationRepository.create({
           data: {
             userId,
             companyId,

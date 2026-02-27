@@ -12,11 +12,17 @@ export const initWorkers = async () => {
     // Initialize Flow Queue Worker
     Logger.info("[Loader] 🌊 Initializing Flow Queue Workers...");
     const { flowQueueWorker } =
-      await import("@/services/queue/flowQueue.worker");
+      await import("@/services/queue/flowQueueWorker");
     flowQueueWorker.startWorker();
 
+    // Initialize Cron Queue Worker
+    Logger.info("[Loader] ⏰ Initializing Cron Queue Workers...");
+    const { initCronWorker } =
+      await import("@/services/queue/cronQueueService");
+    const cronWorker = await initCronWorker();
+
     const { getMessageQueueWorker } =
-      await import("@/services/queue/messageQueue.worker");
+      await import("@/services/queue/messageQueueWorker");
     // Get singleton instance with whatsappService
     const messageWorker = getMessageQueueWorker(whatsappService);
 
@@ -41,9 +47,10 @@ export const initWorkers = async () => {
       Logger.info("[Loader] 🛑 SIGTERM received, shutting down gracefully...");
       await messageWorker.shutdown();
       const { messageQueueService } =
-        await import("@/services/queue/messageQueue.service");
+        await import("@/services/queue/messageQueueService");
       await messageQueueService.shutdown();
       await flowQueueWorker.shutdown();
+      await cronWorker.close();
       process.exit(0);
     });
   } catch (workerError: unknown) {
@@ -67,3 +74,4 @@ export const initWorkers = async () => {
     Logger.info("[Loader] ⚠️ Continuing without queue workers...");
   }
 };
+

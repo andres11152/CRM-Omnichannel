@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Contact, Tag } from "@/types";
+import { Avatar } from "@/components/common/Avatar";
 
 interface Agent {
   id: string;
@@ -414,14 +415,10 @@ export const ChatHeaderEnhanced: React.FC<ChatHeaderEnhancedProps> = ({
             <div
               className={`relative shrink-0 ${isChatListVisible && isCustomer360Visible ? "hidden 2xl:block" : "block"}`}
             >
-              <img
-                src={
-                  contact.profilePicUrl ||
-                  contact.avatarUrl ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=random`
-                }
-                alt={contact.name}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border-2 border-white dark:border-gray-600 shadow-sm"
+              <Avatar
+                src={contact.profilePicUrl || contact.avatarUrl || null}
+                name={contact.name}
+                className="w-8 h-8 sm:w-9 sm:h-9 border-2 border-white dark:border-gray-600 shadow-sm"
               />
               <div
                 className={`absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 border-white dark:border-[#202c33] ${socketStatus === "connected" ? "bg-green-500" : "bg-red-500"}`}

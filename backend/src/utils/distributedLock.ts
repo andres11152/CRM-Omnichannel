@@ -22,7 +22,7 @@ export class DistributedLock {
     key: string,
     task: () => Promise<T>,
     ttlMs: number = 5000,
-    waitTimeoutMs: number = 10000
+    waitTimeoutMs: number = 10000,
   ): Promise<T> {
     const lockKey = `lock:${key}`;
     const start = Date.now();
@@ -46,7 +46,7 @@ export class DistributedLock {
             await redisClient.del(lockKey).catch((err) => {
               Logger.warn(
                 `[DistributedLock] Failed to release lock ${lockKey}`,
-                err
+                err,
               );
             });
           }
@@ -55,7 +55,7 @@ export class DistributedLock {
         // Check timeout
         if (Date.now() - start > waitTimeoutMs) {
           throw new Error(
-            `[DistributedLock] Timeout acquiring lock for ${key}`
+            `[DistributedLock] Timeout acquiring lock for ${key}`,
           );
         }
 
@@ -73,12 +73,12 @@ export class DistributedLock {
       while (this.localLocks.has(key)) {
         if (Date.now() - start > waitTimeoutMs) {
           throw new Error(
-            `[DistributedLock] Timeout acquiring memory lock for ${key}`
+            `[DistributedLock] Timeout acquiring memory lock for ${key}`,
           );
         }
         try {
           await this.localLocks.get(key);
-        } catch (e) {
+        } catch {
           // Ignore failures of previous tasks
         }
       }

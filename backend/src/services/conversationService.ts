@@ -1,4 +1,5 @@
 import { prisma } from "@/config/database";
+import { contactRepository } from "@/repositories/ContactRepository";
 import { AppError } from "@/utils/AppError";
 import { chatSyncService } from "./chatSyncService";
 import { ConversationManager } from "./conversationManager";
@@ -155,7 +156,10 @@ export const conversationService = {
         ? {
             type: attachment.type,
             url: attachment.url,
-            mimetype: attachment.mimeType || "application/octet-stream",
+            mimetype:
+              attachment.mimetype ||
+              attachment.mimeType ||
+              "application/octet-stream",
             filename: attachment.name,
             caption: attachment.name,
           }
@@ -168,14 +172,16 @@ export const conversationService = {
     } catch (e) {
       Logger.error("[ConversationService] Failed to send message", e);
       const failedMsg = await messageRepository.create({
-        companyId,
-        conversationId,
-        content,
-        direction: "OUTBOUND",
-        senderId,
-        channel: "WHATSAPP",
-        status: "FAILED",
-        metadata: metadata as Prisma.InputJsonValue,
+        data: {
+          companyId,
+          conversationId,
+          content,
+          direction: "OUTBOUND",
+          senderId,
+          channel: "WHATSAPP",
+          status: "FAILED",
+          metadata: metadata as Prisma.InputJsonValue,
+        },
       });
 
       gateway.emitToCompany(companyId, "message:new", {
@@ -282,7 +288,7 @@ export const conversationService = {
     let resolvedTags = conversation.tags;
 
     if (conversation.contactId) {
-      const contact = await prisma.contact.findUnique({
+      const contact = await contactRepository.findFirst({
         where: { id: conversation.contactId },
         select: { tags: true },
       });
@@ -293,9 +299,11 @@ export const conversationService = {
 
     // 🚀 CONTEXT SYNC: Auto-backfill if conversation has few messages
     // This is the JIT trigger — fires async, doesn't block the response
-    const CONTEXT_SYNC_THRESHOLD = 5;
-    const hasValidPhone =
-      conversation.channelId && /^\d{5,15}$/.test(conversation.channelId);
+    const CONTEXT_SYNC_THRESHOLD = 20;
+    const cleanChannelId = conversation.channelId
+      ? conversation.channelId.replace(/\D/g, "")
+      : "";
+    const hasValidPhone = cleanChannelId && /^\d{5,15}$/.test(cleanChannelId);
 
     if (
       messagesWithProps.length < CONTEXT_SYNC_THRESHOLD &&
@@ -375,14 +383,16 @@ export const conversationService = {
       };
 
       return await messageRepository.create({
-        companyId,
-        conversationId: resolvedConv.id,
-        content: messageContent,
-        direction: "OUTBOUND",
-        senderId: userId,
-        channel: channel || Channel.WHATSAPP,
-        status: "SCHEDULED",
-        metadata: safeMetadata as unknown as Prisma.InputJsonValue,
+        data: {
+          companyId,
+          conversationId: resolvedConv.id,
+          content: messageContent,
+          direction: "OUTBOUND",
+          senderId: userId,
+          channel: channel || Channel.WHATSAPP,
+          status: "SCHEDULED",
+          metadata: safeMetadata as unknown as Prisma.InputJsonValue,
+        },
       });
     } else {
       const options: SendMessageOptions = {
@@ -393,7 +403,10 @@ export const conversationService = {
           ? {
               type: attachment.type,
               url: attachment.url,
-              mimetype: attachment.mimeType || "application/octet-stream",
+              mimetype:
+                attachment.mimetype ||
+                attachment.mimeType ||
+                "application/octet-stream",
               filename: attachment.name,
               caption: attachment.name,
             }

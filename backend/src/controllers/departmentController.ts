@@ -1,8 +1,15 @@
 import { Response, NextFunction } from "express";
-import { prisma } from "../config/database";
 import { AppError } from "../utils/AppError";
 import { catchAsync } from "../utils/catchAsync";
 import { AuthenticatedRequest } from "../types";
+import { departmentService } from "../services/departmentService";
+
+/**
+ * 🏗️ DEPARTMENT CONTROLLER
+ *
+ * HTTP orchestrator for departments.
+ * All data access delegated to departmentService (SRP).
+ */
 
 // Get all departments
 export const getDepartments = catchAsync(
@@ -13,15 +20,7 @@ export const getDepartments = catchAsync(
       return next(new AppError("Company ID not found", 400));
     }
 
-    const departments = await prisma.department.findMany({
-      where: { companyId },
-      orderBy: { name: "asc" },
-      include: {
-        _count: {
-          select: { queues: true },
-        },
-      },
-    });
+    const departments = await departmentService.findAll(companyId);
 
     res.status(200).json(departments);
   },
@@ -30,28 +29,13 @@ export const getDepartments = catchAsync(
 // Create department
 export const createDepartment = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    // Validated by CreateDepartmentSchema
-    const data = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
       return next(new AppError("Company ID not found", 400));
     }
 
-    const existing = await prisma.department.findFirst({
-      where: { companyId, name: { equals: data.name, mode: "insensitive" } },
-    });
-
-    if (existing) {
-      return next(new AppError("Department already exists", 400));
-    }
-
-    const department = await prisma.department.create({
-      data: {
-        name: data.name,
-        companyId,
-      },
-    });
+    const department = await departmentService.create(companyId, req.body.name);
 
     res.status(201).json(department);
   },
@@ -60,42 +44,14 @@ export const createDepartment = catchAsync(
 // Update department
 export const updateDepartment = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    // Validated by UpdateDepartmentSchema
     const { id } = req.params;
-    const data = req.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
       return next(new AppError("Company ID not found", 400));
     }
 
-    const department = await prisma.department.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!department) {
-      return next(new AppError("Department not found", 404));
-    }
-
-    // Check if name is already taken by another department
-    if (data.name && data.name !== department.name) {
-      const existing = await prisma.department.findFirst({
-        where: {
-          companyId,
-          name: { equals: data.name, mode: "insensitive" },
-          id: { not: id },
-        },
-      });
-
-      if (existing) {
-        return next(new AppError("Department name already exists", 400));
-      }
-    }
-
-    const updated = await prisma.department.update({
-      where: { id },
-      data,
-    });
+    const updated = await departmentService.update(id, companyId, req.body);
 
     res.status(200).json(updated);
   },
@@ -107,17 +63,11 @@ export const deleteDepartment = catchAsync(
     const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
 
-    const department = await prisma.department.findFirst({
-      where: { id, companyId },
-    });
-
-    if (!department) {
-      return next(new AppError("Department not found", 404));
+    if (!companyId) {
+      return next(new AppError("Company ID not found", 400));
     }
 
-    await prisma.department.delete({
-      where: { id },
-    });
+    await departmentService.delete(id, companyId);
 
     res.status(204).json(null);
   },

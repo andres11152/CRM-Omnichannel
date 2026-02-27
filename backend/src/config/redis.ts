@@ -78,7 +78,7 @@ export const connectRedis = async () => {
   try {
     await redisClient.connect();
     Logger.info("✅ Redis Client Connected");
-  } catch (e) {
+  } catch {
     Logger.warn("[Redis] Failed to connect. Will run in Memory/File Mode.");
     // We intentionally catch this so we don't crash the server startup
     // The app should be able to run without Redis (using in-memory fallbacks)

@@ -1,10 +1,18 @@
-import { prisma } from "../config/database";
+/**
+ * 📊 TIMELINE SERVICE (Refactored — ORM-Free)
+ *
+ * Unified timeline of all activities (WhatsApp, Email, etc.)
+ * All data access delegated to TimelineRepository and EmailRepository.
+ */
+
 import {
   TimelineActivity,
   TimelineActivityType,
   GetTimelineParams,
 } from "../types/email.types";
 import { Logger } from "../utils/logger";
+import { timelineRepository } from "@/repositories/TimelineRepository";
+import { emailRepository } from "@/repositories/EmailRepository";
 
 export class TimelineService {
   /**
@@ -26,28 +34,36 @@ export class TimelineService {
       const [whatsappMessages, emails] = await Promise.all([
         // Fetch WhatsApp messages if needed
         !types || types.includes(TimelineActivityType.WHATSAPP_MESSAGE)
-          ? this.fetchWhatsAppMessages(
+          ? timelineRepository.findWhatsAppMessages({
               contactId,
               ticketId,
               companyId,
               limit,
-              offset
-            )
+              offset,
+            })
           : [],
 
         // Fetch Emails if needed
         !types || types.includes(TimelineActivityType.EMAIL)
-          ? this.fetchEmails(contactId, ticketId, companyId, limit, offset)
+          ? emailRepository.findForTimeline({
+              contactId,
+              ticketId,
+              companyId,
+              limit,
+              offset,
+            })
           : [],
       ]);
 
       // Normalize to common interface
       const whatsappActivities: TimelineActivity[] = whatsappMessages.map(
-        (msg: any) => ({
+        (msg) => ({
           id: msg.id,
           type: TimelineActivityType.WHATSAPP_MESSAGE,
           timestamp: msg.createdAt,
-          direction: msg.direction?.toLowerCase() as "inbound" | "outbound",
+          direction: (msg.direction || "inbound").toLowerCase() as
+            | "inbound"
+            | "outbound",
           content: msg.content || "",
           channel: "WHATSAPP" as const,
           status: msg.status || "SENT",
@@ -57,14 +73,16 @@ export class TimelineService {
             messageId: msg.id,
             hasAttachment: !!msg.metadata?.attachment,
           },
-        })
+        }),
       );
 
-      const emailActivities: TimelineActivity[] = emails.map((email: any) => ({
+      const emailActivities: TimelineActivity[] = emails.map((email) => ({
         id: email.id,
         type: TimelineActivityType.EMAIL,
         timestamp: email.createdAt,
-        direction: email.type?.toLowerCase() as "inbound" | "outbound",
+        direction: (email.type || "outbound").toLowerCase() as
+          | "inbound"
+          | "outbound",
         content: email.bodyText || email.bodyHtml || "",
         subject: email.subject,
         channel: "EMAIL" as const,
@@ -83,96 +101,15 @@ export class TimelineService {
 
       // Merge and sort by timestamp descending
       const timeline = [...whatsappActivities, ...emailActivities].sort(
-        (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
       );
 
       // Apply limit
       return timeline.slice(offset, offset + limit);
-    } catch (error: any) {
+    } catch (error: unknown) {
       Logger.error("[TimelineService] Failed to fetch timeline:", error);
       throw error;
     }
-  }
-
-  /**
-   * Fetch WhatsApp messages from conversations
-   */
-  private async fetchWhatsAppMessages(
-    contactId: string | undefined,
-    ticketId: string | undefined,
-    companyId: string,
-    limit: number,
-    offset: number
-  ) {
-    // Build where clause
-    const where: any = {};
-
-    if (contactId || ticketId) {
-      where.conversation = {};
-
-      // Find conversations with this contact or ticket
-      if (contactId) {
-        // This is a simplification - you might need to join through participants
-        where.conversation.participants = {
-          some: { id: contactId },
-        };
-      }
-
-      if (ticketId) {
-        where.conversation.tickets = {
-          some: { id: ticketId },
-        };
-      }
-    }
-
-    where.conversation = {
-      ...where.conversation,
-      companyId,
-      channel: "WHATSAPP",
-    };
-
-    return prisma.message.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      skip: offset,
-      include: {
-        sender: { select: { name: true, email: true } },
-        conversation: { select: { id: true, channelId: true } },
-      },
-    });
-  }
-
-  /**
-   * Fetch emails
-   */
-  private async fetchEmails(
-    contactId: string | undefined,
-    ticketId: string | undefined,
-    companyId: string,
-    limit: number,
-    offset: number
-  ) {
-    const where: any = { companyId };
-
-    if (contactId) {
-      where.contactId = contactId;
-    }
-
-    if (ticketId) {
-      where.ticketId = ticketId;
-    }
-
-    return prisma.email.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      skip: offset,
-      include: {
-        contact: { select: { name: true, email: true } },
-        ticket: { select: { ticketNumber: true } },
-      },
-    });
   }
 
   /**
@@ -180,18 +117,8 @@ export class TimelineService {
    */
   async getTimelineStats(contactId: string, companyId: string) {
     const [whatsappCount, emailCount] = await Promise.all([
-      prisma.message.count({
-        where: {
-          conversation: {
-            participants: { some: { id: contactId } },
-            companyId,
-            channelId: "WHATSAPP",
-          },
-        },
-      }),
-      prisma.email.count({
-        where: { contactId, companyId },
-      }),
+      timelineRepository.countWhatsAppMessages(contactId, companyId),
+      emailRepository.countByContact(contactId, companyId),
     ]);
 
     return {

@@ -28,7 +28,7 @@ interface TransactionOptions {
 
 export async function safeTransaction<T>(
   operation: (tx: typeof prisma) => Promise<T>,
-  options: TransactionOptions = {}
+  options: TransactionOptions = {},
 ): Promise<T> {
   const { maxRetries = 3, timeout = 30000, isolationLevel } = options;
 
@@ -37,7 +37,7 @@ export async function safeTransaction<T>(
 
   while (attempt < maxRetries) {
     try {
-      const result = await prisma.$transaction(operation as any, {
+      const result = await prisma.$transaction(operation, {
         maxWait: timeout,
         timeout,
         isolationLevel,
@@ -62,7 +62,7 @@ export async function safeTransaction<T>(
 
       if (!isRetryable || attempt >= maxRetries) {
         Logger.error(
-          `[Transaction] ❌ Failed after ${attempt} attempts: ${errorMsg}`
+          `[Transaction] ❌ Failed after ${attempt} attempts: ${errorMsg}`,
         );
         throw lastError;
       }
@@ -70,7 +70,7 @@ export async function safeTransaction<T>(
       // Exponential backoff
       const delay = Math.min(100 * Math.pow(2, attempt - 1), 2000);
       Logger.warn(
-        `[Transaction] ⚠️ Retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`
+        `[Transaction] ⚠️ Retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -88,10 +88,10 @@ export async function safeTransaction<T>(
 export async function idempotentTransaction<T>(
   idempotencyKey: string,
   operation: (tx: typeof prisma) => Promise<T>,
-  ttlSeconds: number = 3600
+  ttlSeconds: number = 3600,
 ): Promise<T> {
   // Check if operation was already executed
-  const existing = await prisma.$queryRaw<any[]>`
+  const existing = await prisma.$queryRaw<{ result: T }[]>`
     SELECT result FROM idempotency_cache 
     WHERE key = ${idempotencyKey} 
     AND created_at > NOW() - INTERVAL '${ttlSeconds} seconds'

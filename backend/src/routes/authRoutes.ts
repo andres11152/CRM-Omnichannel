@@ -19,7 +19,7 @@ import {
   ForgotPasswordSchema,
   ResetPasswordSchema,
   UpdatePasswordSchema,
-} from "@/schemas/auth.schema";
+} from "@/schemas/authSchema";
 
 const router = Router();
 
@@ -66,3 +66,4 @@ router.patch(
 );
 
 export default router;
+

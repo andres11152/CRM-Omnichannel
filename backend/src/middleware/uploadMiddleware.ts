@@ -1,5 +1,5 @@
 import multer from "multer";
-import { Request } from "express";
+import { Request, Response, NextFunction } from "express";
 import { AppError } from "@/utils/AppError";
 
 /**
@@ -17,7 +17,7 @@ const storage = multer.memoryStorage();
 const fileFilter = (
   req: Request,
   file: Express.Multer.File,
-  callback: multer.FileFilterCallback
+  callback: multer.FileFilterCallback,
 ) => {
   const allowedMimeTypes = [
     "text/csv",
@@ -44,8 +44,8 @@ const fileFilter = (
   callback(
     new AppError(
       "Invalid file type. Only CSV and Excel files (.csv, .xls, .xlsx) are allowed.",
-      400
-    )
+      400,
+    ),
   );
 };
 
@@ -70,10 +70,10 @@ export const uploadSingle = upload.single("file");
  * Usage: Add after routes to catch multer-specific errors
  */
 export const handleMulterError = (
-  error: any,
+  error: Error,
   req: Request,
-  res: any,
-  next: any
+  res: Response,
+  next: NextFunction,
 ) => {
   if (error instanceof multer.MulterError) {
     if (error.code === "LIMIT_FILE_SIZE") {

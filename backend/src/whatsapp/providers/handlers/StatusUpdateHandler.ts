@@ -60,8 +60,11 @@ export class StatusUpdateHandler {
       const newStatus = statusMap[currentStatus];
       if (!newStatus) return;
 
+      const companyId = this.sessionCache.get(sessionId)?.companyId as string;
+      if (!companyId) return;
+
       const msg = await TenantContextManager.runAsSystem(() =>
-        messageRepository.findMessageByWhatsAppId(whatsappMessageId),
+        messageRepository.findMessageByWhatsAppId(whatsappMessageId, companyId),
       );
 
       if (!msg) return;
@@ -76,8 +79,7 @@ export class StatusUpdateHandler {
       this.socketEmitter.emitMessageStatus(
         msg.id,
         msg.conversationId,
-        msg.companyId ||
-          (this.sessionCache.get(sessionId)?.companyId as string),
+        msg.companyId || companyId,
         newStatus,
       );
     } catch (error) {

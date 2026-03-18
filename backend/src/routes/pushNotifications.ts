@@ -3,6 +3,11 @@ import { Request, Response } from "express";
 import { pushNotificationService } from "@/services/pushNotificationService";
 import { catchAsync } from "@/utils/catchAsync";
 import { Logger } from "@/utils/logger";
+import { validate } from "@/middleware/validationMiddleware";
+import {
+  PushSubscribeSchema,
+  PushUnsubscribeSchema,
+} from "@/schemas/commonSchemas";
 
 const router = Router();
 
@@ -24,17 +29,11 @@ router.get("/vapid-public-key", (req: Request, res: Response) => {
  */
 router.post(
   "/subscribe",
+  validate(PushSubscribeSchema),
   catchAsync(async (req: Request, res: Response) => {
     const user = (req as unknown as { user: { id: string; companyId: string } })
       .user;
     const { subscription } = req.body;
-
-    if (!subscription || !subscription.endpoint || !subscription.keys) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid subscription object",
-      });
-    }
 
     await pushNotificationService.subscribe({
       userId: user.id,
@@ -63,17 +62,11 @@ router.post(
  */
 router.post(
   "/unsubscribe",
+  validate(PushUnsubscribeSchema),
   catchAsync(async (req: Request, res: Response) => {
     const user = (req as unknown as { user: { id: string; companyId: string } })
       .user;
     const { endpoint } = req.body;
-
-    if (!endpoint) {
-      return res.status(400).json({
-        success: false,
-        message: "Endpoint is required",
-      });
-    }
 
     await pushNotificationService.unsubscribe(user.id, endpoint);
 

@@ -99,7 +99,7 @@ const resolveContactId = async (id: string, companyId: string) => {
   }
 
   try {
-    const user = await userRepository.findUnique({ where: { id } });
+    const user = await userRepository.findFirst({ where: { id } });
     if (user) {
       let linkedContact = await contactRepository.findFirst({
         where: {

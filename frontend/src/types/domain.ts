@@ -179,6 +179,8 @@ export interface Conversation extends BaseEntity {
   channelId: string | null;
   tags: string[];
   resolvedAt: string | null;
+  isGroup: boolean;
+  syncEnabled: boolean;
 
   // Relations
   participants: UserListItem[];
@@ -214,6 +216,8 @@ export interface ConversationListItem {
   updatedAt: string;
   messageCount: number;
   unreadCount: number;
+  isGroup?: boolean;
+  syncEnabled?: boolean;
   assignedTo: UserBasic | null;
   contact?: Contact | null;
   lastMessage?: MessagePreview | null; // Optional and Nullable

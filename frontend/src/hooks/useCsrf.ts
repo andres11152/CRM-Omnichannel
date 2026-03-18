@@ -31,8 +31,8 @@ export const useCsrfToken = () => {
 
       // Update Axios defaults to include CSRF token in future requests
       api.defaults.headers.common["X-CSRF-Token"] = token;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unknown error");
       console.error("[CSRF] Failed to fetch token:", err);
     } finally {
       setIsLoading(false);
@@ -56,4 +56,3 @@ export const useCsrfToken = () => {
 };
 
 // Removed global fetch monkey-patching. Axios handles headers via interceptors/defaults.
-

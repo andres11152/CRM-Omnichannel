@@ -4,7 +4,7 @@ import { type TeamAgent } from "./types";
 interface TeamTableProps {
   agents: TeamAgent[];
   loading: boolean;
-  currentUser?: any;
+  currentUser?: { id: string; role: string } | null;
   onEdit: (agent: TeamAgent) => void;
   onDelete: (id: string, name: string) => void;
   onCreateNew: () => void;
@@ -35,7 +35,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
       <div className="text-center py-20 bg-white dark:bg-reply-panel-dark rounded-xl border border-dashed border-gray-300 dark:border-reply-border-dark">
         <div className="text-4xl mb-4">👋</div>
         <h3 className="text-xl font-bold text-gray-800 dark:text-white">
-          Tu equipo estáá vacío
+          Tu equipo está vacío
         </h3>
         <p className="text-gray-500 mb-6">
           Agrega tu primer agente para comenzar a atender tickets.
@@ -271,7 +271,7 @@ const LiveTimer: React.FC<{
  */
 interface TeamTableRowProps {
   agent: TeamAgent;
-  currentUser?: any;
+  currentUser?: { id: string; role: string } | null;
   onEdit: (agent: TeamAgent) => void;
   onDelete: (id: string, name: string) => void;
 }
@@ -504,5 +504,3 @@ const TeamTableRow: React.FC<TeamTableRowProps> = ({
     </tr>
   );
 };
-
-

@@ -78,16 +78,27 @@ export class OutboundMessageHandler {
         ...metadata,
       };
 
-      const savedMessage = await chatService.upsertMessage({
-        whatsappMessageId: sentMsg?.key?.id || `temp_${Date.now()}`,
-        companyId,
-        content,
-        direction: "OUTBOUND",
-        conversationId,
-        senderId,
-        status: "SENT",
-        metadata: prepareMetadataForDB(mergedMeta),
-      });
+      const dbId = metadata?.dbId as string | undefined;
+      let savedMessage;
+
+      if (dbId) {
+        savedMessage = await messageRepository.update(dbId, {
+          whatsappMessageId: sentMsg?.key?.id || generatedId,
+          status: "SENT",
+          metadata: prepareMetadataForDB(mergedMeta) as Prisma.InputJsonValue,
+        });
+      } else {
+        savedMessage = await chatService.upsertMessage({
+          whatsappMessageId: sentMsg?.key?.id || `temp_${Date.now()}`,
+          companyId,
+          content,
+          direction: "OUTBOUND",
+          conversationId,
+          senderId,
+          status: "SENT",
+          metadata: prepareMetadataForDB(mergedMeta),
+        });
+      }
 
       const isAiGenerated = metadata?.aiGenerated === true;
       const isFlowGenerated = metadata?.flowGenerated === true;
@@ -189,18 +200,30 @@ export class OutboundMessageHandler {
       const meta: MessageMetadata = {
         messageId: sentMsg?.key?.id,
         media: { type: metaType, url: media.url },
+        ...(options.metadata || {}), // ❤️ FIX: Preserve quotes/replies metadata
       };
 
-      const savedMessage = await chatService.upsertMessage({
-        whatsappMessageId: sentMsg?.key?.id || `temp_${Date.now()}`,
-        companyId,
-        content,
-        direction: "OUTBOUND",
-        conversationId,
-        senderId,
-        status: "SENT",
-        metadata: prepareMetadataForDB(meta),
-      });
+      const dbId = options.metadata?.dbId as string | undefined;
+      let savedMessage;
+
+      if (dbId) {
+        savedMessage = await messageRepository.update(dbId, {
+          whatsappMessageId: sentMsg?.key?.id || generatedId,
+          status: "SENT",
+          metadata: prepareMetadataForDB(meta) as Prisma.InputJsonValue,
+        });
+      } else {
+        savedMessage = await chatService.upsertMessage({
+          whatsappMessageId: sentMsg?.key?.id || `temp_${Date.now()}`,
+          companyId,
+          content,
+          direction: "OUTBOUND",
+          conversationId,
+          senderId,
+          status: "SENT",
+          metadata: prepareMetadataForDB(meta),
+        });
+      }
 
       const optMetadata = options.metadata;
       const isAiGenerated = optMetadata?.aiGenerated === true;
@@ -290,23 +313,28 @@ export class OutboundMessageHandler {
     const sock = this.sessionManager.getSession(sessionId);
     if (!sock) return;
 
-    const session = await whatsappSessionRepository.findOne(sessionId);
+    const session =
+      await whatsappSessionRepository.findSystemSession(sessionId);
     if (!session) return;
 
     await TenantContextManager.run(
       { companyId: session.companyId, requestId: `read:${messageId}` },
       async () => {
-        const msg = await messageRepository.findWithConversation(messageId);
+        const msg = await messageRepository.findWithConversation(
+          session.companyId,
+          messageId,
+        );
 
         if (msg && msg.metadata) {
-          const meta = msg.metadata as unknown as MessageMetadata;
+          const meta = msg.metadata as Record<string, Prisma.JsonValue | undefined>;
+          const remoteMessageId = meta.messageId as string | undefined;
           let remoteJid = msg.conversation?.channelId;
           if (remoteJid && !remoteJid.includes("@"))
             remoteJid += "@s.whatsapp.net";
 
-          if (meta.messageId && remoteJid) {
+          if (remoteMessageId && remoteJid) {
             await sock.readMessages([
-              { remoteJid, id: meta.messageId, participant: undefined },
+              { remoteJid, id: remoteMessageId, participant: undefined },
             ]);
           }
         }

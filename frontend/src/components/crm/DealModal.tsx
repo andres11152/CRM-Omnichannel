@@ -68,12 +68,32 @@ export const DealModal: React.FC<Props> = ({
     expectedCloseDate: "",
   });
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
-  const [pipelines, setPipelines] = useState<any[]>([]);
-  const [currentStages, setCurrentStages] = useState<any[]>([]);
+  const [pipelines, setPipelines] = useState<
+    Array<{
+      id: string;
+      name: string;
+      isDefault?: boolean;
+      stages: Array<{ id: string; name: string; color?: string }>;
+    }>
+  >([]);
+  const [currentStages, setCurrentStages] = useState<
+    Array<{ id: string; name: string; color?: string }>
+  >([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<
+    Array<{ id: string; name: string; email?: string }>
+  >([]);
   const [loading, setLoading] = useState(false);
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<
+    Array<{
+      id: string;
+      type: string;
+      subject: string;
+      description?: string;
+      createdAt: string;
+      assignedTo?: { name: string };
+    }>
+  >([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [associationType, setAssociationType] = useState<"account" | "contact">(
     "account",
@@ -177,7 +197,7 @@ export const DealModal: React.FC<Props> = ({
           // If current stageId is not in the new pipeline, reset it
           if (selectedPipeline.stages?.length > 0) {
             const stageExists = selectedPipeline.stages.find(
-              (s: any) => s.id === formData.stageId,
+              (s: { id: string; name: string }) => s.id === formData.stageId,
             );
             if (!stageExists && !deal) {
               // Only reset if not editing existing deal (to avoid overwrite before load)
@@ -219,10 +239,10 @@ export const DealModal: React.FC<Props> = ({
         // Cast to any to bypass strict Partial<Deal> check for conflicting 'stage' property
         // The service handles logic based on stageId anyway
         const { stage, ...cleanData } = dataToSave;
-        await updateDeal(deal.id, cleanData as any);
+        await updateDeal(deal.id, cleanData as Partial<Deal>);
       } else {
         const { stage, ...cleanData } = dataToSave;
-        await createDeal(cleanData as any);
+        await createDeal(cleanData as Partial<Deal>);
       }
       onSave();
     } catch (error) {
@@ -479,7 +499,7 @@ export const DealModal: React.FC<Props> = ({
 
               {/* Lost Reason (shows only when stage is "Perdido") */}
               {currentStages.find(
-                (s: any) =>
+                (s: { id: string; name: string }) =>
                   s.id === formData.stageId && /perdido|lost/i.test(s.name),
               ) && (
                 <div className="bg-red-50 dark:bg-red-900/10 rounded-lg p-4 border border-red-200 dark:border-red-800/30">

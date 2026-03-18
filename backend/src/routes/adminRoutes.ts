@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import {
   listCompanies,
   createCompany,
@@ -41,20 +42,58 @@ router.get("/analytics/tenant-health", getTenantHealth);
 
 // Billing Ops
 router.get("/billing/transactions", getTransactions);
-router.post("/billing/retry", retryTransaction);
+router.post(
+  "/billing/retry",
+  validate(
+    z.object({
+      body: z.object({ transactionId: z.string().min(1) }),
+    }),
+  ),
+  retryTransaction,
+);
 router.get("/companies", listCompanies);
 router.post("/companies", validate(createCompanySchema), createCompany);
-router.put("/companies/:companyId", updateCompany);
+router.put(
+  "/companies/:companyId",
+  validate(
+    z.object({
+      params: z.object({ companyId: z.string().cuid() }),
+      body: z.record(z.any()), // Can be more specific later, but must validate param
+    }),
+  ),
+  updateCompany,
+);
 router.patch(
   "/companies/:companyId/status",
   validate(updateCompanyStatusSchema), // <-- APLICAMOS LA VALIDACIÓN AQUÍ
-  updateCompanyStatus
+  updateCompanyStatus,
 );
-router.post("/companies/:companyId/impersonate", impersonateCompany);
-router.get("/companies/:companyId/metrics", getCompanyMetrics);
+// Common param schema
+const companyIdSchema = z.object({
+  params: z.object({ companyId: z.string().cuid() }),
+});
+
+router.post(
+  "/companies/:companyId/impersonate",
+  validate(companyIdSchema),
+  impersonateCompany,
+);
+router.get(
+  "/companies/:companyId/metrics",
+  validate(companyIdSchema),
+  getCompanyMetrics,
+);
 
 router.get("/plans", listPlans);
 router.post("/plans", validate(savePlanSchema), savePlan);
-router.delete("/plans/:planId", deletePlan);
+router.delete(
+  "/plans/:planId",
+  validate(
+    z.object({
+      params: z.object({ planId: z.string().min(1) }),
+    }),
+  ),
+  deletePlan,
+);
 
 export default router;

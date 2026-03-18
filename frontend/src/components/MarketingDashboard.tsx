@@ -53,7 +53,9 @@ export const MarketingDashboard: React.FC = () => {
   // HISTORY FILTERS STATE
   const [historyFilter, setHistoryFilter] = useState("all");
   const [historySearch, setHistorySearch] = useState("");
-  const [historySort, setHistorySort] = useState<"newestá" | "oldestá">("newestá");
+  const [historySort, setHistorySort] = useState<"newestá" | "oldestá">(
+    "newestá",
+  );
 
   // CAMPAIGN FORM STATE
   const [campaignName, setCampaignName] = useState("");
@@ -209,7 +211,13 @@ export const MarketingDashboard: React.FC = () => {
     // Calculate audience count based on selected tags' real counts
     const totalCount = selectedTags.reduce((acc, tagId) => {
       const tag = tags.find((t) => t.id === tagId);
-      return acc + (tag ? (tag as any).count || 0 : 0);
+      return (
+        acc +
+        (tag
+          ? (tag as { id: string; name: string; color: string; count?: number })
+              .count || 0
+          : 0)
+      );
     }, 0);
     setAudienceCount(totalCount + targetPhones.length);
   }, [selectedTags, tags, targetPhones]);
@@ -231,9 +239,10 @@ export const MarketingDashboard: React.FC = () => {
     const jsonData = utils.sheet_to_json(worksheet, { header: 1 });
 
     const phones: string[] = [];
-    jsonData.forEach((row: any) => {
-      if (row[0]) {
-        const phone = String(row[0]).replace(/\D/g, ""); // Keep only digits
+    jsonData.forEach((row: unknown) => {
+      const cells = row as unknown[];
+      if (cells[0]) {
+        const phone = String(cells[0]).replace(/\D/g, ""); // Keep only digits
         if (phone.length >= 7) {
           // Basic validation
           phones.push(phone);
@@ -313,7 +322,9 @@ export const MarketingDashboard: React.FC = () => {
     setSelectedTemplateId(campaign.templateId || "");
     setSelectedTags(campaign.targetTags || []);
 
-    const configPhones = (campaign.config as any)?.targetPhones || [];
+    const configPhones =
+      ((campaign.config as unknown as Record<string, unknown>)
+        ?.targetPhones as string[]) || [];
     setTargetPhones(configPhones);
     setExcelFileName(
       configPhones.length > 0
@@ -379,7 +390,7 @@ export const MarketingDashboard: React.FC = () => {
       const template = getSelectedTemplate();
       let content = "";
       if (template && Array.isArray(template.components)) {
-        const body = template.components.find((c: any) => c.type === "BODY");
+        const body = template.components.find((c) => c.type === "BODY");
         content = body?.text || "";
       }
 
@@ -652,7 +663,7 @@ export const MarketingDashboard: React.FC = () => {
                         <div className="text-5xl font-black text-rose-600 dark:text-rose-400 mb-2 tracking-tighter">
                           {audienceCount}
                         </div>
-                        <div className="text-[10px] font-black text-gray-500 uppercase tracking-widestá">
+                        <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
                           Contactos Estimados en Audiencia
                         </div>
                       </div>
@@ -679,7 +690,7 @@ export const MarketingDashboard: React.FC = () => {
                           <div className="bg-emerald-50 dark:bg-emerald-500/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/20 flex items-center gap-3">
                             <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                             <div>
-                              <p className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widestá">
+                              <p className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
                                 {excelFileName}
                               </p>
                               <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
@@ -836,13 +847,13 @@ export const MarketingDashboard: React.FC = () => {
                         const t = getSelectedTemplate();
                         if (!t) return "Error cargando plantilla";
                         const body = Array.isArray(t.components)
-                          ? t.components.find((c: any) => c.type === "BODY")
+                          ? t.components.find((c) => c.type === "BODY")
                           : null;
                         return body ? body.text : "Sin contenido";
                       })()}
                     </div>
                   ) : (
-                    <div className="text-center text-gray-300 py-16 italic text-[10px] font-medium animate-pulse uppercase tracking-widestá">
+                    <div className="text-center text-gray-300 py-16 italic text-[10px] font-medium animate-pulse uppercase tracking-widest">
                       Selecciona una plantilla
                     </div>
                   )}
@@ -888,7 +899,7 @@ export const MarketingDashboard: React.FC = () => {
                   🎨
                 </div>
                 <h4 className="text-xl font-black text-gray-900 dark:text-white mb-2">
-                  Tu Galería estáá Vacía
+                  Tu Galería está Vacía
                 </h4>
                 <p className="text-sm text-gray-500 max-w-xs uppercase tracking-widest font-bold leading-relaxed">
                   Crea tu primer diseño profesional para empezar a impactar
@@ -899,8 +910,7 @@ export const MarketingDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {templates.map((t) => {
                     const bodyContent = Array.isArray(t.components)
-                      ? t.components.find((c: any) => c.type === "BODY")
-                          ?.text || ""
+                      ? t.components.find((c) => c.type === "BODY")?.text || ""
                       : "";
                     const isHtml = /<[a-z][\s\S]*>/i.test(bodyContent);
 
@@ -1742,5 +1752,3 @@ export const MarketingDashboard: React.FC = () => {
     </div>
   );
 };
-
-

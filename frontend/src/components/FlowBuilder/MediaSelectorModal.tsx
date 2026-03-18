@@ -161,7 +161,7 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
             // @ts-ignore
             <AudioRecorder
               onRecordingComplete={(asset) => {
-                onSelect(asset);
+                onSelect(asset as unknown as MediaAsset);
                 onClose();
               }}
               onCancel={() => setMode("SELECT")}
@@ -205,7 +205,7 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
                         src={
                           asset.thumbnailUrl ||
                           asset.fileUrl ||
-                          (asset as any).url
+                          (asset as unknown as { url: string }).url
                         }
                         alt={asset.filename}
                         className="w-full h-full object-cover"
@@ -277,6 +277,3 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
     </div>
   );
 };
-
-
-

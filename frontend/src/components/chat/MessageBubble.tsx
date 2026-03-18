@@ -67,71 +67,120 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message }) => {
           }
         >
           {/* Quoted Message (Reply Context) */}
-          {message.metadata?.quotedMessageId && (
+          {(
+            message.metadata as {
+              quotedMessageId?: string;
+              quotedContent?: string;
+            }
+          )?.quotedMessageId && (
             <div
               className={`mb-2 p-2 rounded-lg border-l-4 bg-black/5 dark:bg-white/5 ${isAgent ? "border-white/40" : "border-indigo-500"}`}
             >
               <div
                 className={`text-[10px] font-bold mb-0.5 ${isAgent ? "text-white/80" : "text-indigo-600 dark:text-indigo-400"}`}
               >
-                {message.metadata.quotedContent
+                {(message.metadata as { quotedContent?: string })?.quotedContent
                   ? "Respondiendo a:"
                   : "Respondiendo a mensaje multimedia"}
               </div>
               <div
                 className={`text-xs italic line-clamp-2 ${isAgent ? "text-white/70" : "text-gray-500 dark:text-gray-400"}`}
               >
-                {message.metadata.quotedContent ||
-                  "Haga clic para ver el original"}
+                {(message.metadata as { quotedContent?: string })
+                  ?.quotedContent || "Haga clic para ver el original"}
               </div>
             </div>
           )}
 
-          {/* Media Content */}
-          {message.type === "image" && message.mediaUrl && (
-            <img
-              src={message.mediaUrl}
-              alt="Imagen"
-              className="rounded-lg mb-2 max-w-full h-auto"
-            />
-          )}
-          {message.type === "video" && message.mediaUrl && (
-            <video
-              src={message.mediaUrl}
-              controls
-              className="rounded-lg mb-2 max-w-full h-auto"
-            />
-          )}
-          {message.type === "audio" && message.mediaUrl && (
-            <audio
-              src={message.mediaUrl}
-              controls
-              className="mb-2 max-w-full"
-            />
-          )}
-          {message.type === "document" && message.mediaUrl && (
-            <a
-              href={message.mediaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-blue-500 hover:underline mb-2"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          {/* Media Content with Placeholder Fallbacks */}
+          {(message.type === "image" ||
+            (message.type as string) === "image_unavailable") &&
+            (message.mediaUrl ? (
+              <img
+                src={message.mediaUrl}
+                alt="Imagen"
+                className="rounded-lg mb-2 max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => window.open(message.mediaUrl, "_blank")}
+              />
+            ) : (
+              <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
+                <span className="text-xl">📷</span>
+                <span className="text-xs text-gray-500 italic">
+                  Imagen no disponible
+                </span>
+              </div>
+            ))}
+
+          {(message.type === "video" ||
+            (message.type as string) === "video_unavailable") &&
+            (message.mediaUrl ? (
+              <video
+                src={message.mediaUrl}
+                controls
+                className="rounded-lg mb-2 max-w-full h-auto"
+              />
+            ) : (
+              <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
+                <span className="text-xl">🎬</span>
+                <span className="text-xs text-gray-500 italic">
+                  Video no disponible
+                </span>
+              </div>
+            ))}
+
+          {(message.type === "audio" ||
+            (message.type as string) === "audio_unavailable") &&
+            (message.mediaUrl ? (
+              <audio
+                src={message.mediaUrl}
+                controls
+                className="mb-2 max-w-full"
+              />
+            ) : (
+              <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
+                <span className="text-xl">🎤</span>
+                <span className="text-xs text-gray-500 italic">
+                  Audio no disponible
+                </span>
+              </div>
+            ))}
+
+          {(message.type === "document" ||
+            (message.type as string) === "document_unavailable") &&
+            (message.mediaUrl ? (
+              <a
+                href={message.mediaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg mb-2 border border-blue-100 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/30 transition-colors"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              Descargar archivo
-            </a>
-          )}
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <div className="flex flex-col overflow-hidden">
+                  <span className="text-sm font-medium truncate">
+                    Descargar archivo
+                  </span>
+                </div>
+              </a>
+            ) : (
+              <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
+                <span className="text-xl">📄</span>
+                <span className="text-xs text-gray-500 italic">
+                  Archivo no disponible
+                </span>
+              </div>
+            ))}
 
           {/* Text Content */}
           {message.content && (
@@ -301,10 +350,29 @@ const MessageStatus: React.FC<{ status: Message["status"] }> = ({ status }) => {
  */
 const formatTime = (timestamp: string): string => {
   const date = new Date(timestamp);
-  return date.toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const today = new Date();
+
+  if (date.toDateString() === today.toDateString()) {
+    // Only show time if it's today
+    return date.toLocaleTimeString("es-ES", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  // Show date and time if it's a previous day
+  return (
+    date.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    }) +
+    " " +
+    date.toLocaleTimeString("es-ES", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  );
 };
 
 /**

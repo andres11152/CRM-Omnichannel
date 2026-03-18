@@ -13,16 +13,18 @@ export interface ShadowUserParams {
 export class UserRepository {
   constructor(private db: ExtendedPrismaClient = prisma) {}
 
-  async findByEmail(email: string): Promise<User | null> {
-    return this.db.user.findUnique({ where: { email } });
-  }
-
-  async findUnique(args: Prisma.UserFindUniqueArgs) {
-    return this.db.user.findUnique(args);
+  async findById(id: string, companyId: string): Promise<User | null> {
+    return this.db.user.findFirst({
+      where: { id, companyId },
+    });
   }
 
   async findFirst(args: Prisma.UserFindFirstArgs) {
     return this.db.user.findFirst(args);
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.db.user.findUnique({ where: { email } });
   }
 
   async findMany(args: Prisma.UserFindManyArgs) {
@@ -57,8 +59,21 @@ export class UserRepository {
     return this.db.user.upsert({ where, create, update });
   }
 
-  async update(args: Prisma.UserUpdateArgs) {
-    return this.db.user.update(args);
+  async update<T = User>(
+    id: string,
+    companyId: string,
+    data: Prisma.UserUpdateInput | Prisma.UserUncheckedUpdateInput,
+    include?: Prisma.UserInclude
+  ): Promise<T> {
+    const user = await this.findById(id, companyId);
+    if (!user) throw new Error(`User ${id} not found in company ${companyId}`);
+
+    const result = await (this.db.user as Prisma.UserDelegate).update({
+      where: { id },
+      data,
+      include,
+    });
+    return result as T;
   }
 
   async create(args: Prisma.UserCreateArgs): Promise<User> {
@@ -69,7 +84,10 @@ export class UserRepository {
     return this.db.user.count({ where });
   }
 
-  async delete(id: string): Promise<User> {
+  async delete(id: string, companyId: string): Promise<User> {
+    const user = await this.findById(id, companyId);
+    if (!user) throw new Error(`User ${id} not found in company ${companyId}`);
+
     return this.db.user.delete({ where: { id } });
   }
 }

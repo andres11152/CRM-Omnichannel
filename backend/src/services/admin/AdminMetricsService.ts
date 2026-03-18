@@ -72,8 +72,8 @@ export const adminMetricsService = {
       aiAssistants,
     ] = await Promise.all([
       userRepository.count({ companyId }),
-      whatsappSessionRepository.count({
-        where: { companyId, status: "CONNECTED" },
+      whatsappSessionRepository.count(companyId, {
+        where: { status: "CONNECTED" },
       }),
       statsRepository.countQueues({ where: { companyId } }),
       ticketRepository.count({

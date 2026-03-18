@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { socketService } from "@/services/socketService";
 import { API_BASE_URL } from "@/services/apiConfig";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { Logger } from "@/utils/logger";
 import QRCode from "react-qr-code";
 
 interface WhatsAppSession {
@@ -45,10 +46,13 @@ export const IntegrationsPanel: React.FC = () => {
         );
         setSessions(sortedSessions);
 
-        // Update local state if we are currently viewing a QR that has changed
-        if (isScanning && currentQr) {
+        // Fetch using REFS instead of stale closure variables to guarantee accurate state in intervals
+        const currentScanningStatus = isScanningRef.current;
+        const currentQrStatus = currentQrRef.current;
+
+        if (currentScanningStatus && currentQrStatus) {
           const scanningSession = data.data.sessions.find(
-            (s: WhatsAppSession) => s.qrCode === currentQr,
+            (s: WhatsAppSession) => s.qrCode === currentQrStatus,
           );
           // If the session we are watching is no longer scanning (e.g. connected or deleted), close the modal
           if (!scanningSession || scanningSession.status !== "SCANNING") {
@@ -160,13 +164,17 @@ export const IntegrationsPanel: React.FC = () => {
         const currentQrVal = currentQrRef.current;
         const currentSessions = sessionsRef.current;
 
-        // Close modal if open for this session
-        if (
-          data.sessionId === currentScanningId ||
-          (currentQrVal &&
-            currentSessions.find((s) => s.sessionId === data.sessionId)
-              ?.qrCode === currentQrVal)
-        ) {
+        // 🛡️ Robust Modal Closing Logic
+        const isTargetSession = data.sessionId === currentScanningId;
+        const matchesCurrentQr =
+          currentQrVal &&
+          currentSessions.find((s) => s.sessionId === data.sessionId)
+            ?.qrCode === currentQrVal;
+
+        if (isTargetSession || matchesCurrentQr) {
+          Logger.info(
+            `[ChatSync] Closing modal for connected session: ${data.sessionId}`,
+          );
           setIsScanning(false);
           setCurrentQr(null);
           setScanningSessionId(null);
@@ -200,13 +208,43 @@ export const IntegrationsPanel: React.FC = () => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const handleCreateSession = async () => {
+    // 🛡️ GUARD: Prevent duplicate session creation
+    if (loading || isScanning) {
+      toast.info("Ya hay una conexión en progreso...");
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/whatsapp/sessions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      // 🛡️ FIX: Use AbortController with generous timeout
+      // The session init includes fetching WA version + Baileys startup
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE_URL}/whatsapp/sessions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+      } catch (fetchErr: unknown) {
+        clearTimeout(timeoutId);
+        // 🛡️ If aborted/timeout, the session may still be initializing in the backend.
+        // The QR will arrive via WebSocket. Show scanning state and wait.
+        if (fetchErr instanceof DOMException && fetchErr.name === "AbortError") {
+          toast.info("Conectando... el QR llegará en unos segundos.", { duration: 5000 });
+          setIsScanning(true);
+          // Refresh to pick up the newly created session
+          await fetchSessions();
+          return;
+        }
+        throw fetchErr;
+      }
+      clearTimeout(timeoutId);
+
       const data = await res.json();
 
       if (res.status === 403) {
@@ -217,40 +255,48 @@ export const IntegrationsPanel: React.FC = () => {
       if (data.status === "success" && data.data.session) {
         const newSession = data.data.session;
 
-        // ✅ FIX: Set QR code from API response
+        // Set scanning state IMMEDIATELY so WebSocket listeners are active
+        setScanningSessionId(newSession.sessionId);
+        setIsScanning(true);
+
+        // If QR came in the HTTP response, use it
         if (newSession.qrCode) {
           setCurrentQr(newSession.qrCode);
-          setIsScanning(true);
         }
 
-        setSessions((prev) => [...prev, newSession]);
-        setScanningSessionId(newSession.sessionId);
+        setSessions((prev) => {
+          const exists = prev.some((s) => s.sessionId === newSession.sessionId);
+          return exists ? prev : [...prev, newSession];
+        });
 
         // ✅ AUTO-CLEANUP: Delete session if still SCANNING after 2 minutes
+        const cleanupSessionId = newSession.sessionId;
         setTimeout(async () => {
-          const stillScanning = sessions.find(
+          const currentSessions = sessionsRef.current;
+          const stillScanning = currentSessions.find(
             (s) =>
-              s.sessionId === newSession.sessionId && s.status === "SCANNING",
+              s.sessionId === cleanupSessionId && s.status === "SCANNING",
           );
           if (stillScanning) {
             console.log(
-              `[⚠️ ] Session ${newSession.sessionId} timed out, deleting...`,
+              `[⚠️] Session ${cleanupSessionId} timed out, deleting...`,
             );
-            await handleDeleteSession(newSession.sessionId);
+            await handleDeleteSession(cleanupSessionId);
             toast.error("Tiempo de escaneo agotado. Intenta de nuevo.");
           }
-        }, 120000); // 2 minutes
+        }, 120000);
 
         fetchSessions();
 
-        // Show success message
         if (newSession.qrCode) {
           toast.success("✅ QR generado! Escanea para conectar");
+        } else {
+          toast.info("Generando código QR...", { duration: 3000 });
         }
       }
     } catch (error) {
       console.error("Failed to create session", error);
-      toast.error("Error al crear sesión.");
+      toast.error("Error al crear sesión. Intenta de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -471,6 +517,7 @@ export const IntegrationsPanel: React.FC = () => {
                         <button
                           onClick={() => {
                             setCurrentQr(session.qrCode);
+                            setScanningSessionId(session.sessionId);
                             setIsScanning(true);
                           }}
                           className="flex-1 px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors border border-transparent hover:border-blue-100 dark:hover:border-blue-900/30"
@@ -596,14 +643,10 @@ export const IntegrationsPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Scan QR Modal - Futuristic Enterprise Edition (Compact & Responsive) */}
+      {/* Scan QR Modal - Clean Enterprise Design */}
       {isScanning && currentQr && (
-        <div className="fixed inset-0 bg-[#0f172a]/90 backdrop-blur-xl z-[9999] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-[#0B1120] rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-gray-200 dark:border-indigo-500/30 flex flex-col md:flex-row relative">
-            {/* Background Ambient Glows */}
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none"></div>
-            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none"></div>
-
+        <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl w-full max-w-3xl overflow-hidden border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row relative">
             {/* Close Button Absolute (Mobile Optimized) */}
             <button
               onClick={() => setIsScanning(false)}
@@ -625,45 +668,23 @@ export const IntegrationsPanel: React.FC = () => {
             </button>
 
             {/* Left Panel: QR Scanner */}
-            <div className="w-full md:w-5/12 bg-gray-50 dark:bg-[#0F172A]/50 flex flex-col items-center justify-center p-6 md:p-8 relative border-b md:border-b-0 md:border-r border-gray-100 dark:border-indigo-500/10 group">
-              <div className="relative z-10">
-                {/* Animated Scanning Frame */}
-                <div className="relative w-[220px] h-[220px] p-1 rounded-3xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-blue-500 shadow-[0_0_30px_rgba(79,70,229,0.25)]">
-                  <div className="absolute inset-0 bg-white dark:bg-[#0B1120] rounded-[22px] m-[2px]"></div>
-
-                  {/* QR Container */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-white p-3 rounded-[20px] m-[4px] overflow-hidden">
-                    <QRCode
-                      value={currentQr}
-                      size={256}
-                      style={{
-                        height: "auto",
-                        maxWidth: "100%",
-                        width: "100%",
-                      }}
-                      viewBox={`0 0 256 256`}
-                    />
-                    {/* Scanning Line Animation */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/20 to-transparent h-12 w-full animate-scan pointer-events-none border-b border-indigo-500/40"></div>
-                  </div>
-
-                  {/* Corner Accents */}
-                  <div className="absolute -top-1.5 -left-1.5 w-5 h-5 border-t-[3px] border-l-[3px] border-indigo-500 rounded-tl-lg"></div>
-                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 border-t-[3px] border-r-[3px] border-purple-500 rounded-tr-lg"></div>
-                  <div className="absolute -bottom-1.5 -left-1.5 w-5 h-5 border-b-[3px] border-l-[3px] border-blue-500 rounded-bl-lg"></div>
-                  <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 border-b-[3px] border-r-[3px] border-indigo-500 rounded-br-lg"></div>
-                </div>
+            <div className="w-full md:w-5/12 bg-gray-50/50 dark:bg-[#1F2937]/30 flex flex-col items-center justify-center p-8 relative border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-800">
+              <div className="relative z-10 p-4 bg-white rounded-2xl shadow-sm border border-gray-200">
+                <QRCode
+                  value={currentQr}
+                  size={200}
+                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                  viewBox={`0 0 256 256`}
+                />
               </div>
 
-              <div className="mt-6 text-center space-y-2 z-10">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 backdrop-blur-sm">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+              <div className="mt-8 text-center space-y-2 z-10">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 font-medium text-sm">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </span>
-                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 tracking-wide uppercase">
-                    Esperando Conexión
-                  </span>
+                  Esperando conexión...
                 </div>
               </div>
             </div>
@@ -723,37 +744,13 @@ export const IntegrationsPanel: React.FC = () => {
                 ))}
               </div>
 
-              <div className="mt-8 flex gap-3">
+              <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 flex justify-end">
                 <button
                   onClick={() => setIsScanning(false)}
-                  className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-bold text-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                  className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   Cancelar
                 </button>
-                <div className="flex-1 flex items-center justify-end">
-                  <p className="text-[10px] text-indigo-500 flex items-center gap-1.5 opacity-80">
-                    <svg
-                      className="w-3 h-3 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Sincronizando...
-                  </p>
-                </div>
               </div>
             </div>
           </div>

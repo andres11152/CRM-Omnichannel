@@ -2,6 +2,7 @@ import { Router } from "express";
 import { protect } from "@/middleware/authMiddleware";
 import { checkPlanLimit } from "@/middleware/planLimitsMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
+import { requestTimeout } from "@/middleware/timeoutMiddleware";
 import * as whatsappController from "@/controllers/whatsappController";
 import * as chatSyncController from "@/controllers/chatSyncController";
 
@@ -9,6 +10,10 @@ import {
   TriggerSyncSchema,
   SyncConversationSchema,
 } from "@/schemas/chatSyncSchema";
+import {
+  SessionIdParamSchema,
+  UpdateSessionSchema,
+} from "@/schemas/whatsappSchema";
 
 const router = Router();
 
@@ -16,14 +21,25 @@ router.use(protect);
 
 router.post(
   "/sessions",
+  // 🛡️ Override global 30s timeout: QR generation + Baileys init can take up to 20s.
+  requestTimeout({ timeout: 60000 }),
   checkPlanLimit("whatsapp_sessions"),
   whatsappController.createSession,
 );
 router.get("/sessions", whatsappController.getSessions);
-router.delete("/sessions/:sessionId", whatsappController.deleteSession);
-router.patch("/sessions/:sessionId", whatsappController.updateSession);
+router.delete(
+  "/sessions/:sessionId",
+  validate(SessionIdParamSchema),
+  whatsappController.deleteSession,
+);
+router.patch(
+  "/sessions/:sessionId",
+  validate(UpdateSessionSchema),
+  whatsappController.updateSession,
+);
 router.post(
   "/sessions/:sessionId/reconnect",
+  validate(SessionIdParamSchema),
   whatsappController.reconnectSession,
 );
 
@@ -42,4 +58,3 @@ router.post(
 );
 
 export default router;
-

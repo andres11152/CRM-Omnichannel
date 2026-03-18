@@ -1,6 +1,22 @@
 import { Account, Deal, Activity } from "@/types/crm";
 import { api } from "@/lib/axios";
 
+/** Pipeline type for CRM */
+interface Pipeline {
+  id: string;
+  name: string;
+  stages: { id: string; name: string; order: number }[];
+}
+
+/** CRM Contact (lightweight) */
+interface CrmContact {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  companyId?: string;
+}
+
 // --- ACCOUNTS ---
 
 export const getAccounts = async (): Promise<{ accounts: Account[] }> => {
@@ -10,7 +26,7 @@ export const getAccounts = async (): Promise<{ accounts: Account[] }> => {
 
 // --- PIPELINES ---
 
-export const getPipelines = async (): Promise<{ pipelines: any[] }> => {
+export const getPipelines = async (): Promise<{ pipelines: Pipeline[] }> => {
   const res = await api.get("/pipelines");
   return res.data.data;
 };
@@ -21,7 +37,7 @@ export const getAccount = async (id: string): Promise<{ account: Account }> => {
 };
 
 export const createAccount = async (
-  accountData: Partial<Account>
+  accountData: Partial<Account>,
 ): Promise<{ account: Account }> => {
   const res = await api.post("/accounts", accountData);
   return res.data.data;
@@ -29,7 +45,7 @@ export const createAccount = async (
 
 export const updateAccount = async (
   id: string,
-  accountData: Partial<Account>
+  accountData: Partial<Account>,
 ): Promise<{ account: Account }> => {
   const res = await api.patch(`/accounts/${id}`, accountData);
   return res.data.data;
@@ -46,13 +62,15 @@ export const getDeals = async (filters?: {
   stageId?: string;
   accountId?: string;
 }): Promise<{ deals: Deal[] }> => {
-  const query = new URLSearchParams(filters as any).toString();
+  const query = new URLSearchParams(
+    filters as Record<string, string>,
+  ).toString();
   const res = await api.get(`/deals?${query}`);
   return res.data.data;
 };
 
 export const createDeal = async (
-  dealData: Partial<Deal>
+  dealData: Partial<Deal>,
 ): Promise<{ deal: Deal }> => {
   const res = await api.post("/deals", dealData);
   return res.data.data;
@@ -60,7 +78,7 @@ export const createDeal = async (
 
 export const updateDeal = async (
   id: string,
-  dealData: Partial<Deal>
+  dealData: Partial<Deal>,
 ): Promise<{ deal: Deal }> => {
   const res = await api.patch(`/deals/${id}`, dealData);
   return res.data.data;
@@ -72,7 +90,7 @@ export const deleteDeal = async (id: string): Promise<void> => {
 
 // --- CONTACTS ---
 
-export const getContacts = async (): Promise<{ contacts: any[] }> => {
+export const getContacts = async (): Promise<{ contacts: CrmContact[] }> => {
   const res = await api.get("/contacts");
 
   // Axios response.data IS the body.
@@ -95,13 +113,15 @@ export const getActivities = async (filters?: {
   accountId?: string;
   contactId?: string;
 }): Promise<{ activities: Activity[] }> => {
-  const query = new URLSearchParams(filters as any).toString();
+  const query = new URLSearchParams(
+    filters as Record<string, string>,
+  ).toString();
   const res = await api.get(`/activities?${query}`);
   return res.data.data;
 };
 
 export const createActivity = async (
-  activityData: Partial<Activity>
+  activityData: Partial<Activity>,
 ): Promise<{ activity: Activity }> => {
   const res = await api.post("/activities", activityData);
   return res.data.data;
@@ -109,7 +129,7 @@ export const createActivity = async (
 
 export const updateActivity = async (
   id: string,
-  activityData: Partial<Activity>
+  activityData: Partial<Activity>,
 ): Promise<{ activity: Activity }> => {
   const res = await api.patch(`/activities/${id}`, activityData);
   return res.data.data;
@@ -118,4 +138,3 @@ export const updateActivity = async (
 export const deleteActivity = async (id: string): Promise<void> => {
   await api.delete(`/activities/${id}`);
 };
-

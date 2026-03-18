@@ -125,9 +125,9 @@ export const DealKanban: React.FC = () => {
       });
       toast.success("Pipeline inicializado correctamente");
       return true;
-    } catch (e: any) {
-      const msg = e.response?.data?.message || e.message;
-      if (msg?.includes("ya estáá en uso") || msg?.includes("already exists")) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg?.includes("ya está en uso") || msg?.includes("already exists")) {
         return true;
       }
       console.error("[Pipeline] Failed to create default", e);

@@ -5,6 +5,16 @@ import { BASE_URL } from "./apiConfig";
 
 const SOCKET_URL = BASE_URL;
 
+/** 🛡️ JWT Payload type (replaces `any` from jwtDecode) */
+interface JwtPayload {
+  id: string;
+  companyId: string;
+  email?: string;
+  role?: string;
+  iat?: number;
+  exp?: number;
+}
+
 class SocketService {
   private socket: Socket | null = null;
 
@@ -21,7 +31,7 @@ class SocketService {
 
     if (token) {
       try {
-        const decoded: any = jwtDecode(token);
+        const decoded = jwtDecode<JwtPayload>(token);
         agentId = decoded.id;
         companyId = decoded.companyId;
       } catch (e) {
@@ -80,17 +90,17 @@ class SocketService {
     }
   }
 
-  on(event: string, callback: (data: any) => void) {
+  on<T = unknown>(event: string, callback: (data: T) => void) {
     if (!this.socket) this.connect();
     //console.log(`[SocketService] Registering listener for event: ${event}`);
-    this.socket?.on(event, callback);
+    this.socket?.on(event, callback as (...args: unknown[]) => void);
   }
 
-  off(event: string, callback: (data: any) => void) {
-    this.socket?.off(event, callback);
+  off<T = unknown>(event: string, callback: (data: T) => void) {
+    this.socket?.off(event, callback as (...args: unknown[]) => void);
   }
 
-  emit(event: string, data: any) {
+  emit(event: string, data: unknown) {
     if (!this.socket) this.connect();
     this.socket?.emit(event, data);
   }

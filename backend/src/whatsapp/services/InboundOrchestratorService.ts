@@ -1,0 +1,313 @@
+import { WAMessage } from "@whiskeysockets/baileys";
+import { User, Conversation, MediaType } from "@prisma/client";
+import { Logger } from "@/utils/logger";
+import { chatService } from "@/services/chatService";
+import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
+import { IdentityResolverService } from "./IdentityResolverService";
+import { ISessionManager } from "../core/interfaces/ISessionManager";
+import { ProfilePictureService } from "./ProfilePictureService";
+import { groupContactIndexer } from "@/services/queue/groupContactIndexer";
+import { contactRepository } from "@/repositories/ContactRepository";
+import { messageRepository } from "@/repositories/MessageRepository";
+import { MessageMetadata } from "@/types/whatsapp.types";
+import { deduplicationService } from "./DeduplicationService";
+
+export interface OrchestratedEntities {
+  customerUser: User | null;
+  conversation: Conversation & { participants: User[] };
+  isGroup: boolean;
+  cleanRemoteJid: string;
+}
+
+export class InboundOrchestratorService {
+  constructor(
+    private sessionManager: ISessionManager,
+    private identityResolver: IdentityResolverService,
+    private profilePicService: ProfilePictureService,
+  ) {}
+
+  /**
+   * 🔍 ENTITY RESOLUTION
+   * Resolves or creates the User and Conversation associated with an incoming message.
+   */
+  async resolveEntities(
+    message: WAMessage,
+    sessionId: string,
+    companyId: string,
+    sessionPhone?: string,
+  ): Promise<OrchestratedEntities | null> {
+    // 🔍 1. Identity Resolution
+    const { cleanRemoteJid } = await this.identityResolver.resolveMessageJid(
+      message,
+      sessionId,
+      companyId,
+    );
+
+    if (!cleanRemoteJid) return null;
+
+    const isGroup = WhatsAppIdUtils.isGroup(cleanRemoteJid);
+    let isFromMe = message.key.fromMe || false;
+
+    // Detect if "fromMe" even if Baileys doesn't report it (multi-device)
+    if (!isFromMe && isGroup && message.key.participant) {
+      const senderPhone = WhatsAppIdUtils.getPhoneNumber(message.key.participant);
+      if (senderPhone && sessionPhone && senderPhone === sessionPhone) {
+        isFromMe = true;
+      }
+    }
+
+    // 🛡️ 2. Spam Gate
+    if (!isFromMe && !isGroup) {
+      const senderPhone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
+      if (senderPhone) {
+        const blocked = await contactRepository.findFirst({
+          where: { companyId, phone: senderPhone, isBlocked: true },
+          select: { id: true },
+        });
+        if (blocked) {
+          Logger.info(`[Orchestrator] 🚫 Blocked: ${senderPhone}`);
+          return null;
+        }
+      }
+    }
+
+    // 👤 3. User Resolution
+    let customerUser: User | null = null;
+    const chatUniqueId = cleanRemoteJid.split("@")[0];
+    const chatEmail = `${chatUniqueId}@whatsapp.user`;
+
+    if (!isFromMe) {
+      const senderJid = this.identityResolver.resolveSenderJid(message, cleanRemoteJid, isGroup);
+      if (senderJid) {
+        const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
+        customerUser = await chatService.upsertWhatsAppUser({
+          email: `${senderJid.split("@")[0]}@whatsapp.user`,
+          name: message.pushName || (senderPhone ? `+${senderPhone}` : "Usuario WhatsApp"),
+          companyId,
+          phone: senderPhone,
+          role: "USER",
+        });
+
+        this.profilePicService.fetchAndPersist(sessionId, senderJid, customerUser.id, companyId).catch((err) => {
+          Logger.warn(`[Orchestrator] Profile pic fetch failed for ${senderJid}:`, err);
+        });
+      }
+    } else if (!isGroup) {
+      const destPhone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
+      customerUser = await chatService.upsertWhatsAppUser({
+        email: chatEmail,
+        name: destPhone ? `+${destPhone}` : chatUniqueId,
+        companyId,
+        phone: destPhone,
+        role: "USER",
+      });
+    }
+
+    // 💬 4. Conversation Resolution
+    // 🛡️ ENTERPRISE FIX: Only attempt LID-based lookup if the JID is actually a LID.
+    // Running LID heuristics (name matching, brute force store) for @g.us or normal JIDs
+    // risks matching the WRONG conversation (e.g., routing a group message to an individual chat).
+    let conversation: (Conversation & { participants: User[] }) | null = null;
+
+    if (WhatsAppIdUtils.isLid(cleanRemoteJid)) {
+      conversation = await this.identityResolver.findConversationByLid(
+        companyId,
+        cleanRemoteJid,
+        chatUniqueId,
+        sessionId,
+        message,
+        isFromMe,
+      ) as (Conversation & { participants: User[] }) | null;
+    }
+
+    if (!conversation) {
+      const found = await chatService.findConversation(companyId, chatUniqueId, chatEmail);
+      if (found) conversation = await chatService.getFullConversation(found.id) as (Conversation & { participants: User[] });
+    }
+
+    if (!conversation) {
+      let conversationSubject = message.pushName || chatUniqueId;
+      let groupMetadata;
+
+      if (isGroup) {
+        conversationSubject = `📢 Grupo ${chatUniqueId.slice(0, 8)}...`;
+        const sock = this.sessionManager.getSession(sessionId);
+        if (sock) {
+          try {
+            const info = await sock.groupMetadata(cleanRemoteJid);
+            conversationSubject = `📢 ${info.subject || "Grupo"}`;
+
+            // 🏗️ ENTERPRISE: Build rich participant list for sidebar display
+            const participantNames = info.participants
+              ?.slice(0, 10)
+              .map((p) => p.id?.split("@")[0])
+              .filter(Boolean);
+
+            let groupPicUrl: string | null = null;
+            try {
+              groupPicUrl = await sock.profilePictureUrl(cleanRemoteJid, "image").catch(() => null);
+            } catch { /* ignore */ }
+
+            groupMetadata = {
+              groupName: info.subject,
+              description: info.desc,
+              participantCount: info.participants?.length,
+              groupPicUrl,
+              participants: participantNames,
+            };
+          } catch (e) {
+            Logger.warn(`[Orchestrator] Failed to fetch group metadata for ${cleanRemoteJid}`, e);
+          }
+        }
+      }
+
+      let contactId: string | undefined;
+      if (!isGroup) {
+        const phone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
+        if (phone) {
+          const contact = await chatService.findContact(companyId, phone);
+          contactId = contact?.id;
+        }
+      }
+
+      const newConv = await chatService.createConversation({
+        companyId,
+        channelId: chatUniqueId,
+        subject: conversationSubject,
+        userId: customerUser?.id,
+        contactId,
+        isGroup,
+        groupMetadata,
+      });
+
+      if (isGroup) {
+        groupContactIndexer.queueGroupForIndexing(companyId, cleanRemoteJid, sessionId, groupMetadata?.groupName).catch((err) => {
+          Logger.warn(`[Orchestrator] Failed up queue group indexing: ${cleanRemoteJid}`, err);
+        });
+      }
+
+      conversation = (await chatService.getFullConversation(newConv.id)) as Conversation & { participants: User[] };
+    }
+
+    if (conversation && ["CLOSED", "RESOLVED"].includes(conversation.status)) {
+      await chatService.updateConversation(conversation.id, { status: "OPEN" });
+    }
+
+    return { customerUser, conversation: conversation!, isGroup, cleanRemoteJid };
+  }
+
+  /**
+   * 💾 PERSISTENCE & TICKETING
+   * Saves the message to DB and ensures an active ticket exists.
+   */
+  async saveMessageAndTicket(params: {
+    message: WAMessage;
+    messageId: string;
+    entities: OrchestratedEntities;
+    content: { textContent: string, mediaUrl?: string, mediaType?: MediaType, mediaSize?: number };
+    companyId: string;
+    sessionId: string;
+    sessionPhone?: string;
+    defaultQueueId?: string | null;
+  }) {
+    const { message, messageId, entities, content, companyId, sessionPhone, defaultQueueId } = params;
+    const { conversation, customerUser, isGroup } = entities;
+
+    const isOutbound = message.key.fromMe;
+    let dbSenderId = customerUser?.id;
+
+    if (isOutbound) {
+      // Deduplication
+      if (await this.isMessageDuplicate(companyId, conversation.id, content.textContent, messageId)) {
+        return null;
+      }
+
+      // Resolve Agent/Session Owner
+      dbSenderId = await this.resolveOutboundSender({
+        conversation,
+        sessionPhone,
+        companyId,
+      });
+    }
+
+    const metadata = this.prepareMetadata(message, messageId, content, isGroup, isOutbound);
+
+    const savedMessage = await chatService.upsertMessage({
+      whatsappMessageId: messageId,
+      companyId,
+      content: content.textContent,
+      direction: isOutbound ? "OUTBOUND" : "INBOUND",
+      conversationId: conversation.id,
+      senderId: dbSenderId || conversation.participants[0]?.id || "system",
+      status: isOutbound ? "SENT" : "DELIVERED",
+      metadata: JSON.parse(JSON.stringify(metadata)),
+      createdAt: typeof message.messageTimestamp === "number" ? new Date(message.messageTimestamp * 1000) : new Date(),
+    });
+
+    let ticketId: string | undefined;
+    if (!isOutbound && customerUser && !isGroup) {
+      try {
+        const ticket = await chatService.ensureTicket(
+          companyId,
+          conversation.id,
+          customerUser.id,
+          conversation.subject || "WhatsApp",
+          content.textContent || "Media",
+          defaultQueueId,
+        );
+        ticketId = ticket?.id;
+      } catch (e) {
+        Logger.error("[Orchestrator] Ticket creation failed", e);
+      }
+    }
+
+    return { savedMessage, ticketId };
+  }
+
+  private async isMessageDuplicate(companyId: string, conversationId: string, text: string, _messageId: string): Promise<boolean> {
+    const recentThreshold = new Date(Date.now() - 10000);
+    const dbDup = await messageRepository.findDuplicateOutbound(companyId, conversationId, text, recentThreshold);
+    if (dbDup) return true;
+
+    if (text && await deduplicationService.isContentDuplicate(conversationId, text)) return true;
+    return false;
+  }
+
+  private async resolveOutboundSender(params: { conversation: Conversation & { assignedToId?: string | null }, sessionPhone?: string, companyId: string }): Promise<string | undefined> {
+    const { conversation, sessionPhone, companyId } = params;
+    if (conversation.assignedToId) return conversation.assignedToId;
+
+    if (sessionPhone) {
+      const owner = await messageRepository.getSessionOwner(sessionPhone, companyId);
+      if (owner) return owner.id;
+    }
+
+    const defaultAgent = await messageRepository.getDefaultAgent(companyId);
+    return defaultAgent?.id;
+  }
+
+  private prepareMetadata(msg: WAMessage, _id: string, content: { textContent: string, mediaUrl?: string, mediaType?: MediaType, mediaSize?: number }, isGroup: boolean, isOutbound: boolean): MessageMetadata {
+    return {
+      messageId: _id,
+      media: content.mediaUrl && content.mediaType ? {
+        type: content.mediaType === MediaType.IMAGE ? "image" :
+              content.mediaType === MediaType.VIDEO ? "video" :
+              content.mediaType === MediaType.AUDIO ? "audio" : "document",
+        size: content.mediaSize,
+        url: content.mediaUrl,
+      } : undefined,
+      origin: isOutbound ? "phone_sync" : "whatsapp",
+      isGroup,
+      quotedMessageId: this.extractQuotedId(msg),
+    };
+  }
+
+  private extractQuotedId(msg: WAMessage): string | undefined {
+    const ctx = msg.message?.extendedTextMessage?.contextInfo ||
+                msg.message?.imageMessage?.contextInfo ||
+                msg.message?.videoMessage?.contextInfo ||
+                msg.message?.audioMessage?.contextInfo ||
+                msg.message?.documentMessage?.contextInfo;
+    return ctx?.stanzaId || undefined;
+  }
+}

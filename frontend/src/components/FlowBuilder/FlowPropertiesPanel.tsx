@@ -7,7 +7,7 @@ import { getAgents, getQueues } from "@/services/queueService";
 
 interface FlowPropertiesPanelProps {
   node: FlowNode;
-  onUpdate: (key: string, value: any) => void;
+  onUpdate: (key: string, value: unknown) => void;
   onDelete: () => void;
 }
 
@@ -16,12 +16,24 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
   onUpdate,
   onDelete,
 }) => {
-  const [aiAgents, setAiAgents] = useState<any[]>([]);
+  const [aiAgents, setAiAgents] = useState<
+    Array<{
+      id: string;
+      name: string;
+      modelName?: string;
+      model?: string;
+      description?: string;
+    }>
+  >([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
 
   // 🛡️ ROUTING DATA STATE (Agents & Queues)
-  const [humanAgents, setHumanAgents] = useState<any[]>([]);
-  const [supportQueues, setSupportQueues] = useState<any[]>([]);
+  const [humanAgents, setHumanAgents] = useState<
+    Array<{ id: string; name: string; email?: string }>
+  >([]);
+  const [supportQueues, setSupportQueues] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   const [loadingRouting, setLoadingRouting] = useState(false);
 
   // Media Selector Modal
@@ -845,7 +857,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Si estáá vacío, usar el pipeline por defecto
+                Si está vacío, usar el pipeline por defecto
               </p>
             </div>
           </>
@@ -982,11 +994,13 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-pink-500"
                   >
                     <option value="">-- Seleccionar Agente --</option>
-                    {humanAgents.map((agent: any) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name} ({agent.email})
-                      </option>
-                    ))}
+                    {humanAgents.map(
+                      (agent: { id: string; name: string; email?: string }) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name} ({agent.email})
+                        </option>
+                      ),
+                    )}
                   </select>
                 )}
                 <p className="text-xs text-gray-400 mt-1">
@@ -1010,7 +1024,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-pink-500"
                   >
                     <option value="">-- Seleccionar Cola --</option>
-                    {supportQueues.map((q: any) => (
+                    {supportQueues.map((q: { id: string; name: string }) => (
                       <option key={q.id} value={q.id}>
                         {q.name}
                       </option>
@@ -1367,6 +1381,3 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
     </div>
   );
 };
-
-
-

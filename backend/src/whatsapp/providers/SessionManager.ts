@@ -36,7 +36,7 @@ import { bindSessionEvents } from "./events/SessionEventBinder";
 const store = new SimpleInMemoryStore();
 store
   .enablePersistence("global_wa_store")
-  .catch((e: unknown) =>
+  .catch((e: Error) =>
     logger.error({ err: e }, "Failed to enable Redis store persistence"),
   );
 
@@ -75,7 +75,7 @@ export class SessionManager implements ISessionManager {
 
     // DB Fallback (System Context)
     const session = await TenantContextManager.runAsSystem(async () =>
-      whatsappSessionRepository.findOne(sessionId),
+      whatsappSessionRepository.findSystemSession(sessionId),
     );
 
     if (session) {
@@ -166,7 +166,30 @@ export class SessionManager implements ISessionManager {
 
     // Load auth state
     const { state, saveCreds } = await this.authProvider.loadState(sessionId);
-    const { version, isLatest } = await fetchLatestBaileysVersion();
+
+    // 🛡️ RESILIENCE FIX: fetchLatestBaileysVersion makes an external HTTP call.
+    // If the network is slow or restricted, it hangs indefinitely causing a 30s server timeout.
+    // We race against a 5s timeout and fall back to a known-stable WA version.
+    const FALLBACK_WA_VERSION: [number, number, number] = [2, 3000, 1023480872];
+    let version: [number, number, number] = FALLBACK_WA_VERSION;
+    let isLatest = false;
+    try {
+      const versionResult = await Promise.race([
+        fetchLatestBaileysVersion(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("fetchLatestBaileysVersion timeout")),
+            5000,
+          ),
+        ),
+      ]);
+      version = versionResult.version as [number, number, number];
+      isLatest = versionResult.isLatest;
+    } catch (vErr) {
+      logger.warn(
+        `[SessionManager] ⚠️ Could not fetch latest WA version (${(vErr as Error).message}). Using fallback: ${FALLBACK_WA_VERSION.join(".")}`,
+      );
+    }
     logger.info(
       `[SessionManager] Using WA v${version.join(".")}, isLatest: ${isLatest}`,
     );
@@ -178,7 +201,7 @@ export class SessionManager implements ISessionManager {
       version,
       auth: state,
       printQRInTerminal: false,
-      logger: createSessionLogger(sessionId) as unknown as ReturnType<
+      logger: createSessionLogger(sessionId) as ReturnType<
         typeof import("pino")
       >,
       browser: Browsers.ubuntu("Reply CRM"),
@@ -192,11 +215,9 @@ export class SessionManager implements ISessionManager {
           const jid = key.remoteJid;
           if (jid && store.messages[jid]) {
             const msgArray = store.messages[jid];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const found = msgArray.find((m: any) => m?.key?.id === key.id);
+            const found = msgArray.find((m) => (m as proto.IWebMessageInfo)?.key?.id === key.id);
             if (found) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              return (found as any).message as proto.IMessage;
+              return (found as proto.IWebMessageInfo).message as proto.IMessage;
             }
           }
 
@@ -275,7 +296,7 @@ export class SessionManager implements ISessionManager {
       await this.authProvider.clearCredentials(sessionId);
       await TenantContextManager.runAsSystem(async () =>
         whatsappSessionRepository
-          .update(sessionId, {
+          .updateSystemSession(sessionId, {
             status: "DISCONNECTED",
             qrCode: null,
           })
@@ -288,7 +309,7 @@ export class SessionManager implements ISessionManager {
     const meta = this.sessionMetadata.get(sessionId);
     if (!meta) {
       const session = await TenantContextManager.runAsSystem(async () =>
-        whatsappSessionRepository.findOne(sessionId),
+        whatsappSessionRepository.findSystemSession(sessionId),
       );
       if (session) {
         await this.initializeSession({

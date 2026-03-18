@@ -2,13 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { toast } from "sonner"; // New Import
 import { Company, CompanyStatus, Plan } from "@/types";
-import { adminService } from "@/services/adminService";
+import { adminService, CompanyMetrics } from "@/services/adminService";
 import { API_BASE_URL } from "@/services/apiConfig";
 import { AdminTenantTable } from "./AdminTenantTable";
 import { ModuleHeader } from "./common/ModuleHeader";
 
 interface Props {
-  onNavigate: (tab: any) => void;
+  onNavigate: (tab: string) => void;
 }
 
 export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
@@ -24,7 +24,7 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
   const [selectedCompanyMetrics, setSelectedCompanyMetrics] =
     useState<Company | null>(null);
-  const [metrics, setMetrics] = useState<any | null>(null);
+  const [metrics, setMetrics] = useState<CompanyMetrics | null>(null);
   const [loadingMetrics, setLoadingMetrics] = useState(false);
 
   // New Company Form State
@@ -105,7 +105,7 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
 
   const handleImpersonate = async (id: string) => {
     const confirmed = window.confirm(
-      "⚠️ SEGURIDAD: Ests a punto de entrar en la cuenta del cliente. Todas tus acciones quedarn registradas. ¿Continuar?",
+      "⚠️ SEGURIDAD: Estás a punto de entrar en la cuenta del cliente. Todas tus acciones quedarán registradas. ¿Continuar?",
     );
     if (confirmed) {
       try {
@@ -129,7 +129,10 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
         }
 
         // Login and force redirect
-        login(userToLogin as any, result.token);
+        login(
+          userToLogin as unknown as Parameters<typeof login>[0],
+          result.token,
+        );
 
         // Use href to force full reload and clear any Master Admin state/sockets
         window.location.href = "/dashboard";
@@ -208,9 +211,11 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
       fetchData(); // Refresh list
       setIsModalOpen(false);
       resetModal();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error.message || "Error al crear la empresa.");
+      toast.error(
+        error instanceof Error ? error.message : "Error al crear la empresa.",
+      );
     } finally {
       setIsCreating(false);
     }
@@ -664,7 +669,7 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
                     <div className="space-y-3">
                       <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
                         <div className="text-xs text-gray-500 mb-1">
-                          ÚÚÚÚltimo Login Admin
+                          Último Login Admin
                         </div>
                         <div className="text-sm font-medium text-gray-800 dark:text-white">
                           {metrics.engagement?.lastAdminLogin
@@ -676,7 +681,7 @@ export const TenantManagement: React.FC<Props> = ({ onNavigate }) => {
                       </div>
                       <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
                         <div className="text-xs text-gray-500 mb-1">
-                          Conversaciónes
+                          Conversaciones
                         </div>
                         <div className="text-2xl font-bold text-purple-600">
                           {metrics.engagement?.conversationsThisMonth || 0}
@@ -848,12 +853,12 @@ const EditCompanyModal: React.FC<{
     try {
       // Optimistic UI update could be done here if needed, but loading state is safer
       await onUpdate(company.id, {
-        ...(formData as any),
+        ...(formData as unknown as Partial<Company>),
         subscriptionEndsAt: formData.subscriptionEndsAt
           ? new Date(formData.subscriptionEndsAt)
-          : null,
+          : undefined,
         // Ensure planId matches backend expectations (string or null)
-        planId: formData.planId || null,
+        planId: formData.planId || undefined,
       });
       // Modal closes via parent state update in onUpdate, but we can double check
     } catch (error) {
@@ -1075,7 +1080,11 @@ const EditCompanyModal: React.FC<{
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            status: e.target.value as any,
+                            status: e.target.value as
+                              | "ACTIVE"
+                              | "INACTIVE"
+                              | "TRIAL"
+                              | "OVERDUE",
                           })
                         }
                         className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"

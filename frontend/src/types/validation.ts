@@ -31,7 +31,7 @@ export const CompanyStatusSchema = z.nativeEnum(CompanyStatus);
 // ============================================
 
 export const BaseEntitySchema = z.object({
-  id: z.string().cuid(),
+  id: z.string(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -52,7 +52,7 @@ export const UserPreferencesSchema = z.object({
 });
 
 export const UserListItemSchema = z.object({
-  id: z.string().cuid(),
+  id: z.string(),
   name: z.string(),
   email: z.string().email(),
   role: UserRoleSchema,
@@ -63,7 +63,7 @@ export const UserSchema = BaseEntitySchema.extend({
   email: z.string().email(),
   name: z.string().min(1),
   role: UserRoleSchema,
-  companyId: z.string().cuid(),
+  companyId: z.string(),
   phone: z.string().nullable(),
   avatarUrl: z.string().url().nullable(),
   isActive: z.boolean(),
@@ -77,7 +77,7 @@ export const UserSchema = BaseEntitySchema.extend({
 export const CompanySchema = BaseEntitySchema.extend({
   name: z.string().min(1),
   status: CompanyStatusSchema,
-  planId: z.string().cuid().nullable(),
+  planId: z.string().nullable(),
   email: z.string().email().nullable(),
   phone: z.string().nullable(),
   website: z.string().url().nullable(),
@@ -92,7 +92,7 @@ export const ContactSchema = BaseEntitySchema.extend({
   name: z.string().min(1),
   email: z.string().email().nullable(),
   phone: z.string().nullable(),
-  companyId: z.string().cuid(),
+  companyId: z.string(),
   avatarUrl: z.string().url().nullable(),
   tags: z.array(z.string()),
   customFields: z.record(z.string(), z.unknown()),
@@ -135,15 +135,15 @@ export const MessageSchema = BaseEntitySchema.extend({
   channel: ChannelSchema,
   direction: MessageDirectionSchema,
   status: MessageStatusSchema,
-  conversationId: z.string().cuid(),
-  senderId: z.string().cuid(),
+  conversationId: z.string(),
+  senderId: z.string(),
   sender: UserListItemSchema,
   metadata: MessageMetadataSchema.nullable(),
 });
 
 export const MessageCreateSchema = z.object({
   content: z.string().min(1).max(5000),
-  conversationId: z.string().cuid(),
+  conversationId: z.string(),
   media: MessageMediaSchema.optional(),
 });
 
@@ -152,7 +152,7 @@ export const MessageCreateSchema = z.object({
 // ============================================
 
 export const ConversationListItemSchema = z.object({
-  id: z.string().cuid(),
+  id: z.string(),
   ticketId: z.string().optional(),
   subject: z.string().nullable(),
   status: ConversationStatusSchema,
@@ -166,7 +166,7 @@ export const ConversationListItemSchema = z.object({
   contact: ContactSchema.nullable().optional(),
   lastMessage: z
     .object({
-      id: z.string().cuid(),
+      id: z.string(),
       content: z.string(),
       createdAt: z.string().datetime(),
       sender: UserListItemSchema,
@@ -178,10 +178,12 @@ export const ConversationListItemSchema = z.object({
 export const ConversationSchema = BaseEntitySchema.extend({
   subject: z.string().nullable(),
   status: ConversationStatusSchema,
-  companyId: z.string().cuid(),
+  companyId: z.string(),
   channelId: z.string().nullable(),
   tags: z.array(z.string()),
   resolvedAt: z.string().datetime().nullable(),
+  isGroup: z.boolean().default(false),
+  syncEnabled: z.boolean().default(true),
   participants: z.array(UserListItemSchema),
   assignedTo: UserListItemSchema.nullable(),
   contact: ContactSchema.nullable(),
@@ -193,7 +195,7 @@ export const ConversationDetailSchema = ConversationSchema.extend({
   messages: z.array(MessageSchema),
   messagePagination: z.object({
     hasMore: z.boolean(),
-    nextCursor: z.string().cuid().nullable(),
+    nextCursor: z.string().nullable(),
     limit: z.number().int().positive(),
   }),
 });
@@ -201,14 +203,14 @@ export const ConversationDetailSchema = ConversationSchema.extend({
 export const ConversationCreateSchema = z.object({
   subject: z.string().min(1).max(200).optional(),
   channelId: z.string(),
-  contactId: z.string().cuid().optional(),
+  contactId: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
 
 export const ConversationUpdateSchema = z.object({
   subject: z.string().min(1).max(200).optional(),
   status: ConversationStatusSchema.optional(),
-  assignedToId: z.string().cuid().nullable().optional(),
+  assignedToId: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
 });
 
@@ -234,7 +236,7 @@ export const ApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
 export const PaginationSchema = z.object({
   total: z.number().int().nonnegative(),
   hasMore: z.boolean(),
-  nextCursor: z.string().cuid().nullable(),
+  nextCursor: z.string().nullable(),
   limit: z.number().int().positive(),
 });
 
@@ -254,7 +256,7 @@ export const MessageListResponseSchema = z.object({
     messages: z.array(MessageSchema),
     pagination: z.object({
       hasMore: z.boolean(),
-      nextCursor: z.string().cuid().nullable(),
+      nextCursor: z.string().nullable(),
       limit: z.number().int().positive(),
     }),
   }),

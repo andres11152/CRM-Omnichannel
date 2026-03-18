@@ -2,10 +2,8 @@ import { Job } from "bull";
 import { MessageJob, messageQueueService } from "./messageQueueService";
 import { WhatsAppService } from "@/whatsapp/WhatsAppService";
 import { Logger } from "../../utils/logger";
-import {
-  MessagePayload,
-  MediaPayload,
-} from "@/whatsapp/core/types/whatsapp.types";
+import { MediaPayload } from "@/whatsapp/core/types/whatsapp.types";
+import { DistributedLock } from "@/utils/distributedLock";
 
 interface WorkerResult {
   success: boolean;
@@ -45,8 +43,19 @@ class MessageQueueWorker {
     const queue = messageQueueService.getQueue(companyId);
 
     // Process jobs with concurrency of 3
+    // Process jobs with concurrency of 3
     queue.process(3, async (job: Job<MessageJob>) => {
-      return this.processMessage(job);
+      // 🛡️ 100-YEAR FIX: Enforce Sequentiality per Conversation
+      // This prevents out-of-order delivery to the same recipient while allowing
+      // concurrency across different chats in the same company.
+      const lockKey = `msg_proc:${job.data.conversationId}`;
+      
+      return DistributedLock.run(
+        lockKey,
+        () => this.processMessage(job),
+        10000, // TTL 10s (if process crashes)
+        30000  // Wait up to 30s for previous message to finish
+      );
     });
 
     this.activeWorkers.set(companyId, true);
@@ -74,22 +83,48 @@ class MessageQueueWorker {
       let uploadedMedia = media;
       if (media && media.url.startsWith("data:")) {
         await job.progress(40);
-        uploadedMedia = await this.uploadMediaToS3(media);
+        uploadedMedia = await this.uploadMediaToS3(companyId, media);
         await job.progress(60);
       }
 
-      // 4. Send via WhatsApp Service V2
+      // 3. 🤖 HUMAN-LIKE BEHAVIOR: Simulate typing & Random delay
+      await job.progress(40);
+      const typingTime = Math.floor(Math.random() * (3000 - 1500 + 1) + 1500); // 1.5 - 3s
+
+      // Emit "composing" presence
+      await this.whatsappService.sendPresenceUpdate(to, "composing", companyId);
+      await new Promise((r) => setTimeout(r, typingTime));
+
+      // 4. Send via executeQueuedMessage (Bypasses global queue to prevent loops)
       await job.progress(70);
-      const result: MessagePayload = await this.whatsappService.sendMessage(
+
+      const metadata = job.data.metadata as Record<string, string | number | boolean | null> | undefined;
+      const dbId = metadata?.dbId as string | undefined;
+
+      const sessions = await this.whatsappService.getSessions(companyId);
+      const activeSession = sessions.find((s) => s.status === "CONNECTED");
+      const sessionId = activeSession?.sessionId || "";
+
+      const result = await this.whatsappService.executeQueuedMessage(
+        sessionId,
         to,
         text,
         {
           companyId,
           conversationId,
           senderId,
+          metadata: metadata as Record<string, string | number | boolean | null> | undefined,
+          dbId, // Pass the database record ID for status update
           media: uploadedMedia,
         },
       );
+
+      // Stop composing
+      await this.whatsappService.sendPresenceUpdate(to, "paused", companyId);
+
+      // 5. POST-SEND COOL-DOWN (Random 2-5s)
+      const cooldown = Math.floor(Math.random() * (5000 - 2000 + 1) + 2000);
+      await new Promise((r) => setTimeout(r, cooldown));
 
       await job.progress(100);
 
@@ -99,7 +134,17 @@ class MessageQueueWorker {
         sentAt: new Date(),
       };
     } catch (error: unknown) {
-      Logger.error(`[Worker] Job ${job.id} failed:`, error);
+      const isError = error instanceof Error;
+      Logger.error(
+        `[Worker] Job ${job.id} failed for CompanyId: ${companyId}`,
+        {
+          companyId,
+          conversationId,
+          to,
+          error: isError ? error.message : String(error),
+          stack: isError ? error.stack : undefined,
+        },
+      );
       throw error; // Bull will retry automatically
     }
   }
@@ -132,6 +177,7 @@ class MessageQueueWorker {
    * Upload media to S3
    */
   private async uploadMediaToS3(
+    companyId: string,
     media: MediaPayload, // Use strictly typed MediaPayload
   ): Promise<MediaPayload> {
     if (!media) return media;
@@ -147,6 +193,7 @@ class MessageQueueWorker {
     const buffer = Buffer.from(base64Data, "base64");
 
     const result = await storageService.uploadFile(
+      companyId,
       buffer,
       media.filename || `${media.type}-${Date.now()}.webm`,
       media.mimetype || "application/octet-stream",
@@ -189,4 +236,3 @@ export function getMessageQueueWorker(
   }
   return workerInstance;
 }
-

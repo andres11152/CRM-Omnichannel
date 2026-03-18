@@ -34,7 +34,16 @@ export const DeveloperSettings: React.FC = () => {
   const [visibleSecrets, setVisibleSecrets] = useState<string[]>([]);
 
   // New States for Enhanced DX
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<
+    Array<{
+      id: string;
+      status: number;
+      eventType: string;
+      url: string;
+      timestamp: string;
+      duration: number;
+    }>
+  >([]);
   const [globalSecret, setGlobalSecret] = useState("");
 
   // API Key States
@@ -239,8 +248,8 @@ export const DeveloperSettings: React.FC = () => {
                     </span>
                   </h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Configura URLs externas donde Reply enviar eventos en
-                    tiempo real.
+                    Configura URLs externas donde Reply enviar eventos en tiempo
+                    real.
                   </p>
                 </div>
                 <button
@@ -369,7 +378,7 @@ export const DeveloperSettings: React.FC = () => {
 
                     <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-reply-bg dark:bg-black/10 p-4 rounded-xl border border-gray-100 dark:border-reply-border-dark">
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase mb-2 block tracking-widestá">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase mb-2 block tracking-widest">
                           Eventos Suscritos
                         </span>
                         <div className="flex flex-wrap gap-1.5">
@@ -384,7 +393,7 @@ export const DeveloperSettings: React.FC = () => {
                         </div>
                       </div>
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase mb-2 block tracking-widestá">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase mb-2 block tracking-widest">
                           Signing Secret (HMAC)
                         </span>
                         <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-reply-border-dark rounded-lg px-3 py-2 font-mono text-xs shadow-sm">
@@ -490,7 +499,7 @@ export const DeveloperSettings: React.FC = () => {
                           </td>
                         </tr>
                       ) : (
-                        logs.map((log: any) => (
+                        logs.map((log) => (
                           <tr
                             key={log.id}
                             className="hover:bg-reply-bg dark:hover:bg-white/5 transition-colors group"
@@ -536,7 +545,7 @@ export const DeveloperSettings: React.FC = () => {
                       No hay actividad reciente.
                     </div>
                   ) : (
-                    logs.map((log: any) => (
+                    logs.map((log) => (
                       <div
                         key={log.id}
                         className="bg-white dark:bg-reply-panel-dark p-4 rounded-xl border border-gray-100 dark:border-reply-border-dark shadow-sm space-y-3"
@@ -647,7 +656,7 @@ export const DeveloperSettings: React.FC = () => {
 
                       <button
                         onClick={() => setGeneratedKey(null)}
-                        className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline uppercase tracking-widestá"
+                        className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline uppercase tracking-widest"
                       >
                         YA LA HE GUARDADO, CONTINUAR
                       </button>
@@ -706,7 +715,7 @@ export const DeveloperSettings: React.FC = () => {
                           {key.name}
                         </h4>
                         <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-widestá">
+                          <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-widest">
                             {key.keyPrefix}
                           </span>
                           <span className="text-[10px] text-gray-400 uppercase font-bold tracking-tight">
@@ -719,7 +728,7 @@ export const DeveloperSettings: React.FC = () => {
                     <div className="flex justify-end border-t md:border-t-0 pt-3 md:pt-0 border-gray-50 dark:border-reply-border-dark">
                       <button
                         onClick={() => handleDeleteApiKey(key.id)}
-                        className="w-full md:w-auto px-4 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors uppercase tracking-widestá"
+                        className="w-full md:w-auto px-4 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors uppercase tracking-widest"
                       >
                         Revocar Acceso
                       </button>
@@ -734,6 +743,3 @@ export const DeveloperSettings: React.FC = () => {
     </div>
   );
 };
-
-
-

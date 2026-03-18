@@ -53,12 +53,10 @@ export const ProfileSettings: React.FC = () => {
 
       toast.success("Perfil actualizado correctamente");
       playSound("success");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to save profile:", error);
       toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          "Error al actualizar perfil",
+        error instanceof Error ? error.message : "Error al actualizar perfil",
       );
     } finally {
       setLoading(false);
@@ -88,7 +86,7 @@ export const ProfileSettings: React.FC = () => {
       } else {
         toast.error("No se pudo obtener la URL de la imagen");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Upload error:", error);
       toast.error("Error al subir la imagen");
     } finally {
@@ -411,6 +409,3 @@ export const ProfileSettings: React.FC = () => {
     </div>
   );
 };
-
-
-

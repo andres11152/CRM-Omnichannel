@@ -54,9 +54,11 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
         search: search || undefined,
       });
       setMedia(data.media);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error.message || "Error al cargar archivos");
+      toast.error(
+        error instanceof Error ? error.message : "Error al cargar archivos",
+      );
     } finally {
       setLoading(false);
     }
@@ -74,8 +76,10 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
         });
         setMedia([newMedia, ...media]);
         toast.success(`Archivo ${file.name} subido correctamente`);
-      } catch (error: any) {
-        toast.error(`Error al subir ${file.name}: ${error.message}`);
+      } catch (error: unknown) {
+        toast.error(
+          `Error al subir ${file.name}: ${error instanceof Error ? error.message : "Error"}`,
+        );
       } finally {
         setUploading(false);
       }
@@ -96,8 +100,10 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
         setSelectedMedia(null);
       }
       toast.success("Archivo eliminado correctamente");
-    } catch (error: any) {
-      toast.error(error.message || "Error al eliminar archivo");
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : "Error al eliminar archivo",
+      );
     } finally {
       setMediaToDelete(null);
     }
@@ -347,7 +353,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
               </svg>
             </div>
             <p className="text-xl font-medium text-gray-600 dark:text-gray-300">
-              Tu biblioteca estáá vacía
+              Tu biblioteca está vacía
             </p>
             <p className="text-sm mt-2">
               Arrastra archivos aquíí o usa el botón de subir
@@ -729,5 +735,3 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
     </div>
   );
 };
-
-

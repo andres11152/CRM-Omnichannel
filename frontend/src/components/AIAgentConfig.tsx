@@ -44,9 +44,19 @@ export const AIAgentConfig: React.FC<Props> = () => {
   const [showKeys, setShowKeys] = useState(false);
 
   // Assistants State
-  const [assistants, setAssistants] = useState<any[]>([]);
+  interface AIAssistantState {
+    id?: string;
+    name: string;
+    modelProvider: string;
+    modelName: string;
+    systemPrompt: string;
+    temperature: number;
+    _count?: { queues?: number };
+  }
+
+  const [assistants, setAssistants] = useState<AIAssistantState[]>([]);
   const [isEditingAssistant, setIsEditingAssistant] = useState(false);
-  const [currentAssistant, setCurrentAssistant] = useState<any>({
+  const [currentAssistant, setCurrentAssistant] = useState<AIAssistantState>({
     name: "",
     modelProvider: "OPENAI",
     modelName: "gpt-4o",
@@ -105,15 +115,15 @@ export const AIAgentConfig: React.FC<Props> = () => {
         temperature: 0.7,
       });
       loadData(); // Refresh list
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(
-        error.response?.data?.message || "Error al guardar asistente",
-      );
+      const msg =
+        error instanceof Error ? error.message : "Error al guardar asistente";
+      toast.error(msg);
     }
   };
 
-  const handleEditAssistant = (assistant: any) => {
+  const handleEditAssistant = (assistant: AIAssistantState) => {
     setCurrentAssistant({
       id: assistant.id,
       name: assistant.name,
@@ -141,9 +151,10 @@ export const AIAgentConfig: React.FC<Props> = () => {
     try {
       await deleteAssistant(id);
       loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error.response?.data?.message || "Error al eliminar");
+      const msg = error instanceof Error ? error.message : "Error al eliminar";
+      toast.error(msg);
     }
   };
 
@@ -337,9 +348,10 @@ export const AIAgentConfig: React.FC<Props> = () => {
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() =>
-                                handleDeleteAssistant(assistant.id)
-                              }
+                              onClick={() => {
+                                if (assistant.id)
+                                  handleDeleteAssistant(assistant.id);
+                              }}
                               className="p-2 bg-white dark:bg-gray-800 text-gray-400 hover:text-red-500 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -490,7 +502,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
 
                         <div>
                           <div className="flex justify-between mb-3">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widestá">
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">
                               Creatividad
                             </label>
                             <span className="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">

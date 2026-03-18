@@ -3,9 +3,11 @@ import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import jwt, { SignOptions } from "jsonwebtoken";
+import crypto from "crypto";
 import { Logger } from "@/utils/logger";
 import { emailService } from "@/services/emailService";
 import { authCrudService } from "@/services/authCrudService";
+import { sessionService, SESSION_TTL } from "@/services/sessionService";
 
 export interface TokenPayload {
   id: string;
@@ -13,21 +15,67 @@ export interface TokenPayload {
   companyId?: string | null;
   companyStatus?: string;
   planId?: string | null;
+  jti?: string;
+  sessionId?: string;
 }
 
 /**
  * Genera un token JWT firmado.
  */
-export const signToken = (payload: TokenPayload) => {
+/**
+ * Signs an access token (short-lived, 15 min).
+ * Each token gets a unique JTI for blacklist-based revocation.
+ */
+export const signAccessToken = (payload: TokenPayload): string => {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
     throw new AppError("JWT_SECRET no está definido en el archivo .env", 500);
   }
-  const expiresIn = "7d" as jwt.SignOptions["expiresIn"];
-  const options: SignOptions = {
-    expiresIn,
-  };
-  return jwt.sign({ ...payload }, jwtSecret, options);
+  const jti = crypto.randomUUID();
+  const options: SignOptions = { expiresIn: "15m" };
+  return jwt.sign({ ...payload, jti }, jwtSecret, options);
+};
+
+/**
+ * @deprecated Use signAccessToken instead. Kept for backward compatibility.
+ */
+export const signToken = signAccessToken;
+
+// ============================================================================
+// 🍪 COOKIE HELPERS
+// ============================================================================
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: (process.env.NODE_ENV === "production" ? "strict" : "lax") as
+    | "strict"
+    | "lax",
+  path: "/",
+};
+
+const setAuthCookies = (
+  res: Response,
+  accessToken: string,
+  refreshToken: string,
+) => {
+  // Access token cookie (short-lived)
+  res.cookie("access_token", accessToken, {
+    ...COOKIE_OPTIONS,
+    maxAge: SESSION_TTL.ACCESS_TOKEN * 1000, // 15 min
+  });
+
+  // Refresh token cookie (long-lived)
+  res.cookie("refresh_token", refreshToken, {
+    ...COOKIE_OPTIONS,
+    maxAge: SESSION_TTL.REFRESH_TOKEN * 1000, // 7 days
+    path: "/api/auth", // Only sent to auth endpoints
+  });
+};
+
+const clearAuthCookies = (res: Response) => {
+  res.clearCookie("access_token", { path: "/" });
+  res.clearCookie("refresh_token", { path: "/api/auth" });
 };
 
 export const signup = catchAsync(
@@ -68,15 +116,25 @@ export const login = catchAsync(
     const { email, password } = req.body;
 
     Logger.info(`[Auth] Attempting login for email: ${email}`);
-
     const user = await authCrudService.findUserByEmail(email);
 
-    if (
-      !user ||
-      !(await authCrudService.verifyPassword(password, user.password))
-    ) {
+    if (!user) {
+      Logger.warn(`[Auth] User not found: ${email}`);
       return next(new AppError("Email o contraseña incorrectos", 401));
     }
+
+    Logger.info(`[Auth] User found, verifying password for: ${email}`);
+    const isPasswordValid = await authCrudService.verifyPassword(
+      password,
+      user.password,
+    );
+
+    if (!isPasswordValid) {
+      Logger.warn(`[Auth] Invalid password for: ${email}`);
+      return next(new AppError("Email o contraseña incorrectos", 401));
+    }
+
+    Logger.info(`[Auth] Password valid, creating session for: ${email}`);
 
     // Cast safely using intersection
     const userWithCompany = user as unknown as typeof user & {
@@ -86,6 +144,7 @@ export const login = catchAsync(
     if (userWithCompany.company) {
       const restrictedStatuses = ["BANNED"];
       if (restrictedStatuses.includes(userWithCompany.company.status)) {
+        Logger.warn(`[Auth] Account restricted for: ${email}`);
         return next(
           new AppError(
             `Acceso denegado: Su cuenta está en estado ${userWithCompany.company.status}. Contacte a soporte.`,
@@ -95,19 +154,33 @@ export const login = catchAsync(
       }
     }
 
+    // 🏢 ENTERPRISE: Create server-side session
+    const ipAddress = req.ip || req.socket.remoteAddress || "IP no disponible";
+    const userAgent = req.get("user-agent") || "User-Agent no disponible";
+
+    Logger.info(`[Auth] Creating session for user ID: ${user.id}`);
+    const { sessionId, refreshToken } = await sessionService.createSession({
+      userId: user.id,
+      companyId: user.companyId,
+      ip: ipAddress,
+      userAgent,
+    });
+
+    // Sign access token with session binding
     const tokenPayload: TokenPayload = {
       id: user.id,
       role: user.role || "user",
       companyId: user.companyId,
       companyStatus: userWithCompany.company?.status,
       planId: userWithCompany.company?.planId,
+      sessionId,
     };
-    const token = signToken(tokenPayload);
+    const token = signAccessToken(tokenPayload);
+
+    // 🍪 Set HttpOnly cookies (XSS-proof)
+    setAuthCookies(res, token, refreshToken);
 
     // 🔐 Send login notification email (async, fire-and-forget)
-    const ipAddress = req.ip || req.socket.remoteAddress || "IP no disponible";
-    const userAgent = req.get("user-agent") || "User-Agent no disponible";
-
     import("@/services/loginNotificationService").then(
       ({ sendLoginNotification }) => {
         sendLoginNotification({
@@ -122,6 +195,7 @@ export const login = catchAsync(
       },
     );
 
+    // Response includes token in body for backward compatibility (mobile, Postman)
     res.status(200).json({
       status: "success",
       token,
@@ -138,6 +212,141 @@ export const login = catchAsync(
           preferences: user.preferences,
         },
       },
+    });
+  },
+);
+
+// ============================================================================
+// 🔒 ENTERPRISE LOGOUT (Server-side session destruction)
+// ============================================================================
+
+export const logout = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const jti = (req as AuthenticatedRequest & { jti?: string }).jti;
+    const sessionId = (req as AuthenticatedRequest & { sessionId?: string })
+      .sessionId;
+
+    // Destroy the session and blacklist the current token
+    if (sessionId) {
+      await sessionService.destroySession(sessionId, jti);
+    } else if (jti) {
+      await sessionService.blacklistToken(jti);
+    }
+
+    // Clear cookies
+    clearAuthCookies(res);
+
+    Logger.info("[Auth] 🔒 User logged out", { userId: req.user?.id });
+
+    res.status(200).json({
+      status: "success",
+      message: "Sesión cerrada correctamente.",
+    });
+  },
+);
+
+// ============================================================================
+// 🔄 TOKEN REFRESH (Rotate access + refresh tokens)
+// ============================================================================
+
+export const refreshToken = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    // Read refresh token from cookie
+    const incomingRefreshToken = req.cookies?.refresh_token;
+
+    if (!incomingRefreshToken) {
+      return next(new AppError("No refresh token provided", 401));
+    }
+
+    // Validate and consume the refresh token
+    const sessionData =
+      await sessionService.validateRefreshToken(incomingRefreshToken);
+
+    if (!sessionData) {
+      clearAuthCookies(res);
+      return next(
+        new AppError(
+          "Refresh token inválido o expirado. Inicia sesión nuevamente.",
+          401,
+        ),
+      );
+    }
+
+    // Verify user still exists
+    const user = await authCrudService.findUserById(sessionData.userId);
+    if (!user) {
+      clearAuthCookies(res);
+      return next(new AppError("Usuario ya no existe.", 401));
+    }
+
+    const userWithCompany = user as unknown as typeof user & {
+      company?: { status: string; planId?: string };
+    };
+
+    // Issue new access token
+    const newAccessToken = signAccessToken({
+      id: user.id,
+      role: user.role || "user",
+      companyId: user.companyId,
+      companyStatus: userWithCompany.company?.status,
+      planId: userWithCompany.company?.planId,
+      sessionId: sessionData.sessionId,
+    });
+
+    // Rotate refresh token (one-time use)
+    const newRefreshToken = await sessionService.rotateRefreshToken(
+      sessionData.sessionId,
+      sessionData.userId,
+      sessionData.companyId,
+    );
+
+    // Set new cookies
+    setAuthCookies(res, newAccessToken, newRefreshToken);
+
+    res.status(200).json({
+      status: "success",
+      token: newAccessToken,
+    });
+  },
+);
+
+// ============================================================================
+// 📋 ACTIVE SESSIONS (List user's devices)
+// ============================================================================
+
+export const getActiveSessions = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const sessions = await sessionService.getUserSessions(req.user!.id);
+
+    res.status(200).json({
+      status: "success",
+      results: sessions.length,
+      data: { sessions },
+    });
+  },
+);
+
+export const revokeSession = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { sessionId } = req.params;
+    await sessionService.destroySession(sessionId);
+
+    res.status(200).json({
+      status: "success",
+      message: "Sesión revocada correctamente.",
+    });
+  },
+);
+
+export const revokeAllSessions = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const count = await sessionService.destroyAllSessions(req.user!.id);
+
+    clearAuthCookies(res);
+
+    res.status(200).json({
+      status: "success",
+      message: `Se cerraron ${count} sesiones activas.`,
     });
   },
 );

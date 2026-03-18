@@ -115,6 +115,7 @@ export class ProfilePictureService {
             const filename = `profile_${userId}_${Date.now()}.jpg`;
 
             const uploadResult = await storageService.uploadFile(
+              companyId,
               buffer,
               filename,
               mimeType,
@@ -131,10 +132,7 @@ export class ProfilePictureService {
             );
           }
 
-          await userRepository.update({
-            where: { id: userId },
-            data: { profilePicUrl },
-          });
+          await userRepository.update(userId, companyId, { profilePicUrl });
 
           // Also update the associated CRM Contact if it exists
           if (existingUser?.phone) {

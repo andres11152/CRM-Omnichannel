@@ -8,6 +8,7 @@ import { AuthenticatedRequest } from "@/types/types";
 import TenantContextManager from "@/config/tenantContext";
 import redisClient from "@/config/redis";
 import { Logger } from "@/utils/logger";
+import { sessionService } from "@/services/sessionService";
 
 export const protect = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -55,20 +56,20 @@ export const protect = catchAsync(
       );
     }
 
-    // 1) Bearer Token Authentication (for frontend users)
+    // 1) Extract Bearer Token (Cookie > Header) — Enterprise Priority
     let token;
-    if (
+
+    // A. Try HttpOnly cookie first (most secure, XSS-proof)
+    if (req.cookies?.access_token) {
+      token = req.cookies.access_token;
+    }
+    // B. Fallback to Authorization header (mobile apps, Postman, legacy)
+    else if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer")
     ) {
       token = req.headers.authorization.split(" ")[1];
     }
-
-    // Uncomment for detailed auth debugging
-    /*
-    Logger.debug(`[AuthDebug] Method: ${req.method} Url: ${req.originalUrl}`);
-    Logger.debug(`[AuthDebug] Token found: ${token ? "Yes" : "No"}`);
-    */
 
     if (!token) {
       return next(
@@ -86,6 +87,21 @@ export const protect = catchAsync(
     } catch (error) {
       Logger.error("[Auth] Token verification failed:", error as Error);
       return next(new AppError("Token inválido o expirado", 401));
+    }
+
+    // 2b) 🛡️ ENTERPRISE: Check if token is blacklisted (instant revocation)
+    if (decoded.jti) {
+      const isBlacklisted = await sessionService.isTokenBlacklisted(
+        decoded.jti,
+      );
+      if (isBlacklisted) {
+        return next(
+          new AppError(
+            "Sesión revocada. Por favor inicia sesión nuevamente.",
+            401,
+          ),
+        );
+      }
     }
 
     // 3) Verificar si el usuario aún existe (Optimizado con Redis Cache)
@@ -166,6 +182,13 @@ export const protect = catchAsync(
       about: currentUser.about,
     };
     req.companyId = req.user.companyId;
+
+    // 🏢 Attach JTI and sessionId for logout/revocation support
+    (req as AuthenticatedRequest & { jti?: string; sessionId?: string }).jti =
+      decoded.jti;
+    (
+      req as AuthenticatedRequest & { jti?: string; sessionId?: string }
+    ).sessionId = decoded.sessionId;
 
     // 🛡️ SET TENANT CONTEXT FOR JWT USER (Critical for RLS)
     // This activates Row-Level Security for the entire request lifecycle

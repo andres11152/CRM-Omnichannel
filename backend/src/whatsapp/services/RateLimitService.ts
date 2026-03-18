@@ -57,7 +57,7 @@ export class RateLimitService {
       if (count >= this.config.maxMessages) {
         // Find session in the background
         whatsappSessionRepository
-          .findOne(sessionId)
+          .findSystemSession(sessionId)
           .then((session) => {
             if (session) {
               this.eventBus.publish({

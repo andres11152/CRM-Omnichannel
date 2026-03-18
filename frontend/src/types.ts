@@ -93,7 +93,7 @@ export interface Message {
   timestamp: Date;
   senderName?: string;
   attachment?: {
-    id: string;
+    id?: string;
     type:
       | "image"
       | "video"
@@ -102,8 +102,13 @@ export interface Message {
       | "sticker"
       | "location"
       | "contact"
-      | "contact_list";
-    url: string;
+      | "contact_list"
+      // 🛡️ HISTORY SYNC: Synthetic types for historical messages that only have placeholders
+      | "image_unavailable"
+      | "video_unavailable"
+      | "audio_unavailable"
+      | "document_unavailable";
+    url?: string;
     name?: string;
     mimeType?: string;
     isPrivate?: boolean;
@@ -116,8 +121,13 @@ export interface Message {
     | "failed"
     | "pending"
     | "scheduled"
-    | "SCHEDULED";
-  metadata?: any;
+    | "SCHEDULED"
+    | "REVOKED";
+  metadata?: Record<string, unknown>;
+  reactions?: {
+    reactBy: string;
+    content: string;
+  }[];
 }
 
 // SIMPLIFIED: Represents the person, not the conversation
@@ -298,7 +308,7 @@ export interface Integration {
   type: "whatsapp_cloud" | "instagram_graph" | "messenger";
   name: string;
   status: "connected" | "disconnected" | "pending";
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   connectedAt?: Date;
 }
 
@@ -317,10 +327,10 @@ export interface TableSchema {
 export interface AuthenticatedRequest {
   user?: { id: string; email: string; role: string };
   companyId?: string;
-  body: any;
-  query: any;
-  params: any;
-  headers: any;
+  body: Record<string, unknown>;
+  query: Record<string, unknown>;
+  params: Record<string, unknown>;
+  headers: Record<string, unknown>;
 }
 
 export interface MessageTemplate {
@@ -454,7 +464,7 @@ export interface Flow {
   triggerConfig?: {
     keyword?: string;
     event?: string; // e.g. "DEAL_UPDATED"
-    condition?: any;
+    condition?: Record<string, unknown>;
   };
   nodes: FlowNode[];
   edges: FlowConnection[];
@@ -547,7 +557,7 @@ export interface UpdateQuickReplyDTO extends Partial<CreateQuickReplyDTO> {}
 export type ResolutionType = "SALE" | "SUPPORT" | "ADMIN" | "OTHER" | "SPAM";
 
 export interface ResolveTicketDTO {
-  status: "RESOLVED";
+  status: "RESOLVED" | "CLOSED";
   resolutionType: ResolutionType;
   resolutionNotes?: string;
 }

@@ -53,7 +53,7 @@ export const handleIncomingWebhook = async (req: Request, res: Response) => {
     );
 
     // 2. CONSTRUCT MESSAGE OBJECT
-    // Este objeto ahora es compatible con `prisma.message.create`
+    // Este objeto ahora es compatible con el service
     const messageToSave: Omit<Message, "createdAt" | "updatedAt"> = {
       id: data.messageId,
       conversationId: "c1", // TODO: Lógica para encontrar o crear conversación
@@ -67,8 +67,8 @@ export const handleIncomingWebhook = async (req: Request, res: Response) => {
       whatsappMessageId: data.messageId, // Added missing field
     };
 
-    // TODO: Guardar `messageToSave` en la base de datos con `prisma.message.create`
-    // const savedMessage = await prisma.message.create({ data: messageToSave });
+    // TODO: Usar messageRepository o messageService para guardar el mensaje
+    // const savedMessage = await messageService.create(messageToSave);
 
     // 3. TRIGGER OUTGOING WEBHOOKS (Developer API)
     // Notify external customer systems that a message arrived

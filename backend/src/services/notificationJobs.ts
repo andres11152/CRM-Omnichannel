@@ -101,7 +101,7 @@ export class NotificationJobs {
 
     // 🛡️ SYSTEM MODE: Cron job needs access to all WhatsApp sessions
     const sessions = await TenantContextManager.runAsSystem(async () =>
-      whatsappSessionRepository.findMany({
+      whatsappSessionRepository.findManySystem({
         where: {
           status: "DISCONNECTED",
           // Only notify once per disconnection
@@ -119,7 +119,7 @@ export class NotificationJobs {
 
         // Mark as notified - needs system context too
         await TenantContextManager.runAsSystem(async () =>
-          whatsappSessionRepository.updateRaw({
+          whatsappSessionRepository.updateRaw(session.companyId, {
             where: { id: session.id },
             data: { notifiedAt: new Date() },
           }),

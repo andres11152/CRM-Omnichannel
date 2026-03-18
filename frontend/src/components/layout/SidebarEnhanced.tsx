@@ -17,7 +17,12 @@ import {
 import { User } from "@/types/auth.types";
 
 interface SidebarProps {
-  navItems: any[];
+  navItems: Array<{
+    id: string;
+    path: string;
+    icon: React.ReactNode;
+    title: string;
+  }>;
   currentPath: string;
   onNavigate: (path: string) => void;
   onReorder: (result: DropResult) => void;
@@ -35,7 +40,9 @@ const NavIcon: React.FC<{
   icon: React.ReactNode;
   title: string;
   isExpanded: boolean;
-  dragHandleProps?: any;
+  dragHandleProps?:
+    | import("@hello-pangea/dnd").DraggableProvidedDragHandleProps
+    | null;
 }> = ({ active, onClick, icon, title, isExpanded, dragHandleProps }) => {
   return (
     <div

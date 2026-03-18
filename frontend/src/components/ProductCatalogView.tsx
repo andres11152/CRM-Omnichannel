@@ -72,7 +72,7 @@ export const ProductCatalogView: React.FC = () => {
     fetchProducts();
   }, []);
 
-  const handleCreateProduct = async (newProductData: any) => {
+  const handleCreateProduct = async (newProductData: Partial<Product>) => {
     try {
       const createdProduct = await createProduct(newProductData);
       setProducts((prev: Product[]) => [createdProduct, ...prev]);
@@ -311,5 +311,3 @@ export const ProductCatalogView: React.FC = () => {
     </div>
   );
 };
-
-

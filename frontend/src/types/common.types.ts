@@ -3,7 +3,7 @@
  */
 
 // Generic API Response Wrapper
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   status: "success" | "fail" | "error";
   data: T;
   token?: string; // Auth token at root

@@ -2,7 +2,11 @@ import React, { useState, useRef, useEffect } from "react";
 import { API_BASE_URL } from "@/services/apiConfig";
 
 interface AudioRecorderProps {
-  onRecordingComplete: (mediaAsset: any) => void;
+  onRecordingComplete: (mediaAsset: {
+    url: string;
+    blob: Blob;
+    duration: number;
+  }) => void;
   onCancel: () => void;
 }
 
@@ -233,5 +237,3 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     </div>
   );
 };
-
-

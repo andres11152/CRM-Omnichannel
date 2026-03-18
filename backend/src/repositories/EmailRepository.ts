@@ -15,20 +15,46 @@ export class EmailRepository {
   // EMAIL CRUD
   // ────────────────────────────────────────────────
 
-  async create(data: Prisma.EmailCreateInput, include?: Prisma.EmailInclude) {
+  async create(
+    companyId: string,
+    data: Prisma.EmailCreateInput,
+    include?: Prisma.EmailInclude,
+  ) {
+    if (data.company?.connect?.id !== companyId) {
+      data.company = { connect: { id: companyId } };
+    }
     return prisma.email.create({ data, include });
   }
 
-  async findUnique(args: Prisma.EmailFindUniqueArgs) {
-    return prisma.email.findUnique(args);
+  async findUnique(
+    companyId: string,
+    args: Omit<Prisma.EmailFindUniqueArgs, "where"> & {
+      where: Prisma.EmailWhereUniqueInput;
+    },
+  ) {
+    return prisma.email.findFirst({
+      ...args,
+      where: { ...args.where, companyId },
+    });
   }
 
-  async findByMessageId(messageId: string) {
-    return prisma.email.findUnique({ where: { messageId } });
+  async findByMessageId(companyId: string, messageId: string) {
+    return prisma.email.findFirst({ where: { companyId, messageId } });
   }
 
-  async update(id: string, data: Prisma.EmailUpdateInput) {
-    return prisma.email.update({ where: { id }, data });
+  async findByMessageIdSystem(messageId: string) {
+    return prisma.email.findFirst({ where: { messageId } });
+  }
+
+  async update(companyId: string, id: string, data: Prisma.EmailUpdateInput) {
+    const res = await prisma.email.updateMany({
+      where: { companyId, id },
+      data,
+    });
+    if (res.count > 0) {
+      return prisma.email.findUnique({ where: { id } });
+    }
+    return null;
   }
 
   async findByContact(contactId: string, companyId: string, limit = 50) {

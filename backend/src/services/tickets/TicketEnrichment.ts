@@ -34,8 +34,8 @@ export class TicketEnrichment {
       whatsappSessions = await cacheService.wrap(
         `company:${companyId}:sessions:connected:v1`,
         () =>
-          whatsappSessionRepository.findMany({
-            where: { companyId, status: "CONNECTED" },
+          whatsappSessionRepository.findMany(companyId, {
+            where: { status: "CONNECTED" },
             orderBy: { createdAt: "asc" },
             select: {
               id: true,
@@ -58,8 +58,8 @@ export class TicketEnrichment {
         "[TicketService] Cache failed, fetching directly:",
         cacheError,
       );
-      whatsappSessions = (await whatsappSessionRepository.findMany({
-        where: { companyId, status: "CONNECTED" },
+      whatsappSessions = (await whatsappSessionRepository.findMany(companyId, {
+        where: { status: "CONNECTED" },
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
@@ -142,14 +142,35 @@ export class TicketEnrichment {
       let whatsappSessionIndex: number | undefined;
       let whatsappSessionPhone: string | undefined;
 
+      // 1️⃣ Resolve by queueId → session mapping
       if (dto.queueId && queueToSessionDataMap.has(dto.queueId)) {
         const data = queueToSessionDataMap.get(dto.queueId);
         whatsappSessionIndex = data?.index;
         whatsappSessionPhone = data?.phone || undefined;
       }
 
-      if (!whatsappSessionIndex && whatsappSessions.length > 0) {
-        if (whatsappSessions.length === 1) {
+      // 2️⃣ Fallback: Single session → always #1
+      if (!whatsappSessionIndex && whatsappSessions.length === 1) {
+        whatsappSessionIndex = 1;
+        whatsappSessionPhone = whatsappSessions[0].phone || undefined;
+      }
+
+      // 3️⃣ Fallback: Multiple sessions → try matching by sessionId in metadata
+      if (!whatsappSessionIndex && whatsappSessions.length > 1) {
+        // The conversation may carry a sessionId in its metadata (set during creation)
+        const ticketSessionId = (dto as unknown as { sessionId?: string }).sessionId;
+        if (ticketSessionId) {
+          const matchIdx = whatsappSessions.findIndex(
+            (s) => s.sessionId === ticketSessionId,
+          );
+          if (matchIdx !== -1) {
+            whatsappSessionIndex = matchIdx + 1;
+            whatsappSessionPhone = whatsappSessions[matchIdx].phone || undefined;
+          }
+        }
+
+        // 4️⃣ Final fallback: Default to #1 so it always shows something
+        if (!whatsappSessionIndex) {
           whatsappSessionIndex = 1;
           whatsappSessionPhone = whatsappSessions[0].phone || undefined;
         }

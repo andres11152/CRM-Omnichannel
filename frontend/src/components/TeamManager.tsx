@@ -37,7 +37,9 @@ export const TeamManager: React.FC = () => {
   };
 
   // Handle agent edit
-  const handleEditAgent = (agent: any) => {
+  const handleEditAgent = (
+    agent: import("@/components/team/types").TeamAgent,
+  ) => {
     const defaultDept = departments.length > 0 ? departments[0].id : "";
     agentForm.openEditModal(agent, defaultDept);
   };
@@ -192,6 +194,3 @@ export const TeamManager: React.FC = () => {
     </div>
   );
 };
-
-
-

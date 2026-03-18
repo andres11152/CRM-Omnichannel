@@ -129,7 +129,8 @@ export class PresenceHandler {
   ): Promise<SessionData | null> {
     let sessionData = this.sessionCache.get(sessionId);
     if (!sessionData) {
-      const session = await whatsappSessionRepository.findOne(sessionId);
+      const session =
+        await whatsappSessionRepository.findSystemSession(sessionId);
       if (!session) return null;
       sessionData = {
         companyId: session.companyId,

@@ -84,6 +84,10 @@ model Conversation {
   // 🔴 UNREAD COUNTER (Badge Support)
   unreadCount Int @default(0)
 
+  // 🔄 GROUP SYNC CONTROL
+  // Determines if participants of this group should be auto-indexed into CRM
+  syncEnabled Boolean @default(true)
+
   // === HIGH-PERFORMANCE COMPOSITE INDEXES ===
 
   // 🛡️ DATA INTEGRITY
@@ -108,13 +112,13 @@ model Message {
 
   // 🔥 PERFORMANCE: Denormalized companyId
   // Allows querying message stats WITHOUT joining Conversation table
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
 
   content   String
   channel   Channel
   direction MessageDirection
-  status    String           @default("SENT") // SENT, DELIVERED, READ, FAILED
+  status    String           @default("SENT") // PENDING, QUEUED, SENT, DELIVERED, READ, FAILED
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
@@ -126,6 +130,7 @@ model Message {
   sender   User   @relation("SenderMessages", fields: [senderId], references: [id], onDelete: NoAction)
 
   metadata Json? // For attachments, etc.
+  reactions MessageReaction[]
 
   // 🛡️ DATA INTEGRITY: Prevent duplicate processing of same WhatsApp message
   whatsappMessageId String? @unique
@@ -144,6 +149,20 @@ model Message {
 }
 
 // ... (User sections skipped, no changes needed there)
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reactBy   String   // Phone/JID of the person who reacted
+  content   String   // The emoji
+  createdAt DateTime @default(now())
+  companyId String   // 🛡️ REQUIRED for multi-tenant isolation
+
+  @@unique([messageId, reactBy]) // Only one emoji per message per person
+  @@index([companyId])           // 🛡️ Performance index for tenant-scoped queries
+  @@map("message_reactions")
+}
 
 model Contact {
   id            String   @id @default(cuid())

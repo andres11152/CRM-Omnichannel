@@ -81,8 +81,8 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
         toast.success("Respuesta actualizada");
       }
       resetForm();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Error al guardar");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Error al guardar");
     }
   };
 
@@ -410,5 +410,3 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
     </div>
   );
 };
-
-

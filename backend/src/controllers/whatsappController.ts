@@ -59,8 +59,11 @@ export const getSessions = catchAsync(
 
 export const deleteSession = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) {
+      throw new Error("No company ID");
+    }
     const { sessionId } = req.params;
-    await whatsappService.deleteSession(sessionId);
+    await whatsappService.deleteSession(req.companyId, sessionId);
 
     res.status(204).json({
       status: "success",

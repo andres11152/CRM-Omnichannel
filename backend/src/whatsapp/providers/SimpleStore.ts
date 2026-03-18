@@ -19,7 +19,7 @@ import redisClient from "@/config/redis";
  */
 
 const MAX_MESSAGES_PER_JID = parseInt(
-  process.env.WA_STORE_MAX_MESSAGES_PER_JID || "100",
+  process.env.WA_STORE_MAX_MESSAGES_PER_JID || "1000",
   10,
 );
 const MAX_TOTAL_CONTACTS = parseInt(
@@ -80,10 +80,32 @@ export class SimpleInMemoryStore {
     if (!this.messages[jid]) {
       this.messages[jid] = [];
     }
+
     this.messages[jid].push(msg);
     if (this.messages[jid].length > MAX_MESSAGES_PER_JID) {
+      // 🛡️ Ensure we delete the OLDEST messages, not the newest ones!
+      // Since Baileys might receive newest messages first (at index 0),
+      // we sort by timestamp before pruning.
+
+      const getTs = (obj: unknown): number => {
+        const msgObj = obj as { messageTimestamp?: unknown };
+        const ts = msgObj.messageTimestamp;
+        if (typeof ts === "number") return ts;
+        if (!ts) return 0;
+        if (typeof ts === "string") return Number(ts);
+        if (typeof ts === "object") {
+          const tsObj = ts as { toNumber?: () => number; low?: number };
+          if (typeof tsObj.toNumber === "function") return tsObj.toNumber();
+          if (typeof tsObj.low === "number") return tsObj.low;
+        }
+        return Number(ts);
+      };
+
+      this.messages[jid].sort((a, b) => {
+        return getTs(a) - getTs(b); // Ascending (oldest first)
+      });
       const excess = this.messages[jid].length - MAX_MESSAGES_PER_JID;
-      this.messages[jid].splice(0, excess);
+      this.messages[jid].splice(0, excess); // Removes the oldest `excess` messages
     }
   }
 

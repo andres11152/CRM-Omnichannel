@@ -39,7 +39,7 @@ export interface AudienceFilters {
   tags?: string[];
   segments?: string[];
   excludeTags?: string[];
-  customRules?: Record<string, any>;
+  customRules?: Record<string, unknown>;
 }
 
 export interface CampaignStats {
@@ -72,5 +72,10 @@ export interface TemplateComponent {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
   format?: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
   text?: string;
-  buttons?: any[];
+  buttons?: {
+    type: string;
+    text?: string;
+    url?: string;
+    phoneNumber?: string;
+  }[];
 }

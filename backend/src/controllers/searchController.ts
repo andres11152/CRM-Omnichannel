@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { searchService } from "@/services/searchService";
+import { AppError } from "@/utils/AppError";
 
 /**
  * 🔍 SEARCH CONTROLLER
@@ -10,22 +11,12 @@ import { searchService } from "@/services/searchService";
 
 export const globalSearch = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { q } = req.query;
+    // 🛡️ Query already validated by Zod middleware (GlobalSearchSchema)
+    const { q } = req.query as { q: string };
     const companyId = req.user?.companyId || req.companyId;
 
-    // Validation: Minimum 2 characters
-    if (!q || typeof q !== "string" || q.trim().length < 2) {
-      return res.status(400).json({
-        status: "error",
-        message: "Query must be at least 2 characters long",
-      });
-    }
-
     if (!companyId) {
-      return res.status(401).json({
-        status: "error",
-        message: "Company ID not found in request",
-      });
+      throw new AppError("Company ID not found in request", 401);
     }
 
     // Execute search
@@ -43,5 +34,5 @@ export const globalSearch = catchAsync(
         results,
       },
     });
-  }
+  },
 );

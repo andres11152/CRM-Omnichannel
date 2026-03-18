@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect } from "../middleware/authMiddleware";
+import { validate } from "../middleware/validationMiddleware";
 import {
   getHeatmap,
   getAgentPerformance,
@@ -7,18 +8,27 @@ import {
   exportAgentPerformance,
   exportTicketAnalytics,
 } from "../controllers/analyticsController";
+import { AnalyticsQuerySchema } from "../schemas/commonSchemas";
 
 const router = Router();
 
 // Todas las rutas de analítica requieren autenticación
 router.use(protect);
 
-router.get("/heatmap", getHeatmap);
-router.get("/agents", getAgentPerformance);
-router.get("/tags", getTagAnalytics);
+router.get("/heatmap", validate(AnalyticsQuerySchema), getHeatmap);
+router.get("/agents", validate(AnalyticsQuerySchema), getAgentPerformance);
+router.get("/tags", validate(AnalyticsQuerySchema), getTagAnalytics);
 
 // 📊 Export Routes
-router.get("/export/agents", exportAgentPerformance);
-router.get("/export/tickets", exportTicketAnalytics);
+router.get(
+  "/export/agents",
+  validate(AnalyticsQuerySchema),
+  exportAgentPerformance,
+);
+router.get(
+  "/export/tickets",
+  validate(AnalyticsQuerySchema),
+  exportTicketAnalytics,
+);
 
 export default router;

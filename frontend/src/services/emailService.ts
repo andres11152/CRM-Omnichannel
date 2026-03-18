@@ -44,7 +44,7 @@ export interface TimelineActivity {
   subject?: string;
   channel: "EMAIL" | "WHATSAPP";
   status: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -97,4 +97,3 @@ export async function getTimelineStats(contactId: string) {
   const res = await api.get(`/emails/timeline/${contactId}/stats`);
   return res.data.data.stats;
 }
-

@@ -14,7 +14,7 @@ interface AgentModalProps {
   show: boolean;
   isEditing: boolean;
   saving: boolean;
-  currentUser?: any;
+  currentUser?: { id: string; role: string } | null;
 
   // Form state
   formData: AgentFormData;
@@ -24,7 +24,10 @@ interface AgentModalProps {
   // Handlers
   onClose: () => void;
   onSave: () => void;
-  onFormChange: (field: keyof AgentFormData, value: any) => void;
+  onFormChange: (
+    field: keyof AgentFormData,
+    value: AgentFormData[keyof AgentFormData],
+  ) => void;
   onSkillInputChange: (value: string) => void;
   onAddSkill: (e: React.KeyboardEvent) => void;
   onRemoveSkill: (skill: string) => void;
@@ -360,5 +363,3 @@ export const AgentModal: React.FC<AgentModalProps> = ({
     </div>
   );
 };
-
-

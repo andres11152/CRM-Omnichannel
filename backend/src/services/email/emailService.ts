@@ -120,6 +120,7 @@ export class EmailService {
 
       // 2. Save to database via repository
       const email = await emailRepository.create(
+        dto.companyId,
         {
           company: { connect: { id: dto.companyId } },
           messageId: result.messageId,
@@ -190,6 +191,7 @@ export class EmailService {
 
       // Save email via repository
       const email = await emailRepository.create(
+        dto.companyId,
         {
           company: { connect: { id: dto.companyId } },
           messageId: dto.messageId,
@@ -230,7 +232,7 @@ export class EmailService {
    */
   async updateEmailStatus(dto: UpdateEmailStatusDTO) {
     try {
-      const email = await emailRepository.findByMessageId(dto.messageId);
+      const email = await emailRepository.findByMessageIdSystem(dto.messageId);
 
       if (!email) {
         Logger.warn(
@@ -239,12 +241,17 @@ export class EmailService {
         return null;
       }
 
-      const updated = await emailRepository.update(email.id, {
+      const updated = await emailRepository.update(email.companyId, email.id, {
         status: dto.status,
         errorMessage: dto.errorMessage,
         openedAt: dto.openedAt,
         clickedAt: dto.clickedAt,
       });
+
+      if (!updated) {
+        Logger.warn(`[EmailService] Failed to update email or email not found`);
+        return null;
+      }
 
       Logger.info(
         `[EmailService] Status updated: ${updated.id} -> ${dto.status}`,

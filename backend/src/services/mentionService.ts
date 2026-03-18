@@ -163,7 +163,7 @@ export const mentionService = {
 
     try {
       // 1. Obtener info del creador (quien mencionó)
-      const creator = await userRepository.findUnique({
+      const creator = await userRepository.findFirst({
         where: { id: createdByUserId },
         select: { name: true, email: true },
       });

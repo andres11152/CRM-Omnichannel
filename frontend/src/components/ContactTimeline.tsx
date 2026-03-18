@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { API_BASE_URL } from '@/services/apiConfig';
+import { useEffect, useState } from "react";
+import { API_BASE_URL } from "@/services/apiConfig";
 
 interface TimelineItem {
-  type: 'DEAL' | 'ACTIVITY' | 'TICKET' | 'CONVERSATION';
+  type: "DEAL" | "ACTIVITY" | "TICKET" | "CONVERSATION";
   id: string;
   date: string;
   title: string;
@@ -17,24 +17,31 @@ interface ContactTimelineProps {
 
 export default function ContactTimeline({ contactId }: ContactTimelineProps) {
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
-  const [contact, setContact] = useState<any>(null);
+  const [contact, setContact] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchTimeline = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/contacts/${contactId}/timeline`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `${API_BASE_URL}/contacts/${contactId}/timeline`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
         const data = await res.json();
-        
+
         if (data.contact && data.timeline) {
           setContact(data.contact);
           setTimeline(data.timeline);
         }
       } catch (error) {
-        console.error('Error fetching timeline:', error);
+        console.error("Error fetching timeline:", error);
       } finally {
         setLoading(false);
       }
@@ -61,16 +68,16 @@ export default function ContactTimeline({ contactId }: ContactTimelineProps) {
 
   const getColorClasses = (color: string) => {
     switch (color) {
-      case 'green':
-        return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800';
-      case 'blue':
-        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800';
-      case 'red':
-        return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800';
-      case 'yellow':
-        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
+      case "green":
+        return "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800";
+      case "blue":
+        return "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800";
+      case "red":
+        return "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800";
+      case "yellow":
+        return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800";
       default:
-        return 'bg-gray-100 dark:bg-gray-900/30 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-reply-border-dark';
+        return "bg-gray-100 dark:bg-gray-900/30 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-reply-border-dark";
     }
   };
 
@@ -81,13 +88,17 @@ export default function ContactTimeline({ contactId }: ContactTimelineProps) {
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
     if (days === 0) {
-      return `Hoy a las ${date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}`;
+      return `Hoy a las ${date.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}`;
     } else if (days === 1) {
-      return 'Ayer';
+      return "Ayer";
     } else if (days < 7) {
       return `Hace ${days} días`;
     } else {
-      return date.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+      return date.toLocaleDateString("es", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
     }
   };
 
@@ -100,7 +111,7 @@ export default function ContactTimeline({ contactId }: ContactTimelineProps) {
             {contact.name}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {contact.email || contact.phone || 'Sin información de contacto'}
+            {contact.email || contact.phone || "Sin información de contacto"}
           </p>
         </div>
       )}
@@ -113,9 +124,14 @@ export default function ContactTimeline({ contactId }: ContactTimelineProps) {
         {/* Timeline items */}
         <div className="space-y-6">
           {timeline.map((item) => (
-            <div key={`${item.type}-${item.id}`} className="relative flex items-start gap-4">
+            <div
+              key={`${item.type}-${item.id}`}
+              className="relative flex items-start gap-4"
+            >
               {/* Icon */}
-              <div className={`flex-shrink-0 w-12 h-12 rounded-full border-4 border-white dark:border-gray-900 flex items-center justify-center text-xl z-10 ${getColorClasses(item.color)}`}>
+              <div
+                className={`flex-shrink-0 w-12 h-12 rounded-full border-4 border-white dark:border-gray-900 flex items-center justify-center text-xl z-10 ${getColorClasses(item.color)}`}
+              >
                 {item.icon}
               </div>
 
@@ -132,14 +148,16 @@ export default function ContactTimeline({ contactId }: ContactTimelineProps) {
                 <p className="text-sm text-gray-600 dark:text-gray-300">
                   {item.subtitle}
                 </p>
-                
+
                 {/* Type badge */}
                 <div className="mt-2">
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getColorClasses(item.color)}`}>
-                    {item.type === 'DEAL' && 'Oportunidad'}
-                    {item.type === 'ACTIVITY' && 'Actividad'}
-                    {item.type === 'TICKET' && 'Ticket'}
-                    {item.type === 'CONVERSATION' && 'Conversación'}
+                  <span
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getColorClasses(item.color)}`}
+                  >
+                    {item.type === "DEAL" && "Oportunidad"}
+                    {item.type === "ACTIVITY" && "Actividad"}
+                    {item.type === "TICKET" && "Ticket"}
+                    {item.type === "CONVERSATION" && "Conversación"}
                   </span>
                 </div>
               </div>
@@ -150,4 +168,3 @@ export default function ContactTimeline({ contactId }: ContactTimelineProps) {
     </div>
   );
 }
-

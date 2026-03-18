@@ -359,7 +359,7 @@ export const ActivityList: React.FC = () => {
                             <span className="text-orange-500">
                               {getTypeIcon(activity.type)}
                             </span>
-                            <span className="text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase tracking-widestá">
+                            <span className="text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase tracking-widest">
                               {getTypeLabel(activity.type)}
                             </span>
                           </div>

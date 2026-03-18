@@ -4,13 +4,15 @@ import { Prisma } from "@prisma/client";
 
 /**
  * 🔔 NOTIFICATION CRUD SERVICE
+ * 🛡️ All queries scoped by companyId to prevent cross-tenant data leaks
  */
 export const notificationService = {
   async findAll(
+    companyId: string,
     userId: string,
     filters: { limit?: number; unreadOnly?: boolean },
   ) {
-    const where: Prisma.NotificationWhereInput = { userId };
+    const where: Prisma.NotificationWhereInput = { companyId, userId };
     if (filters.unreadOnly) where.read = false;
 
     const [notifications, unreadCount] = await Promise.all([
@@ -19,15 +21,17 @@ export const notificationService = {
         orderBy: { createdAt: "desc" },
         take: filters.limit || 20,
       }),
-      notificationRepository.count({ where: { userId, read: false } }),
+      notificationRepository.count({
+        where: { companyId, userId, read: false },
+      }),
     ]);
 
     return { notifications, unreadCount };
   },
 
-  async markAsRead(id: string, userId: string) {
+  async markAsRead(companyId: string, id: string, userId: string) {
     const notification = await notificationRepository.findFirst({
-      where: { id, userId },
+      where: { id, userId, companyId },
     });
     if (!notification) throw new AppError("Notification not found", 404);
     await notificationRepository.update({
@@ -36,16 +40,16 @@ export const notificationService = {
     });
   },
 
-  async markAllAsRead(userId: string) {
+  async markAllAsRead(companyId: string, userId: string) {
     await notificationRepository.updateMany({
-      where: { userId, read: false },
+      where: { companyId, userId, read: false },
       data: { read: true },
     });
   },
 
-  async delete(id: string, userId: string) {
+  async delete(companyId: string, id: string, userId: string) {
     const notification = await notificationRepository.findFirst({
-      where: { id, userId },
+      where: { id, userId, companyId },
     });
     if (!notification) throw new AppError("Notification not found", 404);
     await notificationRepository.delete({ where: { id } });

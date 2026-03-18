@@ -25,19 +25,26 @@ export const useTeamMembers = () => {
 
         if (response.data.status === "success") {
           const users: TeamMember[] = response.data.data.users.map(
-            (user: any) => ({
+            (user: {
+              id: string;
+              name?: string;
+              email: string;
+              role?: string;
+            }) => ({
               id: user.id,
               name: user.name || user.email,
               email: user.email,
               role: user.role,
-            })
+            }),
           );
 
           setTeamMembers(users);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[useTeamMembers] Error:", err);
-        setError(err.message || "Failed to load team members");
+        setError(
+          err instanceof Error ? err.message : "Failed to load team members",
+        );
       } finally {
         setLoading(false);
       }

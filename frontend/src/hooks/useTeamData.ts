@@ -94,23 +94,34 @@ export const useTeamData = (): UseTeamDataReturn => {
       console.log("[TeamData] Received real-time update:", payload);
 
       // 1. Optimistic Update (Instant Feedback)
-      queryClient.setQueryData(["team-data"], (oldData: any) => {
-        if (!oldData || !oldData.agents) return oldData;
+      queryClient.setQueryData(
+        ["team-data"],
+        (
+          oldData:
+            | {
+                agents: TeamAgent[];
+                departments: Department[];
+                aiAssistants: AIAssistant[];
+              }
+            | undefined,
+        ) => {
+          if (!oldData || !oldData.agents) return oldData;
 
-        return {
-          ...oldData,
-          agents: oldData.agents.map((agent: TeamAgent) => {
-            if (agent.id === payload.id) {
-              return {
-                ...agent,
-                status: payload.status,
-                lastConnectedAt: payload.lastSeen || agent.lastConnectedAt,
-              };
-            }
-            return agent;
-          }),
-        };
-      });
+          return {
+            ...oldData,
+            agents: oldData.agents.map((agent: TeamAgent) => {
+              if (agent.id === payload.id) {
+                return {
+                  ...agent,
+                  status: payload.status,
+                  lastConnectedAt: payload.lastSeen || agent.lastConnectedAt,
+                };
+              }
+              return agent;
+            }),
+          };
+        },
+      );
 
       // 2. Background Sync (Ensure Consistency of Counters)
       // Slight delay to allow backend to finish writing session logs if needed
@@ -177,4 +188,3 @@ export const useTeamData = (): UseTeamDataReturn => {
     filterAgents,
   };
 };
-

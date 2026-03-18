@@ -19,6 +19,7 @@ import {
   TemplateComponent,
   MediaPayload,
 } from "../core/types/whatsapp.types";
+import { Prisma } from "@prisma/client";
 import { messageTemplateRepository } from "@/repositories/MessageTemplateRepository";
 import { AppError } from "@/utils/AppError";
 
@@ -38,41 +39,123 @@ export class WhatsAppMessaging {
     content: string,
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
-    const activeSession = await this.sessionManager.findActiveSessionForCompany(
-      options.companyId,
-    );
+    try {
+      const activeSession =
+        await this.sessionManager.findActiveSessionForCompany(
+          options.companyId,
+        );
 
-    if (!activeSession) {
-      throw new AppError(
-        "No hay una sesión de WhatsApp activa. Por favor, ve a Configuración y escanea el código QR para reconectar.",
-        503,
-      );
+      if (!activeSession) {
+        throw new AppError(
+          "No hay una sesión de WhatsApp activa. Por favor, ve a Configuración y escanea el código QR para reconectar.",
+          503,
+        );
+      }
+
+      await this.rateLimitService.enforceLimit(activeSession.sessionId);
+
+      // 🏗️ 1. SAVE IN DB AS "QUEUED" (Audit Trail)
+      const { chatService } = await import("@/services/chatService");
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      const savedMessage = await chatService.upsertMessage({
+        whatsappMessageId: tempId,
+        companyId: options.companyId,
+        content: content,
+        direction: "OUTBOUND",
+        conversationId: options.conversationId,
+        senderId: options.senderId,
+        status: "QUEUED",
+        metadata: {
+          ...options.metadata,
+          isQueued: true,
+          originalTempId: tempId,
+        },
+      });
+
+      // 🏗️ 2. ENQUEUE: Add to the official multi-tenant queue
+      const { messageQueueService } =
+        await import("@/services/queue/messageQueueService");
+
+      await messageQueueService.enqueue({
+        companyId: options.companyId,
+        conversationId: options.conversationId,
+        senderId: options.senderId,
+        to,
+        text: content,
+        media: options.media,
+        quotedMessageId: options.quotedMessageId, // ❤️ FIX: Pass quoted message ID to queue
+        // Metadata payload for worker
+        metadata: {
+          ...options.metadata,
+          dbId: savedMessage.id, // Linked to the QUEUED record
+        },
+      });
+
+      // 3. Return the saved record for immediate UI feedback
+      return {
+        messageId: savedMessage.whatsappMessageId!,
+        companyId: savedMessage.companyId,
+        sessionId: activeSession.sessionId,
+        from: "system",
+        to,
+        content: savedMessage.content,
+        timestamp: savedMessage.createdAt,
+        metadata: savedMessage.metadata as Record<string, Prisma.JsonValue>,
+      };
+    } catch (error: unknown) {
+      if (!(error instanceof AppError)) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        import("@/utils/logger").then(({ Logger }) => {
+          Logger.error(`[WhatsAppMessaging] sendMessage failed`, {
+            companyId: options.companyId,
+            conversationId: options.conversationId,
+            senderId: options.senderId,
+            to,
+            error: err.message,
+            stack: err.stack,
+          });
+        });
+      }
+      throw error;
     }
-
-    await this.rateLimitService.enforceLimit(activeSession.sessionId);
-
-    if (options.media) {
-      return this.messageHandler.sendMedia(to, options.media, options);
-    }
-    return this.messageHandler.sendMessage(to, content, options);
   }
 
   // ────────────────────────────────────────────────
-  // WORKER INTERFACE: Execute Queued Message
+  // WORKER INTERFACE: Execute Actual Sending
   // ────────────────────────────────────────────────
 
   async executeQueuedMessage(
     sessionId: string,
     to: string,
     content: string,
-    options: SendMessageOptions,
+    options: SendMessageOptions & { dbId?: string },
   ) {
-    await this.rateLimitService.enforceLimit(sessionId);
+    try {
+      // This is called by the worker. We bypass the queue logic here.
+      const result = options.media
+        ? await this.messageHandler.sendMedia(to, options.media, options)
+        : await this.messageHandler.sendMessage(to, content, options);
 
-    if (options.media) {
-      return this.messageHandler.sendMedia(to, options.media, options);
+      // OutboundMessageHandler now handles DB updates automatically using options.metadata.dbId.
+      // We no longer need to update the QUEUED message here.
+
+      return result;
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      import("@/utils/logger").then(({ Logger }) => {
+        Logger.error(`[WhatsAppMessaging] executeQueuedMessage failed`, {
+          sessionId,
+          companyId: options.companyId,
+          conversationId: options.conversationId,
+          dbId: options.dbId,
+          to,
+          error: err.message,
+          stack: err.stack,
+        });
+      });
+      throw error;
     }
-    return this.messageHandler.sendMessage(to, content, options);
   }
 
   // ────────────────────────────────────────────────
@@ -119,7 +202,7 @@ export class WhatsAppMessaging {
     const template = await messageTemplateRepository.findById(templateId);
 
     if (!template) {
-      throw new Error(`Template not found: ${templateId}`);
+      throw new AppError(`Template not found: ${templateId}`, 404);
     }
 
     const components = template.components as unknown as TemplateComponent[];

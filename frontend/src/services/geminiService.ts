@@ -17,7 +17,7 @@ export const generateBotResponse = async (
   history: Message[],
   systemPrompt: string,
   modelName: string = "gemini-1.5-flash",
-  knowledgeBase: Document[] = []
+  knowledgeBase: Document[] = [],
 ): Promise<string> => {
   try {
     const ai = getAI();
@@ -33,7 +33,7 @@ export const generateBotResponse = async (
       ${knowledgeBase
         .map(
           (doc) =>
-            `--- DOC: ${doc.filename} ---\n${doc.content}\n--- FIN DOC ---`
+            `--- DOC: ${doc.filename} ---\n${doc.content}\n--- FIN DOC ---`,
         )
         .join("\n")}
       \n=== FIN BASE DE CONOCIMIENTO ===\n
@@ -60,9 +60,10 @@ export const generateBotResponse = async (
       return response.text;
     }
     return "No se pudo generar una respuesta.";
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Suppress API key errors to avoid console spam
-    if (error.message?.includes("API key not valid") || error.status === 400) {
+    const err = error as { message?: string; status?: number };
+    if (err.message?.includes("API key not valid") || err.status === 400) {
       // Silent fail for missing/invalid API key
       return "";
     }
@@ -103,11 +104,12 @@ export const analyzeSentiment = async (text: string): Promise<string> => {
       return sentiment;
     }
     return "Neutral";
-  } catch (e: any) {
+  } catch (e: unknown) {
     // Suppress API key errors to avoid console spam
-    if (e.message?.includes("API key not valid") || e.status === 400) {
+    const err = e as { message?: string; status?: number };
+    if (err.message?.includes("API key not valid") || err.status === 400) {
       console.warn(
-        "Gemini API Key missing or invalid. Sentiment analysis skipped."
+        "Gemini API Key missing or invalid. Sentiment analysis skipped.",
       );
       return "Neutral";
     }

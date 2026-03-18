@@ -2,6 +2,20 @@ import { api } from "./apiClient";
 
 // ==================== TYPES & INTERFACES ====================
 
+/** Raw user shape as returned by the backend /users endpoint */
+interface RawUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isOwner?: boolean;
+  maxConcurrency?: number;
+  skills?: string[];
+  department?: string;
+  companyId?: string;
+  avatar?: string;
+  [key: string]: unknown; // allow extra fields
+}
 export interface TeamAgent {
   id: string;
   name: string;
@@ -43,7 +57,7 @@ export interface UpdateAgentInput {
   department?: string;
   maxConcurrency?: number;
   skills?: string[];
-  preferences?: Record<string, any>;
+  preferences?: Record<string, unknown>;
   queueIds?: string[];
   profilePicUrl?: string;
 }
@@ -82,8 +96,8 @@ export const teamService = {
    * GET AGENTS
    * Fetches all team members (agents and supervisors)
    */
-  async getAgents(): Promise<any> {
-    const response = await api.get("/users");
+  async getAgents(): Promise<{ data: { users: RawUser[] } }> {
+    const response = await api.get<{ data: { users: RawUser[] } }>("/users");
     return response;
   },
 
@@ -93,7 +107,9 @@ export const teamService = {
    */
   async getAgentMetrics(): Promise<{ data: { metrics: AgentMetrics[] } }> {
     try {
-      const response = await api.get("/users/metrics");
+      const response = await api.get<{ data: { metrics: AgentMetrics[] } }>(
+        "/users/metrics",
+      );
       return response;
     } catch (error) {
       // Metrics are optional, return empty if fails
@@ -107,13 +123,18 @@ export const teamService = {
    * Fetches all departments
    */
   async getDepartments(): Promise<Department[]> {
-    const response = await api.get("/departments");
+    const response = await api.get<
+      { data: { departments: Department[] } } | Department[]
+    >("/departments");
 
     // Handle both response formats
     if (Array.isArray(response)) {
       return response;
-    } else if (response?.data?.departments) {
-      return response.data.departments;
+    } else if (
+      (response as { data: { departments: Department[] } })?.data?.departments
+    ) {
+      return (response as { data: { departments: Department[] } }).data
+        .departments;
     }
 
     return [];
@@ -125,7 +146,7 @@ export const teamService = {
    */
   async getAIAssistants(): Promise<AIAssistant[]> {
     try {
-      const response = await api.get("/ai/assistants");
+      const response = await api.get<AIAssistant[]>("/ai/assistants");
       return response || [];
     } catch (error) {
       // AI assistants are optional
@@ -138,8 +159,13 @@ export const teamService = {
    * CREATE AGENT
    * Creates a new team member
    */
-  async createAgent(agentData: CreateAgentInput): Promise<any> {
-    const response = await api.post("/users", agentData);
+  async createAgent(
+    agentData: CreateAgentInput,
+  ): Promise<{ data: { user: RawUser } }> {
+    const response = await api.post<{ data: { user: RawUser } }>(
+      "/users",
+      agentData,
+    );
     return response;
   },
 
@@ -149,9 +175,12 @@ export const teamService = {
    */
   async updateAgent(
     agentId: string,
-    agentData: UpdateAgentInput
-  ): Promise<any> {
-    const response = await api.patch(`/users/${agentId}`, agentData);
+    agentData: UpdateAgentInput,
+  ): Promise<{ data: { user: RawUser } }> {
+    const response = await api.patch<{ data: { user: RawUser } }>(
+      `/users/${agentId}`,
+      agentData,
+    );
     return response;
   },
 
@@ -170,17 +199,17 @@ export const teamService = {
    * Combines users data with metrics and formats for UI
    */
   transformAgentsData(
-    users: any[],
+    users: RawUser[],
     metrics: AgentMetrics[],
-    aiAssistants: AIAssistant[]
+    aiAssistants: AIAssistant[],
   ): TeamAgent[] {
     // Create metrics map for quick lookup
     const metricsMap = new Map<string, AgentMetrics>();
     metrics.forEach((m) => metricsMap.set(m.userId, m));
 
     // Filter for AGENT and SUPERVISOR roles
-    const rawAgents = users.filter((user: any) =>
-      ["AGENT", "SUPERVISOR", "ADMIN"].includes(user.role)
+    const rawAgents = users.filter((user) =>
+      ["AGENT", "SUPERVISOR", "ADMIN"].includes(user.role),
     );
 
     // Create AI virtual agents
@@ -206,13 +235,13 @@ export const teamService = {
     const aiNames = aiAssistants.map((a) => a.name.toLowerCase().trim());
 
     const humanAgents: TeamAgent[] = rawAgents
-      .filter((agent: any) => {
+      .filter((agent: RawUser) => {
         const isBotEmail = agent.email?.toLowerCase().startsWith("bot_");
         const nameMatch = aiNames.includes(agent.name.toLowerCase().trim());
         const isMeUser = agent.name.toLowerCase() === "me";
         return !isBotEmail && !nameMatch && !isMeUser;
       })
-      .map((agent: any) => {
+      .map((agent: RawUser) => {
         const agentMetrics: Partial<AgentMetrics> =
           metricsMap.get(agent.id) || {};
 

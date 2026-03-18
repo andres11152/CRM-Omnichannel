@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-// Ajusta este path si mueves types.ts a src/types.ts
 import { User } from "@/types";
 
 interface AuthState {
@@ -12,11 +11,16 @@ interface AuthState {
   login: (user: User, token: string) => void;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
+  updateToken: (token: string) => void;
 }
+
+// 🔒 API Base URL for server-side logout
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string) || "http://localhost:4000/api";
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -27,8 +31,29 @@ export const useAuthStore = create<AuthState>()(
         set({ user, token, isAuthenticated: true });
       },
 
+      /**
+       * 🏢 ENTERPRISE LOGOUT
+       * 1. Calls backend to destroy session + blacklist token (server-side)
+       * 2. Clears local state
+       * 3. Redirects to login
+       */
       logout: () => {
-        // 🛡️ SECURE LOGOUT: Hard reset to prevent state contamination
+        const currentToken = get().token;
+
+        // 🔥 Server-side session destruction (fire-and-forget)
+        // Uses fetch directly to avoid circular dependency with axios interceptor
+        if (currentToken) {
+          fetch(`${API_BASE}/auth/logout`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+              "Content-Type": "application/json",
+            },
+            credentials: "include", // Send cookies
+          }).catch(() => {
+            // Non-critical: session will expire naturally if server unreachable
+          });
+        }
 
         // 1. Clear token
         localStorage.removeItem("token");
@@ -51,8 +76,16 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, token: null, isAuthenticated: false });
 
         // 6. CRITICAL: Force full browser reload to clear ALL React state
-        // This prevents any stale data in memory (hooks, contexts, etc.)
         window.location.href = "/login";
+      },
+
+      /**
+       * 🔄 Update access token after silent refresh.
+       * Called by axios interceptor when refresh succeeds.
+       */
+      updateToken: (token: string) => {
+        localStorage.setItem("token", token);
+        set({ token });
       },
 
       updateUser: (updates) => {

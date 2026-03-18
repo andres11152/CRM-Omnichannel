@@ -170,7 +170,7 @@ export const AccountList: React.FC = () => {
                           <div
                             className={`w-1.5 h-1.5 rounded-full ${account.status === "ACTIVE" ? "bg-emerald-500" : "bg-gray-400"}`}
                           />
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widestá">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                             {account.status}
                           </span>
                         </div>

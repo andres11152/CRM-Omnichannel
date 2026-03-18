@@ -31,9 +31,15 @@ export const HeatmapChart: React.FC<Props> = ({ data }) => {
 
   const maxVal = Math.max(...chartData.map((d) => d.value));
 
-  // Custom Shape for colored squares
-  const renderSquare = (props: any) => {
-    const { cx, cy, width, height, payload } = props;
+  interface RechartsSquareProps {
+    cx: number;
+    cy: number;
+    payload: { z: number; [key: string]: unknown };
+    [key: string]: unknown;
+  }
+
+  const renderSquare = (props: RechartsSquareProps) => {
+    const { cx, cy, payload } = props;
     // Calculate intensity based on max value
     const intensity = maxVal > 0 ? payload.z / maxVal : 0;
 
@@ -98,11 +104,14 @@ export const HeatmapChart: React.FC<Props> = ({ data }) => {
               return null;
             }}
           />
-          <Scatter data={chartData} shape={renderSquare} />
+          <Scatter
+            data={chartData}
+            shape={
+              renderSquare as unknown as (props: unknown) => React.ReactElement
+            }
+          />
         </ScatterChart>
       </ResponsiveContainer>
     </div>
   );
 };
-
-

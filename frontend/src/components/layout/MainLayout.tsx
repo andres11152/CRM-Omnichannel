@@ -86,7 +86,7 @@ export const MainLayout = () => {
       .map((id) => itemMap.get(id))
       .filter((item): item is (typeof NAV_ITEMS)[0] => {
         if (!item) return false;
-        const userRole = user.role?.toLowerCase() as any; // Normalize to lowercase
+        const userRole = user.role?.toLowerCase(); // Normalize to lowercase
         if (item.masterOnly && userRole !== "master") return false;
         if (item.agentOnly && userRole !== "agent") return false;
         if (!item.allowedRoles.some((role) => role.toLowerCase() === userRole))

@@ -322,7 +322,7 @@ export const TagsManager: React.FC = () => {
                           </h4>
                           <div className="flex items-center gap-2 mt-1">
                             <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widestá">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                               {new Date(
                                 tag.createdAt || Date.now(),
                               ).toLocaleDateString("es-ES", {

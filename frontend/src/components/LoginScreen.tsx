@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
 import { jwtDecode } from "jwt-decode";
-import { User } from "@/types";
+import { User, UserRole } from "@/types";
 import { API_BASE_URL } from "@/services/apiConfig";
 
 interface Props {
@@ -45,12 +45,21 @@ export const LoginScreen: React.FC<Props> = ({
   const handleTokenLogin = (token: string) => {
     try {
       localStorage.setItem("token", token);
-      const decoded: any = jwtDecode(token);
+      const decoded = jwtDecode<{
+        id: string;
+        email: string;
+        role: string;
+        companyId: string;
+        name?: string;
+        companyStatus?: string;
+        isActive?: boolean;
+        phone?: string;
+      }>(token);
       const user: User = {
         id: decoded.id || "unknown",
         name: decoded.name || "Usuario",
         email: decoded.email || "",
-        role: decoded.role || "company_admin",
+        role: (decoded.role || "company_admin") as User["role"],
         companyId: decoded.companyId,
         companyStatus: decoded.companyStatus,
         isActive: decoded.isActive ?? true,
@@ -432,5 +441,3 @@ export const LoginScreen: React.FC<Props> = ({
     </div>
   );
 };
-
-

@@ -17,7 +17,10 @@ export interface UseAgentFormReturn {
   openCreateModal: (defaultDepartment?: string) => void;
   openEditModal: (agent: TeamAgent, defaultDepartment?: string) => void;
   closeModal: () => void;
-  updateFormField: (field: keyof AgentFormData, value: any) => void;
+  updateFormField: (
+    field: keyof AgentFormData,
+    value: AgentFormData[keyof AgentFormData],
+  ) => void;
   setSkillInputValue: (value: string) => void;
   addSkill: (e: React.KeyboardEvent) => void;
   removeSkill: (skill: string) => void;
@@ -65,7 +68,7 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
       closeModal();
       if (onSuccess) onSuccess();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error("[useAgentForm] Create error:", error);
       // Error toast is handled by apiClient interceptor
     },
@@ -84,7 +87,7 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
       closeModal();
       if (onSuccess) onSuccess();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error("[useAgentForm] Update error:", error);
       // Error toast is handled by apiClient interceptor
     },
@@ -149,7 +152,10 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
    * UPDATE FORM FIELD
    * Generic handler for form field changes
    */
-  const updateFormField = (field: keyof AgentFormData, value: any) => {
+  const updateFormField = (
+    field: keyof AgentFormData,
+    value: AgentFormData[keyof AgentFormData],
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 

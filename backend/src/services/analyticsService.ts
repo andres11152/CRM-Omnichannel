@@ -373,8 +373,8 @@ export class AnalyticsService {
     const prefix = "agent_performance";
     const result =
       format === "pdf"
-        ? await exportService.generatePDF(exportData, prefix)
-        : await exportService.generateCSV(exportData, prefix);
+        ? await exportService.generatePDF(companyId, exportData, prefix)
+        : await exportService.generateCSV(companyId, exportData, prefix);
     return { downloadUrl: result.filePath, format, recordCount: data.length };
   }
 
@@ -431,8 +431,8 @@ export class AnalyticsService {
     const prefix = "ticket_analytics";
     const result =
       format === "pdf"
-        ? await exportService.generatePDF(exportData, prefix)
-        : await exportService.generateCSV(exportData, prefix);
+        ? await exportService.generatePDF(companyId, exportData, prefix)
+        : await exportService.generateCSV(companyId, exportData, prefix);
     return {
       downloadUrl: result.filePath,
       format,

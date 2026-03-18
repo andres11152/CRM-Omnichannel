@@ -26,6 +26,12 @@ export const initWorkers = async () => {
     // Get singleton instance with whatsappService
     const messageWorker = getMessageQueueWorker(whatsappService);
 
+    // 🏢 ENTERPRISE: Group Contact Indexer Worker
+    Logger.info("[Loader] 👥 Initializing Group Contact Indexer...");
+    const { groupContactIndexer } =
+      await import("@/services/queue/groupContactIndexer");
+    groupContactIndexer.startWorker();
+
     // Start workers for all active companies
     const companies = await prisma.company.findMany({
       where: { isActive: true },
@@ -51,6 +57,7 @@ export const initWorkers = async () => {
       await messageQueueService.shutdown();
       await flowQueueWorker.shutdown();
       await cronWorker.close();
+      await groupContactIndexer.shutdown();
       process.exit(0);
     });
   } catch (workerError: unknown) {
@@ -74,4 +81,3 @@ export const initWorkers = async () => {
     Logger.info("[Loader] ⚠️ Continuing without queue workers...");
   }
 };
-

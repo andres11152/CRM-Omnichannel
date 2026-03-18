@@ -2,6 +2,7 @@ import {
   downloadMediaMessage,
   WAMessage,
   AnyMessageContent,
+  getContentType,
 } from "@whiskeysockets/baileys";
 import { MediaType } from "@prisma/client";
 import { mediaRepository } from "@/repositories/MediaRepository";
@@ -44,6 +45,7 @@ export class MediaProcessorService {
    * Downloads media streams, uploads to storage, and returns metadata.
    */
   async extractMessageContent(
+    companyId: string,
     message: WAMessage,
     messageId: string,
   ): Promise<{
@@ -57,7 +59,9 @@ export class MediaProcessorService {
     let mediaSize = 0;
     let mediaType: MediaType | null = null;
 
-    const messageType = Object.keys(message.message || {})[0];
+    const messageType = message.message
+      ? getContentType(message.message)
+      : undefined;
     if (!messageType) return null;
 
     const ignoredTypes = [
@@ -76,6 +80,32 @@ export class MediaProcessorService {
       textContent = message.message?.conversation || "";
     } else if (messageType === "extendedTextMessage") {
       textContent = message.message?.extendedTextMessage?.text || "";
+    } else if (messageType === "protocolMessage") {
+      const proto = message.message?.protocolMessage as {
+        type?: number | string;
+      };
+      if (
+        proto.type === 0 ||
+        proto.type === "REVOKE" ||
+        proto.type === "0" ||
+        !proto.type
+      ) {
+        textContent = "🚫 Este mensaje fue eliminado";
+      } else {
+        textContent = "[Sistema/Protocolo]";
+      }
+    } else if (messageType === "buttonsResponseMessage") {
+      textContent =
+        (message.message?.buttonsResponseMessage?.selectedButtonId as string) ||
+        "[Respuesta de Botón]";
+    } else if (messageType === "listResponseMessage") {
+      textContent =
+        (message.message?.listResponseMessage?.title as string) ||
+        "[Respuesta de Lista]";
+    } else if (messageType === "templateButtonReplyMessage") {
+      textContent =
+        (message.message?.templateButtonReplyMessage?.selectedId as string) ||
+        "[Respuesta de Plantilla]";
     } else {
       const supportedMedia = [
         "imageMessage",
@@ -86,6 +116,7 @@ export class MediaProcessorService {
       ];
       if (supportedMedia.includes(messageType)) {
         try {
+          mediaType = this.mapBaileysToMediaType(messageType);
           const stream = await downloadMediaMessage(message, "stream", {});
           const content = message.message as unknown as Record<string, unknown>;
           const msgObj = content[messageType] as
@@ -96,7 +127,7 @@ export class MediaProcessorService {
             (msgObj?.caption as string) ||
             (msgObj?.text as string) ||
             (msgObj?.fileName as string) ||
-            `[${this.mapBaileysToMediaType(messageType)}]`;
+            `[${mediaType}]`;
 
           if (stream) {
             mediaType = this.mapBaileysToMediaType(messageType);
@@ -107,6 +138,7 @@ export class MediaProcessorService {
             const filename = `${messageId}.${ext}`;
 
             const uploadResult = await storageService.uploadStream(
+              companyId,
               stream as Readable,
               filename,
               mimetype,

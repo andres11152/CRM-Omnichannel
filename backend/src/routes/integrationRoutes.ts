@@ -181,7 +181,7 @@ router.delete(
 
       const sessions = await whatsappService.listSessions(companyId);
       for (const session of sessions) {
-        await whatsappService.deleteSession(session.sessionId);
+        await whatsappService.deleteSession(companyId, session.sessionId);
       }
 
       res.status(200).json({ message: "Logged out successfully" });
@@ -191,6 +191,14 @@ router.delete(
   },
 );
 
-router.post("/whatsapp/sync", integrationController.syncMessages);
+import { validate } from "@/middleware/validationMiddleware";
+import { IntegrationSyncSchema } from "@/schemas/integrationSchema";
+
+// No body/params needed for session creation/deletion, but strictly validating empty body prevents pollution
+router.post(
+  "/whatsapp/sync",
+  validate(IntegrationSyncSchema),
+  integrationController.syncMessages,
+);
 
 export default router;

@@ -14,6 +14,7 @@ import {
   Trash2,
   Plus,
   Minus,
+  MessageSquare,
 } from "lucide-react";
 import { ContactTimelineView } from "./crm/ContactTimelineView";
 import { Avatar } from "@/components/common/Avatar";
@@ -529,8 +530,14 @@ const ContactListComponent: React.FC<Props> = ({
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {/* Section: Direct Messages */}
           {groups && groups.length > 0 && contacts.length > 0 && (
-            <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-reply-bg/80 dark:bg-reply-surface-dark/80 backdrop-blur sticky top-0 z-10 border-b border-gray-100 dark:border-reply-border-dark">
-              Mensajes Directos ({contacts.length})
+            <div className="px-4 py-2.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider bg-indigo-50/50 dark:bg-indigo-900/10 backdrop-blur sticky top-0 z-10 border-b border-indigo-100/50 dark:border-indigo-900/20 flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center">
+                <MessageSquare className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <span>Mensajes Directos</span>
+              <span className="ml-auto bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
+                {contacts.length}
+              </span>
             </div>
           )}
 
@@ -734,8 +741,14 @@ const ContactListComponent: React.FC<Props> = ({
           {/* Section: Groups */}
           {groups && groups.length > 0 && (
             <>
-              <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-reply-bg/80 dark:bg-reply-surface-dark/80 backdrop-blur sticky top-0 z-10 border-b border-gray-100 dark:border-reply-border-dark border-t">
-                Grupos de Trabajo ({groups.length})
+              <div className="px-4 py-2.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider bg-emerald-50/50 dark:bg-emerald-900/10 backdrop-blur sticky top-0 z-10 border-y border-emerald-100/50 dark:border-emerald-900/20 flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center">
+                  <User className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <span>Grupos de Trabajo</span>
+                <span className="ml-auto bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
+                  {groups.length}
+                </span>
               </div>
               {groups.map((contact) => {
                 const isActive = activeContactId === contact.id;
@@ -746,22 +759,41 @@ const ContactListComponent: React.FC<Props> = ({
                     onClick={() => !isDeleting && onSelectContact(contact.id)}
                     className={`flex items-start gap-2.5 cursor-pointer transition-all relative group border-b border-gray-100 dark:border-reply-border-dark dark:hover:bg-reply-panel-dark hover:bg-reply-bg 
                     ${viewMode === "compact" ? "py-1.5 px-2" : "py-2 px-3"}
-                    ${isActive ? "bg-gray-100 dark:bg-reply-border-dark border-l-4 border-l-green-500" : "bg-white dark:bg-reply-surface-dark border-l-4 border-l-transparent"}
+                    ${isActive ? "bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-l-emerald-500" : "bg-white dark:bg-reply-surface-dark border-l-4 border-l-transparent"}
                     ${isDeleting ? "opacity-50 pointer-events-none" : ""}
                   `}
                   >
+                    {/* Delete Button */}
+                    {(userRole === "ADMIN" || userRole === "company_admin") &&
+                      onDeleteContact && (
+                        <button
+                          onClick={(e) => handleDelete(e, contact.id)}
+                          disabled={!!deletingId}
+                          className="absolute bottom-0 left-0 p-1.5 opacity-0 group-hover:opacity-100 transition-all text-gray-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-transparent dark:hover:bg-transparent z-20"
+                          title="Eliminar ticket"
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="animate-spin h-3 w-3 text-red-500" />
+                          ) : (
+                            <Trash2 className="w-3 w-3" />
+                          )}
+                        </button>
+                      )}
+
+                    {/* Avatar with Group Badge */}
                     <div className="relative flex-shrink-0">
                       <Avatar
                         src={contact.profilePicUrl || contact.avatarUrl || null}
                         name={contact.name || ""}
-                        className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} shadow-sm`}
+                        className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} shadow-sm ring-1 ring-emerald-200/50 dark:ring-emerald-700/30`}
                       />
-                      <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full border border-gray-100 p-0.5">
-                        <User className="w-3 h-3 text-orange-500" />
+                      <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full border-2 border-white dark:border-reply-border-dark p-0.5" title="Grupo">
+                        <User className="w-2.5 h-2.5 text-white" />
                       </div>
                     </div>
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      {/* Row 1: Name + Time */}
                       <div className="flex justify-between items-center gap-1">
                         <div className="flex items-center gap-1.5 min-w-0">
                           {contact.channel && (
@@ -772,24 +804,68 @@ const ContactListComponent: React.FC<Props> = ({
                               size="sm"
                             />
                           )}
-                          <h3 className="font-semibold truncate text-gray-900 dark:text-white text-sm">
+                          <h3 className={`font-semibold truncate text-gray-900 dark:text-white ${viewMode === "compact" ? "text-xs" : "text-sm"}`}>
                             {contact.name}
                           </h3>
                         </div>
-                        <span className="text-xs text-gray-400">
-                          {contact.lastMessageTime
-                            ? new Date(
-                                contact.lastMessageTime,
-                              ).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : ""}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {contact.unreadCount > 0 && (
+                            <span className="bg-emerald-500 dark:bg-emerald-600 text-white text-[9px] font-bold px-1.5 min-w-[1rem] h-4 rounded-full flex items-center justify-center shadow-sm">
+                              {contact.unreadCount}
+                            </span>
+                          )}
+                          <span
+                            className={`text-[10px] ${contact.unreadCount > 0 ? "text-emerald-500 dark:text-emerald-400 font-bold" : "text-gray-400 dark:text-gray-500"}`}
+                          >
+                            {(() => {
+                              try {
+                                if (!contact.lastMessageTime) return "";
+                                const date = new Date(contact.lastMessageTime);
+                                return isNaN(date.getTime())
+                                  ? ""
+                                  : date.toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    });
+                              } catch {
+                                return "";
+                              }
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Last Message */}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={`truncate flex-1 text-gray-500 dark:text-gray-400 ${viewMode === "compact" ? "text-[11px]" : "text-xs"}`}>
+                          {contact.lastMessage || "Sin mensajes"}
                         </span>
                       </div>
-                      <div className="text-sm text-gray-500 truncate">
-                        {contact.lastMessage}
-                      </div>
+
+                      {/* Row 3: Agent/Queue (compact inline) */}
+                      {viewMode !== "compact" &&
+                        (contact.assignedAgentName || contact.queueName) && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {contact.assignedAgentName && (
+                              <span
+                                className="text-[9px] text-blue-500 dark:text-blue-400 flex items-center gap-0.5"
+                                title="Agente"
+                              >
+                                <User className="w-2.5 h-2.5" />
+                                {contact.assignedAgentName}
+                              </span>
+                            )}
+                            {contact.queueName && (
+                              <span
+                                className="text-[9px] text-gray-400 dark:text-gray-500 flex items-center gap-0.5"
+                                title="Cola"
+                              >
+                                <Layers className="w-2.5 h-2.5" />
+                                {contact.queueName}
+                              </span>
+                            )}
+                          </div>
+                        )}
                     </div>
                   </div>
                 );

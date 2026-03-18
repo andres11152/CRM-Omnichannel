@@ -9,6 +9,7 @@ import {
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
 import { CreatePostSchema, UpdatePostSchema } from "@/schemas/postSchema";
+import { IdParamSchema } from "@/schemas/commonSchemas";
 
 const router = express.Router();
 
@@ -19,9 +20,8 @@ router.route("/").get(getPosts).post(validate(CreatePostSchema), createPost);
 
 router
   .route("/:id")
-  .get(getPost)
+  .get(validate(IdParamSchema), getPost)
   .patch(validate(UpdatePostSchema), updatePost)
-  .delete(deletePost);
+  .delete(validate(IdParamSchema), deletePost);
 
 export default router;
-

@@ -97,7 +97,11 @@ export class ConversationRepository {
       include: {
         participants: true,
         assignedTo: true,
-        messages: { orderBy: { createdAt: "asc" }, take: 50 }, // Service optimization
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 50,
+          include: { reactions: true },
+        }, // Service optimization
       },
     });
   }
@@ -108,7 +112,19 @@ export class ConversationRepository {
       include: {
         participants: true,
         assignedTo: true,
-        messages: { orderBy: { createdAt: "asc" } },
+        messages: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            reactions: true,
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                role: true,
+              },
+            },
+          },
+        },
       },
     });
   }

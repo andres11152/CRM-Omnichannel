@@ -18,7 +18,9 @@ import { getAssistants } from "@/services/aiService";
 const QueuesConfig: React.FC = () => {
   const [queues, setQueues] = useState<QueueConfig[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [assistants, setAssistants] = useState<any[]>([]);
+  const [assistants, setAssistants] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal State
@@ -72,7 +74,8 @@ const QueuesConfig: React.FC = () => {
         type: queue.type || "MANUAL",
         aiAssistantId: queue.aiAssistantId || "",
         promptTemplateId: queue.promptTemplateId || "Default",
-        config: (queue as any).config || { requiredSkills: [] },
+        config: (queue as unknown as { config?: { requiredSkills: string[] } })
+          .config || { requiredSkills: [] },
       });
     } else {
       setEditingQueue(null);
@@ -112,9 +115,11 @@ const QueuesConfig: React.FC = () => {
       }
       loadData(); // Refresh list to ensure consistency
       handleCloseModal();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error saving queue:", error);
-      toast.error(error.response?.data?.message || "Error al guardar la cola");
+      toast.error(
+        error instanceof Error ? error.message : "Error al guardar la cola",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -131,9 +136,11 @@ const QueuesConfig: React.FC = () => {
       await deleteQueue(id);
       setQueues(queues.filter((q) => q.id !== id));
       toast.success("Cola eliminada correctamente");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting queue:", error);
-      toast.error(error.response?.data?.message || "Error al eliminar la cola");
+      toast.error(
+        error instanceof Error ? error.message : "Error al eliminar la cola",
+      );
     }
   };
 
@@ -245,7 +252,8 @@ const QueuesConfig: React.FC = () => {
                       <span className="bg-gray-100 dark:bg-reply-surface-dark px-2 py-1 rounded text-xs border border-gray-200 dark:border-reply-border-dark">
                         {queue.departmentDetails?.name ||
                           (typeof queue.department === "object"
-                            ? (queue.department as any)?.name
+                            ? (queue.department as unknown as { name?: string })
+                                ?.name
                             : queue.department) ||
                           "General"}
                       </span>
@@ -445,14 +453,15 @@ const QueuesConfig: React.FC = () => {
                   <select
                     value={formData.type}
                     onChange={(e) =>
-                      setFormData({ ...formData, type: e.target.value as any })
+                      setFormData({
+                        ...formData,
+                        type: e.target.value as typeof formData.type,
+                      })
                     }
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   >
                     <option value="MANUAL">Manual</option>
-                    <option value="ROUND_ROBIN">
-                      Automtica (Round Robin)
-                    </option>
+                    <option value="ROUND_ROBIN">Automtica (Round Robin)</option>
                   </select>
                 </div>
 
@@ -573,5 +582,3 @@ const QueuesConfig: React.FC = () => {
 };
 
 export default QueuesConfig;
-
-

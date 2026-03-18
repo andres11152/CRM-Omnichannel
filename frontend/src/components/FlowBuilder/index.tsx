@@ -92,7 +92,7 @@ export const FlowBuilder: React.FC = () => {
 
     // Calculate offset within the node
     const rect = (e.target as HTMLElement)
-      .closestá(".flow-node")
+      .closest(".flow-node")
       ?.getBoundingClientRect();
     if (rect) {
       setDragOffset({
@@ -418,14 +418,20 @@ export const FlowBuilder: React.FC = () => {
                         Condición: Nueva Etapa
                       </label>
                       <select
-                        value={flow.triggerConfig?.condition?.stage || ""}
+                        value={
+                          (flow.triggerConfig?.condition as { stage?: string })
+                            ?.stage || ""
+                        }
                         onChange={(e) =>
                           setFlow({
                             ...flow,
                             triggerConfig: {
                               ...flow.triggerConfig,
                               condition: {
-                                ...flow.triggerConfig?.condition,
+                                ...((flow.triggerConfig?.condition as Record<
+                                  string,
+                                  unknown
+                                >) || {}),
                                 stage: e.target.value,
                               },
                             },
@@ -449,6 +455,3 @@ export const FlowBuilder: React.FC = () => {
     </div>
   );
 };
-
-
-

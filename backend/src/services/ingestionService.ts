@@ -65,6 +65,7 @@ export class IngestionService {
 
       const message = await messageRepository.create({
         data: {
+          companyId,
           content,
           channel,
           direction: "INBOUND",

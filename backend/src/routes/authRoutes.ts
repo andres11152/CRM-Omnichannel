@@ -1,11 +1,17 @@
+import { z } from "zod";
 import { Router } from "express";
 import {
   signup,
   login,
+  logout,
+  refreshToken,
+  getActiveSessions,
+  revokeSession,
+  revokeAllSessions,
   updatePassword,
   forgotPassword,
   resetPassword,
-} from "@/controllers/authController"; // Usar alias
+} from "@/controllers/authController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
 import {
@@ -64,6 +70,27 @@ router.patch(
   validate(UpdatePasswordSchema),
   updatePassword,
 );
+// 🏢 ENTERPRISE: Server-side logout (destroy session + blacklist token)
+router.post("/logout", protect, logout);
+
+// 🔄 TOKEN REFRESH: Exchange refresh cookie for new access token
+// No protect needed — uses refresh_token cookie instead
+router.post("/refresh", refreshToken);
+
+// 📋 ACTIVE SESSIONS: List/manage user's devices
+router.get("/sessions", protect, getActiveSessions);
+router.delete(
+  "/sessions/:sessionId",
+  protect,
+  validate(
+    z.object({
+      params: z.object({
+        sessionId: z.string().min(1, "Session ID is required"),
+      }),
+    }),
+  ),
+  revokeSession,
+);
+router.delete("/sessions", protect, revokeAllSessions);
 
 export default router;
-

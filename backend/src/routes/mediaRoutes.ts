@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { protect } from "../middleware/authMiddleware";
+import { validate } from "../middleware/validationMiddleware";
 import {
   uploadMedia,
   getMedia,
@@ -9,11 +10,18 @@ import {
   updateMedia,
   getMediaContent,
 } from "../controllers/mediaController";
+import {
+  MediaIdParamSchema,
+  GetMediaListSchema,
+  UploadMediaSchema,
+  UpdateMediaSchema,
+} from "../schemas/mediaSchema";
 
 const router = express.Router();
 
 // Public Proxy Route for Media Content (Bypass Auth for <img> tags)
-router.get("/:id/content", getMediaContent);
+// 🛡️ Still validates param to prevent path traversal
+router.get("/:id/content", validate(MediaIdParamSchema), getMediaContent);
 
 // Multer configuration for file upload
 const upload = multer({
@@ -23,22 +31,27 @@ const upload = multer({
   },
 });
 
-// All routes require authentication
+// All routes below require authentication
 router.use(protect);
 
-// Upload media
-router.post("/upload", upload.single("file"), uploadMedia);
+// Upload media (file + metadata validated)
+router.post(
+  "/upload",
+  upload.single("file"),
+  validate(UploadMediaSchema),
+  uploadMedia,
+);
 
-// Get all media (with filters)
-router.get("/", getMedia);
+// Get all media (with validated filters & pagination)
+router.get("/", validate(GetMediaListSchema), getMedia);
 
-// Get single media
-router.get("/:id", getMediaById);
+// Get single media (validated ID)
+router.get("/:id", validate(MediaIdParamSchema), getMediaById);
 
-// Update media metadata
-router.patch("/:id", updateMedia);
+// Update media metadata (validated ID + body)
+router.patch("/:id", validate(UpdateMediaSchema), updateMedia);
 
-// Delete media
-router.delete("/:id", deleteMedia);
+// Delete media (validated ID)
+router.delete("/:id", validate(MediaIdParamSchema), deleteMedia);
 
 export default router;

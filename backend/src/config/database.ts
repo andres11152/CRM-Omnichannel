@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { getCompanyId, contextStorage } from "../context/requestContext";
 import { Logger } from "@/utils/logger";
 
@@ -101,30 +101,31 @@ const createExtendedClient = () => {
             );
           }
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const argsObj = args as any;
+          const argsObj = args as Record<string, Prisma.JsonValue | Prisma.JsonValue[] | undefined>;
           const isSystem = store.companyId === "__SYSTEM__";
           const companyId = isSystem ? null : getCompanyId();
 
           // Inject companyId into args if not system
           if (companyId) {
-            const injectCompanyId = (target: unknown) => {
-              if (target && typeof target === "object" && target !== null) {
-                const record = target as Record<string, unknown>;
+            const injectCompanyId = (target: Prisma.JsonObject) => {
+              if (target && typeof target === "object" && !Array.isArray(target) && target !== null) {
+                const record = target as Prisma.JsonObject;
                 if (!record.company) record.companyId = companyId;
               }
             };
 
             if (operation === "create") {
               if (!argsObj.data) argsObj.data = {};
-              injectCompanyId(argsObj.data);
+              if (!Array.isArray(argsObj.data)) {
+                injectCompanyId(argsObj.data as Prisma.JsonObject);
+              }
             } else if (operation === "createMany") {
               if (Array.isArray(argsObj.data)) {
-                argsObj.data.forEach((d: unknown) => injectCompanyId(d));
+                (argsObj.data as Prisma.JsonObject[]).forEach((d) => injectCompanyId(d));
               }
             } else if (operation === "upsert") {
-              if (argsObj.where) argsObj.where.companyId = companyId;
-              if (argsObj.create) argsObj.create.companyId = companyId;
+              if (argsObj.where) (argsObj.where as Prisma.JsonObject).companyId = companyId;
+              if (argsObj.create) injectCompanyId(argsObj.create as Prisma.JsonObject);
             } else if (
               [
                 "findMany",
@@ -138,7 +139,9 @@ const createExtendedClient = () => {
                 "aggregate",
               ].includes(operation)
             ) {
-              argsObj.where = { ...argsObj.where, companyId };
+              if (argsObj.where) {
+                argsObj.where = { ...(argsObj.where as Prisma.JsonObject), companyId };
+              }
             }
           }
 
@@ -161,8 +164,8 @@ const createExtendedClient = () => {
                 // For 'delete', basePrisma allows where id etc. Even if we mutated argsObj.where above to include companyId,
                 // delegate.update on basePrisma will respect it, securing the soft delete!
                 const deleteWhere = companyId
-                  ? { ...argsObj.where, companyId }
-                  : argsObj.where;
+                  ? { ...(argsObj.where as Prisma.JsonObject), companyId }
+                  : (argsObj.where as Prisma.JsonObject);
                 return delegate.update({
                   where: deleteWhere,
                   data: { deletedAt: new Date() },
@@ -170,8 +173,8 @@ const createExtendedClient = () => {
               }
               if (operation === "deleteMany") {
                 const deleteWhere = companyId
-                  ? { ...argsObj.where, companyId }
-                  : argsObj.where;
+                  ? { ...(argsObj.where as Prisma.JsonObject), companyId }
+                  : (argsObj.where as Prisma.JsonObject);
                 return delegate.updateMany({
                   where: deleteWhere,
                   data: { deletedAt: new Date() },
@@ -190,7 +193,7 @@ const createExtendedClient = () => {
                   "groupBy",
                 ].includes(operation)
               ) {
-                argsObj.where = { ...argsObj.where, deletedAt: null };
+                argsObj.where = { ...(argsObj.where as Prisma.JsonObject), deletedAt: null };
               }
             }
           }
@@ -204,10 +207,10 @@ const createExtendedClient = () => {
             const delegate = prismaUnknown[delegateName];
 
             if (delegate?.findFirst) {
-              const findFirstWhere = { ...argsObj.where };
-              if (companyId) findFirstWhere.companyId = companyId;
+              const findFirstWhere = { ...(argsObj.where as Prisma.JsonObject) };
+              if (companyId) (findFirstWhere as Prisma.JsonObject).companyId = companyId;
               if (isSoftDeleteModel && !includeDeleted)
-                findFirstWhere.deletedAt = null;
+                (findFirstWhere as Prisma.JsonObject).deletedAt = null;
 
               const result = await delegate.findFirst({
                 ...argsObj,

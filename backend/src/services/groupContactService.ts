@@ -96,8 +96,8 @@ export const groupContactService = {
 
     // 2. 🛡️ 100-YEAR FIX: Multi-Session Resilience
     // Fetch ALL connected sessions. If one fails (e.g. not in group), try others.
-    const sessions = await whatsappSessionRepository.findMany({
-      where: { companyId, status: "CONNECTED" },
+    const sessions = await whatsappSessionRepository.findMany(companyId, {
+      where: { status: "CONNECTED" },
     });
 
     if (sessions.length === 0) {

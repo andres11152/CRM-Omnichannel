@@ -6,9 +6,9 @@ import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
 import { CreateEmailDTO } from "../types/email.types";
 import { companySettingsService } from "../services/companySettingsService";
-import {
-  sendEmailSchema,
-  testEmailConnectionSchema,
+import type {
+  SendEmailInput,
+  TestEmailConnectionInput,
 } from "../schemas/emailSchema";
 import { EmailProviderFactory } from "../services/email/email.provider";
 
@@ -29,7 +29,8 @@ export const sendEmail = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
-    const validatedData = sendEmailSchema.parse(req.body);
+    // 🛡️ Body already validated by Zod middleware (SendEmailSchema)
+    const validatedData = req.body as SendEmailInput;
 
     const { fromEmail, fromName } =
       await companySettingsService.getSenderConfig(companyId);
@@ -131,14 +132,20 @@ export const getTimeline = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
-    const { contactId, ticketId, limit, offset } = req.query;
+    // 🛡️ Query already validated & transformed by Zod middleware (GetTimelineSchema)
+    const { contactId, ticketId, limit, offset } = req.query as {
+      contactId?: string;
+      ticketId?: string;
+      limit?: number;
+      offset?: number;
+    };
 
     const timeline = await timelineService.getTimeline({
       companyId,
-      contactId: contactId as string | undefined,
-      ticketId: ticketId as string | undefined,
-      limit: limit ? parseInt(limit as string) : 100,
-      offset: offset ? parseInt(offset as string) : 0,
+      contactId,
+      ticketId,
+      limit: limit ?? 100,
+      offset: offset ?? 0,
     });
 
     res.status(200).json({
@@ -183,14 +190,9 @@ export const testEmailConnection = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
+    // 🛡️ Body already validated by Zod middleware (TestEmailConnectionSchema)
     const { host, port, user, password, secure, toEmail, senderEmail } =
-      testEmailConnectionSchema.parse(req.body);
-
-    if (!host || !user || !toEmail) {
-      return next(
-        new AppError("Missing required SMTP fields or recipient email", 400),
-      );
-    }
+      req.body as TestEmailConnectionInput;
 
     let useSecure = secure;
     if (port === 587) useSecure = false;
@@ -245,4 +247,3 @@ export const testEmailConnection = catchAsync(
     }
   },
 );
-

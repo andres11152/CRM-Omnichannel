@@ -64,10 +64,10 @@ export const userService = {
    * FIND USER BY ID
    * Obtiene un usuario específico por ID
    */
-  async findUserById(id: string) {
-    const user = await userRepository.findUnique({
-      where: { id },
-    });
+  async findUserById(id: string, companyId?: string) {
+    const user = companyId
+      ? await userRepository.findById(id, companyId)
+      : await userRepository.findFirst({ where: { id } });
 
     if (!user) {
       throw new AppError("No se encontró un usuario con ese ID", 404);
@@ -146,12 +146,12 @@ export const userService = {
     }
 
     // Obtener usuario actual para merge de preferences
-    const currentUser = await userRepository.findUnique({ where: { id } });
+    const currentUser = await userRepository.findById(id, companyId);
 
     // Merge preferences si existen
     let mergedPreferences = preferences;
     if (currentUser?.preferences && typeof preferences === "object") {
-      const currentPrefs = currentUser.preferences as Record<string, unknown>;
+      const currentPrefs = currentUser.preferences as Prisma.JsonObject;
       mergedPreferences = {
         ...currentPrefs,
         ...preferences,
@@ -166,12 +166,12 @@ export const userService = {
       companyId,
     );
 
-    // Update user
-    const updatedUser = await userRepository.update({
-      where: { id },
-      data: {
+    const updatedUser = await userRepository.update(
+      id,
+      companyId,
+      {
         ...restData,
-        preferences: preferences ? mergedPreferences : undefined,
+        preferences: preferences ? (mergedPreferences as Prisma.InputJsonValue) : undefined,
         role: isAdminEditingAgent && role ? (role as UserRole) : undefined,
         maxConcurrency: maxConcurrency ? Number(maxConcurrency) : undefined,
         skills: skills ? { set: skills } : undefined,
@@ -180,11 +180,9 @@ export const userService = {
               set: queueIds.map((qId: string) => ({ id: qId })),
             }
           : undefined,
-      } as Prisma.UserUpdateInput,
-      include: {
-        queues: true,
       },
-    });
+      { queues: true },
+    );
 
     // 100-Year Fix: Invalidate Redis cache so auth middleware serves fresh data
     if (redisClient?.isOpen) {
@@ -210,9 +208,7 @@ export const userService = {
 
     // Solo ADMIN puede eliminar usuarios de su compañía
     if (currentUserRole === "ADMIN") {
-      const targetUser = await userRepository.findUnique({
-        where: { id: userId },
-      });
+      const targetUser = await userRepository.findById(userId, companyId);
 
       if (!targetUser) {
         throw new AppError("Usuario no encontrado", 404);
@@ -250,7 +246,7 @@ export const userService = {
       }
 
       // Eliminar usuario
-      await userRepository.delete(userId);
+      await userRepository.delete(userId, companyId);
       return;
     }
 
@@ -398,9 +394,7 @@ export const userService = {
 
     // Permitir si es ADMIN editando AGENT o SUPERVISOR de su compañía
     if (currentUserRole === "ADMIN" && companyId) {
-      const targetUser = await userRepository.findUnique({
-        where: { id: targetUserId },
-      });
+      const targetUser = await userRepository.findById(targetUserId, companyId);
 
       if (targetUser && targetUser.companyId === companyId) {
         return true;
@@ -427,9 +421,7 @@ export const userService = {
     if (targetUserId === currentUserId) return false;
 
     // Validar que el usuario objetivo está en la misma compañía
-    const targetUser = await userRepository.findUnique({
-      where: { id: targetUserId },
-    });
+    const targetUser = await userRepository.findById(targetUserId, companyId);
 
     if (!targetUser || targetUser.companyId !== companyId) {
       return false;

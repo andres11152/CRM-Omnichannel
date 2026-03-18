@@ -18,14 +18,34 @@ import {
   Zap,
 } from "lucide-react";
 
+interface FlowTriggerConfig {
+  keyword?: string;
+  pattern?: string;
+  event?: string;
+}
+
+interface FlowNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  data: Record<string, unknown>;
+}
+
+interface FlowEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+}
+
 interface Flow {
   id: string;
   name: string;
   triggerType: string;
-  triggerConfig: any;
+  triggerConfig: FlowTriggerConfig | null;
   isActive: boolean;
-  nodes: any[];
-  edges: any[];
+  nodes: FlowNode[];
+  edges: FlowEdge[];
   createdAt: string;
   updatedAt: string;
 }
@@ -100,7 +120,7 @@ export const FlowsListPage: React.FC = () => {
     }
   }
 
-  function getTriggerDisplay(trigger: any) {
+  function getTriggerDisplay(trigger: FlowTriggerConfig | string | null) {
     if (!trigger) return "Sin trigger";
     if (typeof trigger === "string") return trigger;
     return trigger.keyword || trigger.pattern || "Configurar trigger";

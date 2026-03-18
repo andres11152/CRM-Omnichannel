@@ -84,9 +84,11 @@ export const EmailModal: React.FC<EmailModalProps> = ({
       setTo("");
       setSubject("");
       setBody("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error sending email:", error);
-      toast.error(error.message || "Error al enviar el email");
+      toast.error(
+        error instanceof Error ? error.message : "Error al enviar el email",
+      );
     } finally {
       setIsSending(false);
     }
@@ -328,6 +330,3 @@ export const EmailModal: React.FC<EmailModalProps> = ({
     document.body,
   );
 };
-
-
-

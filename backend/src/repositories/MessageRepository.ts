@@ -2,14 +2,17 @@ import { prisma } from "@/config/database";
 import { Message, Prisma, User, Conversation } from "@prisma/client";
 
 export class MessageRepository {
-  async findMessageByWhatsAppId(whatsappMessageId: string): Promise<{
+  async findMessageByWhatsAppId(
+    whatsappMessageId: string,
+    companyId: string,
+  ): Promise<{
     id: string;
     conversationId: string;
     status: string;
     companyId: string;
   } | null> {
-    return prisma.message.findUnique({
-      where: { whatsappMessageId },
+    return prisma.message.findFirst({
+      where: { whatsappMessageId, companyId },
       select: {
         id: true,
         conversationId: true,
@@ -19,20 +22,25 @@ export class MessageRepository {
     });
   }
 
-  async doesMessageExist(whatsappMessageId: string): Promise<boolean> {
+  async doesMessageExist(
+    whatsappMessageId: string,
+    companyId: string,
+  ): Promise<boolean> {
     const count = await prisma.message.count({
-      where: { whatsappMessageId },
+      where: { whatsappMessageId, companyId },
     });
     return count > 0;
   }
 
   async findDuplicateOutbound(
+    companyId: string,
     conversationId: string,
     content: string,
     timeThreshold: Date,
   ): Promise<Message | null> {
     return prisma.message.findFirst({
       where: {
+        companyId,
         conversationId,
         direction: "OUTBOUND",
         content,
@@ -57,23 +65,26 @@ export class MessageRepository {
   }
 
   async getConversationHistory(
+    companyId: string,
     conversationId: string,
     limit: number = 10,
   ): Promise<Message[]> {
     return prisma.message.findMany({
-      where: { conversationId },
+      where: { companyId, conversationId },
       orderBy: { createdAt: "desc" },
       take: limit,
     });
   }
 
   async findDuplicate(
+    companyId: string,
     conversationId: string,
     content: string,
   ): Promise<Message | null> {
     const recent = new Date(Date.now() - 60 * 1000);
     return prisma.message.findFirst({
       where: {
+        companyId,
         conversationId,
         content,
         createdAt: { gt: recent },
@@ -108,10 +119,11 @@ export class MessageRepository {
    * Used by markAsRead to resolve the channelId.
    */
   async findWithConversation(
+    companyId: string,
     messageId: string,
   ): Promise<(Message & { conversation: Conversation }) | null> {
-    return prisma.message.findUnique({
-      where: { id: messageId },
+    return prisma.message.findFirst({
+      where: { id: messageId, companyId },
       include: { conversation: true },
     });
   }
@@ -135,11 +147,13 @@ export class MessageRepository {
    * Used by AITriggerService to prevent duplicate AI responses.
    */
   async findRecentAIResponse(
+    companyId: string,
     conversationId: string,
     windowMs: number = 8000,
   ): Promise<Message | null> {
     return prisma.message.findFirst({
       where: {
+        companyId,
         conversationId,
         createdAt: { gt: new Date(Date.now() - windowMs) },
         metadata: {
@@ -162,6 +176,16 @@ export class MessageRepository {
    */
   async updateMany(args: Prisma.MessageUpdateManyArgs) {
     return prisma.message.updateMany(args);
+  }
+
+  /**
+   * Update a specific message by ID.
+   */
+  async update(id: string, data: Prisma.MessageUpdateInput) {
+    return prisma.message.update({
+      where: { id },
+      data,
+    });
   }
 
   /**

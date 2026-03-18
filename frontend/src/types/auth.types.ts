@@ -61,7 +61,7 @@ export interface Company extends BaseEntity {
   planId?: string; // Legacy/Relation support
   isActive: boolean;
   subscriptionEndsAt?: Date | string | null;
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
   users?: { email: string }[];
 }
 

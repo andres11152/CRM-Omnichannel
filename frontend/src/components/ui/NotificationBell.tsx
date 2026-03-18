@@ -138,7 +138,7 @@ export const NotificationBell: React.FC = () => {
                         <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark leading-relaxed mb-2 line-clamp-2">
                           {n.message}
                         </p>
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widestá">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                           {n.time}
                         </span>
                       </div>

@@ -18,10 +18,28 @@ interface TimeoutOptions {
 export function requestTimeout(options: TimeoutOptions = {}) {
   const timeout = options.timeout || 30000; // 30 seconds default
 
+  // 🛡️ Routes with custom route-level timeouts.
+  // The global timeout middleware must skip these so their
+  // route-level timeout takes effect instead of competing.
+  const EXTENDED_TIMEOUT_PATHS = [
+    { method: "POST", path: "/api/whatsapp/sessions" },
+    { method: "POST", path: "/api/whatsapp/sync" },
+  ];
+
   return (req: Request, res: Response, next: NextFunction) => {
     // Skip timeout for streaming endpoints
     if (req.path.includes("/stream") || req.path.includes("/sse")) {
       return next();
+    }
+
+    // 🛡️ FIX: Skip global timeout for routes that have their own route-level timeout
+    if (!options.timeout) {
+      const isExtended = EXTENDED_TIMEOUT_PATHS.some(
+        (r) => req.method === r.method && req.originalUrl.startsWith(r.path),
+      );
+      if (isExtended) {
+        return next();
+      }
     }
 
     const timer = setTimeout(() => {

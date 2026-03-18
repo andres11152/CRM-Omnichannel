@@ -58,7 +58,7 @@ export interface CreateContactDTO {
   phone?: string;
   email?: string;
   tags?: string[];
-  customFields?: Record<string, any>;
+  customFields?: Record<string, unknown>;
 }
 
 // Stats/Summary

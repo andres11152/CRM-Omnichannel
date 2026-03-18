@@ -24,7 +24,7 @@ export const SyncConversationSchema = z.object({
   }),
   body: z
     .object({
-      limit: z.number().int().positive().max(100).default(50),
+      limit: z.number().int().positive().max(1000).default(500),
     })
     .optional()
     .default({}),

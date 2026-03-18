@@ -5,6 +5,7 @@ import {
   replyToConversation,
   updateTags,
   createConversation,
+  toggleGroupSync,
 } from "../controllers/conversationController";
 import {
   getGroupParticipants,
@@ -19,6 +20,12 @@ import {
   ReplyToConversationSchema,
   UpdateTagsSchema,
 } from "../schemas/conversationSchemas";
+import {
+  GetGroupParticipantsSchema,
+  AddParticipantToCRMSchema,
+  AddBulkParticipantsSchema,
+  ConversationIdParamSchema,
+} from "../schemas/whatsappSchema";
 
 const router = express.Router();
 
@@ -28,17 +35,29 @@ router
   .route("/")
   .get(listConversations)
   .post(validate(CreateConversationSchema), createConversation);
+
 // 🛡️ Group Participant Routes (Enterprise Feature)
 // MUST be defined BEFORE /:id generic handler to avoid route conflict
-router.route("/:id/participants").get(getGroupParticipants);
-router.route("/:id/participants/add-to-crm").post(addParticipantToCRM);
-router.route("/:id/participants/add-bulk").post(addBulkParticipantsToCRM);
-router.route("/:id/participants/add-all").post(addAllValidParticipantsToCRM);
+router
+  .route("/:id/participants")
+  .get(validate(GetGroupParticipantsSchema), getGroupParticipants);
+router
+  .route("/:id/participants/add-to-crm")
+  .post(validate(AddParticipantToCRMSchema), addParticipantToCRM);
+router
+  .route("/:id/participants/add-bulk")
+  .post(validate(AddBulkParticipantsSchema), addBulkParticipantsToCRM);
+router
+  .route("/:id/participants/add-all")
+  .post(validate(GetGroupParticipantsSchema), addAllValidParticipantsToCRM);
 
-router.route("/:id").get(getConversation);
+router.route("/:id").get(validate(ConversationIdParamSchema), getConversation);
 router
   .route("/:id/reply")
   .post(validate(ReplyToConversationSchema), replyToConversation);
 router.route("/:id/tags").patch(validate(UpdateTagsSchema), updateTags);
+router
+  .route("/:id/toggle-sync")
+  .patch(validate(ConversationIdParamSchema), toggleGroupSync);
 
 export default router;

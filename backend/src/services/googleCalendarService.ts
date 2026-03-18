@@ -52,11 +52,14 @@ export class GoogleCalendarService {
     userId: string,
     activity: ActivityData,
   ): Promise<string | null> {
+    let user;
     try {
       // 1. Fetch user's Google tokens via repository
-      const user = await userRepository.findUnique({
+      user = await userRepository.findFirst({
         where: { id: userId },
         select: {
+          id: true,
+          companyId: true,
           googleCalendarToken: true,
           googleCalendarRefreshToken: true,
           email: true,
@@ -128,10 +131,13 @@ export class GoogleCalendarService {
 
       // 6. If token was refreshed, update it via repository
       const newAccessToken = oauth2Client.credentials.access_token;
-      if (newAccessToken && newAccessToken !== user.googleCalendarToken) {
-        await userRepository.update({
-          where: { id: userId },
-          data: { googleCalendarToken: newAccessToken },
+      if (
+        newAccessToken &&
+        newAccessToken !== user.googleCalendarToken &&
+        user.companyId
+      ) {
+        await userRepository.update(userId, user.companyId, {
+          googleCalendarToken: newAccessToken,
         });
       }
 
@@ -142,15 +148,13 @@ export class GoogleCalendarService {
 
       // If token is invalid, clear it via repository
       if (
-        msg.includes("invalid_grant") ||
-        msg.includes("Token has been expired")
+        (msg.includes("invalid_grant") ||
+          msg.includes("Token has been expired")) &&
+        user?.companyId
       ) {
-        await userRepository.update({
-          where: { id: userId },
-          data: {
-            googleCalendarToken: null,
-            googleCalendarRefreshToken: null,
-          },
+        await userRepository.update(userId, user.companyId, {
+          googleCalendarToken: null,
+          googleCalendarRefreshToken: null,
         });
         Logger.warn(
           `[GoogleCalendar] Cleared invalid tokens for user ${userId}`,
@@ -168,7 +172,7 @@ export class GoogleCalendarService {
     eventId: string,
   ): Promise<void> {
     try {
-      const user = await userRepository.findUnique({
+      const user = await userRepository.findFirst({
         where: { id: userId },
         select: {
           googleCalendarToken: true,
@@ -208,7 +212,7 @@ export class GoogleCalendarService {
     activity: ActivityData,
   ): Promise<void> {
     try {
-      const user = await userRepository.findUnique({
+      const user = await userRepository.findFirst({
         where: { id: userId },
         select: {
           googleCalendarToken: true,

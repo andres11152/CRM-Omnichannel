@@ -2,6 +2,7 @@ import { userRepository } from "@/repositories/UserRepository";
 import { Logger } from "@/utils/logger";
 import bcrypt from "bcryptjs";
 import type { UserWithCompany } from "@/types/auth.types";
+import { UserRole, Prisma } from "@prisma/client";
 
 /**
  * 🔑 GOOGLE AUTH CRUD SERVICE
@@ -15,7 +16,7 @@ export const googleAuthCrudService = {
    * Find user by email (with company relation)
    */
   async findUserByEmail(email: string): Promise<UserWithCompany | null> {
-    const user = await userRepository.findUnique({
+    const user = await userRepository.findFirst({
       where: { email },
       include: { company: true },
     });
@@ -41,8 +42,8 @@ export const googleAuthCrudService = {
         name: data.name || "Google User",
         password: hashedPassword,
         profilePicUrl: data.picture || null,
-        role: "ADMIN",
-        preferences: { googleAuth: true },
+        role: UserRole.ADMIN,
+        preferences: { googleAuth: true } as Prisma.InputJsonValue,
         company: {
           create: {
             name: `${data.name || "User"}'s Workspace`,
@@ -62,10 +63,12 @@ export const googleAuthCrudService = {
    * Update user profile picture if missing
    */
   async updateProfilePic(userId: string, picture: string) {
-    await userRepository.update({
-      where: { id: userId },
-      data: { profilePicUrl: picture },
-    });
+    const user = await userRepository.findFirst({ where: { id: userId } });
+    if (user?.companyId) {
+      await userRepository.update(userId, user.companyId, {
+        profilePicUrl: picture,
+      });
+    }
   },
 
   /**
@@ -76,7 +79,7 @@ export const googleAuthCrudService = {
     accessToken: string | null,
     refreshToken: string | null,
   ) {
-    const user = await userRepository.findUnique({
+    const user = await userRepository.findFirst({
       where: { id: userId },
     });
 
@@ -84,12 +87,11 @@ export const googleAuthCrudService = {
       return null;
     }
 
-    await userRepository.update({
-      where: { id: userId },
-      data: {
-        googleCalendarToken: accessToken,
-        googleCalendarRefreshToken: refreshToken,
-      },
+    if (!user.companyId) return null;
+
+    await userRepository.update(userId, user.companyId, {
+      googleCalendarToken: accessToken,
+      googleCalendarRefreshToken: refreshToken,
     });
 
     return user;
@@ -99,20 +101,20 @@ export const googleAuthCrudService = {
    * Disconnect Google Calendar (clear tokens)
    */
   async disconnectCalendar(userId: string) {
-    await userRepository.update({
-      where: { id: userId },
-      data: {
+    const user = await userRepository.findFirst({ where: { id: userId } });
+    if (user?.companyId) {
+      await userRepository.update(userId, user.companyId, {
         googleCalendarToken: null,
         googleCalendarRefreshToken: null,
-      },
-    });
+      });
+    }
   },
 
   /**
    * Get calendar connection status
    */
   async getCalendarStatus(userId: string) {
-    const user = await userRepository.findUnique({
+    const user = await userRepository.findFirst({
       where: { id: userId },
       select: {
         googleCalendarToken: true,

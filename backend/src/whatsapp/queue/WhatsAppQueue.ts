@@ -46,7 +46,8 @@ class WhatsAppQueueManager {
 
     // 1. Calculate Reputation / Age
     // New sessions (<24h) get harsher delays
-    const session = await whatsappSessionRepository.findOne(sessionId);
+    const session =
+      await whatsappSessionRepository.findSystemSession(sessionId);
 
     let delay = 0;
     if (session) {

@@ -16,6 +16,7 @@ import {
   WAMessage,
   WAMessageUpdate,
 } from "@whiskeysockets/baileys";
+import { HistoryChat, HistoryContact } from "@/services/sync/ChatSyncIngest";
 import { EventBus } from "../../core/events/EventBus";
 import {
   WhatsAppEventType,
@@ -81,17 +82,59 @@ export function bindSessionEvents(
     );
     if (!validated) return;
 
-    const { messages } = validated;
+    const { messages, chats, contacts } = validated;
+    
+    // 🧠 SMART SYNC STRATEGY: 
+    // 1. Identity Sync: Always process chats/contacts (Shell Creation)
+    // 2. Message Sync: Process limited messages if Full Sync is OFF, or more if ON.
+    
+    const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
+    const MAX_MESSAGES_PER_CHAT = process.env.WA_HISTORY_LIMIT_PER_CHAT 
+      ? parseInt(process.env.WA_HISTORY_LIMIT_PER_CHAT, 10) 
+      : (syncFullHistory ? 100 : 20); // 🚀 20 messages is enough for a sidebar preview
+
+    const syncMessages: WAMessage[] = [];
+    
     if (messages && messages.length > 0) {
-      logger.info(
-        `[SessionManager] 📥 History Sync: Offloading ${messages.length} messages to DB persistence...`,
-      );
-      chatSyncService
-        .handleHistorySync(companyId, messages as WAMessage[])
-        .catch((err) => {
-          logger.error(`[SessionManager] History ingest failed: ${err}`);
+      const messagesByChat = new Map<string, WAMessage[]>();
+      const rawMessages = messages as WAMessage[];
+      
+      for (const msg of rawMessages) {
+        const jid = msg.key?.remoteJid;
+        if (!jid) continue;
+        if (!messagesByChat.has(jid)) messagesByChat.set(jid, []);
+        messagesByChat.get(jid)!.push(msg);
+      }
+
+      let skippedCount = 0;
+      for (const chatMsgs of messagesByChat.values()) {
+        chatMsgs.sort((a, b) => {
+          const tA = Number(a.messageTimestamp || 0);
+          const tB = Number(b.messageTimestamp || 0);
+          return tB - tA; // Newest first
         });
+
+        if (chatMsgs.length > MAX_MESSAGES_PER_CHAT) {
+          skippedCount += chatMsgs.length - MAX_MESSAGES_PER_CHAT;
+        }
+
+        syncMessages.push(...chatMsgs.slice(0, MAX_MESSAGES_PER_CHAT));
+      }
+
+      logger.info(
+        `[SessionManager] 📥 History Sync for ${sessionId}: ${syncMessages.length} messages (📉 Skipped: ${skippedCount} older), ${chats?.length || 0} chats, ${contacts?.length || 0} contacts`,
+      );
+    } else {
+      logger.info(
+        `[SessionManager] 👤 Discovery Sync for ${sessionId}: ${chats?.length || 0} chats found (0 messages in payload)`,
+      );
     }
+
+    chatSyncService
+      .handleHistorySync(companyId, syncMessages, chats as HistoryChat[], contacts as HistoryContact[])
+      .catch((err) => {
+        logger.error(`[SessionManager] History ingest failed: ${err}`);
+      });
   });
 
   sock.ev.on("creds.update", saveCreds);
@@ -118,11 +161,31 @@ export function bindSessionEvents(
       });
 
       await TenantContextManager.runAsSystem(async () =>
-        whatsappSessionRepository.update(sessionId, {
+        whatsappSessionRepository.updateSystemSession(sessionId, {
           qrCode: qr,
           status: "SCANNING",
         }),
-      ).catch((err) => logger.error(`[DB Error] Update QR: ${err.message}`));
+      ).catch(async (err: { code?: string; message?: string }) => {
+        if (err?.code === "P2025") {
+          logger.warn(
+            `[SessionManager] Session ${sessionId} not in DB during QR. Self-healing: recreating record.`,
+          );
+          await TenantContextManager.runAsSystem(async () =>
+            whatsappSessionRepository.createSessionRecord({
+              sessionId,
+              companyId,
+              status: "SCANNING",
+              phone: null,
+            }),
+          ).catch((createErr) =>
+            logger.error(
+              `[DB Error] Failed to self-heal session record during QR: ${createErr}`,
+            ),
+          );
+          return;
+        }
+        logger.error(`[DB Error] Update QR: ${err.message || err}`);
+      });
     }
 
     if (connection === "open") {
@@ -137,12 +200,33 @@ export function bindSessionEvents(
       sessionMetadata.set(sessionId, { companyId, status: "CONNECTED" });
 
       await TenantContextManager.runAsSystem(async () =>
-        whatsappSessionRepository.update(sessionId, {
+        whatsappSessionRepository.updateSystemSession(sessionId, {
           qrCode: null,
           status: "CONNECTED",
           phone: phoneNumber,
         }),
-      );
+      ).catch(async (err: { code?: string }) => {
+        if (err?.code === "P2025") {
+          // 🛡️ SELF-HEALING: Session record was deleted (cleanup/migration). Recreate it.
+          logger.warn(
+            `[SessionManager] Session ${sessionId} not in DB (post-cleanup). Self-healing: recreating record.`,
+          );
+          await TenantContextManager.runAsSystem(async () =>
+            whatsappSessionRepository.createSessionRecord({
+              sessionId,
+              companyId,
+              status: "CONNECTED",
+              phone: phoneNumber,
+            }),
+          ).catch((createErr) =>
+            logger.error(
+              `[DB Error] Failed to self-heal session record: ${createErr}`,
+            ),
+          );
+          return;
+        }
+        logger.error(`[DB Error] Update session status: ${err}`);
+      });
 
       eventBus.publish({
         type: WhatsAppEventType.SESSION_CONNECTED,
@@ -230,6 +314,70 @@ export function bindSessionEvents(
     if (validated.type === "notify") {
       for (const msg of validated.messages) {
         if (!msg.message) continue;
+
+        let msgContent = msg.message;
+
+        // 🛡️ Unwrap nested messages (Ephemeral, viewOnce)
+        if (msgContent?.ephemeralMessage?.message) {
+          msgContent = msgContent.ephemeralMessage.message;
+        }
+
+        if (msgContent?.viewOnceMessageV2?.message) {
+          msgContent = msgContent.viewOnceMessageV2.message;
+        } else if (msgContent?.viewOnceMessage?.message) {
+          msgContent = msgContent.viewOnceMessage.message;
+        } else if (msgContent?.documentWithCaptionMessage?.message) {
+          msgContent = msgContent.documentWithCaptionMessage.message;
+        }
+
+        // 🗑️ REVOCATION DETECTION: "Delete for Everyone"
+        const proto = msgContent?.protocolMessage;
+        if (
+          proto &&
+          (proto.type === 0 ||
+            proto.type === "REVOKE" ||
+            proto.type === "0" ||
+            !proto.type) &&
+          proto.key?.id
+        ) {
+          logger.info(
+            `[SessionManager] 🗑️ Message revocation detected: ${proto.key.id} (by: ${msg.key.fromMe ? "me" : msg.key.remoteJid})`,
+          );
+          eventBus.publish({
+            type: WhatsAppEventType.MESSAGE_REVOKED,
+            sessionId,
+            companyId,
+            timestamp: new Date(),
+            data: {
+              revokedMessageId: proto.key.id,
+              revokedBy: msg.key.remoteJid || "unknown",
+              fromMe: msg.key.fromMe || false,
+            },
+          });
+          continue; // Don't process as a normal message
+        }
+
+        // ❤️ REACTION DETECTION
+        const react = msgContent?.reactionMessage;
+        if (react && react.key?.id) {
+          logger.info(
+            `[SessionManager] ❤️ Reaction detected for ${react.key.id}: ${react.text}`,
+          );
+          eventBus.publish({
+            type: WhatsAppEventType.MESSAGE_REACTION,
+            sessionId,
+            companyId,
+            timestamp: new Date(),
+            data: {
+              messageId: react.key.id,
+              reaction: react.text || "", // Empty if removed
+              participant:
+                msg.key.participant || msg.key.remoteJid || "unknown",
+            },
+          });
+          continue; // Don't process as a normal message
+        }
+
         eventBus.publish({
           type: WhatsAppEventType.MESSAGE_RECEIVED,
           sessionId,

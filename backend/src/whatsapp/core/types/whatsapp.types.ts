@@ -17,7 +17,15 @@ export interface MessagePayload {
 }
 
 export interface MediaPayload {
-  type: "image" | "video" | "audio" | "document";
+  type:
+    | "image"
+    | "video"
+    | "audio"
+    | "document"
+    | "sticker"
+    | "location"
+    | "contact"
+    | "note";
   url: string;
   buffer?: Buffer;
   mimetype: string;

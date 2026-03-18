@@ -3,21 +3,35 @@ import {
   Conversation,
   User,
   ConversationStatus,
+  Prisma,
 } from "@prisma/client";
 
 export interface Attachment {
   name: string;
-  type: "image" | "video" | "document" | "audio";
+  type:
+    | "image"
+    | "video"
+    | "document"
+    | "audio"
+    | "sticker"
+    | "location"
+    | "contact"
+    | "note";
   url: string;
   mimeType?: string;
   mimetype?: string; // Frontend may send lowercase variant
   size?: number;
+  [key: string]: Prisma.InputJsonValue | undefined;
 }
 
-export interface Metadata extends Record<string, unknown> {
+export interface Metadata {
   scheduledAt?: string | Date;
   attachment?: Attachment;
+  media?: Attachment;
   tempId?: string;
+  quotedMessageId?: string;
+  quotedContent?: string;
+  [key: string]: Prisma.InputJsonValue | undefined;
 }
 
 export interface CreateConversationDTO {

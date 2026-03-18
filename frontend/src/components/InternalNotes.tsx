@@ -79,14 +79,26 @@ const InternalNotesComponent: React.FC<Props> = ({
       const data = await res.json();
       if (data.status === "success") {
         setNotes(
-          data.data.activities.map((a: any) => ({
-            id: a.id,
-            subject: a.subject,
-            description: a.description,
-            createdBy: a.createdBy,
-            createdAt: a.createdAt,
-            mentions: a.mentions || [],
-          })),
+          data.data.activities.map(
+            (a: {
+              id: string;
+              type: string;
+              content: string;
+              createdAt: string;
+              subject?: string;
+              description?: string;
+              createdBy?: { name: string };
+              mentions?: Array<{ id: string; name: string; email: string }>;
+              user?: { name?: string };
+            }) => ({
+              id: a.id,
+              subject: a.subject,
+              description: a.description,
+              createdBy: a.createdBy,
+              createdAt: a.createdAt,
+              mentions: a.mentions || [],
+            }),
+          ),
         );
       }
     } catch (error) {

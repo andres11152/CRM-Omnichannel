@@ -62,7 +62,7 @@ export const setupAxiosInterceptors = () => {
 
       // Add request ID for tracking
       if (config.headers) {
-        config.headers["x-requestá-id"] =
+        config.headers["x-request-id"] =
           `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       }
 
@@ -92,7 +92,9 @@ export const setupAxiosInterceptors = () => {
       }
 
       const status = response.status;
-      const errorMessage = (response.data as any)?.message || error.message;
+      const errorMessage =
+        (response.data as unknown as { message?: string })?.message ||
+        error.message;
 
       // ========================================
       // SECURITY VIOLATIONS

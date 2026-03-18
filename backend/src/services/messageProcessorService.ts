@@ -256,8 +256,8 @@ export const messageProcessor = {
       if (!aiResponseText) return;
 
       const botEmail = `ai_${aiAssistant.id}@reply.bot`;
-      let botUser = await userRepository.findUnique({
-        where: { email: botEmail },
+      let botUser = await userRepository.findFirst({
+        where: { email: botEmail, companyId },
       });
 
       if (!botUser) {

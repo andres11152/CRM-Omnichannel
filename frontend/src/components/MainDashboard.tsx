@@ -78,10 +78,27 @@ export const MainDashboard: React.FC<Props> = ({
 };
 
 // --- MASTER ADMIN DASHBOARD (PROFESSIONAL SaaS Style) ---
-const MasterAdminDashboard: React.FC<{ onNavigate?: (tab: any) => void }> = ({
-  onNavigate,
-}) => {
-  const [stats, setStats] = useState({
+const MasterAdminDashboard: React.FC<{
+  onNavigate?: (tab: string) => void;
+}> = ({ onNavigate }) => {
+  const [stats, setStats] = useState<{
+    totalCompanies: number;
+    activeCompanies: number;
+    totalRevenue: number;
+    activeUsers: number;
+    systemHealth: string;
+    financials?: {
+      mrr?: number;
+      trend?: { name: string; revenue: number }[];
+      distribution?: { name: string; value: number }[];
+    };
+    systemStatus?: {
+      api: { status: string; latency: number };
+      database: { status: string; latency: number };
+      queues: { status: string; latency: number };
+      storage: { status: string; latency: number };
+    };
+  }>({
     totalCompanies: 0,
     activeCompanies: 0,
     totalRevenue: 0,
@@ -115,7 +132,7 @@ const MasterAdminDashboard: React.FC<{ onNavigate?: (tab: any) => void }> = ({
 
   const fetchMasterStats = async () => {
     try {
-      let newStats: any = { ...stats };
+      let newStats: typeof stats = { ...stats };
 
       // 1. Core Stats
       try {
@@ -138,7 +155,7 @@ const MasterAdminDashboard: React.FC<{ onNavigate?: (tab: any) => void }> = ({
       // 3. Financials
       try {
         const financials = await adminService.getFinancials();
-        newStats.financials = financials;
+        newStats.financials = financials as typeof stats.financials;
       } catch (e) {
         console.error("Financials failed", e);
       }
@@ -210,7 +227,7 @@ const MasterAdminDashboard: React.FC<{ onNavigate?: (tab: any) => void }> = ({
           />
           <StatCard
             title="MRR Total"
-            value={`$${((stats as any).financials?.mrr || 0).toLocaleString()}`}
+            value={`$${(stats.financials?.mrr || 0).toLocaleString()}`}
             icon={<TrendingUp className="w-6 h-6" />}
             color="text-purple-600 dark:text-purple-400"
             bg="bg-purple-50 dark:bg-purple-900/30"
@@ -229,11 +246,11 @@ const MasterAdminDashboard: React.FC<{ onNavigate?: (tab: any) => void }> = ({
         {/* Charts & Widgets Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2">
-            <MrrTrendModule data={(stats as any).financials?.trend || []} />
+            <MrrTrendModule data={stats.financials?.trend || []} />
           </div>
           <div>
             <PlanDistributionModule
-              data={(stats as any).financials?.distribution || []}
+              data={stats.financials?.distribution || []}
             />
           </div>
         </div>
@@ -259,7 +276,7 @@ const MasterAdminDashboard: React.FC<{ onNavigate?: (tab: any) => void }> = ({
             </div>
           </div>
           <div>
-            <SystemStatusModule data={(stats as any).systemStatus} />
+            <SystemStatusModule data={stats.systemStatus} />
           </div>
           <div>
             <div className="bg-white dark:bg-reply-panel-dark p-6 rounded-xl shadow-sm border border-slate-200 dark:border-reply-border-dark h-[400px] flex flex-col">
@@ -284,7 +301,7 @@ const MasterAdminDashboard: React.FC<{ onNavigate?: (tab: any) => void }> = ({
         <div className="mt-6 bg-white dark:bg-reply-panel-dark rounded-xl shadow-sm border border-slate-200 dark:border-reply-border-dark p-6">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
             <Activity className="w-5 h-5" />
-            Acciónes Rpidas
+            Acciones Rápidas
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button

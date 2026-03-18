@@ -6,14 +6,16 @@ import {
   getAgentStats,
 } from "@/controllers/dashboardController";
 import { protect } from "@/middleware/authMiddleware";
+import { validate } from "@/middleware/validationMiddleware";
+import { AnalyticsQuerySchema } from "@/schemas/commonSchemas";
 
 const router = Router();
 
 router.use(protect);
 
-router.get("/stats", getDashboardStats);
-router.get("/sales-stats", getSalesStats);
-router.get("/overview", getDashboardOverview);
-router.get("/agent-stats", getAgentStats);
+router.get("/stats", validate(AnalyticsQuerySchema), getDashboardStats);
+router.get("/sales-stats", validate(AnalyticsQuerySchema), getSalesStats);
+router.get("/overview", validate(AnalyticsQuerySchema), getDashboardOverview);
+router.get("/agent-stats", validate(AnalyticsQuerySchema), getAgentStats);
 
 export default router;

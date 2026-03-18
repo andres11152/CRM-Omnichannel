@@ -190,6 +190,90 @@ export const useChatSockets = (currentTicketId: string | null) => {
       }
     };
 
+    /**
+     * SOCKET EVENT: message.reaction
+     * Fires when a message receives/loses an emoji reaction
+     */
+    const handleMessageReaction = (payload: {
+      messageId: string;
+      conversationId: string;
+      reaction: string;
+      participant: string;
+    }) => {
+      // Update the message in cache for ALL conversation message lists
+      const ticketId = payload.conversationId || currentTicketId;
+      if (!ticketId) return;
+
+      queryClient.setQueryData<Message[]>(
+        CHAT_KEYS.messages(ticketId),
+        (old = []) =>
+          old.map((msg) => {
+            if (msg.id !== payload.messageId) return msg;
+            const currentReactions =
+              (
+                msg as Message & {
+                  reactions?: { reactBy: string; content: string }[];
+                }
+              ).reactions || [];
+            let newReactions = [...currentReactions];
+            if (!payload.reaction) {
+              newReactions = newReactions.filter(
+                (r) => r.reactBy !== payload.participant,
+              );
+            } else {
+              const idx = newReactions.findIndex(
+                (r) => r.reactBy === payload.participant,
+              );
+              if (idx !== -1) {
+                newReactions[idx] = {
+                  ...newReactions[idx],
+                  content: payload.reaction,
+                };
+              } else {
+                newReactions.push({
+                  reactBy: payload.participant,
+                  content: payload.reaction,
+                });
+              }
+            }
+            return { ...msg, reactions: newReactions } as Message;
+          }),
+      );
+    };
+
+    /**
+     * SOCKET EVENT: sync:started
+     * Fires when an on-demand history sync starts
+     */
+    const handleSyncStarted = (payload: { conversationId: string; type: string }) => {
+      // Set a temporary "isSyncing" flag in the conversation cache
+      updateConversationInCache(queryClient, payload.conversationId, {
+        // @ts-ignore - temporary UI flag
+        isSyncing: true
+      });
+    };
+
+    /**
+     * SOCKET EVENT: conversation:history_synced
+     * Fires when history backfill completes
+     */
+    const handleHistorySynced = (payload: { conversationId: string; newMessages: number }) => {
+      // Clear syncing flag and refresh messages
+      updateConversationInCache(queryClient, payload.conversationId, {
+        // @ts-ignore - temporary UI flag
+        isSyncing: false
+      });
+
+      // Force refresh of the message list
+      queryClient.invalidateQueries({
+        queryKey: CHAT_KEYS.messages(payload.conversationId),
+      });
+
+      if (payload.newMessages > 0) {
+        // Optional: show a small notification if messages were actually found
+      }
+    };
+
     // Subscribe to socket events
     socketService.on("message.received", handleMessageReceived);
     socketService.on("conversation.updated", handleConversationUpdated);
@@ -197,7 +281,10 @@ export const useChatSockets = (currentTicketId: string | null) => {
     socketService.on("message.status", handleMessageStatus);
     socketService.on("ticket.created", handleTicketCreated);
     socketService.on("conversation.closed", handleConversationClosed);
-    socketService.on("conversation:typing", handleConversationTyping); // ✅ NEW
+    socketService.on("conversation:typing", handleConversationTyping);
+    socketService.on("message.reaction", handleMessageReaction);
+    socketService.on("sync:started", handleSyncStarted);
+    socketService.on("conversation:history_synced", handleHistorySynced);
 
     // Cleanup on unmount
     return () => {
@@ -207,9 +294,13 @@ export const useChatSockets = (currentTicketId: string | null) => {
       socketService.off("message.status", handleMessageStatus);
       socketService.off("ticket.created", handleTicketCreated);
       socketService.off("conversation.closed", handleConversationClosed);
-      socketService.off("conversation:typing", handleConversationTyping); // ✅ NEW
+      socketService.off("conversation:typing", handleConversationTyping);
+      socketService.off("message.reaction", handleMessageReaction);
+      socketService.off("sync:started", handleSyncStarted);
+      socketService.off("conversation:history_synced", handleHistorySynced);
     };
   }, [queryClient, currentTicketId]);
+
 
   /**
    * HELPER: Update Conversation Typing Status
@@ -265,4 +356,3 @@ export const useChatSockets = (currentTicketId: string | null) => {
     isConnected: socketService.isConnected,
   };
 };
-

@@ -32,6 +32,7 @@ export const exportService = {
    * Creates a CSV file and uploads to S3
    */
   async generateCSV(
+    companyId: string,
     data: ExportData,
     filename: string,
   ): Promise<{ filePath: string; success: boolean }> {
@@ -56,6 +57,7 @@ export const exportService = {
       // Upload to S3
       const fileBuffer = await fs.readFile(tempFilePath);
       const uploadResult = await storageService.uploadFile(
+        companyId,
         fileBuffer,
         `${sanitizedFilename}_${timestamp}.csv`,
         "text/csv",
@@ -89,6 +91,7 @@ export const exportService = {
    * Creates a professional PDF report and uploads to S3
    */
   async generatePDF(
+    companyId: string,
     data: ExportData,
     filename: string,
   ): Promise<{ filePath: string; success: boolean }> {
@@ -252,6 +255,7 @@ export const exportService = {
       // Upload to S3
       const fileBuffer = await fs.readFile(tempFilePath);
       const uploadResult = await storageService.uploadFile(
+        companyId,
         fileBuffer,
         `${sanitizedFilename}_${timestamp}.pdf`,
         "application/pdf",

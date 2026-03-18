@@ -13,7 +13,10 @@ export const useSocketInit = () => {
     socketService.connect();
 
     // Type payload loosely for now as we integrate
-    const handleAgentAssigned = (payload: any) => {
+    const handleAgentAssigned = (payload: {
+      ticketId: string;
+      agentName: string;
+    }) => {
       // console.log("Socket Event:", payload); // Removed for prod
       toast.info(`Ticket ${payload.ticketId} asignado a ${payload.agentName}`, {
         description: "Nueva asignación desde la cola.",

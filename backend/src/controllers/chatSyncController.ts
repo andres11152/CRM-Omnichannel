@@ -145,7 +145,7 @@ export const syncConversation = catchAsync(
     const { phone } = req.params;
     const companyId = req.user?.companyId;
     const userId = req.user?.id;
-    const { limit = 50 } = req.body; // Default 50 messages per fetch
+    const { limit = 500 } = req.body; // 🚀 Increased default from 50 to 500 for Enterprise history context
 
     if (!companyId || !userId)
       throw new AppError("Authentication required", 401);
@@ -159,13 +159,12 @@ export const syncConversation = catchAsync(
       throw new AppError("No active WhatsApp session found", 404);
     }
 
-    Logger.info(`[ChatSync] 🔄 On-Demand Sync for ${phone} (User: ${userId})`);
+    Logger.info(`[ChatSync] 🔄 On-Demand Sync for ${phone} (User: ${userId}) | Limit: ${limit}`);
 
     // 2. Execute Targeted Sync
-    // We use a generous lookback (30 days) but limit by count (limit=50)
-    // This ensures we get the *most recent* 50 messages, regardless of when they were sent.
+    // 90-day lookback window ensures we can reach back far enough for the 500-message limit
     const sinceDate = new Date();
-    sinceDate.setDate(sinceDate.getDate() - 30); // Last 30 days window
+    sinceDate.setDate(sinceDate.getDate() - 90); // 🚀 Extended: Last 90 days window
 
     const request = ChatSyncRequestSchema.parse({
       companyId,

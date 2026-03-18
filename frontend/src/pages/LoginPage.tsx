@@ -136,7 +136,9 @@ export const LoginPage = () => {
   const { login } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as any)?.from?.pathname || "/dashboard";
+  const from =
+    (location.state as { from?: { pathname?: string } })?.from?.pathname ||
+    "/dashboard";
 
   // UI State
   const [darkMode, setDarkMode] = useState(false);
@@ -299,8 +301,7 @@ export const LoginPage = () => {
       </div>
 
       {/* 🔐 RIGHT SIDE: LOGIN FORM */}
-      {/* Changed to flex-1 with lg:ml-[48%] to accommodate fixed left side. Added py-12 for vertical spacing. */}
-      <div className="flex-1 lg:ml-[48%] flex flex-col justify-center items-center px-6 sm:px-12 xl:px-32 relative bg-reply-surface dark:bg-reply-surface-dark min-h-screen py-12">
+      <div className="flex-1 lg:ml-[48%] flex flex-col px-6 sm:px-12 xl:px-32 relative bg-reply-surface dark:bg-reply-surface-dark min-h-screen overflow-y-auto">
         {/* Theme Toggle (Absolute Top Right) */}
         <button
           onClick={() => setDarkMode(!darkMode)}
@@ -338,7 +339,8 @@ export const LoginPage = () => {
           )}
         </button>
 
-        <div className="w-full max-w-[420px] mx-auto animate-fade-in-up z-10">
+        {/* 🛠️ FIX: Use my-auto and py-12 for safe vertical centering that respects overflow */}
+        <div className="w-full max-w-[420px] mx-auto my-auto py-12 sm:py-16 animate-fade-in-up z-10 flex flex-col">
           {/* Header */}
           <div className="mb-10 text-center lg:text-left">
             <div className="inline-block lg:hidden mb-4">
@@ -406,7 +408,7 @@ export const LoginPage = () => {
               <div className="w-full border-t border-gray-200 dark:border-reply-border-dark"></div>
             </div>
             <div className="relative flex justify-center">
-              <span className="px-4 bg-reply-surface dark:bg-reply-surface-dark text-xs font-semibold text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widestá">
+              <span className="px-4 bg-reply-surface dark:bg-reply-surface-dark text-xs font-semibold text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
                 O con tu email
               </span>
             </div>
@@ -558,4 +560,3 @@ export const LoginPage = () => {
     </div>
   );
 };
-

@@ -16,7 +16,7 @@ export interface Message {
   timestamp: string;
   status?: "sending" | "sent" | "delivered" | "read" | "failed";
   mediaUrl?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Conversation {
@@ -31,13 +31,15 @@ export interface Conversation {
   assignedTo?: string;
   channel: "whatsapp" | "email" | "web";
   tags?: string[];
+  isGroup?: boolean;
+  syncEnabled?: boolean;
 }
 
 export interface SendMessageInput {
   content: string;
   type?: "text" | "image" | "video" | "audio" | "document";
   mediaUrl?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   quotedMessageId?: string;
   quotedContent?: string;
 }
@@ -144,6 +146,21 @@ export const createNewChat = async (input: {
   return response.data;
 };
 
+/**
+ * TOGGLE GROUP SYNC
+ * Enables or disables automatic contact synchronization for a group
+ */
+export const toggleGroupSync = async (
+  ticketId: string,
+  enabled: boolean,
+): Promise<{ syncEnabled: boolean }> => {
+  const response = await apiClient.patch<{ syncEnabled: boolean }>(
+    `/conversations/${ticketId}/toggle-sync`,
+    { enabled },
+  );
+  return response.data;
+};
+
 export const chatService = {
   getConversations,
   getMessages,
@@ -153,4 +170,5 @@ export const chatService = {
   deleteTicket,
   markAsRead,
   createNewChat,
+  toggleGroupSync,
 };

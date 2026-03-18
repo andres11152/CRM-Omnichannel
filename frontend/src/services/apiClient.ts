@@ -55,7 +55,10 @@ apiClient.interceptors.response.use(
     // Error handling
     if (error.response) {
       const status = error.response.status;
-      const data: any = error.response.data;
+      const data = error.response.data as {
+        message?: string;
+        [key: string]: unknown;
+      };
 
       // Handle specific status codes
       switch (status) {
@@ -133,16 +136,16 @@ export const api = {
   /**
    * GET request
    */
-  get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
+  get: <T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> => {
     return apiClient.get(url, config);
   },
 
   /**
    * POST request
    */
-  post: <T = any>(
+  post: <T = unknown>(
     url: string,
-    data?: any,
+    data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<T> => {
     return apiClient.post(url, data, config);
@@ -151,9 +154,9 @@ export const api = {
   /**
    * PUT request
    */
-  put: <T = any>(
+  put: <T = unknown>(
     url: string,
-    data?: any,
+    data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<T> => {
     return apiClient.put(url, data, config);
@@ -162,9 +165,9 @@ export const api = {
   /**
    * PATCH request
    */
-  patch: <T = any>(
+  patch: <T = unknown>(
     url: string,
-    data?: any,
+    data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<T> => {
     return apiClient.patch(url, data, config);
@@ -173,7 +176,10 @@ export const api = {
   /**
    * DELETE request
    */
-  delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
+  delete: <T = unknown>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<T> => {
     return apiClient.delete(url, config);
   },
 };

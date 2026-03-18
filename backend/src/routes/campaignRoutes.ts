@@ -13,7 +13,9 @@ import {
   CreateCampaignSchema,
   UpdateCampaignSchema,
   GetCampaignsSchema,
+  GetCampaignSchema,
   DeleteCampaignSchema,
+  SendCampaignSchema,
 } from "@/schemas/campaignSchema";
 
 import { auditLog } from "@/middleware/auditMiddleware";
@@ -32,7 +34,7 @@ router.use(protect);
 router.route("/").get(validate(GetCampaignsSchema), getCampaigns).post(
   validate(CreateCampaignSchema),
   auditLog("Campaign"), // Log Creation
-  createCampaign
+  createCampaign,
 );
 
 // GET /campaigns/:id
@@ -40,24 +42,24 @@ router.route("/").get(validate(GetCampaignsSchema), getCampaigns).post(
 // DELETE /campaigns/:id
 router
   .route("/:id")
-  .get(getCampaign)
+  .get(validate(GetCampaignSchema), getCampaign)
   .patch(
     validate(UpdateCampaignSchema),
     auditLog("Campaign"), // Log Updates
-    updateCampaign
+    updateCampaign,
   )
   .delete(
     validate(DeleteCampaignSchema),
     auditLog("Campaign"), // Log Deletion
-    deleteCampaign
+    deleteCampaign,
   );
 
 // POST /campaigns/:id/launch
 // Launch campaign execution in background
 router.route("/:id/launch").post(
+  validate(SendCampaignSchema),
   auditLog("Campaign", (req) => req.params.id), // Log Launch as UPDATE/ACTION
-  launchCampaign
+  launchCampaign,
 );
 
 export default router;
-

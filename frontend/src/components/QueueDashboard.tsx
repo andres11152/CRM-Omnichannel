@@ -26,7 +26,9 @@ export const QueueDashboard: React.FC = () => {
   // Config State
   const [queues, setQueues] = useState<QueueConfig[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [assistants, setAssistants] = useState<any[]>([]); // New AI State
+  const [assistants, setAssistants] = useState<
+    Array<{ id: string; name: string; modelName?: string }>
+  >([]); // New AI State
 
   // Alert Modal State
   const [alertModal, setAlertModal] = useState<{
@@ -69,11 +71,16 @@ export const QueueDashboard: React.FC = () => {
         });
         if (!queuesRes.ok) throw new Error("Endpoint not found");
         const queuesData = await queuesRes.json();
-        const mappedQueues = queuesData.map((q: any) => ({
-          ...q,
-          departmentDetails: q.department,
-          department: q.department?.name || q.department, // Fallback
-        }));
+        const mappedQueues = queuesData.map(
+          (q: QueueConfig & { department?: { name?: string } | string }) => ({
+            ...q,
+            departmentDetails: q.department,
+            department:
+              typeof q.department === "object" && q.department !== null
+                ? (q.department as { name?: string }).name
+                : q.department, // Fallback
+          }),
+        );
         setQueues(mappedQueues);
       } catch (error) {
         console.error("Error loading queues:", error);
@@ -145,21 +152,23 @@ export const QueueDashboard: React.FC = () => {
         }
 
         // Create virtual AI agents from assistants
-        const aiAgents: Agent[] = assistantsList.map((assistant: any) => ({
-          id: `ai-${assistant.id}`,
-          name: `🤖 ${assistant.name}`,
-          email: `IA Gemini ${assistant.modelName || ""}`,
-          avatar: "", // Could use a robot icon
-          status: "online" as const, // AI is always online
-          currentLoad: 0,
-          maxCapacity: 999, // Unlimited for AI
-          department: "IA Automation",
-          role: "AI_AGENT" as any,
-          isAI: true, // Flag to identify AI agents
-        }));
+        const aiAgents: Agent[] = assistantsList.map(
+          (assistant: { id: string; name: string; modelName?: string }) => ({
+            id: `ai-${assistant.id}`,
+            name: `🤖 ${assistant.name}`,
+            email: `IA Gemini ${assistant.modelName || ""}`,
+            avatar: "", // Could use a robot icon
+            status: "online" as const, // AI is always online
+            currentLoad: 0,
+            maxCapacity: 999, // Unlimited for AI
+            department: "IA Automation",
+            role: "AGENT" as unknown as "AGENT" | "ADMIN" | "SUPERVISOR",
+            isAI: true, // Flag to identify AI agents
+          }),
+        );
 
         // Filter out human agents that have the same name as AI assistants OR look like bots
-        const aiNames = assistantsList.map((a: any) =>
+        const aiNames = assistantsList.map((a: { name: string }) =>
           a.name.toLowerCase().trim(),
         );
         const filteredHumanAgents = humanAgents.filter((agent) => {
@@ -288,7 +297,10 @@ export const QueueDashboard: React.FC = () => {
       channel: "whatsapp", // Default or derive from source
       clientName: t.contact?.name || "Cliente Desconocido",
       waitTime: diffMins,
-      priority: (t.priority?.toLowerCase() || "medium") as any,
+      priority: (t.priority?.toLowerCase() || "medium") as
+        | "low"
+        | "medium"
+        | "high",
       department: t.queue?.name || "General",
     };
   };
@@ -577,7 +589,10 @@ export const QueueDashboard: React.FC = () => {
                   Agentes IA Online
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {agents.filter((a) => (a as any).isAI).length}
+                  {
+                    agents.filter((a) => (a as Agent & { isAI?: boolean }).isAI)
+                      .length
+                  }
                 </h3>
               </div>
             </div>
@@ -605,11 +620,18 @@ export const QueueDashboard: React.FC = () => {
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {
                     agents.filter(
-                      (a) => a.status === "online" && !(a as any).isAI,
+                      (a) =>
+                        a.status === "online" &&
+                        !(a as Agent & { isAI?: boolean }).isAI,
                     ).length
                   }{" "}
                   <span className="text-sm font-normal text-gray-400">
-                    / {agents.filter((a) => !(a as any).isAI).length}
+                    /{" "}
+                    {
+                      agents.filter(
+                        (a) => !(a as Agent & { isAI?: boolean }).isAI,
+                      ).length
+                    }
                   </span>
                 </h3>
               </div>
@@ -1150,7 +1172,7 @@ const AgentCard = ({
         {/* Config / Transfer Actions */}
         <button
           onClick={() => onConfigClick(agent)}
-          className={`text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-2 rounded-lg hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors ${(agent as any).isAI ? "hidden" : ""}`}
+          className={`text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-2 rounded-lg hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors ${(agent as Agent & { isAI?: boolean }).isAI ? "hidden" : ""}`}
           title="Configurar Colas"
         >
           <svg
@@ -1190,7 +1212,7 @@ const AgentCard = ({
             Resueltos Hoy
           </span>
           <p className="text-lg font-bold text-gray-800 dark:text-gray-200">
-            {(agent as any).resolvedToday || 0}
+            {(agent as Agent & { resolvedToday?: number }).resolvedToday || 0}
           </p>
         </div>
       </div>
@@ -1220,7 +1242,7 @@ const AgentCard = ({
         {agent.department && (
           <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 border border-blue-100 dark:border-blue-800">
             {typeof agent.department === "object"
-              ? (agent.department as any).name
+              ? (agent.department as { name: string }).name
               : agent.department}
           </span>
         )}
@@ -1231,5 +1253,3 @@ const AgentCard = ({
     </div>
   );
 };
-
-

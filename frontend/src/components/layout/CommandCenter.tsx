@@ -86,7 +86,7 @@ export const CommandCenter: React.FC = () => {
           <Search className="text-gray-400 dark:text-gray-500" size={24} />
           <input
             type="text"
-            placeholder="¿Qué estáás buscando? (Acciónes, clientes, flujos...)"
+            placeholder="¿Qué estás buscando? (Acciónes, clientes, flujos...)"
             className="flex-1 bg-transparent border-none outline-none text-xl font-medium text-reply-text-primary dark:text-reply-text-primary-dark placeholder-gray-400 dark:placeholder-gray-600"
             autoFocus
             value={search}

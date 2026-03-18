@@ -20,6 +20,7 @@ interface GroupData {
   participants: GroupParticipant[];
   addableCount: number;
   existingCount: number;
+  syncEnabled?: boolean;
 }
 
 interface Props {
@@ -115,6 +116,26 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
     }
   };
 
+  const handleToggleSync = async (enabled: boolean) => {
+    try {
+      setProcessing(true);
+      const { chatService } = await import("@/services/chatService");
+      await chatService.toggleGroupSync(conversationId, enabled);
+
+      setData((prev) => (prev ? { ...prev, syncEnabled: enabled } : null));
+
+      toast.success(
+        enabled
+          ? "Sincronización automática ACTIVADA"
+          : "Sincronización automática DESACTIVADA",
+      );
+    } catch (error) {
+      toast.error("Error al actualizar preferencia de sincronización");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center p-8">
@@ -161,6 +182,32 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
             />
           </svg>
         </button>
+      </div>
+
+      {/* 🔄 SYNC SETTINGS SECTION */}
+      <div className="p-4 border-b border-gray-100 dark:border-reply-border-dark bg-reply-bg dark:bg-reply-surface-dark/50">
+        <label className="flex items-center justify-between cursor-pointer group">
+          <div className="flex-1 pr-4">
+            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block mb-0.5">
+              Sincronización Automática
+            </span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight block">
+              Guardar automáticamente participantes nuevos como contactos del
+              CRM.
+            </span>
+          </div>
+
+          <div className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={data.syncEnabled ?? true}
+              onChange={(e) => handleToggleSync(e.target.checked)}
+              disabled={processing}
+            />
+            <div className="w-10 h-5 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 transition-colors"></div>
+          </div>
+        </label>
       </div>
 
       {/* Stats / Bulk Action */}
@@ -292,5 +339,3 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
     </div>
   );
 };
-
-

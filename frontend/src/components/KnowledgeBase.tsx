@@ -79,11 +79,14 @@ export const KnowledgeBase: React.FC = () => {
       toast.success("Documento subido e indexado correctamente.", {
         id: toastId,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Upload error:", error);
-      toast.error(error.response?.data?.message || "Error al subir documento", {
-        id: toastId,
-      });
+      toast.error(
+        error instanceof Error ? error.message : "Error al subir documento",
+        {
+          id: toastId,
+        },
+      );
     } finally {
       setIsUploading(false);
     }
@@ -102,10 +105,10 @@ export const KnowledgeBase: React.FC = () => {
       await deleteMedia(id);
       setDocuments(documents.filter((d) => d.id !== id));
       toast.success("Documento eliminado.", { id: toastId });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       toast.error(
-        error.response?.data?.message || "Error al eliminar documento.",
+        error instanceof Error ? error.message : "Error al eliminar documento.",
         { id: toastId },
       );
     }
@@ -294,5 +297,3 @@ export const KnowledgeBase: React.FC = () => {
     </div>
   );
 };
-
-

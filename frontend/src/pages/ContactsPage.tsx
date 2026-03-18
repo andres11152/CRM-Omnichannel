@@ -154,7 +154,7 @@ export const ContactsPage: React.FC = () => {
         console.error("❌ Error saving contact:", errorData);
         toast.error(errorMessage);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Error saving contact (catch):", error);
       toast.error("Error de conexión al guardar contacto");
     }
@@ -350,7 +350,7 @@ export const ContactsPage: React.FC = () => {
                 <User className="w-10 h-10 text-gray-300" />
               </div>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                {searchTerm ? "Sin resultados" : "Tu lista estáá vacía"}
+                {searchTerm ? "Sin resultados" : "Tu lista está vacía"}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
                 {searchTerm
@@ -498,7 +498,7 @@ export const ContactsPage: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widestá">
+                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                                   {contact.channel || "Cliente"}
                                 </span>
                               </div>
@@ -863,5 +863,3 @@ export const ContactsPage: React.FC = () => {
     </div>
   );
 };
-
-

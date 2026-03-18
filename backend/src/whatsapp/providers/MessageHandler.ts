@@ -19,9 +19,11 @@ import { InboundMessageHandler } from "./handlers/InboundMessageHandler";
 import { OutboundMessageHandler } from "./handlers/OutboundMessageHandler";
 import { StatusUpdateHandler } from "./handlers/StatusUpdateHandler";
 import { PresenceHandler } from "./handlers/PresenceHandler";
+import { MessageRevocationHandler } from "./handlers/MessageRevocationHandler";
+import { MessageReactionHandler } from "./handlers/MessageReactionHandler";
+import { InboundOrchestratorService } from "../services/InboundOrchestratorService";
 
 import { SessionData } from "@/types/whatsapp.types";
-import { Logger } from "@/utils/logger";
 
 /**
  * 🏗️ MESSAGE HANDLER (Thin Orchestrator)
@@ -45,6 +47,8 @@ export class MessageHandler implements IMessageHandler {
   private outboundHandler: OutboundMessageHandler;
   private statusHandler: StatusUpdateHandler;
   private presenceHandler: PresenceHandler;
+  private revocationHandler: MessageRevocationHandler;
+  private reactionHandler: MessageReactionHandler;
 
   constructor(private sessionManager: ISessionManager) {
     this.eventBus = EventBus.getInstance();
@@ -67,14 +71,21 @@ export class MessageHandler implements IMessageHandler {
     });
 
     // Wire up remaining handlers
-    this.inboundHandler = new InboundMessageHandler(
+    const inboundOrchestrator = new InboundOrchestratorService(
       sessionManager,
       identityResolver,
-      aiTrigger,
       profilePicService,
     );
 
+    this.inboundHandler = new InboundMessageHandler(
+      sessionManager,
+      inboundOrchestrator,
+      aiTrigger,
+    );
+
     this.statusHandler = new StatusUpdateHandler(this.sessionCache);
+    this.revocationHandler = new MessageRevocationHandler(this.sessionCache);
+    this.reactionHandler = new MessageReactionHandler(this.sessionCache);
     this.presenceHandler = new PresenceHandler(
       sessionManager,
       identityResolver,
@@ -109,6 +120,33 @@ export class MessageHandler implements IMessageHandler {
         await this.presenceHandler.handlePresenceUpdate(
           event.data,
           event.sessionId,
+        );
+      },
+    );
+
+    // 🗑️ Message Revocation ("Delete for Everyone")
+    this.eventBus.subscribe(
+      WhatsAppEventType.MESSAGE_REVOKED,
+      async (event) => {
+        await this.revocationHandler.handleRevocation(
+          event.data.revokedMessageId,
+          event.data.revokedBy,
+          event.data.fromMe,
+          event.sessionId,
+        );
+      },
+    );
+
+    // ❤️ Message Reactions (Emojis)
+    this.eventBus.subscribe(
+      WhatsAppEventType.MESSAGE_REACTION,
+      async (event) => {
+        await this.reactionHandler.handleReaction(
+          event.data.messageId,
+          event.data.reaction,
+          event.data.participant,
+          event.sessionId,
+          event.companyId, // 🛡️ FIX: Pass companyId directly from event
         );
       },
     );

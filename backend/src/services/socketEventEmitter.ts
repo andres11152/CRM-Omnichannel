@@ -289,6 +289,32 @@ export class SocketEventEmitter {
   }
 
   /**
+   * Emit when a message is revoked ("Delete for Everyone")
+   *
+   * Frontend: Replaces message bubble with "[Mensaje eliminado]" indicator
+   */
+  emitMessageRevoked(
+    messageId: string,
+    conversationId: string,
+    companyId: string,
+  ): void {
+    Logger.info(`[SocketEvents] 🔊 Emitting message.revoked: ${messageId}`);
+
+    const payload = {
+      messageId,
+      conversationId,
+      content: "🚫 Este mensaje fue eliminado",
+      status: "REVOKED",
+      timestamp: new Date().toISOString(),
+    };
+
+    this.socketGateway.emitToCompany(companyId, "message.revoked", payload);
+    if (this.socketGateway.emitToRoom) {
+      this.socketGateway.emitToRoom(conversationId, "message.revoked", payload);
+    }
+  }
+
+  /**
    * Emit when a client is typing on WhatsApp
    *
    * Frontend: Shows "Typing..." indicator in chat
@@ -305,6 +331,38 @@ export class SocketEventEmitter {
       from,
       status,
     });
+  }
+
+  /**
+   * Emit when a message receives a reaction (emoji)
+   *
+   * Frontend: Shows the emoji on the message bubble
+   */
+  emitMessageReaction(
+    messageId: string,
+    conversationId: string,
+    companyId: string,
+    reaction: string,
+    participant: string,
+  ): void {
+    Logger.info(`[SocketEvents] 🔊 Emitting message.reaction: ${messageId}`);
+
+    const payload = {
+      messageId,
+      conversationId,
+      reaction,
+      participant,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.socketGateway.emitToCompany(companyId, "message.reaction", payload);
+    if (this.socketGateway.emitToRoom) {
+      this.socketGateway.emitToRoom(
+        conversationId,
+        "message.reaction",
+        payload,
+      );
+    }
   }
 
   /**

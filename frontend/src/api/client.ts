@@ -236,30 +236,6 @@ export const messageApi = {
 };
 
 // ============================================
-// WHATSAPP API
-// ============================================
-
-export const whatsappApi = {
-  /**
-   * On-Demand Sync: Sync messages for a specific chat (phone number).
-   */
-  async syncConversation(phone: string) {
-    const sanitizedPhone = phone.replace(/^\+/, "");
-    // Define inline Zod schema for response
-    const schema = z.object({
-      status: z.string(),
-      data: z.object({
-        synced: z.number(),
-        totalFound: z.number(),
-      }),
-    });
-    return typedFetch(`/whatsapp/sync/conversation/${sanitizedPhone}`, schema, {
-      method: "POST",
-    });
-  },
-};
-
-// ============================================
 // AUTH API
 // ============================================
 

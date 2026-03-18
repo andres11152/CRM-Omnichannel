@@ -247,10 +247,9 @@ const ContactCRMInfoComponent: React.FC<Props> = ({
               value: 0,
               currency: "USD",
               probability: 10,
-              stage: "NEW" as any,
               contactId: contact.realContactId || contact.id, // Link to this contact
               accountId: "", // Or fetch account if needed
-            } as any
+            } as unknown as import("@/types/crm").Deal
           }
         />
       )}

@@ -15,7 +15,7 @@ export interface UseAgentActionsReturn {
  * @returns {UseAgentActionsReturn} Action methods
  */
 export const useAgentActions = (
-  onSuccess?: () => void
+  onSuccess?: () => void,
 ): UseAgentActionsReturn => {
   const queryClient = useQueryClient();
 
@@ -31,7 +31,7 @@ export const useAgentActions = (
       queryClient.invalidateQueries({ queryKey: ["team-data"] });
       if (onSuccess) onSuccess();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error("[useAgentActions] Delete error:", error);
       // Error toast is handled by apiClient interceptor
     },
@@ -46,7 +46,7 @@ export const useAgentActions = (
     // Confirmation dialog
     if (
       !confirm(
-        `¿Ests seguro de eliminar a ${name}? Esta acción no se puede deshacer.`
+        `¿Ests seguro de eliminar a ${name}? Esta acción no se puede deshacer.`,
       )
     ) {
       return false;

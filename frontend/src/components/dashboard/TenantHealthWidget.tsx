@@ -44,7 +44,10 @@ export const TenantHealthWidget: React.FC<Props> = ({ tenants, loading }) => {
         companyStatus: "ACTIVE",
       };
 
-      login(userToLogin as any, result.token);
+      login(
+        userToLogin as unknown as Parameters<typeof login>[0],
+        result.token,
+      );
       window.location.href = "/dashboard";
     } catch (error) {
       toast.error("Error al iniciar impersonación");
@@ -157,6 +160,3 @@ export const TenantHealthWidget: React.FC<Props> = ({ tenants, loading }) => {
     </div>
   );
 };
-
-
-

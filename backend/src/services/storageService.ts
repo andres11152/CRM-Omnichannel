@@ -15,6 +15,7 @@ import { AppError } from "../utils/AppError";
 // INTERFACE: The Contract
 export interface IStorageService {
   uploadFile(
+    companyId: string,
     buffer: Buffer,
     filename: string,
     mimeType: string,
@@ -22,6 +23,7 @@ export interface IStorageService {
   ): Promise<UploadResult>;
 
   uploadStream(
+    companyId: string,
     stream: Readable,
     filename: string,
     mimeType: string,
@@ -67,12 +69,13 @@ class S3StorageService implements IStorageService {
   }
 
   async uploadFile(
+    companyId: string,
     buffer: Buffer,
     filename: string,
     mimeType: string,
     _isPrivate: boolean = false,
   ): Promise<UploadResult> {
-    const key = `uploads/${Date.now()}_${filename}`;
+    const key = `companies/${companyId}/uploads/${Date.now()}_${filename}`;
 
     const command = new PutObjectCommand({
       Bucket: this.bucket,
@@ -91,12 +94,13 @@ class S3StorageService implements IStorageService {
   }
 
   async uploadStream(
+    companyId: string,
     stream: Readable,
     filename: string,
     mimeType: string,
     _isPrivate: boolean = false,
   ): Promise<UploadResult> {
-    const key = `uploads/${Date.now()}_${filename}`;
+    const key = `companies/${companyId}/uploads/${Date.now()}_${filename}`;
 
     try {
       const upload = new Upload({

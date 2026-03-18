@@ -42,11 +42,13 @@ router.post(
   contactController.upsertContact,
 );
 
+import { IdParamSchema } from "../schemas/commonSchemas";
+
 // GET /contacts/:id/timeline
 // Get contact activity timeline
 router.get(
   "/:id/timeline",
-  // No validation needed - simple ID param (handled by controller)
+  validate(IdParamSchema),
   contactController.getContactTimeline,
 );
 
@@ -80,4 +82,3 @@ router.post(
 );
 
 export const contactRouter = router;
-

@@ -24,7 +24,7 @@ export const marketingService = {
 
   updateCampaign: async (
     id: string,
-    data: Partial<Campaign>
+    data: Partial<Campaign>,
   ): Promise<Campaign> => {
     const res = await api.patch(`/campaigns/${id}`, data);
     return res.data.data.campaign;
@@ -33,7 +33,7 @@ export const marketingService = {
   /**
    * Create a post (Legacy/Forum)
    */
-  createPost: async (content: string): Promise<any> => {
+  createPost: async (content: string): Promise<unknown> => {
     const res = await api.post("/posts", { content });
     return res.data;
   },
@@ -41,7 +41,7 @@ export const marketingService = {
   /**
    * Get all posts (Legacy/Forum)
    */
-  getPosts: async (): Promise<any[]> => {
+  getPosts: async (): Promise<unknown[]> => {
     const res = await api.get("/posts");
     return res.data.data?.posts || [];
   },
@@ -49,7 +49,7 @@ export const marketingService = {
   /**
    * Create a reply to a post
    */
-  createReply: async (postId: string, content: string): Promise<any> => {
+  createReply: async (postId: string, content: string): Promise<unknown> => {
     const res = await api.post("/replies", { postId, content });
     return res.data;
   },
@@ -57,7 +57,7 @@ export const marketingService = {
   /**
    * Get replies for a post
    */
-  getReplies: async (postId: string): Promise<any[]> => {
+  getReplies: async (postId: string): Promise<unknown[]> => {
     const res = await api.get(`/replies/post/${postId}`);
     return res.data.data?.replies || [];
   },
@@ -70,4 +70,3 @@ export const marketingService = {
     return res.data.response; // Adapt based on backend response structure
   },
 };
-

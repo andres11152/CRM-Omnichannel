@@ -3,7 +3,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
 import { conversationService } from "@/services/conversationService";
-import { Channel } from "@prisma/client";
+import { Channel, Conversation } from "@prisma/client";
 import { Logger } from "@/utils/logger";
 
 export const createConversation = catchAsync(
@@ -145,6 +145,31 @@ export const updateTags = catchAsync(
     res.status(200).json({
       status: "success",
       data: { tags: conversation.tags },
+    });
+  },
+);
+
+export const toggleGroupSync = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+
+    const { enabled } = req.body;
+    if (typeof enabled !== "boolean") {
+      throw new AppError("Enabled must be a boolean", 400);
+    }
+
+    const conversation: Conversation =
+      await conversationService.updateSyncEnabled(
+        req.companyId,
+        req.params.id,
+        enabled,
+      );
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        syncEnabled: conversation.syncEnabled,
+      },
     });
   },
 );

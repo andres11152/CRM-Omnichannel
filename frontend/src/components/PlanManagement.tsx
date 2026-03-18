@@ -385,7 +385,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
   const removeFeature = (key: string) => {
     if (!formData) return;
     const newConfig = { ...formData.config };
-    delete (newConfig as any)[key];
+    delete (newConfig as Record<string, unknown>)[key];
     setFormData({ ...formData, config: newConfig });
   };
 
@@ -706,7 +706,9 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                 ].includes(k),
                             )
                             .map((key) => {
-                              const value = (formData.config as any)[key];
+                              const value = (
+                                formData.config as Record<string, unknown>
+                              )[key];
                               const meta = FEATURE_META[key];
                               const label = meta?.label || key;
                               const description =
@@ -842,10 +844,16 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                             // IF key is missing, user has to "Add Feature".
                             // BUT user said "Add inputs...". I'll assume they might be added via the "Add Feature" UI,
                             // OR I should just iterate them if they are in config.
-                            if (!(formData.config as any).hasOwnProperty(key))
+                            if (
+                              !(
+                                formData.config as Record<string, unknown>
+                              ).hasOwnProperty(key)
+                            )
                               return null;
 
-                            const value = (formData.config as any)[key];
+                            const value = (
+                              formData.config as Record<string, unknown>
+                            )[key];
                             const meta = FEATURE_META[key];
                             const isUnlimited = value === -1 || value === null;
 

@@ -23,7 +23,7 @@ export interface Message {
 
   senderId?: string; // If outbound (Agent ID)
   timestamp: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Conversation {

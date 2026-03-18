@@ -158,7 +158,7 @@ const LegacyLoginWrapper = () => {
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
 
-  const handleLogin = (user: any) => {
+  const handleLogin = (user: import("@/types").User) => {
     const token = localStorage.getItem("token") || "mock-token";
     login(user, token);
     navigate("/");
@@ -180,7 +180,7 @@ const DashboardWrapper = () => {
   if (!user) return null;
   return (
     <MainDashboard
-      role={user.role as any}
+      role={user.role as import("@/types").UserRole}
       user={user}
       onNavigate={(path: string) => navigate("/" + path)}
       onUserUpdate={() => {}}
@@ -199,7 +199,12 @@ const WorkspaceWrapper = () => {
     systemPrompt: "Asistente Virtual",
     knowledgeBaseIds: [],
   };
-  return <AgentWorkspace user={user} aiConfig={aiConfig as any} />;
+  return (
+    <AgentWorkspace
+      user={user}
+      aiConfig={aiConfig as import("@/types").AIConfig}
+    />
+  );
 };
 
 // --- ADAPTERS FOR LEGACY NAV PROPS ---

@@ -9,6 +9,8 @@ export enum WhatsAppEventType {
   MESSAGE_SENT = "message.sent",
   MESSAGE_FAILED = "message.failed",
   MESSAGE_UPDATE = "message.update", // Added for status updates
+  MESSAGE_REVOKED = "message.revoked", // 🗑️ Message deleted ("for everyone")
+  MESSAGE_REACTION = "message.reaction", // ❤️ Added for reactions
   PRESENCE_UPDATE = "presence.update", // ✅ Added for Typing Indicators
   CONTACT_UPDATED = "contact.updated",
   RATE_LIMIT_EXCEEDED = "rate_limit.exceeded",
@@ -28,6 +30,16 @@ export interface WhatsAppEventData {
   [WhatsAppEventType.MESSAGE_UPDATE]: {
     messageId: string;
     update: WAMessageUpdate;
+  };
+  [WhatsAppEventType.MESSAGE_REVOKED]: {
+    revokedMessageId: string;
+    revokedBy: string; // JID of who deleted
+    fromMe: boolean;
+  };
+  [WhatsAppEventType.MESSAGE_REACTION]: {
+    messageId: string; // The message being reacted to
+    reaction: string; // The emoji
+    participant: string; // Who reacted
   };
   [WhatsAppEventType.PRESENCE_UPDATE]: {
     id: string;

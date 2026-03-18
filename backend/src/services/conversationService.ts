@@ -4,7 +4,6 @@
 import { prisma } from "@/config/database";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { AppError } from "@/utils/AppError";
-import { chatSyncService } from "./chatSyncService";
 import { ConversationManager } from "./conversationManager";
 import { whatsappService, SendMessageOptions } from "@/whatsapp";
 import { gateway } from "@/gateways/socketGateway";
@@ -14,8 +13,8 @@ import {
   Conversation,
   Message,
   Prisma,
-  TicketStatus,
 } from "@prisma/client";
+import { ticketSyncService } from "./TicketSyncService";
 import { Logger } from "@/utils/logger";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -24,17 +23,16 @@ import {
   ReplyDTO,
   ConversationListItem,
   Attachment,
+  Metadata,
 } from "@/types/conversation.types";
 
 // Repositories
 import { UserRepository } from "@/repositories/UserRepository";
 import { MessageRepository } from "@/repositories/MessageRepository";
-import { TicketRepository } from "@/repositories/TicketRepository";
 import { ConversationRepository } from "@/repositories/ConversationRepository";
 
 const userRepository = new UserRepository();
 const messageRepository = new MessageRepository();
-const ticketRepository = new TicketRepository();
 const conversationRepository = new ConversationRepository();
 
 // Instantiate Manager (receives prisma for $transaction — Unit of Work pattern)
@@ -106,38 +104,13 @@ export const conversationService = {
     }
 
     // 🛡️ 100-YEAR FIX: Ensure Ticket Exists for visibility in Agent Workspace
-    // Every conversation MUST have a ticket to be manageable.
-    const existingTicket = await ticketRepository.findByConversationId(
-      conversation.id,
-    );
-
-    const isTicketActive =
-      existingTicket &&
-      (existingTicket.status === TicketStatus.OPEN ||
-        existingTicket.status === TicketStatus.IN_PROGRESS);
-
-    if (!isTicketActive) {
-      const lastTicket = await ticketRepository.findFirst({
-        where: { companyId },
-        orderBy: { ticketNumber: "desc" },
-        select: { ticketNumber: true },
-      });
-
-      const nextTicketNumber = (lastTicket?.ticketNumber || 0) + 1;
-
-      await ticketRepository.create({
-        data: {
-          ticketNumber: nextTicketNumber,
-          companyId,
-          conversationId: conversation.id,
-          subject: name || cleanPhone,
-          description: message || "Chat importado o iniciado manualmente",
-          createdById: agentId,
-          assignedToId: agentId, // Auto-assign to the creator (Agent)
-          status: TicketStatus.IN_PROGRESS, // Active state
-        },
-      });
-    }
+    await ticketSyncService.ensureActiveTicket({
+      companyId,
+      conversationId: conversation.id,
+      agentId,
+      subject: name || cleanPhone,
+      description: message || "Chat importado o iniciado manualmente",
+    });
 
     return conversation;
   },
@@ -149,7 +122,7 @@ export const conversationService = {
     phone: string,
     content: string,
     attachment?: Attachment,
-    metadata?: Record<string, unknown>,
+    metadata?: Metadata,
   ): Promise<void> {
     const options: SendMessageOptions = {
       companyId,
@@ -172,7 +145,8 @@ export const conversationService = {
 
     try {
       await whatsappService.sendMessage(phone, content, options);
-    } catch (e) {
+    } catch (e: unknown) {
+      // Explicitly type catch variable
       Logger.error("[ConversationService] Failed to send message", e);
       const failedMsg = await messageRepository.create({
         data: {
@@ -212,17 +186,31 @@ export const conversationService = {
       const customer = conv.participants.find(
         (p) => p.role === "USER" || p.phone === conv.channelId,
       );
-      const lastMsg = conv.messages[conv.messages.length - 1];
+      const lastMsg = conv.messages[0];
       const unreadCount = conv.messages.filter(
         (m) => m.direction === "INBOUND" && m.status !== "READ",
       ).length;
+
+      // 🛡️ Map last message content for sidebar display
+      let lastMsgSnippet = lastMsg?.content || "Nueva conversación";
+      if (!lastMsg?.content && lastMsg?.metadata) {
+        const metadata = lastMsg.metadata as Metadata;
+        const media = metadata.media || metadata.attachment;
+        if (media) {
+          if (media.type === "image") lastMsgSnippet = "[📷 Imagen]";
+          else if (media.type === "video") lastMsgSnippet = "[🎬 Video]";
+          else if (media.type === "audio") lastMsgSnippet = "[🎤 Audio]";
+          else if (media.type === "document") lastMsgSnippet = "[📄 Documento]";
+          else if (media.type === "sticker") lastMsgSnippet = "[Sticker]";
+        }
+      }
 
       return {
         id: conv.id,
         ticketId: conv.id,
         contactName: customer?.name || conv.subject || "Usuario",
         contactPhone: customer?.phone || conv.channelId || "",
-        lastMessage: lastMsg?.content || "Nueva conversación",
+        lastMessage: lastMsgSnippet,
         lastMessageTime: lastMsg?.createdAt || conv.updatedAt,
         unreadCount,
         status: conv.status.toLowerCase(),
@@ -237,11 +225,10 @@ export const conversationService = {
    * Get Detail
    */
   async getConversation(companyId: string, id: string) {
-    // Determine type by initial assignment
     let conversation = await conversationRepository.findByIdWithRelations(id);
 
     if (!conversation) {
-      const ticket = await ticketRepository.findByIdWithCreator(id);
+      const ticket = await ticketSyncService.findByIdWithCreator(id);
       if (ticket && ticket.companyId === companyId) {
         if (ticket.conversationId) {
           conversation = await conversationRepository.findByIdWithRelations(
@@ -252,8 +239,6 @@ export const conversationService = {
           const channelId =
             ticket.createdBy.phone || ticket.createdBy.email.split("@")[0];
 
-          // 🛡️ 100-YEAR FIX: Use intermediate variable to avoid type mismatch
-          // Manager returns basic Conversation, Repository returns ConversationWithRelations
           const newConv = await conversationManager.findOrCreate({
             companyId,
             channelId,
@@ -262,9 +247,8 @@ export const conversationService = {
             status: "OPEN",
           });
 
-          await ticketRepository.updateConversationId(ticket.id, newConv.id);
+          await ticketSyncService.updateConversationId(ticket.id, newConv.id);
 
-          // Re-fetch with FULL relations to satisfy type
           conversation = await conversationRepository.findByIdWithRelations(
             newConv.id,
           );
@@ -277,12 +261,26 @@ export const conversationService = {
     }
 
     const messagesWithProps = conversation.messages.map((msg) => {
-      const meta = (
+      const metadata = (
         msg.metadata && typeof msg.metadata === "object" ? msg.metadata : {}
-      ) as { media?: Attachment; attachment?: Attachment };
+      ) as Metadata;
+      const att = metadata.media || metadata.attachment;
+
+      // 🛡️ Map Baileys/Prisma direction to Frontend 'sender' role
+      let senderRole: "agent" | "customer" | "system" = "customer";
+      if (msg.direction === "OUTBOUND") {
+        senderRole = "agent";
+      } else if ((msg.sender as { role?: string })?.role === "SYSTEM") {
+        senderRole = "system";
+      }
+
       return {
         ...msg,
-        attachment: meta.media || meta.attachment,
+        attachment: att,
+        sender: senderRole,
+        senderName: (msg.sender as { name?: string })?.name || "Usuario",
+        type: att ? (att.type as string) : "text",
+        mediaUrl: att?.url || undefined,
       };
     });
 
@@ -300,8 +298,8 @@ export const conversationService = {
       }
     }
 
-    // 🚀 CONTEXT SYNC: Auto-backfill if conversation has few messages
-    // This is the JIT trigger — fires async, doesn't block the response
+    // 🚀 ON-DEMAND CONTEXT SYNC: Backfill messages from Baileys store when agent opens chat
+    // Triggers only when DB has fewer than CONTEXT_SYNC_THRESHOLD messages for this conversation.
     const CONTEXT_SYNC_THRESHOLD = 20;
     const cleanChannelId = conversation.channelId
       ? conversation.channelId.replace(/\D/g, "")
@@ -310,14 +308,15 @@ export const conversationService = {
 
     if (
       messagesWithProps.length < CONTEXT_SYNC_THRESHOLD &&
-      hasValidPhone &&
-      !conversation.isGroup
+      hasValidPhone
     ) {
-      // Fire-and-forget: don't await, don't block
+      const { chatSyncService } = await import("./chatSyncService");
       chatSyncService
         .contextSync(companyId, conversation.id, conversation.channelId!)
-        .catch((err) =>
-          Logger.warn(`[ConversationService] Context sync failed:`, err),
+        .catch((err: Error) =>
+          Logger.warn(`[ConversationService] Context sync failed:`, {
+            error: err.message,
+          }),
         );
     }
 
@@ -330,7 +329,7 @@ export const conversationService = {
 
   async replyToConversation(
     dto: ReplyDTO,
-  ): Promise<Message | { id: string; content: string }> {
+  ): Promise<Message | { id: string; content: string; timestamp?: Date; status?: string }> {
     const {
       companyId,
       userId,
@@ -348,11 +347,9 @@ export const conversationService = {
       await conversationRepository.findByIdWithRelations(conversationId);
 
     if (!resolvedConv) {
-      const ticket = await ticketRepository.findById(conversationId);
-      if (ticket?.conversationId) {
-        resolvedConv = await conversationRepository.findByIdWithRelations(
-          ticket.conversationId,
-        );
+      const ticketConvId = await ticketSyncService.findConversationIdByTicket(conversationId, companyId);
+      if (ticketConvId) {
+        resolvedConv = await conversationRepository.findByIdWithRelations(ticketConvId);
       }
     }
 
@@ -362,11 +359,7 @@ export const conversationService = {
 
     let targetPhone = resolvedConv.channelId;
     if (!targetPhone || !/^\d+$/.test(targetPhone)) {
-      const linkedTicket = await ticketRepository.findByConversationId(
-        resolvedConv.id,
-      );
-      const emailPhone = linkedTicket?.createdBy.email.split("@")[0];
-      if (emailPhone && /^\d+$/.test(emailPhone)) targetPhone = emailPhone;
+      targetPhone = (await ticketSyncService.findPhoneByConversation(resolvedConv.id)) || null;
     }
 
     if (!targetPhone || targetPhone.length < 5) {
@@ -378,7 +371,7 @@ export const conversationService = {
       (attachment ? `📎 Archivo: ${attachment.name || "Adjunto"}` : "");
 
     if (scheduledAt) {
-      const safeMetadata = {
+      const safeMetadata: Metadata = {
         ...(metadata || {}),
         scheduledAt:
           typeof scheduledAt === "string"
@@ -398,7 +391,7 @@ export const conversationService = {
           senderId: userId,
           channel: channel || Channel.WHATSAPP,
           status: "SCHEDULED",
-          metadata: safeMetadata as unknown as Prisma.InputJsonValue,
+          metadata: safeMetadata as Prisma.InputJsonValue,
         },
       });
     } else {
@@ -432,9 +425,14 @@ export const conversationService = {
         options,
       );
 
-      // 🛡️ 100-YEAR FIX: Return the message derived from the Service
+      // 🛡️ 100-YEAR FIX: Return a compatible partial message
       // Do NOT manually create another record here to avoid Double Write.
-      return sentMessage as unknown as Message;
+      return {
+        id: sentMessage.messageId,
+        content: sentMessage.content,
+        timestamp: sentMessage.timestamp,
+        status: "SENT",
+      };
     }
   },
 
@@ -473,5 +471,32 @@ export const conversationService = {
     }
 
     return updatedConv;
+  },
+
+  /**
+   * Toggle Group Contact Synchronization
+   */
+  async updateSyncEnabled(companyId: string, id: string, enabled: boolean) {
+    const conv = await conversationRepository.findFirst({
+      where: { id, companyId },
+    });
+    if (!conv) throw new AppError("Conversation not found", 404);
+
+    if (!conv.isGroup) {
+      throw new AppError("Direct conversations always sync contacts", 400);
+    }
+
+    const updated = await conversationRepository.update(id, {
+      syncEnabled: enabled,
+    });
+
+    // Notify UI via socket
+    gateway.emitToCompany(companyId, "conversation:update", updated);
+
+    Logger.info(
+      `[ConversationService] 🔄 Sync ${enabled ? "ENABLED" : "DISABLED"} for group: ${conv.subject}`,
+    );
+
+    return updated;
   },
 };

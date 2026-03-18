@@ -65,7 +65,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     if (!canvasRef.current) return;
 
     audioContextRef.current = new (
-      window.AudioContext || (window as any).webkitAudioContext
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext
     )();
     const source = audioContextRef.current.createMediaStreamSource(stream);
     analyserRef.current = audioContextRef.current.createAnalyser();
@@ -204,4 +206,3 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     </div>
   );
 };
-

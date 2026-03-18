@@ -1,8 +1,4 @@
-/**
- * 💾 MESSAGE CACHE SERVICE
- * Offline-first message storage using IndexedDB
- * Ensures messages are available even when server is down
- */
+import { Message } from "@/types";
 
 const DB_NAME = "ReplyMessagesDB";
 const DB_VERSION = 1;
@@ -43,7 +39,10 @@ class MessageCacheService {
   /**
    * Save messages for a conversation
    */
-  async saveMessages(conversationId: string, messages: any[]): Promise<void> {
+  async saveMessages(
+    conversationId: string,
+    messages: Message[],
+  ): Promise<void> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -61,7 +60,7 @@ class MessageCacheService {
 
       transaction.oncomplete = () => {
         console.log(
-          `[MessageCache] ✅ Saved ${messages.length} messages for ${conversationId}`
+          `[MessageCache] ✅ Saved ${messages.length} messages for ${conversationId}`,
         );
         resolve();
       };
@@ -72,7 +71,7 @@ class MessageCacheService {
   /**
    * Get cached messages for a conversation
    */
-  async getMessages(conversationId: string): Promise<any[]> {
+  async getMessages(conversationId: string): Promise<Message[]> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -84,10 +83,10 @@ class MessageCacheService {
       request.onsuccess = () => {
         const messages = request.result.sort(
           (a, b) =>
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
         );
         console.log(
-          `[MessageCache] 📦 Retrieved ${messages.length} cached messages`
+          `[MessageCache] 📦 Retrieved ${messages.length} cached messages`,
         );
         resolve(messages);
       };

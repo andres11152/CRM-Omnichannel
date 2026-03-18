@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { jwtDecode } from 'jwt-decode';
-import { 
-  Calendar, 
-  CheckSquare, 
-  Mail, 
-  Phone, 
-  FileText, 
-  CalendarClock, 
-  User, 
+import React, { useState, useEffect } from "react";
+import { jwtDecode } from "jwt-decode";
+import {
+  Calendar,
+  CheckSquare,
+  Mail,
+  Phone,
+  FileText,
+  CalendarClock,
+  User,
   Building2,
   ClipboardList,
   X,
@@ -15,19 +15,31 @@ import {
   AlertTriangle,
   Users,
   Briefcase,
-  CheckCircle2
-} from 'lucide-react';
-import { Activity, Account, Deal } from '@/types/crm';
-import { createActivity, updateActivity, getAccounts, getDeals, getContacts } from '@/services/crmService';
-import { fetchAPI } from '@/services/apiConfig';
+  CheckCircle2,
+} from "lucide-react";
+import { Activity, Account, Deal } from "@/types/crm";
+import {
+  createActivity,
+  updateActivity,
+  getAccounts,
+  getDeals,
+  getContacts,
+} from "@/services/crmService";
+import { fetchAPI } from "@/services/apiConfig";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSave: () => void;
   activity?: Activity;
-  initialType?: 'NOTE' | 'CALL' | 'EMAIL' | 'MEETING' | 'TASK';
-  preselectedContact?: { id: string; name: string; email?: string; companyId?: string; isCompany?: boolean };
+  initialType?: "NOTE" | "CALL" | "EMAIL" | "MEETING" | "TASK";
+  preselectedContact?: {
+    id: string;
+    name: string;
+    email?: string;
+    companyId?: string;
+    isCompany?: boolean;
+  };
 }
 
 interface User {
@@ -36,109 +48,125 @@ interface User {
   email: string;
 }
 
-export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activity, initialType = 'NOTE', preselectedContact }) => {
+export const ActivityModal: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  onSave,
+  activity,
+  initialType = "NOTE",
+  preselectedContact,
+}) => {
   const [formData, setFormData] = useState<Partial<Activity>>({
     type: initialType,
-    subject: '',
-    description: '',
-    status: 'PENDING',
-    dueDate: '',
-    accountId: '',
-    dealId: '',
-    contactId: '',
-    assignedToId: '',
-    participantIds: [] as string[]
+    subject: "",
+    description: "",
+    status: "PENDING",
+    dueDate: "",
+    accountId: "",
+    dealId: "",
+    contactId: "",
+    assignedToId: "",
+    participantIds: [] as string[],
   });
   const [markAsCompleted, setMarkAsCompleted] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<
+    Array<{ id: string; name: string; email?: string }>
+  >([]);
   const [isClientMode, setIsClientMode] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [accountsData, dealsData, contactsData, usersData] = await Promise.all([
-          getAccounts(),
-          getDeals(),
-          getContacts(),
-          fetchAPI('/users')
-        ]);
+        const [accountsData, dealsData, contactsData, usersData] =
+          await Promise.all([
+            getAccounts(),
+            getDeals(),
+            getContacts(),
+            fetchAPI("/users"),
+          ]);
         setAccounts(accountsData.accounts || []);
         setDeals(dealsData.deals || []);
         setContacts(contactsData.contacts || []);
-        
+
         const realUsers = (usersData.data?.users || []).filter((user: User) => {
-          const email = user.email?.toLowerCase() || '';
-          const name = user.name?.toLowerCase() || '';
-          
-          return !email.includes('whatsapp.user') && 
-                 !email.includes('@bot') &&
-                 !name.includes('whatsapp') &&
-                 !name.includes('master') &&
-                 !name.includes('experto en retiro');
+          const email = user.email?.toLowerCase() || "";
+          const name = user.name?.toLowerCase() || "";
+
+          return (
+            !email.includes("whatsapp.user") &&
+            !email.includes("@bot") &&
+            !name.includes("whatsapp") &&
+            !name.includes("master") &&
+            !name.includes("experto en retiro")
+          );
         });
-        
+
         setUsers(realUsers);
-        
+
         if (!activity) {
-            try {
-                const token = localStorage.getItem('token');
-                if (token) {
-                    const decoded: any = jwtDecode(token);
-                    setFormData(prev => ({ ...prev, assignedToId: decoded.id }));
-                }
-            } catch (e) {
-                console.error('Error decoding token:', e);
+          try {
+            const token = localStorage.getItem("token");
+            if (token) {
+              const decoded = jwtDecode<{ id?: string; userId?: string }>(
+                token,
+              );
+              setFormData((prev) => ({ ...prev, assignedToId: decoded.id }));
             }
+          } catch (e) {
+            console.error("Error decoding token:", e);
+          }
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error("Error fetching data:", error);
       }
     };
     fetchData();
 
     if (activity) {
-      let dueDateValue = '';
+      let dueDateValue = "";
       if (activity.dueDate) {
         const date = new Date(activity.dueDate);
-        const pad = (num: number) => num.toString().padStart(2, '0');
+        const pad = (num: number) => num.toString().padStart(2, "0");
         dueDateValue = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
       }
 
       setFormData({
         type: activity.type,
         subject: activity.subject,
-        description: activity.description || '',
+        description: activity.description || "",
         status: activity.status,
         dueDate: dueDateValue,
-        accountId: activity.accountId || '',
-        dealId: activity.dealId || '',
-        contactId: activity.contactId || '',
-        assignedToId: activity.assignedToId || ''
+        accountId: activity.accountId || "",
+        dealId: activity.dealId || "",
+        contactId: activity.contactId || "",
+        assignedToId: activity.assignedToId || "",
       });
-      setIsClientMode(!!(activity.accountId || activity.dealId || activity.contactId));
+      setIsClientMode(
+        !!(activity.accountId || activity.dealId || activity.contactId),
+      );
     } else {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(9, 0, 0, 0);
-      
-      const pad = (num: number) => num.toString().padStart(2, '0');
+
+      const pad = (num: number) => num.toString().padStart(2, "0");
       const tomorrowValue = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T${pad(tomorrow.getHours())}:${pad(tomorrow.getMinutes())}`;
-      
+
       setFormData({
         type: initialType,
-        subject: '',
-        description: '',
-        status: 'PENDING',
+        subject: "",
+        description: "",
+        status: "PENDING",
         dueDate: tomorrowValue,
-        accountId: preselectedContact?.companyId || '',
-        dealId: '',
-        contactId: preselectedContact?.id || '',
-        assignedToId: '',
-        participantIds: []
+        accountId: preselectedContact?.companyId || "",
+        dealId: "",
+        contactId: preselectedContact?.id || "",
+        assignedToId: "",
+        participantIds: [],
       });
       setIsClientMode(!!preselectedContact);
     }
@@ -150,9 +178,11 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
     try {
       const payload = {
         ...formData,
-        status: (markAsCompleted ? 'COMPLETED' : 'PENDING') as 'PENDING' | 'COMPLETED' // Auto-inject status with explicit typing
+        status: (markAsCompleted ? "COMPLETED" : "PENDING") as
+          | "PENDING"
+          | "COMPLETED", // Auto-inject status with explicit typing
       };
-      
+
       if (activity) {
         await updateActivity(activity.id, payload);
       } else {
@@ -160,7 +190,7 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
       }
       onSave();
     } catch (error) {
-      console.error('Error saving activity:', error);
+      console.error("Error saving activity:", error);
     } finally {
       setLoading(false);
     }
@@ -168,15 +198,15 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
 
   if (!isOpen) return null;
 
-  const isMeeting = formData.type === 'MEETING';
-  
+  const isMeeting = formData.type === "MEETING";
+
   // Activity type icons
   const typeIcons: Record<string, React.ReactNode> = {
     NOTE: <FileText className="w-4 h-4" />,
     CALL: <Phone className="w-4 h-4" />,
     EMAIL: <Mail className="w-4 h-4" />,
     MEETING: <Calendar className="w-4 h-4" />,
-    TASK: <CheckSquare className="w-4 h-4" />
+    TASK: <CheckSquare className="w-4 h-4" />,
   };
 
   return (
@@ -191,13 +221,15 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
               </div>
               <div>
                 <h2 className="text-xl font-bold text-white">
-                  {activity ? 'Editar Actividad' : 'Nueva Actividad'}
+                  {activity ? "Editar Actividad" : "Nueva Actividad"}
                 </h2>
-                <p className="text-white/80 text-sm">{isMeeting && '📅 Se sincronizar con Google Calendar'}</p>
+                <p className="text-white/80 text-sm">
+                  {isMeeting && "📅 Se sincronizar con Google Calendar"}
+                </p>
               </div>
             </div>
-            <button 
-              onClick={onClose} 
+            <button
+              onClick={onClose}
               className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-all"
             >
               <X className="w-5 h-5" />
@@ -206,27 +238,44 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-180px)]">
+        <form
+          onSubmit={handleSubmit}
+          className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-180px)]"
+        >
           {/* Locked Contact Card */}
           {preselectedContact ? (
             <div className="p-4 bg-reply-bg dark:bg-white/5 border border-gray-200 dark:border-reply-border-dark rounded-xl">
               <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                {preselectedContact.isCompany ? <Building2 className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
-                Vinculado a {preselectedContact.isCompany ? 'Empresa' : 'Cliente'}
+                {preselectedContact.isCompany ? (
+                  <Building2 className="w-3.5 h-3.5" />
+                ) : (
+                  <User className="w-3.5 h-3.5" />
+                )}
+                Vinculado a{" "}
+                {preselectedContact.isCompany ? "Empresa" : "Cliente"}
               </p>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-orange-600 dark:text-orange-400 font-bold">
-                  {preselectedContact.name.substring(0,2).toUpperCase()}
+                  {preselectedContact.name.substring(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <h4 className="font-bold text-gray-900 dark:text-white">{preselectedContact.name}</h4>
-                  {preselectedContact.email && <p className="text-xs text-gray-500 dark:text-gray-400">{preselectedContact.email}</p>}
+                  <h4 className="font-bold text-gray-900 dark:text-white">
+                    {preselectedContact.name}
+                  </h4>
+                  {preselectedContact.email && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {preselectedContact.email}
+                    </p>
+                  )}
                 </div>
               </div>
               {!preselectedContact.email && isMeeting && (
                 <div className="mt-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-2.5 rounded-lg text-xs text-red-600 dark:text-red-400 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <p>Este contacto no tiene email. Agrega uno para enviar la invitación de calendario.</p>
+                  <p>
+                    Este contacto no tiene email. Agrega uno para enviar la
+                    invitación de calendario.
+                  </p>
                 </div>
               )}
             </div>
@@ -235,13 +284,18 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
               <button
                 type="button"
                 onClick={() => {
-                    setIsClientMode(false);
-                    setFormData({...formData, accountId: '', dealId: '', contactId: ''});
+                  setIsClientMode(false);
+                  setFormData({
+                    ...formData,
+                    accountId: "",
+                    dealId: "",
+                    contactId: "",
+                  });
                 }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                  !isClientMode 
-                    ? 'bg-white dark:bg-gray-600 text-orange-600 shadow-sm' 
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  !isClientMode
+                    ? "bg-white dark:bg-gray-600 text-orange-600 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                 }`}
               >
                 <User className="w-4 h-4" />
@@ -251,9 +305,9 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
                 type="button"
                 onClick={() => setIsClientMode(true)}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                  isClientMode 
-                    ? 'bg-white dark:bg-gray-600 text-orange-600 shadow-sm' 
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  isClientMode
+                    ? "bg-white dark:bg-gray-600 text-orange-600 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                 }`}
               >
                 <Building2 className="w-4 h-4" />
@@ -264,10 +318,17 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
 
           {/* Type of Activity */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Tipo de Actividad</label>
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
+              Tipo de Actividad
+            </label>
             <select
               value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  type: e.target.value as Activity["type"],
+                })
+              }
               className="w-full px-4 py-3 min-h-[44px] rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent font-medium transition-all leading-normal"
             >
               <option value="NOTE">📝 Nota</option>
@@ -287,18 +348,28 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
               type="text"
               required
               value={formData.subject}
-              onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, subject: e.target.value })
+              }
               className="w-full px-4 py-3 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-400 transition-all"
-              placeholder={isMeeting ? "Ej. Reunión con cliente - Demo del producto" : "Ej. Llamar al cliente sobre propuesta"}
+              placeholder={
+                isMeeting
+                  ? "Ej. Reunión con cliente - Demo del producto"
+                  : "Ej. Llamar al cliente sobre propuesta"
+              }
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Descripción</label>
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
+              Descripción
+            </label>
             <textarea
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
               className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-400 transition-all resize-none"
               rows={3}
               placeholder="Detalles adicionales, agenda, notas..."
@@ -309,12 +380,16 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
           <div>
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
               <CalendarClock className="w-4 h-4" />
-              {isMeeting ? 'Fecha y Hora de la Reunión' : 'Fecha y Hora de Vencimiento'}
+              {isMeeting
+                ? "Fecha y Hora de la Reunión"
+                : "Fecha y Hora de Vencimiento"}
             </label>
             <input
               type="datetime-local"
               value={formData.dueDate}
-              onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, dueDate: e.target.value })
+              }
               className="w-full px-4 py-3 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
             />
             {isMeeting && formData.dueDate && (
@@ -330,21 +405,25 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
             <div>
               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
                 <User className="w-4 h-4" />
-                {isMeeting ? 'Organizador' : 'Responsable'}
+                {isMeeting ? "Organizador" : "Responsable"}
               </label>
               <select
                 value={formData.assignedToId}
-                onChange={(e) => setFormData({ ...formData, assignedToId: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, assignedToId: e.target.value })
+                }
                 disabled={!activity}
-                className={`w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent font-medium transition-all ${!activity ? 'opacity-70 cursor-not-allowed bg-gray-100 dark:bg-gray-900' : ''}`}
+                className={`w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent font-medium transition-all ${!activity ? "opacity-70 cursor-not-allowed bg-gray-100 dark:bg-gray-900" : ""}`}
               >
                 <option value="">Sin asignar</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.email})
+                  </option>
                 ))}
               </select>
             </div>
-            
+
             {isMeeting && (
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
@@ -352,22 +431,51 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
                   Invitados
                 </label>
                 <div className="border-2 border-gray-300 dark:border-gray-600 rounded-xl p-2 max-h-32 overflow-y-auto bg-white dark:bg-gray-800">
-                   {users.filter(u => u.id !== formData.assignedToId && !u.name.toLowerCase().includes('admin')).map(user => (
-                      <label key={user.id} className="flex items-center gap-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer">
-                        <input 
-                           type="checkbox"
-                           checked={formData.participantIds?.includes(user.id)}
-                           onChange={(e) => {
-                             const current = formData.participantIds || [];
-                             if (e.target.checked) setFormData({...formData, participantIds: [...current, user.id]});
-                             else setFormData({...formData, participantIds: current.filter(id => id !== user.id)});
-                           }}
-                           className="rounded text-orange-600 focus:ring-orange-500"
+                  {users
+                    .filter(
+                      (u) =>
+                        u.id !== formData.assignedToId &&
+                        !u.name.toLowerCase().includes("admin"),
+                    )
+                    .map((user) => (
+                      <label
+                        key={user.id}
+                        className="flex items-center gap-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.participantIds?.includes(user.id)}
+                          onChange={(e) => {
+                            const current = formData.participantIds || [];
+                            if (e.target.checked)
+                              setFormData({
+                                ...formData,
+                                participantIds: [...current, user.id],
+                              });
+                            else
+                              setFormData({
+                                ...formData,
+                                participantIds: current.filter(
+                                  (id) => id !== user.id,
+                                ),
+                              });
+                          }}
+                          className="rounded text-orange-600 focus:ring-orange-500"
                         />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{user.name}</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {user.name}
+                        </span>
                       </label>
-                   ))}
-                   {users.filter(u => u.id !== formData.assignedToId && !u.name.toLowerCase().includes('admin')).length === 0 && <p className="text-xs text-gray-500 italic p-1">No hay ms agentes disponibles</p>}
+                    ))}
+                  {users.filter(
+                    (u) =>
+                      u.id !== formData.assignedToId &&
+                      !u.name.toLowerCase().includes("admin"),
+                  ).length === 0 && (
+                    <p className="text-xs text-gray-500 italic p-1">
+                      No hay ms agentes disponibles
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -382,15 +490,22 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
                   Contacto
                 </label>
                 <select
-                  value={formData.contactId || ''}
-                  onChange={(e) => setFormData({ ...formData, contactId: e.target.value })}
-                  disabled={!!preselectedContact} 
-                  className={`w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all ${!!preselectedContact ? 'opacity-70 cursor-not-allowed bg-gray-100 dark:bg-gray-900' : ''}`}
+                  value={formData.contactId || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, contactId: e.target.value })
+                  }
+                  disabled={!!preselectedContact}
+                  className={`w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all ${!!preselectedContact ? "opacity-70 cursor-not-allowed bg-gray-100 dark:bg-gray-900" : ""}`}
                 >
                   <option value="">Ninguno</option>
-                  {contacts.map((contact: any) => (
-                    <option key={contact.id} value={contact.id}>{contact.name} {contact.email ? `(${contact.email})` : ''}</option>
-                  ))}
+                  {contacts.map(
+                    (contact: { id: string; name: string; email?: string }) => (
+                      <option key={contact.id} value={contact.id}>
+                        {contact.name}{" "}
+                        {contact.email ? `(${contact.email})` : ""}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
 
@@ -402,12 +517,16 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
                   </label>
                   <select
                     value={formData.accountId}
-                    onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, accountId: e.target.value })
+                    }
                     className="w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
                   >
                     <option value="">Ninguna</option>
-                    {accounts.map(acc => (
-                      <option key={acc.id} value={acc.id}>{acc.name}</option>
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -418,12 +537,16 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
                   </label>
                   <select
                     value={formData.dealId}
-                    onChange={(e) => setFormData({ ...formData, dealId: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, dealId: e.target.value })
+                    }
                     className="w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
                   >
                     <option value="">Ninguno</option>
-                    {deals.map(d => (
-                      <option key={d.id} value={d.id}>{d.title}</option>
+                    {deals.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.title}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -443,7 +566,8 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
                 />
                 <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200 transition-colors flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
-                  Marcar como ya completada (útil para registrar llamadas pasadas)
+                  Marcar como ya completada (útil para registrar llamadas
+                  pasadas)
                 </span>
               </label>
             </div>
@@ -466,18 +590,31 @@ export const ActivityModal: React.FC<Props> = ({ isOpen, onClose, onSave, activi
             className="px-6 py-2.5 h-11 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {loading && (
-              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <svg
+                className="animate-spin h-4 w-4 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
               </svg>
             )}
-            {activity ? 'Guardar Cambios' : 'Crear Actividad'}
+            {activity ? "Guardar Cambios" : "Crear Actividad"}
           </button>
         </div>
       </div>
     </div>
   );
 };
-
-
-

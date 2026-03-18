@@ -184,9 +184,8 @@ export const rolesService = {
     });
     if (!user) throw new AppError("User not found", HTTP_STATUS.NOT_FOUND);
 
-    await userRepository.update({
-      where: { id: userId },
-      data: { customRoleId: roleId },
+    await userRepository.update(userId, companyId, {
+      customRole: { connect: { id: roleId } },
     });
   },
 
@@ -199,7 +198,7 @@ export const rolesService = {
     action: PermissionAction,
     resource: string,
   ): Promise<boolean> {
-    const user = (await userRepository.findUnique({
+    const user = (await userRepository.findFirst({
       where: { id: userId },
       include: {
         customRole: {

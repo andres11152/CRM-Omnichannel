@@ -76,9 +76,13 @@ export class WhatsAppService {
       async (event: WhatsAppEvent<WhatsAppEventType.SESSION_CONNECTED>) => {
         Logger.info(`[WA] Session connected: ${event.sessionId}`);
         try {
-          await this.sessionRepository.update(event.sessionId, {
-            status: "CONNECTED",
-          });
+          await this.sessionRepository.update(
+            event.companyId,
+            event.sessionId,
+            {
+              status: "CONNECTED",
+            },
+          );
           const { gateway } = await import("@/gateways/socketGateway");
           gateway.emitToCompany(event.companyId, "whatsapp:connected", {
             sessionId: event.sessionId,
@@ -94,9 +98,20 @@ export class WhatsAppService {
       async (event: WhatsAppEvent<WhatsAppEventType.SESSION_DISCONNECTED>) => {
         Logger.warn(`[WA] Session disconnected: ${event.sessionId}`);
         try {
-          await this.sessionRepository.update(event.sessionId, {
-            status: "DISCONNECTED",
-          });
+          await this.sessionRepository
+            .update(event.companyId, event.sessionId, {
+              status: "DISCONNECTED",
+            })
+            .catch((dbErr: { code?: string }) => {
+              // P2025: Record not found (e.g., after cleanup). Safe to ignore.
+              if (dbErr?.code === "P2025") {
+                Logger.warn(
+                  `[WA] Session ${event.sessionId} already removed from DB, skipping update.`,
+                );
+                return;
+              }
+              throw dbErr;
+            });
           const { gateway } = await import("@/gateways/socketGateway");
           gateway.emitToCompany(event.companyId, "whatsapp:disconnected", {
             sessionId: event.sessionId,
@@ -175,7 +190,7 @@ export class WhatsAppService {
         } catch (err) {
           Logger.error(`[WA] ❌ Failed to restore ${session.sessionId}:`, err);
           await this.sessionRepository
-            .update(session.sessionId, { status: "ERROR" })
+            .update(session.companyId, session.sessionId, { status: "ERROR" })
             .catch(() => {});
         }
       }
@@ -229,18 +244,24 @@ export class WhatsAppService {
       );
     }
 
-    // Upsert session in DB
+    // 🛡️ PERSISTENCE FIX: Ensure the session record exists in DB BEFORE initializing Baileys.
+    // This prevents "Record not found" errors when connection events (QR) fire.
     try {
-      await this.sessionRepository.findOne(finalSessionId);
-      await this.sessionRepository.update(finalSessionId, {
-        status: "CONNECTING",
-      });
-    } catch {
-      await this.sessionRepository.create({
-        sessionId: finalSessionId,
-        company: { connect: { id: companyId } },
-        status: "CONNECTING",
-      });
+      const session = await this.sessionRepository.findOne(companyId, finalSessionId);
+      if (session) {
+        await this.sessionRepository.update(companyId, finalSessionId, {
+          status: "CONNECTING",
+        });
+      } else {
+        await this.sessionRepository.create({
+          sessionId: finalSessionId,
+          company: { connect: { id: companyId } },
+          status: "CONNECTING",
+        });
+      }
+    } catch (err) {
+      Logger.error(`[WA] Error ensuring session record for ${finalSessionId}:`, err);
+      // We continue anyway as initializeSession might still work, but DB updates will fail
     }
 
     // Create Baileys session
@@ -298,10 +319,10 @@ export class WhatsAppService {
     });
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
-    Logger.info(`[WA] Deleting session ${sessionId}`);
+  async deleteSession(companyId: string, sessionId: string): Promise<void> {
+    Logger.info(`[WA] Deleting session ${sessionId} for company ${companyId}`);
     await this.sessionManager.terminateSession(sessionId, true); // true = force ClearAuth
-    await this.sessionRepository.delete(sessionId);
+    await this.sessionRepository.delete(companyId, sessionId);
   }
 
   // ────────────────────────────────────────────────
@@ -317,12 +338,12 @@ export class WhatsAppService {
     sessionId: string,
     queueId: string | null,
   ) {
-    const session = await this.sessionRepository.findOne(sessionId);
-    if (!session || session.companyId !== companyId) {
+    const session = await this.sessionRepository.findOne(companyId, sessionId);
+    if (!session) {
       throw new AppError("Session not found or unauthorized", 404);
     }
 
-    return this.sessionRepository.update(sessionId, {
+    return this.sessionRepository.update(companyId, sessionId, {
       defaultQueue: queueId
         ? { connect: { id: queueId } }
         : { disconnect: true },
@@ -361,7 +382,7 @@ export class WhatsAppService {
     sessionId: string,
     to: string,
     content: string,
-    options: SendMessageOptions,
+    options: SendMessageOptions & { dbId?: string },
   ) {
     return this.messaging.executeQueuedMessage(sessionId, to, content, options);
   }

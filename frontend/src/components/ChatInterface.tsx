@@ -78,6 +78,55 @@ interface TagBadgeProps {
   className?: string;
 }
 
+const isNewDay = (prevDate: string | Date | undefined, currDate: string | Date | undefined) => {
+  if (!currDate || isNaN(new Date(currDate).getTime())) return false; // 🛡️ Fix: Don't show divider for invalid current dates
+  if (!prevDate || isNaN(new Date(prevDate).getTime())) return true;
+  const d1 = new Date(prevDate);
+  const d2 = new Date(currDate);
+  return d1.toDateString() !== d2.toDateString();
+};
+
+const DateDivider: React.FC<{ timestamp: string | Date }> = ({ timestamp }) => {
+  const formatDate = (date: string | Date) => {
+    const d = new Date(date);
+    const now = new Date();
+
+    if (isNaN(d.getTime())) return "Fecha desconocida";
+
+    // Normalize dates to midnight for comparison
+    const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayDate = new Date(nowDate);
+    yesterdayDate.setDate(nowDate.getDate() - 1);
+
+    if (dDate.getTime() === nowDate.getTime()) return "Hoy";
+    if (dDate.getTime() === yesterdayDate.getTime()) return "Ayer";
+
+    const diffTime = nowDate.getTime() - dDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 7 && diffDays > 0) {
+      return d
+        .toLocaleDateString("es-ES", { weekday: "long" })
+        .replace(/^\w/, (c) => c.toUpperCase());
+    }
+
+    return d.toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    });
+  };
+
+  return (
+    <div className="flex items-center justify-center my-3 sticky top-2 z-10 pointer-events-none">
+      <div className="bg-gray-100/80 dark:bg-[#1f2c34]/80 backdrop-blur-sm px-3 py-1 rounded border-transparent dark:border-white/5 shadow-sm text-[10.5px] text-gray-500 dark:text-gray-400 font-medium pointer-events-auto leading-none">
+        {formatDate(timestamp)}
+      </div>
+    </div>
+  );
+};
+
 const TagBadge: React.FC<TagBadgeProps> = ({ tag, className = "" }) => {
   const getTagColors = (
     tailwindClass: string,
@@ -122,7 +171,7 @@ interface Props {
   onBack?: () => void;
   onContactUpdate?: (contact: Contact) => void;
   /** ? 100-YEAR FIX: Optimistic Update Callback */
-  onTicketUpdate?: (ticketId: string, updates: any) => void;
+  onTicketUpdate?: (ticketId: string, updates: Record<string, unknown>) => void;
 }
 
 export const ChatInterface: React.FC<Props> = ({
@@ -147,6 +196,7 @@ export const ChatInterface: React.FC<Props> = ({
 
   /* New State for Dynamic SLA Timer */
   const [lastInteraction, setLastInteraction] = useState<Date>(new Date());
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Action Modals State
   const [actionModalType, setActionModalType] = useState<
@@ -282,6 +332,263 @@ export const ChatInterface: React.FC<Props> = ({
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashFiltered, setSlashFiltered] = useState<QuickReply[]>([]);
 
+  // 🛡️ REFACTORED CONVERSATION LOADER
+  const fetchConversation = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${API_BASE_URL}/conversations/${activeContact.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const data = await res.json();
+
+      if (data.status === "success" && data.data.conversation) {
+        const conv = data.data.conversation;
+        const userParticipantId = conv.participants?.find(
+          (p: { role: string; id: string }) => p.role === "USER",
+        )?.id;
+
+        // Map backend messages to frontend format
+        const history = conv.messages.map(
+          (
+            m: {
+              id: string;
+              direction?: string;
+              content?: string;
+              createdAt?: string | Date;
+              timestamp?: string | Date;
+              senderId?: string;
+              sender?: { role?: string; email?: string; name?: string };
+              metadata?: {
+                aiGenerated?: boolean;
+                media?: unknown;
+                mediaType?: string;
+                mediaFilename?: string;
+                attachment?: unknown;
+                source?: string;
+                reaction?: string;
+              };
+              attachment?: unknown;
+              reactions?: { reactBy: string; content: string }[];
+            },
+            index: number,
+          ) => {
+            let type = SenderType.AGENT;
+            const dir = (m.direction || "").toUpperCase();
+
+            if (m.metadata?.aiGenerated) {
+              type = SenderType.AGENT;
+            } else if (dir === "INBOUND") {
+              type = SenderType.USER;
+            } else if (dir === "OUTBOUND") {
+              if (
+                m.sender?.role === "AGENT" ||
+                m.sender?.email?.includes("@reply.bot")
+              ) {
+                type = SenderType.AGENT;
+              } else if (
+                m.senderId === userParticipantId ||
+                m.senderId === activeContact.id
+              ) {
+                type = SenderType.USER;
+              } else {
+                type = SenderType.AGENT;
+              }
+            } else {
+              if (
+                m.senderId === userParticipantId ||
+                m.senderId === activeContact.id ||
+                m.senderId === activeContact.realContactId
+              ) {
+                type = SenderType.USER;
+              } else {
+                type = SenderType.AGENT;
+              }
+            }
+
+            // 🛡️ HISTORY SYNC: Synthetic attachment placeholder
+            const rawContent = m.content || "";
+            const existingAttachment =
+              m.metadata?.media || m.attachment || m.metadata?.attachment;
+            let syntheticAttachment: Record<string, string> | null = null;
+            if (!existingAttachment) {
+              // 🚀 PRIMARY: Use metadata.mediaType stored by backend sync
+              const mediaType = m.metadata?.mediaType as string | undefined;
+              if (mediaType) {
+                const mediaTypeMap: Record<
+                  string,
+                  { type: string; name: string }
+                > = {
+                  image: { type: "image_unavailable", name: "Imagen" },
+                  video: { type: "video_unavailable", name: "Video" },
+                  audio: { type: "audio_unavailable", name: "Nota de voz" },
+                  document: {
+                    type: "document_unavailable",
+                    name: (m.metadata?.mediaFilename as string) || "Documento",
+                  },
+                  sticker: { type: "image_unavailable", name: "Sticker" },
+                  contact: { type: "document_unavailable", name: "Contacto" },
+                  location: { type: "document_unavailable", name: "Ubicación" },
+                };
+                const mapped = mediaTypeMap[mediaType];
+                if (mapped) {
+                  syntheticAttachment = {
+                    type: mapped.type,
+                    name: mapped.name,
+                  };
+                }
+              }
+              // 🛡️ FALLBACK: Regex for legacy messages synced before mediaType was stored
+              if (!syntheticAttachment && rawContent) {
+                const lc = rawContent.trim().toLowerCase();
+                const stripped = lc
+                  .replace(/[\[\]\s📷🎬🎤📄📎]/gu, "")
+                  .toLowerCase();
+
+                const isImagePlaceholder =
+                  /imagen|imagem|image|foto|photo/.test(stripped) &&
+                  rawContent.length < 50;
+                const isVideoPlaceholder =
+                  /video|vídeo/.test(stripped) && rawContent.length < 50;
+                const isAudioPlaceholder =
+                  /audio|voz|voice|nota.*voz|voice.*note|ogg|m4a|opus/.test(
+                    stripped,
+                  ) && rawContent.length < 50;
+                const isDocPlaceholder =
+                  /doc|documento|pdf|archivo|sticker|\\.(pdf|doc|docx|xls|xlsx|ppt|zip)/.test(
+                    stripped,
+                  ) ||
+                  rawContent
+                    .trim()
+                    .match(/\.(pdf|docx?|xlsx?|pptx?|zip|rar)$/i) !== null;
+
+                if (isImagePlaceholder)
+                  syntheticAttachment = {
+                    type: "image_unavailable",
+                    name: "Imagen",
+                  };
+                else if (isVideoPlaceholder)
+                  syntheticAttachment = {
+                    type: "video_unavailable",
+                    name: "Video",
+                  };
+                else if (isAudioPlaceholder)
+                  syntheticAttachment = {
+                    type: "audio_unavailable",
+                    name: "Nota de voz",
+                  };
+                else if (isDocPlaceholder)
+                  syntheticAttachment = {
+                    type: "document_unavailable",
+                    name:
+                      rawContent.replace(/[[\]📄📷🎬🎤📎]/gu, "").trim() ||
+                      "Documento",
+                  };
+              }
+            }
+
+            return {
+              id: m.id,
+              ticketId: activeContact.id,
+              companyId: activeContact.companyId,
+              content: m.content,
+              senderType: type,
+              timestamp: m.createdAt || m.timestamp || new Date(),
+              senderName:
+                m.sender?.name ||
+                (type === SenderType.USER ? activeContact.name : "You"),
+              attachment:
+                existingAttachment || syntheticAttachment || undefined,
+              metadata: m.metadata,
+              // ❤️ FIX: Include reactions from backend (Prisma include)
+              reactions: m.reactions && m.reactions.length > 0
+                ? m.reactions
+                : undefined,
+            };
+          },
+        );
+
+        const sortedHistory = history.sort(
+          (a: Record<string, unknown>, b: Record<string, unknown>) =>
+            new Date(a.timestamp as string | number | Date).getTime() -
+            new Date(b.timestamp as string | number | Date).getTime(),
+        );
+
+        setMessages(
+          sortedHistory.filter(
+            (m: Record<string, unknown>) => m.id,
+          ) as Message[],
+        );
+
+        if (conv.tags && Array.isArray(conv.tags)) {
+          setContactTags(conv.tags);
+          setDisplayContact((prev) => ({ ...prev, tags: conv.tags }));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch history", error);
+    }
+  }, [activeContact.id, activeContact.companyId, activeContact.name]);
+
+  // 🔄 MANUAL SYNC HANDLER
+  const handleSyncHistory = async () => {
+    if (isSyncing) return;
+
+    try {
+      const sanitizedPhone = activeContact.channelId?.replace(/\D/g, "");
+      if (!sanitizedPhone) {
+        toast.error("No se encontró un número de teléfono para sincronizar.");
+        return;
+      }
+
+      setIsSyncing(true);
+      const toastId = toast.loading("🔄 Sincronizando historial extendido desde WhatsApp...");
+
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${API_BASE_URL}/whatsapp/sync/conversation/${sanitizedPhone}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ limit: 500 }), // 🚀 Extended limit: up to 500 messages
+        },
+      );
+
+      const data = await res.json();
+      if (data.status === "success") {
+        toast.dismiss(toastId);
+        const synced = data.data.synced ?? 0;
+        const totalFound = data.data.totalFound ?? 0;
+        if (synced > 0) {
+          toast.success(
+            `✅ ${synced} mensajes nuevos cargados (${totalFound} encontrados en historial).`,
+            { duration: 5000 },
+          );
+        } else {
+          toast.info(
+            `ℹ️ Ya estás al día. No hay mensajes nuevos en el historial.`,
+            { duration: 4000 },
+          );
+        }
+        fetchConversation();
+      } else {
+        throw new Error(data.message || "Error al sincronizar");
+      }
+    } catch (error: unknown) {
+      toast.dismiss();
+      toast.error(
+        `Error: ${error instanceof Error ? error.message : "Desconocido"}`,
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Load Quick Replies for Slash Commands
   useEffect(() => {
     quickRepliesService
@@ -317,150 +624,25 @@ export const ChatInterface: React.FC<Props> = ({
   }, []);
 
   // Load initial history & tags
+  // Load initial history & tags
   useEffect(() => {
-    const fetchConversation = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(
-          `${API_BASE_URL}/conversations/${activeContact.id}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-        const data = await res.json();
-
-        if (data.status === "success" && data.data.conversation) {
-          const conv = data.data.conversation;
-          const userParticipantId = conv.participants?.find(
-            (p: any) => p.role === "USER",
-          )?.id;
-
-          // Map backend messages to frontend format
-          const history = conv.messages.map((m: any, index: number) => {
-            // âœ… IMPROVED: Determine senderType based on direction AND sender.role
-            let type = SenderType.AGENT;
-            const dir = (m.direction || "").toUpperCase();
-
-            // DEBUG LOGGING
-            if (index === 0)
-              console.log("ï¿½ï¿½ [First Message Debug]", {
-                id: m.id,
-                content: m.content,
-                direction: m.direction,
-                senderId: m.senderId,
-                senderRole: m.sender?.role,
-                metadata: m.metadata,
-                userParticipantId,
-              });
-
-            // ï¿½ï¿½ CRITICAL FIX: Check metadata for AI-generated messages
-            if (m.metadata?.aiGenerated) {
-              type = SenderType.AGENT;
-            } else if (dir === "INBOUND") {
-              type = SenderType.USER;
-            } else if (dir === "OUTBOUND") {
-              // Check if sender is the bot/agent
-              if (
-                m.sender?.role === "AGENT" ||
-                m.sender?.email?.includes("@reply.bot")
-              ) {
-                type = SenderType.AGENT;
-              } else if (
-                m.senderId === userParticipantId ||
-                m.senderId === activeContact.id
-              ) {
-                type = SenderType.USER;
-              } else {
-                type = SenderType.AGENT;
-              }
-            } else {
-              // Robust Fallback
-              if (
-                m.senderId === userParticipantId ||
-                m.senderId === activeContact.id ||
-                m.senderId === activeContact.realContactId
-              ) {
-                type = SenderType.USER;
-              } else {
-                type = SenderType.AGENT;
-              }
-            }
-
-            return {
-              id: m.id,
-              ticketId: activeContact.id,
-              companyId: activeContact.companyId,
-              content: m.content,
-              senderType: type,
-              timestamp: m.createdAt,
-              senderName:
-                type === SenderType.USER
-                  ? activeContact.name
-                  : m.metadata?.aiAssistantName || "You",
-              attachment:
-                m.metadata?.media || m.attachment || m.metadata?.attachment,
-              metadata: m.metadata,
-            };
-          });
-
-          // âœ… CRITICAL: Sort messages chronologically (oldest first)
-          const sortedHistory = history.sort(
-            (a: any, b: any) =>
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-          );
-
-          setMessages(sortedHistory.filter((m: any) => m.id));
-
-          // ï¿½ï¿½ SAVE TO CACHE for offline access
-          messageCacheService
-            .saveMessages(activeContact.id, sortedHistory)
-            .catch((err) => console.error("[Cache] Failed to save:", err));
-
-          if (conv.tags && Array.isArray(conv.tags)) {
-            setContactTags(conv.tags);
-            setDisplayContact((prev) => ({ ...prev, tags: conv.tags })); // âœ… SYNC Header UI with fetched tags
-            // ? 100-YEAR FIX: Propagate tags to parent (AgentWorkspace) to prevent overwriting with stale props
-            if (onTicketUpdate) {
-              onTicketUpdate(activeContact.id, { tags: conv.tags });
-            }
-          }
-          if (conv.priority) {
-            setCurrentPriority(conv.priority);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch history", error);
-        // Fallback to last message if fetch fails
-        setMessages([
-          {
-            id: "init-1",
-            ticketId: activeContact.id,
-            companyId: activeContact.companyId,
-            content: activeContact.lastMessage,
-            senderType: SenderType.USER,
-            timestamp: activeContact.lastMessageTime,
-            senderName: activeContact.name,
-          },
-        ]);
-      }
-    };
-
     fetchConversation();
     setContactTags(activeContact.tags || []);
     setSentiment("Neutral");
     setIsCopied(false);
 
-    // âœ… SYNC TIMER ON LOAD
     if (activeContact.lastMessageTime) {
       setLastInteraction(new Date(activeContact.lastMessageTime));
     } else {
       setLastInteraction(new Date());
     }
-  }, [activeContact.id]); //  100-YEAR FIX: Only re-fetch when ID changes, not on every object reference update
+  }, [fetchConversation, activeContact.tags, activeContact.lastMessageTime]);
 
   // Socket Listener
   useEffect(() => {
+    let isActiveContext = true;
     setIsRemoteTyping(false); // ? Reset typing status on chat switch
+
     // 1. Define Message Handler
     const handleIncomingMessage = (
       msg: Message & { conversationId?: string },
@@ -475,11 +657,16 @@ export const ChatInterface: React.FC<Props> = ({
         ...msg,
         ticketId: msgTicketId,
         // Map createdAt -> timestamp (backend uses createdAt)
-        timestamp: msg.timestamp || (msg as any).createdAt || new Date(),
+        timestamp:
+          msg.timestamp ||
+          ((msg as unknown as Record<string, unknown>).createdAt as
+            | string
+            | Date) ||
+          new Date(),
         // Normalize senderType based on direction
         senderType:
           msg.senderType ||
-          ((msg as any).direction === "OUTBOUND"
+          ((msg as unknown as Record<string, unknown>).direction === "OUTBOUND"
             ? SenderType.AGENT
             : SenderType.USER),
         companyId: msg.companyId || activeContact.companyId,
@@ -487,74 +674,84 @@ export const ChatInterface: React.FC<Props> = ({
         // Without this, Socket.IO replaces the optimistic message and the image disappears.
         attachment:
           msg.attachment ||
-          (msg as any).metadata?.media ||
-          (msg as any).metadata?.attachment,
+          (
+            msg as unknown as {
+              metadata?: {
+                media?: Message["attachment"];
+                attachment?: Message["attachment"];
+              };
+            }
+          ).metadata?.media ||
+          (
+            msg as unknown as {
+              metadata?: {
+                media?: Message["attachment"];
+                attachment?: Message["attachment"];
+              };
+            }
+          ).metadata?.attachment,
       };
 
-      setMessages((prev) => {
-        // Check if message already exists (by ID)
-        const existingIndex = prev.findIndex((m) => m.id === processedMsg.id);
+      if (isActiveContext) {
+        setMessages((prev) => {
+          // Check if message already exists (by ID)
+          const existingIndex = prev.findIndex((m) => m.id === processedMsg.id);
 
-        if (existingIndex !== -1) {
-          return prev;
-        }
-
-        //  ATOMIC REPLACEMENT: Find SPECIFIC temp message by content match
-        // This prevents replacing the wrong temp message if multiple are in flight
-        let optimisticIndex = prev.findIndex(
-          (m) =>
-            m.id &&
-            m.id.startsWith("temp-") &&
-            m.content?.trim() === processedMsg.content?.trim(),
-        );
-
-        // Fallback: If no exact content match, assume FIFO (First-In-First-Out)
-        // This handles cases where content might be slightly modified by backend or simple race conditions
-        if (optimisticIndex === -1) {
-          const tempMessages = prev
-            .map((m, idx) => ({ ...m, idx }))
-            .filter((m) => m.id && m.id.startsWith("temp-"));
-
-          if (tempMessages.length > 0) {
-            // ? FIFO STRATEGY: Replace the oldest temp message
-            // We assume socket ACKs usually come in order
-            optimisticIndex = tempMessages[0].idx;
+          if (existingIndex !== -1) {
+            return prev;
           }
-        }
 
-        if (optimisticIndex !== -1) {
-          console.log(
-            "[Socket]  Replacing temp:",
-            prev[optimisticIndex].id,
-            "->",
-            processedMsg.id,
+          //  ATOMIC REPLACEMENT: Find SPECIFIC temp message by content match
+          let optimisticIndex = prev.findIndex(
+            (m) =>
+              m.id &&
+              m.id.startsWith("temp-") &&
+              m.content?.trim() === processedMsg.content?.trim(),
           );
-          const updated = [...prev];
-          updated[optimisticIndex] = processedMsg;
-          return updated;
+
+          if (optimisticIndex === -1) {
+            const tempMessages = prev
+              .map((m, idx) => ({ ...m, idx }))
+              .filter((m) => m.id && m.id.startsWith("temp-"));
+
+            if (tempMessages.length > 0) {
+              optimisticIndex = tempMessages[0].idx;
+            }
+          }
+
+          if (optimisticIndex !== -1) {
+            console.log(
+              "[Socket]  Replacing temp:",
+              prev[optimisticIndex].id,
+              "->",
+              processedMsg.id,
+            );
+            const updated = [...prev];
+            updated[optimisticIndex] = processedMsg;
+            return updated;
+          }
+
+          console.log("[ChatInterface] ? Message appended:", processedMsg.id);
+          const newState = [...prev, processedMsg];
+          return Array.from(new Map(newState.map((m) => [m.id, m])).values());
+        });
+
+        // Trigger scroll
+        if (chatEndRef.current) {
+          setTimeout(
+            () => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }),
+            100,
+          );
         }
 
-        console.log("[ChatInterface] ? Message appended:", processedMsg.id);
-        const newState = [...prev, processedMsg];
-        //  NUCLEAR OPTION: Enforce uniqueness by ID
-        return Array.from(new Map(newState.map((m) => [m.id, m])).values());
-      });
-
-      // Trigger scroll
-      if (chatEndRef.current) {
-        setTimeout(
-          () => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }),
-          100,
-        );
+        // âœ… UPDATE TIMER ON INBOUND
+        setLastInteraction(new Date());
       }
-
-      // âœ… UPDATE TIMER ON INBOUND
-      setLastInteraction(new Date());
     };
 
     // 2. Define Join Function
     const joinRoom = () => {
-      if (!activeContact.id) return;
+      if (!activeContact.id || !isActiveContext) return;
 
       console.log(
         `[ChatInterface] ï¿½ï¿½ Joining conversation room: ${activeContact.id}`,
@@ -564,43 +761,67 @@ export const ChatInterface: React.FC<Props> = ({
 
     // 3. Define Connect/Disconnect Handlers
     const handleConnect = () => {
-      console.log("[ChatInterface] ï¿½ï¿½ Socket Connected");
+      if (!isActiveContext) return;
+      console.log("[ChatInterface] 📡 Socket Connected");
       setSocketStatus("connected");
       joinRoom(); // Re-join on reconnect
     };
 
     const handleDisconnect = () => {
-      console.log("[ChatInterface] ï¿½ï¿½ Socket Disconnected");
+      if (!isActiveContext) return;
+      console.log("[ChatInterface] 📡 Socket Disconnected");
       setSocketStatus("disconnected");
     };
 
+    /**
+     * SYNC HANDLERS
+     */
+    const handleSyncStarted = (data: { conversationId: string }) => {
+      if (data.conversationId === activeContact.id) {
+        setIsSyncing(true);
+      }
+    };
+
+    const handleHistorySynced = (data: {
+      conversationId: string;
+      channelId?: string;
+      newMessages: number;
+    }) => {
+      if (data.conversationId === activeContact.id) {
+        setIsSyncing(false);
+        if (data.newMessages > 0) {
+          console.log(`[ContextSync] 🚀 ${data.newMessages} messages synced, reloading...`);
+          toast.info(`📜 ${data.newMessages} mensajes históricos cargados`);
+          fetchConversation();
+        }
+      }
+    };
+
     // 4. Setup Listeners
-    // FIX: Match backend event name 'conversation.new_message'
     socketService.on("conversation.new_message", handleIncomingMessage);
     socketService.on("connect", handleConnect);
     socketService.on("disconnect", handleDisconnect);
+    socketService.on("sync:started", handleSyncStarted);
+    socketService.on("conversation:history_synced", handleHistorySynced);
 
     // 5. Initial Actions
-    // @ts-ignore - Check internal state if possible, or just emit blindly (safe in Socket.io)
-    if (socketService.socket?.connected) {
+    if (socketService.isConnected) {
       setSocketStatus("connected");
       joinRoom();
     } else {
-      // Force connect if needed
       socketService.connect();
     }
 
     // 6. Typing Indicators
-    //  CUSTOMER TYPING (WhatsApp -> CRM)
-    //  CUSTOMER TYPING (WhatsApp -> CRM)
-    // We use the normalized event from MessageHandler which handles LIDs and Phone mapping
+    // Moved sync handlers up
+
     const handleConversationTyping = (data: {
+
       conversationId: string;
       from: string;
       status: "composing" | "recording" | "paused";
     }) => {
-      // Robust check: Ensure event belongs to this conversation
-      // We check the raw phone string inside `data.from` (JID) because conversationId (UUID) mismatch
+      if (!isActiveContext) return;
       if (
         data.conversationId === activeContact.id ||
         (activeContact.phone && data.from.includes(activeContact.phone)) ||
@@ -608,8 +829,9 @@ export const ChatInterface: React.FC<Props> = ({
       ) {
         if (data.status === "composing" || data.status === "recording") {
           setIsRemoteTyping(true);
-          // Safety timeout (clears if no 'paused' event received)
-          setTimeout(() => setIsRemoteTyping(false), 10000);
+          setTimeout(() => {
+            if (isActiveContext) setIsRemoteTyping(false);
+          }, 10000);
         } else {
           setIsRemoteTyping(false);
         }
@@ -617,12 +839,12 @@ export const ChatInterface: React.FC<Props> = ({
     };
     socketService.on("conversation:typing", handleConversationTyping);
 
-    //  AGENT TYPING (Other agents -> CRM)
     const handleAgentTyping = (data: {
       ticketId: string;
       agentId: string;
       agentName: string;
     }) => {
+      if (!isActiveContext) return;
       if (data.ticketId === activeContact.id) {
         setOtherAgentsTyping((prev) => {
           if (prev.some((a) => a.agentId === data.agentId)) return prev;
@@ -633,10 +855,12 @@ export const ChatInterface: React.FC<Props> = ({
         });
       }
     };
+
     const handleAgentStoppedTyping = (data: {
       ticketId: string;
       agentId: string;
     }) => {
+      if (!isActiveContext) return;
       if (data.ticketId === activeContact.id) {
         setOtherAgentsTyping((prev) =>
           prev.filter((a) => a.agentId !== data.agentId),
@@ -646,96 +870,92 @@ export const ChatInterface: React.FC<Props> = ({
     socketService.on("agent.typing", handleAgentTyping);
     socketService.on("agent.stopped_typing", handleAgentStoppedTyping);
 
-    // 🚀 CONTEXT SYNC: Listen for JIT history backfill completion
-    const handleHistorySynced = (data: {
+    // 🚀 CONTEXT SYNC: Implementation moved to main sync handlers block
+
+    // 🗑️ MESSAGE REVOCATION: Real-time "Delete for Everyone"
+    const handleMessageRevoked = (data: {
+      messageId: string;
       conversationId: string;
-      channelId?: string;
-      newMessages: number;
+      content?: string;
+      status?: Message["status"];
     }) => {
-      if (
-        (data.conversationId === activeContact.id ||
-          data.channelId === activeContact.phone ||
-          data.channelId === activeContact.channelId) &&
-        data.newMessages > 0
-      ) {
-        console.log(
-          `[ContextSync] 🚀 ${data.newMessages} historical messages synced, reloading...`,
-        );
-        toast.info(`📜 ${data.newMessages} mensajes históricos cargados`, {
-          duration: 3000,
-        });
-        // Re-fetch conversation to get the new messages
-        const token = localStorage.getItem("token");
-        fetch(`${API_BASE_URL}/conversations/${activeContact.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.status === "success" && data.data.conversation) {
-              const conv = data.data.conversation;
-              const userParticipantId = conv.participants?.find(
-                (p: any) => p.role === "USER",
-              )?.id;
-
-              const history = conv.messages.map((m: any) => {
-                let type = SenderType.AGENT;
-                const dir = (m.direction || "").toUpperCase();
-                if (m.metadata?.aiGenerated) {
-                  type = SenderType.AGENT;
-                } else if (dir === "INBOUND") {
-                  type = SenderType.USER;
-                } else if (dir === "OUTBOUND") {
-                  type = SenderType.AGENT;
-                } else if (
-                  m.senderId === userParticipantId ||
-                  m.senderId === activeContact.id
-                ) {
-                  type = SenderType.USER;
-                }
-                return {
-                  id: m.id,
-                  ticketId: activeContact.id,
-                  companyId: activeContact.companyId,
-                  content: m.content,
-                  senderType: type,
-                  timestamp: m.createdAt,
-                  senderName:
-                    type === SenderType.USER
-                      ? activeContact.name
-                      : m.metadata?.aiAssistantName || "You",
-                  attachment:
-                    m.metadata?.media || m.attachment || m.metadata?.attachment,
-                  metadata: m.metadata,
-                };
-              });
-
-              const sorted = history.sort(
-                (a: any, b: any) =>
-                  new Date(a.timestamp).getTime() -
-                  new Date(b.timestamp).getTime(),
-              );
-              setMessages(sorted.filter((m: any) => m.id));
-            }
-          })
-          .catch((err) =>
-            console.error("[ContextSync] Failed to reload:", err),
-          );
-      }
+      if (!isActiveContext) return;
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === data.messageId
+            ? {
+                ...msg,
+                content: data.content || "🚫 Este mensaje fue eliminado",
+                status: (data.status || "REVOKED") as Message["status"],
+                attachment: undefined,
+                metadata: {
+                  ...(msg.metadata || {}),
+                  revoked: true,
+                },
+              }
+            : msg,
+        ),
+      );
     };
-    socketService.on("conversation:history_synced", handleHistorySynced);
+    socketService.on("message.revoked", handleMessageRevoked);
+
+    // ❤️ MESSAGE REACTIONS: Emojis on bubbles
+    const handleMessageReaction = (data: {
+      messageId: string;
+      conversationId: string;
+      reaction: string;
+      participant: string;
+    }) => {
+      if (!isActiveContext) return;
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== data.messageId) return msg;
+
+          let newReactions = [...(msg.reactions || [])];
+          if (!data.reaction) {
+            // Remove reaction
+            newReactions = newReactions.filter(
+              (r) => r.reactBy !== data.participant,
+            );
+          } else {
+            // Upsert reaction
+            const existingIdx = newReactions.findIndex(
+              (r) => r.reactBy === data.participant,
+            );
+            if (existingIdx !== -1) {
+              newReactions[existingIdx].content = data.reaction;
+            } else {
+              newReactions.push({
+                reactBy: data.participant,
+                content: data.reaction,
+              });
+            }
+          }
+
+          return { ...msg, reactions: newReactions };
+        }),
+      );
+    };
+    socketService.on("message.reaction", handleMessageReaction);
 
     // 7. Cleanup
     return () => {
+      isActiveContext = false;
       console.log(
         `[ChatInterface]  Cleaning up listeners for ${activeContact.id}`,
       );
       socketService.off("conversation.new_message", handleIncomingMessage);
       socketService.off("connect", handleConnect);
       socketService.off("disconnect", handleDisconnect);
+      socketService.off("sync:started", handleSyncStarted);
+      socketService.off("conversation:history_synced", handleHistorySynced);
       socketService.off("conversation:typing", handleConversationTyping);
+
+
       socketService.off("agent.typing", handleAgentTyping);
       socketService.off("agent.stopped_typing", handleAgentStoppedTyping);
-      socketService.off("conversation:history_synced", handleHistorySynced);
+      socketService.off("message.revoked", handleMessageRevoked);
+      socketService.off("message.reaction", handleMessageReaction);
     };
   }, [activeContact.id]); // Re-run ONLY when activeContact.id changes
 
@@ -813,15 +1033,20 @@ export const ChatInterface: React.FC<Props> = ({
           quotedMessageId: replyingTo.id,
           quotedContent:
             replyingTo.content ||
-            (replyingTo as any).attachment?.name ||
+            (replyingTo as Message & { attachment?: { name?: string } })
+              .attachment?.name ||
             "Mensaje multimedia",
         }
       : {};
     setReplyingTo(null);
 
     // Prepare attachment promise
-    let attachmentPromise: Promise<any> | null = null;
-    let optimisticAttachment: any = null;
+    let attachmentPromise: Promise<{
+      mediaContent?: string;
+      type?: string;
+      name?: string;
+    }> | null = null;
+    let optimisticAttachment: Message["attachment"] | undefined = undefined;
 
     if (fileToSend) {
       // Create optimistic attachment
@@ -834,7 +1059,7 @@ export const ChatInterface: React.FC<Props> = ({
         type,
         url: URL.createObjectURL(fileToSend), // Local preview URL
         name: fileToSend.name,
-        mimetype: fileToSend.type,
+        mimeType: fileToSend.type,
       };
 
       // Upload to Server (100-Year Solution: Store File, Send URL)
@@ -847,7 +1072,7 @@ export const ChatInterface: React.FC<Props> = ({
         type: type,
         url: media.url,
         name: media.originalName,
-        mimetype: media.mimeType,
+        mimeType: media.mimeType,
       }));
     }
 
@@ -908,7 +1133,8 @@ export const ChatInterface: React.FC<Props> = ({
       // Prevents processing same message twice if both API and Socket arrive simultaneously
       const dedupeKey = `reconcile-${serverMsg.id}`;
       const now = Date.now();
-      const lastRun = (window as any)[dedupeKey] || 0;
+      const lastRun =
+        (window as unknown as Record<string, number>)[dedupeKey] || 0;
 
       if (now - lastRun < 50) {
         console.log(
@@ -916,7 +1142,7 @@ export const ChatInterface: React.FC<Props> = ({
         );
         return;
       }
-      (window as any)[dedupeKey] = now;
+      (window as unknown as Record<string, number>)[dedupeKey] = now;
 
       // Race Condition Protection
       // Only replace optimistic message if Socket.IO hasn't already done it
@@ -946,16 +1172,18 @@ export const ChatInterface: React.FC<Props> = ({
                 companyId: activeContact.companyId,
                 content: serverMsg.content,
                 senderType: SenderType.AGENT,
-                timestamp: serverMsg.createdAt,
+                timestamp: serverMsg.timestamp || serverMsg.createdAt || new Date(),
                 senderName: "You",
                 attachment: finalAttachment,
               }
             : m,
         );
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error sending message:", error);
-      toast.error(`Error al enviar: ${error.message}`);
+      toast.error(
+        `Error al enviar: ${error instanceof Error ? error.message : "Desconocido"}`,
+      );
       setMessages((prev) => prev.filter((m) => m.id !== tempId)); // Rollback
       setInputValue(content);
       setSelectedFile(fileToSend); // Restore file
@@ -1108,7 +1336,19 @@ export const ChatInterface: React.FC<Props> = ({
     }
   };
 
-  const handleProductSelect = async (product: any) => {
+  const handleProductSelect = async (product: {
+    id: string;
+    name: string;
+    price: number;
+    currency?: string;
+    description?: string;
+    imageUrl?: string;
+    stock?: number;
+    status?: string;
+    companyId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }) => {
     setActionModalType(null);
 
     const token = localStorage.getItem("token");
@@ -1256,7 +1496,9 @@ export const ChatInterface: React.FC<Props> = ({
   );
 
   const handleTypingIndicator = useCallback(() => {
-    const remoteId = (activeContact as any).phone || activeContact.channelId;
+    const remoteId =
+      (activeContact as Contact & { phone?: string }).phone ||
+      activeContact.channelId;
     if (!remoteId) return;
 
     debouncedTypingEmit(remoteId);
@@ -1330,7 +1572,9 @@ export const ChatInterface: React.FC<Props> = ({
     setIsRecording(false);
 
     //  Stop recording status
-    const remoteId = (activeContact as any).phone || activeContact.channelId;
+    const remoteId =
+      (activeContact as Contact & { phone?: string }).phone ||
+      activeContact.channelId;
     if (remoteId) {
       socketService.emit("conversation:typing", {
         to: remoteId,
@@ -1524,7 +1768,7 @@ export const ChatInterface: React.FC<Props> = ({
       // Assuming standard PATCH:
       await transferTicket(
         activeContact.ticketId || activeContact.id,
-        payload as any,
+        payload as TransferTicketDTO,
       );
 
       // ? 100-YEAR FIX: Optimistic Update to Parent
@@ -1558,7 +1802,7 @@ export const ChatInterface: React.FC<Props> = ({
     setIsResolving(true);
     try {
       await resolveTicket(ticketId, {
-        status: "RESOLVED",
+        status: type === "SPAM" ? "CLOSED" : "RESOLVED",
         resolutionType: type as ResolutionType,
         resolutionNotes: notes,
       });
@@ -1567,9 +1811,11 @@ export const ChatInterface: React.FC<Props> = ({
       setShowResolveModal(false);
 
       if (onBack) onBack();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Resolve failed", error);
-      toast.error(error.message || "Error al resolver el ticket");
+      toast.error(
+        error instanceof Error ? error.message : "Error al resolver el ticket",
+      );
     } finally {
       setIsResolving(false);
     }
@@ -1632,6 +1878,7 @@ export const ChatInterface: React.FC<Props> = ({
               onTransfer={handleTransfer}
               onCopyChat={handleCopyChat}
               onTagsClick={() => setShowTagMenu(!showTagMenu)}
+              onSyncHistory={handleSyncHistory}
               isCopied={isCopied}
               socketStatus={socketStatus}
               onForceReconnect={async () => {
@@ -1664,7 +1911,8 @@ export const ChatInterface: React.FC<Props> = ({
                     // Ideally we find the session matching the conversation, but safe fallback is reconnect disconnected ones.
 
                     const targetSessions = sessions.filter(
-                      (s: any) => s.status === "DISCONNECTED",
+                      (s: { status: string; sessionId: string }) =>
+                        s.status === "DISCONNECTED",
                     );
 
                     if (targetSessions.length > 0) {
@@ -1708,7 +1956,9 @@ export const ChatInterface: React.FC<Props> = ({
                 toast.success("Ticket asignado correctamente");
               }}
               onChangePriority={(priority) =>
-                handleChangePriority(priority as any)
+                handleChangePriority(
+                  priority as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
+                )
               }
               currentPriority={currentPriority as "LOW" | "MEDIUM" | "HIGH"}
               agents={[]} // âœ… TODO: Obtener del backend
@@ -1813,11 +2063,24 @@ export const ChatInterface: React.FC<Props> = ({
           )}
 
           {/* ✅ LEVEL 3B: Chat Messages Area - flex: 1, overflow-y: auto (scroll independiente) */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden bg-reply-bg dark:bg-reply-bg-dark">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden bg-reply-bg dark:bg-reply-bg-dark relative">
+            {/* 🔄 SYNCING INDICATOR */}
+            {isSyncing && (
+              <div className="sticky top-0 left-0 right-0 z-50 bg-indigo-600/90 text-white py-1.5 px-4 text-center text-[11px] font-bold backdrop-blur-md flex items-center justify-center gap-2 animate-in slide-in-from-top duration-300">
+                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Sincronizando historial desde WhatsApp...</span>
+              </div>
+            )}
+
             <div className="p-3 sm:p-4 space-y-2">
+
               {useMemo(
                 () =>
                   messages.map((msg, index) => {
+                    const prevMsg = messages[index - 1];
+                    const showDateDivider =
+                      !prevMsg || isNewDay(prevMsg.timestamp, msg.timestamp);
+
                     const isUser =
                       msg.senderType === SenderType.USER &&
                       msg.direction !== "OUTBOUND";
@@ -1827,11 +2090,14 @@ export const ChatInterface: React.FC<Props> = ({
                       isAgent || isBot || msg.direction === "OUTBOUND";
 
                     return (
-                      <div
-                        key={`${msg.id}-${index}`}
-                        id={`msg-${msg.id}`}
-                        className={`flex ${isOutgoing ? "justify-end" : "justify-start"} mb-1.5 group/msg transition-all duration-300`}
-                      >
+                      <React.Fragment key={`${msg.id}-${index}`}>
+                        {showDateDivider && (
+                          <DateDivider timestamp={msg.timestamp} />
+                        )}
+                        <div
+                          id={`msg-${msg.id}`}
+                          className={`flex ${isOutgoing ? "justify-end" : "justify-start"} mb-1.5 group/msg transition-all duration-300`}
+                        >
                         <div
                           className={`max-w-[70%] rounded-xl px-3 py-2 relative shadow-sm text-sm leading-relaxed
                     ${
@@ -1847,24 +2113,26 @@ export const ChatInterface: React.FC<Props> = ({
                           }
                         >
                           {/* Quoted Message (Reply) */}
-                          {msg.metadata?.quotedMessageId && (
+                          {(msg.metadata?.quotedMessageId as string) && (
                             <div
                               onClick={() =>
-                                scrollToMessage(msg.metadata.quotedMessageId)
+                                scrollToMessage(
+                                  msg.metadata?.quotedMessageId as string,
+                                )
                               }
                               className={`mb-2 p-2 rounded-lg border-l-4 bg-black/5 dark:bg-white/5 backdrop-blur-sm cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${isOutgoing ? "border-white/40" : "border-indigo-500"}`}
                             >
                               <div
                                 className={`text-[10px] font-bold mb-0.5 ${isOutgoing ? "text-white/80" : "text-indigo-600 dark:text-indigo-400"}`}
                               >
-                                {msg.metadata.quotedContent
+                                {!!(msg.metadata?.quotedContent as string)
                                   ? "Respondiendo a:"
                                   : "Respondiendo a mensaje multimedia"}
                               </div>
                               <div
                                 className={`text-xs italic line-clamp-2 ${isOutgoing ? "text-white/70" : "text-gray-500 dark:text-gray-400"}`}
                               >
-                                {msg.metadata.quotedContent ||
+                                {(msg.metadata?.quotedContent as string) ||
                                   "Haga clic para ver el original"}
                               </div>
                             </div>
@@ -1875,327 +2143,593 @@ export const ChatInterface: React.FC<Props> = ({
                               ï¿½ï¿½ Agente IA
                             </div>
                           )}
-
-                          {/* Attachment Render */}
-                          {msg.attachment && (
-                            <div className="mb-2 mt-1">
-                              {msg.attachment.type === "image" ? (
-                                <img
-                                  src={
-                                    msg.attachment.url?.startsWith("http") ||
-                                    msg.attachment.url?.startsWith("data:") ||
-                                    msg.attachment.url?.startsWith("blob:")
-                                      ? msg.attachment.url
-                                      : `${BASE_URL}${msg.attachment.url || ""}`
-                                  }
-                                  alt="Adjunto"
-                                  onClick={() => {
-                                    if (msg.attachment?.url) {
-                                      setSelectedImage(
-                                        msg.attachment.url.startsWith("http") ||
-                                          msg.attachment.url.startsWith(
+                          {/* 🗑️ REVOKED MESSAGE: "Delete for Everyone" */}
+                          {Boolean(msg.metadata?.revoked) ? (
+                            <div className="flex items-center gap-2 py-1 opacity-70">
+                              <svg
+                                className="w-4 h-4 opacity-60"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                                />
+                              </svg>
+                              <span className="text-xs italic">
+                                Este mensaje fue eliminado
+                              </span>
+                            </div>
+                          ) : (
+                            <>
+                              {/* Attachment Render */}
+                              {msg.attachment && (
+                                <div className="mb-2 mt-1">
+                                  {msg.attachment.type === "image" ? (
+                                    <img
+                                      src={
+                                        msg.attachment.url?.startsWith(
+                                          "http",
+                                        ) ||
+                                        msg.attachment.url?.startsWith(
+                                          "data:",
+                                        ) ||
+                                        msg.attachment.url?.startsWith("blob:")
+                                          ? msg.attachment.url
+                                          : `${BASE_URL}${msg.attachment.url || ""}`
+                                      }
+                                      alt="Adjunto"
+                                      onClick={() => {
+                                        if (msg.attachment?.url) {
+                                          setSelectedImage(
+                                            msg.attachment.url.startsWith(
+                                              "http",
+                                            ) ||
+                                              msg.attachment.url.startsWith(
+                                                "data:",
+                                              ) ||
+                                              msg.attachment.url.startsWith(
+                                                "blob:",
+                                              )
+                                              ? msg.attachment.url
+                                              : `${BASE_URL}${msg.attachment.url}`,
+                                          );
+                                        }
+                                      }}
+                                      className="rounded-lg max-h-64 object-cover border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
+                                    />
+                                  ) : msg.attachment.type === "video" ? (
+                                    <video
+                                      src={
+                                        msg.attachment.url?.startsWith(
+                                          "http",
+                                        ) ||
+                                        msg.attachment.url?.startsWith(
+                                          "data:",
+                                        ) ||
+                                        msg.attachment.url?.startsWith("blob:")
+                                          ? msg.attachment.url
+                                          : `${BASE_URL}${msg.attachment.url || ""}`
+                                      }
+                                      controls
+                                      className="rounded-lg max-h-64 border border-white/20"
+                                    />
+                                  ) : msg.attachment.type === "audio" ? (
+                                    <div
+                                      className={
+                                        isAgent
+                                          ? "bg-emerald-100 dark:bg-emerald-900/40 rounded-lg"
+                                          : "bg-gray-100 dark:bg-gray-700/50 rounded-lg"
+                                      }
+                                    >
+                                      <VoiceNotePlayer
+                                        src={
+                                          msg.attachment.url?.startsWith(
+                                            "http",
+                                          ) ||
+                                          msg.attachment.url?.startsWith(
                                             "data:",
                                           ) ||
-                                          msg.attachment.url.startsWith("blob:")
-                                          ? msg.attachment.url
-                                          : `${BASE_URL}${msg.attachment.url}`,
-                                      );
-                                    }
-                                  }}
-                                  className="rounded-lg max-h-64 object-cover border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
-                                />
-                              ) : msg.attachment.type === "video" ? (
-                                <video
-                                  src={
-                                    msg.attachment.url?.startsWith("http") ||
-                                    msg.attachment.url?.startsWith("data:") ||
-                                    msg.attachment.url?.startsWith("blob:")
-                                      ? msg.attachment.url
-                                      : `${BASE_URL}${msg.attachment.url || ""}`
-                                  }
-                                  controls
-                                  className="rounded-lg max-h-64 border border-white/20"
-                                />
-                              ) : msg.attachment.type === "audio" ? (
-                                <div
-                                  className={
-                                    isAgent
-                                      ? "bg-emerald-100 dark:bg-emerald-900/40 rounded-lg"
-                                      : "bg-gray-100 dark:bg-gray-700/50 rounded-lg"
-                                  }
-                                >
-                                  <VoiceNotePlayer
-                                    src={
-                                      msg.attachment.url?.startsWith("http") ||
-                                      msg.attachment.url?.startsWith("data:") ||
-                                      msg.attachment.url?.startsWith("blob:")
-                                        ? msg.attachment.url
-                                        : `${BASE_URL}${msg.attachment.url || ""}`
-                                    }
-                                    variant={isAgent ? "sent" : "received"}
-                                  />
-                                </div>
-                              ) : msg.attachment.type === "sticker" ? (
-                                <div className="relative group inline-block">
-                                  <img
-                                    src={
-                                      msg.attachment.url?.startsWith("http") ||
-                                      msg.attachment.url?.startsWith("data:") ||
-                                      msg.attachment.url?.startsWith("blob:")
-                                        ? msg.attachment.url
-                                        : `${BASE_URL}${msg.attachment.url || ""}`
-                                    }
-                                    alt="Sticker"
-                                    className="w-32 h-32 object-contain select-none filter drop-shadow-sm"
-                                    onContextMenu={(e) => {
-                                      e.preventDefault(); /* Maybe custom menu later */
-                                    }}
-                                  />
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (msg.attachment?.url)
-                                        handleSaveSticker(msg.attachment.url);
-                                    }}
-                                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-white/80 hover:bg-white text-yellow-500 rounded-full p-1 shadow-sm transition-opacity"
-                                    title="Guardar Sticker"
-                                  >
-                                    <svg
-                                      className="w-4 h-4"
-                                      fill="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              ) : msg.attachment.type === "location" ? (
-                                <div className="bg-white/95 dark:bg-gray-800 p-3 rounded-lg min-w-[220px] border border-gray-200 dark:border-gray-600 shadow-sm text-left">
-                                  <div className="flex items-center gap-2 mb-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
-                                    <span className="text-xl"></span>
-                                    <span className="font-bold text-gray-800 dark:text-gray-100 text-sm">
-                                      Ubicaciï¿½n
-                                    </span>
-                                  </div>
-                                  {(msg.attachment as any).name && (
-                                    <div className="font-bold text-sm text-gray-800 dark:text-gray-100 mb-0.5">
-                                      {(msg.attachment as any).name}
-                                    </div>
-                                  )}
-                                  {(msg.attachment as any).address && (
-                                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-tight">
-                                      {(msg.attachment as any).address}
-                                    </div>
-                                  )}
-
-                                  <a
-                                    href={`https://maps.google.com/?q=${(msg.attachment as any).latitude},${(msg.attachment as any).longitude}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block text-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-md transition-colors flex items-center justify-center gap-2 shadow-sm"
-                                  >
-                                    <svg
-                                      className="w-3 h-3"
-                                      fill="currentColor"
-                                      viewBox="0 0 20 20"
-                                    >
-                                      <path
-                                        fillRule="evenodd"
-                                        d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                                        clipRule="evenodd"
+                                          msg.attachment.url?.startsWith(
+                                            "blob:",
+                                          )
+                                            ? msg.attachment.url
+                                            : `${BASE_URL}${msg.attachment.url || ""}`
+                                        }
+                                        variant={isAgent ? "sent" : "received"}
                                       />
-                                    </svg>
-                                    Ver en Google Maps
-                                  </a>
-                                </div>
-                              ) : msg.attachment.type === "contact" ? (
-                                <div className="bg-white/95 dark:bg-gray-800 p-3 rounded-lg min-w-[250px] flex items-center gap-3 border border-gray-200 dark:border-gray-600 shadow-sm text-left">
-                                  <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-2xl"></div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate">
-                                      {(msg.attachment as any).displayName ||
-                                        "Contacto"}
                                     </div>
-                                    <div className="text-xs text-blue-500 dark:text-blue-400 cursor-pointer hover:underline mt-0.5 flex items-center gap-1">
-                                      VCard Adjunto
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bg-black/10 p-2 rounded flex items-center gap-2">
-                                  <span className="text-2xl"></span>
-                                  <span className="text-xs font-medium underline truncate max-w-[150px]">
-                                    {msg.attachment.name || "Documento"}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Message Content - Hide redundant filenames for audios */}
-                          {/* Message Content - Hide redundant filenames or placeholders */}
-                          {msg.content &&
-                            // 100-Year Solution: Robust Regex to hide all media placeholders (Case Insensitive)
-                            !/^\[(image|video|audio|record|document|sticker)\]$/i.test(
-                              msg.content.trim(),
-                            ) &&
-                            // Also hide if content is just the type name (e.g. "image", "video")
-                            ![
-                              "image",
-                              "video",
-                              "audio",
-                              "record",
-                              "document",
-                              "sticker",
-                            ].includes(msg.content.trim().toLowerCase()) &&
-                            !msg.content.includes("Imagen adjunta") &&
-                            !msg.content.includes("Ubicació³n compartida") &&
-                            !(
-                              msg.content.includes("Contacto:") &&
-                              msg.attachment?.type === "contact"
-                            ) &&
-                            !(
-                              msg.attachment &&
-                              msg.content === msg.attachment.name
-                            ) &&
-                            !(
-                              msg.attachment &&
-                              msg.content === `Archivo: ${msg.attachment.name}`
-                            ) &&
-                            !(
-                              msg.attachment?.type === "audio" &&
-                              (msg.content.includes("Archivo:") ||
-                                msg.content.includes("voice-note") ||
-                                msg.content.includes("Nota de voz"))
-                            ) &&
-                            (() => {
-                              const content = msg.content;
-                              // Special Renderers
-                              if (
-                                content.includes("MENSAJE PROGRAMADO:") ||
-                                ["SCHEDULED", "scheduled", "pending"].includes(
-                                  msg.status || "",
-                                )
-                              ) {
-                                let realMsg = content;
-                                let dateDisplay = "Programado";
-
-                                if (content.includes("MENSAJE PROGRAMADO:")) {
-                                  // Optimistic Format
-                                  const lines = content.split("\n\n");
-                                  realMsg = lines[1] || "";
-                                  dateDisplay =
-                                    lines[2]
-                                      ?.replace("Para: ", "")
-                                      .replace(" ", "") || "";
-                                } else {
-                                  // Persisted DB Format
-                                  realMsg = content;
-                                  if (msg.metadata?.scheduledAt) {
-                                    try {
-                                      dateDisplay = new Date(
-                                        msg.metadata.scheduledAt,
-                                      ).toLocaleString();
-                                    } catch (e) {
-                                      console.error("Date parse error", e);
-                                    }
-                                  }
-                                }
-
-                                return (
-                                  <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-200 dark:border-amber-800/50 my-1 relative overflow-hidden">
-                                    {/* Background Pattern */}
-                                    <div className="absolute -right-6 -top-6 text-amber-100 dark:text-amber-900/20 opacity-50">
-                                      <svg
-                                        className="w-24 h-24"
-                                        fill="currentColor"
-                                        viewBox="0 0 24 24"
+                                  ) : msg.attachment.type === "sticker" ? (
+                                    <div className="relative group inline-block">
+                                      <img
+                                        src={
+                                          msg.attachment.url?.startsWith(
+                                            "http",
+                                          ) ||
+                                          msg.attachment.url?.startsWith(
+                                            "data:",
+                                          ) ||
+                                          msg.attachment.url?.startsWith(
+                                            "blob:",
+                                          )
+                                            ? msg.attachment.url
+                                            : `${BASE_URL}${msg.attachment.url || ""}`
+                                        }
+                                        alt="Sticker"
+                                        className="w-32 h-32 object-contain select-none filter drop-shadow-sm"
+                                        onContextMenu={(e) => {
+                                          e.preventDefault(); /* Maybe custom menu later */
+                                        }}
+                                      />
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (msg.attachment?.url)
+                                            handleSaveSticker(
+                                              msg.attachment.url,
+                                            );
+                                        }}
+                                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-white/80 hover:bg-white text-yellow-500 rounded-full p-1 shadow-sm transition-opacity"
+                                        title="Guardar Sticker"
                                       >
-                                        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
-                                      </svg>
+                                        <svg
+                                          className="w-4 h-4"
+                                          fill="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                                        </svg>
+                                      </button>
                                     </div>
-
-                                    <div className="relative z-10">
-                                      <div className="flex items-center gap-2 mb-3 border-b border-amber-200 dark:border-amber-800 pb-2">
-                                        <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-pulse" />
-                                        <h4 className="font-bold text-amber-800 dark:text-amber-200 text-xs uppercase tracking-wide">
-                                          Mensaje Programado
-                                        </h4>
-                                      </div>
-                                      <p className="text-gray-800 dark:text-gray-200 font-medium text-sm italic mb-3">
-                                        "{realMsg}"
-                                      </p>
-                                      <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded w-fit">
-                                        <Clock className="w-3.5 h-3.5" />
-                                        <span className="font-semibold">
-                                          {dateDisplay}
+                                  ) : msg.attachment.type === "location" ? (
+                                    <div className="bg-white/95 dark:bg-gray-800 p-3 rounded-lg min-w-[220px] border border-gray-200 dark:border-gray-600 shadow-sm text-left">
+                                      <div className="flex items-center gap-2 mb-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
+                                        <span className="text-xl"></span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-100 text-sm">
+                                          Ubicaciï¿½n
                                         </span>
                                       </div>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              if (content.includes(" *SOLICITUD DE PAGO*")) {
-                                return (
-                                  <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm my-1 min-w-[200px] border border-gray-100 dark:border-gray-600">
-                                    <div className="flex items-center gap-2 mb-3 border-b border-gray-100 dark:border-reply-border-dark pb-2">
-                                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600">
-                                        <CreditCard className="w-4 h-4" />
-                                      </div>
-                                      <div>
-                                        <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                          Solicitud de Pago
+                                      {(
+                                        msg.attachment as {
+                                          name?: string;
+                                          address?: string;
+                                          latitude?: string | number;
+                                          longitude?: string | number;
+                                          displayName?: string;
+                                        }
+                                      ).name && (
+                                        <div className="font-bold text-sm text-gray-800 dark:text-gray-100 mb-0.5">
+                                          {
+                                            (
+                                              msg.attachment as {
+                                                name?: string;
+                                                address?: string;
+                                                latitude?: string | number;
+                                                longitude?: string | number;
+                                                displayName?: string;
+                                              }
+                                            ).name
+                                          }
                                         </div>
-                                        <div className="text-sm font-bold text-gray-900 dark:text-white">
-                                          Reply Pay
+                                      )}
+                                      {(
+                                        msg.attachment as {
+                                          name?: string;
+                                          address?: string;
+                                          latitude?: string | number;
+                                          longitude?: string | number;
+                                          displayName?: string;
+                                        }
+                                      ).address && (
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-tight">
+                                          {
+                                            (
+                                              msg.attachment as {
+                                                name?: string;
+                                                address?: string;
+                                                latitude?: string | number;
+                                                longitude?: string | number;
+                                                displayName?: string;
+                                              }
+                                            ).address
+                                          }
                                         </div>
-                                      </div>
-                                    </div>
-                                    <div className="whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300 mb-4">
-                                      {content
-                                        .replace(" *SOLICITUD DE PAGO*", "")
-                                        .split("")[0]
-                                        .trim()}
-                                    </div>
-                                    <button
-                                      onClick={() =>
-                                        window.open(
-                                          `https://buy.stripe.com/testá_token?amount=${content.replace(" *SOLICITUD DE PAGO*", "").split("Total:")[1]?.split("\n")[0]?.replace("$", "").trim() || "29.99"}`,
-                                          "_blank",
-                                        )
-                                      }
-                                      className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm transition-colors shadow-sm active:scale-95 transform"
-                                    >
-                                      Pagar Ahora
-                                    </button>
-                                  </div>
-                                );
-                              }
-                              if (content.includes(" *SOLICITUD DE DATOS*")) {
-                                return (
-                                  <div className="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-lg border border-teal-100 dark:border-teal-800 my-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <FileText className="w-5 h-5 text-teal-600" />
-                                      <span className="font-bold text-teal-800 dark:text-teal-200">
-                                        Datos Requeridos
-                                      </span>
-                                    </div>
-                                    <div className="whitespace-pre-wrap text-gray-700 dark:text-gray-300">
-                                      {content
-                                        .replace(" *SOLICITUD DE DATOS*", "")
-                                        .trim()}
-                                    </div>
-                                  </div>
-                                );
-                              }
+                                      )}
 
-                              // Default Text
-                              return (
-                                <div className="whitespace-pre-wrap leading-relaxed">
-                                  {content}
+                                      <a
+                                        href={`https://maps.google.com/?q=${(msg.attachment as { name?: string; address?: string; latitude?: string | number; longitude?: string | number; displayName?: string }).latitude},${(msg.attachment as { name?: string; address?: string; latitude?: string | number; longitude?: string | number; displayName?: string }).longitude}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block text-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-md transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                      >
+                                        <svg
+                                          className="w-3 h-3"
+                                          fill="currentColor"
+                                          viewBox="0 0 20 20"
+                                        >
+                                          <path
+                                            fillRule="evenodd"
+                                            d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                                            clipRule="evenodd"
+                                          />
+                                        </svg>
+                                        Ver en Google Maps
+                                      </a>
+                                    </div>
+                                  ) : msg.attachment.type === "contact" ? (
+                                    <div className="bg-white/95 dark:bg-gray-800 p-3 rounded-lg min-w-[250px] flex items-center gap-3 border border-gray-200 dark:border-gray-600 shadow-sm text-left">
+                                      <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-2xl"></div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate">
+                                          {(
+                                            msg.attachment as {
+                                              name?: string;
+                                              address?: string;
+                                              latitude?: string | number;
+                                              longitude?: string | number;
+                                              displayName?: string;
+                                            }
+                                          ).displayName || "Contacto"}
+                                        </div>
+                                        <div className="text-xs text-blue-500 dark:text-blue-400 cursor-pointer hover:underline mt-0.5 flex items-center gap-1">
+                                          VCard Adjunto
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : msg.attachment?.type ===
+                                    "image_unavailable" ? (
+                                    <div className="rounded-xl overflow-hidden border border-white/10 min-w-[200px] max-w-[260px]">
+                                      <div className="bg-black/20 dark:bg-black/40 flex flex-col items-center justify-center py-8 px-4 gap-3">
+                                        <svg
+                                          className="w-12 h-12 opacity-60"
+                                          fill="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                                        </svg>
+                                        <span className="text-xs font-semibold opacity-70">
+                                          Imagen
+                                        </span>
+                                      </div>
+                                      {msg.attachment.url ? (
+                                        <a
+                                          href={msg.attachment.url}
+                                          download
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center justify-center gap-2 py-2 bg-black/20 hover:bg-black/30 text-xs font-bold transition-colors"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />{" "}
+                                          Descargar
+                                        </a>
+                                      ) : (
+                                        <div className="flex items-center justify-center py-2 bg-black/10 text-xs opacity-50">
+                                          Archivo no disponible en historial
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : msg.attachment?.type ===
+                                    "video_unavailable" ? (
+                                    <div className="rounded-xl overflow-hidden border border-white/10 min-w-[200px] max-w-[260px]">
+                                      <div className="bg-black/20 dark:bg-black/40 flex flex-col items-center justify-center py-8 px-4 gap-3">
+                                        <svg
+                                          className="w-12 h-12 opacity-60"
+                                          fill="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
+                                        </svg>
+                                        <span className="text-xs font-semibold opacity-70">
+                                          Video
+                                        </span>
+                                      </div>
+                                      {msg.attachment.url ? (
+                                        <a
+                                          href={msg.attachment.url}
+                                          download
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center justify-center gap-2 py-2 bg-black/20 hover:bg-black/30 text-xs font-bold transition-colors"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />{" "}
+                                          Descargar
+                                        </a>
+                                      ) : (
+                                        <div className="flex items-center justify-center py-2 bg-black/10 text-xs opacity-50">
+                                          Archivo no disponible en historial
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : msg.attachment?.type ===
+                                    "audio_unavailable" ? (
+                                    <div className="rounded-xl overflow-hidden border border-white/10 min-w-[200px]">
+                                      <div className="flex items-center gap-3 px-4 py-3 bg-black/10 dark:bg-black/30">
+                                        <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center flex-shrink-0">
+                                          <svg
+                                            className="w-5 h-5 opacity-70"
+                                            fill="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h3V3h-6z" />
+                                          </svg>
+                                        </div>
+                                        <div className="flex-1">
+                                          <div className="text-xs font-bold opacity-80">
+                                            Nota de voz
+                                          </div>
+                                          {msg.attachment.url ? (
+                                            <a
+                                              href={msg.attachment.url}
+                                              download
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-[10px] underline opacity-60 hover:opacity-90 flex items-center gap-1 mt-0.5"
+                                            >
+                                              <Download className="w-2.5 h-2.5" />{" "}
+                                              Descargar audio
+                                            </a>
+                                          ) : (
+                                            <div className="text-[10px] opacity-40 mt-0.5">
+                                              No disponible en historial
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : msg.attachment?.type ===
+                                    "document_unavailable" ? (
+                                    <div className="flex items-center gap-3 bg-black/10 dark:bg-black/30 p-3 rounded-xl min-w-[200px] border border-white/10">
+                                      <div className="w-10 h-10 rounded-lg bg-blue-500/30 flex items-center justify-center flex-shrink-0 text-xl">
+                                        📄
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-bold truncate opacity-90">
+                                          {msg.attachment.name || "Documento"}
+                                        </div>
+                                        {msg.attachment.url ? (
+                                          <a
+                                            href={msg.attachment.url}
+                                            download
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-[10px] underline opacity-70 hover:opacity-100 mt-0.5 transition-opacity"
+                                          >
+                                            <Download className="w-2.5 h-2.5" />{" "}
+                                            Descargar
+                                          </a>
+                                        ) : (
+                                          <div className="text-[10px] opacity-40 mt-0.5">
+                                            No disponible en historial
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-3 bg-black/10 dark:bg-black/30 p-3 rounded-xl min-w-[220px] max-w-[320px] border border-white/10">
+                                      <div className="w-11 h-11 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                                        <svg className="w-6 h-6 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                                          <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                                        </svg>
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-bold truncate opacity-90">
+                                          {msg.attachment.name || "Documento"}
+                                        </div>
+                                        {msg.attachment.url ? (
+                                          <a
+                                            href={
+                                              msg.attachment.url.startsWith("http") ||
+                                              msg.attachment.url.startsWith("data:") ||
+                                              msg.attachment.url.startsWith("blob:")
+                                                ? msg.attachment.url
+                                                : `${BASE_URL}${msg.attachment.url}`
+                                            }
+                                            download={msg.attachment.name || "documento"}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-[10px] text-blue-400 underline opacity-80 hover:opacity-100 mt-1 transition-opacity"
+                                          >
+                                            <Download className="w-3 h-3" />{" "}
+                                            Descargar
+                                          </a>
+                                        ) : (
+                                          <div className="text-[10px] opacity-40 mt-0.5">
+                                            No disponible
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              );
-                            })()}
+                              )}
+
+                              {/* Message Content - Hide redundant filenames for audios */}
+                              {/* Message Content - Hide redundant filenames or placeholders */}
+                              {msg.content &&
+                                // 🛡️ Hide content when a synthetic 'unavailable' attachment is shown (avoids duplicate placeholder text)
+                                !msg.attachment?.type?.endsWith(
+                                  "_unavailable",
+                                ) &&
+                                // 100-Year Solution: Robust Regex to hide all media placeholders (Case Insensitive)
+                                !/^\[(image|video|audio|record|document|sticker)\]$/i.test(
+                                  msg.content.trim(),
+                                ) &&
+                                // Also hide if content is just the type name (e.g. "image", "video")
+                                ![
+                                  "image",
+                                  "video",
+                                  "audio",
+                                  "record",
+                                  "document",
+                                  "sticker",
+                                ].includes(msg.content.trim().toLowerCase()) &&
+                                !msg.content.includes("Imagen adjunta") &&
+                                !msg.content.includes(
+                                  "Ubicació³n compartida",
+                                ) &&
+                                !(
+                                  msg.content.includes("Contacto:") &&
+                                  msg.attachment?.type === "contact"
+                                ) &&
+                                !(
+                                  msg.attachment &&
+                                  msg.content === msg.attachment.name
+                                ) &&
+                                !(
+                                  msg.attachment &&
+                                  msg.content ===
+                                    `Archivo: ${msg.attachment.name}`
+                                ) &&
+                                !(
+                                  msg.attachment?.type === "audio" &&
+                                  (msg.content.includes("Archivo:") ||
+                                    msg.content.includes("voice-note") ||
+                                    msg.content.includes("Nota de voz"))
+                                ) &&
+                                (() => {
+                                  const content = msg.content;
+                                  // Special Renderers
+                                  if (
+                                    content.includes("MENSAJE PROGRAMADO:") ||
+                                    [
+                                      "SCHEDULED",
+                                      "scheduled",
+                                      "pending",
+                                    ].includes(msg.status || "")
+                                  ) {
+                                    let realMsg = content;
+                                    let dateDisplay = "Programado";
+
+                                    if (
+                                      content.includes("MENSAJE PROGRAMADO:")
+                                    ) {
+                                      // Optimistic Format
+                                      const lines = content.split("\n\n");
+                                      realMsg = lines[1] || "";
+                                      dateDisplay =
+                                        lines[2]
+                                          ?.replace("Para: ", "")
+                                          .replace(" ", "") || "";
+                                    } else {
+                                      // Persisted DB Format
+                                      realMsg = content;
+                                      if (msg.metadata?.scheduledAt) {
+                                        try {
+                                          dateDisplay = new Date(
+                                            msg.metadata?.scheduledAt as string,
+                                          ).toLocaleString();
+                                        } catch (e) {
+                                          console.error("Date parse error", e);
+                                        }
+                                      }
+                                    }
+
+                                    return (
+                                      <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-200 dark:border-amber-800/50 my-1 relative overflow-hidden">
+                                        {/* Background Pattern */}
+                                        <div className="absolute -right-6 -top-6 text-amber-100 dark:text-amber-900/20 opacity-50">
+                                          <svg
+                                            className="w-24 h-24"
+                                            fill="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                                          </svg>
+                                        </div>
+
+                                        <div className="relative z-10">
+                                          <div className="flex items-center gap-2 mb-3 border-b border-amber-200 dark:border-amber-800 pb-2">
+                                            <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-pulse" />
+                                            <h4 className="font-bold text-amber-800 dark:text-amber-200 text-xs uppercase tracking-wide">
+                                              Mensaje Programado
+                                            </h4>
+                                          </div>
+                                          <p className="text-gray-800 dark:text-gray-200 font-medium text-sm italic mb-3">
+                                            "{realMsg}"
+                                          </p>
+                                          <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded w-fit">
+                                            <Clock className="w-3.5 h-3.5" />
+                                            <span className="font-semibold">
+                                              {dateDisplay}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  if (
+                                    content.includes(" *SOLICITUD DE PAGO*")
+                                  ) {
+                                    return (
+                                      <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm my-1 min-w-[200px] border border-gray-100 dark:border-gray-600">
+                                        <div className="flex items-center gap-2 mb-3 border-b border-gray-100 dark:border-reply-border-dark pb-2">
+                                          <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600">
+                                            <CreditCard className="w-4 h-4" />
+                                          </div>
+                                          <div>
+                                            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                              Solicitud de Pago
+                                            </div>
+                                            <div className="text-sm font-bold text-gray-900 dark:text-white">
+                                              Reply Pay
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                          {content
+                                            .replace(" *SOLICITUD DE PAGO*", "")
+                                            .split("")[0]
+                                            .trim()}
+                                        </div>
+                                        <button
+                                          onClick={() =>
+                                            window.open(
+                                              `https://buy.stripe.com/test_token?amount=${content.replace(" *SOLICITUD DE PAGO*", "").split("Total:")[1]?.split("\n")[0]?.replace("$", "").trim() || "29.99"}`,
+                                              "_blank",
+                                            )
+                                          }
+                                          className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm transition-colors shadow-sm active:scale-95 transform"
+                                        >
+                                          Pagar Ahora
+                                        </button>
+                                      </div>
+                                    );
+                                  }
+                                  if (
+                                    content.includes(" *SOLICITUD DE DATOS*")
+                                  ) {
+                                    return (
+                                      <div className="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-lg border border-teal-100 dark:border-teal-800 my-1">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <FileText className="w-5 h-5 text-teal-600" />
+                                          <span className="font-bold text-teal-800 dark:text-teal-200">
+                                            Datos Requeridos
+                                          </span>
+                                        </div>
+                                        <div className="whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                                          {content
+                                            .replace(
+                                              " *SOLICITUD DE DATOS*",
+                                              "",
+                                            )
+                                            .trim()}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+
+                                  // Default Text
+                                  return (
+                                    <div className="whitespace-pre-wrap leading-relaxed">
+                                      {content}
+                                    </div>
+                                  );
+                                })()}
+                            </>
+                          )}
                           <div
                             className={`flex justify-end items-center gap-1 mt-1 text-[10px] ${isOutgoing ? "text-white/70" : "text-gray-400"}`}
                           >
@@ -2217,6 +2751,35 @@ export const ChatInterface: React.FC<Props> = ({
                             </span>
                             {isOutgoing && <CheckCheck className="w-3 h-3" />}
                           </div>
+
+                          {/* ❤️ REACTION DISPLAY */}
+                          {msg.reactions && msg.reactions.length > 0 ? (
+                            <div
+                              className={`absolute -bottom-4 ${isOutgoing ? "right-2" : "left-2"} z-20 flex items-center justify-center bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600 rounded-full px-1.5 py-0.5 animate-in zoom-in-50 duration-200 gap-1`}
+                            >
+                              {msg.reactions.map((react, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-sm leading-none"
+                                  title={`Reaccionó: ${react.reactBy}`}
+                                >
+                                  {react.content}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            // Legacy fallback
+                            Boolean(msg.metadata?.reaction) && (
+                              <div
+                                className={`absolute -bottom-4 ${isOutgoing ? "right-2" : "left-2"} z-20 flex items-center justify-center bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600 rounded-full px-1.5 py-0.5 animate-in zoom-in-50 duration-200`}
+                                title={`Reaccionó: ${(msg.metadata?.reaction as string) || ""}`}
+                              >
+                                <span className="text-sm leading-none">
+                                  {(msg.metadata?.reaction as string) || ""}
+                                </span>
+                              </div>
+                            )
+                          )}
                         </div>
 
                         {/* Reply Button Action (on hover) */}
@@ -2244,8 +2807,9 @@ export const ChatInterface: React.FC<Props> = ({
                           </button>
                         </div>
                       </div>
-                    );
-                  }),
+                    </React.Fragment>
+                  );
+                }),
                 [messages, activeContact.name, scrollToMessage],
               )}
               {(isTyping || isRemoteTyping) && (
@@ -2293,7 +2857,9 @@ export const ChatInterface: React.FC<Props> = ({
                       </div>
                       <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
                         {otherAgentsTyping.map((a) => a.agentName).join(", ")}{" "}
-                        {otherAgentsTyping.length === 1 ? "estáï¿½" : "estáï¿½n"}{" "}
+                        {otherAgentsTyping.length === 1
+                          ? "estáï¿½"
+                          : "estáï¿½n"}{" "}
                         escribiendo...
                       </span>
                     </div>
@@ -2332,7 +2898,8 @@ export const ChatInterface: React.FC<Props> = ({
                       setIsRecording(false);
                       //  Stop recording status
                       const remoteId =
-                        (activeContact as any).phone || activeContact.channelId;
+                        (activeContact as Contact & { phone?: string }).phone ||
+                        activeContact.channelId;
                       if (remoteId) {
                         socketService.emit("conversation:typing", {
                           to: remoteId,
@@ -2438,7 +3005,8 @@ export const ChatInterface: React.FC<Props> = ({
                 onVoiceNoteClick={useCallback(() => {
                   setIsRecording(true);
                   const remoteId =
-                    (activeContact as any).phone || activeContact.channelId;
+                    (activeContact as Contact & { phone?: string }).phone ||
+                    activeContact.channelId;
                   if (remoteId) {
                     socketService.emit("conversation:typing", {
                       to: remoteId,
@@ -2476,8 +3044,8 @@ export const ChatInterface: React.FC<Props> = ({
                   const context = messages
                     .slice(-15)
                     .map(
-                      (m: any) =>
-                        `[${m.direction === "inbound" ? "CLIENTE" : "AGENTE"}]: ${typeof m.content === "object" ? m.content.body || JSON.stringify(m.content) : m.content}`,
+                      (m: Message & { direction?: string }) =>
+                        `[${m.direction === "INBOUND" ? "CLIENTE" : "AGENTE"}]: ${typeof m.content === "object" ? (m.content as Record<string, unknown>).body || JSON.stringify(m.content) : m.content}`,
                     )
                     .join("\n");
 
@@ -2808,3 +3376,4 @@ export const ChatInterface: React.FC<Props> = ({
     </>
   );
 };
+//

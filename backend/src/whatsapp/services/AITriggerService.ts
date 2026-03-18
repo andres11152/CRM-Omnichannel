@@ -23,7 +23,7 @@ import { Conversation, Queue, User } from "@prisma/client";
  * - HITL (Human-in-the-Loop) grace period management
  */
 
-type ConversationWithQueue = Conversation & {
+export type ConversationWithQueue = Conversation & {
   queue: (Queue & { aiAssistantId: string | null }) | null;
   participants: User[];
   assignedTo: User | null;
@@ -231,6 +231,7 @@ export class AITriggerService {
     // 🛡️ RACE CONDITION GUARD: Prevent double AI response
     // If an AI message was sent in the last 8 seconds for this conversation, skip to avoid spam.
     const recentAiResponse = await messageRepository.findRecentAIResponse(
+      companyId,
       conversation.id,
     );
 
@@ -245,6 +246,7 @@ export class AITriggerService {
     await new Promise((r) => setTimeout(r, thinkingTime));
 
     const history = await messageRepository.getConversationHistory(
+      companyId,
       conversation.id,
       10,
     );

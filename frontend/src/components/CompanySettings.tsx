@@ -50,7 +50,7 @@ const defaultSettings = {
     senderName: "",
   },
   billing: {
-    plan: null as any,
+    plan: null as { name?: string; price?: number } | null,
     subscriptionEndsAt: null as string | null,
   },
 };
@@ -237,13 +237,11 @@ export const CompanySettings: React.FC = () => {
       }
 
       playSound("success");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to save settings:", error);
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          "Error al guardar cambios",
-      );
+      const msg =
+        error instanceof Error ? error.message : "Error al guardar cambios";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -252,7 +250,7 @@ export const CompanySettings: React.FC = () => {
   const updateSetting = (
     section: keyof typeof defaultSettings,
     startKey: string,
-    value: any,
+    value: string | boolean | number,
   ) => {
     // Deep update helper would go here, simple version:
     setSettings((prev) => ({
@@ -264,7 +262,11 @@ export const CompanySettings: React.FC = () => {
     }));
   };
 
-  const updateBusinessHour = (day: string, field: string, value: any) => {
+  const updateBusinessHour = (
+    day: string,
+    field: string,
+    value: string | boolean,
+  ) => {
     setSettings((prev) => ({
       ...prev,
       businessHours: {
@@ -293,9 +295,9 @@ export const CompanySettings: React.FC = () => {
     try {
       // Use current logged in user email as recipient
       const targetEmail =
-        user?.email || settings.smtp.senderEmail || "testá@example.com";
+        user?.email || settings.smtp.senderEmail || "test@example.com";
 
-      await api.post("/emails/testá-connection", {
+      await api.post("/emails/test-connection", {
         host: settings.smtp.host,
         port: settings.smtp.port,
         user: settings.smtp.user,
@@ -309,9 +311,10 @@ export const CompanySettings: React.FC = () => {
         id: toastId,
       });
       playSound("success");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("SMTP Test Failed:", error);
-      toast.error(`Error: ${error.message || "Falló la conexión"}`, {
+      const msg = error instanceof Error ? error.message : "Falló la conexión";
+      toast.error(`Error: ${msg}`, {
         id: toastId,
       });
       playSound("error");
@@ -351,7 +354,7 @@ export const CompanySettings: React.FC = () => {
       } else {
         toast.error("No se pudo obtener la URL de la imagen");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Upload error:", error);
       toast.error("Error al subir la imagen");
     } finally {
@@ -622,7 +625,7 @@ export const CompanySettings: React.FC = () => {
                     Horario de Atención
                   </h3>
                   <p className="text-sm text-gray-500 mt-1">
-                    Define cundo tu equipo estáá disponible para responder.
+                    Define cundo tu equipo está disponible para responder.
                   </p>
                 </div>
                 <label className="inline-flex items-center cursor-pointer group">
@@ -758,8 +761,8 @@ export const CompanySettings: React.FC = () => {
                 </h3>
               </div>
               <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-                Este mensaje se enviar automticamente a nuevos contactos o
-                tras 24h de inactividad.
+                Este mensaje se enviar automticamente a nuevos contactos o tras
+                24h de inactividad.
               </p>
               <textarea
                 className="w-full h-32 border border-gray-200 dark:border-reply-border-dark rounded-2xl p-4 text-sm bg-reply-bg dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none resize-none no-scrollbar font-medium"
@@ -1678,9 +1681,8 @@ export const CompanySettings: React.FC = () => {
                           </svg>
                         </div>
                         <p className="text-white/90 text-sm leading-relaxed mb-3">
-                          Pronto podrs vincular tu tarjeta para pagos
-                          automticos y gestión de suscripciones sin
-                          interrupciones.
+                          Pronto podrs vincular tu tarjeta para pagos automticos
+                          y gestión de suscripciones sin interrupciones.
                         </p>
                         <button
                           className="w-full py-2 bg-white text-[#635BFF] rounded-lg font-bold text-sm hover:bg-reply-bg transition-colors shadow-sm cursor-not-allowed opacity-80"
@@ -1995,6 +1997,3 @@ const NavButton: React.FC<{
     <span className="text-sm hidden md:block">{fullLabel || label}</span>
   </button>
 );
-
-
-

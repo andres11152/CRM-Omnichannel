@@ -317,31 +317,20 @@ export class IdentityResolverService {
       }
     }
 
-    // Strategy 5: Universal LID Fallback
+    // ⛔ REMOVED: "Universal LID Fallback" (Strategy 5)
+    //
+    // THE OLD CODE grabbed the most recently updated conversation
+    // and assigned unresolved LID messages to it. This caused a CRITICAL
+    // bug where outbound messages from the phone to DIFFERENT contacts
+    // were all being routed to whichever conversation was most recently
+    // active — creating fake messages in the wrong chat.
+    //
+    // FIX: Return null so InboundMessageHandler creates a NEW conversation.
+    // A new conversation with an unresolved LID is infinitely better than
+    // contaminating an existing conversation with messages from a
+    // completely different contact.
     Logger.warn(
-      `[IdentityResolver] 🚨 LID ${lidBase} completely unresolved. fromMe=${isFromMe}. Searching for recent conversation...`,
-    );
-
-    const recentConv = await conversationRepository.findFirst({
-      where: {
-        companyId,
-        isGroup: false,
-        updatedAt: {
-          gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
-
-    if (recentConv) {
-      Logger.info(
-        `[IdentityResolver] 🎯 FALLBACK SUCCESS: Using conversation ${recentConv.id} for unresolved LID ${lidBase}`,
-      );
-      return chatService.getFullConversation(recentConv.id);
-    }
-
-    Logger.warn(
-      `[IdentityResolver] ⚠️ No recent conversation found for LID ${lidBase}. Will create new (unavoidable).`,
+      `[IdentityResolver] ⚠️ LID ${lidBase} fully unresolved. Creating new conversation (safe fallback).`,
     );
     return null;
   }

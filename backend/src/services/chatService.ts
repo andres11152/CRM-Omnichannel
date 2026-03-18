@@ -60,43 +60,64 @@ export class ChatService {
     phone?: string | null;
     role?: "USER" | "AGENT" | "ADMIN" | "MASTER";
   }) {
-    // 0. 🛡️ 100-YEAR FIX: Name Preservation Logic
-    // Prevent overwriting a real name (e.g. "Juan Perez") with a phone-number-name (e.g. "+57300...")
-    // which happens when WhatsApp messages arrive without a pushName.
-
     let nameToPersist = params.name;
-    const existingUser = await userRepository.findUnique({
-      where: { email: params.email },
-      select: { name: true },
-    });
+    let user;
 
-    if (existingUser) {
-      const isNewNamePhone = /^\+?\d[\d\s-]*$/.test(params.name);
-      const isOldNamePhone = /^\+?\d[\d\s-]*$/.test(existingUser.name);
+    try {
+      // 0. Name Preservation
+      const existingUser = await userRepository.findFirst({
+        where: { email: params.email, companyId: params.companyId },
+        select: { id: true, name: true },
+      });
 
-      // If new name is just a phone number, but we already have a real name, KEEP the real name.
-      if (isNewNamePhone && !isOldNamePhone) {
-        nameToPersist = existingUser.name;
+      if (existingUser) {
+        const isNewNamePhone = /^\+?\d[\d\s-]*$/.test(params.name);
+        const isOldNamePhone = /^\+?\d[\d\s-]*$/.test(existingUser.name);
+
+        if (isNewNamePhone && !isOldNamePhone) {
+          nameToPersist = existingUser.name;
+        }
+      }
+
+      // 1. Upsert System User (Authentication/Chat Identity)
+      user = await userRepository.upsert(
+        { email: params.email },
+        {
+          email: params.email,
+          name: nameToPersist,
+          password: "$2a$10$DummyHashForWhatsAppUser",
+          role: params.role || "USER",
+          company: { connect: { id: params.companyId } },
+          phone: params.phone,
+        },
+        {
+          name: nameToPersist,
+          ...(params.phone && { phone: params.phone }),
+          updatedAt: new Date(),
+        },
+      );
+    } catch (error: unknown) {
+      const isUniqueError =
+        error instanceof Error &&
+        error.message.includes("Unique constraint failed");
+
+      if (isUniqueError) {
+        Logger.info(
+          `[ChatService] 🛡️ Race condition detected for user ${params.email}, resolving existing...`,
+        );
+        const existingUserAfterCollision = await userRepository.findFirst({
+          where: { email: params.email, companyId: params.companyId },
+        });
+        if (existingUserAfterCollision) {
+          user = existingUserAfterCollision;
+        } else {
+          // If for some reason the user is not found after a unique constraint error, rethrow.
+          throw error;
+        }
+      } else {
+        throw error;
       }
     }
-
-    // 1. Upsert System User (Authentication/Chat Identity)
-    const user = await userRepository.upsert(
-      { email: params.email },
-      {
-        email: params.email,
-        name: nameToPersist,
-        password: "$2a$10$DummyHashForWhatsAppUser",
-        role: params.role || "USER",
-        company: { connect: { id: params.companyId } },
-        phone: params.phone,
-      },
-      {
-        name: nameToPersist,
-        ...(params.phone && { phone: params.phone }),
-        updatedAt: new Date(),
-      },
-    );
 
     // 2. 🛡️ 100-YEAR ENTERPRISE FIX: CRM Contact Sync with Real Phone Validation
     const isGroup = params.email.includes("@g.us");
@@ -177,14 +198,14 @@ export class ChatService {
 
       if (contact) {
         const currentFields =
-          (contact.customFields as Record<string, unknown>) || {};
+          (contact.customFields as Prisma.JsonObject) || {};
         await contactRepository.updateByArgs({
           where: { id: contact.id },
           data: {
             customFields: {
               ...currentFields,
               whatsappLid: lid,
-            },
+            } as Prisma.JsonObject,
           },
         });
         Logger.info(
@@ -352,7 +373,7 @@ export class ChatService {
     direction: "INBOUND" | "OUTBOUND";
     conversationId: string;
     senderId: string;
-    status: "SENT" | "DELIVERED";
+    status: "SENT" | "DELIVERED" | "QUEUED" | "REVOKED";
     metadata: Prisma.InputJsonValue;
     createdAt?: Date;
   }) {
@@ -455,11 +476,8 @@ export class ChatService {
   /**
    * Update user profile picture
    */
-  async updateUserProfilePic(userId: string, url: string) {
-    return userRepository.update({
-      where: { id: userId },
-      data: { profilePicUrl: url },
-    });
+  async updateUserProfilePic(userId: string, companyId: string, url: string) {
+    return userRepository.update(userId, companyId, { profilePicUrl: url });
   }
 }
 

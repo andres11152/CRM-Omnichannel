@@ -47,7 +47,7 @@ export const authCrudService = {
    */
   async findUserByEmail(email: string): Promise<UserWithCompanyAndPlan | null> {
     const user = await TenantContextManager.runAsSystem(async () =>
-      userRepository.findUnique({
+      userRepository.findFirst({
         where: { email },
         include: {
           company: {
@@ -73,23 +73,25 @@ export const authCrudService = {
    * Find user by ID
    */
   async findUserById(id: string) {
-    return await userRepository.findUnique({ where: { id } });
+    return await userRepository.findFirst({ where: { id } });
   },
 
   /**
    * Update user password
    */
   async updatePassword(userId: string, newPassword: string) {
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    await userRepository.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
-    });
-
-    // 🕵️‍♂️ Log sensitive action
-    const userForAudit = await userRepository.findUnique({
+    const userForAudit = await userRepository.findFirst({
       where: { id: userId },
       select: { companyId: true },
+    });
+
+    if (!userForAudit?.companyId) {
+      throw new AppError("User not found", 404);
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    await userRepository.update(userId, userForAudit.companyId, {
+      password: hashedPassword,
     });
     if (userForAudit?.companyId) {
       void auditLogService.log({
@@ -108,7 +110,7 @@ export const authCrudService = {
    */
   async generateResetToken(email: string) {
     const user = await TenantContextManager.runAsSystem(async () =>
-      userRepository.findUnique({ where: { email } }),
+      userRepository.findFirst({ where: { email } }),
     );
 
     if (!user) {
@@ -122,12 +124,13 @@ export const authCrudService = {
       .digest("hex");
     const passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-    await userRepository.update({
-      where: { id: user.id },
-      data: {
-        resetPasswordToken: passwordResetToken,
-        resetPasswordExpires: passwordResetExpires,
-      },
+    if (!user.companyId) {
+      throw new AppError("Global users cannot reset password via token", 403);
+    }
+
+    await userRepository.update(user.id, user.companyId, {
+      resetPasswordToken: passwordResetToken,
+      resetPasswordExpires: passwordResetExpires,
     });
 
     return { user, resetToken };
@@ -137,10 +140,13 @@ export const authCrudService = {
    * Clear reset token (on error or after use)
    */
   async clearResetToken(userId: string) {
-    await userRepository.update({
-      where: { id: userId },
-      data: { resetPasswordToken: null, resetPasswordExpires: null },
-    });
+    const user = await userRepository.findFirst({ where: { id: userId } });
+    if (user?.companyId) {
+      await userRepository.update(userId, user.companyId, {
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+      });
+    }
   },
 
   /**
@@ -165,13 +171,14 @@ export const authCrudService = {
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    await userRepository.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        resetPasswordToken: null,
-        resetPasswordExpires: null,
-      },
+    if (!user.companyId) {
+      throw new AppError("Global users cannot reset password via token", 403);
+    }
+
+    await userRepository.update(user.id, user.companyId, {
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
     });
 
     // 🕵️‍♂️ Log sensitive action

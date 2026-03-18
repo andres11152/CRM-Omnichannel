@@ -222,6 +222,16 @@ class TicketService {
       ) {
         updateData.resolvedAt = new Date();
       }
+    } else if (data.status === "OPEN" || data.status === "IN_PROGRESS") {
+      if (
+        existingTicket.status === "RESOLVED" ||
+        existingTicket.status === "CLOSED"
+      ) {
+        // Enterprise: Reset resolution audit if reopened
+        updateData.resolvedAt = null;
+        updateData.resolutionType = null as unknown as TicketResolutionType; 
+        updateData.resolutionNotes = null as unknown as string;
+      }
     }
 
     if (data.subject !== undefined) updateData.subject = data.subject as string;

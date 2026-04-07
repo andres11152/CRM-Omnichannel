@@ -1,176 +1,179 @@
-import { Request, Response } from "express";
-import { mediaService } from "@/services/mediaService";
-import { catchAsync } from "@/utils/catchAsync";
-import { AppError } from "@/utils/AppError";
-import { HTTP_STATUS } from "@/constants/httpStatus";
+import { Response } from "express";
+import { mediaRepository } from "@/repositories/MediaRepository";
+import { storageService } from "@/services/StorageService";
 import { Logger } from "@/utils/logger";
+import { MediaType } from "@prisma/client";
+import { AuthenticatedRequest } from "@/types/types";
 
 /**
- * 🎨 MEDIA CONTROLLER
- * Decoupled controller handling media via MediaService
+ *  MEDIA CONTROLLER (Audit Hardened)
+ * 
+ * Central orchestrator for the Multimedia Library.
+ * Enforces multi-tenant isolation and secure JIT S3 access.
  */
 
-export const mediaController = {
-  /**
-   * Upload File
-   */
-  uploadMedia: catchAsync(async (req: Request, res: Response) => {
-    Logger.info("[MediaController] Upload request received");
+/**
+ *  PUBLIC PROXY: getMediaContent
+ * Serves media binary via an authenticated redirect to a JIT Signed URL.
+ */
+export const getMediaContent = async (req: AuthenticatedRequest, res: Response): Promise<Response | void> => {
+  const { id: mediaId } = req.params;
+  const userCompanyId = req.user?.companyId;
 
-    if (!req.file) {
-      throw new AppError(
-        "No se ha enviado ningún archivo",
-        HTTP_STATUS.BAD_REQUEST,
-      );
+  try {
+    const media = await mediaRepository.findById(mediaId, {
+      id: true,
+      key: true,
+      companyId: true,
+    });
+
+    if (!media) return res.status(404).json({ error: "Media not found" });
+
+    // Enforce Tenant Access
+    if (userCompanyId && media.companyId !== userCompanyId) {
+      Logger.warn(`[MediaProxy]  Tenant mismatch: User ${userCompanyId} accessing ${mediaId}`);
+      return res.status(403).json({ error: "Access denied" });
     }
 
-    const { category, description, tags } = req.body;
-    const companyId = req.user?.companyId;
-    const userId = req.user?.id;
-
-    if (!companyId || !userId) {
-      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
+    if (!media.key) {
+      Logger.error(`[MediaProxy] [ERROR] Missing S3 key for media ${mediaId}`);
+      return res.status(500).json({ error: "Missing file key" });
     }
 
-    const media = await mediaService.upload({
-      file: req.file,
-      companyId,
-      userId,
-      category,
-      description,
-      tags,
-    });
-
-    Logger.info(`[MediaController] Upload success: ${media.id}`);
-
-    res.status(HTTP_STATUS.CREATED).json({
-      status: "success",
-      data: { media },
-    });
-  }),
-
-  /**
-   * Get Media List
-   */
-  getMedia: catchAsync(async (req: Request, res: Response) => {
-    const companyId = req.user?.companyId;
-    if (!companyId)
-      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
-
-    const { page = 1, limit = 20, search, type, category } = req.query;
-
-    const result = await mediaService.list(companyId, {
-      page: Number(page),
-      limit: Number(limit),
-      search: search as string,
-      type: type as string,
-      category: category as string,
-    });
-
-    res.json({
-      status: "success",
-      results: result.data.length,
-      total: result.meta.total,
-      page: result.meta.page,
-      totalPages: result.meta.pages,
-      data: { media: result.data },
-    });
-  }),
-
-  /**
-   * Get Single Media
-   */
-  getMediaById: catchAsync(async (req: Request, res: Response) => {
-    const companyId = req.user?.companyId;
-    const { id } = req.params;
-
-    if (!companyId)
-      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
-
-    const media = await mediaService.get(companyId, id);
-
-    res.json({
-      status: "success",
-      data: { media },
-    });
-  }),
-
-  /**
-   * Delete Media
-   */
-  deleteMedia: catchAsync(async (req: Request, res: Response) => {
-    const companyId = req.user?.companyId;
-    const { id } = req.params;
-
-    if (!companyId)
-      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
-
-    await mediaService.delete(companyId, id);
-
-    res.json({
-      status: "success",
-      message: "Archivo eliminado correctamente",
-    });
-  }),
-
-  /**
-   * Update Media
-   */
-  updateMedia: catchAsync(async (req: Request, res: Response) => {
-    const companyId = req.user?.companyId;
-    const { id } = req.params;
-    const { category, description, tags } = req.body;
-
-    if (!companyId)
-      throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
-
-    const media = await mediaService.update(companyId, id, {
-      category,
-      description,
-      tags,
-    });
-
-    res.json({
-      status: "success",
-      data: { media },
-    });
-  }),
-
-  /**
-   * Stream Content (Proxy)
-   * Serves media files through backend to avoid CORS and signed URL issues
-   */
-  getMediaContent: catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
-
-    Logger.info(`[MediaController] Streaming content for media ID: ${id}`);
-
-    const { stream, mimeType } = await mediaService.getStream(id);
-
-    // Set proper headers for browser to display content inline
-    res.setHeader("Content-Type", mimeType);
-    res.setHeader("Content-Disposition", "inline"); // Display in browser, don't download
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable"); // 1 year cache
-    res.setHeader("Accept-Ranges", "bytes"); // Enable seeking for audio/video
-    res.setHeader("Access-Control-Allow-Origin", "*"); // Allow cross-origin
-
-    // Pipe the stream to response
-    stream.pipe(res);
-
-    // Handle stream errors
-    stream.on("error", (err) => {
-      Logger.error(`[MediaController] Stream error for ${id}:`, err);
-      if (!res.headersSent) {
-        res.status(500).end();
-      }
-    });
-  }),
+    const signedUrl = await storageService.getSignedUrl(media.key, 3600);
+    return res.redirect(signedUrl);
+  } catch (error) {
+    Logger.error(`[MediaProxy] [ERROR] Failed to proxy ${mediaId}:`, error);
+    return res.status(500).json({ error: "Media server failure" });
+  }
 };
 
-// Exports compatibility
-export const uploadMedia = mediaController.uploadMedia;
-export const getMedia = mediaController.getMedia;
-export const getMediaById = mediaController.getMediaById;
-export const deleteMedia = mediaController.deleteMedia;
-export const updateMedia = mediaController.updateMedia;
-export const getMediaContent = mediaController.getMediaContent;
+/**
+ *  UPLOAD: uploadMedia
+ * Handles manual uploads to the Multimedia Library.
+ */
+export const uploadMedia = async (req: AuthenticatedRequest, res: Response): Promise<Response | void> => {
+  const companyId = req.user?.companyId;
+  const file = req.file;
+
+  if (!companyId) return res.status(403).json({ error: "No company context" });
+  if (!file) return res.status(400).json({ error: "No file provided" });
+
+  try {
+    const filename = `${Date.now()}_${file.originalname}`;
+    const uploadResult = await storageService.uploadFile(
+      companyId,
+      file.buffer,
+      filename,
+      file.mimetype
+    );
+
+    const media = await mediaRepository.create({
+      company: { connect: { id: companyId } },
+      filename: uploadResult.key,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      size: file.size,
+      url: uploadResult.url,
+      key: uploadResult.key,
+      type: mapMimeToType(file.mimetype),
+      uploadedBy: { connect: { id: req.user.id } },
+    });
+
+    return res.status(201).json(media);
+  } catch (error) {
+    Logger.error("[MediaUpload] [ERROR] Upload failed:", error);
+    return res.status(500).json({ error: "Upload failed" });
+  }
+};
+
+/**
+ * [SEARCH] LIST: getMedia
+ */
+export const getMedia = async (req: AuthenticatedRequest, res: Response): Promise<Response | void> => {
+  const companyId = req.user?.companyId;
+  if (!companyId) return res.status(403).json({ error: "No company context" });
+
+  try {
+    const mediaList = await mediaRepository.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(mediaList);
+  } catch (error) {
+    Logger.error("[MediaList] [ERROR] Failed to fetch media:", error);
+    return res.status(500).json({ error: "Failed to fetch media" });
+  }
+};
+
+/**
+ * 🆔 READ: getMediaById
+ */
+export const getMediaById = async (req: AuthenticatedRequest, res: Response): Promise<Response | void> => {
+  const { id } = req.params;
+  const companyId = req.user?.companyId;
+  if (!companyId) return res.status(403).json({ error: "No company context" });
+
+  try {
+    const media = await mediaRepository.findFirst({
+      where: { id, companyId },
+    });
+    if (!media) return res.status(404).json({ error: "Media not found" });
+    return res.json(media);
+  } catch (error) {
+    Logger.error(`[MediaById] [ERROR] Database error for ${id}:`, error);
+    return res.status(500).json({ error: "Database error" });
+  }
+};
+
+/**
+ *  UPDATE: updateMedia
+ */
+export const updateMedia = async (req: AuthenticatedRequest, res: Response): Promise<Response | void> => {
+  const { id } = req.params;
+  const companyId = req.user?.companyId;
+  const { description, category, tags } = req.body;
+
+  if (!companyId) return res.status(403).json({ error: "No company context" });
+
+  try {
+    const media = await mediaRepository.update({
+      where: { id, companyId },
+      data: { description, category, tags },
+    });
+    return res.json(media);
+  } catch (error) {
+    Logger.error(`[MediaUpdate] [ERROR] Update failed for ${id}:`, error);
+    return res.status(500).json({ error: "Update failed" });
+  }
+};
+
+/**
+ * ️ DELETE: deleteMedia
+ */
+export const deleteMedia = async (req: AuthenticatedRequest, res: Response): Promise<Response | void> => {
+  const { id } = req.params;
+  const companyId = req.user?.companyId;
+  if (!companyId) return res.status(403).json({ error: "No company context" });
+
+  try {
+    const media = await mediaRepository.findFirst({ where: { id, companyId } });
+    if (!media) return res.status(404).json({ error: "Media not found" });
+
+    await storageService.deleteFile(media.key);
+    await mediaRepository.delete(id);
+
+    return res.json({ message: "Media deleted successfully" });
+  } catch (error) {
+    Logger.error(`[MediaDelete] [ERROR] Deletion failed for ${id}:`, error);
+    return res.status(500).json({ error: "Deletion failed" });
+  }
+};
+
+// --- Helpers ---
+function mapMimeToType(mime: string): MediaType {
+  if (mime.startsWith("image/")) return MediaType.IMAGE;
+  if (mime.startsWith("audio/")) return MediaType.AUDIO;
+  if (mime.startsWith("video/")) return MediaType.VIDEO;
+  return MediaType.DOCUMENT;
+}

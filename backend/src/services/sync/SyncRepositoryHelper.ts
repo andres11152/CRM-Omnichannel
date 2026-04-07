@@ -1,6 +1,6 @@
 import { userRepository } from "@/repositories/UserRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
-import { chatService } from "@/services/chatService";
+import { chatService } from "@/services/ChatService";
 import { Logger } from "@/utils/logger";
 import { User, Conversation } from "@prisma/client";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
@@ -38,10 +38,10 @@ export class SyncRepositoryHelper {
         let subject = name || phone;
 
         if (!isGroup) {
-          // 🛡️ ENTERPRISE GUARD: Validate phone before creating contacts
+          // [SEC] ENTERPRISE GUARD: Validate phone before creating contacts
           // Blocks LID bases that somehow leaked through resolveJid
           if (!WhatsAppIdUtils.isRealPhoneNumber(phone.replace(/\D/g, ""))) {
-            Logger.warn(`[SyncRepo] ⛔ Skipping invalid phone (likely LID): ${phone}`);
+            Logger.warn(`[SyncRepo] [BLOCKED] Skipping invalid phone (likely LID): ${phone}`);
             return { conversation: null as unknown as Conversation & { participants: User[] }, customerUserId: undefined };
           }
           const newUser = await chatService.upsertWhatsAppUser({
@@ -55,7 +55,7 @@ export class SyncRepositoryHelper {
           customerUserId = createdUserId;
           subject = newUser.name || phone;
         } else {
-          subject = name ? `📢 ${name}` : `📢 Grupo Histórico`;
+          subject = name ? `[GROUP] ${name}` : `[GROUP] Grupo Histórico`;
         }
 
         await chatService.createConversation({

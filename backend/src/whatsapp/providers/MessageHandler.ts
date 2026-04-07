@@ -1,20 +1,19 @@
 import { IMessageHandler } from "../core/interfaces/IMessageHandler";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
 import {
-  MessagePayload,
   SendMessageOptions,
   MediaPayload,
+  MessagePayload,
 } from "../core/types/whatsapp.types";
+import { proto } from "@whiskeysockets/baileys";
 import { EventBus } from "../core/events/EventBus";
 import { WhatsAppEventType } from "../core/events/WhatsAppEvents";
-import { WAMessage } from "@whiskeysockets/baileys";
 
-// 🏗️ SRP SERVICES
+// [BUILD] SRP SERVICES
 import { IdentityResolverService } from "../services/IdentityResolverService";
 import { AITriggerService } from "../services/AITriggerService";
 import { ProfilePictureService } from "../services/ProfilePictureService";
 
-// 🏗️ EXTRACTED HANDLERS (Phase 2 Refactor)
 import { InboundMessageHandler } from "./handlers/InboundMessageHandler";
 import { OutboundMessageHandler } from "./handlers/OutboundMessageHandler";
 import { StatusUpdateHandler } from "./handlers/StatusUpdateHandler";
@@ -22,33 +21,33 @@ import { PresenceHandler } from "./handlers/PresenceHandler";
 import { MessageRevocationHandler } from "./handlers/MessageRevocationHandler";
 import { MessageReactionHandler } from "./handlers/MessageReactionHandler";
 import { InboundOrchestratorService } from "../services/InboundOrchestratorService";
-
 import { SessionData } from "@/types/whatsapp.types";
 
+import { getWhatsAppQueue } from "../queue/WhatsAppQueue";
+import { InboundWorker } from "../queue/workers/InboundWorker";
+import { OutboundWorker } from "../queue/workers/OutboundWorker";
+
 /**
- * 🏗️ MESSAGE HANDLER (Thin Orchestrator)
+ * [BUILD] MESSAGE HANDLER (Thin Orchestrator)
  *
- * After Phase 2 refactoring, this class is now a pure routing layer.
- * All heavyweight logic has been extracted into specialized handlers:
- *
- * - InboundMessageHandler:  Incoming message → identity, persist, AI trigger
- * - OutboundMessageHandler: sendMessage, sendMedia, markAsRead, sendPresenceUpdate
- * - StatusUpdateHandler:    Message status updates (sent → delivered → read)
- * - PresenceHandler:        Typing indicators (composing/recording/paused)
- *
- * Line count: ~120 ✅ (was 1048)
+ * After Phase 2 & 3 (BullMQ) refactoring, this class is now an 
+ * asynchronous routing layer. All heavy logic is offloaded to Redis queues.
  */
 export class MessageHandler implements IMessageHandler {
   private eventBus: EventBus;
   private sessionCache = new Map<string, SessionData>();
 
-  // 🏗️ Delegated handlers
+  // [BUILD] Delegated handlers
   private inboundHandler: InboundMessageHandler;
   private outboundHandler: OutboundMessageHandler;
   private statusHandler: StatusUpdateHandler;
   private presenceHandler: PresenceHandler;
   private revocationHandler: MessageRevocationHandler;
   private reactionHandler: MessageReactionHandler;
+
+  // [BUILD] Background Workers
+  private inboundWorker: InboundWorker;
+  private outboundWorker: OutboundWorker;
 
   constructor(private sessionManager: ISessionManager) {
     this.eventBus = EventBus.getInstance();
@@ -83,6 +82,10 @@ export class MessageHandler implements IMessageHandler {
       aiTrigger,
     );
 
+    //  Start Workers
+    this.inboundWorker = new InboundWorker(this.inboundHandler);
+    this.outboundWorker = new OutboundWorker(this.outboundHandler);
+
     this.statusHandler = new StatusUpdateHandler(this.sessionCache);
     this.revocationHandler = new MessageRevocationHandler(this.sessionCache);
     this.reactionHandler = new MessageReactionHandler(this.sessionCache);
@@ -102,9 +105,11 @@ export class MessageHandler implements IMessageHandler {
     this.eventBus.subscribe(
       WhatsAppEventType.MESSAGE_RECEIVED,
       async (event) => {
-        await this.handleIncoming(event.data.message, event.sessionId);
+        //  OFF-LOAD TO QUEUE
+        await this.handleIncoming(event.data.message, event.sessionId, event.companyId);
       },
     );
+// ... reste del archivo ...
 
     this.eventBus.subscribe(WhatsAppEventType.MESSAGE_UPDATE, async (event) => {
       await this.statusHandler.handleMessageUpdate(
@@ -124,7 +129,7 @@ export class MessageHandler implements IMessageHandler {
       },
     );
 
-    // 🗑️ Message Revocation ("Delete for Everyone")
+    // ️ Message Revocation ("Delete for Everyone")
     this.eventBus.subscribe(
       WhatsAppEventType.MESSAGE_REVOKED,
       async (event) => {
@@ -137,7 +142,7 @@ export class MessageHandler implements IMessageHandler {
       },
     );
 
-    // ❤️ Message Reactions (Emojis)
+    // ️ Message Reactions (Emojis)
     this.eventBus.subscribe(
       WhatsAppEventType.MESSAGE_REACTION,
       async (event) => {
@@ -146,7 +151,7 @@ export class MessageHandler implements IMessageHandler {
           event.data.reaction,
           event.data.participant,
           event.sessionId,
-          event.companyId, // 🛡️ FIX: Pass companyId directly from event
+          event.companyId, // [SEC] FIX: Pass companyId directly from event
         );
       },
     );
@@ -156,26 +161,85 @@ export class MessageHandler implements IMessageHandler {
   // IMessageHandler INTERFACE (Delegation)
   // ────────────────────────────────────────────────
 
-  async handleIncoming(message: WAMessage, sessionId: string): Promise<void> {
-    return this.inboundHandler.handleIncoming(message, sessionId);
+  // Helper to strip defective Baileys prototypes before BullMQ serialization
+  private deepCopyPlain(obj: unknown): unknown {
+    if (obj === null || typeof obj !== 'object') return obj;
+    
+    // Convert Buffer/Uint8Array to standard Base64 string for safe Redis transport
+    // rather than relying on BullMQ's default buffer handling
+    if (Buffer.isBuffer(obj) || obj instanceof Uint8Array) {
+      return Buffer.from(obj);
+    }
+
+    // Convert Long.js objects (used aggressively by Baileys for messageTimestamps) into JS Numbers
+    if ('toNumber' in obj && typeof (obj as { toNumber: () => number }).toNumber === 'function') {
+      return (obj as { toNumber: () => number }).toNumber();
+    }
+
+    if (Array.isArray(obj)) return obj.map((item) => this.deepCopyPlain(item));
+    
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(obj as Record<string, unknown>)) {
+      const val = (obj as Record<string, unknown>)[key];
+      // [SEC] CRITICAL: Never copy functions (like toJSON) into the serialized object
+      // This prevents Baileys defective prototypes from crashing BullMQ serialization
+      if (typeof val === 'function') continue;
+      
+      result[key] = this.deepCopyPlain(val);
+    }
+    return result;
+  }
+
+  async handleIncoming(message: proto.IWebMessageInfo, sessionId: string, companyId: string): Promise<void> {
+    const plainMessage = this.deepCopyPlain(message) as proto.IWebMessageInfo;
+
+    await getWhatsAppQueue().inboundQueue.add("process-message", {
+      message: plainMessage,
+      sessionId,
+      companyId,
+    });
   }
 
   async sendMessage(
     to: string,
     content: string,
     options: SendMessageOptions,
-    retries = 3,
   ): Promise<MessagePayload> {
-    return this.outboundHandler.sendMessage(to, content, options, retries);
+    const job = await getWhatsAppQueue().outboundQueue.add("send-text", {
+      type: "text",
+      payload: { to, content, options },
+    });
+    
+    return {
+      sessionId: "queued",
+      companyId: options.companyId,
+      from: "system",
+      to,
+      content,
+      messageId: `job:${job.id}`,
+      timestamp: new Date(),
+    } as MessagePayload;
   }
 
   async sendMedia(
     to: string,
     media: MediaPayload,
     options: SendMessageOptions,
-    retries = 3,
   ): Promise<MessagePayload> {
-    return this.outboundHandler.sendMedia(to, media, options, retries);
+    const job = await getWhatsAppQueue().outboundQueue.add("send-media", {
+      type: "media",
+      payload: { to, media, options },
+    });
+
+    return {
+      sessionId: "queued",
+      companyId: options.companyId,
+      from: "system",
+      to,
+      content: media.caption || "Media",
+      messageId: `job:${job.id}`,
+      timestamp: new Date(),
+    } as MessagePayload;
   }
 
   async markAsRead(messageId: string, sessionId: string): Promise<void> {
@@ -188,5 +252,21 @@ export class MessageHandler implements IMessageHandler {
     companyId: string,
   ): Promise<void> {
     return this.outboundHandler.sendPresenceUpdate(to, type, companyId);
+  }
+
+  async sendReaction(
+    to: string,
+    messageId: string,
+    reaction: string,
+    companyId: string,
+    fromMe?: boolean,
+  ): Promise<void> {
+    return this.outboundHandler.sendReaction(
+      to,
+      messageId,
+      reaction,
+      companyId,
+      fromMe,
+    );
   }
 }

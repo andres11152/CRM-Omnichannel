@@ -8,7 +8,7 @@ import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import bcrypt from "bcryptjs";
 import type { IncomingMessagePayload } from "@/types/message.types";
 
-// 🧩 SRP Sub-Services
+//  SRP Sub-Services
 import {
   contactResolver,
   userResolver,
@@ -19,7 +19,7 @@ import {
 } from "./messageProcessing";
 
 /**
- * 🧠 UTILITY: JID Normalizer
+ *  UTILITY: JID Normalizer
  * Converts messy JIDs (12345:11@s.whatsapp.net) into clean ints (12345)
  */
 const normalizeJid = (jid: string): string | null => {
@@ -35,7 +35,7 @@ const normalizeJid = (jid: string): string | null => {
   }
 
   if (phone.length < 7 || phone.length > 15) {
-    Logger.warn(`[normalizeJid] ⚠️ Rejected: Invalid phone length: ${phone}`);
+    Logger.warn(`[normalizeJid] [WARNING] Rejected: Invalid phone length: ${phone}`);
     return null;
   }
 
@@ -43,7 +43,7 @@ const normalizeJid = (jid: string): string | null => {
 };
 
 /**
- * 🚀 MESSAGE PROCESSOR (ORCHESTRATOR)
+ *  MESSAGE PROCESSOR (ORCHESTRATOR)
  *
  * This module is now a thin orchestrator that delegates each responsibility
  * to a specialized sub-service, following the Single Responsibility Principle:
@@ -60,7 +60,7 @@ const normalizeJid = (jid: string): string | null => {
  */
 export const messageProcessor = {
   /**
-   * 🚀 ENTRY POINT
+   *  ENTRY POINT
    * Using Distributed Locking to ensure concurrency safety across clusters.
    */
   async process(payload: IncomingMessagePayload) {
@@ -68,7 +68,7 @@ export const messageProcessor = {
     const phone = normalizeJid(remoteJid);
 
     if (!phone) {
-      Logger.error(`[MsgProcessor] 🛑 Blocking Message: Unresolved JID/LID`, {
+      Logger.error(`[MsgProcessor]  Blocking Message: Unresolved JID/LID`, {
         remoteJid,
         originalLid,
       });
@@ -96,7 +96,7 @@ export const messageProcessor = {
   },
 
   /**
-   * 🔒 CORE LOGIC (Orchestrator)
+   *  CORE LOGIC (Orchestrator)
    * Delegates each step to a specialized sub-service.
    */
   async _processSafeInternal(payload: IncomingMessagePayload) {
@@ -112,7 +112,7 @@ export const messageProcessor = {
       } = payload;
 
       Logger.info(
-        `[MsgProcessor] ⚡ Processing ${
+        `[MsgProcessor]  Processing ${
           isOutbound ? "OUT" : "IN"
         } | Phone: ${phone}`,
       );
@@ -204,7 +204,7 @@ export const messageProcessor = {
   },
 
   /**
-   * 🤖 AI AUTO-RESPONSE HANDLER (Legacy — preserved for backward compatibility)
+   * [AI] AI AUTO-RESPONSE HANDLER (Legacy — preserved for backward compatibility)
    * Called by autoAssignmentService.
    */
   async _handleAIAutoResponse(

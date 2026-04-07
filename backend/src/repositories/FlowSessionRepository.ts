@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma, ExtendedPrismaClient } from "@/config/database";
 
 /**
- * 🔄 FLOW SESSION REPOSITORY
+ * [SYNC] FLOW SESSION REPOSITORY
  *
  * Data access layer for ContactFlowSession, Workflow,
  * AIAssistant, AIConfig, Pipeline, and Stage models

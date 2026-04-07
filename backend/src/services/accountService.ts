@@ -1,9 +1,9 @@
 import { AppError } from "@/utils/AppError";
-import { planLimitsService } from "@/services/planLimitsService";
+import { planLimitsService } from "@/services/PlanLimitsService";
 import { accountRepository } from "@/repositories/AccountRepository";
 
 /**
- * 🏢 ACCOUNT CRUD SERVICE
+ *  ACCOUNT CRUD SERVICE
  *
  * Data access layer for CRM accounts (companies/organizations).
  */

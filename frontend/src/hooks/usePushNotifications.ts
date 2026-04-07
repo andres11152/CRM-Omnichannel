@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 
 /**
- * 🔔 USE PUSH NOTIFICATIONS HOOK
+ *  USE PUSH NOTIFICATIONS HOOK
  * Manages PWA push notification subscriptions
  */
 

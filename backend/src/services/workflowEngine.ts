@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import { Prisma } from "@prisma/client";
 import { Logger } from "@/utils/logger";
 import { emailService } from "./email/emailService";
 import { workflowRepository } from "@/repositories/WorkflowRepository";
@@ -10,196 +11,59 @@ import { activityRepository } from "@/repositories/ActivityRepository";
 import {
   DealPayload,
   WorkflowNode,
-  WorkflowTriggerConfig,
   WorkflowDefinition,
-} from "@/types/workflow.types";
+  WorkflowActionHandler,
+} from "../types/workflow.types";
+import { resolveVariables } from "@/utils/variableResolver";
+import { flowSessionRepository } from "@/repositories/FlowSessionRepository";
+import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+/**
+ * ️ WORKFLOW ENGINE (Audit Hardened)
+ * 
+ * Orchestrates event-based automations with multi-tenant isolation.
+ */
 
 // ==========================================
-// ⚙️ WORKFLOW ENGINE
+// ️ WORKFLOW ACTION HANDLERS
 // ==========================================
 
-class WorkflowEngine extends EventEmitter {
-  constructor() {
-    super();
-    this.initializeListeners();
-  }
-
-  private initializeListeners() {
-    this.on("DEAL_UPDATED", this.handleDealUpdated);
-    this.on("DEAL_CREATED", this.handleDealCreated);
-  }
-
-  private handleDealCreated = async (payload: DealPayload) => {
-    Logger.info(
-      `[WorkflowEngine] Processing DEAL_CREATED for deal ${payload.dealId}`,
-    );
-    await this.processEvent("DEAL_CREATED", payload);
-  };
-
-  private handleDealUpdated = async (payload: DealPayload) => {
-    Logger.info(
-      `[WorkflowEngine] Processing DEAL_UPDATED for deal ${payload.dealId}`,
-    );
-    await this.processEvent("DEAL_UPDATED", payload);
-  };
-
-  private async processEvent(eventName: string, payload: DealPayload) {
-    try {
-      // Find workflows triggered by this event
-      const workflows = await workflowRepository.findMany({
-        where: {
-          companyId: payload.companyId,
-          isActive: true,
-          triggerType: "EVENT",
-        },
-      });
-
-      for (const workflow of workflows) {
-        // Safe cast for JSON fields
-        const config =
-          workflow.triggerConfig as unknown as WorkflowTriggerConfig;
-
-        // Check if event matches
-        if (config?.event === eventName) {
-          // Check conditions (e.g. stage changed to WON)
-          let conditionMet = true;
-          if (config.condition) {
-            // Simple condition check: "stage" === "WON"
-            // In a real engine, this would be a complex rule evaluator
-            if (
-              config.condition.stage &&
-              config.condition.stage !== payload.newStage
-            ) {
-              conditionMet = false;
-            }
-          }
-
-          if (conditionMet) {
-            // Cast workflow to expected definition including JSON types
-            this.executeWorkflow(
-              workflow as unknown as WorkflowDefinition,
-              payload,
-            );
-          }
-        }
-      }
-    } catch (error) {
-      Logger.error(
-        `[WorkflowEngine] Error processing event ${eventName}:`,
-        error as Error,
-      );
-    }
-  }
-
-  private async executeWorkflow(
-    workflow: WorkflowDefinition,
-    payload: DealPayload,
-  ) {
-    Logger.info(
-      `[WorkflowEngine] Executing workflow ${workflow.name} (${workflow.id})`,
-    );
-
-    // Create Execution Log
-    const execution = await workflowExecutionRepository.create({
-      data: {
-        workflowId: workflow.id,
-        status: "PENDING",
-      },
-    });
-
-    try {
-      const nodes = workflow.nodes as unknown as WorkflowNode[];
-
-      if (!Array.isArray(nodes) || nodes.length === 0) {
-        Logger.warn(
-          `[WorkflowEngine] Workflow ${workflow.id} has no valid nodes`,
-        );
-        return;
-      }
-
-      // Find a valid user to be the "creator" (System or First Admin)
-      const systemUser = await userRepository.findFirst({
-        where: { companyId: workflow.companyId },
-        orderBy: { createdAt: "asc" }, // Usually the owner/first user
-      });
-
-      if (!systemUser) {
-        Logger.error(
-          `[WorkflowEngine] No user found for company ${workflow.companyId} to execute workflow`,
-        );
-        return;
-      }
-
-      // Simple sequential execution for MVP
-      for (const node of nodes) {
-        if (node.type === "action_email") {
-          await this.executeEmailAction(
-            node,
-            payload,
-            workflow.companyId,
-            systemUser.id,
-          );
-        } else if (node.type === "action_task") {
-          await this.executeTaskAction(
-            node,
-            payload,
-            workflow.companyId,
-            workflow.name,
-            systemUser.id,
-          );
-        }
-      }
-
-      await workflowExecutionRepository.update({
-        where: { id: execution.id },
-        data: { status: "SUCCESS", completedAt: new Date() },
-      });
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      Logger.error(`[WorkflowEngine] Execution Failed: ${errorMessage}`);
-
-      await workflowExecutionRepository.update({
-        where: { id: execution.id },
-        data: {
-          status: "FAILED",
-          error: errorMessage,
-          completedAt: new Date(),
-        },
-      });
-    }
-  }
-
-  private async executeEmailAction(
+class EmailActionHandler implements WorkflowActionHandler {
+  async execute(
     node: WorkflowNode,
     payload: DealPayload,
     companyId: string,
     systemUserId: string,
-  ) {
-    const recipientOption = node.data?.options?.[0]; // "Cliente" or specific email
-    const subject =
-      node.data?.options?.[1] || node.data?.params?.subject || "Sin Asunto";
-    const body = node.data?.content || node.data?.params?.body || "";
+  ): Promise<void> {
+    const recipientOption = node.data?.options?.[0];
+    
+    //  RESOLVE VARIABLES
+    const context: Record<string, unknown> = { ...payload };
+    const subject = resolveVariables(
+      node.data?.options?.[1] || node.data?.params?.subject || "Sin Asunto",
+      context
+    );
+    const bodyText = resolveVariables(
+      node.data?.content || node.data?.params?.body || "",
+      context
+    );
 
-    // 1. Resolve Recipient Email & Contact
     let targetEmail = "";
     let targetContactId: string | undefined = undefined;
 
     if (recipientOption === "Cliente" || !recipientOption) {
-      // Fetch Deal to get Contact
       const deal = await dealRepository.findById(payload.dealId, companyId);
       if (deal?.contact?.email) {
         targetEmail = deal.contact.email;
         targetContactId = deal.contact.id;
+        context.contact = deal.contact;
       } else {
-        Logger.warn(
-          `[WorkflowEngine] No email/contact found for Deal ${payload.dealId}`,
-        );
-        return; // Skip execution
+        Logger.warn(`[WorkflowAction:Email] No contact info for Deal ${payload.dealId}`);
+        return;
       }
     } else if (recipientOption.includes("@")) {
       targetEmail = recipientOption;
-      // Optionally try to find contact by email to link history
       const contact = await contactRepository.findFirst({
         where: { email: targetEmail, companyId },
       });
@@ -207,63 +71,257 @@ class WorkflowEngine extends EventEmitter {
     }
 
     if (targetEmail) {
-      Logger.info(
-        `[WorkflowEngine] Action: Sending Real Email to ${targetEmail} | Subject: ${subject}`,
-      );
-
-      // 2. Send Real Email via SMTP
+      Logger.info(`[WorkflowAction:Email] Sending to ${targetEmail}`);
       await emailService.sendEmail({
         companyId,
         to: [targetEmail],
-        subject: subject,
-        bodyHtml: body.replace(/\n/g, "<br>"),
-        bodyText: body,
+        subject,
+        bodyHtml: bodyText.replace(/\n/g, "<br>"),
+        bodyText,
         contactId: targetContactId,
         from: process.env.DEFAULT_SENDER_EMAIL || "automation@reply.com",
       });
 
-      // 3. Log email as an Activity in the CRM
-      await activityRepository
-        .create({
-          data: {
-            companyId,
-            type: "EMAIL",
-            subject: `📧 Email Automático: ${subject}`,
-            description: `Destinatario: ${targetEmail}\n\n${body}`,
-            dealId: payload.dealId,
-            status: "COMPLETED",
-            createdById: systemUserId,
-          },
-        })
-        .catch((e) => Logger.error("Failed to log email activity", e as Error));
+      await activityRepository.create({
+        data: {
+          companyId,
+          type: "EMAIL",
+          subject: ` Email Automático: ${subject}`,
+          description: `Destinatario: ${targetEmail}\n\n${bodyText}`,
+          dealId: payload.dealId,
+          status: "COMPLETED",
+          createdById: systemUserId,
+        },
+      });
     }
   }
+}
 
-  private async executeTaskAction(
+class TaskActionHandler implements WorkflowActionHandler {
+  async execute(
     node: WorkflowNode,
     payload: DealPayload,
     companyId: string,
-    workflowName: string,
     systemUserId: string,
-  ) {
-    Logger.info(`[WorkflowEngine] Action: Creating Task for ${payload.dealId}`);
+  ): Promise<void> {
+    const subject = resolveVariables(node.data?.label || "Tarea Automática de Workflow", payload as unknown as Record<string, unknown>);
+    const description = resolveVariables(node.data?.content || `Generada para el deal ${payload.dealId}`, payload as unknown as Record<string, unknown>);
 
-    // Implement task creation logic here
-    await activityRepository
-      .create({
-        data: {
-          companyId,
-          type: "TASK",
-          subject: node.data?.label || `Tarea Automática: ${workflowName}`,
-          description:
-            node.data?.content ||
-            `Generada por workflow para el deal ${payload.dealId}`,
-          dealId: payload.dealId,
-          status: "PENDING",
-          createdById: systemUserId,
+    Logger.info(`[WorkflowAction:Task] Creating for Deal ${payload.dealId}`);
+    await activityRepository.create({
+      data: {
+        companyId,
+        type: "TASK",
+        subject,
+        description,
+        dealId: payload.dealId,
+        status: "PENDING",
+        createdById: systemUserId,
+      },
+    });
+  }
+}
+
+class AIActionHandler implements WorkflowActionHandler {
+  async execute(
+    node: WorkflowNode,
+    payload: DealPayload,
+    companyId: string,
+  ): Promise<void> {
+    const aiAssistantId = node.data?.aiAssistantId || node.data?.params?.assistantId;
+    if (!aiAssistantId) throw new Error("AI Agent node missing AssistantId");
+
+    const [agent, aiConfig] = await Promise.all([
+      flowSessionRepository.findAIAssistant(aiAssistantId),
+      flowSessionRepository.findAIConfig(companyId)
+    ]);
+
+    if (!agent) throw new Error(`AI Assistant ${aiAssistantId} not found`);
+
+    const context = payload as unknown as Record<string, unknown>;
+    const systemPrompt = resolveVariables(agent.systemPrompt || "", context);
+    const userPrompt = resolveVariables(node.data?.content || "Analiza el contexto y responde.", context);
+
+    let aiResponse = "";
+
+    if (agent.modelProvider === "GEMINI") {
+      const key = aiConfig?.geminiKey || process.env.GEMINI_API_KEY;
+      if (!key) throw new Error("Gemini API Key missing for tenant");
+      
+      const genAI = new GoogleGenerativeAI(key);
+      const model = genAI.getGenerativeModel({ model: agent.modelName || "gemini-1.5-flash" });
+      const result = await model.generateContent([systemPrompt, userPrompt]);
+      aiResponse = result.response.text();
+    } else {
+      const key = aiConfig?.openaiKey || process.env.OPENAI_API_KEY;
+      if (!key) throw new Error("OpenAI API Key missing for tenant");
+
+      const openai = new OpenAI({ apiKey: key });
+      const completion = await openai.chat.completions.create({
+        model: agent.modelName || "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+      });
+      aiResponse = completion.choices[0]?.message?.content || "";
+    }
+
+    if (!payload.variables) payload.variables = {};
+    payload.variables.last_ai_response = aiResponse;
+    Logger.info(`[WorkflowAction:AI] Response received (${aiResponse.length} chars)`);
+  }
+}
+
+// ==========================================
+// ️ WORKFLOW ENGINE
+// ==========================================
+
+class WorkflowEngine extends EventEmitter {
+  private handlers: Record<string, WorkflowActionHandler> = {};
+
+  constructor() {
+    super();
+    this.registerHandlers();
+    this.initializeListeners();
+  }
+
+  private registerHandlers() {
+    this.handlers["action_email"] = new EmailActionHandler();
+    this.handlers["action_task"] = new TaskActionHandler();
+    this.handlers["AI_AGENT"] = new AIActionHandler();
+    this.handlers["action_ai"] = new AIActionHandler();
+  }
+
+  private initializeListeners() {
+    this.on("DEAL_UPDATED", this.handleDealUpdated);
+    this.on("DEAL_CREATED", this.handleDealCreated);
+  }
+
+  private handleDealCreated = async (payload: DealPayload): Promise<void> => {
+    Logger.info(`[WorkflowEngine] Event: DEAL_CREATED (${payload.dealId})`);
+    await this.processEvent("DEAL_CREATED", payload);
+  };
+
+  private handleDealUpdated = async (payload: DealPayload): Promise<void> => {
+    Logger.info(`[WorkflowEngine] Event: DEAL_UPDATED (${payload.dealId})`);
+    await this.processEvent("DEAL_UPDATED", payload);
+  };
+
+  private async processEvent(eventName: string, payload: DealPayload): Promise<void> {
+    try {
+      const activeWorkflows = await workflowRepository.findMany({
+        where: {
+          companyId: payload.companyId,
+          isActive: true,
+          triggerType: "EVENT",
         },
-      })
-      .catch((e) => Logger.error("Failed to create auto task", e as Error));
+      });
+
+      for (const rawWorkflow of activeWorkflows) {
+        const workflow = rawWorkflow as unknown as WorkflowDefinition;
+        const config = workflow.triggerConfig;
+
+        if (config?.event === eventName) {
+          let conditionMet = true;
+          if (config.condition?.stage && config.condition.stage !== payload.newStage) {
+            conditionMet = false;
+          }
+
+          if (conditionMet) {
+            this.executeWorkflow(workflow, payload).catch((e: Error) =>
+              Logger.error(`[WorkflowEngine] Execution Error: ${workflow.id}`, e),
+            );
+          }
+        }
+      }
+    } catch (error) {
+      Logger.error(`[WorkflowEngine] Critical Event Error ${eventName}:`, error as Error);
+    }
+  }
+
+  private async executeWorkflow(workflow: WorkflowDefinition, payload: DealPayload): Promise<void> {
+    const execution = await workflowExecutionRepository.create({
+      data: {
+        workflowId: workflow.id,
+        companyId: workflow.companyId,
+        status: "PENDING",
+      },
+    });
+
+    const stepLogs: Array<{ nodeId: string; type: string; timestamp: Date; status: string; error?: string }> = [];
+
+    try {
+      const { nodes, edges } = workflow;
+      if (!nodes || nodes.length === 0) return;
+
+      const startNode = nodes.find((n) => n.type === "START" || n.type === "trigger_deal");
+      if (!startNode) throw new Error("Could not find a valid START node in graph.");
+
+      const systemUser = await userRepository.findFirst({
+        where: { companyId: workflow.companyId },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (!systemUser) throw new Error("No system user found for company. Cannot execute actions.");
+
+      let currentNodes = [startNode];
+      const visited = new Set<string>();
+
+      while (currentNodes.length > 0) {
+        const nextBatch: WorkflowNode[] = [];
+
+        for (const node of currentNodes) {
+          if (visited.has(node.id)) continue;
+          visited.add(node.id);
+
+          const handler = this.handlers[node.type];
+          if (handler) {
+            try {
+              await handler.execute(node, payload, workflow.companyId, systemUser.id);
+              stepLogs.push({ nodeId: node.id, type: node.type, timestamp: new Date(), status: "COMPLETED" });
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              stepLogs.push({ nodeId: node.id, type: node.type, timestamp: new Date(), status: "FAILED", error: msg });
+              throw err;
+            }
+          } else {
+            stepLogs.push({ nodeId: node.id, type: node.type, timestamp: new Date(), status: "SKIPPED_NO_HANDLER" });
+          }
+
+          const outwardEdges = (edges || []).filter((e) => e.source === node.id);
+          for (const edge of outwardEdges) {
+            const neighbor = nodes.find((n) => n.id === edge.target);
+            if (neighbor) nextBatch.push(neighbor);
+          }
+        }
+        currentNodes = nextBatch;
+      }
+
+      await workflowExecutionRepository.update({
+        where: { id: execution.id },
+        data: { 
+          status: "SUCCESS", 
+          completedAt: new Date(),
+          logs: stepLogs as unknown as Prisma.JsonValue
+        },
+      });
+
+      Logger.info(`[WorkflowEngine] Execution SUCCESS: ${execution.id}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Graph Execution Failed";
+      Logger.error(`[WorkflowEngine] Execution FAILED (${execution.id}): ${errorMessage}`);
+      
+      await workflowExecutionRepository.update({
+        where: { id: execution.id },
+        data: { 
+          status: "FAILED", 
+          error: errorMessage, 
+          completedAt: new Date(),
+          logs: stepLogs as unknown as Prisma.JsonValue
+        },
+      });
+    }
   }
 }
 

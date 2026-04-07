@@ -3,14 +3,14 @@ import { prisma } from "@/config/database";
 import { Logger } from "@/utils/logger";
 
 /**
- * 👷 Worker Loader
+ *  Worker Loader
  * Initializes background workers for message queues and flows.
  */
 export const initWorkers = async () => {
-  Logger.info("[Loader] 🚀 Initializing Message Queue Workers...");
+  Logger.info("[Loader]  Initializing Message Queue Workers...");
   try {
     // Initialize Flow Queue Worker
-    Logger.info("[Loader] 🌊 Initializing Flow Queue Workers...");
+    Logger.info("[Loader]  Initializing Flow Queue Workers...");
     const { flowQueueWorker } =
       await import("@/services/queue/flowQueueWorker");
     flowQueueWorker.startWorker();
@@ -26,8 +26,8 @@ export const initWorkers = async () => {
     // Get singleton instance with whatsappService
     const messageWorker = getMessageQueueWorker(whatsappService);
 
-    // 🏢 ENTERPRISE: Group Contact Indexer Worker
-    Logger.info("[Loader] 👥 Initializing Group Contact Indexer...");
+    //  ENTERPRISE: Group Contact Indexer Worker
+    Logger.info("[Loader] [CONTACTS] Initializing Group Contact Indexer...");
     const { groupContactIndexer } =
       await import("@/services/queue/groupContactIndexer");
     groupContactIndexer.startWorker();
@@ -45,12 +45,12 @@ export const initWorkers = async () => {
       await messageWorker.startWorker(company.id);
     }
     Logger.info(
-      `[Loader] ✅ ${companies.length} message queue workers initialized`,
+      `[Loader] [OK] ${companies.length} message queue workers initialized`,
     );
 
     // Graceful shutdown handler
     process.on("SIGTERM", async () => {
-      Logger.info("[Loader] 🛑 SIGTERM received, shutting down gracefully...");
+      Logger.info("[Loader]  SIGTERM received, shutting down gracefully...");
       await messageWorker.shutdown();
       const { messageQueueService } =
         await import("@/services/queue/messageQueueService");
@@ -72,12 +72,12 @@ export const initWorkers = async () => {
       String(msg).toLowerCase().includes("error")
     ) {
       Logger.warn(
-        `[Loader] ⚠️ Redis connection failed for Workers. Running without Message Queues. (Reason: ${msg})`,
+        `[Loader] [WARNING] Redis connection failed for Workers. Running without Message Queues. (Reason: ${msg})`,
       );
     } else {
-      Logger.error("[Loader] ❌ Failed to initialize workers:");
+      Logger.error("[Loader] [ERROR] Failed to initialize workers:");
       Logger.error(workerError as string);
     }
-    Logger.info("[Loader] ⚠️ Continuing without queue workers...");
+    Logger.info("[Loader] [WARNING] Continuing without queue workers...");
   }
 };

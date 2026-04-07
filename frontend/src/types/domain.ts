@@ -122,6 +122,7 @@ export interface Contact extends BaseEntity {
   avatarUrl: string | null;
   tags: string[];
   customFields: Record<string, unknown>;
+  assignedToId?: string | null;
 }
 
 // ============================================

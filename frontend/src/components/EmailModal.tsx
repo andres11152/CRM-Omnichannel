@@ -28,7 +28,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      // 🔧 FIX: Use axios api instance
+      //  FIX: Use axios api instance
       api
         .get("/company/email-config")
         .then((res) => {
@@ -41,13 +41,13 @@ export const EmailModal: React.FC<EmailModalProps> = ({
             setEmailConfigured(true);
           } else {
             // Email NO configurado
-            setFrom("⚠️ Sin configurar");
+            setFrom("[WARNING] Sin configurar");
             setEmailConfigured(false);
           }
         })
         .catch((err) => {
           console.error("Error fetching email config:", err);
-          setFrom("⚠️ Error al cargar");
+          setFrom("[WARNING] Error al cargar");
           setEmailConfigured(false);
         });
     }

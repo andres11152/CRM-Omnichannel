@@ -1,5 +1,5 @@
 /**
- * 📧 EMAIL REPOSITORY
+ *  EMAIL REPOSITORY
  *
  * Data access for Email model + Company SMTP config:
  * - CRUD for emails (create, find, update status)

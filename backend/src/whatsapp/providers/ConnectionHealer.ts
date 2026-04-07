@@ -2,7 +2,7 @@ import { WASocket } from "@whiskeysockets/baileys";
 import { sessionModuleLogger as logger } from "./SessionLogger";
 
 /**
- * 🛡️ CONNECTION HEALER
+ * [SEC] CONNECTION HEALER
  *
  * Manages reconnection logic, heartbeat timers, and retry timeouts
  * for WhatsApp sessions. Extracted from SessionManager for SRP compliance.
@@ -19,21 +19,22 @@ type ReconnectFn = (sessionId: string) => Promise<void>;
 export interface ConnectionHealerConfig {
   /** Heartbeat interval in ms (default: 300_000 = 5 min) */
   heartbeatIntervalMs?: number;
-  /** Default reconnect delay in ms */
-  defaultReconnectDelayMs?: number;
-  /** Conflict reconnect delay in ms */
-  conflictReconnectDelayMs?: number;
+  /** Initial reconnect delay in ms (default: 5_000) */
+  baseReconnectDelayMs?: number;
+  /** Max delay for backoff in ms (default: 600_000 = 10 min) */
+  maxReconnectDelayMs?: number;
 }
 
 const DEFAULT_CONFIG: Required<ConnectionHealerConfig> = {
   heartbeatIntervalMs: 300_000,
-  defaultReconnectDelayMs: 5_000,
-  conflictReconnectDelayMs: 30_000,
+  baseReconnectDelayMs: 5_000,
+  maxReconnectDelayMs: 600_000, // 10 minutes max wait
 };
 
 export class ConnectionHealer {
   private heartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
   private retryTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private retryCounts: Map<string, number> = new Map();
   private readonly config: Required<ConnectionHealerConfig>;
 
   constructor(config?: ConnectionHealerConfig) {
@@ -54,6 +55,8 @@ export class ConnectionHealer {
     isSessionActive: () => boolean,
   ): void {
     this.stopHeartbeat(sessionId);
+    // On successful heartbeat start, we assume connectivity is better
+    // but don't reset retryCount here (done in SessionManager on open)
 
     const timer = setInterval(async () => {
       try {
@@ -62,6 +65,7 @@ export class ConnectionHealer {
           return;
         }
         if (sock.user?.id) {
+          // Presence subscribe acts as a "ping" to keep the socket warm
           await sock.presenceSubscribe(sock.user.id).catch(() => {});
         }
       } catch {
@@ -86,33 +90,54 @@ export class ConnectionHealer {
   // ────────────────────────────────────────────────
 
   /**
-   * Schedule a reconnection attempt with smart delay.
-   * Conflict errors get a longer delay to let the other connection stabilize.
+   * Reset retry count for a session (call on successful connection open)
+   */
+  resetRetryCount(sessionId: string): void {
+    this.retryCounts.set(sessionId, 0);
+  }
+
+  /**
+   * Schedule a reconnection attempt with Exponential Backoff.
+   * Prevents banning by avoiding aggressive reconnection loops.
    */
   scheduleReconnect(
     sessionId: string,
     errorMessage: string,
     reconnectFn: ReconnectFn,
   ): void {
-    // Cancel any existing retry for this session
     this.cancelReconnect(sessionId);
 
+    const currentRetry = this.retryCounts.get(sessionId) || 0;
     const isConflict = errorMessage.toLowerCase().includes("conflict");
-    const delayMs = isConflict
-      ? this.config.conflictReconnectDelayMs
-      : this.config.defaultReconnectDelayMs;
 
-    if (isConflict) {
-      logger.warn(
-        `[ConnectionHealer] ⚠️ Conflict detected. Waiting ${delayMs}ms before reconnect for ${sessionId}`,
-      );
+    // Strategy: Base * 2^retry + (Jitter)
+    // Retry 0: 5s
+    // Retry 1: 10s
+    // Retry 2: 20s
+    // ...
+    // Conflict doubles the base penalty
+    const penaltyFactor = isConflict ? 3 : 1; 
+    let delayMs = this.config.baseReconnectDelayMs * Math.pow(2, currentRetry) * penaltyFactor;
+
+    // Cap the delay
+    if (delayMs > this.config.maxReconnectDelayMs) {
+      delayMs = this.config.maxReconnectDelayMs;
     }
+
+    // Add 10% jitter to avoid thundering herd problem
+    delayMs += Math.random() * (delayMs * 0.1);
+
+    logger.warn(
+      `[ConnectionHealer] [SYNC] Scheduling reconnect #${currentRetry + 1} for ${sessionId} in ${Math.round(delayMs / 1000)}s (Conflict: ${isConflict})`,
+    );
 
     const timeout = setTimeout(() => {
       this.retryTimeouts.delete(sessionId);
+      this.retryCounts.set(sessionId, currentRetry + 1); // Increment for next time if it fails again
+      
       reconnectFn(sessionId).catch((e) =>
         logger.error(
-          `[ConnectionHealer] Reconnect failed for ${sessionId}: ${e}`,
+          `[ConnectionHealer] Reconnect attempt failed for ${sessionId}: ${e}`,
         ),
       );
     }, delayMs);
@@ -157,7 +182,7 @@ export class ConnectionHealer {
     for (const [sessionId] of this.retryTimeouts) {
       this.cancelReconnect(sessionId);
     }
-    logger.info("[ConnectionHealer] 🛑 All timers destroyed.");
+    logger.info("[ConnectionHealer]  All timers destroyed.");
   }
 
   /** Get stats for monitoring */

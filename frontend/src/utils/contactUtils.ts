@@ -1,6 +1,6 @@
 import { Contact } from "@/types";
 
-// 🏢 100-Year Solution: Flexible input type for resolving contact names
+//  100-Year Solution: Flexible input type for resolving contact names
 // This allows various contact formats from sockets, DTOs, etc.
 interface ResolveContactInput {
   name?: string;
@@ -11,7 +11,7 @@ interface ResolveContactInput {
 }
 
 /**
- * 🧹 Sanitiza y resuelve el nombre a mostrar para un contacto.
+ *  Sanitiza y resuelve el nombre a mostrar para un contacto.
  *
  * Principio: Single Responsibility (SRP) - Esta función solo sabe cómo formatear nombres.
  * No depende de React ni del estado de la UI.
@@ -26,7 +26,7 @@ export const resolveContactName = (
 ): string => {
   let name = contact.name || "";
 
-  // 🛡️ Sanitize: Remove technical suffixes
+  // [SEC] Sanitize: Remove technical suffixes
   if (name) {
     name = name
       .replace("@s.whatsapp.net", "")

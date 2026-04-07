@@ -17,7 +17,7 @@ import { conversationRepository } from "@/repositories/ConversationRepository";
 import { userRepository } from "@/repositories/UserRepository";
 
 /**
- * 🚀 CAMPAIGN EXECUTION ENGINE
+ *  CAMPAIGN EXECUTION ENGINE
  *
  * Intelligent campaign executor with:
  * - Template rendering support
@@ -26,17 +26,17 @@ import { userRepository } from "@/repositories/UserRepository";
  * - Retry logic
  * - Real-time metrics tracking
  *
- * 🛡️ ARCHITECTURE: Zero direct Prisma calls.
+ * [SEC] ARCHITECTURE: Zero direct Prisma calls.
  * All DB access goes through repositories.
  */
 
-// 🛡️ THROTTLING CONFIGURATION
+// [SEC] THROTTLING CONFIGURATION
 const MIN_DELAY_MS = 2000;
 const MAX_DELAY_MS = 5000;
 const BATCH_UPDATE_SIZE = 10;
 const RATE_LIMIT_PAUSE_MS = 60000;
 
-// 🧼 Type Guard for Campaign Stats
+//  Type Guard for Campaign Stats
 function normalizeStats(json: Prisma.JsonValue | null): CampaignStats {
   if (!json || typeof json !== "object" || Array.isArray(json)) {
     return {
@@ -51,7 +51,7 @@ function normalizeStats(json: Prisma.JsonValue | null): CampaignStats {
   return json as unknown as CampaignStats;
 }
 
-// 🧼 Type Guard for Custom Fields
+//  Type Guard for Custom Fields
 function normalizeCustomFields(
   json: Prisma.JsonValue | null,
 ): Record<string, unknown> {
@@ -266,7 +266,7 @@ export const campaignService = {
         },
       });
 
-      // 🔁 PREPARATION: Resolve System User ONCE (Optimization)
+      //  PREPARATION: Resolve System User ONCE (Optimization)
       let systemUser = await userRepository.findFirst({
         where: { companyId, email: "campaigns@system.bot" },
         select: { id: true },
@@ -369,11 +369,11 @@ export const campaignService = {
       });
 
       Logger.info(
-        `[Campaign] ✅ Finished ${campaignId}: ${stats.sent} sent, ${stats.failed} failed`,
+        `[Campaign] [OK] Finished ${campaignId}: ${stats.sent} sent, ${stats.failed} failed`,
       );
     } catch (error: unknown) {
       const errorMsg = getErrorMessage(error);
-      Logger.error(`[Campaign] ❌ Critical Error: ${errorMsg}`);
+      Logger.error(`[Campaign] [ERROR] Critical Error: ${errorMsg}`);
 
       await campaignRepository.update({
         where: { id: campaignId },
@@ -462,7 +462,7 @@ export const campaignService = {
           phone: contact.phone || "",
         };
 
-        // 🛡️ Safe mapping of unknown custom fields to string parameters
+        // [SEC] Safe mapping of unknown custom fields to string parameters
         if (contact.customFields) {
           Object.entries(contact.customFields).forEach(([key, val]) => {
             if (typeof val === "string" || typeof val === "number") {

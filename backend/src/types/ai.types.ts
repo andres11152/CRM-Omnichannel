@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// 🧠 AI Context Definition
+//  AI Context Definition
 export interface AIHistoryMessage {
   role: "user" | "model";
   parts: string;
@@ -15,7 +15,7 @@ export interface AIContext {
   variables?: Record<string, string>;
 }
 
-// 🛡️ Zod Schema for AI Response Validation
+// [SEC] Zod Schema for AI Response Validation
 // In future, if AI returns JSON actions (e.g. { action: "create_ticket", data: ... })
 // this schema will expand. For now, we validate strict text output.
 export const AIResponseSchema = z

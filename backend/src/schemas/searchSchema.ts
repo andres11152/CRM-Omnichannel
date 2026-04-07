@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ SEARCH VALIDATION SCHEMAS
+ * [SEC] SEARCH VALIDATION SCHEMAS
  *
  * Validates Command Palette (Cmd+K) search queries.
  * Prevents DoS via excessively long queries and injection attacks.

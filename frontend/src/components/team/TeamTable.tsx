@@ -33,7 +33,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
   if (agents.length === 0) {
     return (
       <div className="text-center py-20 bg-white dark:bg-reply-panel-dark rounded-xl border border-dashed border-gray-300 dark:border-reply-border-dark">
-        <div className="text-4xl mb-4">👋</div>
+        <div className="text-4xl mb-4"></div>
         <h3 className="text-xl font-bold text-gray-800 dark:text-white">
           Tu equipo está vacío
         </h3>
@@ -52,7 +52,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* 🖥️ DESKTOP TABLE VIEW */}
+      {/* ️ DESKTOP TABLE VIEW */}
       <div className="hidden lg:block bg-white dark:bg-reply-panel-dark rounded-xl border border-gray-200 dark:border-reply-border-dark shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead className="bg-reply-bg dark:bg-reply-surface-dark text-gray-500 dark:text-gray-400 text-xs uppercase font-bold tracking-wider">
@@ -81,7 +81,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
         </table>
       </div>
 
-      {/* 📱 MOBILE CARD VIEW */}
+      {/* [APP] MOBILE CARD VIEW */}
       <div className="lg:hidden space-y-3">
         {agents.map((agent) => (
           <div
@@ -101,7 +101,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
                 />
                 <div>
                   <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-                    {agent.isOwner && "👑"}
+                    {agent.isOwner && ""}
                     {agent.name}
                   </h4>
                   <p className="text-[10px] text-gray-500 truncate max-w-[150px]">
@@ -123,7 +123,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
                     )}
                     {agent.isAI && (
                       <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-100 text-emerald-700 uppercase">
-                        🤖 IA
+                        [AI] IA
                       </span>
                     )}
                   </div>
@@ -298,7 +298,7 @@ const TeamTableRow: React.FC<TeamTableRowProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <div className="font-bold text-gray-900 dark:text-white text-sm">
-                {agent.isOwner && "👑 "}
+                {agent.isOwner && " "}
                 {agent.name}
               </div>
               {agent.role === "Admin" ? (
@@ -316,7 +316,7 @@ const TeamTableRow: React.FC<TeamTableRowProps> = ({
               )}
               {agent.isAI && (
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 uppercase tracking-wide flex items-center gap-1">
-                  🤖 IA
+                  [AI] IA
                 </span>
               )}
             </div>

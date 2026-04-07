@@ -216,7 +216,7 @@ export const teamService = {
     const aiAgents: TeamAgent[] = aiAssistants.map((assistant) => ({
       id: `ai-${assistant.id}`,
       companyId: assistant.companyId || "system",
-      name: `🤖 ${assistant.name}`,
+      name: `[AI] ${assistant.name}`,
       email: `IA Gemini ${assistant.modelName || ""}`,
       role: "AI_AGENT",
       isOwner: false,

@@ -72,7 +72,7 @@ export const ScheduleModal: React.FC<{
     <ModalBackdrop onClose={onClose} title="Programar Mensaje">
       <div className="space-y-4">
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-start gap-3">
-          <span className="text-xl">🕒</span>
+          <span className="text-xl"></span>
           <p className="text-sm text-blue-700 dark:text-blue-200">
             El sistema enviar este mensaje automticamente en la fecha
             seleccionada.
@@ -214,7 +214,7 @@ export const ProductPicker: React.FC<{
                 />
               ) : (
                 <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 flex items-center justify-center">
-                  <span className="text-2xl">📦</span>
+                  <span className="text-2xl">[PKG]</span>
                 </div>
               )}
               <div className="flex-1">
@@ -303,19 +303,19 @@ export const DataRequestPicker: React.FC<{
     {
       id: "email",
       label: "Correo Electrónico",
-      icon: "📧",
+      icon: "",
       desc: "Solicitar email al cliente",
     },
     {
       id: "phone",
       label: "Número de Teléfono",
-      icon: "📱",
+      icon: "[APP]",
       desc: "Confirmar número de contacto",
     },
     {
       id: "location",
       label: "Ubicación Actual",
-      icon: "📍",
+      icon: "[LOC]",
       desc: "Pedir ubicación GPS",
     },
     {

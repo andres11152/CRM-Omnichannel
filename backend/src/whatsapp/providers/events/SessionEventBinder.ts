@@ -1,5 +1,5 @@
 /**
- * 🔌 SESSION EVENT BINDER
+ *  SESSION EVENT BINDER
  *
  * Wires Baileys socket events to the internal EventBus:
  * - connection.update (QR, open, close with reconnect logic)
@@ -34,9 +34,10 @@ import {
 } from "../../core/validation/baileys.schemas";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import TenantContextManager from "@/config/tenantContext";
-import { chatSyncService } from "@/services/chatSyncService";
+import { chatSyncService } from "@/services/ChatSyncService";
 import type { SessionStatus } from "../../core/types/whatsapp.types";
 import type { SimpleInMemoryStore } from "../SimpleStore";
+import { AuditService } from "@/services/AuditService";
 
 /** Dependencies injected from SessionManager */
 export interface SessionEventBinderDeps {
@@ -69,10 +70,10 @@ export function bindSessionEvents(
     reconnectSession,
   } = deps;
 
-  // 🔗 Bind Store (Memory Only for Baileys usage)
+  //  Bind Store (Memory Only for Baileys usage)
   store.bind(sock.ev);
 
-  // 🚀 Enterprise Persistence: Ingest history to DB
+  //  Enterprise Persistence: Ingest history to DB
   sock.ev.on("messaging-history.set", (rawData: unknown) => {
     const validated = validateBaileysEvent(
       HistorySyncSchema,
@@ -84,14 +85,10 @@ export function bindSessionEvents(
 
     const { messages, chats, contacts } = validated;
     
-    // 🧠 SMART SYNC STRATEGY: 
-    // 1. Identity Sync: Always process chats/contacts (Shell Creation)
-    // 2. Message Sync: Process limited messages if Full Sync is OFF, or more if ON.
-    
     const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
     const MAX_MESSAGES_PER_CHAT = process.env.WA_HISTORY_LIMIT_PER_CHAT 
       ? parseInt(process.env.WA_HISTORY_LIMIT_PER_CHAT, 10) 
-      : (syncFullHistory ? 100 : 20); // 🚀 20 messages is enough for a sidebar preview
+      : (syncFullHistory ? 100 : 20);
 
     const syncMessages: WAMessage[] = [];
     
@@ -106,27 +103,17 @@ export function bindSessionEvents(
         messagesByChat.get(jid)!.push(msg);
       }
 
-      let skippedCount = 0;
       for (const chatMsgs of messagesByChat.values()) {
         chatMsgs.sort((a, b) => {
           const tA = Number(a.messageTimestamp || 0);
           const tB = Number(b.messageTimestamp || 0);
-          return tB - tA; // Newest first
+          return tB - tA;
         });
-
-        if (chatMsgs.length > MAX_MESSAGES_PER_CHAT) {
-          skippedCount += chatMsgs.length - MAX_MESSAGES_PER_CHAT;
-        }
-
         syncMessages.push(...chatMsgs.slice(0, MAX_MESSAGES_PER_CHAT));
       }
 
       logger.info(
-        `[SessionManager] 📥 History Sync for ${sessionId}: ${syncMessages.length} messages (📉 Skipped: ${skippedCount} older), ${chats?.length || 0} chats, ${contacts?.length || 0} contacts`,
-      );
-    } else {
-      logger.info(
-        `[SessionManager] 👤 Discovery Sync for ${sessionId}: ${chats?.length || 0} chats found (0 messages in payload)`,
+        `[SessionManager]  History Sync for ${sessionId}: ${syncMessages.length} messages, ${chats?.length || 0} chats, ${contacts?.length || 0} contacts`,
       );
     }
 
@@ -160,6 +147,9 @@ export function bindSessionEvents(
         data: { qr },
       });
 
+      // [SEC] Audit: QR Emitted
+      await AuditService.logWhatsAppEvent(companyId, sessionId, "SCANNING", { qrLength: qr.length });
+
       await TenantContextManager.runAsSystem(async () =>
         whatsappSessionRepository.updateSystemSession(sessionId, {
           qrCode: qr,
@@ -167,9 +157,6 @@ export function bindSessionEvents(
         }),
       ).catch(async (err: { code?: string; message?: string }) => {
         if (err?.code === "P2025") {
-          logger.warn(
-            `[SessionManager] Session ${sessionId} not in DB during QR. Self-healing: recreating record.`,
-          );
           await TenantContextManager.runAsSystem(async () =>
             whatsappSessionRepository.createSessionRecord({
               sessionId,
@@ -177,14 +164,8 @@ export function bindSessionEvents(
               status: "SCANNING",
               phone: null,
             }),
-          ).catch((createErr) =>
-            logger.error(
-              `[DB Error] Failed to self-heal session record during QR: ${createErr}`,
-            ),
           );
-          return;
         }
-        logger.error(`[DB Error] Update QR: ${err.message || err}`);
       });
     }
 
@@ -194,9 +175,11 @@ export function bindSessionEvents(
         phoneNumber = sock.user.id.split(":")[0].split("@")[0];
       }
 
-      logger.info(
-        `[SessionManager] Session ${sessionId} CONNECTED ✅ Phone: ${phoneNumber || "Unknown"}`,
-      );
+      logger.info(`[SessionManager] Session ${sessionId} CONNECTED [OK] Phone: ${phoneNumber || "Unknown"}`);
+      
+      // [SEC] Audit: Connected
+      await AuditService.logWhatsAppEvent(companyId, sessionId, "CONNECTED", { phone: phoneNumber });
+
       sessionMetadata.set(sessionId, { companyId, status: "CONNECTED" });
 
       await TenantContextManager.runAsSystem(async () =>
@@ -207,10 +190,6 @@ export function bindSessionEvents(
         }),
       ).catch(async (err: { code?: string }) => {
         if (err?.code === "P2025") {
-          // 🛡️ SELF-HEALING: Session record was deleted (cleanup/migration). Recreate it.
-          logger.warn(
-            `[SessionManager] Session ${sessionId} not in DB (post-cleanup). Self-healing: recreating record.`,
-          );
           await TenantContextManager.runAsSystem(async () =>
             whatsappSessionRepository.createSessionRecord({
               sessionId,
@@ -218,14 +197,8 @@ export function bindSessionEvents(
               status: "CONNECTED",
               phone: phoneNumber,
             }),
-          ).catch((createErr) =>
-            logger.error(
-              `[DB Error] Failed to self-heal session record: ${createErr}`,
-            ),
           );
-          return;
         }
-        logger.error(`[DB Error] Update session status: ${err}`);
       });
 
       eventBus.publish({
@@ -236,7 +209,7 @@ export function bindSessionEvents(
         data: { phone: phoneNumber || undefined },
       });
 
-      // ⚡ Delegate heartbeat to ConnectionHealer
+      healer.resetRetryCount(sessionId);
       healer.startHeartbeat(sessionId, sock, () => sessions.has(sessionId));
     }
 
@@ -246,37 +219,27 @@ export function bindSessionEvents(
         message?: string;
       };
 
-      const resetConnection =
-        boomError?.output?.statusCode !== DisconnectReason.loggedOut;
+      const resetConnection = boomError?.output?.statusCode !== DisconnectReason.loggedOut;
       const errorMsg = boomError?.message || "Unknown";
 
-      logger.warn(
-        `[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg}. Reconnect: ${resetConnection}`,
-      );
+      logger.warn(`[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg}. Reconnect: ${resetConnection}`);
 
-      // 🛑 Force kill the socket to prevent zombies
-      try {
-        sock.end(undefined);
-      } catch {
-        // Ignore end errors
-      }
+      // [SEC] Audit: Disconnected
+      await AuditService.logWhatsAppEvent(companyId, sessionId, "DISCONNECTED", { 
+        reason: errorMsg, 
+        isReconnecting: resetConnection,
+        statusCode: boomError?.output?.statusCode
+      });
 
-      // Cleanup listeners
+      try { sock.end(undefined); } catch { /* Ignore socket close errors during cleanup */ }
       sock.ev.removeAllListeners("connection.update");
       sock.ev.removeAllListeners("creds.update");
       sock.ev.removeAllListeners("messages.upsert");
-
       healer.stopHeartbeat(sessionId);
 
       if (resetConnection) {
-        sessionMetadata.set(sessionId, {
-          companyId,
-          status: "DISCONNECTED",
-        });
-        // Delegate smart reconnect to ConnectionHealer
-        healer.scheduleReconnect(sessionId, errorMsg, (sid) =>
-          reconnectSession(sid),
-        );
+        sessionMetadata.set(sessionId, { companyId, status: "DISCONNECTED" });
+        healer.scheduleReconnect(sessionId, errorMsg, (sid) => reconnectSession(sid));
       } else {
         await terminateSession(sessionId, true);
       }
@@ -291,152 +254,74 @@ export function bindSessionEvents(
     }
   });
 
-  // Message listener
+  // Message listener (notify only)
   sock.ev.on("messages.upsert", async (rawData: unknown) => {
-    logger.info(
-      `[SessionManager] raw messages.upsert fired: ${JSON.stringify(rawData).substring(0, 300)}...`,
-    );
-    const validated = validateBaileysEvent(
-      MessagesUpsertSchema,
-      rawData,
-      "messages.upsert",
-      { sessionId, companyId },
-    );
-
-    if (!validated) {
-      logger.warn(
-        `[SessionManager] Validation failed for messages.upsert in session ${sessionId}`,
-      );
-      return;
-    }
-
-    // ONLY process 'notify' (new messages) to prevent history sync floods
-    if (validated.type === "notify") {
+    const validated = validateBaileysEvent(MessagesUpsertSchema, rawData, "messages.upsert", { sessionId, companyId });
+    if (validated && validated.type === "notify") {
       for (const msg of validated.messages) {
         if (!msg.message) continue;
-
         let msgContent = msg.message;
 
-        // 🛡️ Unwrap nested messages (Ephemeral, viewOnce)
-        if (msgContent?.ephemeralMessage?.message) {
-          msgContent = msgContent.ephemeralMessage.message;
-        }
-
-        if (msgContent?.viewOnceMessageV2?.message) {
-          msgContent = msgContent.viewOnceMessageV2.message;
-        } else if (msgContent?.viewOnceMessage?.message) {
-          msgContent = msgContent.viewOnceMessage.message;
-        } else if (msgContent?.documentWithCaptionMessage?.message) {
-          msgContent = msgContent.documentWithCaptionMessage.message;
-        }
-
-        // 🗑️ REVOCATION DETECTION: "Delete for Everyone"
-        const proto = msgContent?.protocolMessage;
-        if (
-          proto &&
-          (proto.type === 0 ||
-            proto.type === "REVOKE" ||
-            proto.type === "0" ||
-            !proto.type) &&
-          proto.key?.id
-        ) {
-          logger.info(
-            `[SessionManager] 🗑️ Message revocation detected: ${proto.key.id} (by: ${msg.key.fromMe ? "me" : msg.key.remoteJid})`,
-          );
+        // Unwrap specific types
+        if (msgContent.ephemeralMessage) msgContent = msgContent.ephemeralMessage.message!;
+        if (msgContent.viewOnceMessageV2) msgContent = msgContent.viewOnceMessageV2.message!;
+        
+        // Revocation check
+        const proto = msgContent.protocolMessage;
+        if (proto && (proto.type === 0 || proto.type === "REVOKE" || !proto.type) && proto.key?.id) {
           eventBus.publish({
             type: WhatsAppEventType.MESSAGE_REVOKED,
-            sessionId,
-            companyId,
-            timestamp: new Date(),
-            data: {
-              revokedMessageId: proto.key.id,
-              revokedBy: msg.key.remoteJid || "unknown",
-              fromMe: msg.key.fromMe || false,
-            },
+            sessionId, companyId, timestamp: new Date(),
+            data: { revokedMessageId: proto.key.id, revokedBy: msg.key.remoteJid || "unknown", fromMe: msg.key.fromMe || false },
           });
-          continue; // Don't process as a normal message
+          continue;
         }
 
-        // ❤️ REACTION DETECTION
-        const react = msgContent?.reactionMessage;
+        // Reaction check
+        const react = msgContent.reactionMessage;
         if (react && react.key?.id) {
-          logger.info(
-            `[SessionManager] ❤️ Reaction detected for ${react.key.id}: ${react.text}`,
-          );
           eventBus.publish({
             type: WhatsAppEventType.MESSAGE_REACTION,
-            sessionId,
-            companyId,
-            timestamp: new Date(),
-            data: {
-              messageId: react.key.id,
-              reaction: react.text || "", // Empty if removed
-              participant:
-                msg.key.participant || msg.key.remoteJid || "unknown",
-            },
+            sessionId, companyId, timestamp: new Date(),
+            data: { messageId: react.key.id, reaction: react.text || "", participant: msg.key.participant || msg.key.remoteJid || "unknown" },
           });
-          continue; // Don't process as a normal message
+          continue;
         }
 
         eventBus.publish({
           type: WhatsAppEventType.MESSAGE_RECEIVED,
-          sessionId,
-          companyId,
-          timestamp: new Date(),
+          sessionId, companyId, timestamp: new Date(),
+          // [SEC] CAST NOTE: We cast 'msg' (validated zod output) to WAMessage to satisfy Baileys interfaces.
+          // The Zod schema (MessagesUpsertSchema) ensures structural compatibility.
           data: { message: msg as unknown as WAMessage },
         });
       }
     }
   });
 
-  // Message status updates
   sock.ev.on("messages.update", async (rawUpdates: unknown) => {
-    if (!Array.isArray(rawUpdates)) {
-      logger.warn(
-        `[SessionManager] ⚠️ messages.update received non-array payload for session ${sessionId}`,
-      );
-      return;
-    }
-
-    for (const rawUpdate of rawUpdates) {
-      const validated = validateBaileysEvent(
-        MessageUpdateSchema,
-        rawUpdate,
-        "messages.update",
-        { sessionId, companyId },
-      );
-      if (!validated) continue;
-      if (!validated.key?.id) continue;
-
-      eventBus.publish({
-        type: WhatsAppEventType.MESSAGE_UPDATE,
-        sessionId,
-        companyId,
-        timestamp: new Date(),
-        data: {
-          messageId: validated.key.id,
-          update: validated as unknown as WAMessageUpdate,
-        },
-      });
+    if (Array.isArray(rawUpdates)) {
+      for (const rawUpdate of rawUpdates) {
+        const validated = validateBaileysEvent(MessageUpdateSchema, rawUpdate, "messages.update", { sessionId, companyId });
+        if (validated && validated.key?.id) {
+          eventBus.publish({
+            type: WhatsAppEventType.MESSAGE_UPDATE,
+            sessionId, companyId, timestamp: new Date(),
+            data: { messageId: validated.key.id, update: validated as unknown as WAMessageUpdate },
+          });
+        }
+      }
     }
   });
 
-  // Presence updates (typing)
   sock.ev.on("presence.update", (rawData: unknown) => {
-    const validated = validateBaileysEvent(
-      PresenceUpdateSchema,
-      rawData,
-      "presence.update",
-      { sessionId, companyId },
-    );
-    if (!validated) return;
-
-    eventBus.publish({
-      type: WhatsAppEventType.PRESENCE_UPDATE,
-      sessionId,
-      companyId,
-      timestamp: new Date(),
-      data: validated as WhatsAppEventData[WhatsAppEventType.PRESENCE_UPDATE],
-    });
+    const validated = validateBaileysEvent(PresenceUpdateSchema, rawData, "presence.update", { sessionId, companyId });
+    if (validated) {
+      eventBus.publish({
+        type: WhatsAppEventType.PRESENCE_UPDATE,
+        sessionId, companyId, timestamp: new Date(),
+        data: validated as WhatsAppEventData[WhatsAppEventType.PRESENCE_UPDATE],
+      });
+    }
   });
 }

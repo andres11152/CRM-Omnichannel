@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🚀 ONBOARDING SCHEMAS
+ *  ONBOARDING SCHEMAS
  *
  * Validation for onboarding a new company/tenant via registration endpoint
  */

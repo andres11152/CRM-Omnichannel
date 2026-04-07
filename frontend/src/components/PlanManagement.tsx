@@ -715,7 +715,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                 meta?.description ||
                                 "Configuración personalizada";
                               const icon = meta?.icon || (
-                                <span className="text-2xl">⚙️</span>
+                                <span className="text-2xl">️</span>
                               );
                               const type =
                                 meta?.type ||
@@ -875,7 +875,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                   </p>
                                   {key === "storage_limit_gb" && (
                                     <p className="text-[10px] text-indigo-500 font-medium mt-1">
-                                      💡 1 GB ≈ 500 imgenes de alta calidad
+                                       1 GB ≈ 500 imgenes de alta calidad
                                     </p>
                                   )}
                                 </div>

@@ -3,8 +3,8 @@ import { AppError } from "@/utils/AppError";
 import { Prisma } from "@prisma/client";
 
 /**
- * 🔔 NOTIFICATION CRUD SERVICE
- * 🛡️ All queries scoped by companyId to prevent cross-tenant data leaks
+ *  NOTIFICATION CRUD SERVICE
+ * [SEC] All queries scoped by companyId to prevent cross-tenant data leaks
  */
 export const notificationService = {
   async findAll(

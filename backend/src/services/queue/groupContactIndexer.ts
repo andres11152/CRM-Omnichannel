@@ -2,13 +2,14 @@ import { Queue, Worker, Job } from "bullmq";
 import { connection } from "@/config/bullmq";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
-import { contactService } from "@/services/contactService";
+import { contactService } from "@/services/ContactService";
 import { whatsappService } from "@/whatsapp";
+import { Prisma } from "@prisma/client";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { Logger } from "@/utils/logger";
 
 // ============================================================================
-// 🏢 ENTERPRISE GROUP CONTACT INDEXER
+//  ENTERPRISE GROUP CONTACT INDEXER
 //
 // Async BullMQ worker that:
 // 1. Registers group participants as lightweight contacts (phone + origin tag)
@@ -108,7 +109,7 @@ async function indexGroupParticipants(
     return;
   }
 
-  // 🛡️ ENTERPRISE: Check if synchronization is enabled for this specific group
+  // [SEC] ENTERPRISE: Check if synchronization is enabled for this specific group
   const conversation = await conversationRepository.findFirst({
     where: { companyId, channelId: groupJid.split("@")[0] },
     select: { id: true, syncEnabled: true },
@@ -116,7 +117,7 @@ async function indexGroupParticipants(
 
   if (conversation && !conversation.syncEnabled) {
     Logger.info(
-      `[GroupIndexer] 🛑 Skipping group ${groupJid} (Sync is DISABLED by user)`,
+      `[GroupIndexer]  Skipping group ${groupJid} (Sync is DISABLED by user)`,
     );
     return;
   }
@@ -232,7 +233,7 @@ async function indexGroupParticipants(
   }
 
   Logger.info(
-    `[GroupIndexer] ✅ Group "${resolvedGroupName}" indexed: ${created} created, ${tagged} tagged, ${skipped} skipped (LID/invalid)`,
+    `[GroupIndexer] [OK] Group "${resolvedGroupName}" indexed: ${created} created, ${tagged} tagged, ${skipped} skipped (LID/invalid)`,
   );
 }
 
@@ -295,9 +296,9 @@ async function enrichContact(data: GroupIndexJob): Promise<void> {
         }
 
         if (Object.keys(updates).length > 0) {
-          await contactRepository.update(contact.id, updates);
+          await contactRepository.update(companyId, contact.id, updates as Prisma.ContactUncheckedUpdateInput);
           Logger.debug(
-            `[GroupIndexer] 🎨 Enriched contact ${contactPhone}: ${Object.keys(updates).join(", ")}`,
+            `[GroupIndexer]  Enriched contact ${contactPhone}: ${Object.keys(updates).join(", ")}`,
           );
         }
       }
@@ -328,15 +329,15 @@ export const groupContactIndexer = {
     });
 
     workerInstance.on("completed", (job) => {
-      Logger.debug(`[GroupIndexer] ✅ Job ${job.name} completed`);
+      Logger.debug(`[GroupIndexer] [OK] Job ${job.name} completed`);
     });
 
     workerInstance.on("failed", (job, err) => {
-      Logger.warn(`[GroupIndexer] ❌ Job ${job?.name} failed: ${err.message}`);
+      Logger.warn(`[GroupIndexer] [ERROR] Job ${job?.name} failed: ${err.message}`);
     });
 
     Logger.info(
-      "[GroupIndexer] 🚀 Worker started (concurrency: 2, rate: 10/min)",
+      "[GroupIndexer]  Worker started (concurrency: 2, rate: 10/min)",
     );
   },
 

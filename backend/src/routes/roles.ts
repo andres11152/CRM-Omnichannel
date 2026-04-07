@@ -19,7 +19,7 @@ import {
 const router = express.Router();
 
 /**
- * 🔐 ROLES & PERMISSIONS ROUTES
+ * [AUTH] ROLES & PERMISSIONS ROUTES
  * All routes require authentication
  */
 

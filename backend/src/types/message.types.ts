@@ -1,5 +1,5 @@
 /**
- * 🔒 MESSAGE PROCESSING TYPE DEFINITIONS
+ *  MESSAGE PROCESSING TYPE DEFINITIONS
  *
  * Centralized type definitions for message handling, events, and socket payloads.
  * Eliminates anonymous types and 'any' usage in message flow.
@@ -18,7 +18,7 @@ import {
 } from "@prisma/client";
 
 // ============================================================================
-// 📨 INCOMING MESSAGE TYPES
+//  INCOMING MESSAGE TYPES
 // ============================================================================
 
 export interface MessagingMediaPayload {
@@ -46,7 +46,7 @@ export interface IncomingMessagePayload {
 }
 
 // ============================================================================
-// 📤 OUTGOING & SOCKET TYPES
+//  OUTGOING & SOCKET TYPES
 // ============================================================================
 
 export interface SocketDashboardPayload {
@@ -86,7 +86,7 @@ export interface ProcessingError extends Error {
 }
 
 // ============================================================================
-// 📦 REPOSITORY TYPES
+// [PKG] REPOSITORY TYPES
 // ============================================================================
 
 export interface CreateMessageParams {

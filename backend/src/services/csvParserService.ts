@@ -4,7 +4,7 @@ import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 
 /**
- * 📊 CSV/EXCEL PARSER SERVICE
+ * [STAT] CSV/EXCEL PARSER SERVICE
  *
  * Handles parsing of uploaded CSV and Excel files
  * Returns normalized array of objects

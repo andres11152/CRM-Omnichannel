@@ -16,11 +16,11 @@ import { SoundProvider } from "./components/SoundContext";
 import { ImpersonationHandler } from "./components/auth/ImpersonationHandler";
 import { ImpersonationBanner } from "./components/auth/ImpersonationBanner.tsx";
 
-// 🛡️ SECURITY: Tenant isolation and emergency logout
+// SECURITY: Tenant isolation and emergency logout
 import { SecurityProvider } from "./context/SecurityProvider";
 import { setupAxiosInterceptors } from "./config/axiosInterceptors";
 
-// 🔄 REAL-TIME: Conversation synchronization
+// REAL-TIME: Conversation synchronization
 import { useConversationSync } from "./hooks/useConversationSync";
 
 // --- CRITICAL PATH (Always loaded) ---
@@ -29,7 +29,7 @@ import { ForgotPassword } from "./components/ForgotPassword";
 import { ResetPassword } from "./components/ResetPassword";
 import { LoginScreen } from "./components/LoginScreen";
 
-// --- 🚀 CODE-SPLIT: Lazy-loaded modules ---
+// --- CODE-SPLIT: Lazy-loaded modules ---
 // Each chunk loads only when the user navigates to that route.
 // This reduces initial bundle from ~2.7MB to ~800KB.
 
@@ -140,7 +140,7 @@ const SchemaVisualizer = React.lazy(() =>
   })),
 );
 
-// --- 🎨 LOADING FALLBACK ---
+// --- LOADING FALLBACK ---
 const PageLoader = () => (
   <div className="flex items-center justify-center h-full w-full">
     <div className="flex flex-col items-center gap-3">
@@ -229,19 +229,19 @@ const PlanManagementWrapper = () => {
 // --- MAIN APP ---
 
 const App: React.FC = () => {
-  // 🛡️ Initialize security interceptors on app mount
+  // Initialize security interceptors on app mount
   useEffect(() => {
     setupAxiosInterceptors();
-    console.log("[Security] ✅ Axios interceptors configured");
+    console.log("[Security] Axios interceptors configured");
   }, []);
 
-  // 🔄 REAL-TIME: Enable conversation synchronization
+  // REAL-TIME: Enable conversation synchronization
   useConversationSync();
 
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        {/* 🛡️ SECURITY: Wrap entire app with SecurityProvider */}
+        {/* SECURITY: Wrap entire app with SecurityProvider */}
         <SecurityProvider>
           <ImpersonationHandler />
           <div className="flex flex-col h-screen w-full overflow-hidden bg-reply-bg dark:bg-reply-bg-dark">
@@ -364,7 +364,7 @@ const App: React.FC = () => {
               </SoundProvider>
             </div>
           </div>
-          {/* 🛡️ Close SecurityProvider */}
+          {/* Close SecurityProvider */}
         </SecurityProvider>
       </BrowserRouter>
       {/* React Query Devtools - Only in development */}

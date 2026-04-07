@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 📝 POST VALIDATION SCHEMAS
+ *  POST VALIDATION SCHEMAS
  *
  * Validation for forum/blog posts
  */

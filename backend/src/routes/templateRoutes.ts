@@ -23,7 +23,7 @@ const router = Router();
 // router.use(protect); // Handled in server.ts
 
 /**
- * 📝 TEMPLATE ROUTES
+ *  TEMPLATE ROUTES
  * All routes include Zod validation for security and data integrity
  */
 

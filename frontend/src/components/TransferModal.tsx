@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Agent, QueueConfig } from "@/types";
 import { getAgents, getQueues } from "@/services/queueService";
 
-// 🏢 100-Year Solution: Extended interface for agents with AI capabilities
+//  100-Year Solution: Extended interface for agents with AI capabilities
 interface AgentWithAI extends Agent {
   isAI?: boolean;
 }
@@ -10,7 +10,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onTransfer: (targetId: string, type: "AGENT" | "QUEUE") => void;
-  /** 🛡️ 100-Year Fix: Current user ID to exclude from transfer list */
+  /** [SEC] 100-Year Fix: Current user ID to exclude from transfer list */
   currentUserId?: string;
 }
 
@@ -42,7 +42,7 @@ export const TransferModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  // 🛡️ 100-Year Fix: Exclude current user and MASTER (SaaS Admin) from transfer list
+  // [SEC] 100-Year Fix: Exclude current user and MASTER (SaaS Admin) from transfer list
   // An agent cannot transfer a ticket to themselves or to the System Admin
   const filteredAgents = agents.filter(
     (a) =>
@@ -163,7 +163,7 @@ export const TransferModal: React.FC<Props> = ({
                   </div>
                   {agent.isAI && (
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
-                      🤖 IA
+                      [AI] IA
                     </span>
                   )}
                 </div>
@@ -205,7 +205,7 @@ export const TransferModal: React.FC<Props> = ({
                 </div>
                 {queue.aiAssistantId && (
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
-                    🤖 IA
+                    [AI] IA
                   </span>
                 )}
               </div>

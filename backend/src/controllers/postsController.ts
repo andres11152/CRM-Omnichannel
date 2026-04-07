@@ -2,13 +2,13 @@ import { Request, Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { postService } from "@/services/postService";
+import { postService } from "@/services/PostService";
 
 /**
- * 📝 POST CONTROLLER
+ *  POST CONTROLLER
  *
  * HTTP orchestrator for internal posts/feed.
- * 🛡️ All operations scoped by companyId for multi-tenant isolation.
+ * [SEC] All operations scoped by companyId for multi-tenant isolation.
  * All data access delegated to postService (SRP).
  */
 

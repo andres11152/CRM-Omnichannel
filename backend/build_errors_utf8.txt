@@ -1,0 +1,94 @@
+﻿src/services/ActivityService.ts(1,39): error TS1261: Already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/googleCalendarService.ts' differs from file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/GoogleCalendarService.ts' only in casing.
+  The file is in the program because:
+    Imported via "./googleCalendarService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ActivityService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/ActivityService.ts(2,32): error TS1261: Already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/mentionService.ts' differs from file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/MentionService.ts' only in casing.
+  The file is in the program because:
+    Imported via "./mentionService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ActivityService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/ApiKeyService.ts(1,33): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/auditLogService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/AuditLogService.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/AuditLogService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/AuthCrudService.ts'
+    Imported via "./auditLogService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ApiKeyService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/AutoAssignmentService.ts(61,28): error TS1261: Already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/messageProcessorService.ts' differs from file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/MessageProcessorService.ts' only in casing.
+  The file is in the program because:
+    Imported via "./messageProcessorService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/AutoAssignmentService.ts'
+    Imported via "@/services/MessageProcessorService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/WebhookService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/CampaignService.ts(3,50): error TS1261: Already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/templateService.ts' differs from file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/TemplateService.ts' only in casing.
+  The file is in the program because:
+    Imported via "./templateService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/CampaignService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/ConversationActionService.ts(3,32): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/contactService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ContactService.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/ContactService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ChatService.ts'
+    Imported via "@/services/ContactService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/queue/groupContactIndexer.ts'
+    Imported via "./contactService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ConversationActionService.ts'
+    Imported via "@/services/ContactService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/GroupContactService.ts'
+    Imported via "@/services/ContactService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/controllers/contactController.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/ConversationQueryService.ts(154,12): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/chatSyncService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ChatSyncService.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/ChatSyncService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/whatsapp/providers/events/SessionEventBinder.ts'
+    Imported via "@/services/ChatSyncService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/whatsapp/WhatsAppService.ts'
+    Imported via "./chatSyncService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ConversationQueryService.ts'
+    Imported via "@/services/ChatSyncService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/controllers/chatSyncController.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/DealService.ts(5,32): error TS1261: Already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/workflowEngine.ts' differs from file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/WorkflowEngine.ts' only in casing.
+  The file is in the program because:
+    Imported via "./workflowEngine" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/DealService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/flow/FlowNavigationService.ts(4,30): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/cacheService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/CacheService.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/CacheService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/PlanLimitsService.ts'
+    Imported via "../cacheService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/flow/FlowNavigationService.ts'
+    Imported via "@/services/CacheService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/OnboardingService.ts'
+    Imported via "@/services/CacheService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/AdminService.ts'
+    Imported via "@/services/CacheService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/tickets/TicketEnrichment.ts'
+    Imported via "@/services/CacheService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/FlowService.ts'
+    Imported via "@/services/CacheService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/DashboardService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/LoginNotificationService.ts(1,30): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/emailService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/EmailService.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/EmailService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/controllers/authController.ts'
+    Imported via "./emailService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/LoginNotificationService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/messageProcessing/FlowRunner.ts(33,45): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/flowExecutor.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/FlowExecutor.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/FlowExecutor" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/whatsapp/services/AITriggerService.ts'
+    Imported via "../flowExecutor" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/messageProcessing/FlowRunner.ts'
+    Imported via "@/services/FlowExecutor" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/queue/flowQueueWorker.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/messageProcessorService.ts(248,51): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/aiResponseService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/AiResponseService.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/AiResponseService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/whatsapp/services/AITriggerService.ts'
+    Imported via "./aiResponseService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/messageProcessorService.ts'
+    Imported via "@/services/AiResponseService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/controllers/aiController.ts'
+    Imported via "@/services/AiResponseService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/controllers/aiController.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/MetaMediaService.ts(2,32): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/storageService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/StorageService.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/whatsapp/services/ProfilePictureService.ts'
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/sync/SyncMediaService.ts'
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/whatsapp/services/MediaProcessorService.ts'
+    Imported via "./storageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/MetaMediaService.ts'
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ExportService.ts'
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/controllers/mediaController.ts'
+    Imported via "../storageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/queue/messageQueueWorker.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/queue/messageQueueWorker.ts(214,45): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/storageService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/StorageService.ts' only in casing.
+  The file is in the program because:
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/whatsapp/services/ProfilePictureService.ts'
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/sync/SyncMediaService.ts'
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/whatsapp/services/MediaProcessorService.ts'
+    Imported via "./storageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/MetaMediaService.ts'
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/ExportService.ts'
+    Imported via "@/services/StorageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/controllers/mediaController.ts'
+    Imported via "../storageService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/queue/messageQueueWorker.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'
+src/services/WebhookService.ts(3,34): error TS1149: File name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/MessageProcessorService.ts' differs from already included file name 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/messageProcessorService.ts' only in casing.
+  The file is in the program because:
+    Imported via "./messageProcessorService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/AutoAssignmentService.ts'
+    Imported via "@/services/MessageProcessorService" from file 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/src/services/WebhookService.ts'
+    Matched by include pattern 'src/**/*.ts' in 'C:/Users/Andres Betancourt/Desktop/Desarrollos Personales/Reply/Proyecto/backend/tsconfig.json'

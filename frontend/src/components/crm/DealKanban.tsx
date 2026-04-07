@@ -237,9 +237,9 @@ export const DealKanban: React.FC = () => {
       const newStage = pipeline?.stages.find((s) => s.id === newStageId);
       if (newStage) {
         if (isWonStage(newStage.name)) {
-          toast.success("🎉 ¡Deal ganado! ¡Felicidades!");
+          toast.success(" ¡Deal ganado! ¡Felicidades!");
         } else if (isLostStage(newStage.name)) {
-          toast("Deal marcado como perdido", { icon: "😞" });
+          toast("Deal marcado como perdido", { icon: "" });
         } else {
           toast.success(`Movido a "${newStage.name}"`);
         }

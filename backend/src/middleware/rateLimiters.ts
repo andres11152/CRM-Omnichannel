@@ -3,14 +3,14 @@ import { Request } from "express";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ RATE LIMITERS
+ * [SEC] RATE LIMITERS
  *
  * Collection of rate limiting middlewares for different endpoints.
  * Prevents brute force attacks, credential stuffing, and abuse.
  */
 
 /**
- * 🔐 AUTH RATE LIMITER (Login & Password Reset)
+ * [AUTH] AUTH RATE LIMITER (Login & Password Reset)
  *
  * Strict limiter for authentication endpoints to prevent:
  * - Brute force password attacks
@@ -25,7 +25,7 @@ import { Logger } from "@/utils/logger";
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50000, // 🛡️ DEV MODE: Increased limit for testing (was 500)
+  max: 50000, // [SEC] DEV MODE: Increased limit for testing (was 500)
 
   // Message returned when rate limit is exceeded
   message: {
@@ -101,7 +101,7 @@ export const authLimiter = rateLimit({
 });
 
 /**
- * 📧 PASSWORD RESET LIMITER
+ *  PASSWORD RESET LIMITER
  *
  * Stricter limiter for password reset to prevent:
  * - Email bombing (sending many reset emails)
@@ -146,7 +146,7 @@ export const passwordResetLimiter = rateLimit({
 });
 
 /**
- * 🌐 GENERAL API LIMITER (Global)
+ * [WEB] GENERAL API LIMITER (Global)
  *
  * Loose limiter for general API endpoints.
  * Prevents aggressive abuse without impacting normal users.
@@ -185,7 +185,7 @@ export const apiLimiter = rateLimit({
 });
 
 /**
- * 📱 SIGNUP LIMITER
+ * [APP] SIGNUP LIMITER
  *
  * Moderate limiter for signup endpoint.
  * Prevents mass account creation abuse.

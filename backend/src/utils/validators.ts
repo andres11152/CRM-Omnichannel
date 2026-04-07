@@ -1,7 +1,7 @@
 import { Logger } from "./logger";
 
 /**
- * 🛡️ EXTERNAL PAYLOAD VALIDATOR
+ * [SEC] EXTERNAL PAYLOAD VALIDATOR
  *
  * Validates and sanitizes data from external sources (WhatsApp, webhooks).
  * Prevents injection attacks and malformed data from crashing the system.
@@ -73,7 +73,7 @@ export function validateUrl(url: unknown): string | null {
 }
 
 /**
- * 🛡️ SAFE JSON PARSE
+ * [SEC] SAFE JSON PARSE
  *
  * Parses JSON without throwing. Returns null on failure.
  */
@@ -93,7 +93,7 @@ export function safeJsonParse<T = unknown>(input: unknown): T | null {
 }
 
 /**
- * 🛡️ VALIDATE WHATSAPP MESSAGE PAYLOAD
+ * [SEC] VALIDATE WHATSAPP MESSAGE PAYLOAD
  *
  * Ensures WhatsApp messages have required fields and valid format.
  */
@@ -157,7 +157,7 @@ export function validateWhatsAppPayload(
 }
 
 /**
- * 🛡️ VALIDATE WEBHOOK PAYLOAD
+ * [SEC] VALIDATE WEBHOOK PAYLOAD
  *
  * Ensures webhook data is safe to process.
  */
@@ -201,7 +201,7 @@ export function validateWebhookPayload(
 }
 
 /**
- * 🛡️ RATE LIMIT KEY GENERATOR
+ * [SEC] RATE LIMIT KEY GENERATOR
  *
  * Creates safe rate limit keys from user input.
  */

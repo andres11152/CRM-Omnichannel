@@ -126,7 +126,7 @@ export const KnowledgeBase: React.FC = () => {
     <div className="h-full flex flex-col bg-white dark:bg-reply-panel-dark rounded-lg shadow-sm border border-gray-200 dark:border-reply-border-dark transition-colors duration-200">
       <div className="px-6 py-4 border-b border-gray-200 dark:border-reply-border-dark bg-reply-bg dark:bg-reply-border-dark">
         <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <span className="text-2xl">📚</span> Base de Conocimiento (RAG)
+          <span className="text-2xl"></span> Base de Conocimiento (RAG)
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Sube documentos (PDF, TXT, DOCX) para entrenar a tu Agente IA

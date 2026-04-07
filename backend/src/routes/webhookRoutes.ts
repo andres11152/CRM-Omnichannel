@@ -48,7 +48,7 @@ router.get(
   verifyMetaWebhook,
 );
 
-// 🛠️ WEBHOOK MANAGEMENT (CRUD)
+// [DEV] WEBHOOK MANAGEMENT (CRUD)
 // Protect management endpoints
 router.use("/", protect);
 router.get("/", getCompanyWebhooks); // LIST

@@ -13,7 +13,7 @@ interface CreateAuditLogDTO {
 }
 
 /**
- * 🕵️‍♂️ AUDIT LOG SERVICE
+ * ️‍️ AUDIT LOG SERVICE
  *
  * Centralized service to register all sensitive changes in the platform
  * ensuring compliance, traceability, and robust multi-tenancy.

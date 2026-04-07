@@ -2,11 +2,11 @@
 description: Comprehensive System Test Protocol for Reply CRM
 ---
 
-# 🧪 Protocolo de Pruebas Comprensivas - Reply CRM
+# [TEST] Protocolo de Pruebas Comprensivas - Reply CRM
 
 Este workflow guía a través de la validación completa de las funcionalidades críticas del sistema, asegurando que todos los módulos operen correctamente.
 
-## 1. 🔐 Autenticación y Sesión de WhatsApp
+## 1. [AUTH] Autenticación y Sesión de WhatsApp
 
 - [ ] **Login**: Iniciar sesión con credenciales de Agente y Admin.
 - [ ] **Estado de Conexión**: Verificar que el indicador de "WhatsApp" en el encabezado muestre "Conectado".
@@ -15,7 +15,7 @@ Este workflow guía a través de la validación completa de las funcionalidades 
   - Observar que el sistema intente reconectar automáticamente sin intervención manual (SessionGuard).
   - Verificar que no se generen bucles de reinicio ("Emergency Reset").
 
-## 2. 👥 Gestión de Contactos
+## 2. [CONTACTS] Gestión de Contactos
 
 - [ ] **Crear Contacto**:
   - Ir a módulo "Contactos".
@@ -27,7 +27,7 @@ Este workflow guía a través de la validación completa de las funcionalidades 
   - Guardar y verificar persistencia.
 - [ ] **Filtrado**: Probar la búsqueda por nombre y validación de columnas compactas.
 
-## 3. 💬 Agent Workspace & Mensajería
+## 3. [CHAT] Agent Workspace & Mensajería
 
 - [ ] **Recepción de Mensajes**:
   - Enviar un mensaje desde un celular real al número del bot.
@@ -45,7 +45,7 @@ Este workflow guía a través de la validación completa de las funcionalidades 
     - _Nota_: Verificar que los grupos no salgan en la cola general.
   - **Cerrar/Resolver**: Marcar como resuelto y verificar que desaparezca de la vista activa.
 
-## 4. 🧩 Customer 360 & CRM
+## 4.  Customer 360 & CRM
 
 - [ ] **Panel 360**:
   - Abrir un chat.
@@ -63,7 +63,7 @@ Este workflow guía a través de la validación completa de las funcionalidades 
   - Validar que el botón "Crear" redundante ya no esté en el encabezado del widget.
 - [ ] **Agendar Reunión**: Clic en "Agendar Reunión" y verificar funcionalidad (o placeholder).
 
-## 5. 🚀 Marketing & Plantillas
+## 5.  Marketing & Plantillas
 
 - [ ] **Dashboard Marketing**:
   - Ir a módulo Marketing.
@@ -78,7 +78,7 @@ Este workflow guía a través de la validación completa de las funcionalidades 
   - Lanzar campaña a un segmento de prueba o contacto individual.
   - Verificar recepción en el celular destino.
 
-## 6. ⚙️ Configuraciones & Sistema
+## 6. ️ Configuraciones & Sistema
 
 - [ ] **Logs del Servidor**: Revisar terminal para asegurar que no hay errores de `Unhandled Promise Rejection` o desconexiones de Prisma.
 - [ ] **Performance**: Navegar entre módulos rápidamente para verificar carga de UI y estado de Sockets.

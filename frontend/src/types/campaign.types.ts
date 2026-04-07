@@ -1,7 +1,7 @@
 import { BaseEntity } from "./common.types";
 
 /**
- * 📣 Marketing & Campaigns Types
+ * [CA] Marketing & Campaigns Types
  */
 
 export type CampaignStatus =

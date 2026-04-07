@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { contactService } from "@/services/contactService";
+import { contactService } from "@/services/ContactService";
 import { Logger } from "@/utils/logger";
 import { userRepository } from "@/repositories/UserRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
@@ -9,11 +9,11 @@ import { ticketRepository } from "@/repositories/TicketRepository";
 import { DistributedLock } from "@/utils/distributedLock";
 
 /**
- * 💬 CHAT SERVICE
+ * [CHAT] CHAT SERVICE
  * Handles low-level DB persistence for conversations and messages.
  * Extracted from MessageHandler to follow SRP.
  *
- * 🏗️ REFACTORED: All direct prisma calls replaced with repository pattern.
+ * [BUILD] REFACTORED: All direct prisma calls replaced with repository pattern.
  */
 export class ChatService {
   /**
@@ -103,7 +103,7 @@ export class ChatService {
 
       if (isUniqueError) {
         Logger.info(
-          `[ChatService] 🛡️ Race condition detected for user ${params.email}, resolving existing...`,
+          `[ChatService] [SEC] Race condition detected for user ${params.email}, resolving existing...`,
         );
         const existingUserAfterCollision = await userRepository.findFirst({
           where: { email: params.email, companyId: params.companyId },
@@ -119,7 +119,7 @@ export class ChatService {
       }
     }
 
-    // 2. 🛡️ 100-YEAR ENTERPRISE FIX: CRM Contact Sync with Real Phone Validation
+    // 2. [SEC] 100-YEAR ENTERPRISE FIX: CRM Contact Sync with Real Phone Validation
     const isGroup = params.email.includes("@g.us");
     const hasRealPhone =
       params.phone && params.phone.length >= 7 && params.phone.length <= 15;
@@ -138,7 +138,7 @@ export class ChatService {
           tags: ["Importado de Chat"],
         });
         Logger.info(
-          `[ChatService] ✅ CRM Contact synced for real phone: ${params.phone}`,
+          `[ChatService] [OK] CRM Contact synced for real phone: ${params.phone}`,
         );
       } catch (error) {
         Logger.warn(
@@ -188,7 +188,7 @@ export class ChatService {
   }
 
   /**
-   * 🛡️ 100-YEAR FIX: Save LID -> Phone mapping in Contact's customFields
+   * [SEC] 100-YEAR FIX: Save LID -> Phone mapping in Contact's customFields
    */
   async saveLidPhoneMapping(companyId: string, lid: string, phone: string) {
     try {
@@ -209,7 +209,7 @@ export class ChatService {
           },
         });
         Logger.info(
-          `[ChatService] 🎯 LID->Phone mapping saved: ${lid} -> ${phone}`,
+          `[ChatService]  LID->Phone mapping saved: ${lid} -> ${phone}`,
         );
       }
     } catch (error) {
@@ -218,7 +218,7 @@ export class ChatService {
   }
 
   /**
-   * 🛡️ 100-YEAR FIX: Find Contact by LID stored in customFields
+   * [SEC] 100-YEAR FIX: Find Contact by LID stored in customFields
    */
   async findContactByLid(companyId: string, lid: string) {
     return contactRepository.findFirst({
@@ -234,7 +234,7 @@ export class ChatService {
   }
 
   /**
-   * 🛡️ 100-YEAR FIX: Find Conversation by Contact's LID
+   * [SEC] 100-YEAR FIX: Find Conversation by Contact's LID
    */
   async findConversationByLid(companyId: string, lid: string) {
     const contact = await this.findContactByLid(companyId, lid);
@@ -250,7 +250,7 @@ export class ChatService {
 
   /**
    * Create new conversation (Atomic)
-   * 🛡️ 100-YEAR FIX: Now supports Group chats with metadata + Contact linking
+   * [SEC] 100-YEAR FIX: Now supports Group chats with metadata + Contact linking
    */
   async createConversation(data: {
     companyId: string;
@@ -272,9 +272,9 @@ export class ChatService {
         channelId: data.channelId,
         subject: data.subject,
         status: "OPEN",
-        isGroup: data.isGroup ?? false,
-        groupMetadata: data.groupMetadata ?? undefined,
-        contactId: data.contactId ?? undefined,
+        isGroup: data.isGroup || false,
+        groupMetadata: data.groupMetadata || undefined,
+        contactId: data.contactId || undefined,
         participants: data.userId
           ? { connect: [{ id: data.userId }] }
           : undefined,
@@ -284,15 +284,16 @@ export class ChatService {
 
   /**
    * Update conversation status/timestamp
-   * 🛡️ 100-YEAR FIX: Self-healing Contact linking for orphaned conversations
+   * [SEC] 100-YEAR FIX: Self-healing Contact linking for orphaned conversations
    */
   async updateConversation(
+    companyId: string,
     id: string,
     updates: Prisma.ConversationUncheckedUpdateInput,
   ) {
     // Self-heal: Check if conversation is orphaned (no contactId) and link to Contact
     const conv = await conversationRepository.findFirst({
-      where: { id },
+      where: { id, companyId },
       select: { contactId: true, channelId: true, companyId: true },
     });
 
@@ -309,12 +310,12 @@ export class ChatService {
       if (contact) {
         contactLink = { contactId: contact.id };
         Logger.info(
-          `[ChatService] 🔗 Self-healed: Linked conversation ${id} to contact ${contact.id}`,
+          `[ChatService]  Self-healed: Linked conversation ${id} to contact ${contact.id}`,
         );
       }
     }
 
-    return conversationRepository.update(id, {
+    return conversationRepository.update(companyId, id, {
       ...updates,
       ...contactLink,
       updatedAt: new Date(),
@@ -338,16 +339,17 @@ export class ChatService {
   }
 
   async migrateConversationHistory(
+    companyId: string,
     conversationId: string,
     oldUserId: string,
     newUserId: string,
   ) {
     await messageRepository.updateMany({
-      where: { conversationId, senderId: oldUserId },
+      where: { companyId, conversationId, senderId: oldUserId },
       data: { senderId: newUserId },
     });
 
-    await conversationRepository.update(conversationId, {
+    await conversationRepository.update(companyId, conversationId, {
       participants: {
         disconnect: { id: oldUserId },
         connect: { id: newUserId },
@@ -399,11 +401,21 @@ export class ChatService {
   /**
    * Fetch Full Conversation Context for Events
    */
-  async getFullConversation(id: string) {
-    return conversationRepository.findByIdWithQueueAndParticipants(id);
+  async getFullConversation(companyId: string, id: string) {
+    return conversationRepository.findByIdWithQueueAndParticipants(companyId, id);
   }
 
   // --- Ticket Methods ---
+
+  async findActiveTicket(companyId: string, conversationId: string) {
+    return ticketRepository.findFirst({
+      where: {
+        companyId,
+        conversationId,
+        status: { in: ["OPEN", "IN_PROGRESS"] },
+      },
+    });
+  }
 
   async ensureTicket(
     companyId: string,

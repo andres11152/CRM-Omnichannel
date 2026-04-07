@@ -56,15 +56,15 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
   const getFileIcon = (type: string) => {
     switch (type) {
       case "IMAGE":
-        return "🖼️";
+        return "️";
       case "AUDIO":
-        return "🎵";
+        return "";
       case "VIDEO":
-        return "🎬";
+        return "";
       case "DOCUMENT":
-        return "📄";
+        return "";
       default:
-        return "📁";
+        return "";
     }
   };
 
@@ -134,7 +134,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
                     : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
-                {type === "ALL" ? "📁 Todos" : `${getFileIcon(type)} ${type}`}
+                {type === "ALL" ? " Todos" : `${getFileIcon(type)} ${type}`}
               </button>
             ))}
           </div>

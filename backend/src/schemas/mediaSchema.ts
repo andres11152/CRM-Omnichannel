@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ MEDIA VALIDATION SCHEMAS
+ * [SEC] MEDIA VALIDATION SCHEMAS
  *
  * Covers media upload, listing, retrieval, update, and deletion.
  * Prevents path traversal, XSS in metadata, and DoS via pagination.

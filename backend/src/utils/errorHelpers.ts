@@ -1,5 +1,5 @@
 /**
- * 🛡️ UTILITY: normalizeError
+ * [SEC] UTILITY: normalizeError
  *
  * Ensures that any thrown value is converted into a proper Error object.
  * This prevents crashes when "throws" are strings, nulls, or generic objects.
@@ -20,7 +20,7 @@ export function normalizeError(candidate: unknown): Error {
 }
 
 /**
- * 🛡️ UTILITY: getErrorMessage
+ * [SEC] UTILITY: getErrorMessage
  *
  * Safely extracts a message string from any unknown thrown entity.
  */

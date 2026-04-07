@@ -1,5 +1,5 @@
 import express from "express";
-// ♻️ REFACTOR: Unified Service
+// ️ REFACTOR: Unified Service
 import { whatsappService } from "@/whatsapp";
 import { AuthenticatedRequest } from "@/types/types";
 import { protect } from "@/middleware/authMiddleware";
@@ -102,11 +102,7 @@ router.post(
   async (req: express.Request, res: express.Response) => {
     try {
       const authReq = req as AuthenticatedRequest;
-      const companyId = authReq.companyId || authReq.user?.companyId;
-
-      if (!companyId) {
-        return res.status(400).json({ message: "Company ID missing" });
-      }
+      const companyId = authReq.companyId!;
 
       // Check if session exists
       const sessions = await whatsappService.listSessions(companyId);
@@ -115,10 +111,10 @@ router.post(
 
       if (!existingSession) {
         const result = await whatsappService.createSession(companyId);
-        sessionId = result.sessionId; // ✅ Fixed to match new API
+        sessionId = result.sessionId;
       } else if (existingSession.status === "DISCONNECTED") {
         // Re-initialize if disconnected using reconnectSession
-        await whatsappService.reconnectSession(existingSession.sessionId);
+        await whatsappService.reconnectSession(companyId, existingSession.sessionId);
         sessionId = existingSession.sessionId;
       } else {
         sessionId = existingSession.sessionId;
@@ -129,8 +125,8 @@ router.post(
       const maxAttempts = 60; // 60 * 500ms = 30 seconds
 
       const checkQr = async () => {
-        // Fix: use getSession instead of getSessionStatus
-        const currentSession = await whatsappService.getSession(sessionId);
+        // Fix: use getSession with companyId scoping
+        const currentSession = await whatsappService.getSession(companyId, sessionId);
         if (currentSession?.qrCode) {
           res.status(200).json({
             message: "Session initialization started",

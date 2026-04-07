@@ -1,7 +1,7 @@
 import { Logger } from "@/utils/logger";
 
 /**
- * 📝 TEMPLATE RENDERING SERVICE
+ *  TEMPLATE RENDERING SERVICE
  *
  * Handles dynamic template rendering by replacing variables with actual values.
  * Supports multiple variable formats:

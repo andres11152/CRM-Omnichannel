@@ -62,15 +62,15 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
   function getTypeIcon(assetType: string) {
     switch (assetType) {
       case "IMAGE":
-        return "🖼️";
+        return "️";
       case "VIDEO":
-        return "🎥";
+        return "";
       case "AUDIO":
-        return "🎵";
+        return "";
       case "DOCUMENT":
-        return "📄";
+        return "";
       default:
-        return "📦";
+        return "[PKG]";
     }
   }
 
@@ -140,7 +140,7 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
               }`}
             >
-              📚 Biblioteca
+               Biblioteca
             </button>
             <button
               onClick={() => setMode("RECORD")}
@@ -150,7 +150,7 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
               }`}
             >
-              🎙️ Grabar Voz
+              ️ Grabar Voz
             </button>
           </div>
         )}

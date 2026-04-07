@@ -1,7 +1,7 @@
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { Logger } from "@/utils/logger";
-import { planLimitsService } from "@/services/planLimitsService";
+import { planLimitsService } from "@/services/PlanLimitsService";
 import { Contact, Prisma } from "@prisma/client";
 import {
   ContactDTO,
@@ -125,7 +125,7 @@ export const contactService = {
     let email = data.email?.toLowerCase().trim() || null;
     const phone = data.phone?.replace(/\D/g, "") || null;
 
-    // 🛡️ 100-YEAR FIX: Handle WhatsApp Internal Emails
+    // [SEC] 100-YEAR FIX: Handle WhatsApp Internal Emails
     const isInternalEmail =
       email &&
       (email.includes("@whatsapp.user") ||
@@ -148,9 +148,8 @@ export const contactService = {
 
     if (data.id) {
       existingContact = await contactRepository.findFirst({
-        where: { id: data.id },
+        where: { id: data.id, companyId },
       });
-      if (existingContact?.companyId !== companyId) existingContact = null;
     }
 
     if (!existingContact) {
@@ -179,30 +178,30 @@ export const contactService = {
 
   /**
    * Internal Update with Zombie Recovery
-   * 🛡️ 100-YEAR FIX: Tags are MERGED (union), never overwritten blindly.
+   * [SEC] 100-YEAR FIX: Tags are MERGED (union), never overwritten blindly.
    */
   async updateExisting(
     existing: Contact,
     data: ContactUpsertParams & { companyId: string },
   ): Promise<ContactDTO> {
-    // 🛡️ TAG MERGE: Union of existing tags + incoming tags (no duplicates, no destruction)
+    // [SEC] TAG MERGE: Union of existing tags + incoming tags (no duplicates, no destruction)
     const mergedTags = data.tags
       ? [...new Set([...existing.tags, ...data.tags])]
       : undefined;
 
     try {
-      const updated = await contactRepository.update(existing.id, {
+      const updated = await contactRepository.update(data.companyId, existing.id, {
         name: data.name || undefined,
         email: data.email,
         phone: data.phone,
         tags: mergedTags,
         notes: data.notes,
-        customFields: data.customFields,
+        customFields: data.customFields || {},
         avatarUrl: data.avatarUrl,
-      } as Partial<Contact>);
+      });
       return toContactDTO(updated);
     } catch (error: unknown) {
-      // 🛡️ TYPE-SAFE ERROR HANDLING: Prisma P2002 = Unique constraint violation
+      // [SEC] TYPE-SAFE ERROR HANDLING: Prisma P2002 = Unique constraint violation
       const prismaError = error as { code?: string };
       if (prismaError.code === "P2002") {
         // Zombie logic
@@ -218,22 +217,22 @@ export const contactService = {
         });
 
         if (zombie && zombie.deletedAt) {
-          Logger.info(`[Contacts] 🧟 Recovering zombie contact ${zombie.id}`);
+          Logger.info(`[Contacts]  Recovering zombie contact ${zombie.id}`);
           // Anonymize zombie to free up phone/email
-          await contactRepository.update(zombie.id, {
+          await contactRepository.update(data.companyId, zombie.id, {
             phone: zombie.phone ? `${zombie.phone}_del_${Date.now()}` : null,
             email: zombie.email ? `${zombie.email}_del_${Date.now()}` : null,
-          } as Partial<Contact>);
+          });
           // Retry update (with merged tags)
-          const retry = await contactRepository.update(existing.id, {
+          const retry = await contactRepository.update(data.companyId, existing.id, {
             name: data.name || undefined,
             email: data.email,
             phone: data.phone,
             tags: mergedTags,
             notes: data.notes,
-            customFields: data.customFields,
+            customFields: data.customFields || {},
             avatarUrl: data.avatarUrl,
-          } as Partial<Contact>);
+          });
           return toContactDTO(retry);
         }
         throw new AppError(
@@ -259,7 +258,7 @@ export const contactService = {
     if (!canCreate)
       throw new AppError("Plan limit exceeded", HTTP_STATUS.FORBIDDEN);
 
-    // 🛡️ 100-YEAR FIX: Use atomic upsert to prevent P2002 errors and race conditions
+    // [SEC] 100-YEAR FIX: Use atomic upsert to prevent P2002 errors and race conditions
     if (data.phone) {
       // Phone-based upsert (atomic, prevents duplicates)
       const contact = await contactRepository.upsertByPhone(
@@ -284,10 +283,10 @@ export const contactService = {
       });
 
       if (existing) {
-        const updated = await contactRepository.update(existing.id, {
+        const updated = await contactRepository.update(companyId, existing.id, {
           ...(data.name && { name: data.name }),
           ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
-        } as Partial<Contact>);
+        });
         return toContactDTO(updated);
       }
 
@@ -304,13 +303,13 @@ export const contactService = {
         data.customFields ||
         data.avatarUrl
       ) {
-        const withExtras = await contactRepository.update(created.id, {
+        const withExtras = await contactRepository.update(companyId, created.id, {
           email: data.email,
           tags: data.tags || [],
           notes: data.notes,
           customFields: data.customFields || {},
           avatarUrl: data.avatarUrl,
-        } as Partial<Contact>);
+        });
         return toContactDTO(withExtras);
       }
       return toContactDTO(created);
@@ -330,7 +329,7 @@ export const contactService = {
       throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
 
     // Clean relations and soft-delete in transaction
-    await contactRepository.softDeleteWithCleanup(id, contact);
+    await contactRepository.softDeleteWithCleanup(companyId, id, contact);
   },
 
   /**
@@ -347,7 +346,7 @@ export const contactService = {
     if (!contact)
       throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
 
-    const updated = await contactRepository.update(contact.id, {
+    const updated = await contactRepository.update(companyId, contact.id, {
       ...(data.name && { name: data.name }),
       ...(data.email && { email: data.email }),
       ...(data.phone && { phone: data.phone }),
@@ -355,7 +354,7 @@ export const contactService = {
       ...(data.notes && { notes: data.notes }),
       ...(data.customFields && { customFields: data.customFields }),
       ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
-    } as Partial<Contact>);
+    });
 
     return toContactDTO(updated);
   },
@@ -370,7 +369,7 @@ export const contactService = {
     if (!contact)
       throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
 
-    // 🛡️100-YEAR FIX: Fetch related data for timeline.
+    // [SEC]100-YEAR FIX: Fetch related data for timeline.
     const [deals, activities, tickets, conversations] = await Promise.all([
       dealRepository.findMany({ contactId: id }, [{ createdAt: "desc" }]),
       contactRepository.findActivities(id),
@@ -397,7 +396,7 @@ export const contactService = {
         date: d.createdAt.toISOString(),
         title: `Deal: ${d.title}`,
         subtitle: `${d.value} ${d.currency}`,
-        icon: "💰",
+        icon: "[BILLING]",
         color: "green",
       })),
       ...activities.map((a) => ({
@@ -406,7 +405,7 @@ export const contactService = {
         date: a.createdAt.toISOString(),
         title: `${a.type}: ${a.subject}`,
         subtitle: a.description || "",
-        icon: "📅",
+        icon: "[DATE]",
         color: "yellow",
       })),
       ...tickets.map((t) => ({
@@ -415,7 +414,7 @@ export const contactService = {
         date: t.createdAt.toISOString(),
         title: `Ticket #${t.ticketNumber}: ${t.subject}`,
         subtitle: t.status,
-        icon: "🎫",
+        icon: "",
         color: "red",
       })),
       ...conversations.map((c) => ({
@@ -426,7 +425,7 @@ export const contactService = {
         subtitle:
           (c as { messages?: Array<{ content: string }> }).messages?.[0]
             ?.content || "Sin mensajes",
-        icon: "💬",
+        icon: "[CHAT]",
         color: "blue",
       })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -472,3 +471,4 @@ export const contactService = {
     );
   },
 };
+

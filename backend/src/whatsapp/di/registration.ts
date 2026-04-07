@@ -1,5 +1,5 @@
 /**
- * 🔌 WHATSAPP DI REGISTRATION
+ *  WHATSAPP DI REGISTRATION
  *
  * Composition Root for the WhatsApp module.
  * This is the ONLY place where concrete implementations are instantiated.
@@ -21,7 +21,7 @@ import { IdentityResolverService } from "../services/IdentityResolverService";
 import { AITriggerService } from "../services/AITriggerService";
 import { ProfilePictureService } from "../services/ProfilePictureService";
 import { deduplicationService } from "../services/DeduplicationService";
-import { SocketEventEmitter } from "@/services/socketEventEmitter";
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 import { MediaPayload } from "../core/types/whatsapp.types";
 import { IMessageHandler } from "../core/interfaces/IMessageHandler";

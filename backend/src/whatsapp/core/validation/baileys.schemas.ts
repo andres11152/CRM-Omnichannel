@@ -2,7 +2,7 @@ import { z } from "zod";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ BAILEYS EVENT VALIDATION SCHEMAS
+ * [SEC] BAILEYS EVENT VALIDATION SCHEMAS
  *
  * Zod schemas for validating raw payloads from @whiskeysockets/baileys.
  * These schemas act as the first line of defense against malformed,
@@ -138,7 +138,7 @@ export type ValidatedHistorySync = z.infer<typeof HistorySyncSchema>;
 // ────────────────────────────────────────────────
 
 /**
- * 🛡️ Safe-parse helper that returns null on validation failure.
+ * [SEC] Safe-parse helper that returns null on validation failure.
  * Logs a structured warning with context for observability.
  *
  * @param schema - Zod schema to validate against
@@ -157,7 +157,7 @@ export function validateBaileysEvent<T>(
   if (!result.success) {
     // Import-free structured log to avoid circular dependency with Logger
     // SessionManager will handle actual Logger calls
-    Logger.warn(`[BaileysValidation] ⚠️ Invalid ${eventName} payload dropped`, {
+    Logger.warn(`[BaileysValidation] [WARNING] Invalid ${eventName} payload dropped`, {
       sessionId: context.sessionId,
       companyId: context.companyId,
       errors: result.error.errors.map((e) => ({

@@ -1,7 +1,7 @@
 import { Permission } from "@/types/permissions";
 
 /**
- * 🛡️ RBAC Frontend Utilities
+ * [SEC] RBAC Frontend Utilities
  * Client-side permission checking (must match backend)
  */
 

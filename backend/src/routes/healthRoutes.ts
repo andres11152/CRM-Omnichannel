@@ -8,7 +8,7 @@ import {
 const router = Router();
 
 /**
- * 🛡️ HEALTH CHECK ROUTES
+ * [SEC] HEALTH CHECK ROUTES
  *
  * These endpoints are critical for production deployments:
  * - /health: Comprehensive health status (for monitoring dashboards)

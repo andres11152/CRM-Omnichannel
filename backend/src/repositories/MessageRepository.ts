@@ -143,7 +143,7 @@ export class MessageRepository {
   }
 
   /**
-   * 🛡️ Race Condition Guard: Check if an AI-generated message was sent recently.
+   * [SEC] Race Condition Guard: Check if an AI-generated message was sent recently.
    * Used by AITriggerService to prevent duplicate AI responses.
    */
   async findRecentAIResponse(

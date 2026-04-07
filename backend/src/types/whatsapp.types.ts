@@ -1,7 +1,7 @@
 import { proto } from "@whiskeysockets/baileys";
 
 /**
- * 📨 WhatsApp Event Contracts
+ *  WhatsApp Event Contracts
  * Strict typing for Baileys events and extended payloads
  */
 
@@ -42,7 +42,7 @@ export interface SessionData {
 }
 
 /**
- * 📡 EVENT PAYLOADS
+ * [WS] EVENT PAYLOADS
  */
 export interface MessageReceivedEvent {
   message: StrictWAMessage;

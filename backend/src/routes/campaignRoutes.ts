@@ -25,7 +25,7 @@ const router = express.Router();
 router.use(protect);
 
 /**
- * 📢 CAMPAIGN ROUTES
+ * [GROUP] CAMPAIGN ROUTES
  * All routes include Zod validation for security and data integrity
  */
 

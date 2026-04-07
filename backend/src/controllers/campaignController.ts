@@ -2,11 +2,11 @@ import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { campaignService } from "@/services/campaignService";
+import { campaignService } from "@/services/CampaignService";
 import { Logger } from "@/utils/logger";
 
 /**
- * 📢 CAMPAIGN CONTROLLER
+ * [GROUP] CAMPAIGN CONTROLLER
  *
  * Handles campaign management and execution
  */

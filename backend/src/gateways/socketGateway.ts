@@ -23,7 +23,7 @@ interface SocketData {
 }
 
 // Importing service for session tracking
-import { agentSessionService } from "@/services/agentSessionService";
+import { agentSessionService } from "@/services/AgentSessionService";
 
 // Enforcing strict event signatures.
 // Ideally, all events should be named here.
@@ -57,7 +57,7 @@ class WebSocketGateway {
   private redisConnected: boolean = false;
 
   public async initialize(httpServer: HttpServer) {
-    Logger.info("[Gateway] 🔧 Initializing Socket.io...");
+    Logger.info("[Gateway]  Initializing Socket.io...");
 
     this.io = new Server(httpServer, {
       cors: {
@@ -79,7 +79,7 @@ class WebSocketGateway {
 
           if (allowedOrigins.includes(origin)) return callback(null, true);
 
-          // 🛡️ 100-YEAR FIX: Allow all subdomains (preview environments, staging)
+          // [SEC] 100-YEAR FIX: Allow all subdomains (preview environments, staging)
           if (
             origin.endsWith(".reply.software") ||
             origin.endsWith(".onrender.com")
@@ -96,7 +96,7 @@ class WebSocketGateway {
         methods: ["GET", "POST"],
         credentials: true,
       },
-      // 🛡️ 100-YEAR FIX: Prioritize WebSocket for lower latency, fallback to polling
+      // [SEC] 100-YEAR FIX: Prioritize WebSocket for lower latency, fallback to polling
       transports: ["websocket", "polling"],
       // Increase timeouts to reduce false disconnections
       pingTimeout: 30000, // 30s (was 20s)
@@ -112,17 +112,17 @@ class WebSocketGateway {
     this.setupMiddleware();
     this.handleConnections();
 
-    Logger.info("[Gateway] ✅ WebSocket fully initialized");
+    Logger.info("[Gateway] [OK] WebSocket fully initialized");
   }
 
   private async setupRedis() {
     const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
-      Logger.warn("[Gateway] ⚠️ No REDIS_URL found. Using Memory Adapter.");
+      Logger.warn("[Gateway] [WARNING] No REDIS_URL found. Using Memory Adapter.");
       return;
     }
 
-    Logger.info(`[Gateway] 🔌 Connecting to Redis...`);
+    Logger.info(`[Gateway]  Connecting to Redis...`);
     try {
       const pubClient = createClient({
         url: redisUrl,
@@ -165,11 +165,11 @@ class WebSocketGateway {
       if (this.io) {
         this.io.adapter(createAdapter(pubClient, subClient));
         this.redisConnected = true;
-        Logger.info("[Gateway] ✅ Redis Adapter Configured Successfully");
+        Logger.info("[Gateway] [OK] Redis Adapter Configured Successfully");
       }
     } catch (err) {
       Logger.error(
-        "[Gateway] ❌ Redis Connection Failed. Using Memory Adapter.",
+        "[Gateway] [ERROR] Redis Connection Failed. Using Memory Adapter.",
         err instanceof Error ? err.message : String(err),
       );
     }
@@ -178,8 +178,8 @@ class WebSocketGateway {
   private setupMiddleware() {
     if (!this.io) return;
 
-    // 🛡️ AUTHENTICATION MIDDLEWARE
-    this.io.use((socket, next) => {
+    // [SEC] AUTHENTICATION MIDDLEWARE
+    this.io.use(async (socket, next) => {
       const token =
         socket.handshake.auth?.token || socket.handshake.query?.token;
 
@@ -188,7 +188,8 @@ class WebSocketGateway {
       }
 
       try {
-        const secret = process.env.JWT_SECRET;
+        const { getEnv } = await import("@/config/env");
+        const secret = getEnv().JWT_SECRET;
         if (!secret) throw new Error("JWT_SECRET missing");
 
         // Strict Typing for JWT verification
@@ -228,7 +229,7 @@ class WebSocketGateway {
       const userRoom = `agent:${user.id}`;
       socket.join(userRoom);
 
-      // 🛡️ 100-YEAR FIX: Strict Access Control for Agents via Socket Rooms
+      // [SEC] 100-YEAR FIX: Strict Access Control for Agents via Socket Rooms
       // Agents should NOT receive all company traffic. They only care about their assigned work.
       // Admins and Supervisors need full visibility (Company Room).
       if (user.companyId) {
@@ -245,9 +246,9 @@ class WebSocketGateway {
         }
       }
 
-      // 🟢 CONNECTION EVENT
+      // [ONLINE] CONNECTION EVENT
       // 1. Update DB/Redis with status 'online' & 'lastSeen'
-      this.updateUserStatus(user.id, "online");
+      this.updateUserStatus(user.id, "online", user.companyId || undefined);
 
       // 1.5 Start Analytics Session
       if (user.companyId) {
@@ -271,7 +272,7 @@ class WebSocketGateway {
         });
       }
 
-      // 🛡️ SECURITY AUDIT FIX: SECURE ROOM JOINING
+      // [SEC] SECURITY AUDIT FIX: SECURE ROOM JOINING
       // Prevents tenants from joining other tenants' rooms
       socket.on("join", (room: string) => {
         if (!room) return;
@@ -289,10 +290,10 @@ class WebSocketGateway {
 
           if (room !== expectedRoom) {
             Logger.warn(
-              `[Gateway] 🚨 SECURITY ALERT: User ${user.id} (Company: ${user.companyId}) tried to join unauthorized room: ${room}`,
+              `[Gateway] [ALERT] SECURITY ALERT: User ${user.id} (Company: ${user.companyId}) tried to join unauthorized room: ${room}`,
             );
 
-            // 🛑 PENALTY: Disconnect suspicious client
+            //  PENALTY: Disconnect suspicious client
             socket.emit("error", {
               message: "Unauthorized access detected. Reported.",
             });
@@ -306,7 +307,7 @@ class WebSocketGateway {
             Logger.debug(`[Gateway] Authorized join to ${room}`);
           } else {
             Logger.warn(
-              `[Gateway] 🚫 Role ${user.role} denied access to global company room`,
+              `[Gateway]  Role ${user.role} denied access to global company room`,
             );
           }
           return;
@@ -336,70 +337,79 @@ class WebSocketGateway {
         }
       });
 
-      // 🟢 TYPING INDICATOR (100-YEAR FIX)
+      // [ONLINE] TYPING INDICATOR (100-YEAR FIX)
       socket.on("conversation:typing", async (data) => {
-        Logger.info(
-          `[Gateway] 📥 Received typing event: ${JSON.stringify(data)} from ${user.id}`,
-        );
-        if (!user.companyId || !data.to || !data.status) return;
+        const { default: TenantContextManager } = await import("@/config/tenantContext");
+        
+        await TenantContextManager.run({
+          companyId: user.companyId || "__SYSTEM__",
+          userId: user.id,
+        }, async () => {
+          Logger.info(
+            `[Gateway]  Received typing event: ${JSON.stringify(data)} from ${user.id}`,
+          );
+          if (!user.companyId || !data.to || !data.status) return;
 
-        // Sanitize status
-        const status = data.status === "composing" ? "composing" : "paused";
+          // Sanitize status
+          const status = data.status === "composing" ? "composing" : "paused";
 
-        try {
-          // Dynamic imports to avoid circular deps
-          const { prisma } = await import("@/config/database");
-          const { whatsappService } =
-            await import("@/whatsapp/WhatsAppService");
+          try {
+            // Dynamic imports to avoid circular deps
+            const { prisma } = await import("@/config/database");
+            const { whatsappService } =
+              await import("@/whatsapp/WhatsAppService");
 
-          // Check if 'to' is a UUID (Conversation ID) or JID
-          const isUuid =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-              data.to,
+            // Check if 'to' is a UUID (Conversation ID) or JID
+            const isUuid =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                data.to,
+              );
+
+            let targetJid = data.to;
+
+            if (isUuid) {
+              // Resolve Conversation specific channel ID
+              const conv = await prisma.conversation.findUnique({
+                where: { id: data.to },
+                select: { channelId: true },
+              });
+              if (conv?.channelId) {
+                targetJid = conv.channelId;
+              }
+            }
+
+            // 1. Broadcast to WhatsApp (Phone)
+            await whatsappService.sendPresenceUpdate(
+              targetJid,
+              status,
+              user.companyId,
             );
 
-          let targetJid = data.to;
-
-          if (isUuid) {
-            // Resolve Conversation specific channel ID
-            const conv = await prisma.conversation.findUnique({
-              where: { id: data.to },
-              select: { channelId: true },
+            // 2. Broadcast to other agents in the conversation room (UI)
+            socket.to(data.to).emit("conversation:typing", {
+              from: user.id,
+              conversationId: data.to,
+              status,
             });
-            if (conv?.channelId) {
-              targetJid = conv.channelId;
-            }
+          } catch (err) {
+            Logger.warn(`[Gateway] Failed to handle typing for ${user.id}`, err);
           }
-
-          // Broadcast to WhatsApp
-          // Signature: (to, type, companyId)
-          await whatsappService.sendPresenceUpdate(
-            targetJid,
-            status,
-            user.companyId,
-          );
-
-          // Also broadcast to other agents in the conversation room (for internal typing indicators)
-          // Exclude sender
-          socket.to(data.to).emit("conversation:typing", {
-            from: user.id,
-            conversationId: data.to,
-            status,
-          });
-        } catch (err) {
-          Logger.warn(`[Gateway] Failed to handle typing for ${user.id}`, err);
-        }
+        });
       });
 
       socket.on("disconnect", async (reason) => {
         Logger.debug(`[Gateway] Client disconnected: ${user.id} (${reason})`);
 
-        // 🔴 DISCONNECT EVENT
+        // [OFFLINE] DISCONNECT EVENT
         // Update DB/Redis with status 'offline' & 'lastSeen'
-        await this.updateUserStatus(user.id, "offline");
+        await this.updateUserStatus(user.id, "offline", user.companyId || undefined);
 
         // End Analytics Session
-        await agentSessionService.endSession({ socketId: socket.id });
+        await agentSessionService.endSession({
+          socketId: socket.id,
+          userId: user.id,
+          companyId: user.companyId || undefined,
+        });
 
         // EMIT STATUS OFFLINE
         if (user.companyId) {
@@ -414,19 +424,23 @@ class WebSocketGateway {
   }
 
   // Helper method to update Prisma + Redis (if needed)
-  private async updateUserStatus(userId: string, status: "online" | "offline") {
+  private async updateUserStatus(userId: string, status: "online" | "offline", companyId?: string) {
     try {
       // We use dynamic import for prisma to avoid circular dep issues in singleton if any
       const { prisma } = await import("@/config/database");
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          // We might need to add 'status' field to User model if not present, but for now we track lastSeen.
-          // Actually, the UI relies on 'lastSeen'.
-          lastSeen: new Date(),
-          isOnline: status === "online",
-        },
-      });
+      const { default: TenantContextManager } = await import("@/config/tenantContext");
+      
+      const effectiveCompanyId = companyId || "__SYSTEM__";
+      
+      await TenantContextManager.run({ companyId: effectiveCompanyId, userId }, () => 
+        prisma.user.update({
+          where: { id: userId },
+          data: {
+            lastSeen: new Date(),
+            isOnline: status === "online",
+          },
+        })
+      );
     } catch (err) {
       Logger.error(`[Gateway] Failed to update user status for ${userId}`, err);
     }
@@ -443,14 +457,14 @@ class WebSocketGateway {
       return;
     }
     const room = `company:${companyId}`;
-    // 🛡️ CRITICAL: Sanitize data to strip protobuf class methods (Baileys WAMessage).
+    // [SEC] CRITICAL: Sanitize data to strip protobuf class methods (Baileys WAMessage).
     // notepack.io (Redis adapter) crashes on protobuf's toJSON() → toObject() chain.
     try {
       const safe = JSON.parse(JSON.stringify(data));
       this.io.to(room).emit(event, safe);
     } catch (err) {
       Logger.error(
-        `[Gateway] ❌ Failed to serialize data for event ${event}`,
+        `[Gateway] [ERROR] Failed to serialize data for event ${event}`,
         err,
       );
     }
@@ -463,7 +477,7 @@ class WebSocketGateway {
       this.io.to(room).emit(event, safe);
     } catch (err) {
       Logger.error(
-        `[Gateway] ❌ Failed to serialize data for room ${room}`,
+        `[Gateway] [ERROR] Failed to serialize data for room ${room}`,
         err,
       );
     }
@@ -477,7 +491,7 @@ class WebSocketGateway {
       this.io.to(room).emit(event, safe);
     } catch (err) {
       Logger.error(
-        `[Gateway] ❌ Failed to serialize data for user ${userId}`,
+        `[Gateway] [ERROR] Failed to serialize data for user ${userId}`,
         err,
       );
     }

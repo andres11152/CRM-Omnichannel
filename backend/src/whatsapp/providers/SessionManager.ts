@@ -1,5 +1,5 @@
 /**
- * 🏗️ SESSION MANAGER (Refactored for SRP)
+ * [BUILD] SESSION MANAGER (Refactored for SRP)
  *
  * Responsibilities: Socket lifecycle (create, terminate, reconnect)
  * Delegated: ConnectionHealer (reconnect, heartbeat, retry timers)
@@ -32,20 +32,14 @@ import { messageRepository } from "@/repositories/MessageRepository";
 import TenantContextManager from "@/config/tenantContext";
 import { bindSessionEvents } from "./events/SessionEventBinder";
 
-// 🛡️ Memory Store for Contact Resolution (LID -> Phone)
-const store = new SimpleInMemoryStore();
-store
-  .enablePersistence("global_wa_store")
-  .catch((e: Error) =>
-    logger.error({ err: e }, "Failed to enable Redis store persistence"),
-  );
-
 export class SessionManager implements ISessionManager {
   private sessions: Map<string, WASocket> = new Map();
   private sessionMetadata: Map<
     string,
     { companyId: string; status: SessionStatus["status"] }
   > = new Map();
+  // [SEC] MEMORY STORES (Isolated per Session/Tenant)
+  private sessionStores: Map<string, SimpleInMemoryStore> = new Map();
   private eventBus: EventBus;
   private healer: ConnectionHealer;
 
@@ -94,14 +88,19 @@ export class SessionManager implements ISessionManager {
   }
 
   // ────────────────────────────────────────────────
-  // CONTACT / LID RESOLUTION
+  // CONTACT / LID RESOLUTION (Scoped to Session)
   // ────────────────────────────────────────────────
 
-  public getContactInfo(jid: string) {
+  public getContactInfo(sessionId: string, jid: string) {
+    const store = this.sessionStores.get(sessionId);
+    if (!store) return undefined;
     return store.contacts[jidNormalizedUser(jid)];
   }
 
-  public findContactByLid(lid: string): { id: string } | undefined {
+  public findContactByLid(sessionId: string, lid: string): { id: string } | undefined {
+    const store = this.sessionStores.get(sessionId);
+    if (!store) return undefined;
+
     const lidBase = lid.split("@")[0].split(":")[0];
     if (!lidBase || lidBase.length < 10) return undefined;
 
@@ -109,7 +108,7 @@ export class SessionManager implements ISessionManager {
     const cachedPhone = store.getPhoneFromLid(lidBase);
     if (cachedPhone && !cachedPhone.includes(lidBase)) {
       logger.info(
-        `[SessionManager] ⚡ Cache hit: LID ${lidBase} → ${cachedPhone}`,
+        `[SessionManager]  Cache hit: LID ${lidBase} → ${cachedPhone}`,
       );
       return { id: cachedPhone };
     }
@@ -120,12 +119,12 @@ export class SessionManager implements ISessionManager {
       if (!contact.lid) continue;
       const storedLidBase = contact.lid.split("@")[0].split(":")[0];
       if (lidBase === storedLidBase) {
-        logger.info(`[SessionManager] ✅ LID ${lidBase} → Phone ${jid}`);
+        logger.info(`[SessionManager] [OK] LID ${lidBase} → Phone ${jid}`);
         return contact;
       }
     }
 
-    logger.debug(`[SessionManager] ⚠️ LID Resolution Failed: ${lidBase}`);
+    logger.debug(`[SessionManager] [WARNING] LID Resolution Failed: ${lidBase}`);
     return undefined;
   }
 
@@ -136,13 +135,13 @@ export class SessionManager implements ISessionManager {
     const sock = this.sessions.get(sessionId);
     if (!sock) return null;
 
-    const fromStore = this.findContactByLid(lid);
+    const fromStore = this.findContactByLid(sessionId, lid);
     if (fromStore?.id) {
       return fromStore.id.split("@")[0].split(":")[0];
     }
 
     logger.warn(
-      `[SessionManager] ⚠️ Could not resolve LID ${lid}. Waiting for history sync...`,
+      `[SessionManager] [WARNING] Could not resolve LID ${lid}. Waiting for history sync...`,
     );
     return null;
   }
@@ -164,10 +163,19 @@ export class SessionManager implements ISessionManager {
     logger.info(`[SessionManager] Initializing session: ${sessionId}`);
     this.sessionMetadata.set(sessionId, { companyId, status: "CONNECTING" });
 
+    // [SEC] CREATE ISOLATED STORE FOR THIS SESSION
+    const sessionStore = new SimpleInMemoryStore();
+    this.sessionStores.set(sessionId, sessionStore);
+
+    // Enable Redis persistence scoped to this session
+    await sessionStore.enablePersistence(`${companyId}_${sessionId}`).catch((e) =>
+      logger.error({ err: e }, `[SessionManager] Failed to enable persistence for ${sessionId}`)
+    );
+
     // Load auth state
     const { state, saveCreds } = await this.authProvider.loadState(sessionId);
 
-    // 🛡️ RESILIENCE FIX: fetchLatestBaileysVersion makes an external HTTP call.
+    // [SEC] RESILIENCE FIX: fetchLatestBaileysVersion makes an external HTTP call.
     // If the network is slow or restricted, it hangs indefinitely causing a 30s server timeout.
     // We race against a 5s timeout and fall back to a known-stable WA version.
     const FALLBACK_WA_VERSION: [number, number, number] = [2, 3000, 1023480872];
@@ -178,7 +186,7 @@ export class SessionManager implements ISessionManager {
         fetchLatestBaileysVersion(),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () => reject(new Error("fetchLatestBaileysVersion timeout")),
+            () => reject(new Error("Timeout")),
             5000,
           ),
         ),
@@ -187,21 +195,26 @@ export class SessionManager implements ISessionManager {
       isLatest = versionResult.isLatest;
     } catch (vErr) {
       logger.warn(
-        `[SessionManager] ⚠️ Could not fetch latest WA version (${(vErr as Error).message}). Using fallback: ${FALLBACK_WA_VERSION.join(".")}`,
+        `[SessionManager] [WARNING] Could not fetch latest WA version (${(vErr as Error).message}). Using fallback: ${FALLBACK_WA_VERSION.join(".")}`,
       );
     }
     logger.info(
       `[SessionManager] Using WA v${version.join(".")}, isLatest: ${isLatest}`,
     );
 
-    // 🛡️ MEMORY OPTIMIZATION: Default to false unless explicitly enabled
+    // [SEC] MEMORY OPTIMIZATION: Default to false unless explicitly enabled
     const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
 
     const sock = makeWASocket({
       version,
       auth: state,
       printQRInTerminal: false,
-      logger: createSessionLogger(sessionId) as ReturnType<
+      // Intercept Baileys internal logs to detect corruption
+      logger: createSessionLogger(sessionId, (sid) => {
+        this.reconnectSession(sid).catch((e) => {
+          logger.error(`[SessionGuard] Auto-healing reconnect failed: ${e}`);
+        });
+      }) as ReturnType<
         typeof import("pino")
       >,
       browser: Browsers.ubuntu("Reply CRM"),
@@ -212,13 +225,13 @@ export class SessionManager implements ISessionManager {
       getMessage: async (key) => {
         if (!key.id) return undefined;
         try {
-          const jid = key.remoteJid;
-          if (jid && store.messages[jid]) {
-            const msgArray = store.messages[jid];
-            const found = msgArray.find((m) => (m as proto.IWebMessageInfo)?.key?.id === key.id);
-            if (found) {
-              return (found as proto.IWebMessageInfo).message as proto.IMessage;
-            }
+          // Check session-specific store first
+          if (key.remoteJid && sessionStore.messages[key.remoteJid]) {
+            const msgArray = sessionStore.messages[key.remoteJid];
+            const found = msgArray.find(
+              (m) => (m as proto.IWebMessageInfo)?.key?.id === key.id,
+            );
+            if (found) return (found as proto.IWebMessageInfo).message as proto.IMessage;
           }
 
           // Fallback to database if not in memory
@@ -239,11 +252,11 @@ export class SessionManager implements ISessionManager {
     });
 
     // Bind store & events (delegated to SessionEventBinder)
-    store.bind(sock.ev);
+    sessionStore.bind(sock.ev);
     bindSessionEvents(sock, sessionId, companyId, saveCreds, {
       eventBus: this.eventBus,
       healer: this.healer,
-      store,
+      store: sessionStore, // Pass isolated store
       sessions: this.sessions,
       sessionMetadata: this.sessionMetadata,
       terminateSession: (sid, clear) => this.terminateSession(sid, clear),
@@ -262,12 +275,17 @@ export class SessionManager implements ISessionManager {
     sessionId: string,
     clearAuth: boolean = false,
   ): Promise<void> {
-    logger.info(
-      `[SessionManager] Terminating session ${sessionId}. ClearAuth: ${clearAuth}`,
-    );
+    logger.info(`[SessionManager] Terminating session ${sessionId}. Clear: ${clearAuth}`);
 
     // Delegate timer cleanup to healer
     this.healer.cleanupSession(sessionId);
+
+    // [SEC] CLEANUP ISOLATED STORE
+    const store = this.sessionStores.get(sessionId);
+    if (store) {
+      store.flush();
+      this.sessionStores.delete(sessionId);
+    }
 
     const sock = this.sessions.get(sessionId);
     if (sock) {
@@ -290,7 +308,14 @@ export class SessionManager implements ISessionManager {
       this.sessions.delete(sessionId);
     }
 
-    this.sessionMetadata.delete(sessionId);
+    if (clearAuth) {
+      this.sessionMetadata.delete(sessionId);
+    } else {
+      const meta = this.sessionMetadata.get(sessionId);
+      if (meta) {
+        meta.status = "DISCONNECTED";
+      }
+    }
 
     if (clearAuth) {
       await this.authProvider.clearCredentials(sessionId);
@@ -397,7 +422,9 @@ export class SessionManager implements ISessionManager {
     return false;
   }
 
-  getSessionStore(_sessionId: string): unknown {
+  getSessionStore(sessionId: string): unknown {
+    const store = this.sessionStores.get(sessionId);
+    if (!store) return null;
     return {
       chats: store.chats,
       messages: store.messages,

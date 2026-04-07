@@ -219,9 +219,9 @@ export const DealModal: React.FC<Props> = ({
       const dataToSave = { ...formData };
       // Ensure we only send the relevant ID based on association type
       if (associationType === "account") {
-        dataToSave.contactId = undefined; // Use undefined, not null
+        dataToSave.contactId = undefined; // Use undefined, not || null
       } else {
-        dataToSave.accountId = undefined; // Use undefined, not null
+        dataToSave.accountId = undefined; // Use undefined, not || null
       }
 
       // Fix IDs if empty strings
@@ -340,14 +340,14 @@ export const DealModal: React.FC<Props> = ({
                     }
                     className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
                   >
-                    <option value="COP">🇨🇴 COP</option>
-                    <option value="USD">🇺🇸 USD</option>
-                    <option value="EUR">🇪🇺 EUR</option>
-                    <option value="MXN">🇲🇽 MXN</option>
-                    <option value="BRL">🇧🇷 BRL</option>
-                    <option value="PEN">🇵🇪 PEN</option>
-                    <option value="CLP">🇨🇱 CLP</option>
-                    <option value="ARS">🇦🇷 ARS</option>
+                    <option value="COP"> COP</option>
+                    <option value="USD"> USD</option>
+                    <option value="EUR"> EUR</option>
+                    <option value="MXN"> MXN</option>
+                    <option value="BRL"> BRL</option>
+                    <option value="PEN"> PEN</option>
+                    <option value="CLP"> CLP</option>
+                    <option value="ARS"> ARS</option>
                   </select>
                 </div>
               </div>
@@ -531,7 +531,7 @@ export const DealModal: React.FC<Props> = ({
               {!deal && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    📝 Notas Iniciales
+                     Notas Iniciales
                   </label>
                   <textarea
                     value={formData.notes || ""}

@@ -1,5 +1,5 @@
 /**
- * 🔄 CHAT SYNC CONTROLLER
+ * [SYNC] CHAT SYNC CONTROLLER
  *
  * Enterprise-grade REST API for triggering historical message synchronization.
  * Follows Controller-Service-Repository architecture.
@@ -11,7 +11,7 @@ import { AppError } from "@/utils/AppError";
 import {
   chatSyncService,
   ChatSyncRequestSchema,
-} from "@/services/chatSyncService";
+} from "@/services/ChatSyncService";
 import { whatsappService } from "@/whatsapp";
 import { Logger } from "@/utils/logger";
 
@@ -145,7 +145,7 @@ export const syncConversation = catchAsync(
     const { phone } = req.params;
     const companyId = req.user?.companyId;
     const userId = req.user?.id;
-    const { limit = 500 } = req.body; // 🚀 Increased default from 50 to 500 for Enterprise history context
+    const { limit = 500 } = req.body; //  Increased default from 50 to 500 for Enterprise history context
 
     if (!companyId || !userId)
       throw new AppError("Authentication required", 401);
@@ -159,19 +159,19 @@ export const syncConversation = catchAsync(
       throw new AppError("No active WhatsApp session found", 404);
     }
 
-    Logger.info(`[ChatSync] 🔄 On-Demand Sync for ${phone} (User: ${userId}) | Limit: ${limit}`);
+    Logger.info(`[ChatSync] [SYNC] On-Demand Sync for ${phone} (User: ${userId}) | Limit: ${limit}`);
 
     // 2. Execute Targeted Sync
     // 90-day lookback window ensures we can reach back far enough for the 500-message limit
     const sinceDate = new Date();
-    sinceDate.setDate(sinceDate.getDate() - 90); // 🚀 Extended: Last 90 days window
+    sinceDate.setDate(sinceDate.getDate() - 90); //  Extended: Last 90 days window
 
     const request = ChatSyncRequestSchema.parse({
       companyId,
       sessionId: activeSession.sessionId,
       sinceDate: sinceDate.toISOString(),
       limit: Number(limit),
-      // 🎯 TARGETING STRATEGY:
+      //  TARGETING STRATEGY:
       // We want to filter ONLY this specific phone number in the service.
       // Ideally, we'd pass `targetJid` to the service, but for now we filter in the loop (MVP)
       // or we enable a specific mode in the service.

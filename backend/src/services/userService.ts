@@ -11,7 +11,7 @@ import { userRepository } from "@/repositories/UserRepository";
 export interface UserFilters {
   companyId?: string;
   role?: string;
-  roles?: string[]; // 🛡️ 100-YEAR FIX: Support multi-role filtering (e.g. Staff Only)
+  roles?: string[]; // [SEC] 100-YEAR FIX: Support multi-role filtering (e.g. Staff Only)
 }
 
 export interface CreateUserInput {
@@ -222,7 +222,7 @@ export const userService = {
         );
       }
 
-      // 🛡️ SECURITY: Owner Protection
+      // [SEC] SECURITY: Owner Protection
       if (targetUser.isOwner) {
         throw new AppError(
           "El Dueño (Owner) de la cuenta no puede ser eliminado.",
@@ -230,7 +230,7 @@ export const userService = {
         );
       }
 
-      // 🛡️ SECURITY: Last Man Standing (Anti-Lockout)
+      // [SEC] SECURITY: Last Man Standing (Anti-Lockout)
       if (targetUser.role === "ADMIN" || targetUser.role === "MASTER") {
         const adminCount = await userRepository.count({
           companyId,
@@ -267,7 +267,7 @@ export const userService = {
       where.companyId = filters.companyId;
     }
 
-    // 🛡️ 100-YEAR FIX: Prioritize multi-role filter for robust lists
+    // [SEC] 100-YEAR FIX: Prioritize multi-role filter for robust lists
     if (filters.roles && filters.roles.length > 0) {
       const validRoles = filters.roles.filter((r) =>
         Object.values(UserRole).includes(r as UserRole),
@@ -281,11 +281,11 @@ export const userService = {
     ) {
       where.role = filters.role as UserRole;
     } else {
-      // 🛡️ 100-YEAR FIX: Global MASTER Exclusion
+      // [SEC] 100-YEAR FIX: Global MASTER Exclusion
       where.role = { not: UserRole.MASTER };
     }
 
-    // 🛡️ 100-YEAR FIX: Exclude System Bots (Flow/AI Agents)
+    // [SEC] 100-YEAR FIX: Exclude System Bots (Flow/AI Agents)
     where.email = {
       ...((where.email as Prisma.StringFilter) || {}),
       not: {
@@ -448,3 +448,4 @@ export const userService = {
     return sanitized;
   },
 };
+

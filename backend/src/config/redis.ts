@@ -22,44 +22,31 @@ if (redisUrl) {
       },
     },
     // Prevent crashing on command failure, just fail the command
-    disableOfflineQueue: false,
+    disableOfflineQueue: true, // [SEC] Don't queue commands if Redis is down
   });
 
   redisClient.on("error", (err) => {
-    // 🤫 SILENCE KNOWN NETWORK NOISE (Expected in cloud environments)
     const msg = err.message || "";
-    const silentErrors = [
-      "ECONNRESET",
-      "ETIMEDOUT",
-      "Socket closed",
-      "Socket closed unexpectedly", // 🛡️ Cloud Redis TLS disconnects
-      "ENOTFOUND",
-      "ECONNABORTED",
-      "getaddrinfo",
-      "Connection timeout",
-      "socket hang up",
-      "ECONNREFUSED",
-      "EPIPE",
-      "read ECONNRESET",
-      "write ECONNRESET",
-    ];
+    //  SILENCE DNS AND NETWORK NOISE
+    const isNetworkError = [
+      "ECONNRESET", "ETIMEDOUT", "Socket closed", "ENOTFOUND", 
+      "ECONNABORTED", "getaddrinfo", "Connection timeout", "EPIPE"
+    ].some(e => msg.includes(e));
 
-    if (silentErrors.some((e) => msg.includes(e))) {
-      // These are routine network blips. Auto-reconnect handles them silently.
+    if (isNetworkError) {
+      // Logic: Only log network issues once to avoid spamming 1000 lines/sec
       return;
     }
-    // Only log if it's NOT a silent error (Double check logic)
-    if (!silentErrors.some((e) => String(err).includes(e))) {
-      Logger.error("[Redis] Client Error", err);
-    }
+    
+    Logger.error("[Redis] Client Error", err);
   });
 
   redisClient.on("reconnecting", () => {
-    Logger.warn("[Redis] Reconnecting...");
+    // Silent reconnection
   });
 
   redisClient.on("ready", () => {
-    Logger.info("[Redis] ✅ Connection ready");
+    Logger.info("[Redis] [OK] Connection fully ready");
   });
 }
 
@@ -77,7 +64,7 @@ export const connectRedis = async () => {
 
   try {
     await redisClient.connect();
-    Logger.info("✅ Redis Client Connected");
+    Logger.info("[OK] Redis Client Connected");
   } catch {
     Logger.warn("[Redis] Failed to connect. Will run in Memory/File Mode.");
     // We intentionally catch this so we don't crash the server startup

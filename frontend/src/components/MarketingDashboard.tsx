@@ -671,7 +671,7 @@ export const MarketingDashboard: React.FC = () => {
 
                     <div className="pt-8 border-t border-gray-100 dark:border-reply-border-dark">
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">
-                        📤 Importar desde Base de Datos Externa (Excel)
+                         Importar desde Base de Datos Externa (Excel)
                       </label>
                       <div className="flex flex-col sm:flex-row gap-4 items-center">
                         <label className="w-full sm:w-auto cursor-pointer bg-white dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-reply-border-dark rounded-2xl px-10 py-6 text-center hover:border-rose-500 transition-all flex flex-col items-center gap-2 group">
@@ -708,7 +708,7 @@ export const MarketingDashboard: React.FC = () => {
                   <div className="space-y-8 animate-fade-in">
                     <div className="bg-reply-bg/50 dark:bg-gray-900/50 p-8 rounded-[2rem] border border-gray-100 dark:border-reply-border-dark">
                       <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-rose-500" /> 🗓️
+                        <Calendar className="w-4 h-4 text-rose-500" /> ️
                         Programación de Campaña
                       </h4>
                       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -752,7 +752,7 @@ export const MarketingDashboard: React.FC = () => {
                     <div className="bg-reply-bg/50 dark:bg-gray-900/50 p-8 rounded-[2rem] border border-gray-100 dark:border-reply-border-dark">
                       <div className="flex justify-between items-center mb-6">
                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                          <Zap className="w-4 h-4 text-amber-500" /> 🛡️
+                          <Zap className="w-4 h-4 text-amber-500" /> [SEC]
                           Velocidad y Anti-Spam
                         </h4>
                         <span className="text-xs font-black text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-3 py-1 rounded-full">
@@ -896,7 +896,7 @@ export const MarketingDashboard: React.FC = () => {
             {templates.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-white dark:bg-reply-surface-dark rounded-[3rem] border border-dashed border-gray-200 dark:border-reply-border-dark shadow-inner">
                 <div className="w-32 h-32 bg-reply-bg dark:bg-gray-800/50 rounded-full flex items-center justify-center mb-8 animate-pulse text-5xl">
-                  🎨
+                  
                 </div>
                 <h4 className="text-xl font-black text-gray-900 dark:text-white mb-2">
                   Tu Galería está Vacía
@@ -1239,13 +1239,13 @@ export const MarketingDashboard: React.FC = () => {
                 <div className="absolute top-16 right-20 w-80 bg-white dark:bg-reply-panel-dark shadow-xl rounded-xl p-6 z-50 border border-gray-200 dark:border-reply-border-dark animate-fade-in-down">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-gray-800 dark:text-white text-sm flex items-center gap-2">
-                      <span>📧</span> Configuración del Correo
+                      <span></span> Configuración del Correo
                     </h3>
                     <button
                       onClick={() => setShowEmailSettings(false)}
                       className="text-gray-400 hover:text-gray-600"
                     >
-                      ✕
+                      
                     </button>
                   </div>
                   <div className="space-y-4">
@@ -1303,7 +1303,7 @@ export const MarketingDashboard: React.FC = () => {
                     <div className="flex justify-between items-center mb-3">
                       <label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2">
                         <div className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                          ✨
+                          
                         </div>
                         <span>AI Copilot</span>
                       </label>
@@ -1454,10 +1454,10 @@ export const MarketingDashboard: React.FC = () => {
                               Insertar Variable Dinmica...
                             </option>
                             <option value="contact.firstName">
-                              👤 Nombre del Contacto
+                               Nombre del Contacto
                             </option>
-                            <option value="contact.company">🏢 Empresa</option>
-                            <option value="agent.name">👨‍💼 Nombre Agente</option>
+                            <option value="contact.company"> Empresa</option>
+                            <option value="agent.name">‍ Nombre Agente</option>
                           </select>
                           <div className="absolute right-4 top-3.5 pointer-events-none text-gray-400">
                             <svg
@@ -1488,7 +1488,7 @@ export const MarketingDashboard: React.FC = () => {
                           className="w-full border border-gray-200 dark:border-reply-border-dark hover:bg-reply-bg dark:hover:bg-reply-panel-dark text-gray-600 dark:text-gray-300 text-xs font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-between group"
                         >
                           <span className="flex items-center gap-2">
-                            <span>⚖️</span> Footer Legal Anti-Spam
+                            <span>[LEGAL]</span> Footer Legal Anti-Spam
                           </span>
                           <span className="opacity-0 group-hover:opacity-100 transition-opacity">
                             →
@@ -1599,7 +1599,7 @@ export const MarketingDashboard: React.FC = () => {
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center opacity-40">
                     <div className="w-32 h-32 bg-gray-300 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                      <span className="text-4xl grayscale">✉️</span>
+                      <span className="text-4xl grayscale">️</span>
                     </div>
                     <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
                       Espacio de Trabajo
@@ -1677,7 +1677,7 @@ export const MarketingDashboard: React.FC = () => {
                       <td className="py-4 px-4 text-gray-600 dark:text-gray-300">
                         {c.status === "scheduled" && c.config?.scheduledAt ? (
                           <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-500 font-medium">
-                            <span>🕒</span>
+                            <span></span>
                             {new Date(c.config.scheduledAt).toLocaleString()}
                           </div>
                         ) : (
@@ -1722,13 +1722,13 @@ export const MarketingDashboard: React.FC = () => {
             <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] overflow-hidden flex flex-col relative animate-scale-in">
               <div className="p-4 border-b border-gray-200 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-reply-surface-dark">
                 <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                  <span>🖼️</span> Galería Multimedia
+                  <span>️</span> Galería Multimedia
                 </h3>
                 <button
                   onClick={() => setShowMediaLibrary(false)}
                   className="text-gray-500 hover:text-gray-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 >
-                  ✕
+                  
                 </button>
               </div>
               <div className="flex-1 overflow-hidden relative">

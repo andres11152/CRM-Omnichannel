@@ -39,7 +39,7 @@ export const AgentPerformanceTable: React.FC<Props> = ({ data }) => {
     <div className="bg-white dark:bg-reply-surface-dark rounded-xl border border-gray-100 dark:border-reply-border-dark overflow-hidden">
       <div className="p-4 border-b border-gray-100 dark:border-reply-border-dark bg-reply-bg dark:bg-gray-800/50">
         <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-          <span className="text-xl">🏆</span> Rendimiento de Agentes
+          <span className="text-xl"></span> Rendimiento de Agentes
         </h3>
       </div>
       <div className="overflow-x-auto">

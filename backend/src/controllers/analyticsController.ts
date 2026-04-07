@@ -1,10 +1,10 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
-import { analyticsService } from "@/services/analyticsService";
+import { analyticsService } from "@/services/AnalyticsService";
 
 /**
- * 📊 ANALYTICS CONTROLLER (Refactored)
+ * [STAT] ANALYTICS CONTROLLER (Refactored)
  * Delegates complex reporting to AnalyticsService.
  */
 

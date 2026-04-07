@@ -19,7 +19,7 @@ export interface ApiResponse<T = unknown> {
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
 /**
- * 🚀 ENTERPRISE HTTP CLIENT
+ *  ENTERPRISE HTTP CLIENT
  * Features:
  * - HttpOnly cookie auth (XSS-proof)
  * - Automatic token refresh on 401
@@ -31,14 +31,14 @@ export const api: AxiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  // 🍪 ENTERPRISE: Send HttpOnly cookies with every request
+  //  ENTERPRISE: Send HttpOnly cookies with every request
   withCredentials: true,
   // 15s timeout to handle slow network but fail before user gives up
   timeout: 15000,
 });
 
 // ============================================================================
-// 🔒 REQUEST INTERCEPTOR: AUTOMATIC TOKEN INJECTION
+//  REQUEST INTERCEPTOR: AUTOMATIC TOKEN INJECTION
 // ============================================================================
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -50,7 +50,7 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // 🛡️ FormData Detection: Let axios auto-generate multipart boundary
+    // [SEC] FormData Detection: Let axios auto-generate multipart boundary
     if (config.data instanceof FormData) {
       delete config.headers["Content-Type"];
     }
@@ -63,7 +63,7 @@ api.interceptors.request.use(
 );
 
 // ============================================================================
-// 🔄 TOKEN REFRESH QUEUE (Prevents multiple concurrent refresh calls)
+// [SYNC] TOKEN REFRESH QUEUE (Prevents multiple concurrent refresh calls)
 // ============================================================================
 
 let isRefreshing = false;
@@ -84,7 +84,7 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 };
 
 // ============================================================================
-// 🚨 RESPONSE INTERCEPTOR: AUTO-REFRESH + CENTRALIZED ERROR HANDLING
+// [ALERT] RESPONSE INTERCEPTOR: AUTO-REFRESH + CENTRALIZED ERROR HANDLING
 // ============================================================================
 api.interceptors.response.use(
   (response: AxiosResponse) => {
@@ -115,7 +115,7 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      // 🔄 ENTERPRISE: Attempt silent token refresh
+      // [SYNC] ENTERPRISE: Attempt silent token refresh
       if (!originalRequest._retry) {
         if (isRefreshing) {
           // Queue this request while refresh is in progress
@@ -158,7 +158,7 @@ api.interceptors.response.use(
         } catch (refreshError) {
           // Refresh failed → full logout
           processQueue(new Error("Session expired"), null);
-          console.warn("[Axios] 🔒 Refresh failed. Forcing logout...");
+          console.warn("[Axios]  Refresh failed. Forcing logout...");
           useAuthStore.getState().logout();
           return Promise.reject(
             new Error(

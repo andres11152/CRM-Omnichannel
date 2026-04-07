@@ -1,5 +1,5 @@
 /**
- * 🛡️ Permission Types
+ * [SEC] Permission Types
  * Must match backend Permission enum exactly
  */
 export type Permission =

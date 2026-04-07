@@ -1,7 +1,7 @@
 import { Logger } from "./logger";
 
 /**
- * 🛡️ CIRCUIT BREAKER PATTERN
+ * [SEC] CIRCUIT BREAKER PATTERN
  *
  * Prevents cascading failures by temporarily blocking requests to a failing service.
  *
@@ -76,7 +76,7 @@ export class CircuitBreaker {
         // Require 2 successes to fully close
         this.state = CircuitState.CLOSED;
         this.successCount = 0;
-        Logger.info(`[${this.name}] ✅ Circuit breaker CLOSED (recovered)`);
+        Logger.info(`[${this.name}] [OK] Circuit breaker CLOSED (recovered)`);
       }
     }
   }
@@ -89,7 +89,7 @@ export class CircuitBreaker {
       this.state = CircuitState.OPEN;
       this.nextAttempt = Date.now() + this.timeout;
       Logger.error(
-        `[${this.name}] 🚨 Circuit breaker OPEN after ${
+        `[${this.name}] [ALERT] Circuit breaker OPEN after ${
           this.failureCount
         } failures. Will retry at ${new Date(this.nextAttempt).toISOString()}`
       );
@@ -109,7 +109,7 @@ export class CircuitBreaker {
 }
 
 /**
- * 🛡️ RETRY WITH EXPONENTIAL BACKOFF
+ * [SEC] RETRY WITH EXPONENTIAL BACKOFF
  *
  * Automatically retries failed operations with increasing delays.
  *

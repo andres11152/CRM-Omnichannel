@@ -4,7 +4,7 @@ import {
 } from "@/repositories/AnalyticsRepository";
 import { ticketRepository } from "@/repositories/TicketRepository";
 import { companyRepository } from "@/repositories/CompanyRepository";
-import { exportService } from "@/services/exportService";
+import { exportService } from "@/services/ExportService";
 import dayjs from "dayjs";
 
 // --- DTOs ---

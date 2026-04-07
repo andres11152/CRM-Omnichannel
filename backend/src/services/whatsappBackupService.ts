@@ -8,7 +8,7 @@ import { promisify } from "util";
 const execAsync = promisify(exec);
 
 /**
- * 🔐 WHATSAPP SESSION BACKUP SYSTEM
+ * [AUTH] WHATSAPP SESSION BACKUP SYSTEM
  * Automatic backup every 6 hours to prevent total data loss
  * Uses Redis keys directly (Baileys stores auth state in Redis)
  */
@@ -115,10 +115,10 @@ export class WhatsAppBackupService {
 
       const duration = Date.now() - startTime;
       Logger.info(
-        `[WhatsApp Backup] ✅ Backup completed: ${allKeys.length} keys in ${duration}ms`,
+        `[WhatsApp Backup] [OK] Backup completed: ${allKeys.length} keys in ${duration}ms`,
       );
     } catch (error) {
-      Logger.error("[WhatsApp Backup] ❌ Backup failed:", error);
+      Logger.error("[WhatsApp Backup] [ERROR] Backup failed:", error);
       // Don't throw - we don't want to crash the app if backup fails
     }
   }
@@ -225,7 +225,7 @@ export class WhatsAppBackupService {
 
         if (restored > 0) {
           Logger.info(
-            `[WhatsApp Backup] ✅ Restored ${restored} keys for session ${sessionId}`,
+            `[WhatsApp Backup] [OK] Restored ${restored} keys for session ${sessionId}`,
           );
           return true;
         }

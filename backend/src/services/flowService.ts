@@ -1,12 +1,12 @@
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
-import { cacheService } from "@/services/cacheService";
-import { planLimitsService } from "@/services/planLimitsService";
+import { cacheService } from "@/services/CacheService";
+import { planLimitsService } from "@/services/PlanLimitsService";
 import { Prisma } from "@prisma/client";
 import { workflowRepository } from "@/repositories/WorkflowRepository";
 
 /**
- * ⚡ FLOW (WORKFLOW) CRUD SERVICE
+ *  FLOW (WORKFLOW) CRUD SERVICE
  *
  * Data access layer for automation workflows.
  * Handles CRUD, toggle, duplicate, plan limits, and cache invalidation.

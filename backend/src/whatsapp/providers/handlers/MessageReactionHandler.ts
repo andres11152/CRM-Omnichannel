@@ -1,5 +1,5 @@
 /**
- * 🧡 MESSAGE REACTION HANDLER
+ *  MESSAGE REACTION HANDLER
  *
  * Handles WhatsApp message reactions (emojis).
  * When a user/contact reacts to a message, this handler:
@@ -14,11 +14,11 @@ import { Logger } from "@/utils/logger";
 import { TenantContextManager } from "@/config/tenantContext";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { reactionRepository } from "@/repositories/ReactionRepository";
-import { SocketEventEmitter } from "@/services/socketEventEmitter";
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 import { SessionData } from "@/types/whatsapp.types";
 
-// 🛡️ Zod validation schema
+// [SEC] Zod validation schema
 const ReactionInputSchema = z.object({
   messageId: z.string().min(1),
   reaction: z.string(), // can be empty if removed
@@ -39,7 +39,7 @@ export class MessageReactionHandler {
     sessionId: string,
     eventCompanyId?: string,
   ): Promise<void> {
-    // 🛡️ Zod Validation
+    // [SEC] Zod Validation
     const validated = ReactionInputSchema.safeParse({
       messageId: whatsappMessageId,
       reaction,
@@ -47,7 +47,7 @@ export class MessageReactionHandler {
     });
 
     if (!validated.success) {
-      Logger.warn(`[ReactionHandler] ⚠️ Invalid reaction payload dropped`, {
+      Logger.warn(`[ReactionHandler] [WARNING] Invalid reaction payload dropped`, {
         sessionId,
         errors: validated.error.errors.map(
           (e) => `${e.path.join(".")}: ${e.message}`,
@@ -56,10 +56,10 @@ export class MessageReactionHandler {
       return;
     }
 
-    // 🛡️ FIX: Use event companyId first, fallback to sessionCache
+    // [SEC] FIX: Use event companyId first, fallback to sessionCache
     const companyId = eventCompanyId || (this.sessionCache.get(sessionId)?.companyId as string);
     if (!companyId) {
-      Logger.warn(`[ReactionHandler] ⚠️ No companyId for session ${sessionId} — reaction dropped`);
+      Logger.warn(`[ReactionHandler] [WARNING] No companyId for session ${sessionId} — reaction dropped`);
       return;
     }
 
@@ -91,7 +91,7 @@ export class MessageReactionHandler {
               companyId,
             );
             Logger.info(
-              `[ReactionHandler] 🗑️ Reaction removed from ${msg.id} by ${participant}`,
+              `[ReactionHandler] ️ Reaction removed from ${msg.id} by ${participant}`,
             );
           } else {
             // Upsert reaction
@@ -102,7 +102,7 @@ export class MessageReactionHandler {
               companyId,
             });
             Logger.info(
-              `[ReactionHandler] ✅ Reaction saved for ${msg.id}: ${reaction}`,
+              `[ReactionHandler] [OK] Reaction saved for ${msg.id}: ${reaction}`,
             );
           }
 
@@ -119,7 +119,7 @@ export class MessageReactionHandler {
     } catch (error: unknown) {
       const isError = error instanceof Error;
       Logger.error(
-        `[ReactionHandler] ❌ Failed to process reaction for ${whatsappMessageId}`,
+        `[ReactionHandler] [ERROR] Failed to process reaction for ${whatsappMessageId}`,
         {
           sessionId,
           companyId,

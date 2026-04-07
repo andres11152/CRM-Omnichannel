@@ -14,6 +14,7 @@ import {
   Building2,
   Info,
   Clock,
+  Users,
 } from "lucide-react";
 import { Contact } from "@/types";
 import { InternalNotes } from "./InternalNotes";
@@ -40,8 +41,8 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
     alt: string;
   } | null>(null);
 
-  // 🏢 GROUP DETECTION
-  const isGroup = contact.isGroup ?? false;
+  //  GROUP DETECTION
+  const isGroup = contact.isGroup || false;
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -80,10 +81,10 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
               className="relative w-24 h-24 border-2 border-white dark:border-gray-900 shadow-xl transform transition-transform group-hover:scale-[1.02] cursor-pointer"
             />
             <div
-              className={`absolute bottom-1 right-1 w-6 h-6 ${isGroup ? "bg-green-500" : "bg-white dark:bg-reply-panel-dark"} p-1 rounded-full shadow-lg flex items-center justify-center border border-gray-100 dark:border-reply-border-dark`}
+              className={`absolute bottom-1 right-1 ${isGroup ? "w-8 h-8 bg-green-500" : "w-6 h-6 bg-white dark:bg-reply-panel-dark"} p-1 rounded-full shadow-lg flex items-center justify-center border border-gray-100 dark:border-reply-border-dark`}
             >
               {isGroup ? (
-                <span className="text-white text-[10px] font-bold">👥</span>
+                <Users className="w-4 h-4 text-white" />
               ) : (
                 <div className="w-full h-full bg-emerald-500 rounded-full"></div>
               )}
@@ -91,13 +92,14 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
           </div>
 
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mt-4 mb-1">
-            {contact.name}
+            {isGroup ? contact.name.replace(/^\[GROUP\]\s*/i, '') : contact.name}
           </h2>
 
           {/* Group Badge or Last Activity */}
           {isGroup ? (
             <p className="text-xs text-green-600 dark:text-green-400 flex items-center justify-center gap-1 font-semibold">
-              <span>📢 Grupo de WhatsApp</span>
+              <Users className="w-3.5 h-3.5" />
+              <span>Grupo de WhatsApp</span>
             </p>
           ) : (
             <p className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1.5 font-medium tracking-wide">
@@ -214,7 +216,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
             <div className="flex items-center gap-2 mb-1 text-gray-400">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
               <span className="text-[10px] font-bold uppercase tracking-wider">
-                Acciónes Rpidas
+                Acciones Rápidas
               </span>
             </div>
 
@@ -266,7 +268,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
             <div className="flex items-center gap-2 mb-3 text-gray-400">
               <Building2 className="w-3.5 h-3.5" />
               <span className="text-[10px] font-bold uppercase tracking-wider">
-                Bitcora Interna
+                Bitácora Interna
               </span>
             </div>
             <InternalNotes

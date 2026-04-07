@@ -1,5 +1,5 @@
 /**
- * 📝 FRONTEND LOGGER
+ *  FRONTEND LOGGER
  *
  * Type-safe logging utility for debugging
  */
@@ -31,25 +31,25 @@ class FrontendLogger {
 
   info(message: string, ...args: unknown[]): void {
     if (this.shouldLog("info")) {
-      console.log(`ℹ️ ${message}`, ...args);
+      console.log(`[INFO] ${message}`, ...args);
     }
   }
 
   warn(message: string, ...args: unknown[]): void {
     if (this.shouldLog("warn")) {
-      console.warn(`⚠️ ${message}`, ...args);
+      console.warn(`[WARNING] ${message}`, ...args);
     }
   }
 
   error(message: string, ...args: unknown[]): void {
     if (this.shouldLog("error")) {
-      console.error(`❌ ${message}`, ...args);
+      console.error(`[ERROR] ${message}`, ...args);
     }
   }
 
   debug(message: string, ...args: unknown[]): void {
     if (this.shouldLog("debug")) {
-      console.debug(`🐛 ${message}`, ...args);
+      console.debug(`[DEBUG] ${message}`, ...args);
     }
   }
 }

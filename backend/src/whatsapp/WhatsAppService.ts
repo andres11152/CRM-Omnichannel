@@ -1,5 +1,5 @@
 /**
- * 📱 WHATSAPP SERVICE (Refactored Orchestrator)
+ * WHATSAPP SERVICE
  *
  * Core orchestrator for WhatsApp integration.
  * Manages: initialization, session lifecycle, event wiring, sync.
@@ -22,7 +22,7 @@ import { WASocket } from "@whiskeysockets/baileys";
 
 import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { AppError } from "@/utils/AppError";
-// 🏗️ DI Container
+// DI Container
 import { container } from "@/config/container";
 import { WA_TOKENS } from "./di/tokens";
 import { registerWhatsAppServices } from "./di/registration";
@@ -39,7 +39,7 @@ export class WhatsAppService {
   private messaging: WhatsAppMessaging;
 
   private constructor() {
-    // 🏗️ Bootstrap DI container (Composition Root)
+    // Bootstrap DI container (Composition Root)
     registerWhatsAppServices();
 
     // Resolve all dependencies from container
@@ -150,7 +150,7 @@ export class WhatsAppService {
               requestId: `wa:msg:${event.data.message?.key?.id || "unknown"}`,
             },
             async () => {
-              await this.messageHandler.handleIncoming(event.data, sessionId);
+              await this.messageHandler.handleIncoming(event.data.message, sessionId, companyId);
             },
           );
         } catch (err) {
@@ -165,39 +165,42 @@ export class WhatsAppService {
   // ────────────────────────────────────────────────
 
   async initialize(): Promise<void> {
-    Logger.info("[WA] 🚀 Initializing WhatsApp Service...");
+    Logger.info("[WA] Initializing WhatsApp Service...");
 
     try {
-      const sessions = await this.sessionRepository.findByStatus("CONNECTED");
+      // Bypassing RLS for system-wide session restoration
+      await TenantContextManager.runAsSystem(async () => {
+        const sessions = await this.sessionRepository.findByStatus("CONNECTED");
 
-      if (sessions.length === 0) {
-        Logger.info("[WA] No sessions to restore.");
-        return;
-      }
-
-      Logger.info(`[WA] Restoring ${sessions.length} sessions...`);
-
-      for (const session of sessions) {
-        try {
-          Logger.info(
-            `[WA] Restoring session ${session.sessionId} (Company: ${session.companyId})`,
-          );
-          await this.sessionManager.initializeSession({
-            sessionId: session.sessionId,
-            companyId: session.companyId,
-          });
-          Logger.info(`[WA] ✅ Restored: ${session.sessionId}`);
-        } catch (err) {
-          Logger.error(`[WA] ❌ Failed to restore ${session.sessionId}:`, err);
-          await this.sessionRepository
-            .update(session.companyId, session.sessionId, { status: "ERROR" })
-            .catch(() => {});
+        if (sessions.length === 0) {
+          Logger.info("[WA] No sessions to restore.");
+          return;
         }
-      }
 
-      Logger.info("[WA] 🏁 Session restoration complete.");
+        Logger.info(`[WA] Restoring ${sessions.length} sessions...`);
+
+        for (const session of sessions) {
+          try {
+            Logger.info(
+              `[WA] Restoring session ${session.sessionId} (Company: ${session.companyId})`,
+            );
+            await this.sessionManager.initializeSession({
+              sessionId: session.sessionId,
+              companyId: session.companyId,
+            });
+            Logger.info(`[WA] Restored: ${session.sessionId}`);
+          } catch (err) {
+            Logger.error(`[WA] ERROR: Failed to restore ${session.sessionId}:`, err);
+            await this.sessionRepository
+              .update(session.companyId, session.sessionId, { status: "ERROR" })
+              .catch(() => {});
+          }
+        }
+      });
+
+      Logger.info("[WA] Session restoration complete.");
     } catch (err) {
-      Logger.error("[WA] ❌ Initialization error:", err);
+      Logger.error("[WA] ERROR: Initialization error:", err);
     }
   }
 
@@ -209,26 +212,46 @@ export class WhatsAppService {
     companyId: string,
     sessionId?: string,
   ): Promise<{ sessionId: string; qrCode: string | null }> {
-    const finalSessionId =
-      sessionId || `wa_${companyId}_${Date.now().toString(36)}`;
+    // ANTI-DUPLICATION LOGIC: 
+    // Check if we already have a session for this company that isn't fully established.
+    // If we do, we REUSE it to avoid filling the UI with "Connecting..." ghosts.
+    let finalSessionId = sessionId;
+    
+    if (!finalSessionId) {
+      const existingSessions = await this.sessionRepository.findByCompany(companyId);
+      const ghostSession = existingSessions.find(s => 
+        ["CONNECTING", "QR", "ERROR", "DISCONNECTED"].includes(s.status)
+      );
+
+      if (ghostSession) {
+        Logger.info(`[WA] Recycling ghost session: ${ghostSession.sessionId} for company ${companyId}`);
+        finalSessionId = ghostSession.sessionId;
+      } else {
+        finalSessionId = `wa_${companyId}_${Date.now().toString(36)}`;
+      }
+    }
 
     Logger.info(
-      `[WA] Creating session ${finalSessionId} for company ${companyId}`,
+      `[WA] Creating/Updating session ${finalSessionId} for company ${companyId}`,
     );
 
-    // Check plan limits
+    // Check plan limits (only for NEW rows, but recycling is safe)
     try {
       const { planLimitsService } =
-        await import("@/services/planLimitsService");
-      const canCreate = await planLimitsService.canCreateResource(
-        companyId,
-        "whatsapp_sessions",
-      );
-      if (!canCreate) {
-        throw new AppError(
-          "Has alcanzado el límite de conexiones WhatsApp de tu plan.",
-          403,
+        await import("@/services/PlanLimitsService");
+      
+      const existing = await this.sessionRepository.findOne(companyId, finalSessionId);
+      if (!existing) {
+        const canCreate = await planLimitsService.canCreateResource(
+          companyId,
+          "whatsapp_sessions",
         );
+        if (!canCreate) {
+          throw new AppError(
+            "Has alcanzado el límite de conexiones WhatsApp de tu plan.",
+            403,
+          );
+        }
       }
     } catch (planErr) {
       if (
@@ -244,13 +267,13 @@ export class WhatsAppService {
       );
     }
 
-    // 🛡️ PERSISTENCE FIX: Ensure the session record exists in DB BEFORE initializing Baileys.
-    // This prevents "Record not found" errors when connection events (QR) fire.
+    // PERSISTENCE: Ensure the session record exists in DB BEFORE initializing Baileys.
     try {
       const session = await this.sessionRepository.findOne(companyId, finalSessionId);
       if (session) {
         await this.sessionRepository.update(companyId, finalSessionId, {
           status: "CONNECTING",
+          qrCode: null, // Reset QR if recycling
         });
       } else {
         await this.sessionRepository.create({
@@ -261,7 +284,6 @@ export class WhatsAppService {
       }
     } catch (err) {
       Logger.error(`[WA] Error ensuring session record for ${finalSessionId}:`, err);
-      // We continue anyway as initializeSession might still work, but DB updates will fail
     }
 
     // Create Baileys session
@@ -320,9 +342,29 @@ export class WhatsAppService {
   }
 
   async deleteSession(companyId: string, sessionId: string): Promise<void> {
-    Logger.info(`[WA] Deleting session ${sessionId} for company ${companyId}`);
-    await this.sessionManager.terminateSession(sessionId, true); // true = force ClearAuth
-    await this.sessionRepository.delete(companyId, sessionId);
+    Logger.info(`[WA] Requested deletion for session ${sessionId} (Company: ${companyId})`);
+    
+    try {
+      // 1. Try a graceful termination (this clears memory and auth tokens)
+      // We wrap it to prevent session-logout-timeouts from blocking the entire flow
+      await Promise.race([
+        this.sessionManager.terminateSession(sessionId, true),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Termination timeout")), 15000))
+      ]).catch(err => {
+        Logger.warn(`[WA] Graceful termination for ${sessionId} timed out or failed, proceeding with local cleanup.`, err);
+      });
+    } catch (err) {
+      Logger.error(`[WA] Error during terminateSession for ${sessionId}:`, err);
+    }
+
+    // 2. ABSOLUTE CLEANUP: Ensure record is removed from DB regardless of socket state
+    try {
+      await this.sessionRepository.delete(companyId, sessionId);
+      Logger.info(`[WA] Session record ${sessionId} removed from DB.`);
+    } catch (dbErr) {
+      Logger.error(`[WA] ERROR: Failed to delete session record ${sessionId} from DB:`, dbErr);
+      throw new AppError("No se pudo eliminar el registro de la sesión. Intente nuevamente.", 500);
+    }
   }
 
   // ────────────────────────────────────────────────
@@ -354,12 +396,20 @@ export class WhatsAppService {
     return this.sessionManager.listSessions(companyId);
   }
 
-  async getSession(sessionId: string): Promise<SessionStatus> {
+  async getSession(companyId: string, sessionId: string): Promise<SessionStatus> {
+    const record = await this.sessionRepository.findOne(companyId, sessionId);
+    if (!record) {
+      throw new AppError("No session found or unauthorized", 404);
+    }
     return this.sessionManager.getSessionStatus(sessionId);
   }
 
+  async getSessionRecord(companyId: string, sessionId: string) {
+    return this.sessionRepository.findOne(companyId, sessionId);
+  }
+
   /**
-   * 🛡️ 100-YEAR FIX: Expose Raw Socket
+   * Expose Raw Socket
    * Necessary for advanced operations like Group Metadata, Blocklist, etc.
    */
   getSocket(sessionId: string): WASocket | undefined {
@@ -399,6 +449,16 @@ export class WhatsAppService {
     return this.messaging.sendPresenceUpdate(to, type, companyId);
   }
 
+  async sendReaction(
+    to: string,
+    messageId: string,
+    reaction: string,
+    companyId: string,
+    fromMe?: boolean,
+  ): Promise<void> {
+    return this.messaging.sendReaction(to, messageId, reaction, companyId, fromMe);
+  }
+
   async sendTemplate(
     to: string,
     templateId: string,
@@ -412,13 +472,17 @@ export class WhatsAppService {
   // RECONNECT & SYNC
   // ────────────────────────────────────────────────
 
-  async reconnectSession(sessionId: string): Promise<void> {
+  async reconnectSession(companyId: string, sessionId: string): Promise<void> {
+    const record = await this.sessionRepository.findOne(companyId, sessionId);
+    if (!record) {
+      throw new AppError("Session not found or unauthorized", 404);
+    }
     await this.sessionManager.reconnectSession(sessionId);
   }
 
   /**
-   * 🔄 SYNC MESSAGES FROM PHONE HISTORY
-   * Enterprise-grade historical message synchronization.
+   * SYNC MESSAGES FROM PHONE HISTORY
+   * Historical message synchronization.
    * Delegates to ChatSyncService for actual processing.
    */
   async syncMessages(
@@ -433,7 +497,7 @@ export class WhatsAppService {
     errors: string[];
   }> {
     const { chatSyncService, ChatSyncRequestSchema } =
-      await import("@/services/chatSyncService");
+      await import("@/services/ChatSyncService");
 
     const activeSession =
       await this.sessionManager.findActiveSessionForCompany(companyId);
@@ -462,7 +526,7 @@ export class WhatsAppService {
   }
 
   /**
-   * 🗄️ GET SESSION STORE
+   * GET SESSION STORE
    * Returns the Baileys in-memory store for a session.
    */
   getSessionStore(sessionId: string): unknown {
@@ -470,7 +534,7 @@ export class WhatsAppService {
   }
 
   /**
-   * 🚀 CHECK COMPANY CONNECTION (Memory-First)
+   * CHECK COMPANY CONNECTION (Memory-First)
    */
   async isCompanyConnected(companyId: string): Promise<boolean> {
     if (this.sessionManager.hasActiveSessionInMemory(companyId)) {

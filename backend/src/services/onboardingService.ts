@@ -1,10 +1,10 @@
 import { onboardingRepository } from "@/repositories/OnboardingRepository";
 import { Logger } from "@/utils/logger";
 import bcrypt from "bcryptjs";
-import { cacheService } from "@/services/cacheService";
+import { cacheService } from "@/services/CacheService";
 
 /**
- * 🚀 ONBOARDING SERVICE
+ *  ONBOARDING SERVICE
  */
 export const onboardingService = {
   async registerCompany(data: {
@@ -31,7 +31,7 @@ export const onboardingService = {
       hashedPassword,
     });
 
-    Logger.info(`[Onboarding] ✅ Created company: ${result.company.id}`);
+    Logger.info(`[Onboarding] [OK] Created company: ${result.company.id}`);
 
     // Invalidate admin cache
     await cacheService.delete("admin:companies:all");

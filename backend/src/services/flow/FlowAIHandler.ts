@@ -1,5 +1,5 @@
 /**
- * 🤖 FLOW AI HANDLER
+ * [AI] FLOW AI HANDLER
  *
  * AI Agent node execution logic:
  * - handleAIAgentNode: Orchestrates AI interaction (BYOK, history, variable extraction, termination)
@@ -157,7 +157,7 @@ export class FlowAIHandler {
           .replace(TERMINATION_KEYWORD, "")
           .trim();
         Logger.info(
-          `[FlowExecutor] 🛑 AI Termination Triggered. Advancing Flow.`,
+          `[FlowExecutor]  AI Termination Triggered. Advancing Flow.`,
         );
       }
 

@@ -1,9 +1,11 @@
 import { Job } from "bull";
 import { MessageJob, messageQueueService } from "./messageQueueService";
 import { WhatsAppService } from "@/whatsapp/WhatsAppService";
+import { messageRepository } from "@/repositories/MessageRepository";
 import { Logger } from "../../utils/logger";
 import { MediaPayload } from "@/whatsapp/core/types/whatsapp.types";
 import { DistributedLock } from "@/utils/distributedLock";
+import { contextStorage } from "@/context/requestContext";
 
 interface WorkerResult {
   success: boolean;
@@ -42,31 +44,38 @@ class MessageQueueWorker {
 
     const queue = messageQueueService.getQueue(companyId);
 
-    // Process jobs with concurrency of 3
-    // Process jobs with concurrency of 3
     queue.process(3, async (job: Job<MessageJob>) => {
-      // 🛡️ 100-YEAR FIX: Enforce Sequentiality per Conversation
-      // This prevents out-of-order delivery to the same recipient while allowing
-      // concurrency across different chats in the same company.
-      const lockKey = `msg_proc:${job.data.conversationId}`;
-      
-      return DistributedLock.run(
-        lockKey,
-        () => this.processMessage(job),
-        10000, // TTL 10s (if process crashes)
-        30000  // Wait up to 30s for previous message to finish
-      );
+      // [SEC] SECURITY CONTEXT INJECTION
+      // Background workers run outside the HTTP request lifecycle. We must manually
+      // inject the companyId into the contextStorage so Prisma RLS can function.
+      return contextStorage.run({
+        companyId: job.data.companyId,
+        userId: job.data.senderId,
+        requestId: `job:${job.id}`,
+      }, () => {
+        // [SEC] 100-YEAR FIX: Enforce Sequentiality per Conversation
+        // This prevents out-of-order delivery to the same recipient while allowing
+        // concurrency across different chats in the same company.
+        const lockKey = `msg_proc:${job.data.conversationId}`;
+        
+        return DistributedLock.run(
+          lockKey,
+          () => this.processMessage(job),
+          10000, // TTL 10s (if process crashes)
+          30000  // Wait up to 30s for previous message to finish
+        );
+      });
     });
 
     this.activeWorkers.set(companyId, true);
-    Logger.info(`[Worker:${companyId}] 🚀 Started (3 concurrent workers)`);
+    Logger.info(`[Worker:${companyId}]  Started (3 concurrent workers)`);
   }
 
   /**
    * Process a single message job
    */
   private async processMessage(job: Job<MessageJob>): Promise<WorkerResult> {
-    const { companyId, conversationId, senderId, to, text, media } = job.data;
+    const { companyId, conversationId, senderId, to, text, media, quotedMessageId } = job.data;
 
     try {
       // 1. Report progress: Waiting for session
@@ -87,19 +96,34 @@ class MessageQueueWorker {
         await job.progress(60);
       }
 
-      // 3. 🤖 HUMAN-LIKE BEHAVIOR: Simulate typing & Random delay
+      const metadata = job.data.metadata as Record<string, string | number | boolean | null> | undefined;
+      const dbId = metadata?.dbId as string | undefined;
+
+      //  ANTI-DUPLICATION STRICT CHECK: Avoid resending if this job was retried
+      // after the message was successfully dispatched
+      if (dbId) {
+        const existingMessage = await messageRepository.findUnique({ where: { id: dbId } });
+        // NOTE: We omit companyId in findUnique because it's not part of the unique index or id alone is unique. Actually we can do findFirst to include companyId
+        if (existingMessage && ["SENT", "DELIVERED", "READ"].includes(existingMessage.status)) {
+          Logger.warn(`[Worker] Job ${job.id} skipped - Message ${dbId} already marked as ${existingMessage.status}`);
+          return { success: true, messageId: existingMessage.whatsappMessageId || "", sentAt: new Date() };
+        }
+      }
+
+      // 3. [AI] HUMAN-LIKE BEHAVIOR: Simulate typing & Random delay
       await job.progress(40);
       const typingTime = Math.floor(Math.random() * (3000 - 1500 + 1) + 1500); // 1.5 - 3s
 
-      // Emit "composing" presence
-      await this.whatsappService.sendPresenceUpdate(to, "composing", companyId);
+      // Emit "composing" presence carefully
+      try {
+        await this.whatsappService.sendPresenceUpdate(to, "composing", companyId);
+      } catch (err) {
+        Logger.warn(`[Worker] Failed to emit composing presence for ${to}`, err);
+      }
       await new Promise((r) => setTimeout(r, typingTime));
 
       // 4. Send via executeQueuedMessage (Bypasses global queue to prevent loops)
       await job.progress(70);
-
-      const metadata = job.data.metadata as Record<string, string | number | boolean | null> | undefined;
-      const dbId = metadata?.dbId as string | undefined;
 
       const sessions = await this.whatsappService.getSessions(companyId);
       const activeSession = sessions.find((s) => s.status === "CONNECTED");
@@ -116,11 +140,16 @@ class MessageQueueWorker {
           metadata: metadata as Record<string, string | number | boolean | null> | undefined,
           dbId, // Pass the database record ID for status update
           media: uploadedMedia,
+          quotedMessageId, // ️ FIX: Propagate quoted message ID
         },
       );
 
-      // Stop composing
-      await this.whatsappService.sendPresenceUpdate(to, "paused", companyId);
+      // Stop composing carefully
+      try {
+        await this.whatsappService.sendPresenceUpdate(to, "paused", companyId);
+      } catch (err) {
+        Logger.warn(`[Worker] Failed to emit paused presence for ${to}`, err);
+      }
 
       // 5. POST-SEND COOL-DOWN (Random 2-5s)
       const cooldown = Math.floor(Math.random() * (5000 - 2000 + 1) + 2000);
@@ -200,7 +229,7 @@ class MessageQueueWorker {
       false,
     );
 
-    Logger.info(`[Worker] 📤 Media uploaded to S3: ${result.key}`);
+    Logger.info(`[Worker]  Media uploaded to S3: ${result.key}`);
 
     return {
       ...media,

@@ -2,7 +2,7 @@ import axios from "axios";
 import crypto from "crypto";
 import { Logger } from "@/utils/logger";
 
-// 🧠 IN-MEMORY MOCK DB FOR WEBHOOKS
+//  IN-MEMORY MOCK DB FOR WEBHOOKS
 const WEBHOOK_CONFIGS: Record<string, string> = {
   default: "https://webhook.site/26e3c162-8e1c-43f6-b184-5f504d6074d2",
 };
@@ -56,12 +56,12 @@ export const webhookDispatcher = {
         },
         timeout: 5000,
       });
-      Logger.info(`✅ [Webhook] Delivered ${eventType} to ${webhookUrl}`);
+      Logger.info(`[OK] [Webhook] Delivered ${eventType} to ${webhookUrl}`);
     } catch (err: unknown) {
       status =
         (err as { response?: { status: number } }).response?.status || 500;
       errorMessage = err instanceof Error ? err.message : String(err);
-      Logger.error(`❌ [Webhook] Delivery Failed: ${status}`, {
+      Logger.error(`[ERROR] [Webhook] Delivery Failed: ${status}`, {
         error: errorMessage,
       });
     }

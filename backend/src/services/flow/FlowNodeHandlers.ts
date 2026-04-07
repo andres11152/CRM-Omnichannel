@@ -1,5 +1,5 @@
 /**
- * 🧩 FLOW NODE HANDLERS (Refactored Facade)
+ *  FLOW NODE HANDLERS (Refactored Facade)
  *
  * Messaging and navigation node handlers:
  * - SEND_MESSAGE / SEND_IMAGE / SEND_VIDEO / SEND_AUDIO / SEND_DOCUMENT
@@ -177,7 +177,7 @@ export class FlowNodeHandlers {
   ): Promise<string | null> {
     const conditions = node.data.conditions || [];
     const variable = node.data.variable || "last_response";
-    const valueToCheck = String(session.variables[variable] ?? userMessage);
+    const valueToCheck = String(session.variables[variable] || userMessage);
 
     for (const condition of conditions) {
       const { operator, value, targetHandle } = condition;
@@ -326,8 +326,9 @@ export class FlowNodeHandlers {
     }
 
     await conversationRepository.update(
+      session.companyId,
       conversationId,
-      updateData as Prisma.ConversationUpdateInput,
+      updateData as Prisma.ConversationUncheckedUpdateInput,
     );
 
     Logger.info(`[FlowExecutor] Handoff executed: ${logMsg}`);
@@ -346,7 +347,7 @@ export class FlowNodeHandlers {
     conversationId: string,
     endSession: (sessionId: string) => Promise<void>,
   ): Promise<string> {
-    await conversationRepository.update(conversationId, {
+    await conversationRepository.update(session.companyId, conversationId, {
       status: "IN_PROGRESS",
     });
 

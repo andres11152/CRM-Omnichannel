@@ -7,7 +7,7 @@ import type {
 } from "@/types/message.types";
 
 /**
- * 📡 SOCKET EMITTER
+ * [WS] SOCKET EMITTER
  *
  * Single Responsibility: Emits real-time socket events for new messages.
  */

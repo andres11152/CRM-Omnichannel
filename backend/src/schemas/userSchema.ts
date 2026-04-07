@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 👤 USER VALIDATION SCHEMAS
+ *  USER VALIDATION SCHEMAS
  *
  * Comprehensive validation for user and agent operations
  */

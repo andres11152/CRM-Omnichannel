@@ -4,7 +4,7 @@ import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🤖 AI CRUD SERVICE
+ * [AI] AI CRUD SERVICE
  *
  * Data access layer for AI Config (API keys) and AI Assistants (personas).
  */

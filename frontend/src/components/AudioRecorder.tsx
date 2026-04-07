@@ -30,7 +30,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // 🎯 Prefer Opus codec for better WhatsApp compatibility
+      //  Prefer Opus codec for better WhatsApp compatibility
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/webm";

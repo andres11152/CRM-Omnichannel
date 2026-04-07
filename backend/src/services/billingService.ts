@@ -2,7 +2,7 @@ import { billingRepository } from "@/repositories/BillingRepository";
 import { Logger } from "@/utils/logger";
 
 /**
- * 💰 BILLING CRUD SERVICE
+ * [BILLING] BILLING CRUD SERVICE
  */
 export const billingService = {
   async getTransactionsWithStats() {

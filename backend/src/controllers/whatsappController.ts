@@ -1,8 +1,8 @@
 import { Logger } from "@/utils/logger";
 import { Response } from "express";
-// ♻️ REFACTOR: Unified Service (Split Brain Fix)
+// ️ REFACTOR: Unified Service (Split Brain Fix)
 import { whatsappService } from "@/whatsapp";
-import { planLimitsService } from "@/services/planLimitsService";
+import { planLimitsService } from "@/services/PlanLimitsService";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { AppError } from "@/utils/AppError";
@@ -47,7 +47,7 @@ export const getSessions = catchAsync(
       throw new Error("No company ID");
     }
 
-    // 🔍 FETCH FROM SERVICE (Repository abstraction)
+    // [SEARCH] FETCH FROM SERVICE (Repository abstraction)
     const sessions = await whatsappService.getSessions(req.companyId);
 
     res.status(200).json({
@@ -97,18 +97,25 @@ export const updateSession = catchAsync(
 export const reconnectSession = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { sessionId } = req.params;
+    const companyId = req.companyId!;
 
-    // Force initialization
+    // [SEC] SECURITY: Validate session ownership BEFORE reconnect attempt (BOLA Fix)
+    const session = await whatsappService.getSessionRecord(companyId, sessionId);
+    if (!session) {
+      throw new AppError("Session not found or unauthorized", 404);
+    }
+
     Logger.info(
-      `[WhatsAppController] Manual reconnect requested for ${sessionId}`,
+      `[WhatsAppController] Manual reconnect requested for ${sessionId} (Company: ${companyId})`,
     );
 
-    // We don't await this to keep the API responsive, but we do trigger it
-    whatsappService
-      .reconnectSession(sessionId)
-      .catch((e) =>
-        Logger.error(`[WhatsAppController] Manual reconnect failed `, e),
-      );
+    // Trigger reconnection
+    whatsappService.reconnectSession(companyId, sessionId).catch((e) =>
+      Logger.error(
+        `[WhatsAppController] Manual reconnect failed for ${sessionId}`,
+        e,
+      ),
+    );
 
     res.status(200).json({
       status: "success",

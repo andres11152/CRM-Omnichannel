@@ -1,5 +1,5 @@
 /**
- * 🛡️ AXIOS SECURITY INTERCEPTORS
+ * [SEC] AXIOS SECURITY INTERCEPTORS
  *
  * Global interceptors that:
  * 1. Detect tenant context violations from backend
@@ -28,7 +28,7 @@ export const performEmergencyLogout = (reason: string) => {
 
   isEmergencyLogoutInProgress = true;
 
-  console.error(`[Security] 🚨 EMERGENCY LOGOUT: ${reason}`);
+  console.error(`[Security] [ALERT] EMERGENCY LOGOUT: ${reason}`);
 
   // Clear ALL storage
   localStorage.clear();
@@ -100,7 +100,7 @@ export const setupAxiosInterceptors = () => {
       // SECURITY VIOLATIONS
       // ========================================
 
-      // 🛡️ Backend Tenant Context Violation
+      // [SEC] Backend Tenant Context Violation
       if (
         errorMessage &&
         (errorMessage.includes("tenant context") ||
@@ -108,20 +108,20 @@ export const setupAxiosInterceptors = () => {
           errorMessage.includes("Database operation attempted without"))
       ) {
         console.error(
-          "[Security] 🚨 Backend reported tenant context violation",
+          "[Security] [ALERT] Backend reported tenant context violation",
         );
         useAuthStore.getState().logout(); // Unified logout
         return Promise.reject(error);
       }
 
-      // 🛡️ Security Error (403)
+      // [SEC] Security Error (403)
       if (status === 403) {
         if (
           errorMessage &&
           (errorMessage.includes("company affiliation") ||
             errorMessage.includes("SECURITY"))
         ) {
-          console.error("[Security] 🚨 Backend security violation");
+          console.error("[Security] [ALERT] Backend security violation");
           useAuthStore.getState().logout(); // Unified logout
           return Promise.reject(error);
         }
@@ -133,7 +133,7 @@ export const setupAxiosInterceptors = () => {
 
       // 401 Unauthorized
       if (status === 401) {
-        // 🔒 IGNORAR LOGIN: Si el error viene del endpoint de login, NO hacemos logout.
+        //  IGNORAR LOGIN: Si el error viene del endpoint de login, NO hacemos logout.
         // Un 401 en login significa "Credenciales Incorrectas", no "Token Expirado".
         // Dejamos que el componente LoginPage maneje el error y muestre el mensaje correcto.
         const requestUrl = error.config?.url || "";
@@ -165,7 +165,7 @@ export const setupAxiosInterceptors = () => {
     },
   );
 
-  console.log("[Security] ✅ Axios interceptors configured");
+  console.log("[Security] [OK] Axios interceptors configured");
 };
 
 export default setupAxiosInterceptors;

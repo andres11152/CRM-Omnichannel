@@ -2,7 +2,7 @@ import redisClient from "@/config/redis";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ DEDUPLICATION SERVICE
+ * [SEC] DEDUPLICATION SERVICE
  *
  * Centralized deduplication engine for WhatsApp message processing.
  * Uses Redis as primary store (survives restarts, supports multi-instance),
@@ -154,7 +154,7 @@ export class DeduplicationService {
     content: string,
   ): Promise<void> {
     const key = `${conversationId}:${this.hashContent(content)}`;
-    await this.markSeen("content", key, 15);
+    await this.markSeen("content", key, 120); //  Higher TTL (120s) covers slow echoes/retries
   }
 
   /**

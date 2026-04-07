@@ -2,7 +2,7 @@ import { AppError } from "@/utils/AppError";
 import { departmentRepository } from "@/repositories/DepartmentRepository";
 
 /**
- * 🏗️ DEPARTMENT CRUD SERVICE
+ * [BUILD] DEPARTMENT CRUD SERVICE
  *
  * Data access layer for departments.
  */

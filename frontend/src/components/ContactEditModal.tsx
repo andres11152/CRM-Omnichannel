@@ -24,7 +24,7 @@ export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, on
 
   useEffect(() => {
     if (isOpen) {
-      console.log('✏️ [ContactEditModal] Opening with contact:', contact);
+      console.log('️ [ContactEditModal] Opening with contact:', contact);
       // 1. Hide internal tech emails from the user
       const isFakeEmail = contact.email?.includes('@whatsapp.user') || contact.email?.includes('@c.us');
       const cleanEmail = isFakeEmail ? '' : (contact.email || '');
@@ -126,7 +126,7 @@ export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, on
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-gray-800/50">
           <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2 text-lg">
-            <span className="text-xl">✏️</span> Editar Contacto
+            <span className="text-xl">️</span> Editar Contacto
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -137,7 +137,7 @@ export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, on
           {/* Avatar */}
           <div className="flex justify-center mb-2">
               <div className="w-20 h-20 rounded-full bg-reply-green/10 dark:bg-reply-green/20 flex items-center justify-center text-3xl text-reply-green dark:text-reply-green-light font-bold ring-4 ring-white dark:ring-gray-700 shadow-lg">
-                  {formData.name?.charAt(0).toUpperCase() || <span className="text-2xl">👤</span>}
+                  {formData.name?.charAt(0).toUpperCase() || <span className="text-2xl"></span>}
               </div>
           </div>
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ CAMPAIGN VALIDATION SCHEMAS
+ * [SEC] CAMPAIGN VALIDATION SCHEMAS
  *
  * Security-focused validation for marketing campaigns
  * Prevents message injection, DoS attacks, and scheduling errors
@@ -230,3 +230,4 @@ export const SendCampaignSchema = z.object({
  */
 export type CreateCampaignInput = z.infer<typeof CreateCampaignSchema>["body"];
 export type UpdateCampaignInput = z.infer<typeof UpdateCampaignSchema>["body"];
+

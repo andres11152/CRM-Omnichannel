@@ -1,5 +1,20 @@
-import React, { useState } from "react";
-import { ActionMenu } from "./ActionMenu";
+import React, { useState, useRef, useEffect } from "react";
+import { 
+  Sparkles, 
+  Paperclip, 
+  Image as ImageIcon, 
+  Smile, 
+  Zap,
+  ChevronDown,
+  X,
+  Mic,
+  SendHorizontal,
+  Plus,
+  Calendar,
+  Package,
+  CreditCard,
+  UserCheck
+} from "lucide-react";
 
 interface SmartComposerProps {
   inputValue: string;
@@ -11,19 +26,22 @@ interface SmartComposerProps {
   onVoiceNoteClick: () => void;
   onStickerClick: () => void;
   onAICopilotClick: (action: "summarize" | "formal" | "suggest") => void;
-
+  onEmojiToggle?: () => void;
+  
   // Action Menu Props
   onSchedule?: () => void;
   onProduct?: () => void;
   onRequestData?: () => void;
   onPayment?: () => void;
 
-  disabled?: boolean;
-  isRecording?: boolean;
-  selectedFile?: File | null;
   onClearFile?: () => void;
   replyingTo?: { id: string; content: string; senderName?: string } | null;
   onClearReply?: () => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+
+  disabled?: boolean;
+  isRecording?: boolean;
+  selectedFile?: File | null;
 }
 
 const SmartComposerComponent: React.FC<SmartComposerProps> = ({
@@ -36,12 +54,12 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
   onVoiceNoteClick,
   onStickerClick,
   onAICopilotClick,
+  onEmojiToggle = () => {},
 
-  // Defaults
-  onSchedule = () => {},
-  onProduct = () => {},
-  onRequestData = () => {},
-  onPayment = () => {},
+  onSchedule,
+  onProduct,
+  onRequestData,
+  onPayment,
 
   disabled = false,
   isRecording = false,
@@ -49,400 +67,179 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
   onClearFile,
   replyingTo,
   onClearReply,
+  onKeyDown,
 }) => {
   const [showAIMenu, setShowAIMenu] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // [SEC] Allow parent to override or intercept keys (e.g., Slash Menu navigation)
+    if (onKeyDown) {
+      onKeyDown(e);
+      if (e.defaultPrevented) return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       onSend();
     }
   };
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, [inputValue]);
+
   return (
-    <div className="bg-white dark:bg-reply-panel-dark px-4 py-3 flex flex-col gap-3 border-t border-gray-200 dark:border-reply-border-dark transition-colors duration-200">
-      {/* 🔹 Reply Preview */}
-      {replyingTo && (
-        <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-l-4 border-l-indigo-500 relative animate-fade-in mx-2">
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-1">
-              Refiriéndose a: {replyingTo.senderName || "Mensaje"}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-300 truncate">
-              {replyingTo.content || "Mensaje de archivo o multimedia"}
-            </div>
-          </div>
-          <button
-            onClick={onClearReply}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* âœ… Attachment Preview */}
-      {selectedFile && (
-        <div className="flex items-center gap-3 p-3 bg-reply-bg dark:bg-reply-surface-dark rounded-lg border border-indigo-100 dark:border-indigo-900/30 relative animate-fade-in mx-2">
-          {/* Preview Image or Icon */}
-          {selectedFile.type.startsWith("image/") ? (
-            <img
-              src={URL.createObjectURL(selectedFile)}
-              alt="Preview"
-              className="w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-reply-border-dark"
-            />
-          ) : (
-            <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center">
-              <svg
-                className="w-6 h-6 text-gray-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </div>
-          )}
-
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-              {selectedFile.name}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {(selectedFile.size / 1024).toFixed(1)} KB
-            </p>
-          </div>
-
-          <button
-            onClick={onClearFile}
-            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors transform hover:scale-110"
-          >
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-2">
-        {/* Quick Replies */}
+    <div className="flex flex-col w-full animate-in fade-in duration-300">
+      
+      {/* 1. TOP ACTIONS (Quick Replies, AI, etc.) */}
+      <div className="flex items-center gap-2 px-1 mb-2">
         <button
           onClick={onQuickRepliesClick}
-          className="group flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-1.5 rounded-lg transition-all text-xs font-medium border border-transparent hover:border-indigo-200 dark:hover:border-indigo-800"
-          title="Respuestas Rpidas"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50/50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all border border-indigo-100 dark:border-indigo-500/20"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 10V3L4 14h7v7l9-11h-7z"
-            />
-          </svg>
-          <span className="hidden sm:inline">Respuestas Rpidas</span>
+          <Zap className="w-3.5 h-3.5" />
+          <span>RESPUESTAS RÁPIDAS</span>
         </button>
 
-        {/* AI Co-pilot */}
-        <div className="relative">
+        <div className="relative group/ai">
           <button
-            onClick={() => setShowAIMenu(!showAIMenu)}
-            className="group flex items-center gap-1.5 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/40 dark:hover:to-pink-900/40 text-purple-600 dark:text-purple-400 px-3 py-1.5 rounded-lg transition-all text-xs font-medium border border-purple-200 dark:border-purple-800"
-            title="IA Co-pilot"
+            disabled
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-200/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-600 text-[11px] font-bold border border-gray-300/30 dark:border-gray-700/30 transition-all cursor-not-allowed"
+            title="Próximamente..."
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-              />
-            </svg>
-            <span className="hidden sm:inline">IA Co-pilot</span>
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </button>
-
-          {showAIMenu && (
-            <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-reply-panel-dark rounded-xl shadow-2xl border-2 border-gray-200 dark:border-reply-border-dark overflow-hidden z-50">
-              <div className="p-2 space-y-1">
-                <button
-                  onClick={() => {
-                    onAICopilotClick("summarize");
-                    setShowAIMenu(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors text-left group"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <svg
-                      className="w-4 h-4 text-purple-600 dark:text-purple-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-gray-900 dark:text-white">
-                      Resumir Chat
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Genera resumen de la conversación
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onAICopilotClick("formal");
-                    setShowAIMenu(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors text-left group"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <svg
-                      className="w-4 h-4 text-blue-600 dark:text-blue-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-gray-900 dark:text-white">
-                      Tono Formal
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Reformula el mensaje
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onAICopilotClick("suggest");
-                    setShowAIMenu(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors text-left group"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <svg
-                      className="w-4 h-4 text-green-600 dark:text-green-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-gray-900 dark:text-white">
-                      Sugerir Respuesta
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      IA genera una respuesta
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1"></div>
-
-        {/* Attachments Group */}
-        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-          <button
-            onClick={onMediaLibraryClick}
-            className="p-1.5 hover:bg-white dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300 transition-colors"
-            title="Biblioteca Multimedia"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
-
-          <button
-            onClick={onAttachmentClick}
-            className="p-1.5 hover:bg-white dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300 transition-colors"
-            title="Adjuntar Archivo"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-              />
-            </svg>
-          </button>
-
-          <button
-            onClick={onStickerClick}
-            className="p-1.5 hover:bg-white dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300 transition-colors"
-            title="Stickers"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <Sparkles className="w-3.5 h-3.5 grayscale" />
+            <span>AI COPILOT</span>
+            <ChevronDown className="w-3 h-3" />
           </button>
         </div>
       </div>
 
-      {/* Input Area */}
-      <div className="flex items-end gap-3 rounded-2xl bg-reply-bg dark:bg-reply-surface-dark border border-gray-200 dark:border-reply-border-dark p-2 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500 dark:focus-within:ring-indigo-400 focus-within:border-transparent">
-        {/* âœ… Action Button */}
-        <ActionMenu
-          onSchedule={onSchedule}
-          onProduct={onProduct}
-          onRequestData={onRequestData}
-          onPayment={onPayment}
-          disabled={disabled}
-        />
+      {/* 2. COMPOSER BODY (Glassmorphism inspired) */}
+      <div className="relative flex flex-col bg-white/80 dark:bg-[#1f2c34]/80 backdrop-blur-md rounded-[24px] border border-gray-200 dark:border-white/10 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50">
+        
+        {/* PREVIEWS (Replies/Files) */}
+        {(selectedFile || replyingTo) && (
+           <div className="p-3 border-b border-gray-100 dark:border-white/5 space-y-2">
+             {replyingTo && (
+               <div className="flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-500/5 p-2 rounded-xl border-l-4 border-indigo-500 animate-in slide-in-from-left-2">
+                  <div className="min-w-0 pr-4">
+                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-0.5">RESPONDIENDO A {replyingTo.senderName?.toUpperCase()}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 truncate">{replyingTo.content}</p>
+                  </div>
+                  <button onClick={onClearReply} className="p-1.5 hover:bg-white dark:hover:bg-white/10 rounded-full transition-colors">
+                    <X className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+               </div>
+             )}
+             {selectedFile && (
+               <div className="flex items-center justify-between bg-gray-50 dark:bg-white/5 p-2 rounded-xl border border-dashed border-gray-200 dark:border-white/10">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                      <ImageIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate pr-4">{selectedFile.name}</p>
+                      <p className="text-[10px] text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                  </div>
+                  <button onClick={onClearFile} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-500/20 rounded-full transition-colors text-red-500">
+                    <X className="w-4 h-4" />
+                  </button>
+               </div>
+             )}
+           </div>
+        )}
 
-        <textarea
-          placeholder="Escribe un mensaje..."
-          value={inputValue}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={disabled || isRecording}
-          rows={1}
-          className="flex-1 bg-transparent focus:outline-none text-gray-900 dark:text-gray-100 text-sm placeholder-gray-400 dark:placeholder-gray-500 resize-none max-h-32 scrollbar-hide py-2"
-          style={{ minHeight: "24px" }}
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = "auto";
-            // target.style.height = Math.min(target.scrollHeight, 128) + 'px'; // Buggy flicker
-            target.style.height = target.scrollHeight + "px";
-          }}
-        />
+        {/* MAIN INPUT AREA */}
+        <div className="flex items-end p-2.5 gap-2">
+          <div className="flex items-center gap-1 mb-1">
+             <div className="relative">
+                <button 
+                  onClick={() => setShowActionMenu(!showActionMenu)} 
+                  className={`p-2 rounded-full transition-all ${showActionMenu ? 'bg-indigo-600 text-white rotate-45' : 'text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 dark:text-gray-400 dark:hover:bg-white/10'}`}
+                  title="Acciones"
+                >
+                    <Plus className="w-5.5 h-5.5" />
+                </button>
 
-        <div className="flex items-center gap-2 pb-1">
-          {inputValue.trim() || selectedFile ? (
-            <button
-              onClick={onSend}
-              disabled={disabled}
-              className="text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 p-2 rounded-full hover:scale-105 active:scale-95 transition-transform shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
-            </button>
-          ) : (
-            <button
-              onClick={onVoiceNoteClick}
-              disabled={disabled}
-              className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 p-2 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+                {showActionMenu && (
+                  <div className="absolute bottom-full left-0 mb-4 w-56 bg-white dark:bg-[#1f2c34] rounded-[24px] shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden z-50 animate-in slide-in-from-bottom-4 zoom-in-95 duration-200">
+                    <div className="p-2 space-y-1">
+                      {[
+                        { label: 'Programar Envío', icon: Calendar, color: 'text-purple-500', onClick: onSchedule },
+                        { label: 'Enviar Producto', icon: Package, color: 'text-orange-500', onClick: onProduct },
+                        { label: 'Solicitar Pago', icon: CreditCard, color: 'text-green-500', onClick: onPayment },
+                        { label: 'Solicitar Datos', icon: UserCheck, color: 'text-blue-500', onClick: onRequestData },
+                        { label: 'Adjuntar Archivo', icon: Paperclip, color: 'text-gray-500', onClick: onAttachmentClick },
+                      ].map((action, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            action.onClick?.();
+                            setShowActionMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 dark:hover:bg-white/5 rounded-2xl transition-all group active:scale-95"
+                        >
+                          <div className={`p-2 rounded-xl bg-gray-50 dark:bg-white/5 group-hover:bg-white dark:group-hover:bg-indigo-500/20 transition-colors`}>
+                            <action.icon className={`w-4.5 h-4.5 ${action.color}`} />
+                          </div>
+                          <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{action.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+             </div>
+
+             <button 
+               onClick={onEmojiToggle} 
+               className="p-2 text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 dark:text-gray-400 dark:hover:bg-white/10 rounded-full transition-all"
+               title="Emojis"
+             >
+                <Smile className="w-5.5 h-5.5" />
+             </button>
+          </div>
+
+          <textarea
+            ref={textareaRef}
+            placeholder="Escribe un mensaje..."
+            value={inputValue}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            rows={1}
+            className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] leading-relaxed text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 resize-none py-2 px-1 max-h-[120px] scrollbar-hide"
+          />
+
+          <div className="flex items-center gap-2 mb-1">
+            {!inputValue.trim() && !selectedFile ? (
+               <button 
+                 onClick={onVoiceNoteClick}
+                 className="p-2.5 text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 dark:text-gray-400 dark:hover:bg-white/10 rounded-full transition-all active:scale-90"
+                 title="Nota de Voz"
+               >
+                 <Mic className="w-5.5 h-5.5" />
+               </button>
+            ) : (
+              <button 
+                onClick={onSend}
+                className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+                title="Enviar"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                />
-              </svg>
-            </button>
-          )}
+                <SendHorizontal className="w-5.5 h-5.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
 export const SmartComposer = React.memo(SmartComposerComponent);

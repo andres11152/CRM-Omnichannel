@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 📦 PRODUCT VALIDATION SCHEMAS
+ * [PKG] PRODUCT VALIDATION SCHEMAS
  *
  * Validation for system-wide product catalog
  */

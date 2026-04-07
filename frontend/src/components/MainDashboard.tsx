@@ -64,7 +64,7 @@ export const MainDashboard: React.FC<Props> = ({
   }
 
   if (role === "AGENT") {
-    // 🏗️ AGENT DASHBOARD: Personalized, focused, gamified.
+    // [BUILD] AGENT DASHBOARD: Personalized, focused, gamified.
     return <AgentDashboard user={user} onNavigate={onNavigate} />;
   }
 
@@ -519,7 +519,7 @@ const AgentDashboard: React.FC<{
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-1 flex items-center gap-2">
               Hola, {user?.name?.split(" ")[0]}{" "}
-              <span className="text-2xl">👋</span>
+              <span className="text-2xl"></span>
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
               ¡Vamos con todo hoy! Aquí tienes tu resumen personal.
@@ -610,7 +610,7 @@ const AgentDashboard: React.FC<{
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                Alto nivel de actividad 🔥
+                Alto nivel de actividad 
               </p>
             </div>
           </div>

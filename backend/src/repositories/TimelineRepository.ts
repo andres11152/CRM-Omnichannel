@@ -1,5 +1,5 @@
 /**
- * 📊 TIMELINE REPOSITORY
+ * [STAT] TIMELINE REPOSITORY
  *
  * Data access for unified timeline queries:
  * - WhatsApp messages with conversation joins

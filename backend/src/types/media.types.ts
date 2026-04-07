@@ -1,7 +1,7 @@
 import { Media, MediaType, User } from "@prisma/client";
 
 /**
- * 📦 MEDIA DTOs
+ * [PKG] MEDIA DTOs
  */
 
 export interface MediaDTO {

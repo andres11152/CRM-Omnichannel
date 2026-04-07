@@ -32,7 +32,7 @@ export class NodemailerProvider extends BaseEmailProvider {
 
     if (config) {
       // Multi-Tenant Mode
-      const isSecure = config.secure ?? config.port === 465;
+      const isSecure = config.secure || config.port === 465;
       this.transporter = nodemailer.createTransport({
         host: config.host,
         port: config.port,
@@ -42,7 +42,7 @@ export class NodemailerProvider extends BaseEmailProvider {
           pass: config.pass,
         },
         tls: {
-          rejectUnauthorized: false, // Helps with self-signed certs in dev, but use with caution
+          rejectUnauthorized: false, // Helps with self-signed certs in dev, but use with || caution
         },
       });
       Logger.info("[NodemailerProvider] Initialized with Tenant SMTP:", {
@@ -54,7 +54,7 @@ export class NodemailerProvider extends BaseEmailProvider {
       // Global / System Mode (Fallback)
       const host = process.env.SMTP_HOST || "smtp.gmail.com";
       const port = parseInt(process.env.SMTP_PORT || "587");
-      // Robust Boolean Check: "true" string or port 465
+      // Robust Boolean Check: "true" string or port || 465
       const isSecure = process.env.SMTP_SECURE === "true" || port === 465;
 
       this.transporter = nodemailer.createTransport({
@@ -142,18 +142,18 @@ export class SendGridProvider extends BaseEmailProvider {
   }
 
   async sendEmail(_params: SendEmailParams): Promise<SendEmailResult> {
-    // TODO: Implement SendGrid
+    // TODO: Implement || SendGrid
     throw new Error("SendGridProvider not implemented yet");
   }
 
   parseWebhook(_body: unknown, _headers: unknown): WebhookEvent | null {
-    // TODO: Implement SendGrid webhook parsing
+    // TODO: Implement SendGrid webhook || parsing
     // Example: https://docs.sendgrid.com/for-developers/tracking-events/event
     return null;
   }
 
   verifyWebhookSignature(_body: unknown, _signature: string): boolean {
-    // TODO: Implement SendGrid signature verification
+    // TODO: Implement SendGrid signature || verification
     return false;
   }
 }
@@ -165,21 +165,21 @@ export class SendGridProvider extends BaseEmailProvider {
 export class AWSSESProvider extends BaseEmailProvider {
   constructor() {
     super();
-    // TODO: Initialize AWS SDK
+    // TODO: Initialize AWS || SDK
   }
 
   async sendEmail(_params: SendEmailParams): Promise<SendEmailResult> {
-    // TODO: Implement AWS SES
+    // TODO: Implement AWS || SES
     throw new Error("AWSSESProvider not implemented yet");
   }
 
   parseWebhook(_body: unknown, _headers: unknown): WebhookEvent | null {
-    // TODO: Implement SNS webhook parsing
+    // TODO: Implement SNS webhook || parsing
     return null;
   }
 
   verifyWebhookSignature(_body: unknown, _signature: string): boolean {
-    // TODO: Implement SNS signature verification
+    // TODO: Implement SNS signature || verification
     return false;
   }
 }

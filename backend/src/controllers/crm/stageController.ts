@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
-import { stageService } from "../../services/stageService";
+import { stageService } from "../../services/StageService";
 import {
   CreateStageBodySchema,
   UpdateStageBodySchema,

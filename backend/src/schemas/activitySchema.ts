@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ActivityType } from "@prisma/client";
 
 /**
- * 📝 ACTIVITY VALIDATION SCHEMAS
+ *  ACTIVITY VALIDATION SCHEMAS
  *
  * Validation for CRM Activities (Notes, Meetings, Tasks, Calls)
  */

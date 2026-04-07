@@ -4,7 +4,7 @@ import { ProductType, ProductStatus } from "@prisma/client";
 import { productRepository } from "@/repositories/ProductRepository";
 
 /**
- * 📦 PRODUCT CRUD SERVICE
+ * [PKG] PRODUCT CRUD SERVICE
  *
  * Data access layer for products catalog.
  */

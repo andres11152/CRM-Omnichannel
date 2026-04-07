@@ -1,5 +1,5 @@
 /**
- * 🔐 AUTH TYPES
+ * [AUTH] AUTH TYPES
  *
  * Strict types for authentication operations.
  * Uses Prisma's GetPayload to infer exact shapes from include queries.

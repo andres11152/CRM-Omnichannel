@@ -5,25 +5,32 @@ export * from "./contact.types";
 export * from "./campaign.types";
 
 /**
- * 💬 Chat & Messaging Types
+ * [CHAT] Chat & Messaging Types
  * (Defined here for convenience, should eventually have their own file)
  */
 export interface Message {
   id: string;
-  conversationId: string;
-  ticketId?: string;
+  ticketId: string;
+  conversationId?: string;
 
-  direction: "INBOUND" | "OUTBOUND";
+  content: string;
   type: "text" | "image" | "video" | "audio" | "document" | "template";
-
-  content: string; // Text content or Caption
-  mediaUrl?: string;
-
-  status: "SENT" | "DELIVERED" | "READ" | "FAILED";
-
-  senderId?: string; // If outbound (Agent ID)
+  sender: "agent" | "customer" | "system";
+  senderName?: string;
+  senderType?: "USER" | "BOT" | "SYSTEM";
+  
   timestamp: string;
-  metadata?: Record<string, unknown>;
+  status?: "sending" | "sent" | "delivered" | "read" | "failed";
+  
+  mediaUrl?: string;
+  companyId?: string;
+
+  metadata?: {
+    quotedMessageId?: string;
+    quotedContent?: string;
+    [key: string]: unknown;
+  };
+  reactions?: { reactBy: string; content: string }[];
 }
 
 export interface Conversation {
@@ -36,7 +43,7 @@ export interface Conversation {
 }
 
 /**
- * 🤖 AI & Bot Configuration
+ * [AI] AI & Bot Configuration
  */
 export interface AIConfig {
   companyId: string;
@@ -50,4 +57,13 @@ export interface AIConfig {
   // Tools
   enableCrmLookup?: boolean;
   enableBooking?: boolean;
+}
+
+export interface SendMessageInput {
+  content: string;
+  type?: "text" | "image" | "video" | "audio" | "document";
+  mediaUrl?: string;
+  metadata?: Record<string, unknown>;
+  quotedMessageId?: string;
+  quotedContent?: string;
 }

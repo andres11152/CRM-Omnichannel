@@ -1,71 +1,99 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
-import { contactService } from "@/services/contactService";
-import { planLimitsService } from "@/services/planLimitsService";
+import { contactService } from "@/services/ContactService";
+import { planLimitsService } from "@/services/PlanLimitsService";
 import { AuthenticatedRequest } from "@/types/types";
+import { ParsedQs } from "qs";
 
 export const contactController = {
-  upsertContact: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as AuthenticatedRequest).companyId;
-    const contact = await contactService.upsert(companyId!, req.body);
-    res.status(HTTP_STATUS.OK).json(contact);
-  }),
+  upsertContact: catchAsync(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const companyId = req.companyId!;
+      const contact = await contactService.upsert(companyId, req.body);
+      res.status(HTTP_STATUS.OK).json({
+        status: "success",
+        data: contact,
+      });
+    },
+  ),
 
-  getContacts: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as AuthenticatedRequest).companyId;
+  getContacts: catchAsync(async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const { search, limit, offset } = req.query as ParsedQs;
+
     const query = {
-      search: req.query.search as string,
-      page: Number(req.query.page) || 1,
-      limit: Number(req.query.limit) || 100,
+      search: search as string,
+      page: Math.floor(Number(offset) / Number(limit)) + 1 || 1,
+      limit: Number(limit) || 100,
     };
 
-    const result = await contactService.findAll(companyId!, query);
-    res.status(HTTP_STATUS.OK).json(result.data);
-  }),
-
-  getContactDetail: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as AuthenticatedRequest).companyId;
-    const { id, phone } = req.query;
-
-    const contact = await contactService.findOne(companyId!, {
-      id: id as string,
-      phone: phone as string,
-    });
-
-    if (!contact) return res.status(200).json(null);
-    res.status(HTTP_STATUS.OK).json(contact);
-  }),
-
-  deleteContact: catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const companyId = (req as AuthenticatedRequest).companyId;
-
-    await contactService.delete(companyId!, id);
-    res.status(HTTP_STATUS.OK).json({ status: "success" });
-  }),
-
-  getContactTimeline: catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const companyId = (req as AuthenticatedRequest).companyId;
-
-    const result = await contactService.getTimeline(companyId!, id);
+    const result = await contactService.findAll(companyId, query);
     res.status(HTTP_STATUS.OK).json({
       status: "success",
-      data: result,
+      results: result.meta.total,
+      data: result.data,
     });
   }),
 
-  importContacts: catchAsync(async (req: Request, res: Response) => {
-    const companyId = (req as AuthenticatedRequest).companyId!;
-    const file = (req as AuthenticatedRequest & { file?: Express.Multer.File })
-      .file;
+  getContactDetail: catchAsync(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const companyId = req.companyId!;
+      const { id, phone } = req.query;
+
+      const contact = await contactService.findOne(companyId, {
+        id: id as string,
+        phone: phone as string,
+      });
+
+      if (!contact) {
+        return res.status(HTTP_STATUS.OK).json({
+          status: "success",
+          data: null,
+        });
+      }
+
+      res.status(HTTP_STATUS.OK).json({
+        status: "success",
+        data: contact,
+      });
+    },
+  ),
+
+  deleteContact: catchAsync(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { id } = req.params;
+      const companyId = req.companyId!;
+
+      await contactService.delete(companyId, id);
+      res.status(HTTP_STATUS.OK).json({ status: "success" });
+    },
+  ),
+
+  getContactTimeline: catchAsync(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { id } = req.params;
+      const companyId = req.companyId!;
+
+      const result = await contactService.getTimeline(companyId, id);
+      res.status(HTTP_STATUS.OK).json({
+        status: "success",
+        data: result,
+      });
+    },
+  ),
+
+  importContacts: catchAsync(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const companyId = req.companyId!;
+      const file = (req as AuthenticatedRequest & { file?: Express.Multer.File })
+        .file;
 
     if (!file) throw new AppError("No file uploaded", 400);
 
     const { parseFile, normalizeRows } =
-      await import("../services/csvParserService");
+      await import("../services/CsvParserService");
     const { CreateContactSchema } = await import("../schemas/contactSchema");
 
     const { rows, totalRows } = parseFile(file);

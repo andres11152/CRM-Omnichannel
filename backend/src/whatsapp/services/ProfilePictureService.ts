@@ -5,7 +5,7 @@ import { TenantContextManager } from "@/config/tenantContext";
 import { userRepository } from "@/repositories/UserRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
 import axios from "axios";
-import { storageService } from "@/services/storageService";
+import { storageService } from "@/services/StorageService";
 
 const FetchProfilePicSchema = z.object({
   sessionId: z.string().min(1, "Session ID is required"),
@@ -15,7 +15,7 @@ const FetchProfilePicSchema = z.object({
 });
 
 /**
- * 📸 PROFILE PICTURE SERVICE
+ *  PROFILE PICTURE SERVICE
  *
  * Handles fetching and persisting WhatsApp profile pictures.
  * Extracted from MessageHandler for SRP compliance.
@@ -37,7 +37,7 @@ export class ProfilePictureService {
     companyIdParam: string,
   ): Promise<void> {
     try {
-      // 🛡️ Fail-Safe Validation: strictly validate incoming parameters
+      // [SEC] Fail-Safe Validation: strictly validate incoming parameters
       const { sessionId, jid, userId, companyId } = FetchProfilePicSchema.parse(
         {
           sessionId: sessionIdParam,
@@ -47,7 +47,7 @@ export class ProfilePictureService {
         },
       );
 
-      // 🛡️ Multi-tenant Scope: Ensure code execution is contextualized
+      // [SEC] Multi-tenant Scope: Ensure code execution is contextualized
       await TenantContextManager.run(
         { companyId, userId: "system", requestId: `profile-pic:${userId}` },
         async () => {
@@ -105,7 +105,7 @@ export class ProfilePictureService {
 
           if (!profilePicUrl) return;
 
-          // 🛡️ 100-YEAR FIX: Download and persist the image to avoid 403 errors (PPS links expire)
+          // [SEC] 100-YEAR FIX: Download and persist the image to avoid 403 errors (PPS links expire)
           try {
             const response = await axios.get(profilePicUrl, {
               responseType: "arraybuffer",
@@ -123,7 +123,7 @@ export class ProfilePictureService {
             profilePicUrl = uploadResult.url;
 
             Logger.info(
-              `[ProfilePic] 📦 Persisted profile picture for ${userId} to storage: ${profilePicUrl}`,
+              `[ProfilePic] [PKG] Persisted profile picture for ${userId} to storage: ${profilePicUrl}`,
             );
           } catch (uploadErr) {
             Logger.warn(
@@ -146,12 +146,12 @@ export class ProfilePictureService {
           }
 
           Logger.info(
-            `[ProfilePic] ✅ Saved profile picture for user & contact ${userId}: ${profilePicUrl.slice(0, 60)}... - CompanyId: ${companyId}`,
+            `[ProfilePic] [OK] Saved profile picture for user & contact ${userId}: ${profilePicUrl.slice(0, 60)}... - CompanyId: ${companyId}`,
           );
         },
       );
     } catch (error) {
-      // 🛡️ 100-YEAR FIX: Centralized logging with full stack trace and context
+      // [SEC] 100-YEAR FIX: Centralized logging with full stack trace and context
       Logger.error(
         `[ProfilePic] Failed to fetch/save profile pic for user ${userIdParam} in company ${companyIdParam}. SessionId: ${sessionIdParam}:`,
         error instanceof Error ? error.stack || error.message : error,

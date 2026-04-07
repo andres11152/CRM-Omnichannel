@@ -1,5 +1,6 @@
 import { Conversation, Prisma, ConversationStatus } from "@prisma/client";
 import { prisma, ExtendedPrismaClient } from "@/config/database";
+import { Logger } from "@/utils/logger";
 
 export class ConversationRepository {
   constructor(private db: ExtendedPrismaClient = prisma) {}
@@ -38,9 +39,15 @@ export class ConversationRepository {
   }
 
   async updateConversation(
+    companyId: string,
     id: string,
-    data: Prisma.ConversationUpdateInput,
+    data: Prisma.ConversationUncheckedUpdateInput,
   ): Promise<Conversation> {
+    const existing = await this.db.conversation.findFirst({
+      where: { id, companyId },
+    });
+    if (!existing) throw new Error("Conversation not found or access denied");
+
     return this.db.conversation.update({
       where: { id },
       data,
@@ -48,9 +55,15 @@ export class ConversationRepository {
   }
 
   async update(
+    companyId: string,
     id: string,
-    data: Prisma.ConversationUpdateInput,
+    data: Prisma.ConversationUncheckedUpdateInput,
   ): Promise<Conversation> {
+    const existing = await this.db.conversation.findFirst({
+      where: { id, companyId },
+    });
+    if (!existing) throw new Error("Conversation not found or access denied");
+
     return this.db.conversation.update({
       where: { id },
       data,
@@ -106,9 +119,9 @@ export class ConversationRepository {
     });
   }
 
-  async findByIdWithRelations(id: string) {
-    return this.db.conversation.findUnique({
-      where: { id },
+  async findByIdWithRelations(companyId: string, id: string) {
+    return this.db.conversation.findFirst({
+      where: { id, companyId },
       include: {
         participants: true,
         assignedTo: true,
@@ -125,6 +138,7 @@ export class ConversationRepository {
             },
           },
         },
+        contact: true,
       },
     });
   }
@@ -133,9 +147,9 @@ export class ConversationRepository {
    * Find conversation with participants, assignedTo, and queue (with AI assistant).
    * Used by chatService.getFullConversation for message processing context.
    */
-  async findByIdWithQueueAndParticipants(id: string) {
-    return this.db.conversation.findUnique({
-      where: { id },
+  async findByIdWithQueueAndParticipants(companyId: string, id: string) {
+    return this.db.conversation.findFirst({
+      where: { id, companyId },
       include: {
         participants: true,
         assignedTo: true,
@@ -144,15 +158,25 @@ export class ConversationRepository {
     });
   }
 
-  async updateTags(id: string, tags: string[]) {
+  async updateTags(companyId: string, id: string, tags: string[]) {
+    const existing = await this.db.conversation.findFirst({
+      where: { id, companyId },
+    });
+    if (!existing) throw new Error("Conversation not found or access denied");
+
     return this.db.conversation.update({
       where: { id },
       data: { tags },
     });
   }
 
-  // 🔴 Badge Logic
-  async incrementUnread(id: string): Promise<Conversation> {
+  // [OFFLINE] Badge Logic
+  async incrementUnread(companyId: string, id: string): Promise<Conversation> {
+    const existing = await this.db.conversation.findFirst({
+      where: { id, companyId },
+    });
+    if (!existing) throw new Error("Conversation not found or access denied");
+
     return this.db.conversation.update({
       where: { id },
       data: {
@@ -162,13 +186,150 @@ export class ConversationRepository {
     });
   }
 
-  async resetUnread(id: string): Promise<Conversation> {
+  async resetUnread(companyId: string, id: string): Promise<Conversation> {
+    const existing = await this.db.conversation.findFirst({
+      where: { id, companyId },
+    });
+    if (!existing) throw new Error("Conversation not found or access denied");
+
     return this.db.conversation.update({
       where: { id },
       data: {
         unreadCount: 0,
         // updatedAt is usually NOT updated on read, to preserve sort order by last message
       },
+    });
+  }
+
+  /**
+   * FindOrCreate Pattern (Ported from ConversationManager)
+   */
+  async findOrCreate(params: {
+    companyId: string;
+    channelId: string;
+    customerId: string;
+    subject?: string;
+    status?: ConversationStatus;
+  }): Promise<Conversation> {
+    const { companyId, channelId, customerId, subject, status } = params;
+
+    return this.db.$transaction(
+      async (tx) => {
+        const conversation = await tx.conversation.findFirst({
+          where: { companyId, channelId },
+          include: { participants: true, assignedTo: true },
+        });
+
+        if (conversation) {
+          const isAssigned = !!conversation.assignedToId;
+          let newStatus = conversation.status;
+          if (["CLOSED", "RESOLVED"].includes(conversation.status)) {
+            newStatus = isAssigned ? "IN_PROGRESS" : "OPEN";
+          }
+
+          return tx.conversation.update({
+            where: { id: conversation.id },
+            data: { status: newStatus, updatedAt: new Date() },
+            include: { participants: true, assignedTo: true },
+          });
+        }
+
+        try {
+          return await tx.conversation.create({
+            data: {
+              companyId,
+              channelId: subject || channelId,
+              status: status || "OPEN",
+              participants: { connect: [{ id: customerId }] },
+            },
+            include: { participants: true, assignedTo: true },
+          });
+        } catch (err: unknown) {
+          if (
+            err instanceof Prisma.PrismaClientKnownRequestError &&
+            err.code === "P2002"
+          ) {
+            Logger.warn(
+              `[ConvRepo] findOrCreate Race detected for ${channelId}`,
+            );
+            return tx.conversation.findFirstOrThrow({
+              where: { companyId, channelId },
+              include: { participants: true, assignedTo: true },
+            });
+          }
+          throw err;
+        }
+      },
+      { isolationLevel: "Serializable" },
+    );
+  }
+
+  /**
+   * findOrCreateWithTicket (Ported from ConversationResolver)
+   */
+  async findOrCreateWithTicket(params: {
+    companyId: string;
+    phone: string;
+    subject: string;
+    userId: string;
+    sessionId?: string;
+    contactId?: string;
+  }): Promise<Conversation> {
+    const { companyId, phone, subject, userId, sessionId, contactId } = params;
+
+    return this.db.$transaction(async (tx) => {
+      // 1. Check existing
+      let conversation = await tx.conversation.findFirst({
+        where: { companyId, channelId: phone },
+      });
+
+      if (conversation) return conversation;
+
+      // 2. Queue Assignment
+      let queueId: string | null = null;
+      if (sessionId) {
+        const session = await tx.whatsAppSession.findUnique({
+          where: { sessionId },
+          select: { defaultQueueId: true },
+        });
+        queueId = session?.defaultQueueId || null;
+      }
+
+      // 3. Create Conversation
+      conversation = await tx.conversation.create({
+        data: {
+          companyId,
+          channelId: phone,
+          subject,
+          status: "OPEN",
+          participants: { connect: [{ id: userId }] },
+          contactId,
+          queueId,
+        },
+      });
+
+      // 4. Create Ticket
+      const lastTicket = await tx.ticket.findFirst({
+        where: { companyId },
+        orderBy: { ticketNumber: "desc" },
+        select: { ticketNumber: true },
+      });
+
+      await tx.ticket.create({
+        data: {
+          companyId,
+          ticketNumber: (lastTicket?.ticketNumber || 0) + 1,
+          subject,
+          description: "Chat iniciado en WhatsApp",
+          status: "OPEN",
+          priority: "MEDIUM",
+          createdById: userId,
+          conversationId: conversation.id,
+          queueId,
+        },
+      });
+
+      return conversation;
     });
   }
 

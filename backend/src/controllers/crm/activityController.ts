@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
-import { activityService } from "../../services/activityService";
+import { activityService } from "../../services/ActivityService";
 
 // Get activities
 export const getActivities = catchAsync(

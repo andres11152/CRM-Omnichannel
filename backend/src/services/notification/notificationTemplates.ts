@@ -1,5 +1,5 @@
 /**
- * 🎨 NOTIFICATION TEMPLATES
+ *  NOTIFICATION TEMPLATES
  * Centralized HTML generation for emails
  */
 

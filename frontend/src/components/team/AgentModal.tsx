@@ -194,11 +194,11 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                         : ""
                     }`}
                   >
-                    <option value="AGENT">🎧 Agente (Operador)</option>
+                    <option value="AGENT"> Agente (Operador)</option>
                     {currentUser?.role !== "SUPERVISOR" && (
                       <>
-                        <option value="SUPERVISOR">👀 Supervisor</option>
-                        <option value="ADMIN">🛡️ Administrador</option>
+                        <option value="SUPERVISOR"> Supervisor</option>
+                        <option value="ADMIN">[SEC] Administrador</option>
                       </>
                     )}
                   </select>

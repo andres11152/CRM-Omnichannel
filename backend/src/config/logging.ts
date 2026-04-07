@@ -2,7 +2,7 @@ import { Logger as MainLogger } from "@/utils/logger";
 import { isDevelopment } from "@/config/env";
 
 /**
- * ⚙️ LOGGING CONFIGURATION
+ * ️ LOGGING CONFIGURATION
  * Defines granular logging controls for specific sub-systems.
  *
  * Checks allow strictly disabling noisy modules even if global log level is debug.
@@ -24,7 +24,7 @@ export const LogConfig = {
 };
 
 /**
- * ⚠️ DEPRECATED LEGACY LOGGER ADAPTER
+ * [WARNING] DEPRECATED LEGACY LOGGER ADAPTER
  *
  * This adapter forwards logs to the main enterprise Winston logger (@/utils/logger).
  * New code should import { Logger } from "@/utils/logger" directly and use:

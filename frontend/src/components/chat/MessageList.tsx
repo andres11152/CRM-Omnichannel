@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { type Message } from "@/services/chatService";
+import { Message } from "@/types";
 import { MessageBubble } from "./MessageBubble";
 
 interface MessageListProps {
@@ -40,7 +40,7 @@ export const MessageList: React.FC<MessageListProps> = ({
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="text-6xl mb-4">💬</div>
+          <div className="text-6xl mb-4">[CHAT]</div>
           <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
             No hay mensajes
           </h3>
@@ -80,8 +80,8 @@ export const MessageList: React.FC<MessageListProps> = ({
  * DATE DIVIDER COMPONENT
  * Shows date separator between messages
  */
-const DateDivider: React.FC<{ date: string }> = ({ date }) => {
-  const formatDate = (timestamp: string) => {
+const DateDivider: React.FC<{ date: string | Date }> = ({ date }) => {
+  const formatDate = (timestamp: string | Date) => {
     const messageDate = new Date(timestamp);
     const today = new Date();
     const yesterday = new Date(today);
@@ -113,7 +113,7 @@ const DateDivider: React.FC<{ date: string }> = ({ date }) => {
 /**
  * HELPER: Check if two timestamps are on different days
  */
-const isNewDay = (prevTimestamp: string, currentTimestamp: string): boolean => {
+const isNewDay = (prevTimestamp: string | Date, currentTimestamp: string | Date): boolean => {
   const prevDate = new Date(prevTimestamp).toDateString();
   const currentDate = new Date(currentTimestamp).toDateString();
   return prevDate !== currentDate;

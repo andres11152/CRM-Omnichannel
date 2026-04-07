@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 
-// 🚑 EMERGENCY: Kill any zombie Service Workers from previous projects/versions
+//  EMERGENCY: Kill any zombie Service Workers from previous projects/versions
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     for (const registration of registrations) {

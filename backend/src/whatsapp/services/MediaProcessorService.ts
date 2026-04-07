@@ -6,7 +6,7 @@ import {
 } from "@whiskeysockets/baileys";
 import { MediaType } from "@prisma/client";
 import { mediaRepository } from "@/repositories/MediaRepository";
-import { storageService } from "@/services/storageService";
+import { storageService } from "@/services/StorageService";
 import { Logger } from "@/utils/logger";
 import { Readable } from "stream";
 import mime from "mime-types";
@@ -22,7 +22,7 @@ export interface PreparedMediaResult {
 }
 
 /**
- * 🎬 MEDIA PROCESSOR SERVICE
+ *  MEDIA PROCESSOR SERVICE
  *
  * Handles all media-related operations:
  * - Inbound: Extract content from Baileys WAMessage (download, upload to storage)
@@ -90,7 +90,7 @@ export class MediaProcessorService {
         proto.type === "0" ||
         !proto.type
       ) {
-        textContent = "🚫 Este mensaje fue eliminado";
+        textContent = " Este mensaje fue eliminado";
       } else {
         textContent = "[Sistema/Protocolo]";
       }
@@ -113,15 +113,19 @@ export class MediaProcessorService {
         "audioMessage",
         "documentMessage",
         "stickerMessage",
+        "documentWithCaptionMessage",
       ];
       if (supportedMedia.includes(messageType)) {
         try {
           mediaType = this.mapBaileysToMediaType(messageType);
           const stream = await downloadMediaMessage(message, "stream", {});
-          const content = message.message as unknown as Record<string, unknown>;
-          const msgObj = content[messageType] as
-            | Record<string, unknown>
-            | undefined;
+          const content = message.message as unknown as Record<string, any>;
+          
+          // Baileys unwrapping for documentWithCaptionMessage
+          let msgObj = content[messageType] as Record<string, any> | undefined;
+          if (messageType === "documentWithCaptionMessage" && msgObj?.message?.documentMessage) {
+              msgObj = msgObj.message.documentMessage;
+          }
 
           textContent =
             (msgObj?.caption as string) ||
@@ -129,24 +133,49 @@ export class MediaProcessorService {
             (msgObj?.fileName as string) ||
             `[${mediaType}]`;
 
+          // [SEC] MAX-SIZE GUARD (50MB Limit for WhatsApp)
+          const MAX_SIZE = 50 * 1024 * 1024;
+          const reportedSize = Number(
+            (msgObj?.fileLength as number | bigint | undefined) || 0,
+          );
+          if (reportedSize > MAX_SIZE) {
+             Logger.warn(`[MediaProcessor]  Skipping large file (${reportedSize} bytes) for ${messageId}`);
+             return { textContent: "[WARNING] Archivo demasiado grande (>50MB)" };
+          }
+
           if (stream) {
             mediaType = this.mapBaileysToMediaType(messageType);
             const mimetype: string =
               (msgObj?.mimetype as string | undefined) ||
               "application/octet-stream";
             const ext = mime.extension(mimetype) || "bin";
+            const originalName = (msgObj?.fileName as string) || `${messageId}.${ext}`;
             const filename = `${messageId}.${ext}`;
 
+            // 1. Upload to S3 (Private by default now)
             const uploadResult = await storageService.uploadStream(
               companyId,
               stream as Readable,
               filename,
               mimetype,
             );
-            mediaUrl = uploadResult.url;
-            mediaSize = Number(
-              (msgObj?.fileLength as number | bigint | undefined) || 0,
-            );
+
+            // 2. Persist to DB (Permanent Reference)
+            const mediaRecord = await mediaRepository.create({
+              company: { connect: { id: companyId } },
+              filename: uploadResult.key,
+              originalName: originalName,
+              mimeType: mimetype,
+              size: reportedSize || 0,
+              url: uploadResult.url, // This is the S3 Key now
+              key: uploadResult.key,
+              type: mediaType,
+              uploadedBy: { connect: { email: "system@reply.ai" } }, // Fallback to system user
+            });
+
+            // 3. Return internal Proxy URL (Audit-Ready & Persistent)
+            mediaUrl = `/api/media/${mediaRecord.id}/content`;
+            mediaSize = reportedSize;
           }
         } catch (e: unknown) {
           if ((e as Error)?.name === "InvalidAccessKeyId") {
@@ -289,7 +318,7 @@ export class MediaProcessorService {
           realMimeType = dbMedia.mimeType;
         }
       } catch (err) {
-        Logger.warn(`[MediaProcessor] ⚠️ Failed to resolve MIME from DB:`, err);
+        Logger.warn(`[MediaProcessor] [WARNING] Failed to resolve MIME from DB:`, err);
       }
     }
 
@@ -313,7 +342,7 @@ export class MediaProcessorService {
         };
       } catch (error) {
         Logger.error(
-          "[MediaProcessor] ❌ Conversion failed, falling back to raw:",
+          "[MediaProcessor] [ERROR] Conversion failed, falling back to raw:",
           error,
         );
         return {

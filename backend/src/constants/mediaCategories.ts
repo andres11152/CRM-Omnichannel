@@ -1,5 +1,5 @@
 /**
- * 📁 MEDIA CATEGORIES
+ *  MEDIA CATEGORIES
  *
  * Centralized category definitions for media files.
  * This ensures consistency across the entire application.

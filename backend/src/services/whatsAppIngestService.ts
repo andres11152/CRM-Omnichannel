@@ -7,10 +7,10 @@ import { WAMessage } from "@whiskeysockets/baileys";
 
 export class WhatsAppIngestService {
   async handleIngestion(msg: WAMessage, companyId: string) {
-    // 🕵️ LOG VERBOSO PARA DEPURACIÓN
+    // ️ LOG VERBOSO PARA DEPURACIÓN
     const remoteJid = msg.key?.remoteJid;
     const participant = msg.key?.participant;
-    Logger.info("\n📨 [INGEST] INCOMING MSG:");
+    Logger.info("\n [INGEST] INCOMING MSG:");
     Logger.info(`   - Chat (RemoteJid): ${remoteJid}`);
     Logger.info(`   - Sender (Participant): ${participant || "N/A"}`);
     Logger.info(`   - PushName: ${msg.pushName}`);
@@ -21,14 +21,14 @@ export class WhatsAppIngestService {
 
       if (identity.isZombie && !identity.e164Phone) {
         Logger.warn(
-          `⚠️ [INGEST] ZOMBIE REJECTED: ID Técnico ${identity.originalId} sin resolución.`,
+          `[WARNING] [INGEST] ZOMBIE REJECTED: ID Técnico ${identity.originalId} sin resolución.`,
         );
         return;
       }
 
       const finalPhone = identity.e164Phone!;
       Logger.info(
-        `🔍 [INGEST] IDENTIDAD RESUELTA: ${finalPhone} (Origen: ${identity.source})`,
+        `[SEARCH] [INGEST] IDENTIDAD RESUELTA: ${finalPhone} (Origen: ${identity.source})`,
       );
 
       // 2. PERSISTENCIA DE MAPPING (Auto-Learn Legacy)
@@ -59,7 +59,7 @@ export class WhatsAppIngestService {
           (contact.customFields as Record<string, unknown>) || {};
         const combinedFields = { ...existingFields, ...customFieldsUpdate };
 
-        contact = await contactRepository.update(contact.id, {
+        contact = await contactRepository.update(companyId, contact.id, {
           name: msg.pushName || contact.name,
           customFields: combinedFields as unknown as Prisma.JsonValue,
         });
@@ -74,15 +74,15 @@ export class WhatsAppIngestService {
         });
       }
 
-      Logger.info(`✅ [INGEST] CONTACTO: ${contact.name} (${contact.phone})`);
+      Logger.info(`[OK] [INGEST] CONTACTO: ${contact.name} (${contact.phone})`);
 
       let chat = await conversationRepository.findUnique({
         where: { id: remoteJid },
       });
 
       if (chat) {
-        chat = await conversationRepository.update(chat.id, {
-          contact: { connect: { id: contact.id } },
+        chat = await conversationRepository.update(companyId, chat.id, {
+          contactId: contact.id,
         });
       } else {
         chat = await conversationRepository.createRaw({
@@ -98,7 +98,7 @@ export class WhatsAppIngestService {
 
       return { contact, chat };
     } catch (error) {
-      Logger.error(`❌ [INGEST] CRITICAL ERROR: ${error}`);
+      Logger.error(`[ERROR] [INGEST] CRITICAL ERROR: ${error}`);
     }
   }
 
@@ -256,17 +256,17 @@ export class WhatsAppIngestService {
         const currentFields =
           (contact.customFields as Record<string, unknown>) || {};
         if (currentFields.lid !== cleanLid) {
-          await contactRepository.update(contact.id, {
+          await contactRepository.update(companyId, contact.id, {
             customFields: {
               ...currentFields,
               lid: cleanLid,
             } as unknown as Prisma.JsonValue,
           });
-          Logger.info(`💾 [INGEST] MAPPING GUARDADO: ${phone} <-> ${cleanLid}`);
+          Logger.info(`[SAVE] [INGEST] MAPPING GUARDADO: ${phone} <-> ${cleanLid}`);
         }
       }
     } catch (e) {
-      Logger.warn(`⚠️ [INGEST] Fallo al guardar mapping LID: ${e}`);
+      Logger.warn(`[WARNING] [INGEST] Fallo al guardar mapping LID: ${e}`);
     }
   }
 }

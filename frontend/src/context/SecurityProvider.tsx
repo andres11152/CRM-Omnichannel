@@ -1,5 +1,5 @@
 /**
- * 🛡️ TENANT SECURITY PROVIDER
+ * TENANT SECURITY PROVIDER
  *
  * Prevents cross-tenant data contamination in frontend state by:
  * 1. Detecting companyId changes
@@ -7,9 +7,9 @@
  * 3. Emergency logout on security violations
  *
  * Security Model:
- * - Company changes → Full state reset (prevent stale data)
- * - Missing auth → Immediate redirect
- * - Backend tenant errors → Emergency clear + redirect
+ * - Company changes: Full state reset (prevent stale data)
+ * - Missing auth: Immediate redirect
+ * - Backend tenant errors: Emergency clear + redirect
  */
 
 import React, {
@@ -20,6 +20,7 @@ import React, {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { ShieldAlert } from "lucide-react";
 
 interface SecurityContextValue {
   currentCompanyId: string | null;
@@ -52,11 +53,11 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({
   const previousCompanyIdRef = useRef<string | null>(null);
 
   /**
-   * 🚨 EMERGENCY LOGOUT
+   * EMERGENCY LOGOUT
    * Clears ALL possible state and forces browser reload
    */
   const emergencyLogout = (reason: string) => {
-    console.error(`[Security] 🚨 EMERGENCY LOGOUT: ${reason}`);
+    console.error(`[Security] EMERGENCY LOGOUT: ${reason}`);
 
     // 1. Clear ALL storage
     localStorage.clear();
@@ -94,13 +95,12 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({
         const payload = JSON.parse(atob(token.split(".")[1]));
         const newCompanyId = payload.companyId;
 
-        // 🛡️ CRITICAL: Detect company switch
         if (
           previousCompanyIdRef.current &&
           previousCompanyIdRef.current !== newCompanyId
         ) {
           console.warn(
-            `[Security] 🚨 COMPANY SWITCH DETECTED: ${previousCompanyIdRef.current} → ${newCompanyId}`,
+            `[Security] COMPANY SWITCH DETECTED: ${previousCompanyIdRef.current} → ${newCompanyId}`,
           );
 
           // Emergency logout to prevent data contamination
@@ -153,8 +153,9 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({
           gap: "1rem",
         }}
       >
-        <h1>🛡️ Security Check</h1>
-        <p>Redirecting to login...</p>
+        <ShieldAlert size={48} className="text-red-500 mb-4" />
+        <h1 className="text-2xl font-bold">Security Check</h1>
+        <p className="text-slate-400">Redirecting to login...</p>
       </div>
     );
   }

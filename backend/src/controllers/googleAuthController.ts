@@ -4,7 +4,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { signToken } from "./authController";
 import { Logger } from "@/utils/logger";
-import { googleAuthCrudService } from "@/services/googleAuthCrudService";
+import { googleAuthCrudService } from "@/services/GoogleAuthCrudService";
 
 // Environment Variables
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -14,7 +14,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !BACKEND_URL) {
   Logger.error(
-    "❌ CRITICAL: Missing Google Auth Environment Variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, BACKEND_URL)",
+    "[ERROR] CRITICAL: Missing Google Auth Environment Variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, BACKEND_URL)",
   );
 }
 

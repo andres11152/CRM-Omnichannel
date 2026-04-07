@@ -7,7 +7,7 @@ const apiKey = import.meta.env.VITE_API_KEY;
 // Initialize AI only if API key exists (prevents browser crashes)
 const getAI = () => {
   if (!apiKey) {
-    // console.warn("⚠️ Gemini API Key not configured - AI features disabled");
+    // console.warn("[WARNING] Gemini API Key not configured - AI features disabled");
     return null;
   }
   return new GoogleGenAI({ apiKey });
@@ -68,7 +68,7 @@ export const generateBotResponse = async (
       return "";
     }
     console.error("Gemini API Error:", error);
-    return "⚠️ Error del Servicio IA: No se pudo procesar la solicitud.";
+    return "[WARNING] Error del Servicio IA: No se pudo procesar la solicitud.";
   }
 };
 

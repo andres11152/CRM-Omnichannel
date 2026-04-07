@@ -7,12 +7,12 @@ import { Logger } from "@/utils/logger";
 import redisClient from "@/config/redis";
 
 /**
- * 🛡️ MEMORY-OPTIMIZED IN-MEMORY STORE + REDIS PERSISTENCE
+ * [SEC] MEMORY-OPTIMIZED IN-MEMORY STORE + REDIS PERSISTENCE
  *
  * Lightweight implementation focused on LID -> Phone mapping.
  * Uses Redis cluster-friendly persistence.
  *
- * 🔧 MEMORY OPTIMIZATION:
+ *  MEMORY OPTIMIZATION:
  * - Messages capped at MAX_MESSAGES_PER_JID per chat.
  * - Total contacts cap at MAX_CONTACTS.
  * - Auto-pruning clears oldest entries when limits are reached.
@@ -51,7 +51,7 @@ export class SimpleInMemoryStore {
         delete this.contacts[key];
       }
       Logger.debug(
-        `[Store] 🧹 Pruned ${evictCount} contacts (cap: ${MAX_TOTAL_CONTACTS})`,
+        `[Store]  Pruned ${evictCount} contacts (cap: ${MAX_TOTAL_CONTACTS})`,
       );
     }
 
@@ -83,7 +83,7 @@ export class SimpleInMemoryStore {
 
     this.messages[jid].push(msg);
     if (this.messages[jid].length > MAX_MESSAGES_PER_JID) {
-      // 🛡️ Ensure we delete the OLDEST messages, not the newest ones!
+      // [SEC] Ensure we delete the OLDEST messages, not the newest ones!
       // Since Baileys might receive newest messages first (at index 0),
       // we sort by timestamp before pruning.
 
@@ -266,7 +266,7 @@ export class SimpleInMemoryStore {
     this.chats.clear();
     this.lidToPhone = lidMappingsBackup;
     Logger.warn(
-      "[Store] 🧹 FLUSH: Cleared messages & chats (LID mappings preserved).",
+      "[Store]  FLUSH: Cleared messages & chats (LID mappings preserved).",
     );
   }
 
@@ -289,10 +289,10 @@ export class SimpleInMemoryStore {
     try {
       await redisClient.set(`wa:store:${redisKey}`, JSON.stringify(data));
       Logger.debug(
-        `[Store] 💾 Wrote memory store to Redis (Key: wa:store:${redisKey})`,
+        `[Store] [SAVE] Wrote memory store to Redis (Key: wa:store:${redisKey})`,
       );
     } catch (e) {
-      Logger.error(`[Store] ❌ Failed to write store to Redis`, e);
+      Logger.error(`[Store] [ERROR] Failed to write store to Redis`, e);
     }
   }
 
@@ -308,11 +308,11 @@ export class SimpleInMemoryStore {
         this.messages = data.messages || {};
         this.lidToPhone = data.lidToPhone || {};
         Logger.info(
-          `[Store] 📂 Loaded memory store from Redis (Key: wa:store:${redisKey})`,
+          `[Store] [DIR] Loaded memory store from Redis (Key: wa:store:${redisKey})`,
         );
       }
     } catch (e) {
-      Logger.error(`[Store] ❌ Failed to read store from Redis`, e);
+      Logger.error(`[Store] [ERROR] Failed to read store from Redis`, e);
     }
   }
 
@@ -327,7 +327,7 @@ export class SimpleInMemoryStore {
       writeIntervalMs,
     );
     Logger.info(
-      `[Store] 💾 Redis Persistence enabled with interval ${writeIntervalMs}ms`,
+      `[Store] [SAVE] Redis Persistence enabled with interval ${writeIntervalMs}ms`,
     );
   }
 }

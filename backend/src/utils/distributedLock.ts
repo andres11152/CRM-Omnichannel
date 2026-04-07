@@ -2,7 +2,7 @@ import redisClient from "@/config/redis";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🔒 Enterprise-Grade Distributed Lock (Mutex)
+ *  Enterprise-Grade Distributed Lock (Mutex)
  * Provides concurrent access control using Redis SET NX pattern.
  * Supports graceful fallback to in-memory locking for dev/offline scenarios.
  */

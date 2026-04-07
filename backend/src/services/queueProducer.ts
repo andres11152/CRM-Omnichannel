@@ -13,7 +13,7 @@ import {
 export const queueProducer = {
   async addMessageToQueue(data: MessageJobData) {
     Logger.info(
-      "[QueueProducer] 📤 Message enqueued for delivery",
+      "[QueueProducer]  Message enqueued for delivery",
       data as unknown as Record<string, unknown>,
     );
     // await queue.add('send-message', data);
@@ -21,7 +21,7 @@ export const queueProducer = {
 
   async addAITaskToQueue(data: AITaskData) {
     Logger.info(
-      "[QueueProducer] 🧠 AI Task enqueued",
+      "[QueueProducer]  AI Task enqueued",
       data as unknown as Record<string, unknown>,
     );
     // await aiQueue.add('process-ai', data);
@@ -29,7 +29,7 @@ export const queueProducer = {
 
   async addWebhookJob(data: WebhookJobData) {
     Logger.info(
-      "[QueueProducer] 🔗 Webhook delivery enqueued",
+      "[QueueProducer]  Webhook delivery enqueued",
       data as unknown as Record<string, unknown>,
     );
     // await webhookQueue.add('send-webhook', data);

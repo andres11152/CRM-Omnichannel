@@ -2,10 +2,10 @@ import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { flowService } from "@/services/flowService";
+import { flowService } from "@/services/FlowService";
 
 /**
- * ⚡ FLOW CONTROLLER
+ *  FLOW CONTROLLER
  *
  * HTTP orchestrator for automation workflows.
  * All data access delegated to flowService (SRP).

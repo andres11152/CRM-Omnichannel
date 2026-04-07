@@ -1,7 +1,7 @@
 import { webhookRepository } from "@/repositories/WebhookRepository";
 import { AppError } from "@/utils/AppError";
-import { messageProcessor } from "@/services/messageProcessorService";
-import { webhookDispatcher } from "@/services/webhookDispatcher";
+import { messageProcessor } from "@/services/MessageProcessorService";
+import { webhookDispatcher } from "@/services/WebhookDispatcher";
 import { Logger } from "@/utils/logger";
 import {
   CreateWebhookDto,
@@ -33,7 +33,7 @@ export const webhookService = {
    * Delete a webhook strictly ensuring ownership
    */
   async deleteWebhook(id: string, companyId: string) {
-    // 🛡️ Use deleteMany with compound where for strict tenant isolation
+    // [SEC] Use deleteMany with compound where for strict tenant isolation
     const deleted = await webhookRepository.deleteMany(id, companyId);
 
     if (deleted.count === 0) {
@@ -64,11 +64,11 @@ export const webhookService = {
 
     if (mode && token) {
       if (mode === "subscribe" && token === process.env.META_VERIFY_TOKEN) {
-        Logger.info("[Webhook] ✅ Meta webhook verified successfully");
+        Logger.info("[Webhook] [OK] Meta webhook verified successfully");
         return challenge as string;
       } else {
         Logger.warn(
-          "[Webhook] ⚠️ Meta verification failed: Invalid token or mode",
+          "[Webhook] [WARNING] Meta verification failed: Invalid token or mode",
         );
         throw new AppError("Forbidden: Invalid Verify Token", 403);
       }
@@ -109,7 +109,7 @@ export const webhookService = {
       });
     } catch (err) {
       Logger.error(
-        `[Webhook] ❌ Async processing failed for company ${companyId}:`,
+        `[Webhook] [ERROR] Async processing failed for company ${companyId}:`,
         err,
       );
       // We don't rethrow here to treat it as fire-and-forget success for the webhook provider

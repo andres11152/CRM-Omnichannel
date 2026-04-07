@@ -1,14 +1,11 @@
 import { Conversation, Prisma } from "@prisma/client";
-// ⚠️ ARCHITECTURAL NOTE: `prisma` is imported ONLY for `$transaction` in createNew().
-// All standard queries use `conversationRepository`. This is the Unit of Work pattern.
-import { prisma } from "@/config/database";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { Logger } from "@/utils/logger";
 import type { IdentityResult } from "@/utils/contactStrategy";
 import type { ConversationWithQueue } from "@/types/message.types";
 
 /**
- * 🛡️ TYPE GUARD
+ * [SEC] TYPE GUARD
  */
 function isPrismaError(
   error: unknown,
@@ -33,7 +30,7 @@ export interface ConversationResolverParams {
 }
 
 /**
- * 💬 CONVERSATION RESOLVER
+ * [CHAT] CONVERSATION RESOLVER
  *
  * Single Responsibility: Finds or creates a Conversation (and Ticket) for a message.
  * Handles LID migration, channelId normalization, and conversation re-opening.
@@ -114,7 +111,7 @@ export class ConversationResolver {
     identity: IdentityResult,
   ): Promise<Conversation | null> {
     Logger.info(
-      `[ConvResolver] 🔍 Searching for legacy LID conversation: ${originalLid}`,
+      `[ConvResolver] [SEARCH] Searching for legacy LID conversation: ${originalLid}`,
     );
 
     const legacyConversation = await conversationRepository.findFirst({
@@ -124,20 +121,21 @@ export class ConversationResolver {
     if (!legacyConversation) return null;
 
     Logger.info(
-      `[ConvResolver] 🔄 MIGRATING LID Conversation: ${originalLid} → ${phone}`,
+      `[ConvResolver] [SYNC] MIGRATING LID Conversation: ${originalLid} → ${phone}`,
     );
 
     try {
       const migrated = await conversationRepository.update(
+        companyId,
         legacyConversation.id,
         { channelId: phone, subject: identity.subjectDisplayName },
       );
-      Logger.info(`[ConvResolver] ✅ Migration successful: ${migrated.id}`);
+      Logger.info(`[ConvResolver] [OK] Migration successful: ${migrated.id}`);
       return migrated;
     } catch (error: unknown) {
       if (isPrismaError(error) && error.code === "P2002") {
         Logger.warn(
-          `[ConvResolver] ⚠️ Already migrated by another process. Re-fetching...`,
+          `[ConvResolver] [WARNING] Already migrated by another process. Re-fetching...`,
         );
         return conversationRepository.findFirst({
           where: { companyId, channelId: phone },
@@ -153,7 +151,7 @@ export class ConversationResolver {
     contactId: string,
   ): Promise<Conversation | null> {
     Logger.info(
-      `[ConvResolver] 🔍 Failsafe: Searching by Contact ID: ${contactId}`,
+      `[ConvResolver] [SEARCH] Failsafe: Searching by Contact ID: ${contactId}`,
     );
 
     const contactConversation = await conversationRepository.findFirst({
@@ -165,13 +163,13 @@ export class ConversationResolver {
 
     if (contactConversation.channelId !== phone) {
       Logger.info(
-        `[ConvResolver] 🔄 Migrating channelId: ${contactConversation.channelId} -> ${phone}`,
+        `[ConvResolver] [SYNC] Migrating channelId: ${contactConversation.channelId} -> ${phone}`,
       );
       try {
-        return await conversationRepository.update(contactConversation.id, {});
+        return await conversationRepository.update(companyId, contactConversation.id, {});
       } catch (error: unknown) {
         if (isPrismaError(error) && error.code === "P2002") {
-          Logger.warn(`[ConvResolver] ⚠️ Migration conflict. Using existing.`);
+          Logger.warn(`[ConvResolver] [WARNING] Migration conflict. Using existing.`);
           return conversationRepository.findFirst({
             where: { companyId, channelId: phone },
           });
@@ -193,89 +191,15 @@ export class ConversationResolver {
   ): Promise<Conversation> {
     Logger.info(`[ConvResolver] 🆕 Creating new conversation for: ${phone}`);
 
-    try {
-      let conversation: Conversation | null = null;
-
-      await prisma.$transaction(async (tx) => {
-        // Queue Logic (Smart Assignment)
-        let queueId: string | null = null;
-
-        // Priority 1: Session's default queue
-        if (sessionId) {
-          const sessionConfig = await tx.whatsAppSession.findUnique({
-            where: { sessionId },
-            select: { defaultQueueId: true },
-          });
-          if (sessionConfig?.defaultQueueId) {
-            queueId = sessionConfig.defaultQueueId;
-          }
-        }
-
-        Logger.info(
-          `[ConvResolver] 🎯 Assigned Queue: ${queueId || "None (Manual)"}`,
-        );
-
-        // CREATE CONVERSATION
-        conversation = await tx.conversation.create({
-          data: {
-            companyId,
-            channelId: phone,
-            subject: identity.subjectDisplayName,
-            status: "OPEN",
-            participants: { connect: [{ id: userId }] },
-            contactId,
-            queueId,
-          },
-        });
-
-        // CREATE TICKET
-        const lastTicket = await tx.ticket.findFirst({
-          where: { companyId },
-          orderBy: { ticketNumber: "desc" },
-          select: { ticketNumber: true },
-        });
-
-        await tx.ticket.create({
-          data: {
-            companyId,
-            ticketNumber: (lastTicket?.ticketNumber || 0) + 1,
-            subject: identity.subjectDisplayName,
-            description: "Chat iniciado en WhatsApp",
-            status: "OPEN",
-            priority: "MEDIUM",
-            createdById: userId,
-            conversationId: conversation.id,
-            queueId,
-          },
-        });
-
-        Logger.info(
-          `[ConvResolver] ✅ Conversation created: ${conversation.id}`,
-        );
-      });
-
-      if (!conversation) {
-        throw new Error("Transaction completed but conversation is null");
-      }
-
-      return conversation;
-    } catch (error: unknown) {
-      if (isPrismaError(error) && error.code === "P2002") {
-        Logger.warn(
-          `[ConvResolver] ⚠️ Created by another process. Re-fetching...`,
-        );
-        const existing = await conversationRepository.findFirst({
-          where: { companyId, channelId: phone },
-        });
-        if (!existing) {
-          throw new Error(
-            "Critical: Conversation should exist but not found after P2002",
-          );
-        }
-        return existing;
-      }
-      throw error;
-    }
+    // [SEC] REFACTOR: Delegate Unit-of-Work to Repository
+    return conversationRepository.findOrCreateWithTicket({
+      companyId,
+      phone,
+      subject: identity.subjectDisplayName,
+      userId,
+      sessionId,
+      contactId,
+    });
   }
 
   private async updateExisting(
@@ -286,14 +210,14 @@ export class ConversationResolver {
     contactId: string | undefined,
   ): Promise<Conversation> {
     Logger.info(
-      `[ConvResolver] ♻️ Using existing conversation: ${conversation.id}`,
+      `[ConvResolver] ️ Using existing conversation: ${conversation.id}`,
     );
 
-    const updates: Prisma.ConversationUpdateInput = {};
+    const updates: Prisma.ConversationUncheckedUpdateInput = {};
 
     // Link contact if missing
     if (!conversation.contactId && contactId) {
-      updates.contact = { connect: { id: contactId } };
+      updates.contactId = contactId;
     }
 
     // Update subject if generic and we have a better name
@@ -312,12 +236,12 @@ export class ConversationResolver {
     if (isClosed && !isOutbound) {
       updates.status = conversation.assignedToId ? "IN_PROGRESS" : "OPEN";
       Logger.info(
-        `[ConvResolver] 🔓 Re-opening conversation as ${updates.status}`,
+        `[ConvResolver]  Re-opening conversation as ${updates.status}`,
       );
     }
 
     if (Object.keys(updates).length > 0) {
-      return conversationRepository.update(conversation.id, updates);
+      return conversationRepository.update(conversation.companyId, conversation.id, updates);
     }
 
     return conversation;

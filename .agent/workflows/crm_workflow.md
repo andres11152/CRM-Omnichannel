@@ -2,11 +2,11 @@
 description: CRM and Sales Pipeline Validation Workflow
 ---
 
-# 🚀 CRM & Sales Workflow - Protocolo de Validación
+#  CRM & Sales Workflow - Protocolo de Validación
 
 Este workflow está diseñado para probar a fondo el módulo de CRM, asegurando que el ciclo de ventas fluya correctamente desde el contacto hasta el cierre del negocio.
 
-## 1. 📇 Gestión de Contactos (La Base)
+## 1.  Gestión de Contactos (La Base)
 
 - [ ] **Creación de Prospecto**:
   - Navegar a "Contactos".
@@ -19,7 +19,7 @@ Este workflow está diseñado para probar a fondo el módulo de CRM, asegurando 
   - Verificar que el avatar se genere o cargue correctamente.
   - Confirmar que el panel lateral (Customer 360) muestre los datos actualizados.
 
-## 2. 📊 Pipeline y Deals (Oportunidades)
+## 2. [STAT] Pipeline y Deals (Oportunidades)
 
 - [ ] **Creación de Deal**:
   - Desde el **Panel 360** del contacto:
@@ -35,7 +35,7 @@ Este workflow está diseñado para probar a fondo el módulo de CRM, asegurando 
   - Arrastrar el deal a la siguiente etapa (ej. "Negociación").
   - Verificar que el valor total de la columna se actualice.
 
-## 3. 📝 Bitácora de Actividades (Seguimiento)
+## 3.  Bitácora de Actividades (Seguimiento)
 
 - [ ] **Notas Internas**:
   - En el Panel 360, agregar una nota: "El cliente está interesado pero pide descuento".
@@ -45,7 +45,7 @@ Este workflow está diseñado para probar a fondo el módulo de CRM, asegurando 
   - Registrar una **Llamada**: "Demo presentada" (Resultado: Exitosa).
   - Verificar que estas actividades aparezcan en la "Línea de Tiempo" (Timeline) del contacto.
 
-## 4. 🔄 Flujo de Conversión
+## 4. [SYNC] Flujo de Conversión
 
 - [ ] **Mover a Ganado**:
   - Cambiar la etapa del deal a "Cerrado Ganado".
@@ -55,7 +55,7 @@ Este workflow está diseñado para probar a fondo el módulo de CRM, asegurando 
   - Mover a "Cerrado Perdido".
   - Seleccionar motivo de pérdida (si el sistema lo pide).
 
-## 5. 🔍 Buscador y Filtros
+## 5. [SEARCH] Buscador y Filtros
 
 - [ ] **Búsqueda Global**:
   - Buscar "Juan Pérez" en la barra superior.

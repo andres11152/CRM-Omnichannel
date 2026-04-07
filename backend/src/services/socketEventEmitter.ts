@@ -1,5 +1,5 @@
 /**
- * 🔊 SOCKET EVENT EMITTER
+ * [SOUND] SOCKET EVENT EMITTER
  *
  * Centralized service for emitting real-time events via Socket.IO
  *
@@ -56,7 +56,7 @@ export class SocketEventEmitter {
    */
   emitConversationCreated(conversation: ConversationWithRelations): void {
     Logger.info(
-      `[SocketEvents] 🔊 Emitting conversation.created: ${conversation.id}`,
+      `[SocketEvents] [SOUND] Emitting conversation.created: ${conversation.id}`,
     );
 
     this.socketGateway.emitToCompany(
@@ -76,7 +76,7 @@ export class SocketEventEmitter {
    */
   emitConversationUpdated(conversation: ConversationWithRelations): void {
     Logger.info(
-      `[SocketEvents] 🔊 Emitting conversation.updated: ${conversation.id}`,
+      `[SocketEvents] [SOUND] Emitting conversation.updated: ${conversation.id}`,
     );
 
     this.socketGateway.emitToCompany(
@@ -99,7 +99,7 @@ export class SocketEventEmitter {
     conversation: ConversationWithRelations,
     ticketId?: string,
   ): void {
-    Logger.info(`[SocketEvents] 🔊 Emitting message.received: ${message.id}`);
+    Logger.info(`[SocketEvents] [SOUND] Emitting message.received: ${message.id}`);
 
     // 1. Emit for Active Chat (ChatInterface)
     // Frontend expects 'conversation.new_message'
@@ -137,7 +137,7 @@ export class SocketEventEmitter {
       conversation.companyId,
       "message.received",
       {
-        ticketId, // ✅ CRITICAL FIX: Frontend expects this at root
+        ticketId, // [OK] CRITICAL FIX: Frontend expects this at root
         message: messagePayload,
         conversation: this.formatConversation(conversation),
         timestamp: new Date().toISOString(),
@@ -155,7 +155,7 @@ export class SocketEventEmitter {
     conversation: ConversationWithRelations,
     ticketId?: string,
   ): void {
-    Logger.info(`[SocketEvents] 🔊 Emitting message.sent: ${message.id}`);
+    Logger.info(`[SocketEvents] [SOUND] Emitting message.sent: ${message.id}`);
 
     const messagePayload = this.formatMessage(message);
 
@@ -187,7 +187,7 @@ export class SocketEventEmitter {
 
     // 3. Legacy
     this.socketGateway.emitToCompany(conversation.companyId, "message.sent", {
-      ticketId, // ✅ CRITICAL FIX: Include ticketId
+      ticketId, // [OK] CRITICAL FIX: Include ticketId
       message: messagePayload,
       conversation: this.formatConversation(conversation),
       timestamp: new Date().toISOString(),
@@ -197,7 +197,7 @@ export class SocketEventEmitter {
   /**
    * Emit when message delivery status changes
    *
-   * Frontend: Updates message status indicator (✓, ✓✓, blue checkmarks)
+   * Frontend: Updates message status indicator (, , blue checkmarks)
    */
   emitMessageStatus(
     messageId: string,
@@ -206,7 +206,7 @@ export class SocketEventEmitter {
     status: "sent" | "delivered" | "read" | "failed",
   ): void {
     Logger.info(
-      `[SocketEvents] 🔊 Emitting message.status: ${messageId} → ${status}`,
+      `[SocketEvents] [SOUND] Emitting message.status: ${messageId} → ${status}`,
     );
 
     this.socketGateway.emitToCompany(companyId, "message.status", {
@@ -235,7 +235,7 @@ export class SocketEventEmitter {
     assignedTo: User,
   ): void {
     Logger.info(
-      `[SocketEvents] 🔊 Emitting conversation.assigned: ${conversation.id} → ${assignedTo.name}`,
+      `[SocketEvents] [SOUND] Emitting conversation.assigned: ${conversation.id} → ${assignedTo.name}`,
     );
 
     this.socketGateway.emitToCompany(
@@ -259,7 +259,7 @@ export class SocketEventEmitter {
    * Frontend: Shows new ticket notification
    */
   emitTicketCreated(ticket: Ticket): void {
-    Logger.info(`[SocketEvents] 🔊 Emitting ticket.created: ${ticket.id}`);
+    Logger.info(`[SocketEvents] [SOUND] Emitting ticket.created: ${ticket.id}`);
 
     this.socketGateway.emitToCompany(
       ticket.companyId,
@@ -275,7 +275,7 @@ export class SocketEventEmitter {
    */
   emitConversationClosed(conversation: ConversationWithRelations): void {
     Logger.info(
-      `[SocketEvents] 🔊 Emitting conversation.closed: ${conversation.id}`,
+      `[SocketEvents] [SOUND] Emitting conversation.closed: ${conversation.id}`,
     );
 
     this.socketGateway.emitToCompany(
@@ -298,12 +298,12 @@ export class SocketEventEmitter {
     conversationId: string,
     companyId: string,
   ): void {
-    Logger.info(`[SocketEvents] 🔊 Emitting message.revoked: ${messageId}`);
+    Logger.info(`[SocketEvents] [SOUND] Emitting message.revoked: ${messageId}`);
 
     const payload = {
       messageId,
       conversationId,
-      content: "🚫 Este mensaje fue eliminado",
+      content: " Este mensaje fue eliminado",
       status: "REVOKED",
       timestamp: new Date().toISOString(),
     };
@@ -345,7 +345,7 @@ export class SocketEventEmitter {
     reaction: string,
     participant: string,
   ): void {
-    Logger.info(`[SocketEvents] 🔊 Emitting message.reaction: ${messageId}`);
+    Logger.info(`[SocketEvents] [SOUND] Emitting message.reaction: ${messageId}`);
 
     const payload = {
       messageId,
@@ -372,7 +372,7 @@ export class SocketEventEmitter {
   private formatConversation(conversation: ConversationWithRelations) {
     const lastMessage = conversation.messages?.[0];
 
-    // 🧠 LOGIC: Identify the Customer (Contact)
+    //  LOGIC: Identify the Customer (Contact)
     // The participant that is NOT the agent/admin/system
     // Fallback: Use the one matching channelId if participants list is weird
     const customerParticipant = conversation.participants?.find(
@@ -412,7 +412,7 @@ export class SocketEventEmitter {
         phone: p.phone,
         role: p.role, // Important for frontend filtering
       })),
-      contact: contact, // ✅ FIX: Explicitly provide contact object for Frontend
+      contact: contact, // [OK] FIX: Explicitly provide contact object for Frontend
       lastMessage: lastMessage
         ? {
             id: lastMessage.id,
@@ -423,7 +423,7 @@ export class SocketEventEmitter {
         : null,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
-      // 🔴 Badge Logic: Include database value (defaults to 0)
+      // [OFFLINE] Badge Logic: Include database value (defaults to 0)
       unreadCount: conversation.unreadCount || 0,
     };
   }

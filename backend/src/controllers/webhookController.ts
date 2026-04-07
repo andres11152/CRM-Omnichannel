@@ -3,7 +3,7 @@ import { Logger } from "@/utils/logger";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { webhookService } from "@/services/webhookService";
+import { webhookService } from "@/services/WebhookService";
 import {
   whatsappWebhookSchema,
   createWebhookSchema,
@@ -11,7 +11,7 @@ import {
 } from "@/schemas/webhookSchemas";
 
 // ===================================
-// 🎮 CONTROLLERS
+//  CONTROLLERS
 // ===================================
 
 /**

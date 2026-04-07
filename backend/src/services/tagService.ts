@@ -4,7 +4,7 @@ import { tagRepository } from "@/repositories/TagRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
 
 /**
- * 🏷️ TAG CRUD SERVICE
+ * ️ TAG CRUD SERVICE
  *
  * Data access layer for tags management.
  */

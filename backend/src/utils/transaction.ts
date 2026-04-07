@@ -3,7 +3,7 @@ import { Logger } from "./logger";
 import { getErrorMessage } from "./errorHelpers";
 
 /**
- * 🛡️ SAFE TRANSACTION WRAPPER
+ * [SEC] SAFE TRANSACTION WRAPPER
  *
  * Ensures database operations are atomic and properly rolled back on failure.
  * Prevents partial updates that can corrupt data integrity.
@@ -44,7 +44,7 @@ export async function safeTransaction<T>(
       });
 
       if (attempt > 0) {
-        Logger.info(`[Transaction] ✅ Succeeded after ${attempt + 1} attempts`);
+        Logger.info(`[Transaction] [OK] Succeeded after ${attempt + 1} attempts`);
       }
 
       return result as T;
@@ -62,7 +62,7 @@ export async function safeTransaction<T>(
 
       if (!isRetryable || attempt >= maxRetries) {
         Logger.error(
-          `[Transaction] ❌ Failed after ${attempt} attempts: ${errorMsg}`,
+          `[Transaction] [ERROR] Failed after ${attempt} attempts: ${errorMsg}`,
         );
         throw lastError;
       }
@@ -70,7 +70,7 @@ export async function safeTransaction<T>(
       // Exponential backoff
       const delay = Math.min(100 * Math.pow(2, attempt - 1), 2000);
       Logger.warn(
-        `[Transaction] ⚠️ Retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`,
+        `[Transaction] [WARNING] Retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -80,7 +80,7 @@ export async function safeTransaction<T>(
 }
 
 /**
- * 🛡️ IDEMPOTENT TRANSACTION
+ * [SEC] IDEMPOTENT TRANSACTION
  *
  * Ensures operation can be safely retried without creating duplicates.
  * Uses idempotency key to prevent double-execution.

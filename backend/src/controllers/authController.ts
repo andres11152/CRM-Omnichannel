@@ -5,9 +5,10 @@ import { AppError } from "@/utils/AppError";
 import jwt, { SignOptions } from "jsonwebtoken";
 import crypto from "crypto";
 import { Logger } from "@/utils/logger";
-import { emailService } from "@/services/emailService";
-import { authCrudService } from "@/services/authCrudService";
-import { sessionService, SESSION_TTL } from "@/services/sessionService";
+import { getEnv } from "@/config/env";
+import { emailService } from "@/services/EmailService";
+import { authCrudService } from "@/services/AuthCrudService";
+import { sessionService, SESSION_TTL } from "@/services/SessionService";
 
 export interface TokenPayload {
   id: string;
@@ -23,16 +24,14 @@ export interface TokenPayload {
  * Genera un token JWT firmado.
  */
 /**
- * Signs an access token (short-lived, 15 min).
+ * Signs an access token (enterprise-grade, based on JWT_EXPIRES_IN).
  * Each token gets a unique JTI for blacklist-based revocation.
  */
 export const signAccessToken = (payload: TokenPayload): string => {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    throw new AppError("JWT_SECRET no está definido en el archivo .env", 500);
-  }
+  const jwtSecret = getEnv().JWT_SECRET;
   const jti = crypto.randomUUID();
-  const options: SignOptions = { expiresIn: "15m" };
+  const expiresIn = getEnv().JWT_EXPIRES_IN as SignOptions["expiresIn"];
+  const options: SignOptions = { expiresIn };
   return jwt.sign({ ...payload, jti }, jwtSecret, options);
 };
 
@@ -42,7 +41,7 @@ export const signAccessToken = (payload: TokenPayload): string => {
 export const signToken = signAccessToken;
 
 // ============================================================================
-// 🍪 COOKIE HELPERS
+//  COOKIE HELPERS
 // ============================================================================
 
 const COOKIE_OPTIONS = {
@@ -154,7 +153,7 @@ export const login = catchAsync(
       }
     }
 
-    // 🏢 ENTERPRISE: Create server-side session
+    //  ENTERPRISE: Create server-side session
     const ipAddress = req.ip || req.socket.remoteAddress || "IP no disponible";
     const userAgent = req.get("user-agent") || "User-Agent no disponible";
 
@@ -177,11 +176,11 @@ export const login = catchAsync(
     };
     const token = signAccessToken(tokenPayload);
 
-    // 🍪 Set HttpOnly cookies (XSS-proof)
+    //  Set HttpOnly cookies (XSS-proof)
     setAuthCookies(res, token, refreshToken);
 
-    // 🔐 Send login notification email (async, fire-and-forget)
-    import("@/services/loginNotificationService").then(
+    // [AUTH] Send login notification email (async, fire-and-forget)
+    import("@/services/LoginNotificationService").then(
       ({ sendLoginNotification }) => {
         sendLoginNotification({
           userEmail: user.email,
@@ -217,7 +216,7 @@ export const login = catchAsync(
 );
 
 // ============================================================================
-// 🔒 ENTERPRISE LOGOUT (Server-side session destruction)
+//  ENTERPRISE LOGOUT (Server-side session destruction)
 // ============================================================================
 
 export const logout = catchAsync(
@@ -236,7 +235,7 @@ export const logout = catchAsync(
     // Clear cookies
     clearAuthCookies(res);
 
-    Logger.info("[Auth] 🔒 User logged out", { userId: req.user?.id });
+    Logger.info("[Auth]  User logged out", { userId: req.user?.id });
 
     res.status(200).json({
       status: "success",
@@ -246,7 +245,7 @@ export const logout = catchAsync(
 );
 
 // ============================================================================
-// 🔄 TOKEN REFRESH (Rotate access + refresh tokens)
+// [SYNC] TOKEN REFRESH (Rotate access + refresh tokens)
 // ============================================================================
 
 export const refreshToken = catchAsync(
@@ -311,7 +310,7 @@ export const refreshToken = catchAsync(
 );
 
 // ============================================================================
-// 📋 ACTIVE SESSIONS (List user's devices)
+//  ACTIVE SESSIONS (List user's devices)
 // ============================================================================
 
 export const getActiveSessions = catchAsync(

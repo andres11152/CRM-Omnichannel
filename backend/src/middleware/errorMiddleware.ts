@@ -63,7 +63,7 @@ const sendErrorProd = (err: AppError, res: Response) => {
   }
 
   // Programming or other unknown error: don't leak error details
-  Logger.error("ERROR 💥", err);
+  Logger.error("ERROR ", err);
 
   res.status(500).json({
     success: false,

@@ -1,7 +1,7 @@
 import { Contact } from "@prisma/client";
 
 /**
- * 📦 CONTACT DTOs
+ * [PKG] CONTACT DTOs
  * Decoupled data transfer objects for frontend communication
  */
 
@@ -35,7 +35,7 @@ export interface ContactTimelineResponseDTO {
 }
 
 /**
- * 🔄 MAPPERS
+ * [SYNC] MAPPERS
  */
 export const toContactDTO = (contact: Contact): ContactDTO => {
   return {

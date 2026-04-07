@@ -4,7 +4,7 @@ import { Logger } from "@/utils/logger";
 import type { IdentityResult } from "@/utils/contactStrategy";
 
 /**
- * 🛡️ TYPE GUARD
+ * [SEC] TYPE GUARD
  */
 function isPrismaError(
   error: unknown,
@@ -26,7 +26,7 @@ export interface ContactResolverParams {
 }
 
 /**
- * 📇 CONTACT RESOLVER
+ *  CONTACT RESOLVER
  *
  * Single Responsibility: Resolves or creates a Contact record for an incoming/outgoing message.
  * Handles phone normalization, LID migration, zombie recovery, and race conditions.
@@ -96,9 +96,9 @@ export class ContactResolver {
   ): Promise<Contact> {
     if (contact.phone !== phone) {
       Logger.info(
-        `[ContactResolver] 🧹 Normalizing phone (removing +): ${contact.phone} -> ${phone}`,
+        `[ContactResolver]  Normalizing phone (removing +): ${contact.phone} -> ${phone}`,
       );
-      return contactRepository.update(contact.id, { phone });
+      return contactRepository.update(contact.companyId, contact.id, { phone });
     }
     return contact;
   }
@@ -113,9 +113,9 @@ export class ContactResolver {
       const currentNameIsPhone = contact.name === phone || !contact.name;
       if (currentNameIsPhone && contact.name !== identity.contactName) {
         Logger.info(
-          `[ContactResolver] ♻️ Upgrading name: ${identity.contactName}`,
+          `[ContactResolver] ️ Upgrading name: ${identity.contactName}`,
         );
-        return contactRepository.update(contact.id, {
+        return contactRepository.update(contact.companyId, contact.id, {
           name: identity.contactName,
         });
       }
@@ -138,10 +138,10 @@ export class ContactResolver {
     if (!legacyContact) return null;
 
     Logger.info(
-      `[ContactResolver] 🔄 Merging legacy LID: ${originalLid} -> ${phone}`,
+      `[ContactResolver] [SYNC] Merging legacy LID: ${originalLid} -> ${phone}`,
     );
 
-    return contactRepository.update(legacyContact.id, {
+    return contactRepository.update(companyId, legacyContact.id, {
       phone,
       ...(identity.contactName && { name: identity.contactName }),
     });
@@ -153,7 +153,7 @@ export class ContactResolver {
     identity: IdentityResult,
   ): Promise<Contact> {
     Logger.info(
-      `[ContactResolver] 👤 Creating contact: ${identity.subjectDisplayName}`,
+      `[ContactResolver]  Creating contact: ${identity.subjectDisplayName}`,
     );
 
     try {
@@ -176,7 +176,7 @@ export class ContactResolver {
     identity: IdentityResult,
     originalError: unknown,
   ): Promise<Contact> {
-    Logger.info(`[ContactResolver] ♻️ Race condition on create. Recovering...`);
+    Logger.info(`[ContactResolver] ️ Race condition on create. Recovering...`);
 
     // Check even soft-deleted contacts
     const contact = await contactRepository.findFirst({
@@ -187,7 +187,7 @@ export class ContactResolver {
 
     if (!contact) {
       Logger.error(
-        `[ContactResolver] ❌ PHANTOM: P2002 but findFirst(includeDeleted) returned NULL.`,
+        `[ContactResolver] [ERROR] PHANTOM: P2002 but findFirst(includeDeleted) returned NULL.`,
       );
       throw originalError;
     }
@@ -195,11 +195,11 @@ export class ContactResolver {
     const isZombie = !!contact.deletedAt;
     if (isZombie) {
       Logger.info(
-        `[ContactResolver] 🚑 Restoring zombie contact: ${phone} (ID: ${contact.id})`,
+        `[ContactResolver]  Restoring zombie contact: ${phone} (ID: ${contact.id})`,
       );
     }
 
-    await contactRepository.update(contact.id, {
+    await contactRepository.update(companyId, contact.id, {
       deletedAt: null,
       name: identity.contactName || contact.name,
       phone,
@@ -218,9 +218,9 @@ export class ContactResolver {
     const currentFields =
       (contact.customFields as Record<string, unknown>) || {};
     if (currentFields.lid !== originalLid) {
-      Logger.info(`[ContactResolver] 💾 Persisting LID mapping`);
+      Logger.info(`[ContactResolver] [SAVE] Persisting LID mapping`);
       await contactRepository
-        .update(contact.id, {
+        .update(contact.companyId, contact.id, {
           customFields: { ...currentFields, lid: originalLid },
         })
         .catch((e) => Logger.warn("LID map save failed", { error: e }));

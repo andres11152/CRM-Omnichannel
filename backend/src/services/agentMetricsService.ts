@@ -3,7 +3,7 @@ import { ticketRepository } from "@/repositories/TicketRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 
 /**
- * 📊 AGENT METRICS SERVICE
+ * [STAT] AGENT METRICS SERVICE
  *
  * Data access layer for agent performance metrics.
  * Handles complex analytics queries for agent dashboards.

@@ -5,7 +5,7 @@ import type { UserWithCompany } from "@/types/auth.types";
 import { UserRole, Prisma } from "@prisma/client";
 
 /**
- * 🔑 GOOGLE AUTH CRUD SERVICE
+ * [KEY] GOOGLE AUTH CRUD SERVICE
  *
  * Data access layer for Google OAuth operations.
  * Handles user lookup/creation for Google login and calendar token management.

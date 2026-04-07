@@ -1,11 +1,12 @@
 import { prisma } from "@/config/database";
 import { MessageReaction, Prisma } from "@prisma/client";
+import { AppError } from "@/utils/AppError";
 
 /**
- * 🧡 MESSAGE REACTION REPOSITORY
+ *  MESSAGE REACTION REPOSITORY
  *
  * Handles persistence for emojis/reactions on messages.
- * 🛡️ ALL queries are scoped by companyId for multi-tenant safety.
+ * [SEC] ALL queries are scoped by companyId for multi-tenant safety.
  */
 export class ReactionRepository {
   async upsertReaction(data: {
@@ -14,15 +15,16 @@ export class ReactionRepository {
     content: string;
     companyId: string;
   }): Promise<MessageReaction> {
-    // 🛡️ MULTI-TENANT: Verify message belongs to the same company before upserting
+    // [SEC] MULTI-TENANT: Verify message belongs to the same company before upserting
     const targetMessage = await prisma.message.findFirst({
       where: { id: data.messageId, companyId: data.companyId },
       select: { id: true },
     });
 
     if (!targetMessage) {
-      throw new Error(
-        `[ReactionRepository] Message ${data.messageId} not found for company ${data.companyId}`,
+      throw new AppError(
+        `Mensaje ${data.messageId} no encontrado para la empresa.`,
+        404,
       );
     }
 
@@ -46,7 +48,7 @@ export class ReactionRepository {
   }
 
   /**
-   * 🛡️ MULTI-TENANT: Always scoped by companyId
+   * [SEC] MULTI-TENANT: Always scoped by companyId
    */
   async findReactionsByMessage(
     messageId: string,
@@ -59,7 +61,7 @@ export class ReactionRepository {
   }
 
   /**
-   * 🛡️ MULTI-TENANT: Always scoped by companyId
+   * [SEC] MULTI-TENANT: Always scoped by companyId
    */
   async removeReaction(
     messageId: string,

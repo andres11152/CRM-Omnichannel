@@ -1,6 +1,6 @@
 import { userRepository } from "@/repositories/UserRepository";
 import { AppError } from "@/utils/AppError";
-import { auditLogService } from "@/services/auditLogService";
+import { auditLogService } from "@/services/AuditLogService";
 import { Logger } from "@/utils/logger";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -8,7 +8,7 @@ import TenantContextManager from "@/config/tenantContext";
 import type { UserWithCompanyAndPlan } from "@/types/auth.types";
 
 /**
- * 🔐 AUTH CRUD SERVICE
+ * [AUTH] AUTH CRUD SERVICE
  *
  * Data access layer for authentication operations.
  * Handles user lookup, creation, password hashing, and token management.
@@ -181,7 +181,7 @@ export const authCrudService = {
       resetPasswordExpires: null,
     });
 
-    // 🕵️‍♂️ Log sensitive action
+    // ️‍️ Log sensitive action
     if (user.companyId) {
       void auditLogService.log({
         companyId: user.companyId,

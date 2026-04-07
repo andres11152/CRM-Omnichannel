@@ -1,102 +1,84 @@
-import { Prisma } from "@prisma/client";
-import { auditLogRepository } from "@/repositories/AuditLogRepository";
+import { prisma } from "@/config/database";
 import { Logger } from "@/utils/logger";
-
-export interface IAuditLogData {
-  companyId: string;
-  userId?: string;
-  action:
-    | "CREATE"
-    | "UPDATE"
-    | "DELETE"
-    | "LOGIN"
-    | "EXPORT"
-    | "READ_SENSITIVE"
-    | string;
-  entity: string;
-  entityId: string;
-  details?: Record<string, unknown>;
-  ipAddress?: string;
-  userAgent?: string;
-}
+import { Prisma } from "@prisma/client";
 
 /**
- * 🕵️ AUDIT SERVICE
- *
- * Provides "Fire-and-Forget" logging for critical system actions.
- * Ensures immutability and compliance tracing without blocking the main thread.
+ * [SEC] GLOBAL AUDIT SERVICE
+ * 
+ * Captures all critical administrative and system actions for compliance and security.
+ * Every action is scoped by companyId to preserve multi-tenant integrity.
  */
-export const auditService = {
+export class AuditService {
   /**
-   * Log an action to the database asynchronously.
-   * Does NOT throw errors - silently logs failures to console to avoid disrupting user flow.
+   * Logs an action to the AuditLog table
    */
-  logAction: async (data: IAuditLogData) => {
-    // Fire and forget - don't await to block response
-    setImmediate(async () => {
-      try {
-        const sanitizedDetails = sanitizeDetails(data.details);
-
-        await auditLogRepository.create({
-          data: {
-            companyId: data.companyId,
-            userId: data.userId,
-            action: data.action,
-            entity: data.entity,
-            entityId: data.entityId,
-            details: sanitizedDetails as unknown as Prisma.InputJsonObject, // Clean sensitive data
-            ipAddress: data.ipAddress,
-            userAgent: data.userAgent,
-          },
-        });
-
-        // Low-level debug log
-        // Logger.debug(`[Audit] Logged ${data.action} on ${data.entity}`);
-      } catch (error) {
-        // Failing to log should NEVER crash the app, but should be reported
-        Logger.error("[Audit] FAILED TO LOG ACTION:", error);
-        if (data && data.details) {
-          Logger.debug("Audit Data (Partial):", {
-            action: data.action,
-            entity: data.entity,
-          });
-        }
-      }
-    });
-  },
-};
-
-/**
- * Removes sensitive fields (passwords, tokens) from JSON payloads
- * before saving them to the database loop.
- */
-function sanitizeDetails(
-  details?: Record<string, unknown>,
-): Record<string, unknown> | undefined {
-  if (!details) return undefined;
-
-  const sensitiveKeys = [
-    "password",
-    "token",
-    "secret",
-    "apiKey",
-    "creditCard",
-    "stripeId",
-    "authorization",
-  ];
-
-  const sanitized: Record<string, unknown> = { ...details };
-
-  for (const key of Object.keys(sanitized)) {
-    if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) {
-      sanitized[key] = "[REDACTED]";
-    } else if (typeof sanitized[key] === "object" && sanitized[key] !== null) {
-      // Recursive sanitization for nested objects
-      sanitized[key] = sanitizeDetails(
-        sanitized[key] as Record<string, unknown>,
-      );
+  static async log(params: {
+    companyId: string;
+    userId?: string;
+    action: "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "LOGOUT" | "EXPORT" | "SYSTEM_ACTION" | "INTEGRATION_SYNC";
+    entity: string;
+    entityId: string;
+    details?: Record<string, unknown>;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<void> {
+    try {
+      await prisma.auditLog.create({
+        data: {
+          companyId: params.companyId,
+          userId: params.userId || null,
+          action: params.action,
+          entity: params.entity,
+          entityId: params.entityId,
+          details: params.details ? (params.details as Prisma.InputJsonValue) : undefined,
+          ipAddress: params.ipAddress,
+          userAgent: params.userAgent,
+        },
+      });
+      
+      Logger.debug(`[AuditLog] ${params.action} on ${params.entity}:${params.entityId} (Company: ${params.companyId})`);
+    } catch (error) {
+      // [SEC] Fail-safe: A failure in logging should NEVER crash the main business logic
+      Logger.error(`[AuditService] [ERROR] Failed to write audit log:`, error as Error);
     }
   }
 
-  return sanitized;
+  /**
+   * Shortcut for logging WhatsApp connection events
+   */
+  static async logWhatsAppEvent(
+    companyId: string, 
+    sessionId: string, 
+    event: "CONNECTED" | "DISCONNECTED" | "AUTH_FAILURE" | "VERSION_MISMATCH" | "SCANNING" | "SYNC_COMPLETED",
+    details?: Record<string, unknown>
+  ): Promise<void> {
+    await this.log({
+      companyId,
+      action: "SYSTEM_ACTION",
+      entity: "WhatsAppSession",
+      entityId: sessionId,
+      details: { event, ...details },
+    });
+  }
+
+  /**
+   * Shortcut for security-sensitive actions
+   */
+  static async logSecurityAction(
+    companyId: string,
+    userId: string,
+    action: "LOGIN" | "LOGOUT" | "EXPORT",
+    details?: Record<string, unknown>,
+    ipAddress?: string
+  ): Promise<void> {
+    await this.log({
+      companyId,
+      userId,
+      action,
+      entity: "User",
+      entityId: userId,
+      details,
+      ipAddress,
+    });
+  }
 }

@@ -1,7 +1,7 @@
 import { Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { AppError } from "@/utils/AppError";
-import { planLimitsService } from "@/services/planLimitsService";
+import { planLimitsService } from "@/services/PlanLimitsService";
 import TenantContextManager from "@/config/tenantContext";
 import { Logger } from "@/utils/logger";
 
@@ -30,7 +30,7 @@ export const checkPlanLimit = (resourceType: ResourceType) => {
         return next();
       }
 
-      // 🛡️ ENFORCE TENANT CONTEXT for Async Safety
+      // [SEC] ENFORCE TENANT CONTEXT for Async Safety
       return TenantContextManager.run(
         {
           companyId,

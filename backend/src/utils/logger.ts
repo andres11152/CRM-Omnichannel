@@ -2,7 +2,7 @@ import winston from "winston";
 import { trace, SpanStatusCode, Attributes } from "@opentelemetry/api";
 
 /**
- * 📊 ENTERPRISE-GRADE STRUCTURED LOGGING
+ * [STAT] ENTERPRISE-GRADE STRUCTURED LOGGING
  * Winston with JSON format, OpenTelemetry integration, and sensitive data masking
  */
 
@@ -26,7 +26,7 @@ const colors = {
 winston.addColors(colors);
 
 /**
- * 🔒 Sensitive Data Masking
+ *  Sensitive Data Masking
  */
 const sensitiveKeys = [
   /pass/i,
@@ -56,7 +56,7 @@ const maskSensitiveData = (obj: unknown): unknown => {
 };
 
 /**
- * 🔍 OpenTelemetry Context Enrichment
+ * [SEARCH] OpenTelemetry Context Enrichment
  * Automatically adds trace/span IDs to logs
  */
 const addTraceContext = winston.format((info) => {
@@ -71,7 +71,7 @@ const addTraceContext = winston.format((info) => {
 });
 
 /**
- * 📝 JSON Format for Production
+ *  JSON Format for Production
  */
 const jsonFormat = winston.format.combine(
   winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
@@ -92,7 +92,7 @@ const jsonFormat = winston.format.combine(
 );
 
 /**
- * 🎨 Pretty Format for Development
+ *  Pretty Format for Development
  */
 const prettyFormat = winston.format.combine(
   winston.format.timestamp({ format: "HH:mm:ss.SSS" }),
@@ -122,7 +122,7 @@ const prettyFormat = winston.format.combine(
 );
 
 /**
- * 📁 Transport Configuration
+ *  Transport Configuration
  */
 const transports: winston.transport[] = [];
 
@@ -163,7 +163,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 /**
- * 🏗️ Logger Instance
+ * [BUILD] Logger Instance
  */
 const logger = winston.createLogger({
   level:
@@ -175,7 +175,7 @@ const logger = winston.createLogger({
 });
 
 /**
- * 🎯 Enhanced Logger with Typed Methods
+ *  Enhanced Logger with Typed Methods
  */
 export class Logger {
   /**
@@ -237,7 +237,7 @@ export class Logger {
   }
 
   /**
-   * 🔍 Log with custom trace span
+   * [SEARCH] Log with custom trace span
    */
   static trace(
     spanName: string,
@@ -268,7 +268,7 @@ export class Logger {
   }
 
   /**
-   * 📊 Log with performance timing
+   * [STAT] Log with performance timing
    */
   static timed(operation: string, meta?: Record<string, unknown>) {
     const start = Date.now();

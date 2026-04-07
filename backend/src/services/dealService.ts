@@ -28,7 +28,7 @@ export class DealService {
       contactId?: string;
     },
   ) {
-    const where: Prisma.DealWhereInput = {}; // Middleware injects companyId
+    const where: Prisma.DealWhereInput = {}; // Middleware injects || companyId
     if (filters.pipelineId) where.pipelineId = filters.pipelineId;
     if (filters.stageId) where.stageId = filters.stageId;
     if (filters.accountId) where.accountId = filters.accountId;
@@ -92,8 +92,8 @@ export class DealService {
       currency: currency || "COP",
       order: newOrder,
       probability: probability || 10,
-      expectedCloseDate: expectedCloseDate ?? null,
-      lostReason: lostReason ?? null,
+      expectedCloseDate: expectedCloseDate || null,
+      lostReason: lostReason || null,
       closedAt: isWonOrLost ? new Date() : null,
       account: accountId ? { connect: { id: accountId } } : undefined,
       contact: contactId ? { connect: { id: contactId } } : undefined,
@@ -102,7 +102,7 @@ export class DealService {
 
     const deal = await this.dealRepo.create(dealData);
 
-    // 📝 Auto-create initial Activity note if notes provided
+    //  Auto-create initial Activity note if notes provided
     if (notes && userId) {
       try {
         await activityRepository.create({
@@ -113,8 +113,8 @@ export class DealService {
             description: notes,
             status: "COMPLETED",
             dealId: deal.id,
-            accountId: accountId ?? null,
-            contactId: contactId ?? null,
+            accountId: accountId || null,
+            contactId: contactId || null,
             createdById: userId,
           },
         });
@@ -123,7 +123,7 @@ export class DealService {
           "[DealService] Failed to create initial activity:",
           activityError,
         );
-        // Non-blocking: deal was created successfully, activity is supplementary
+        // Non-blocking: deal was created successfully, activity is || supplementary
       }
     }
 
@@ -151,16 +151,16 @@ export class DealService {
     if (data.probability !== undefined)
       updateData.probability = data.probability;
     if (data.expectedCloseDate !== undefined)
-      updateData.expectedCloseDate = data.expectedCloseDate ?? null;
+      updateData.expectedCloseDate = data.expectedCloseDate || null;
     if (data.order !== undefined) updateData.order = data.order;
     if (data.contactId !== undefined)
-      updateData.contactId = data.contactId ?? null;
+      updateData.contactId = data.contactId || null;
     if (data.accountId !== undefined)
-      updateData.accountId = data.accountId ?? null;
+      updateData.accountId = data.accountId || null;
     if (data.assignedToId !== undefined)
-      updateData.assignedToId = data.assignedToId ?? null;
+      updateData.assignedToId = data.assignedToId || null;
     if (data.lostReason !== undefined)
-      updateData.lostReason = data.lostReason ?? null;
+      updateData.lostReason = data.lostReason || null;
 
     // Stage Change Logic
     if (data.stageId && data.stageId !== deal.stageId) {

@@ -2,7 +2,7 @@ import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { conversationService } from "@/services/conversationService";
+import { conversationService } from "@/services/ConversationService";
 import { Channel, Conversation } from "@prisma/client";
 import { Logger } from "@/utils/logger";
 
@@ -24,7 +24,26 @@ export const createConversation = catchAsync(
 
     res.status(201).json({
       status: "success",
-      data: { conversation },
+      data: {
+        conversation: {
+          id: conversation.id,
+          subject: conversation.subject,
+          status: conversation.status,
+          lastMessage: conversation.lastMessage || null,
+          lastMessageAt: conversation.lastMessageAt || null,
+          isGroup: conversation.isGroup,
+          tags: conversation.tags,
+          contact: conversation.contact
+            ? {
+                id: conversation.contact.id,
+                name: conversation.contact.name,
+                phone: conversation.contact.phone,
+                profilePicUrl: conversation.contact.profilePicUrl,
+              }
+            : null,
+          messages: conversation.messages || [],
+        },
+      },
     });
   },
 );
@@ -58,7 +77,26 @@ export const getConversation = catchAsync(
 
     res.status(200).json({
       status: "success",
-      data: { conversation },
+      data: {
+        conversation: {
+          id: conversation.id,
+          subject: conversation.subject,
+          status: conversation.status,
+          lastMessage: conversation.lastMessage || null,
+          lastMessageAt: conversation.lastMessageAt || null,
+          isGroup: conversation.isGroup,
+          tags: conversation.tags,
+          contact: conversation.contact
+            ? {
+                id: conversation.contact.id,
+                name: conversation.contact.name,
+                phone: conversation.contact.phone,
+                profilePicUrl: conversation.contact.profilePicUrl,
+              }
+            : null,
+          messages: conversation.messages || [],
+        },
+      },
     });
   },
 );
@@ -113,7 +151,7 @@ export const replyToConversation = catchAsync(
       const errorMessage = isError ? error.message : "Error desconocido";
       const statusCode = (error as { statusCode?: number })?.statusCode || 500;
 
-      // 🛡️ DEBUG: Return full error details
+      // [SEC] DEBUG: Return full error details
       res.status(statusCode).json({
         status: "error",
         message: errorMessage,
@@ -170,6 +208,28 @@ export const toggleGroupSync = catchAsync(
       data: {
         syncEnabled: conversation.syncEnabled,
       },
+    });
+  },
+);
+
+export const reactToMessage = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user || !req.companyId) throw new AppError("Not authorized", 401);
+
+    const { id: conversationId, messageId } = req.params;
+    const { reaction } = req.body;
+
+    await conversationService.reactToMessage(
+      req.companyId,
+      conversationId,
+      messageId,
+      reaction,
+      req.user.id,
+    );
+
+    res.status(200).json({
+      status: "success",
+      data: { reaction },
     });
   },
 );

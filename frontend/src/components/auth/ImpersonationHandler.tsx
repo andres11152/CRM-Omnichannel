@@ -24,7 +24,7 @@ export const ImpersonationHandler = () => {
         const token = params.get('impersonate');
 
         if (token) {
-            console.log("🕵️ Detectado token de impersonation...");
+            console.log("️ Detectado token de impersonation...");
             try {
                 // Decode token manually to get minimal user info
                 // In a production app, you might want to verify this token with the backend '/me' endpoint
@@ -51,7 +51,7 @@ export const ImpersonationHandler = () => {
                      login(user, token);
                      
                      toast.success(`Accediendo como ${user.role}...`);
-                     console.log("✅ Impersonation exitosa:", user);
+                     console.log("[OK] Impersonation exitosa:", user);
                      
                      // Clean URL
                      window.history.replaceState({}, document.title, window.location.pathname);
@@ -63,7 +63,7 @@ export const ImpersonationHandler = () => {
                      // setTimeout(() => window.location.reload(), 500); 
                 }
             } catch (e) {
-                console.error("❌ Fallo al procesar token de impersonation", e);
+                console.error("[ERROR] Fallo al procesar token de impersonation", e);
                 toast.error("Token de acceso invlido.");
             }
         }

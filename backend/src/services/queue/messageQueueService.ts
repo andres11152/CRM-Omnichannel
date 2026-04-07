@@ -62,14 +62,14 @@ class MessageQueueService {
     if (!this.queues.has(companyId)) {
       const redisUrl = process.env.REDIS_URL;
       const redisAdvancedOpts = {
-        maxRetriesPerRequest: null, // 🔥 CRITICAL for Bull reliability
+        maxRetriesPerRequest: null, //  CRITICAL for Bull reliability
         enableReadyCheck: false,
         connectTimeout: 30000,
         retryStrategy: (times: number) => Math.min(times * 50, 2000),
         family: 4,
         tls: redisUrl?.startsWith("rediss://")
           ? { rejectUnauthorized: false }
-          : undefined, // 🔥 Render SSL Fix
+          : undefined, //  Render SSL Fix
       };
 
       const defaultJobOptions: Bull.JobOptions = {
@@ -109,7 +109,7 @@ class MessageQueueService {
 
       // Event listeners for monitoring
       queue.on("error", (error) => {
-        // 🤫 SILENCE KNOWN NETWORK NOISE
+        //  SILENCE KNOWN NETWORK NOISE
         if (
           error.message?.includes("ECONNRESET") ||
           error.message?.includes("ETIMEDOUT") ||
@@ -130,7 +130,7 @@ class MessageQueueService {
       });
 
       queue.on("completed", (job) => {
-        Logger.info(`[Queue:${companyId}] ✅ Job ${job.id} completed`);
+        Logger.info(`[Queue:${companyId}] [OK] Job ${job.id} completed`);
       });
 
       this.queues.set(companyId, queue);
@@ -153,7 +153,7 @@ class MessageQueueService {
     });
 
     Logger.info(
-      `[Queue:${jobData.companyId}] 📥 Enqueued job ${job.id} (${
+      `[Queue:${jobData.companyId}]  Enqueued job ${job.id} (${
         jobData.media?.type || "text"
       })`,
     );

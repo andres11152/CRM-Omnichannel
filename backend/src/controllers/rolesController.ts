@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
-import { rolesService } from "@/services/rolesService";
+import { rolesService } from "@/services/RolesService";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 
 /**
- * 🔐 ROLES CONTROLLER
+ * [AUTH] ROLES CONTROLLER
  * Facade for RBAC operations
  */
 

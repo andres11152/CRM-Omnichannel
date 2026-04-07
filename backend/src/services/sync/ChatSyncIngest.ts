@@ -4,6 +4,7 @@ import { Channel, MessageDirection, Prisma } from "@prisma/client";
 import {
   WAMessage,
   isJidBroadcast,
+  WASocket,
 } from "@whiskeysockets/baileys";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { reactionRepository } from "@/repositories/ReactionRepository";
@@ -11,7 +12,7 @@ import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionReposit
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { TenantContextManager } from "@/config/tenantContext";
 import { syncMediaService } from "./SyncMediaService";
-import { syncMessageParser } from "./SyncMessageParser";
+import { syncMessageParser, ParsedMessage } from "./SyncMessageParser";
 import { syncRepositoryHelper } from "./SyncRepositoryHelper";
 
 export interface HistoryContact {
@@ -28,7 +29,7 @@ export interface HistoryChat {
 }
 
 /**
- * 🏪 MINIMAL BAILEYS STORE INTERFACE
+ *  MINIMAL BAILEYS STORE INTERFACE
  */
 export interface BaileysStore {
   messages: Record<string, WAMessage[]>;
@@ -36,12 +37,16 @@ export interface BaileysStore {
   getPhoneFromLid?: (lid: string) => string | undefined;
 }
 
+/**
+ * CHAT SYNC INGEST
+ * Handles high-volume message ingestion from WhatsApp history and context sync.
+ */
 export class ChatSyncIngest {
   private activeContextSyncs = new Set<string>();
 
-  // ────────────────────────────────────────────────
+  // ------------------------------------------------
   // HISTORY SYNC (Bulk Ingest on Connection)
-  // ────────────────────────────────────────────────
+  // ------------------------------------------------
 
   async handleHistorySync(
     companyId: string,
@@ -56,7 +61,7 @@ export class ChatSyncIngest {
         { companyId, userId: "system", requestId: `history-sync-${companyId}` },
         async () => {
           try {
-            Logger.info(`[ChatSync] 📥 History Ingest Started | ${messages?.length || 0} msgs, ${chats?.length || 0} chats`);
+            Logger.info(`[ChatSync] History Ingest Started | ${messages?.length || 0} msgs, ${chats?.length || 0} chats`);
 
             const store = await this.resolveStore(companyId, contacts);
             const admin = await syncRepositoryHelper.getAdminUser(companyId);
@@ -87,9 +92,9 @@ export class ChatSyncIngest {
               await this.ingestConversationBatch(companyId, phone, chatMsgs, admin.id);
             }
 
-            Logger.info(`[ChatSync] 🏁 History Ingest Complete for ${companyId}`);
+            Logger.info(`[ChatSync] History Ingest Complete for ${companyId}`);
           } catch (err: unknown) {
-            Logger.error(`[ChatSync] ❌ Fatal History Ingest Failure:`, {
+            Logger.error(`[ChatSync] ERROR: Fatal History Ingest Failure:`, {
               companyId,
               error: err instanceof Error ? err.message : String(err),
               stack: err instanceof Error ? err.stack : undefined
@@ -100,16 +105,18 @@ export class ChatSyncIngest {
     });
   }
 
-  // ────────────────────────────────────────────────
+  // ------------------------------------------------
   // CONTEXT SYNC (On-Demand)
-  // ────────────────────────────────────────────────
+  // ------------------------------------------------
 
   async contextSync(companyId: string, conversationId: string, channelId: string): Promise<void> {
     const lockKey = `${companyId}:${conversationId}`;
     if (this.activeContextSyncs.has(lockKey)) return;
 
     this.activeContextSyncs.add(lockKey);
-    gateway.emitToCompany(companyId, "sync:started", { conversationId, channelId, type: "chat_context" });
+    gateway.emitToCompany(companyId, "conversation:sync_started", { conversationId, channelId, type: "chat_context" });
+    
+    let syncedCount = 0;
 
     try {
       const { whatsappService } = await import("@/whatsapp");
@@ -132,12 +139,11 @@ export class ChatSyncIngest {
 
       const recent = messages.slice(-500);
       for (const msg of recent) {
-        await this.processMessage(companyId, channelId, msg, false, admin.id);
+        const result = await this.processMessage(companyId, channelId, msg, false, admin.id);
+        if (result === "new") syncedCount++;
       }
-
-      gateway.emitToCompany(companyId, "conversation:history_synced", { conversationId, channelId });
     } catch (err: unknown) {
-      Logger.error(`[ContextSync] ❌ Failed for ${channelId}:`, {
+      Logger.error(`[ContextSync] ERROR: Failed for ${channelId}:`, {
         companyId,
         channelId,
         conversationId,
@@ -146,6 +152,12 @@ export class ChatSyncIngest {
       });
     } finally {
       this.activeContextSyncs.delete(lockKey);
+      // ALWAYS emit finished event to unlock the UI, even if it returns early or fails!
+      gateway.emitToCompany(companyId, "conversation:history_synced", { 
+        conversationId, 
+        channelId, 
+        newMessages: syncedCount 
+      });
     }
   }
 
@@ -162,7 +174,9 @@ export class ChatSyncIngest {
   ): Promise<"new" | "duplicate" | "skipped"> {
     if (!syncMessageParser.isValid(msg)) return "skipped";
 
-    const whatsappMessageId = msg.key.id!;
+    const whatsappMessageId = msg.key.id;
+    if (!whatsappMessageId) return "skipped";
+
     const existing = await messageRepository.findFirst({ where: { whatsappMessageId, companyId } });
 
     if (existing) {
@@ -173,7 +187,10 @@ export class ChatSyncIngest {
     if (dryRun) return "new";
 
     const isGroup = WhatsAppIdUtils.isGroup(channelId);
-    const phone = isGroup ? channelId : WhatsAppIdUtils.getPhoneNumber(channelId) || channelId;
+    // Strip @g.us from group JID to match Orchestrator's DB channelId format.
+    const phone = isGroup 
+      ? WhatsAppIdUtils.cleanChannelId(channelId) 
+      : (WhatsAppIdUtils.getPhoneNumber(channelId) || channelId);
 
     const { conversation, customerUserId } = await syncRepositoryHelper.ensureConversation({
       companyId,
@@ -181,18 +198,21 @@ export class ChatSyncIngest {
       isGroup,
     });
 
-    if (!conversation) return "skipped"; // 🛡️ Invalid phone (LID guard)
+    if (!conversation) return "skipped"; // Invalid phone (LID guard)
 
-    const parsed = syncMessageParser.parseContent(msg);
+    const parsed: ParsedMessage | null = syncMessageParser.parseContent(msg);
     if (!parsed) return "skipped";
 
     if (parsed.type === "reaction") {
-      await this.handleReaction(companyId, parsed.content, customerUserId || fallbackSenderId);
+      const reactionContent = parsed.content as { key?: { id?: string }, text?: string | null } | undefined;
+      if (reactionContent) {
+        await this.handleReaction(companyId, reactionContent, customerUserId || fallbackSenderId);
+      }
       return "skipped";
     }
 
     // Media Handling
-    let mediaMeta = {};
+    let mediaMeta: Record<string, unknown> = {};
     if (parsed.mediaType) {
       const { url, mimetype } = await syncMediaService.downloadAndUpload({
         companyId,
@@ -216,6 +236,13 @@ export class ChatSyncIngest {
       };
     }
 
+    const metadata: Record<string, unknown> = {
+      origin: "sync",
+      ...mediaMeta,
+      ...(parsed.contextInfo || {}),
+      revoked: parsed.textContent.includes("eliminado")
+    };
+
     await messageRepository.create({
       data: {
         companyId,
@@ -226,11 +253,7 @@ export class ChatSyncIngest {
         direction: parsed.direction === "OUTBOUND" ? MessageDirection.OUTBOUND : MessageDirection.INBOUND,
         senderId: parsed.direction === "OUTBOUND" ? fallbackSenderId : (customerUserId || fallbackSenderId),
         status: parsed.textContent.includes("eliminado") ? "REVOKED" : "DELIVERED",
-        metadata: {
-          origin: "sync",
-          ...mediaMeta,
-          revoked: parsed.textContent.includes("eliminado")
-        } as Prisma.InputJsonValue,
+        metadata: metadata as Prisma.InputJsonValue,
         createdAt: new Date(syncMessageParser.getTimestamp(msg.messageTimestamp) * 1000)
       }
     });
@@ -250,12 +273,18 @@ export class ChatSyncIngest {
       isGroup,
     });
 
-    if (!conversation) return; // 🛡️ Skipped invalid phone (LID guard)
+    if (!conversation) return; // Skipped invalid phone (LID guard)
 
     const validBatch: Prisma.MessageCreateManyInput[] = [];
     for (const msg of msgs) {
-      const parsed = syncMessageParser.parseContent(msg);
+      const parsed: ParsedMessage | null = syncMessageParser.parseContent(msg);
       if (!parsed || parsed.type !== "message") continue;
+
+      const metadata: Record<string, unknown> = { 
+        origin: "history_sync", 
+        mediaType: parsed.mediaType,
+        ...(parsed.contextInfo || {})
+      };
 
       validBatch.push({
         companyId,
@@ -266,7 +295,7 @@ export class ChatSyncIngest {
         direction: parsed.direction === "OUTBOUND" ? MessageDirection.OUTBOUND : MessageDirection.INBOUND,
         senderId: parsed.direction === "OUTBOUND" ? adminId : (customerUserId || adminId),
         status: parsed.textContent.includes("eliminado") ? "REVOKED" : "DELIVERED",
-        metadata: { origin: "history_sync", mediaType: parsed.mediaType } as Prisma.InputJsonValue,
+        metadata: metadata as Prisma.InputJsonValue,
         createdAt: new Date(syncMessageParser.getTimestamp(msg.messageTimestamp) * 1000)
       });
     }
@@ -309,7 +338,7 @@ export class ChatSyncIngest {
   private resolveJid(jid: string, store: BaileysStore | null): string | null {
     if (jid.endsWith("@g.us")) return jid;
 
-    // 🛡️ LID RESOLUTION: WhatsApp internal IDs must be resolved to real phones
+    // [SEC] LID RESOLUTION: WhatsApp internal IDs must be resolved to real phones
     if (jid.includes("@lid")) {
       // Strategy 1: getPhoneFromLid helper
       if (store?.getPhoneFromLid) {
@@ -324,8 +353,7 @@ export class ChatSyncIngest {
         if (mapped) return mapped.split("@")[0];
       }
 
-      // ⛔ ENTERPRISE FIX: Do NOT return the raw LID as a phone number!
-      // Returning null = skip this message. It prevents hundreds of fake contacts.
+      // ENTERPRISE FIX: Do NOT return the raw LID as a phone number!
       return null;
     }
 
@@ -355,8 +383,8 @@ export class ChatSyncIngest {
 
   private async getSessionStore(sessionId: string): Promise<BaileysStore | null> {
     const { whatsappService } = await import("@/whatsapp");
-    const ws = whatsappService as unknown as { stores?: Map<string, BaileysStore> };
-    return ws.stores?.get(sessionId) || null;
+    const store = whatsappService.getSessionStore(sessionId);
+    return store as BaileysStore | null;
   }
 
   public extractMessagesFromStore(store: BaileysStore, since?: Date | string, targetJid?: string): WAMessage[] {
@@ -368,7 +396,7 @@ export class ChatSyncIngest {
     if (targetJid) {
       all = store.messages[targetJid] || [];
       if (all.length === 0 && store.lidToPhone) {
-        // 🛡️ Search for LID mapped to this phone JID
+        // [SEC] Search for LID mapped to this phone JID
         for (const [lidBase, phone] of Object.entries(store.lidToPhone)) {
           if (phone === targetJid) {
             all = store.messages[`${lidBase}@lid`] || [];
@@ -389,15 +417,32 @@ export class ChatSyncIngest {
     return sorted;
   }
 
-  private async fetchFromServer(sessionId: string, jid: string, count: number) {
+  private async fetchFromServer(sessionId: string, jid: string, count: number): Promise<WAMessage[] | null> {
     const { whatsappService } = await import("@/whatsapp");
-    const ws = whatsappService as unknown as {
-      sessions?: Map<string, { sock?: { fetchMessagesFromWAServer?: (jid: string, count: number) => Promise<WAMessage[]> } }>;
+    const sock = whatsappService.getSocket(sessionId);
+    
+    // Check if sock is available
+    if (!sock) return null;
+
+    // [SEC] Baileys standard history fetch method is usually called 'fetchMessagesFromWA'
+    // in modern versions or requires a manual query execution.
+    const augmentedSock = sock as WASocket & { 
+      fetchMessagesFromWA?: (jid: string, count: number, cursor?: unknown) => Promise<WAMessage[]> 
     };
-    const sock = ws.sessions?.get(sessionId)?.sock;
-    if (sock?.fetchMessagesFromWAServer) {
-      return await sock.fetchMessagesFromWAServer(jid, count);
+
+    try {
+      if (augmentedSock?.fetchMessagesFromWA) {
+        Logger.info(`[ChatSync] Calling fetchMessagesFromWA for ${jid} (count: ${count})`);
+        return await augmentedSock.fetchMessagesFromWA(jid, count);
+      }
+      
+      // Fallback: If no direct method, the history should eventually arrive via events 
+      // if syncFullHistory is true. But for on-demand, we really need this.
+      Logger.warn(`[ChatSync] WARNING: Socket for ${sessionId} does not support fetchMessagesFromWA.`);
+    } catch (err) {
+      Logger.error(`[ChatSync] ERROR: Error fetching from WA server for ${jid}:`, err);
     }
+    
     return null;
   }
 }

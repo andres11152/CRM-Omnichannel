@@ -20,7 +20,7 @@ export const createApp = (): express.Application => {
 
   // 2. Security Headers & Parsing
   securityMiddleware(app);
-  app.use(cookieParser()); // 🍪 Enterprise: Parse HttpOnly cookies
+  app.use(cookieParser()); //  Enterprise: Parse HttpOnly cookies
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 

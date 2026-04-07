@@ -155,7 +155,7 @@ export const QueueDashboard: React.FC = () => {
         const aiAgents: Agent[] = assistantsList.map(
           (assistant: { id: string; name: string; modelName?: string }) => ({
             id: `ai-${assistant.id}`,
-            name: `🤖 ${assistant.name}`,
+            name: `[AI] ${assistant.name}`,
             email: `IA Gemini ${assistant.modelName || ""}`,
             avatar: "", // Could use a robot icon
             status: "online" as const, // AI is always online
@@ -385,7 +385,7 @@ export const QueueDashboard: React.FC = () => {
         );
 
         // Optional: Show success toast instead of modal for flow
-        console.log(`✅ Ticket asignado a ${agent.name}`);
+        console.log(`[OK] Ticket asignado a ${agent.name}`);
       })
       .catch((err) => {
         console.error("Error assigning ticket:", err);

@@ -1,12 +1,12 @@
 import { BaseEntity } from "./common.types";
 
 /**
- * 👥 Contact & CRM Types
+ * [CONTACTS] Contact & CRM Types
  */
 
 export type ContactType = "LEAD" | "CUSTOMER" | "PARTNER";
 export type ContactStatus = "ACTIVE" | "ARCHIVED" | "BLOCKED";
-export type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "INSTAGRAM";
+import { Channel } from "../types";
 
 export interface Tag extends BaseEntity {
   name: string;
@@ -22,6 +22,7 @@ export interface Contact extends BaseEntity {
 
   type: ContactType;
   status: ContactStatus;
+  channel?: Channel;
 
   // Arrays & JSON
   tags: string[];
@@ -31,25 +32,27 @@ export interface Contact extends BaseEntity {
   lastInteractionAt?: string;
   ltv?: number; // Lifetime Value
 
-  avatarUrl?: string;
+  avatarUrl: string;
   notes?: string;
 
-  // 🏢 Enterprise Fields (Runtime Enrichment)
+  //  Enterprise Fields (Runtime Enrichment)
   isGroup?: boolean;
   profilePicUrl?: string;
   channelId?: string;
   about?: string;
   realContactId?: string;
-  whatsappSessionIndex?: number; // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
-  whatsappSessionPhone?: string; // 📞 Phone number for tooltip
+  whatsappSessionIndex?: number; // [APP] Multi-WhatsApp Session Identification (#1, #2, #3)
+  whatsappSessionPhone?: string; // [PHONE] Phone number for tooltip
 
   // Runtime UI State
-  lastMessage?: string;
-  lastMessageTime?: Date | string;
+  lastMessage: string;
+  lastMessageTime: Date | string;
   unreadCount?: number;
   assignedMode?: "bot" | "human";
   queueName?: string;
   assignedAgentName?: string;
+  assignedToId?: string | null;
+  ticketId?: string;
 }
 
 // For Forms/Creation

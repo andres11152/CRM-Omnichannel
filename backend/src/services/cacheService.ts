@@ -40,7 +40,7 @@ class CacheService {
 
       await this.client.connect();
       this.isConnected = true;
-      Logger.info("[Cache] ✅ Redis cache connected");
+      Logger.info("[Cache] [OK] Redis cache connected");
     } catch (error) {
       Logger.error("[Cache] Failed to connect to Redis:", error);
       this.client = null;

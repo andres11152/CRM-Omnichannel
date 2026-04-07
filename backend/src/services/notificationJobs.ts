@@ -17,12 +17,12 @@ type CompanyWithPlan = Company & { plan: Plan | null };
 
 export class NotificationJobs {
   /**
-   * 💰 Check Billing & Quotas (runs daily)
+   * [BILLING] Check Billing & Quotas (runs daily)
    */
   async checkBillingAndQuotas() {
     Logger.info("[NotificationJobs] Starting billing and quota checks");
 
-    // 🛡️ SYSTEM MODE: Cron job needs access to all companies
+    // [SEC] SYSTEM MODE: Cron job needs access to all companies
     const companiesOutput = await TenantContextManager.runAsSystem(async () =>
       companyRepository.findMany({
         where: {
@@ -60,14 +60,14 @@ export class NotificationJobs {
   }
 
   /**
-   * 🎫 Check Inactive Tickets (runs every 6 hours)
+   *  Check Inactive Tickets (runs every 6 hours)
    */
   async checkInactiveTickets() {
     Logger.info("[NotificationJobs] Checking inactive tickets");
 
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
-    // 🛡️ SYSTEM MODE: Cron job needs access to all tickets across tenants
+    // [SEC] SYSTEM MODE: Cron job needs access to all tickets across tenants
     const inactiveTicketsOutput = await TenantContextManager.runAsSystem(
       async () =>
         ticketRepository.findMany({
@@ -94,12 +94,12 @@ export class NotificationJobs {
   }
 
   /**
-   * 📱 Check WhatsApp Sessions (runs every hour)
+   * [APP] Check WhatsApp Sessions (runs every hour)
    */
   async checkWhatsAppSessions() {
     Logger.info("[NotificationJobs] Checking WhatsApp sessions");
 
-    // 🛡️ SYSTEM MODE: Cron job needs access to all WhatsApp sessions
+    // [SEC] SYSTEM MODE: Cron job needs access to all WhatsApp sessions
     const sessions = await TenantContextManager.runAsSystem(async () =>
       whatsappSessionRepository.findManySystem({
         where: {
@@ -134,7 +134,7 @@ export class NotificationJobs {
   }
 
   /**
-   * 💾 Check Failed Backups (runs daily)
+   * [SAVE] Check Failed Backups (runs daily)
    */
   async checkFailedBackups() {
     Logger.info("[NotificationJobs] Checking failed backups");
@@ -161,7 +161,7 @@ export class NotificationJobs {
 
     // Trial expired
     if (daysRemaining <= 0) {
-      // 🛡️ SYSTEM MODE: Update company status
+      // [SEC] SYSTEM MODE: Update company status
       await TenantContextManager.runAsSystem(async () =>
         companyRepository.update(company.id, { status: "INACTIVE" }),
       );
@@ -190,7 +190,7 @@ export class NotificationJobs {
 
     // Subscription expired
     if (daysRemaining <= 0) {
-      // 🛡️ SYSTEM MODE: Update company status
+      // [SEC] SYSTEM MODE: Update company status
       await TenantContextManager.runAsSystem(async () =>
         companyRepository.update(company.id, { status: "OVERDUE" }),
       );
@@ -211,7 +211,7 @@ export class NotificationJobs {
       1,
     );
 
-    // 🛡️ SYSTEM MODE: Count messages for quota check
+    // [SEC] SYSTEM MODE: Count messages for quota check
     const messageCount = await TenantContextManager.runAsSystem(async () =>
       messageRepository.count({
         where: {
@@ -247,7 +247,7 @@ export class NotificationJobs {
     const limit = company.plan.maxContacts || Infinity;
     if (limit === Infinity) return;
 
-    // 🛡️ SYSTEM MODE: Count contacts for quota check
+    // [SEC] SYSTEM MODE: Count contacts for quota check
     const contactCount = await TenantContextManager.runAsSystem(async () =>
       statsRepository.countContacts({
         where: { companyId: company.id },
@@ -282,7 +282,7 @@ export class NotificationJobs {
     if (limit === Infinity) return;
 
     // Calculate total storage used
-    // 🛡️ SYSTEM MODE: Aggregate media size for quota check
+    // [SEC] SYSTEM MODE: Aggregate media size for quota check
     const mediaSize = await TenantContextManager.runAsSystem(async () =>
       statsRepository.sumMediaSize(company.id),
     );

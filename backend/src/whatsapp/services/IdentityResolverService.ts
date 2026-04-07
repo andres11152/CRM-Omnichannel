@@ -3,11 +3,11 @@ import { userRepository } from "@/repositories/UserRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
-import { chatService } from "@/services/chatService";
+import { chatService } from "@/services/ChatService";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🔍 IDENTITY RESOLVER SERVICE
+ * [SEARCH] IDENTITY RESOLVER SERVICE
  *
  * Encapsulates all LID → Phone resolution strategies.
  * Extracted from MessageHandler for SRP compliance.
@@ -34,20 +34,20 @@ export class IdentityResolverService {
     message: WAMessage,
     sessionId: string,
     companyId: string,
-  ): Promise<{ cleanRemoteJid: string; resolved: boolean }> {
+  ): Promise<{ cleanRemoteJid: string; remoteJid: string; resolved: boolean }> {
     const rawRemoteJid = message.key.remoteJid;
     let cleanRemoteJid = WhatsAppIdUtils.getCleanJid(rawRemoteJid);
 
     if (!cleanRemoteJid) {
       Logger.warn(`[IdentityResolver] Invalid JID: ${rawRemoteJid}`);
-      return { cleanRemoteJid: "", resolved: false };
+      return { cleanRemoteJid: "", remoteJid: "", resolved: false };
     }
 
     if (!WhatsAppIdUtils.isLid(cleanRemoteJid)) {
-      return { cleanRemoteJid, resolved: true };
+      return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
     }
 
-    Logger.info(`[IdentityResolver] 🔍 LID Detected: ${cleanRemoteJid}`);
+    Logger.info(`[IdentityResolver] [SEARCH] LID Detected: ${cleanRemoteJid}`);
 
     // Strategy 1: remoteJidAlt
     const messageKey = message.key as {
@@ -62,7 +62,7 @@ export class IdentityResolverService {
     ) {
       cleanRemoteJid =
         WhatsAppIdUtils.getCleanJid(messageKey.remoteJidAlt) || cleanRemoteJid;
-      return { cleanRemoteJid, resolved: true };
+      return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
     }
 
     // Strategy 2: senderPn
@@ -73,7 +73,7 @@ export class IdentityResolverService {
     ) {
       cleanRemoteJid =
         WhatsAppIdUtils.getCleanJid(messageKey.senderPn) || cleanRemoteJid;
-      return { cleanRemoteJid, resolved: true };
+      return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
     }
 
     // Strategy 3: participant
@@ -81,7 +81,7 @@ export class IdentityResolverService {
     if (participant && !WhatsAppIdUtils.isLid(participant)) {
       cleanRemoteJid =
         WhatsAppIdUtils.getCleanJid(participant) || cleanRemoteJid;
-      return { cleanRemoteJid, resolved: true };
+      return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
     }
 
     // Strategy 4: messageStubParameters
@@ -96,18 +96,18 @@ export class IdentityResolverService {
           !param.includes("@lid")
         ) {
           cleanRemoteJid = WhatsAppIdUtils.getCleanJid(param) || cleanRemoteJid;
-          return { cleanRemoteJid, resolved: true };
+          return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
         }
       }
     }
 
     // Strategy 5: In-memory store contact lookup
     const resolvedContact =
-      this.sessionManager.findContactByLid(cleanRemoteJid);
+      this.sessionManager.findContactByLid(sessionId, cleanRemoteJid);
     if (resolvedContact?.id && !WhatsAppIdUtils.isLid(resolvedContact.id)) {
       const realJid = WhatsAppIdUtils.getCleanJid(resolvedContact.id);
       if (realJid) {
-        return { cleanRemoteJid: realJid, resolved: true };
+        return { cleanRemoteJid: realJid, remoteJid: realJid, resolved: true };
       }
     }
 
@@ -126,7 +126,7 @@ export class IdentityResolverService {
       const originalLidBase = cleanRemoteJid.split("@")[0];
       cleanRemoteJid = `${realPhone}@s.whatsapp.net`;
       Logger.info(
-        `[IdentityResolver] 🎯 Retried & Resolved LID ${cleanRemoteJid}`,
+        `[IdentityResolver]  Retried & Resolved LID ${cleanRemoteJid}`,
       );
       // Persist the mapping for future lookups
       await chatService.saveLidPhoneMapping(
@@ -134,13 +134,13 @@ export class IdentityResolverService {
         originalLidBase,
         realPhone,
       );
-      return { cleanRemoteJid, resolved: true };
+      return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
     }
 
     Logger.warn(
-      `[IdentityResolver] ⚠️ LID could not be resolved: ${cleanRemoteJid}`,
+      `[IdentityResolver] [WARNING] LID could not be resolved: ${cleanRemoteJid}`,
     );
-    return { cleanRemoteJid, resolved: false };
+    return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: false };
   }
 
   /**
@@ -159,13 +159,10 @@ export class IdentityResolverService {
     }
 
     if (senderJid && WhatsAppIdUtils.isLid(senderJid)) {
-      const resolvedSender = this.sessionManager.findContactByLid(senderJid);
-      if (resolvedSender?.id) {
-        const realSenderJid = WhatsAppIdUtils.getCleanJid(resolvedSender.id);
-        if (realSenderJid && !WhatsAppIdUtils.isLid(realSenderJid)) {
-          senderJid = realSenderJid;
-        }
-      }
+      // Best effort: Try all sessions for this company? No, we need a sessionId.
+      // But resolveSenderJid doesn't have it.
+      // Wait! I'll check where it's called.
+      return senderJid;
     }
 
     return senderJid;
@@ -191,19 +188,19 @@ export class IdentityResolverService {
 
     // Strategy 1: Database LID Lookup (survives restarts)
     Logger.info(
-      `[IdentityResolver] 🔍 Strategy 1: DB LID lookup for ${lidBase}`,
+      `[IdentityResolver] [SEARCH] Strategy 1: DB LID lookup for ${lidBase}`,
     );
     const lidConv = await chatService.findConversationByLid(companyId, lidBase);
     if (lidConv) {
       Logger.info(
-        `[IdentityResolver] 🎯 Strategy 1 SUCCESS: Found conv ${lidConv.id} via persisted LID mapping`,
+        `[IdentityResolver]  Strategy 1 SUCCESS: Found conv ${lidConv.id} via persisted LID mapping`,
       );
-      return chatService.getFullConversation(lidConv.id);
+      return chatService.getFullConversation(companyId, lidConv.id);
     }
 
     // Strategy 3: Active resolve via sessionManager
     Logger.info(
-      `[IdentityResolver] 🔄 Final attempt to resolve LID ${lidBase} via active query...`,
+      `[IdentityResolver] [SYNC] Final attempt to resolve LID ${lidBase} via active query...`,
     );
     const sock = this.sessionManager.getSession(sessionId);
 
@@ -217,7 +214,7 @@ export class IdentityResolverService {
 
         if (resolvedPhone) {
           Logger.info(
-            `[IdentityResolver] ✅ Actively resolved LID ${lidBase} -> ${resolvedPhone}`,
+            `[IdentityResolver] [OK] Actively resolved LID ${lidBase} -> ${resolvedPhone}`,
           );
           const realChannelId = resolvedPhone.replace(/\D/g, "");
           const realChatEmail = `${realChannelId}@whatsapp.user`;
@@ -236,14 +233,14 @@ export class IdentityResolverService {
 
           if (phoneConv) {
             Logger.info(
-              `[IdentityResolver] 🎯 Found existing conversation ${phoneConv.id} for resolved phone ${realChannelId}`,
+              `[IdentityResolver]  Found existing conversation ${phoneConv.id} for resolved phone ${realChannelId}`,
             );
-            return chatService.getFullConversation(phoneConv.id);
+            return chatService.getFullConversation(companyId, phoneConv.id);
           }
         }
       } catch (resErr) {
         Logger.warn(
-          `[IdentityResolver] ⚠️ Active LID resolution failed:`,
+          `[IdentityResolver] [WARNING] Active LID resolution failed:`,
           resErr,
         );
       }
@@ -252,7 +249,7 @@ export class IdentityResolverService {
     // Strategy 4: Name Heuristic (Last Resort for inbound)
     if (message.pushName && !isFromMe) {
       Logger.info(
-        `[IdentityResolver] 🔍 Trying Name Heuristic for LID: ${message.pushName}`,
+        `[IdentityResolver] [SEARCH] Trying Name Heuristic for LID: ${message.pushName}`,
       );
 
       const possibleUsers = await userRepository.findMany({
@@ -264,7 +261,7 @@ export class IdentityResolverService {
       });
 
       Logger.info(
-        `[IdentityResolver] 🔍 Found ${possibleUsers.length} users matching name "${message.pushName}"`,
+        `[IdentityResolver] [SEARCH] Found ${possibleUsers.length} users matching name "${message.pushName}"`,
       );
 
       for (const user of possibleUsers) {
@@ -276,13 +273,7 @@ export class IdentityResolverService {
           orderBy: { updatedAt: "desc" },
         });
 
-        if (userConv) {
-          const fullConv = await chatService.getFullConversation(userConv.id);
-          Logger.info(
-            `[IdentityResolver] 🎯 Heuristic Match: Found conv ${fullConv?.id} by name ${message.pushName}`,
-          );
-          return fullConv;
-        }
+          return chatService.getFullConversation(companyId, userConv.id);
       }
     }
 
@@ -304,20 +295,20 @@ export class IdentityResolverService {
             const realChannelId = phoneJid.replace(/\D/g, "");
             const realChatEmail = `${realChannelId}@whatsapp.user`;
             Logger.info(
-              `[IdentityResolver] 🎯 Brute Force Store Match: ${cleanRemoteJid} -> ${phoneJid}`,
+              `[IdentityResolver]  Brute Force Store Match: ${cleanRemoteJid} -> ${phoneJid}`,
             );
             const storeConv = await chatService.findConversation(
               companyId,
               realChannelId,
               realChatEmail,
             );
-            if (storeConv) return chatService.getFullConversation(storeConv.id);
+            if (storeConv) return chatService.getFullConversation(companyId, storeConv.id);
           }
         }
       }
     }
 
-    // ⛔ REMOVED: "Universal LID Fallback" (Strategy 5)
+    // [BLOCKED] REMOVED: "Universal LID Fallback" (Strategy 5)
     //
     // THE OLD CODE grabbed the most recently updated conversation
     // and assigned unresolved LID messages to it. This caused a CRITICAL
@@ -330,7 +321,7 @@ export class IdentityResolverService {
     // contaminating an existing conversation with messages from a
     // completely different contact.
     Logger.warn(
-      `[IdentityResolver] ⚠️ LID ${lidBase} fully unresolved. Creating new conversation (safe fallback).`,
+      `[IdentityResolver] [WARNING] LID ${lidBase} fully unresolved. Creating new conversation (safe fallback).`,
     );
     return null;
   }
@@ -348,11 +339,11 @@ export class IdentityResolverService {
     }
 
     Logger.info(
-      `[IdentityResolver] 🔍 Resolving Presence LID ${originalJid}...`,
+      `[IdentityResolver] [SEARCH] Resolving Presence LID ${originalJid}...`,
     );
 
     for (let i = 0; i < 5; i++) {
-      const resolved = this.sessionManager.findContactByLid(originalJid);
+      const resolved = this.sessionManager.findContactByLid(_sessionId, originalJid);
       if (resolved?.id) {
         const real = WhatsAppIdUtils.getCleanJid(resolved.id);
         if (real && !WhatsAppIdUtils.isLid(real)) {

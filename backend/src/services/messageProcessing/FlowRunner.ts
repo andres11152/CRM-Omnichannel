@@ -11,7 +11,7 @@ interface FlowMediaResult {
 type FlowResult = string | FlowMediaResult;
 
 /**
- * 🤖 FLOW RUNNER
+ * [AI] FLOW RUNNER
  *
  * Single Responsibility: Executes the Flow Engine for incoming messages.
  * If a flow handles the message, sends responses back via WhatsApp.
@@ -45,7 +45,7 @@ export class FlowRunner {
       }
 
       Logger.info(
-        `[FlowRunner] 🤖 Flow Engine handled message. Sending ${flowResults.length} responses.`,
+        `[FlowRunner] [AI] Flow Engine handled message. Sending ${flowResults.length} responses.`,
       );
 
       await this.sendFlowResponses(

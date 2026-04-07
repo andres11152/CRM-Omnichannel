@@ -19,7 +19,7 @@ setInterval(
 );
 
 /**
- * 🛡️ CSRF Token Generator
+ * [SEC] CSRF Token Generator
  * Generates a unique token for each user session
  */
 export const generateCsrfToken = (userId: string): string => {
@@ -31,7 +31,7 @@ export const generateCsrfToken = (userId: string): string => {
 };
 
 /**
- * 🛡️ CSRF Token Validator Middleware
+ * [SEC] CSRF Token Validator Middleware
  * Validates CSRF token for state-changing operations (POST, PUT, DELETE, PATCH)
  */
 export const validateCsrfToken = (
@@ -86,7 +86,7 @@ export const validateCsrfToken = (
 };
 
 /**
- * 🛡️ CSRF Token Endpoint
+ * [SEC] CSRF Token Endpoint
  * GET /api/csrf-token - Returns a fresh CSRF token for the authenticated user
  */
 export const getCsrfTokenHandler = (req: Request, res: Response) => {

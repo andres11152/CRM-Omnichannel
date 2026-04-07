@@ -2,7 +2,7 @@ import { prisma } from "@/config/database";
 import { MessageTemplate, Prisma } from "@prisma/client";
 
 /**
- * 📝 MESSAGE TEMPLATE REPOSITORY
+ *  MESSAGE TEMPLATE REPOSITORY
  *
  * Handles all database operations for the MessageTemplate model.
  * Used by WhatsAppService for template-based messaging.

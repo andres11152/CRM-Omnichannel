@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🏢 QUEUE VALIDATION SCHEMAS
+ *  QUEUE VALIDATION SCHEMAS
  *
  * Validation for Queue (department groups/routing) operations
  */

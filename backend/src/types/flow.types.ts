@@ -1,5 +1,5 @@
 /**
- * 🔒 FLOW EXECUTOR TYPE DEFINITIONS
+ *  FLOW EXECUTOR TYPE DEFINITIONS
  *
  * Enterprise-grade type definitions for the chatbot flow executor engine.
  * Eliminates all `any` types for type safety and better IDE support.
@@ -9,7 +9,7 @@
  */
 
 // ============================================================================
-// 🔷 CORE FLOW SESSION TYPES
+//  CORE FLOW SESSION TYPES
 // ============================================================================
 
 /**
@@ -40,7 +40,7 @@ export interface FlowSessionState {
 export type FlowVariables = Record<string, string | number | boolean>;
 
 // ============================================================================
-// 🔷 FLOW STRUCTURE TYPES (React Flow Schema)
+//  FLOW STRUCTURE TYPES (React Flow Schema)
 // ============================================================================
 
 /**
@@ -155,7 +155,7 @@ export interface FlowStructure {
 }
 
 // ============================================================================
-// 🔷 TRIGGER TYPES
+//  TRIGGER TYPES
 // ============================================================================
 
 /**
@@ -171,7 +171,7 @@ export interface KeywordTriggerData {
 export type FlowTriggerData = KeywordTriggerData | Record<string, unknown>;
 
 // ============================================================================
-// 🔷 RESPONSE TYPES
+//  RESPONSE TYPES
 // ============================================================================
 
 /**
@@ -190,7 +190,7 @@ export interface FlowMediaResponse {
 export type FlowExecutionResult = string | FlowMediaResponse | null;
 
 // ============================================================================
-// 🔷 SESSION UPDATE TYPES
+//  SESSION UPDATE TYPES
 // ============================================================================
 
 /**
@@ -207,7 +207,7 @@ export interface FlowSessionUpdate {
 }
 
 // ============================================================================
-// 🔷 PRISMA ENTITY TYPES (Subset for flow operations)
+//  PRISMA ENTITY TYPES (Subset for flow operations)
 // ============================================================================
 
 /**

@@ -23,7 +23,7 @@ interface QueueViewProps {
   tickets: Ticket[];
   activeTicketId: string | null;
   onSelectTicket: (id: string) => void;
-  // 🏢 ENTERPRISE: Transfer from Queue
+  //  ENTERPRISE: Transfer from Queue
   onTransferTicket?: (ticketId: string) => void;
 }
 
@@ -234,7 +234,7 @@ export const QueueView: React.FC<QueueViewProps> = ({
           </div>
         </div>
 
-        {/* 🏢 ENTERPRISE: Transfer Button (visible on hover) */}
+        {/*  ENTERPRISE: Transfer Button (visible on hover) */}
         {onTransferTicket && (
           <button
             onClick={(e) => {

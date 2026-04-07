@@ -2,7 +2,7 @@ import { z } from "zod";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ ENVIRONMENT VARIABLES VALIDATION
+ * [SEC] ENVIRONMENT VARIABLES VALIDATION
  *
  * Validates all required environment variables at startup.
  * FAIL FAST: If any critical variable is missing, the app will not start.
@@ -45,6 +45,12 @@ const EnvSchema = z.object({
     .string()
     .min(32, "JWT_SECRET must be at least 32 characters for security")
     .describe("Secret key for JWT token signing"),
+
+  SESSION_SECRET: z
+    .string()
+    .min(32, "SESSION_SECRET must be at least 32 characters for encryption")
+    .default("dev-secret-key-at-least-32-characters-long-crm-reply")
+    .describe("Master secret for multi-tenant data encryption"),
 
   JWT_EXPIRES_IN: z
     .string()
@@ -143,12 +149,12 @@ export function validateEnv(): Env {
   const result = EnvSchema.safeParse(process.env);
 
   if (!result.success) {
-    Logger.error("❌ ENVIRONMENT VALIDATION FAILED");
+    Logger.error("[ERROR] ENVIRONMENT VALIDATION FAILED");
     Logger.error("Missing or invalid environment variables:");
 
     result.error.errors.forEach((err) => {
       const path = err.path.join(".");
-      Logger.error(`  ❌ ${path}: ${err.message}`);
+      Logger.error(`  [ERROR] ${path}: ${err.message}`);
     });
 
     Logger.error("Check your .env file.");
@@ -158,10 +164,10 @@ export function validateEnv(): Env {
   }
 
   const parsed = result.data;
-  Logger.info(`🌍 Running in ${parsed.NODE_ENV} mode`);
+  Logger.info(` Running in ${parsed.NODE_ENV} mode`);
 
   if (parsed.NODE_ENV === "development") {
-    Logger.info("✅ strict environment validation passed");
+    Logger.info("[OK] strict environment validation passed");
   }
 
   return parsed;

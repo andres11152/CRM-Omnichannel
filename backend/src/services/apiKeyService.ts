@@ -3,7 +3,7 @@ import { apiKeyRepository } from "@/repositories/ApiKeyRepository";
 import cryptoModule from "crypto"; // To avoid naming conflicts
 
 /**
- * 🔑 API KEY CRUD SERVICE
+ * [KEY] API KEY CRUD SERVICE
  */
 export const apiKeyService = {
   async findAll(companyId: string) {

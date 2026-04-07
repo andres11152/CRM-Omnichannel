@@ -29,11 +29,11 @@ export const assignTicketToAgent = async (
       return;
     }
 
-    // 🧠 100-YEAR FIX: AI QUEUE HANDLING
+    //  100-YEAR FIX: AI QUEUE HANDLING
     // If Queue is AI-managed, trigger the bot immediately
     if (queue.type === "AI" && queue.aiAssistantId) {
       Logger.info(
-        `[AutoAssign] 🤖 Queue ${queue.name} is AI-managed. Triggering bot...`,
+        `[AutoAssign] [AI] Queue ${queue.name} is AI-managed. Triggering bot...`,
       );
 
       const ticket = (await ticketRepository.findUnique({
@@ -65,9 +65,9 @@ export const assignTicketToAgent = async (
               lastMsg.content,
               queue.companyId,
             );
-            Logger.info(`[AutoAssign] ✅ AI Response Triggered successfully`);
+            Logger.info(`[AutoAssign] [OK] AI Response Triggered successfully`);
           } catch (err) {
-            Logger.error(`[AutoAssign] ❌ Failed to trigger AI response`, err);
+            Logger.error(`[AutoAssign] [ERROR] Failed to trigger AI response`, err);
           }
         } else {
           Logger.info(`[AutoAssign] ⏩ Skipped AI: Last message was OUTBOUND`);

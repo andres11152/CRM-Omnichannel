@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { ticketService } from "@/services/ticketService";
+import { ticketService } from "@/services/TicketService";
 import { TicketPriority, TicketStatus } from "@prisma/client";
 
 // --- CONTROLLER ACTIONS ---

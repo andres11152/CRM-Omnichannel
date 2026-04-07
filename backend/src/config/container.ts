@@ -1,5 +1,5 @@
 /**
- * 🏗️ SERVICE CONTAINER (Lightweight DI)
+ * [BUILD] SERVICE CONTAINER (Lightweight DI)
  *
  * Manual, type-safe Dependency Injection container.
  * Zero external dependencies — no reflect-metadata, no decorators.

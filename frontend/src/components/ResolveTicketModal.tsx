@@ -81,7 +81,7 @@ export const ResolveTicketModal: React.FC<Props> = ({
 
   return (
     <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      {/* 🛡️ ENTERPRISE: Max height constraints and flex column layout for scrolling content */}
+      {/* [SEC] ENTERPRISE: Max height constraints and flex column layout for scrolling content */}
       <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 dark:border-reply-border-dark">
         {/* 1. Header (Sticky) */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-white dark:bg-reply-panel-dark flex-shrink-0 z-10">

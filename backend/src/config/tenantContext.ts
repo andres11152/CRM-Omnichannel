@@ -4,7 +4,7 @@ import {
 } from "../context/requestContext";
 
 /**
- * 🛡️ TENANT CONTEXT MANAGER (ADAPTER)
+ * [SEC] TENANT CONTEXT MANAGER (ADAPTER)
  *
  * This class now acts as an adapter/facade over the unified 'requestContext' store.
  * It ensures backward compatibility while enforcing a single source of truth for context.
@@ -50,7 +50,7 @@ export class TenantContextManager {
 
   /**
    * Execute callback WITHOUT tenant context enforcement
-   * ⚠️ DANGER: Use ONLY for system operations (migrations, cron jobs, etc.)
+   * [WARNING] DANGER: Use ONLY for system operations (migrations, cron jobs, etc.)
    */
   static runAsSystem<T>(callback: () => T | Promise<T>): Promise<T> {
     return contextStorage.run(

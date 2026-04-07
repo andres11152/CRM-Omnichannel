@@ -389,7 +389,7 @@ export const CompanySettings: React.FC = () => {
               onClick={() => setPickerOpen(false)}
               className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
             >
-              ✕
+              
             </button>
           </div>
 
@@ -833,7 +833,7 @@ export const CompanySettings: React.FC = () => {
                 </h3>
                 {googleCalendarConnected ? (
                   <span className="text-xs font-bold bg-green-100 text-green-800 px-3 py-1 rounded-full flex items-center gap-1">
-                    ✓ Conectado
+                     Conectado
                   </span>
                 ) : (
                   <span className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
@@ -995,7 +995,7 @@ export const CompanySettings: React.FC = () => {
                           target="_blank"
                           className="text-indigo-600 hover:underline font-bold text-xs"
                         >
-                          ➡️ Generar Contraseña Aquí
+                          ️ Generar Contraseña Aquí
                         </a>
                       </div>
                     )}
@@ -1612,7 +1612,7 @@ export const CompanySettings: React.FC = () => {
                       <div className="text-left mb-6 md:mb-0">
                         <div className="flex items-center gap-3 mb-2">
                           <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-2xl">
-                            💎
+                            [VIP]
                           </div>
                           <div>
                             <h3 className="text-2xl font-bold text-gray-800 dark:text-white leading-tight">
@@ -1811,29 +1811,29 @@ export const CompanySettings: React.FC = () => {
                         {[
                           {
                             name: "Motor de Inteligencia Artificial",
-                            icon: "⚡",
+                            icon: "",
                             enabled:
                               (planData?.plan.limits.max_ai_assistants || 0) >
                               0,
                           },
                           {
                             name: "API Access & Webhooks",
-                            icon: "🔌",
+                            icon: "",
                             enabled: true,
                           },
                           {
                             name: "Marca Blanca (White Label)",
-                            icon: "🏷️",
+                            icon: "️",
                             enabled: true,
                           },
                           {
                             name: "Soporte Prioritario",
-                            icon: "🛟",
+                            icon: "",
                             enabled: true,
                           },
                           {
                             name: "Reportes Avanzados",
-                            icon: "📊",
+                            icon: "[STAT]",
                             enabled: true,
                           },
                         ].map((feature, i) => (
@@ -1849,7 +1849,7 @@ export const CompanySettings: React.FC = () => {
                             </div>
                             {feature.enabled ? (
                               <span className="text-xs font-bold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full flex items-center gap-1">
-                                ✓ Incluido
+                                 Incluido
                               </span>
                             ) : (
                               <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1 rounded-full">

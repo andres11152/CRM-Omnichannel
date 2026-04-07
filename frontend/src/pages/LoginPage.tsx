@@ -13,7 +13,7 @@ import { LoginResponse } from "@/types/auth.types";
 import { API_BASE_URL } from "@/services/apiConfig";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 
-// 📝 VALIDATION SCHEMA
+//  VALIDATION SCHEMA
 const loginSchema = z.object({
   email: z.string().min(1, "El email es requerido").email("Email invlido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
@@ -21,7 +21,7 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-// 🎨 REUSABLE COMPONENT: INPUT FIELD
+//  REUSABLE COMPONENT: INPUT FIELD
 interface FormInputProps {
   label: string;
   name: Path<LoginFormData>;
@@ -175,7 +175,7 @@ export const LoginPage = () => {
         );
       }
 
-      // 🔄 DATA MAPPING: Convert ISO strings to Date objects to satisfy Store types
+      // [SYNC] DATA MAPPING: Convert ISO strings to Date objects to satisfy Store types
       const mappedUser = {
         ...user,
         createdAt: new Date(user.createdAt),
@@ -194,7 +194,7 @@ export const LoginPage = () => {
 
       // @ts-ignore - Explicit mapping above handles the Date/String mismatch
       login(mappedUser, token);
-      toast.success(`Bienvenido de nuevo, ${user.name.split(" ")[0]} 👋`);
+      toast.success(`Bienvenido de nuevo, ${user.name.split(" ")[0]}`);
       navigate(from, { replace: true });
     } catch (error: unknown) {
       console.error("[LoginPage] Login Error:", error);
@@ -205,7 +205,7 @@ export const LoginPage = () => {
         if (error.response?.status === 429) {
           toast.error("Demasiados intentos. Espera un minuto.");
         } else if (error.response?.status === 401) {
-          // 🎯 SHOW SPECIFIC INVALID CREDENTIALS MESSAGE
+          //  SHOW SPECIFIC INVALID CREDENTIALS MESSAGE
           const serverMsg = error.response.data?.message;
           const displayMsg =
             typeof serverMsg === "string"
@@ -239,7 +239,7 @@ export const LoginPage = () => {
         richColors
         toastOptions={{ style: { zIndex: 99999 } }}
       />
-      {/* 🖼️ LEFT SIDE: ARTWORK & BRANDING */}
+      {/* ️ LEFT SIDE: ARTWORK & BRANDING */}
       <div className="hidden lg:flex w-[48%] fixed inset-y-0 left-0 bg-gradient-to-br from-reply-brand to-reply-brand-dark items-center justify-center p-12 overflow-hidden z-0">
         {/* Background Patterns */}
         <div className="absolute inset-0 opacity-10 dark:opacity-20 bg-[radial-gradient(#ffffff33_1px,transparent_1px)] [background-size:24px_24px]"></div>
@@ -300,7 +300,7 @@ export const LoginPage = () => {
         </div>
       </div>
 
-      {/* 🔐 RIGHT SIDE: LOGIN FORM */}
+      {/* [AUTH] RIGHT SIDE: LOGIN FORM */}
       <div className="flex-1 lg:ml-[48%] flex flex-col px-6 sm:px-12 xl:px-32 relative bg-reply-surface dark:bg-reply-surface-dark min-h-screen overflow-y-auto">
         {/* Theme Toggle (Absolute Top Right) */}
         <button
@@ -339,7 +339,7 @@ export const LoginPage = () => {
           )}
         </button>
 
-        {/* 🛠️ FIX: Use my-auto and py-12 for safe vertical centering that respects overflow */}
+        {/* [DEV] FIX: Use my-auto and py-12 for safe vertical centering that respects overflow */}
         <div className="w-full max-w-[420px] mx-auto my-auto py-12 sm:py-16 animate-fade-in-up z-10 flex flex-col">
           {/* Header */}
           <div className="mb-10 text-center lg:text-left">
@@ -440,7 +440,7 @@ export const LoginPage = () => {
                   to="/forgot-password"
                   className="text-sm font-semibold text-reply-green hover:text-green-700 dark:hover:text-green-400 transition-colors"
                 >
-                  ¿¿Olvidaste tu contraseña?
+                  ¿Olvidaste tu contraseña?
                 </Link>
               </div>
             </div>
@@ -511,7 +511,7 @@ export const LoginPage = () => {
         </div>
       </div>
 
-      {/* 🛑 BLOCKED USER MODAL */}
+      {/*  BLOCKED USER MODAL */}
       {blockedStatus && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-reply-surface dark:bg-reply-panel-dark rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-red-100 dark:border-red-900/30 scale-100 animate-scale-in">
@@ -555,7 +555,7 @@ export const LoginPage = () => {
         </div>
       )}
 
-      {/* 📱 PWA INSTALL PROMPT */}
+      {/* [APP] PWA INSTALL PROMPT */}
       <PWAInstallPrompt />
     </div>
   );

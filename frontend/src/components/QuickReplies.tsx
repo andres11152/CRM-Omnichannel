@@ -125,13 +125,13 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
   ) as string[];
 
   return (
-    // 🛡️ ENTERPRISE UX FIX:
+    // [SEC] ENTERPRISE UX FIX:
     // 1. "bottom-full mb-4" -> Positions ABOVE the trigger button
-    // 2. "right-0" -> Aligns to the right edge
-    // 3. "origin-bottom-right" -> Animation flows from the button
-    // 4. "max-h-[600px]" + flex column -> Handles content overflow properly
+    // 2. "left-0" -> Aligns to the left edge to match the button location
+    // 3. "origin-bottom-left" -> Animation flows from the button
+    // 4. "max-h-[400px]" + flex column -> Handles content overflow properly
     // 5. "z-[9999]" -> Ensures it stays on top of sticky headers/navbars
-    <div className="absolute bottom-full right-0 mb-3 w-[calc(100vw-24px)] xs:w-[350px] sm:w-[400px] bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl border border-gray-100 dark:border-reply-border-dark flex flex-col max-h-[65vh] xs:max-h-[500px] sm:max-h-[600px] overflow-hidden origin-bottom-right animate-in fade-in zoom-in-95 duration-200 z-[9999]">
+    <div className="absolute bottom-full left-0 mb-3 w-[calc(100vw-24px)] xs:w-[350px] sm:w-[400px] bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl border border-gray-100 dark:border-reply-border-dark flex flex-col max-h-[350px] sm:max-h-[400px] overflow-hidden origin-bottom-left animate-in fade-in zoom-in-95 duration-200 z-[9999]">
       {/* 1. Header (Sticky) */}
       <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-white dark:bg-reply-panel-dark shrink-0 z-[20]">
         <div className="flex items-center gap-3">
@@ -212,18 +212,18 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
           </div>
 
           {/* 3. List (Scrollable) */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar bg-reply-bg/50 dark:bg-reply-bg-dark/50 relative min-h-[200px]">
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar bg-reply-bg/50 dark:bg-reply-bg-dark/50 relative min-h-[150px]">
             {loading ? (
-              <div className="flex flex-col items-center justify-center h-48 gap-3">
+              <div className="flex flex-col items-center justify-center h-32 gap-3">
                 <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                 <span className="text-xs text-gray-500 font-medium">
                   Cargando biblioteca...
                 </span>
               </div>
             ) : filteredReplies.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-center p-6">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                  <MessageSquare className="w-8 h-8 opacity-40 text-gray-500" />
+              <div className="flex flex-col items-center justify-center h-32 text-gray-400 text-center p-6">
+                <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
+                  <MessageSquare className="w-6 h-6 opacity-40 text-gray-500" />
                 </div>
                 <p className="font-medium text-gray-600 dark:text-gray-300">
                   No hay respuestas

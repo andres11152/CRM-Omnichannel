@@ -2,11 +2,10 @@ import { ISessionManager } from "../../core/interfaces/ISessionManager";
 import { Logger } from "@/utils/logger";
 import { PresenceUpdateSchema } from "../../core/validation/baileys.schemas";
 import { TenantContextManager } from "@/config/tenantContext";
-import { chatService } from "@/services/chatService";
+import { chatService } from "@/services/ChatService";
 import { IdentityResolverService } from "../../services/IdentityResolverService";
-import { WhatsAppIdUtils } from "../../utils/WhatsAppIdUtils";
 import { SessionData } from "@/types/whatsapp.types";
-import { SocketEventEmitter } from "@/services/socketEventEmitter";
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import {
@@ -15,7 +14,7 @@ import {
 } from "../../core/events/WhatsAppEvents";
 
 /**
- * 📡 PRESENCE HANDLER
+ * [WS] PRESENCE HANDLER
  *
  * Handles typing indicators (composing/recording/paused)
  * from WhatsApp contacts and emits them via Socket.IO.
@@ -35,11 +34,11 @@ export class PresenceHandler {
     data: WhatsAppEventData[WhatsAppEventType.PRESENCE_UPDATE],
     sessionId: string,
   ): Promise<void> {
-    // 🛡️ Zod Validation
+    // [SEC] Zod Validation
     const validated = PresenceUpdateSchema.safeParse(data);
     if (!validated.success) {
       Logger.warn(
-        `[PresenceHandler] ⚠️ Invalid presence update payload dropped`,
+        `[PresenceHandler] [WARNING] Invalid presence update payload dropped`,
         {
           sessionId,
           errors: validated.error.errors.map(
@@ -62,11 +61,11 @@ export class PresenceHandler {
       | "recording"
       | "paused";
 
-    Logger.info(`[Presence] 📥 Event from ${remoteJid}: ${status}`);
+    Logger.info(`[Presence]  Event from ${remoteJid}: ${status}`);
 
     const sessionData = await this.ensureSessionData(sessionId);
     if (!sessionData) {
-      Logger.warn(`[Presence] ⚠️ SessionData missing for ${sessionId}`);
+      Logger.warn(`[Presence] [WARNING] SessionData missing for ${sessionId}`);
       return;
     }
 
@@ -77,7 +76,7 @@ export class PresenceHandler {
         requestId: `presence:${remoteJid}`,
       },
       async () => {
-        const originalJid = WhatsAppIdUtils.getCleanJid(remoteJid);
+        const originalJid = remoteJid;
         const targetJid = await this.identityResolver.resolvePresenceJid(
           originalJid,
           sessionId,
@@ -93,7 +92,7 @@ export class PresenceHandler {
 
         if (!conv && targetJid !== originalJid) {
           Logger.warn(
-            `[Presence] ⚠️ Phone lookup failed for ${targetJid}, trying LID fallback...`,
+            `[Presence] [WARNING] Phone lookup failed for ${targetJid}, trying LID fallback...`,
           );
           const fallbackId = originalJid.split("@")[0];
           conv = await chatService.findConversation(
@@ -104,16 +103,16 @@ export class PresenceHandler {
         }
 
         if (conv) {
-          Logger.info(`[Presence] 📡 Emitting ${status} to Chat ${conv.id}`);
+          Logger.info(`[Presence] [WS] Emitting ${status} to Chat ${conv.id}`);
           this.socketEmitter.emitConversationTyping(
             conv.id,
             sessionData.companyId,
-            targetJid,
+            originalJid,
             status,
           );
         } else {
           Logger.warn(
-            `[Presence] ❌ Conversation NOT FOUND. Original: ${originalJid}, Target: ${targetJid}, Company: ${sessionData.companyId}`,
+            `[Presence] [ERROR] Conversation NOT FOUND. Original: ${originalJid}, Target: ${targetJid}, Company: ${sessionData.companyId}`,
           );
         }
       },

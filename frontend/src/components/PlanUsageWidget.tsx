@@ -88,7 +88,7 @@ export const PlanUsageWidget: React.FC<Props> = ({ planName, usage }) => {
                     {/* Tooltip for Critical */}
                     {!isUnlimited && percentage > 90 && (
                         <p className="text-[10px] text-red-500 mt-1 font-medium animate-bounce">
-                           ⚠️ Límite crítico alcanzado
+                           [WARNING] Límite crítico alcanzado
                         </p>
                     )}
                 </div>

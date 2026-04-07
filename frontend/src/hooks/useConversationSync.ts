@@ -1,5 +1,5 @@
 /**
- * 🔄 CONVERSATION SYNC HOOK (Refactored for Consistency)
+ * [SYNC] CONVERSATION SYNC HOOK (Refactored for Consistency)
  *
  * Real-time synchronization of conversations via Socket.IO
  * Updates the shared CHAT_KEYS cache used by the Sidebar.
@@ -8,7 +8,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { socketService } from "@/services/socketService";
-import { type Conversation } from "@/services/chatService";
+import { Conversation } from "@/types";
 import { CHAT_KEYS } from "./useChat";
 import { Logger } from "@/utils/logger";
 
@@ -48,14 +48,14 @@ export function useConversationSync(): void {
 
           const existing = old.conversations || [];
 
-          // 🛡️ DEDUPLICATION: Check if already exists by TicketID
+          // [SEC] DEDUPLICATION: Check if already exists by TicketID
           const alreadyExists = existing.some(
             (conv) => conv.ticketId === payload.conversation.ticketId,
           );
 
           if (alreadyExists) {
             Logger.warn(
-              "[useConversationSync] ⚠️ Conversation already exists (ignoring duplicate):",
+              "[useConversationSync] [WARNING] Conversation already exists (ignoring duplicate):",
               payload.conversation.ticketId,
             );
             return old;
@@ -63,7 +63,7 @@ export function useConversationSync(): void {
 
           // Add to start of list (most recent first)
           Logger.info(
-            "[useConversationSync] ✅ Added new conversation to cache:",
+            "[useConversationSync] [OK] Added new conversation to cache:",
             payload.conversation.ticketId,
           );
 
@@ -109,8 +109,8 @@ export function useConversationSync(): void {
       });
     };
 
-    // ✅ Subscribe to socket events
-    Logger.info("[useConversationSync] 🔌 Subscribing to real-time events");
+    // [OK] Subscribe to socket events
+    Logger.info("[useConversationSync]  Subscribing to real-time events");
 
     // Only handle CREATED here to prevent duplicates.
     // Updated/Closed/Message are handled by useChatSockets or can be migrated here fully later.

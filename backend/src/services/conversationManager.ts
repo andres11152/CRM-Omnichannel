@@ -8,7 +8,7 @@ import {
 } from "@/types/conversation.types";
 import { TenantContextManager } from "@/config/tenantContext";
 
-// 🛡️ 100-YEAR FIX: Exact Transaction Client Type Extraction
+// [SEC] 100-YEAR FIX: Exact Transaction Client Type Extraction
 // This extracts the exact type expected by the $transaction callback of our specific extended client.
 type ExtendedTransactionClient = Parameters<
   Parameters<ExtendedPrismaClient["$transaction"]>[0]
@@ -37,11 +37,11 @@ export class ConversationManager {
     const { companyId, channelId, customerId, subject, status } = params;
 
     try {
-      // 🛡️ STRATEGY: Transaction with retry on unique violation
+      // [SEC] STRATEGY: Transaction with retry on unique violation
 
       const runInTransaction = async (tx: ExtendedTransactionClient) => {
         // 1. Try to find existing conversation
-        // 🛡️ FIX: Use findFirst instead of findUnique to avoid Prisma Extension issues with composite keys
+        // [SEC] FIX: Use findFirst instead of findUnique to avoid Prisma Extension issues with composite keys
         let conversation = await tx.conversation.findFirst({
           where: {
             companyId,
@@ -59,7 +59,7 @@ export class ConversationManager {
             `[ConversationManager] Found existing conversation: ${conversation.id} (Status: ${conversation.status}, Assigned: ${conversation.assignedToId})`,
           );
 
-          // 🛡️ Smart Status Transition
+          // [SEC] Smart Status Transition
           const isAssigned = !!conversation.assignedToId;
           let newStatus = conversation.status;
 
@@ -113,12 +113,12 @@ export class ConversationManager {
           await this.events?.onCreated?.(conversation);
 
           Logger.info(
-            `[ConversationManager] ✅ Created conversation: ${conversation.id}`,
+            `[ConversationManager] [OK] Created conversation: ${conversation.id}`,
           );
 
           return conversation;
         } catch (createError: unknown) {
-          // 🛡️ RACE CONDITION HANDLER
+          // [SEC] RACE CONDITION HANDLER
           if (
             createError instanceof Prisma.PrismaClientKnownRequestError &&
             createError.code === "P2002"
@@ -145,7 +145,7 @@ export class ConversationManager {
         }
       };
 
-      // 🛡️ DANGER: Async context can be lost in transactions!
+      // [SEC] DANGER: Async context can be lost in transactions!
       // We must capture it explicitly.
       const currentContext = TenantContextManager.getContext();
 
@@ -155,7 +155,7 @@ export class ConversationManager {
         const client = this.prisma as ExtendedPrismaClient;
         return await client.$transaction(
           async (tx) => {
-            // 🛡️ RESTORE CONTEXT inside transaction callback
+            // [SEC] RESTORE CONTEXT inside transaction callback
             return TenantContextManager.run(currentContext, () =>
               runInTransaction(tx),
             );
@@ -174,7 +174,7 @@ export class ConversationManager {
       }
     } catch (error: unknown) {
       Logger.error(
-        `[ConversationManager] ❌ Failed to find/create conversation:`,
+        `[ConversationManager] [ERROR] Failed to find/create conversation:`,
         error,
       );
       const msg = error instanceof Error ? error.message : String(error);

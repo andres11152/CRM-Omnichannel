@@ -2,7 +2,7 @@ import { AppError } from "@/utils/AppError";
 import { quickReplyRepository } from "@/repositories/QuickReplyRepository";
 
 /**
- * ⚡ QUICK REPLY CRUD SERVICE
+ *  QUICK REPLY CRUD SERVICE
  *
  * Data access layer for Quick Replies (canned response templates).
  */

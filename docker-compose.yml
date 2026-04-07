@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: reply-postgres-local
+    restart: always
+    environment:
+      POSTGRES_USER: reply_user
+      POSTGRES_PASSWORD: reply_password
+      POSTGRES_DB: reply_db_local
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: reply-redis-local
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:

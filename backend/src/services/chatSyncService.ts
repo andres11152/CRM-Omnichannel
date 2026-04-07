@@ -1,5 +1,5 @@
 /**
- * 🔄 CHAT SYNC SERVICE (Refactored Orchestrator)
+ * [SYNC] CHAT SYNC SERVICE (Refactored Orchestrator)
  *
  * Enterprise-grade historical message synchronization service.
  * Allows on-demand backfill of WhatsApp messages from the phone's history
@@ -31,13 +31,13 @@ import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 
 /** Zod schema for sync request validation */
 export const ChatSyncRequestSchema = z.object({
-  companyId: z.string().uuid(),
+  companyId: z.string().min(1),
   sessionId: z.string(),
   sinceDate: z.coerce
     .date()
     .transform((d) => d.toISOString())
     .optional(),
-  conversationId: z.string().uuid().optional(),
+  conversationId: z.string().min(1).optional(),
   limit: z.number().int().positive().max(1000).default(500),
   dryRun: z.boolean().default(false),
 });
@@ -91,7 +91,7 @@ class ChatSyncService {
     const { companyId, sessionId, sinceDate, limit, dryRun, conversationId } =
       request;
 
-    // 🛡️ Type definition for Baileys socket with server fetch capability
+    // [SEC] Type definition for Baileys socket with server fetch capability
     interface WASocketWithFetch extends WASocket {
       fetchMessagesFromWAServer?: (jid: string, count: number) => Promise<WAMessage[]>;
     }
@@ -137,20 +137,20 @@ class ChatSyncService {
         throw new Error(`No store found for session ${sessionId}`);
       }
 
-      // 🔍 DIAGNOSTIC: Show what's in the store
+      // [SEARCH] DIAGNOSTIC: Show what's in the store
       const storeJids = Object.keys(store.messages || {});
       const storeMsgCounts = storeJids.map(
         (j) => `${j}(${(store.messages[j] || []).length})`,
       );
       Logger.info(
-        `[ChatSync] 🔍 STORE DIAG: ${storeJids.length} JIDs in memory: [${storeMsgCounts.join(", ")}]`,
+        `[ChatSync] [SEARCH] STORE DIAG: ${storeJids.length} JIDs in memory: [${storeMsgCounts.join(", ")}]`,
       );
       Logger.info(
-        `[ChatSync] 🔍 STORE DIAG: LID map entries: ${Object.keys(store.lidToPhone || {}).length}`,
+        `[ChatSync] [SEARCH] STORE DIAG: LID map entries: ${Object.keys(store.lidToPhone || {}).length}`,
       );
       if (conversationId) {
         Logger.info(
-          `[ChatSync] 🔍 STORE DIAG: conversationId=${conversationId}`,
+          `[ChatSync] [SEARCH] STORE DIAG: conversationId=${conversationId}`,
         );
       }
 
@@ -168,7 +168,7 @@ class ChatSyncService {
         }
       }
 
-      Logger.info(`[ChatSync] 🔍 STORE DIAG: targetJid=${targetJid || "ALL"}`);
+      Logger.info(`[ChatSync] [SEARCH] STORE DIAG: targetJid=${targetJid || "ALL"}`);
 
       let allMessages = this.ingest.extractMessagesFromStore(
         store,
@@ -180,12 +180,21 @@ class ChatSyncService {
       if (allMessages.length === 0 && targetJid) {
         const { whatsappService } = await import("@/whatsapp");
         const sock = whatsappService.getSocket(sessionId) as WASocketWithFetch;
-        if (sock && typeof sock.fetchMessagesFromWAServer === "function") {
+        
+        // [SEC] Type-safe access to history fetch methods
+        const augmentedSock = sock as WASocket & { 
+          fetchMessagesFromWA?: (jid: string, count: number) => Promise<WAMessage[]>;
+          fetchMessagesFromWAServer?: (jid: string, count: number) => Promise<WAMessage[]>;
+        };
+
+        const fetchMethod = augmentedSock.fetchMessagesFromWA || augmentedSock.fetchMessagesFromWAServer;
+        
+        if (sock && typeof fetchMethod === "function") {
           try {
-            Logger.info(`[ChatSync] 🌐 Store empty for ${targetJid}. Fetching from server...`);
-            const fetched: WAMessage[] = await sock.fetchMessagesFromWAServer(targetJid, limit);
+            Logger.info(`[ChatSync] [WEB] Store empty for ${targetJid}. Fetching from server...`);
+            const fetched: WAMessage[] = await fetchMethod.call(sock, targetJid, limit);
             if (fetched && fetched.length > 0) {
-              Logger.info(`[ChatSync] ✅ Fetched ${fetched.length} messages from server for ${targetJid}`);
+              Logger.info(`[ChatSync] [OK] Fetched ${fetched.length} messages from server for ${targetJid}`);
               const { syncMessageParser } = await import("./sync/SyncMessageParser");
               allMessages = fetched.sort((a, b) => {
                 return syncMessageParser.getTimestamp(a.messageTimestamp) - syncMessageParser.getTimestamp(b.messageTimestamp);
@@ -202,7 +211,7 @@ class ChatSyncService {
       messagesFound = limitedMessages.length;
 
       Logger.info(
-        `[ChatSync] 🔍 Found ${messagesFound} messages (limit: ${limit})`,
+        `[ChatSync] [SEARCH] Found ${messagesFound} messages (limit: ${limit})`,
       );
 
       // 4. Group by conversation
@@ -281,7 +290,7 @@ class ChatSyncService {
       });
 
       Logger.info(
-        `[ChatSync] ✅ Sync completed for ${companyId} in ${duration}ms | ` +
+        `[ChatSync] [OK] Sync completed for ${companyId} in ${duration}ms | ` +
           `Found: ${messagesFound} | New: ${messagesNew} | Duplicates: ${messagesDuplicate} | Errors: ${errors.length}`,
       );
 
@@ -296,7 +305,7 @@ class ChatSyncService {
       };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      Logger.error(`[ChatSync] ❌ Sync failed for ${companyId}:`, errMsg);
+      Logger.error(`[ChatSync] [ERROR] Sync failed for ${companyId}:`, errMsg);
 
       this.emitProgress(companyId, {
         status: "failed",

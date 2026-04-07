@@ -1,11 +1,11 @@
 import { Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "../types";
 import { emailService } from "../services/email/emailService";
-import { timelineService } from "../services/timelineService";
+import { timelineService } from "../services/TimelineService";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
 import { CreateEmailDTO } from "../types/email.types";
-import { companySettingsService } from "../services/companySettingsService";
+import { companySettingsService } from "../services/CompanySettingsService";
 import type {
   SendEmailInput,
   TestEmailConnectionInput,
@@ -29,7 +29,7 @@ export const sendEmail = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
-    // 🛡️ Body already validated by Zod middleware (SendEmailSchema)
+    // [SEC] Body already validated by Zod middleware (SendEmailSchema)
     const validatedData = req.body as SendEmailInput;
 
     const { fromEmail, fromName } =
@@ -47,7 +47,7 @@ export const sendEmail = catchAsync(
       replyTo: validatedData.replyTo || fromEmail,
       contactId: validatedData.contactId,
       ticketId: validatedData.ticketId,
-      enableTracking: validatedData.enableTracking ?? true,
+      enableTracking: validatedData.enableTracking || true,
     };
 
     const email = await emailService.sendEmail(dto);
@@ -132,7 +132,7 @@ export const getTimeline = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
-    // 🛡️ Query already validated & transformed by Zod middleware (GetTimelineSchema)
+    // [SEC] Query already validated & transformed by Zod middleware (GetTimelineSchema)
     const { contactId, ticketId, limit, offset } = req.query as {
       contactId?: string;
       ticketId?: string;
@@ -144,8 +144,8 @@ export const getTimeline = catchAsync(
       companyId,
       contactId,
       ticketId,
-      limit: limit ?? 100,
-      offset: offset ?? 0,
+      limit: limit || 100,
+      offset: offset || 0,
     });
 
     res.status(200).json({
@@ -190,7 +190,7 @@ export const testEmailConnection = catchAsync(
       return next(new AppError("Company ID is missing", 400));
     }
 
-    // 🛡️ Body already validated by Zod middleware (TestEmailConnectionSchema)
+    // [SEC] Body already validated by Zod middleware (TestEmailConnectionSchema)
     const { host, port, user, password, secure, toEmail, senderEmail } =
       req.body as TestEmailConnectionInput;
 
@@ -213,7 +213,7 @@ export const testEmailConnection = catchAsync(
         subject: "Prueba de Conexión SMTP - Reply CRM",
         htmlBody: `
                 <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-                    <h2 style="color: #4F46E5;">¡Conexión Exitosa! 🎉</h2>
+                    <h2 style="color: #4F46E5;">¡Conexión Exitosa! </h2>
                     <p>Hola,</p>
                     <p>Si estás leyendo esto, significa que tu configuración SMTP en <strong>Reply CRM</strong> es correcta.</p>
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">

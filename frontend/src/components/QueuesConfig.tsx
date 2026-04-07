@@ -261,11 +261,11 @@ const QueuesConfig: React.FC = () => {
                     <td className="px-6 py-4 text-sm">
                       {queue.type === "AI" ? (
                         <span className="text-purple-600 dark:text-purple-400 font-bold text-xs flex items-center gap-1">
-                          ✨ IA Automation
+                           IA Automation
                         </span>
                       ) : queue.type === "ROUND_ROBIN" ? (
                         <span className="text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center gap-1">
-                          🔄 Round Robin
+                          [SYNC] Round Robin
                         </span>
                       ) : (
                         <span className="text-gray-500 dark:text-gray-400 text-xs">
@@ -276,7 +276,7 @@ const QueuesConfig: React.FC = () => {
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                       {queue.aiAssistantId ? (
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">🤖</span>
+                          <span className="text-lg">[AI]</span>
                           <span>
                             {assistants.find(
                               (a) => a.id === queue.aiAssistantId,
@@ -432,13 +432,13 @@ const QueuesConfig: React.FC = () => {
                       onClick={handleCreateDepartment}
                       className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                     >
-                      ✓
+                      
                     </button>
                     <button
                       onClick={() => setIsCreatingDept(false)}
                       className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                     >
-                      ✕
+                      
                     </button>
                   </div>
                 )}

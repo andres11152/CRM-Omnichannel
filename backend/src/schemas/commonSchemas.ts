@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ COMMON VALIDATION SCHEMAS
+ * [SEC] COMMON VALIDATION SCHEMAS
  *
  * Reusable schemas for common patterns across routes:
  * - CUID ID params

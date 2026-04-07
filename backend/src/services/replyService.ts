@@ -2,7 +2,7 @@ import { replyRepository } from "@/repositories/ReplyRepository";
 import { AppError } from "@/utils/AppError";
 
 /**
- * 💬 REPLY CRUD SERVICE
+ * [CHAT] REPLY CRUD SERVICE
  */
 export const replyService = {
   async findByPost(postId: string, companyId: string) {

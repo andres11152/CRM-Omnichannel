@@ -1,10 +1,9 @@
-import { Prisma } from "@prisma/client";
-
 export interface DealPayload {
   dealId: string;
   companyId: string;
   previousStage?: string;
   newStage?: string;
+  variables?: Record<string, string | number | boolean | null | undefined>;
 }
 
 export interface WorkflowTriggerConfig {
@@ -20,8 +19,11 @@ export interface WorkflowNodeData {
   params?: {
     subject?: string;
     body?: string;
+    aiAssistantId?: string;
+    assistantId?: string;
     [key: string]: unknown;
   };
+  aiAssistantId?: string;
   content?: string;
   label?: string;
 }
@@ -32,10 +34,29 @@ export interface WorkflowNode {
   data?: WorkflowNodeData;
 }
 
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
+}
+
 export interface WorkflowDefinition {
   id: string;
   name: string;
-  nodes: Prisma.JsonValue;
+  isActive: boolean;
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
   companyId: string;
-  triggerConfig: Prisma.JsonValue;
+  triggerConfig: WorkflowTriggerConfig;
+}
+
+export interface WorkflowActionHandler {
+  execute(
+    node: WorkflowNode,
+    payload: DealPayload,
+    companyId: string,
+    systemUserId: string,
+  ): Promise<void>;
 }

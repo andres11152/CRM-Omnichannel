@@ -58,7 +58,7 @@ export const usePWAInstall = (): PWAInstallState => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setIsInstallable(true);
-      console.log("✅ PWA Install Prompt captured (Android/Desktop)");
+      console.log("[OK] PWA Install Prompt captured (Android/Desktop)");
     };
 
     const handleAppInstalled = () => {
@@ -66,7 +66,7 @@ export const usePWAInstall = (): PWAInstallState => {
       setIsInstallable(false);
       setDeferredPrompt(null);
       setShowIOSInstructions(false);
-      console.log("🎉 PWA Installed successfully");
+      console.log(" PWA Installed successfully");
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -83,7 +83,7 @@ export const usePWAInstall = (): PWAInstallState => {
 
   const installApp = async () => {
     if (!deferredPrompt) {
-      console.warn("⚠️ No install prompt available");
+      console.warn("[WARNING] No install prompt available");
       return;
     }
 
@@ -91,13 +91,13 @@ export const usePWAInstall = (): PWAInstallState => {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       console.log(
-        `📱 User ${outcome === "accepted" ? "accepted" : "dismissed"} installation`,
+        `[APP] User ${outcome === "accepted" ? "accepted" : "dismissed"} installation`,
       );
 
       setDeferredPrompt(null);
       setIsInstallable(false);
     } catch (error) {
-      console.error("❌ Install prompt error:", error);
+      console.error("[ERROR] Install prompt error:", error);
     }
   };
 

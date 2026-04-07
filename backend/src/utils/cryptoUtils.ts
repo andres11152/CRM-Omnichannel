@@ -1,18 +1,30 @@
 import crypto from "crypto";
 import { Logger } from "@/utils/logger";
 
-// Use a consistent key based on environment variable
-// Ensure your SESSION_SECRET is strong and kept secret!
-const SECRET_KEY =
-  process.env.SESSION_SECRET ||
-  "default-secret-key-must-be-changed-in-production-32chars";
+/**
+ * [AUTH] ADVANCED CRYPTO UTILS (Audit Hardened)
+ * 
+ * Implements Multi-tenant Encryption Scoping.
+ * Each company/session gets a UNIQUE derived key.
+ */
+
+import { getEnv } from "@/config/env";
+
 const ALGORITHM = "aes-256-gcm";
 
-// Derby a 32-byte key from the secret
-const key = crypto.scryptSync(SECRET_KEY, "salt", 32);
+/**
+ * Derives a key for a specific namespace (Tenant Isolation)
+ */
+const deriveKey = (namespace: string): Buffer => {
+  // [SEC] SECURITY: getEnv() ensures strict validation and 32-char minimum via Zod
+  const secret = getEnv().SESSION_SECRET;
+  // We use the namespace (companyId/sessionId) as the salt
+  return crypto.scryptSync(secret, namespace, 32);
+};
 
-export const encrypt = (text: string): string => {
-  const iv = crypto.randomBytes(12); // Recommended 12 bytes for GCM
+export const encrypt = (text: string, namespace: string = "global"): string => {
+  const key = deriveKey(namespace);
+  const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
   let encrypted = cipher.update(text, "utf8", "hex");
@@ -24,20 +36,17 @@ export const encrypt = (text: string): string => {
   return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
 };
 
-export const decrypt = (text: string): string | null => {
+export const decrypt = (text: string, namespace: string = "global"): string | null => {
   try {
     const parts = text.split(":");
-    if (parts.length !== 3) {
-      // Fallback: maybe it's not encrypted or legacy format
-      return null;
-    }
+    if (parts.length !== 3) return null;
 
     const [ivHex, authTagHex, encryptedText] = parts;
-
+    const key = deriveKey(namespace);
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
+    
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-
     decipher.setAuthTag(authTag);
 
     let decrypted = decipher.update(encryptedText, "hex", "utf8");
@@ -45,7 +54,19 @@ export const decrypt = (text: string): string | null => {
 
     return decrypted;
   } catch (error) {
-    Logger.error("[Crypto] Decryption failed:", error);
+    const isAuthenticityError =
+      error instanceof Error &&
+      error.message.includes("unable to authenticate data");
+    
+    if (isAuthenticityError) {
+      Logger.warn(
+        `[Crypto] Authentication failed for namespace ${namespace}. ` +
+        `Possible mismatch in SESSION_SECRET or data corruption.`
+      );
+    } else {
+      Logger.error(`[Crypto] Decryption error [${namespace}]:`, error);
+    }
     return null;
   }
 };
+

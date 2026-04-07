@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "../types";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
-import { companySettingsService } from "../services/companySettingsService";
+import { companySettingsService } from "../services/CompanySettingsService";
 
 /**
  * Get company's email configuration

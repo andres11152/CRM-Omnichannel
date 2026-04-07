@@ -49,7 +49,7 @@ export async function sendLoginNotification(
               <tr>
                 <td style="background: linear-gradient(135deg, #00a884 0%, #005c4b 100%); padding: 40px 40px 30px; border-radius: 12px 12px 0 0; text-align: center;">
                   <h1 style="color: #ffffff; margin: 0 0 10px; font-size: 28px; font-weight: 600;">
-                    🔐 Nuevo Inicio de Sesión
+                    [AUTH] Nuevo Inicio de Sesión
                   </h1>
                   <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 16px;">
                     Hemos detectado un acceso a tu cuenta
@@ -73,7 +73,7 @@ export async function sendLoginNotification(
                     <tr>
                       <td style="padding: 24px;">
                         <h3 style="color: #333333; margin: 0 0 16px; font-size: 16px; font-weight: 600;">
-                          📋 Detalles del Inicio de Sesión
+                           Detalles del Inicio de Sesión
                         </h3>
                         
                         <table role="presentation" style="width: 100%;">
@@ -143,12 +143,12 @@ export async function sendLoginNotification(
                           <tr>
                             <td style="padding-right: 8px; width: 50%;">
                               <a href="${frontendUrl}" style="display: block; padding: 14px 24px; background-color: #00a884; color: #ffffff; text-decoration: none; border-radius: 6px; text-align: center; font-weight: 600; font-size: 14px;">
-                                ✅ Sí, fui yo
+                                [OK] Sí, fui yo
                               </a>
                             </td>
                             <td style="padding-left: 8px; width: 50%;">
                               <a href="${reportUrl}" style="display: block; padding: 14px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; text-align: center; font-weight: 600; font-size: 14px;">
-                                ⚠️ No fui yo
+                                [WARNING] No fui yo
                               </a>
                             </td>
                           </tr>
@@ -162,7 +162,7 @@ export async function sendLoginNotification(
                     <tr>
                       <td style="padding: 20px;">
                         <p style="color: #856404; font-size: 13px; margin: 0 0 10px; font-weight: 600;">
-                          💡 Consejos de Seguridad:
+                           Consejos de Seguridad:
                         </p>
                         <ul style="color: #856404; font-size: 13px; margin: 0; padding-left: 20px; line-height: 1.6;">
                           <li>Usa contraseñas únicas y seguras</li>
@@ -202,16 +202,16 @@ export async function sendLoginNotification(
   try {
     await emailService.sendEmail({
       to: userEmail,
-      subject: `🔐 Nuevo inicio de sesión en Reply CRM - ${
+      subject: `[AUTH] Nuevo inicio de sesión en Reply CRM - ${
         formattedDate.split(",")[0]
       }`,
       html: htmlContent,
     });
-    Logger.info(`[LoginNotification] ✅ Security email sent to ${userEmail}`);
+    Logger.info(`[LoginNotification] [OK] Security email sent to ${userEmail}`);
   } catch (error) {
     // No lanzamos error para no bloquear el login si el email falla
     Logger.error(
-      `[LoginNotification] ❌ Failed to send security email to ${userEmail}:`,
+      `[LoginNotification] [ERROR] Failed to send security email to ${userEmail}:`,
       error,
     );
   }
@@ -233,11 +233,11 @@ function parseUserAgent(userAgent: string): {
 
   // Detect device
   if (/mobile/i.test(userAgent)) {
-    device = "📱 Móvil";
+    device = "[APP] Móvil";
   } else if (/tablet|ipad/i.test(userAgent)) {
-    device = "📱 Tablet";
+    device = "[APP] Tablet";
   } else {
-    device = "💻 Computadora";
+    device = " Computadora";
   }
 
   // Detect browser

@@ -1,5 +1,6 @@
 import { gdprCleanupRepository } from "@/repositories/GdprCleanupRepository";
 import { Logger } from "@/utils/logger";
+import { runWithCompanyId } from "@/context/requestContext";
 
 const RETENTION_DAYS = 30;
 
@@ -10,7 +11,7 @@ function getRetentionCutoffDate(): Date {
 }
 
 /**
- * 🔐 SAFE DELETION HELPER
+ * [AUTH] SAFE DELETION HELPER
  * - Centralizes deletion logic (D.R.Y.)
  * - Enforces Tenant Isolation (companyId required)
  * - Uses 'unknown' for proper error handling
@@ -20,7 +21,7 @@ async function safelyDeleteRecords(
   companyId: string,
   cutoffDate: Date,
 ): Promise<number> {
-  // 🛡️ TENANT ISOLATION: companyId is MANDATORY in the WHERE clause
+  // [SEC] TENANT ISOLATION: companyId is MANDATORY in the WHERE clause
   const whereClause = {
     companyId: companyId,
     deletedAt: {
@@ -30,23 +31,22 @@ async function safelyDeleteRecords(
   };
 
   try {
-    const count = await gdprCleanupRepository.safelyDeleteRecords(
-      modelName,
-      whereClause,
+    const count = await runWithCompanyId(companyId, () =>
+      gdprCleanupRepository.safelyDeleteRecords(modelName, whereClause)
     );
 
     if (count > 0) {
       Logger.info(
-        `[GDPR Cleanup] 🗑️ Hard deleted ${count} ${modelName}s for Company ${companyId}`,
+        `[GDPR Cleanup] ️ Hard deleted ${count} ${modelName}s for Company ${companyId}`,
       );
     }
     return count;
   } catch (error: unknown) {
-    // 🛡️ Safe Error Handling
+    // [SEC] Safe Error Handling
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     Logger.error(
-      `[GDPR Cleanup] ❌ Error cleaning ${modelName} for company ${companyId}: ${errorMessage}`,
+      `[GDPR Cleanup] [ERROR] Error cleaning ${modelName} for company ${companyId}: ${errorMessage}`,
     );
     // Non-blocking failure: allows other models/companies to proceed
     return 0;
@@ -54,7 +54,7 @@ async function safelyDeleteRecords(
 }
 
 /**
- * 📊 SAFE STATS HELPER
+ * [STAT] SAFE STATS HELPER
  */
 async function safelyCountRecords(
   modelName: "contact" | "deal" | "ticket" | "campaign",
@@ -74,9 +74,8 @@ async function safelyCountRecords(
   }
 
   try {
-    return await gdprCleanupRepository.safelyCountRecords(
-      modelName,
-      whereClause,
+    return await runWithCompanyId(companyId, () =>
+      gdprCleanupRepository.safelyCountRecords(modelName, whereClause)
     );
   } catch {
     return 0;
@@ -98,7 +97,7 @@ async function processCompanyCleanup(companyId: string, cutoffDate: Date) {
 }
 
 /**
- * 🚀 MAIN ENTRY POINT: Run GDPR cleanup for ALL companies
+ *  MAIN ENTRY POINT: Run GDPR cleanup for ALL companies
  * Iterates company-by-company to ensure strict isolation.
  */
 export async function runGDPRCleanup(): Promise<{
@@ -138,13 +137,13 @@ export async function runGDPRCleanup(): Promise<{
 
     const duration = Date.now() - startTime;
     Logger.info(
-      `[GDPR Cleanup] ✅ Completed in ${duration}ms. Total deleted: ${totalDeleted}`,
+      `[GDPR Cleanup] [OK] Completed in ${duration}ms. Total deleted: ${totalDeleted}`,
     );
 
     return { totalDeleted, details };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    Logger.error("[GDPR Cleanup] ❌ Global Job Failed:", errorMessage);
+    Logger.error("[GDPR Cleanup] [ERROR] Global Job Failed:", errorMessage);
     throw error;
   }
 }

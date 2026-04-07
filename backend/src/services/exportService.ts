@@ -5,10 +5,10 @@ import path from "path";
 import os from "os";
 import * as fsSync from "fs";
 import { Logger } from "@/utils/logger";
-import { storageService } from "@/services/storageService";
+import { storageService } from "@/services/StorageService";
 
 /**
- * 📊 EXPORT SERVICE
+ * [STAT] EXPORT SERVICE
  * Genera reportes en CSV y PDF para analytics
  * Enterprise-grade con validación y error handling
  * Almacenamiento en S3 (Stateless)
@@ -28,7 +28,7 @@ interface ExportData {
 
 export const exportService = {
   /**
-   * 📄 Generate CSV Export
+   *  Generate CSV Export
    * Creates a CSV file and uploads to S3
    */
   async generateCSV(
@@ -87,7 +87,7 @@ export const exportService = {
   },
 
   /**
-   * 📕 Generate PDF Export
+   *  Generate PDF Export
    * Creates a professional PDF report and uploads to S3
    */
   async generatePDF(
@@ -285,7 +285,7 @@ export const exportService = {
   },
 
   /**
-   * 🧹 Cleanup (No longer needed for local files, S3 handles persistence)
+   *  Cleanup (No longer needed for local files, S3 handles persistence)
    */
   async cleanupOldExports(): Promise<void> {
     // S3 lifecycle policies handle this more efficiently

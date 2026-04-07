@@ -1,5 +1,5 @@
 /**
- * 📤 WHATSAPP MESSAGING SERVICE
+ *  WHATSAPP MESSAGING SERVICE
  *
  * All outbound messaging logic:
  * - sendMessage: Direct message dispatch with rate limiting
@@ -40,10 +40,22 @@ export class WhatsAppMessaging {
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
     try {
-      const activeSession =
+      let activeSession =
         await this.sessionManager.findActiveSessionForCompany(
           options.companyId,
         );
+
+      // [SEC] HIGH AVAILABILITY ENQUEUE: If no CONNECTED session, check if any session exists
+      // as it might be currently RECONNECTING. The Worker handles wait-for-ready.
+      if (!activeSession) {
+        const sessions = await this.sessionManager.listSessions(options.companyId);
+        const anySession = sessions[0];
+        if (anySession) {
+          // Bypassing strict CONNECTED check because the Worker will wait for it.
+          // @ts-expect-error - socket not needed for enqueuing
+          activeSession = { sessionId: anySession.sessionId };
+        }
+      }
 
       if (!activeSession) {
         throw new AppError(
@@ -54,12 +66,14 @@ export class WhatsAppMessaging {
 
       await this.rateLimitService.enforceLimit(activeSession.sessionId);
 
-      // 🏗️ 1. SAVE IN DB AS "QUEUED" (Audit Trail)
-      const { chatService } = await import("@/services/chatService");
-      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      // [BUILD] 1. SAVE IN DB AS "QUEUED" (Audit Trail)
+      const { chatService } = await import("@/services/ChatService");
+      const { generateMessageID } = await import("@whiskeysockets/baileys");
+      
+      const generatedId = generateMessageID();
 
       const savedMessage = await chatService.upsertMessage({
-        whatsappMessageId: tempId,
+        whatsappMessageId: generatedId,
         companyId: options.companyId,
         content: content,
         direction: "OUTBOUND",
@@ -69,11 +83,11 @@ export class WhatsAppMessaging {
         metadata: {
           ...options.metadata,
           isQueued: true,
-          originalTempId: tempId,
+          generatedMessageId: generatedId,
         },
       });
 
-      // 🏗️ 2. ENQUEUE: Add to the official multi-tenant queue
+      // [BUILD] 2. ENQUEUE: Add to the official multi-tenant queue
       const { messageQueueService } =
         await import("@/services/queue/messageQueueService");
 
@@ -84,11 +98,12 @@ export class WhatsAppMessaging {
         to,
         text: content,
         media: options.media,
-        quotedMessageId: options.quotedMessageId, // ❤️ FIX: Pass quoted message ID to queue
+        quotedMessageId: options.quotedMessageId, // ️ FIX: Pass quoted message ID to queue
         // Metadata payload for worker
         metadata: {
           ...options.metadata,
           dbId: savedMessage.id, // Linked to the QUEUED record
+          generatedMessageId: generatedId, // Pass consistent ID to worker
         },
       });
 
@@ -97,7 +112,8 @@ export class WhatsAppMessaging {
         messageId: savedMessage.whatsappMessageId!,
         companyId: savedMessage.companyId,
         sessionId: activeSession.sessionId,
-        from: "system",
+        from: "agent",
+        sender: "agent",
         to,
         content: savedMessage.content,
         timestamp: savedMessage.createdAt,
@@ -187,6 +203,16 @@ export class WhatsAppMessaging {
     }
 
     return this.messageHandler.sendPresenceUpdate(to, type, companyId);
+  }
+
+  async sendReaction(
+    to: string,
+    messageId: string,
+    reaction: string,
+    companyId: string,
+    fromMe?: boolean,
+  ): Promise<void> {
+    return this.messageHandler.sendReaction(to, messageId, reaction, companyId, fromMe);
   }
 
   // ────────────────────────────────────────────────

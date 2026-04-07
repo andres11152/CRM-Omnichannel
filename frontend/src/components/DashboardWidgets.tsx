@@ -315,7 +315,7 @@ export const AgentLeaderboardWidget: React.FC<{
                       />
                       {i === 0 && (
                         <span className="absolute -top-1 -right-1 text-yellow-500 drop-shadow-sm">
-                          👑
+                          
                         </span>
                       )}
                     </div>

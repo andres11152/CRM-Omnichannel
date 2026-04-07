@@ -2,10 +2,10 @@ import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { quickReplyService } from "@/services/quickReplyService";
+import { quickReplyService } from "@/services/QuickReplyService";
 
 /**
- * ⚡ QUICK REPLY CONTROLLER
+ *  QUICK REPLY CONTROLLER
  *
  * HTTP orchestrator for Quick Replies.
  * All data access delegated to quickReplyService (SRP).

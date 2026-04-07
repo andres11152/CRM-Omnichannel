@@ -1,5 +1,5 @@
 /**
- * 🏷️ WHATSAPP DI TOKENS
+ * ️ WHATSAPP DI TOKENS
  *
  * Type-safe injection tokens for all WhatsApp layer services.
  * Each token carries the type of the service it represents,
@@ -20,7 +20,7 @@ import type { AITriggerService } from "../services/AITriggerService";
 import type { ProfilePictureService } from "../services/ProfilePictureService";
 import type { DeduplicationService } from "../services/DeduplicationService";
 import type { EventBus } from "../core/events/EventBus";
-import type { SocketEventEmitter } from "@/services/socketEventEmitter";
+import type { SocketEventEmitter } from "@/services/SocketEventEmitter";
 
 export const WA_TOKENS = {
   // ── Core Infrastructure ──────────────────────

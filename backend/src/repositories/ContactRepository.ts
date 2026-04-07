@@ -50,7 +50,16 @@ export class ContactRepository {
     });
   }
 
-  async update(id: string, data: Partial<Contact>): Promise<Contact> {
+  async update(
+    companyId: string,
+    id: string,
+    data: Prisma.ContactUncheckedUpdateInput,
+  ): Promise<Contact> {
+    const existing = await this.db.contact.findFirst({
+      where: { id, companyId },
+    });
+    if (!existing) throw new Error("Contact not found or access denied");
+
     return this.db.contact.update({
       where: { id },
       data,
@@ -65,7 +74,7 @@ export class ContactRepository {
     companyId: string,
     phone: string,
   ): Promise<Contact | null> {
-    // 🛡️ 100-YEAR FIX: Use a safe functional cast instead of 'any' to support custom middleware arguments
+    // [SEC] 100-YEAR FIX: Use a safe functional cast instead of 'any' to support custom middleware arguments
     const findFirst = this.db.contact.findFirst as (
       args: unknown,
     ) => Promise<Contact | null>;
@@ -136,7 +145,16 @@ export class ContactRepository {
    * Soft-delete a contact with transactional relation cleanup.
    * Encapsulates the $transaction to keep ORM isolated in the repository.
    */
-  async softDeleteWithCleanup(id: string, contact: Contact): Promise<void> {
+  async softDeleteWithCleanup(
+    companyId: string,
+    id: string,
+    contact: Contact,
+  ): Promise<void> {
+    const existing = await this.db.contact.findFirst({
+      where: { id, companyId },
+    });
+    if (!existing) throw new Error("Contact not found or access denied");
+
     await this.db.$transaction([
       this.db.deal.updateMany({
         where: { contactId: id },

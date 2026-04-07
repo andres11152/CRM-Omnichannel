@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ MESSAGE TEMPLATE VALIDATION SCHEMAS
+ * [SEC] MESSAGE TEMPLATE VALIDATION SCHEMAS
  *
  * Security-focused validation for WhatsApp message templates
  * Ensures templates follow WhatsApp Business API requirements

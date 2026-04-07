@@ -2,7 +2,7 @@ import { Logger } from "./logger";
 import v8 from "v8";
 
 /**
- * 🛡️ RESOURCE CLEANUP MANAGER
+ * [SEC] RESOURCE CLEANUP MANAGER
  *
  * Ensures all timers, intervals, and event listeners are properly cleaned up.
  * Prevents memory leaks in long-running processes.
@@ -83,7 +83,7 @@ class ResourceManager {
   }
 
   /**
-   * 🛡️ CLEANUP ALL RESOURCES
+   * [SEC] CLEANUP ALL RESOURCES
    *
    * Called on server shutdown to prevent memory leaks
    */
@@ -94,7 +94,7 @@ class ResourceManager {
     }
 
     this.isShuttingDown = true;
-    Logger.info("[ResourceManager] 🧹 Starting cleanup...");
+    Logger.info("[ResourceManager]  Starting cleanup...");
 
     const stats = this.getStats();
     Logger.info(
@@ -130,7 +130,7 @@ class ResourceManager {
     await Promise.allSettled(cleanupPromises);
     this.cleanupFunctions.clear();
 
-    Logger.info("[ResourceManager] ✅ Cleanup complete");
+    Logger.info("[ResourceManager] [OK] Cleanup complete");
   }
 }
 
@@ -138,7 +138,7 @@ class ResourceManager {
 export const resourceManager = new ResourceManager();
 
 /**
- * 🛡️ AUTO-CLEANUP DECORATOR
+ * [SEC] AUTO-CLEANUP DECORATOR
  *
  * Automatically cleans up resources when a class instance is destroyed
  */
@@ -168,7 +168,7 @@ export function tracked(
 }
 
 /**
- * 🛡️ MEMORY MONITOR
+ * [SEC] MEMORY MONITOR
  *
  * Watches memory usage and warns if it exceeds thresholds
  */
@@ -208,7 +208,7 @@ class MemoryMonitor {
 
     if (heapPercent >= this.CRITICAL_THRESHOLD) {
       Logger.error(
-        `[MemoryMonitor] 🚨 CRITICAL: Memory usage at ${(
+        `[MemoryMonitor] [ALERT] CRITICAL: Memory usage at ${(
           heapPercent * 100
         ).toFixed(1)}% of LIMIT`,
         {
@@ -219,7 +219,7 @@ class MemoryMonitor {
         },
       );
 
-      // 🛡️ Memory is critical - GC will be forced below.
+      // [SEC] Memory is critical - GC will be forced below.
       // Store pruning is handled automatically by SimpleInMemoryStore's caps.
 
       // Force garbage collection if available
@@ -229,7 +229,7 @@ class MemoryMonitor {
       }
     } else if (heapPercent >= this.WARNING_THRESHOLD) {
       Logger.warn(
-        `[MemoryMonitor] ⚠️ Memory usage at ${(heapPercent * 100).toFixed(1)}%`,
+        `[MemoryMonitor] [WARNING] Memory usage at ${(heapPercent * 100).toFixed(1)}%`,
       );
     }
   }

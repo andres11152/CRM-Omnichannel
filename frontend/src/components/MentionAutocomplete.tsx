@@ -2,7 +2,7 @@ import React from 'react';
 import { User } from 'lucide-react';
 
 /**
- * 💬 MENTION AUTOCOMPLETE DROPDOWN
+ * [CHAT] MENTION AUTOCOMPLETE DROPDOWN
  * Shows team members suggestions when typing @username
  */
 

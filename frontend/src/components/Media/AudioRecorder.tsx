@@ -143,11 +143,11 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
           }`}
         >
           {isRecording ? (
-            <span className="text-3xl">🎙️</span>
+            <span className="text-3xl">️</span>
           ) : audioBlob ? (
-            <span className="text-3xl">✅</span>
+            <span className="text-3xl">[OK]</span>
           ) : (
-            <span className="text-3xl">🎤</span>
+            <span className="text-3xl"></span>
           )}
         </div>
       </div>
@@ -213,7 +213,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
               onClick={handleUpload}
               className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-full font-bold shadow-lg flex items-center gap-2"
             >
-              💾 Guardar y Usar
+              [SAVE] Guardar y Usar
             </button>
           </>
         )}

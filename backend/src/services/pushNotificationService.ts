@@ -4,7 +4,7 @@ import { userRepository } from "@/repositories/UserRepository";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🔔 WEB PUSH NOTIFICATION SERVICE
+ *  WEB PUSH NOTIFICATION SERVICE
  * PWA push notifications using Web Push API
  */
 
@@ -309,7 +309,7 @@ class PushNotificationService {
   }
 
   /**
-   * 🔔 NOTIFICATION TEMPLATES
+   *  NOTIFICATION TEMPLATES
    */
 
   /**
@@ -346,7 +346,7 @@ class PushNotificationService {
     subject: string,
   ): Promise<void> {
     await this.sendToUser(userId, {
-      title: "🎫 New Ticket Assigned",
+      title: " New Ticket Assigned",
       body: subject,
       icon: "/icon-192x192.png",
       tag: "ticket-assigned",
@@ -377,7 +377,7 @@ class PushNotificationService {
     await this.sendToUsers(
       admins.map((a) => a.id),
       {
-        title: `⚠️ ${quotaType} Quota Warning`,
+        title: `[WARNING] ${quotaType} Quota Warning`,
         body: `You've used ${percentage}% of your ${quotaType} quota`,
         icon: "/icon-192x192.png",
         badge: "/badge-72x72.png",
@@ -411,7 +411,7 @@ class PushNotificationService {
     await this.sendToUsers(
       admins.map((a) => a.id),
       {
-        title: "⚠️ WhatsApp Disconnected",
+        title: "[WARNING] WhatsApp Disconnected",
         body: "Your WhatsApp session has been disconnected. Reconnect to continue.",
         icon: "/icon-192x192.png",
         tag: "whatsapp-disconnected",
@@ -436,7 +436,7 @@ class PushNotificationService {
     const successRate = ((stats.sent / stats.total) * 100).toFixed(1);
 
     await this.sendToUser(userId, {
-      title: "✅ Campaign Completed",
+      title: "[OK] Campaign Completed",
       body: `"${campaignName}" sent to ${stats.sent}/${stats.total} (${successRate}%)`,
       icon: "/icon-192x192.png",
       tag: "campaign-completed",

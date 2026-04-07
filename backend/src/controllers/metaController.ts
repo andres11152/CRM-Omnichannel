@@ -1,9 +1,9 @@
 // THIS IS BACKEND CODE (Node.js)
 import { Logger } from "@/utils/logger";
 import { gateway } from "@/gateways/socketGateway"; // Import the socket gateway
-import { metaMediaService } from "@/services/metaMediaService";
-import { queueProducer } from "@/services/queueProducer";
-import { webhookDispatcher } from "@/services/webhookDispatcher";
+import { metaMediaService } from "@/services/MetaMediaService";
+import { queueProducer } from "@/services/QueueProducer";
+import { webhookDispatcher } from "@/services/WebhookDispatcher";
 import type { Message } from "@prisma/client";
 import { MessageDirection, Channel } from "@prisma/client";
 
@@ -22,7 +22,7 @@ export const verifyWebhook = (req: Request, res: Response) => {
 
   if (mode && token) {
     if (mode === "subscribe" && token === META_VERIFY_TOKEN) {
-      Logger.info("[Meta] Webhook Verified! 🟢");
+      Logger.info("[Meta] Webhook Verified! [ONLINE]");
       res.status(200).send(challenge);
     } else {
       res.sendStatus(403);
@@ -49,7 +49,7 @@ export const handleIncomingWebhook = async (req: Request, res: Response) => {
 
     const data = parsedData.data;
     Logger.info(
-      `[Meta] 📩 Received message from ${data.phoneNumber} (Type: ${data.type})`,
+      `[Meta]  Received message from ${data.phoneNumber} (Type: ${data.type})`,
     );
 
     // 2. CONSTRUCT MESSAGE OBJECT

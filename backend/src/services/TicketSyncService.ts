@@ -7,7 +7,7 @@ const ticketRepository = new TicketRepository();
 
 export class TicketSyncService {
   /**
-   * 🛡️ ENSURE TICKET EXISTS
+   * [SEC] ENSURE TICKET EXISTS
    * Every conversation MUST have an active ticket for visibility in Agent Workspace.
    */
   async ensureActiveTicket(params: {
@@ -66,7 +66,7 @@ export class TicketSyncService {
   }
 
   /**
-   * 🔍 FIND RECIPIENT PHONE FROM TICKET
+   * [SEARCH] FIND RECIPIENT PHONE FROM TICKET
    * Fallback for when conversation.channelId is not a clean phone.
    */
   async findPhoneByConversation(conversationId: string): Promise<string | null> {
@@ -95,3 +95,4 @@ export class TicketSyncService {
 }
 
 export const ticketSyncService = new TicketSyncService();
+

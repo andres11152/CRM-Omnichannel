@@ -1,5 +1,5 @@
 /**
- * 📧 EMAIL SERVICE (Refactored — ORM-Free)
+ *  EMAIL SERVICE (Refactored — ORM-Free)
  *
  * Business logic for email operations:
  * - Send and persist outbound emails
@@ -36,10 +36,10 @@ export class EmailService {
     // Default system provider (fallback)
     this.provider = provider || EmailProviderFactory.createProvider();
 
-    // 🛡️ Circuit Breaker for SMTP operations
+    // [SEC] Circuit Breaker for SMTP operations
     this.smtpBreaker = new CircuitBreaker({
       threshold: 5,
-      timeout: 60000, // 1 minute
+      timeout: 60000, // 1 || minute
       name: "SMTP",
     });
   }
@@ -68,7 +68,7 @@ export class EmailService {
           port: company.smtpPort || 587,
           user: company.smtpUser,
           pass: company.smtpPassword, // In production, decrypt this!
-          secure: company.smtpSecure ?? true,
+          secure: company.smtpSecure || true,
         });
       }
 

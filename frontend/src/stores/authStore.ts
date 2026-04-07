@@ -14,7 +14,7 @@ interface AuthState {
   updateToken: (token: string) => void;
 }
 
-// 🔒 API Base URL for server-side logout
+//  API Base URL for server-side logout
 const API_BASE =
   (import.meta.env.VITE_API_URL as string) || "http://localhost:4000/api";
 
@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       /**
-       * 🏢 ENTERPRISE LOGOUT
+       *  ENTERPRISE LOGOUT
        * 1. Calls backend to destroy session + blacklist token (server-side)
        * 2. Clears local state
        * 3. Redirects to login
@@ -40,7 +40,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         const currentToken = get().token;
 
-        // 🔥 Server-side session destruction (fire-and-forget)
+        //  Server-side session destruction (fire-and-forget)
         // Uses fetch directly to avoid circular dependency with axios interceptor
         if (currentToken) {
           fetch(`${API_BASE}/auth/logout`, {
@@ -80,7 +80,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       /**
-       * 🔄 Update access token after silent refresh.
+       * [SYNC] Update access token after silent refresh.
        * Called by axios interceptor when refresh succeeds.
        */
       updateToken: (token: string) => {

@@ -4,7 +4,7 @@ import { AppError } from "@/utils/AppError";
 import { UserRole } from "@prisma/client";
 
 /**
- * 🛡️ ROLE-BASED ACCESS CONTROL MIDDLEWARE
+ * [SEC] ROLE-BASED ACCESS CONTROL MIDDLEWARE
  *
  * Usage: router.post("/", protect, restrictTo("ADMIN", "MASTER"), handler)
  *

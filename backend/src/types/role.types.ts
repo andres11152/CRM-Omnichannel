@@ -1,7 +1,7 @@
 import { Role, Permission, RolePermission } from "@prisma/client";
 
 /**
- * 🛡️ PERMISSION CONSTANTS
+ * [SEC] PERMISSION CONSTANTS
  */
 export type PermissionModule =
   | "CONVERSATIONS"
@@ -30,7 +30,7 @@ export type PermissionAction =
   | "MANAGE";
 
 /**
- * 📦 DTOs
+ * [PKG] DTOs
  */
 export interface PermissionDTO {
   id: string;
@@ -53,7 +53,7 @@ export interface RoleDTO {
 }
 
 /**
- * 🔄 MAPPERS
+ * [SYNC] MAPPERS
  */
 export const toPermissionDTO = (perm: Permission): PermissionDTO => ({
   id: perm.id,

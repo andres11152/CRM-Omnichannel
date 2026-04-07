@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ INTEGRATION VALIDATION SCHEMAS
+ * [SEC] INTEGRATION VALIDATION SCHEMAS
  *
  * Covers WhatsApp session lifecycle via integration layer:
  * - Session status checks

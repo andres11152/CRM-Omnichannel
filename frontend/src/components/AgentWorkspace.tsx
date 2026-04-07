@@ -53,7 +53,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   );
   const [loading, setLoading] = useState(true);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
-  // ?? ENTERPRISE: Queue Transfer Modal State
+  // ENTERPRISE: Queue Transfer Modal State
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferringTicketId, setTransferringTicketId] = useState<
     string | null
@@ -67,7 +67,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const [viewMode, setViewMode] = useState<"compact" | "comfortable">(
     "comfortable",
   );
-  // ??? ENTERPRISE: Tag Filtering State
+  // ENTERPRISE: Tag Filtering State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -81,7 +81,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     activeTicketIdRef.current = activeTicketId;
   }, [activeTicketId]);
 
-  // ?? URL DEEP LINKING: Handle ?ticketId=xyz
+  // URL DEEP LINKING: Handle ?ticketId=xyz
   const [searchParams, setSearchParams] = useSearchParams();
   const queryTicketId = searchParams.get("ticketId");
 
@@ -93,7 +93,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       );
 
       if (found) {
-        console.log(`[AgentWorkspace] ?? Deep linking to ticket: ${found.id}`);
+        console.log(`[AgentWorkspace] Deep linking to ticket: ${found.id}`);
         setActiveTicketId(found.id);
 
         // Smart Tab Switching
@@ -119,14 +119,14 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const triggerBackgroundRefresh = () => {
     if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
     refreshTimeoutRef.current = setTimeout(() => {
-      console.log("[AgentWorkspace] ?? Triggering background refresh...");
+      console.log("[AgentWorkspace] Triggering background refresh...");
       fetchData(true); // Silent refresh
     }, 2000); // Wait 2 seconds before refreshing
   };
 
-  // ?? HANDLE CONTACT SELECTION (Reset Unread Count)
+  // HANDLE CONTACT SELECTION (Reset Unread Count)
   const handleSelectContact = (ticketId: string) => {
-    console.log("[AgentWorkspace] ?? Opening chat:", ticketId);
+    console.log("[AgentWorkspace] Opening chat:", ticketId);
 
     // Reset unread count for this ticket
     setTickets((prev) =>
@@ -145,7 +145,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const fetchData = (isBackground = false) => {
     if (!isBackground) setLoading(true);
 
-    // ?? FORCE STATUS CHECK: Immediate feedback on connection status
+    // FORCE STATUS CHECK: Immediate feedback on connection status
     // useful when user clicks "refresh" button
     socketService.emit("session.check_status", {});
 
@@ -193,7 +193,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
 
           if (protectedLocalTickets.length > 0) {
             console.log(
-              `[AgentWorkspace] ??? Protected ${protectedLocalTickets.length} recent tickets from being overwritten`,
+              `[AgentWorkspace] Protected ${protectedLocalTickets.length} recent tickets from being overwritten`,
             );
           }
 
@@ -271,7 +271,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   };
 
   // ? Socket & Lifecycle Effect
-  // ?? SOCKETS HOOK
+  // SOCKETS HOOK
   useAgentWorkspaceSockets({
     user,
     setTickets,
@@ -282,7 +282,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     triggerBackgroundRefresh,
   });
 
-  // 🛡️ ENTERPRISE: Auto-detect socket connection state on mount
+  // [SEC] ENTERPRISE: Auto-detect socket connection state on mount
   // Fixes the race condition where socket connects before the listener is registered
   useEffect(() => {
     // Poll briefly to catch already-connected socket
@@ -303,7 +303,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     };
   }, []);
 
-  // 🟢 100-YEAR FIX: Real-time WhatsApp Status Synchronization
+  // [ONLINE] 100-YEAR FIX: Real-time WhatsApp Status Synchronization
   // NOTE: This listens to WhatsApp session events for UI indicators
   // but does NOT override the CRM socket connection state (socketConnected).
   // Those are TWO DIFFERENT concepts:
@@ -314,15 +314,15 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       sessionId: string;
       status: string;
     }) => {
-      console.log("[AgentWorkspace] 📡 WhatsApp Status Update:", data.status);
-      // 🛡️ REMOVED: setSocketConnected(data.status === "CONNECTED");
+      console.log("[AgentWorkspace] [WS] WhatsApp Status Update:", data.status);
+      // [SEC] REMOVED: setSocketConnected(data.status === "CONNECTED");
       // WhatsApp session status should NOT override CRM socket state.
       // The Online/Offline badge reflects CRM connectivity, not WA sessions.
     };
 
     const handleQrUpdated = () => {
-      console.log("[AgentWorkspace] 📱 QR Code received");
-      // 🛡️ REMOVED: setSocketConnected(false);
+      console.log("[AgentWorkspace] [APP] QR Code received");
+      // [SEC] REMOVED: setSocketConnected(false);
       // A QR code appearing means a WA session needs pairing, 
       // but the CRM socket is still perfectly connected.
     };
@@ -347,7 +347,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       .catch((err) => console.error("Error loading tags", err));
   }, []);
 
-  // ??? TAB TITLE MANAGEMENT (Must be Top Level Hook)
+  // TAB TITLE MANAGEMENT (Must be Top Level Hook)
   useEffect(() => {
     const totalUnread = tickets.reduce(
       (acc, t) => acc + (t.unreadCount || 0),
@@ -360,7 +360,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     }
   }, [tickets]);
   const handleDeleteTicket = async (ticketId: string) => {
-    console.log("[AgentWorkspace] ??? Deleting ticket:", ticketId);
+    console.log("[AgentWorkspace] Deleting ticket:", ticketId);
 
     try {
       const token = localStorage.getItem("token");
@@ -395,7 +395,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     }
   };
 
-  // ?? ENTERPRISE: Queue Transfer Handlers
+  // ENTERPRISE: Queue Transfer Handlers
   const handleOpenTransferModal = (ticketId: string) => {
     setTransferringTicketId(ticketId);
     setIsTransferModalOpen(true);
@@ -433,14 +433,14 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       const json = await res.json();
       const updatedTicketData = json.data?.ticket || json; // Robust fallback
 
-      // ??? 100-YEAR ENTERPRISE FIX: Smart State Update Based on Transfer Type
+      // 100-YEAR ENTERPRISE FIX: Smart State Update Based on Transfer Type
       if (type === "AGENT") {
         // TRANSFER TO AGENT: The ticket now belongs to someone else.
         // Remove it from the current agent's view IMMEDIATELY.
         // The new assignee will receive it via socket event.
         setTickets((prev) => prev.filter((t) => t.id !== transferringTicketId));
         console.log(
-          "[AgentWorkspace] ?? Ticket transferred to agent. Removed from local view.",
+          "[AgentWorkspace] Ticket transferred to agent. Removed from local view.",
           transferringTicketId,
         );
       } else {
@@ -459,7 +459,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
           ),
         );
         console.log(
-          "[AgentWorkspace] ?? Ticket moved to queue. Updated local state.",
+          "[AgentWorkspace] Ticket moved to queue. Updated local state.",
           transferringTicketId,
         );
       }
@@ -484,9 +484,9 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   };
 
   // Filter Logic
-  // ?? CRITICAL FIX: My Chats MUST only show tickets assigned to the current user
+  // CRITICAL FIX: My Chats MUST only show tickets assigned to the current user
   // This ensures that when a ticket is transferred, it disappears from the original agent's view
-  // ?? CRITICAL FIX: Deduplication Logic (100-Year Solution)
+  // CRITICAL FIX: Deduplication Logic (100-Year Solution)
   // Ensure we NEVER show duplicate tickets for the same conversation
   // Or phantom duplicates with same message content but different IDs
   const uniqueTicketsMap = new Map<string, Ticket>();
@@ -523,7 +523,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     return t.status === "OPEN" || t.status === "IN_PROGRESS";
   });
 
-  // ??? 100-YEAR ENTERPRISE: Queue Visibility
+  // 100-YEAR ENTERPRISE: Queue Visibility
   // Requirements:
   // - ONLY tickets that are OPEN AND have NO assignedToId (unassigned)
   // - EXCLUDE GROUPS (User Request: "no le debe salir los grupos a los agentes en 'cola de espera'")
@@ -534,7 +534,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       return false;
     }
 
-    // ?? EXCLUDE GROUPS
+    // EXCLUDE GROUPS
     // Groups are handled separately or directly by assigned agents, not in the general queue
     if (t.isGroup || t.contact?.isGroup) {
       return false;
@@ -557,7 +557,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       (t) => t.status !== "CLOSED" && t.status !== "RESOLVED",
     );
   } else if (activeTab === "resolved") {
-    // ??? 100-YEAR ENTERPRISE: Role-aware Resolved View
+    // 100-YEAR ENTERPRISE: Role-aware Resolved View
     const isAdminOrSupervisor = ["ADMIN", "SUPERVISOR", "MASTER"].includes(
       user?.role || "",
     );
@@ -581,7 +581,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     displayedTickets = displayedTickets.filter((t) => t.unreadCount > 0);
   }
 
-  // ??? ENTERPRISE: Advanced Tag Filtering
+  // ENTERPRISE: Advanced Tag Filtering
   // Only show tickets that contain ALL selected tags (AND logic) or ANY (OR logic)?
   // Usually "OR" is better for discovery, "AND" for strict narrowing.
   // Let's go with "AND" for precise filtering (Enterprise standard).
@@ -627,14 +627,14 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
       queueName: t.contact.queueName || t.queue?.name,
       assignedAgentName: t.contact.assignedAgentName || t.assignedTo?.name,
       channel: t.channel as Channel,
-      // ?? GROUP CHAT SUPPORT
-      isGroup: t.isGroup ?? t.contact.isGroup ?? false,
-      // ?? Multi-WhatsApp Session Identification (#1, #2, #3)
+      // GROUP CHAT SUPPORT
+      isGroup: t.isGroup || t.contact.isGroup || false,
+      // Multi-WhatsApp Session Identification (#1, #2, #3)
       whatsappSessionIndex: t.contact.whatsappSessionIndex,
     };
   });
 
-  // 🏢 100-YEAR ENTERPRISE: Smart Group Visibility
+  //  100-YEAR ENTERPRISE: Smart Group Visibility
   // Groups need special handling:
   // - ADMINs/SUPERVISORs: See ALL active groups for the company (global oversight)
   // - AGENTs: See only groups assigned to them
@@ -649,7 +649,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   if (activeTab === "my_chats") {
     directContacts = contacts.filter((c) => !c.isGroup);
 
-    // 🏢 ENTERPRISE GROUP LOGIC:
+    //  ENTERPRISE GROUP LOGIC:
     // For Admins: Show ALL active groups (even unassigned) so they can monitor
     // For Agents: Show groups assigned to them (already in myTickets)
     if (isAdminRole) {
@@ -752,21 +752,22 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
           | "human",
         queueName: activeTicket.queue?.name,
         assignedAgentName: activeTicket.assignedTo?.name,
-        // ?? GROUP CHAT SUPPORT
-        isGroup: activeTicket.isGroup ?? activeTicket.contact.isGroup ?? false,
+        assignedToId: activeTicket.assignedToId,
+        // GROUP CHAT SUPPORT
+        isGroup: activeTicket.isGroup || activeTicket.contact.isGroup || false,
       }
     : null;
 
   if (activeContact) {
     // Debug Socket Room ID
-    // console.log(`[AgentWorkspace] ?? Active Contact ID for Socket: ${activeContact.id} (TicketID: ${activeTicket.id}, ConvID: ${activeTicket.conversationId})`);
+    // console.log(`[AgentWorkspace] Active Contact ID for Socket: ${activeContact.id} (TicketID: ${activeTicket.id}, ConvID: ${activeTicket.conversationId})`);
   }
 
   // Actions
   const handlePickTicket = async () => {
     if (!activeTicketId || !user) return;
 
-    // ??? DEBUG: deeply inspect ID
+    // DEBUG: deeply inspect ID
     console.log(
       `[handlePickTicket] Attempting to pick ID: '${activeTicketId}'`,
     );
@@ -775,7 +776,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     for (let i = 0; i < activeTicketId.length; i++) {
       const code = activeTicketId.charCodeAt(i);
       if (code < 32 || code > 126)
-        console.warn(`[handlePickTicket] ?? Suspicious char at ${i}: ${code}`);
+        console.warn(`[handlePickTicket] Suspicious char at ${i}: ${code}`);
     }
 
     const cleanId = activeTicketId.trim();
@@ -802,12 +803,12 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
         }),
       });
 
-      // ??? 100-YEAR FIX: Self-Healing for Optimistic IDs (404 Handling)
+      // 100-YEAR FIX: Self-Healing for Optimistic IDs (404 Handling)
       // If we get a 404, it likely means we used a ConversationID (optimistic) instead of the real TicketID.
       // We force a refresh, find the REAL ticket using the conversation ID, and retry.
       if (response.status === 404) {
         console.warn(
-          "[handlePickTicket] ?? 404 encountered. ID might be optimistic. Attempting self-heal...",
+          "[handlePickTicket] 404 encountered. ID might be optimistic. Attempting self-heal...",
         );
 
         // 1. Force Sync Fetch (wait for it)
@@ -825,7 +826,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
 
               if (realTicket && realTicket.id !== cleanId) {
                 console.log(
-                  `[handlePickTicket] ?? Healed ID: ${cleanId} -> ${realTicket.id}`,
+                  `[handlePickTicket] Healed ID: ${cleanId} -> ${realTicket.id}`,
                 );
                 // 3. Retry with Real ID
                 fetch(`${API_BASE_URL}/tickets/${realTicket.id}`, {
@@ -854,20 +855,9 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
         throw new Error("Error al asignar ticket (Posiblemente ya no existe)");
       }
 
-      // 2. Send system notification to chat
-      const conversationId = ticketToUpdate.conversationId || ticketToUpdate.id;
-      await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          content: `✅ El agente *${user.name}* se ha unido al chat`,
-          senderType: "SYSTEM",
-          direction: "OUTBOUND",
-        }),
-      });
+      // 2. System notification to chat (Optional: Can be moved to Enterprise Settings)
+      // Removed per user request: "[OK] El agente *${user.name}* se ha unido al chat"
+      // TODO: Make this configurable in Tenant Settings later.
 
       // 3. Optimistic UI Update
       setTickets((prev) =>
@@ -940,7 +930,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const isRestricted =
     user?.companyStatus === "INACTIVE" || user?.companyStatus === "CANCELED";
 
-  // ??? 100-YEAR FIX: Global Optimistic Update
+  // 100-YEAR FIX: Global Optimistic Update
   const handleOptimisticTicketUpdate = (
     ticketId: string,
     updates: Partial<Ticket>,
@@ -964,10 +954,49 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
     );
   };
 
+  const handleResolve = async (category: string) => {
+    if (!activeTicketId) return;
+    try {
+      const { resolveTicket } = await import("@/services/ticketService");
+      await resolveTicket(activeTicketId, {
+        status: "RESOLVED",
+        resolutionType: category as any,
+      });
+
+      // Optimistic Update: Move to Resolved/Closed
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === activeTicketId ? { ...t, status: "RESOLVED" } : t,
+        ),
+      );
+      setActiveTicketId(null);
+      toast.success("Ticket resuelto correctamente");
+    } catch (error) {
+      toast.error("Error al resolver el ticket");
+    }
+  };
+
+  const handleContactUpdate = (updatedContact: Contact) => {
+    setTickets((prev) =>
+      prev.map((t) =>
+        t.contact.id === updatedContact.id ||
+        t.conversationId === updatedContact.id
+          ? {
+              ...t,
+              contact: {
+                ...t.contact,
+                ...updatedContact,
+              },
+            }
+          : t,
+      ),
+    );
+  };
+
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark">
       {/* Header */}
-      {/* ?? ENTERPRISE HEADER */}
+      {/* ENTERPRISE HEADER */}
       <div className="px-4 md:px-6 py-3 md:py-4 bg-white/80 dark:bg-reply-surface-dark/95 backdrop-blur-xl border-b border-gray-200/60 dark:border-reply-border-dark sticky top-0 z-40 transition-all duration-300 shadow-sm relative">
         <div className="flex justify-between items-center max-w-full gap-4">
           {/* LEFT: Branding & Status */}
@@ -1208,7 +1237,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               Cargando tickets...
             </div>
           ) : activeTab === "queue" ? (
-            // ?? ENTERPRISE: Queue View with priority grouping + Manual Transfer
+            // ENTERPRISE: Queue View with priority grouping + Manual Transfer
             <QueueView
               tickets={queueTickets}
               activeTicketId={activeTicketId}
@@ -1216,7 +1245,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               onTransferTicket={handleOpenTransferModal}
             />
           ) : activeTab === "resolved" ? (
-            // ?? ENTERPRISE: Resolved View with history and metrics
+            // ENTERPRISE: Resolved View with history and metrics
             <ResolvedView
               tickets={tickets.filter(
                 (t) => t.status === "CLOSED" || t.status === "RESOLVED",
@@ -1265,12 +1294,14 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               <ChatInterface
                 activeContact={{
                   ...activeContact!,
-                  ticketId: activeTicket?.id, // ??? CRITICAL FIX: Ensure Ticket ID is present for API calls
+                  ticketId: activeTicket?.id, // CRITICAL FIX: Ensure Ticket ID is present for API calls
                 }}
                 aiConfig={aiConfig}
                 readOnly={isRestricted}
                 onBack={() => setActiveTicketId(null)}
-                // ??? 100-YEAR FIX: Pass Optimistic Update Handler
+                onResolve={handleResolve}
+                onContactUpdate={handleContactUpdate}
+                // 100-YEAR FIX: Pass Optimistic Update Handler
                 onTicketUpdate={handleOptimisticTicketUpdate}
               />
             ) : (
@@ -1287,11 +1318,13 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                       <div className="relative flex-shrink-0">
                         <Avatar
                           src={
-                            activeTicket.contact.profilePicUrl ||
+                            (activeTicket.contact.profilePicUrl?.startsWith("/")
+                              ? `${BASE_URL}${activeTicket.contact.profilePicUrl}`
+                              : activeTicket.contact.profilePicUrl) ||
                             activeTicket.contact.avatarUrl ||
                             null
                           }
-                          name={activeTicket.contact.name || ""}
+                          name={activeTicket.contact.name || "Usuario"}
                           className="w-14 h-14 shadow-md ring-2 ring-white dark:ring-gray-700"
                         />
                         <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-amber-500 rounded-full border-2 border-white dark:border-reply-panel-dark flex items-center justify-center">
@@ -1300,11 +1333,13 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                          {activeTicket.contact.name}
+                          {activeTicket.contact.name || "Sin Nombre"}
                         </h3>
                         {activeTicket.contact.phone && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
-                            +{activeTicket.contact.phone}
+                            {activeTicket.contact.phone.startsWith("+") 
+                              ? activeTicket.contact.phone 
+                              : `+${activeTicket.contact.phone}`}
                           </p>
                         )}
                         <div className="flex items-center flex-wrap gap-1.5 mt-2">
@@ -1367,7 +1402,9 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                       <div className="bg-gray-50 dark:bg-[#111b21] rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/50">
                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Ticket</p>
                         <p className="text-sm font-bold text-gray-800 dark:text-white mt-0.5">
-                          #{activeTicket.ticketNumber || "—"}
+                          {activeTicket.ticketNumber !== undefined && activeTicket.ticketNumber !== null
+                            ? `#${activeTicket.ticketNumber}`
+                            : "—"}
                         </p>
                       </div>
                       <div className="bg-gray-50 dark:bg-[#111b21] rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/50">
@@ -1413,7 +1450,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               </div>
             )
           ) : (
-            // ?? ENTERPRISE: Enhanced Empty State
+            // ENTERPRISE: Enhanced Empty State
             <div className="h-full flex flex-col items-center justify-center p-10 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0b141a] dark:via-[#111b21] dark:to-[#0b141a]">
               <div className="max-w-md w-full text-center">
                 {/* Animated Icon */}
@@ -1496,7 +1533,7 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
         onClose={() => setIsNewChatModalOpen(false)}
         onSubmit={handleCreateChatSubmit}
       />
-      {/* ?? ENTERPRISE: Queue Transfer Modal */}
+      {/* ENTERPRISE: Queue Transfer Modal */}
       <TransferModal
         isOpen={isTransferModalOpen}
         onClose={() => {

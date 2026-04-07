@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
-import { planLimitsService } from "@/services/planLimitsService";
+import { planLimitsService } from "@/services/PlanLimitsService";
 import { AppError } from "@/utils/AppError";
 
 /**

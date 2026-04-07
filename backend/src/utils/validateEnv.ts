@@ -16,10 +16,10 @@ const envSchema = z.object({
 export const validateEnv = () => {
   try {
     envSchema.parse(process.env);
-    Logger.info('✅ Variables de entorno validadas correctamente.');
+    Logger.info('[OK] Variables de entorno validadas correctamente.');
   } catch (error) {
     if (error instanceof z.ZodError) {
-      Logger.error('❌ Error de validación en las variables de entorno:');
+      Logger.error('[ERROR] Error de validación en las variables de entorno:');
       error.errors.forEach((err) => {
         Logger.error(`- ${err.path.join('.')}: ${err.message}`);
       });

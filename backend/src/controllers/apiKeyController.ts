@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
-import { apiKeyService } from "@/services/apiKeyService";
+import { apiKeyService } from "@/services/ApiKeyService";
 
 export const listApiKeys = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {

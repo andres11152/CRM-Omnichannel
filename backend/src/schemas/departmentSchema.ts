@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🏢 DEPARTMENT VALIDATION SCHEMAS
+ *  DEPARTMENT VALIDATION SCHEMAS
  *
  * Validation for departments
  */

@@ -4,7 +4,7 @@ import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ SECURE IMPERSONATION MIDDLEWARE
+ * [SEC] SECURE IMPERSONATION MIDDLEWARE
  * Validates impersonation token from X-Impersonation-Token header
  * This prevents token exposure in URLs/logs
  */

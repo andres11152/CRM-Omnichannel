@@ -5,11 +5,11 @@ import {
   deleteFile,
   getSignedUrl,
   getFileStream,
-} from "@/services/uploadService";
+} from "@/services/UploadService";
 import { IStorageProvider, StorageUploadResult } from "@/types/storage.types";
 
 /**
- * 🔌 ADAPTER IMPLEMENTATION
+ *  ADAPTER IMPLEMENTATION
  * Wraps existing uploadService logic into a clean provider class.
  */
 export class DefaultStorageProvider implements IStorageProvider {

@@ -11,7 +11,7 @@ export interface AuthContextType {
 }
 
 /**
- * 🔐 useAuth Hook
+ * [AUTH] useAuth Hook
  * Centralized Authentication logic.
  * Wraps Zustand store to provide a clean API for components.
  * replaces: localStorage.getItem('token') in components

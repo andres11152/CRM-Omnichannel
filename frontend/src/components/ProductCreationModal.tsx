@@ -52,8 +52,8 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
   const [stock, setStock] = useState("100");
   const [description, setDescription] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null); // ✅ S3 URL from MediaPicker
-  const [showMediaPicker, setShowMediaPicker] = useState(false); // ✅ MediaPicker toggle
+  const [imageUrl, setImageUrl] = useState<string | null>(null); // [OK] S3 URL from MediaPicker
+  const [showMediaPicker, setShowMediaPicker] = useState(false); // [OK] MediaPicker toggle
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update category when type changes
@@ -125,7 +125,7 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
       // CRM Logic: Services and Digital items don't track stock quantity
       const finalStock = type === "Physical" ? parseInt(stock) || 0 : 0;
 
-      // ✅ Use imageUrl from MediaPicker (already an S3 URL)
+      // [OK] Use imageUrl from MediaPicker (already an S3 URL)
       // If user uploaded locally, imagePreview will be base64 but imageUrl will be null
       // Only use S3 URL from MediaPicker
       const finalImageUrl = imageUrl || null;
@@ -139,7 +139,7 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
         sku: sku || `SKU-${Date.now()}`,
         stock: finalStock,
         description,
-        imageUrl: finalImageUrl || undefined, // ✅ S3 URL from MediaPicker
+        imageUrl: finalImageUrl || undefined, // [OK] S3 URL from MediaPicker
         status: "active" as const,
         createdAt: new Date(),
       };

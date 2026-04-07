@@ -2,14 +2,14 @@ import { WAMessageUpdate } from "@whiskeysockets/baileys";
 import { z } from "zod";
 import { Logger } from "@/utils/logger";
 import { TenantContextManager } from "@/config/tenantContext";
-import { chatService } from "@/services/chatService";
+import { chatService } from "@/services/ChatService";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { SessionData } from "@/types/whatsapp.types";
-import { SocketEventEmitter } from "@/services/socketEventEmitter";
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 
 /**
- * 📊 STATUS UPDATE HANDLER
+ * [STAT] STATUS UPDATE HANDLER
  *
  * Handles WhatsApp message status updates (sent → delivered → read).
  * Maps numeric Baileys status codes to semantic status strings.
@@ -26,7 +26,7 @@ export class StatusUpdateHandler {
     update: WAMessageUpdate,
     sessionId: string,
   ): Promise<void> {
-    // 🛡️ Zod Validation
+    // [SEC] Zod Validation
     const inputSchema = z.object({
       whatsappMessageId: z.string().min(1),
       status: z.number().optional(),
@@ -38,7 +38,7 @@ export class StatusUpdateHandler {
     });
 
     if (!validated.success) {
-      Logger.warn(`[StatusHandler] ⚠️ Invalid message update payload dropped`, {
+      Logger.warn(`[StatusHandler] [WARNING] Invalid message update payload dropped`, {
         sessionId,
         errors: validated.error.errors.map(
           (e) => `${e.path.join(".")}: ${e.message}`,

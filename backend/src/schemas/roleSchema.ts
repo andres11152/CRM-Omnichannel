@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🔐 ROLE & PERMISSION VALIDATION SCHEMAS
+ * [AUTH] ROLE & PERMISSION VALIDATION SCHEMAS
  *
  * Validation for Role-Based Access Control (RBAC) operations
  */

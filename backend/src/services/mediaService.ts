@@ -1,8 +1,8 @@
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { storageProvider } from "@/providers/StorageProvider";
-import { planLimitsService } from "@/services/planLimitsService";
-import { validateFileType, validateFileSize } from "@/services/uploadService";
+import { planLimitsService } from "@/services/PlanLimitsService";
+import { validateFileType, validateFileSize } from "@/services/UploadService";
 import { toMediaDTO, MediaDTO } from "@/types/media.types";
 import { Media, MediaType, Prisma } from "@prisma/client";
 import { Readable } from "stream";

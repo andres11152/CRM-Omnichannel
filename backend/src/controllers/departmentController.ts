@@ -2,10 +2,10 @@ import { Response, NextFunction } from "express";
 import { AppError } from "../utils/AppError";
 import { catchAsync } from "../utils/catchAsync";
 import { AuthenticatedRequest } from "../types";
-import { departmentService } from "../services/departmentService";
+import { departmentService } from "../services/DepartmentService";
 
 /**
- * 🏗️ DEPARTMENT CONTROLLER
+ * [BUILD] DEPARTMENT CONTROLLER
  *
  * HTTP orchestrator for departments.
  * All data access delegated to departmentService (SRP).

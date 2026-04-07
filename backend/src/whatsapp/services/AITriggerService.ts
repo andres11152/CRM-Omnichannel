@@ -1,9 +1,9 @@
 import { contactRepository } from "@/repositories/ContactRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { aiAssistantRepository } from "@/repositories/AIAssistantRepository";
-import { chatService } from "@/services/chatService";
-import { generateAIResponse } from "@/services/aiResponseService";
-import { flowExecutor } from "@/services/flowExecutor";
+import { chatService } from "@/services/ChatService";
+import { generateAIResponse } from "@/services/AiResponseService";
+import { flowExecutor } from "@/services/FlowExecutor";
 import { AIResponseSchema } from "@/types/ai.types";
 import { TenantContextManager } from "@/config/tenantContext";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
@@ -12,7 +12,7 @@ import mime from "mime-types";
 import { Conversation, Queue, User } from "@prisma/client";
 
 /**
- * 🤖 AI TRIGGER SERVICE
+ * [AI] AI TRIGGER SERVICE
  *
  * Handles AI response generation and Flow Bot execution.
  * Extracted from MessageHandler for SRP compliance.
@@ -77,6 +77,7 @@ export class AITriggerService {
     textContent: string,
     companyId: string,
     cleanRemoteJid: string,
+    remoteJid: string,
     customerUser: User | null,
     pushName: string | undefined,
   ): Promise<void> {
@@ -86,6 +87,7 @@ export class AITriggerService {
       textContent,
       companyId,
       cleanRemoteJid,
+      remoteJid,
       customerUser,
       pushName,
     );
@@ -108,14 +110,14 @@ export class AITriggerService {
       if (lastIntervention && timeSinceIntervention < GRACE_PERIOD_MS) {
         return;
       } else {
-        await chatService.updateConversation(conversation.id, {
+        await chatService.updateConversation(companyId, conversation.id, {
           aiEnabled: true,
         });
       }
     }
 
     // Step 3: Trigger AI Response
-    this.triggerAIResponse(conversation, textContent, companyId).catch(
+    this.triggerAIResponse(conversation, textContent, companyId, remoteJid).catch(
       () => {},
     );
   }
@@ -130,6 +132,7 @@ export class AITriggerService {
     textContent: string,
     companyId: string,
     cleanRemoteJid: string,
+    remoteJid: string,
     customerUser: User | null,
     pushName: string | undefined,
   ): Promise<boolean> {
@@ -177,7 +180,7 @@ export class AITriggerService {
         async () => {
           for (const result of flowResults) {
             if (typeof result === "string") {
-              await this.callbacks.sendMessage(conversation.channelId, result, {
+              await this.callbacks.sendMessage(remoteJid, result, {
                 companyId,
                 conversationId: conversation.id,
                 senderId: botUser.id,
@@ -189,7 +192,7 @@ export class AITriggerService {
               "type" in result
             ) {
               await this.callbacks.sendMedia(
-                conversation.channelId,
+                remoteJid,
                 {
                   type: result.type,
                   url: result.url,
@@ -225,10 +228,11 @@ export class AITriggerService {
     conversation: ConversationWithQueue,
     messageContent: string,
     companyId: string,
+    remoteJid: string,
   ): Promise<void> {
     if (!conversation?.queue?.aiAssistantId) return;
 
-    // 🛡️ RACE CONDITION GUARD: Prevent double AI response
+    // [SEC] RACE CONDITION GUARD: Prevent double AI response
     // If an AI message was sent in the last 8 seconds for this conversation, skip to avoid spam.
     const recentAiResponse = await messageRepository.findRecentAIResponse(
       companyId,
@@ -237,7 +241,7 @@ export class AITriggerService {
 
     if (recentAiResponse) {
       Logger.warn(
-        `[AITrigger] 🛡️ Skipping duplicate AI response for conv ${conversation.id} (recent response found)`,
+        `[AITrigger] [SEC] Skipping duplicate AI response for conv ${conversation.id} (recent response found)`,
       );
       return;
     }
@@ -276,7 +280,7 @@ export class AITriggerService {
     );
 
     await this.callbacks.sendPresenceUpdate(
-      conversation.channelId,
+      remoteJid,
       "composing",
       companyId,
     );
@@ -301,13 +305,13 @@ export class AITriggerService {
       { companyId, userId: botUser.id, requestId: "ai" },
       async () => {
         await this.callbacks.sendPresenceUpdate(
-          conversation.channelId,
+          remoteJid,
           "paused",
           companyId,
         );
 
         await this.callbacks.sendMessage(
-          conversation.channelId,
+          remoteJid,
           cleanResponse,
           {
             companyId,
@@ -323,3 +327,4 @@ export class AITriggerService {
     );
   }
 }
+

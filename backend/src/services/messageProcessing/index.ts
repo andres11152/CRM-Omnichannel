@@ -1,5 +1,5 @@
 /**
- * 📦 MESSAGE PROCESSING MODULE
+ * [PKG] MESSAGE PROCESSING MODULE
  *
  * Barrel export for all message processing sub-services.
  * Each service follows the Single Responsibility Principle.

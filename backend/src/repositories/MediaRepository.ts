@@ -2,7 +2,7 @@ import { prisma, ExtendedPrismaClient } from "@/config/database";
 import { Media, Prisma } from "@prisma/client";
 
 /**
- * 🗃️ MEDIA REPOSITORY
+ * ️ MEDIA REPOSITORY
  *
  * Handles all database operations for the Media model.
  * Used by MediaProcessorService to resolve MIME types and filenames from proxy URLs.

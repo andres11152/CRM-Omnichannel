@@ -26,7 +26,7 @@ export class EmailService {
       );
     }
 
-    // 🛡️ SECURITY: Decrypt password if encrypted
+    // [SEC] SECURITY: Decrypt password if encrypted
     let smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
     if (smtpPass) {
       // Lazy load decryption to avoid circular deps or init issues
@@ -50,7 +50,7 @@ export class EmailService {
   }
 
   async sendEmail(options: EmailOptions): Promise<void> {
-    // 🔒 VALIDATION: Check if SMTP is configured before attempting to send
+    //  VALIDATION: Check if SMTP is configured before attempting to send
     if (
       !process.env.SMTP_HOST ||
       !process.env.SMTP_USER ||
@@ -58,7 +58,7 @@ export class EmailService {
     ) {
       const errorMsg =
         "SMTP no configurado. Configure las variables SMTP_HOST, SMTP_USER, SMTP_PASS (o SMTP_PASSWORD) en el archivo .env";
-      Logger.error(`[EmailService] ❌ ${errorMsg}`);
+      Logger.error(`[EmailService] [ERROR] ${errorMsg}`);
       throw new AppError(errorMsg, 500);
     }
 

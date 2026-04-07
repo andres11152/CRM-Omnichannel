@@ -6,6 +6,7 @@ import {
   updateTags,
   createConversation,
   toggleGroupSync,
+  reactToMessage,
 } from "../controllers/conversationController";
 import {
   getGroupParticipants,
@@ -36,7 +37,7 @@ router
   .get(listConversations)
   .post(validate(CreateConversationSchema), createConversation);
 
-// 🛡️ Group Participant Routes (Enterprise Feature)
+// [SEC] Group Participant Routes (Enterprise Feature)
 // MUST be defined BEFORE /:id generic handler to avoid route conflict
 router
   .route("/:id/participants")
@@ -59,5 +60,9 @@ router.route("/:id/tags").patch(validate(UpdateTagsSchema), updateTags);
 router
   .route("/:id/toggle-sync")
   .patch(validate(ConversationIdParamSchema), toggleGroupSync);
+
+router
+  .route("/:id/messages/:messageId/react")
+  .post(reactToMessage);
 
 export default router;

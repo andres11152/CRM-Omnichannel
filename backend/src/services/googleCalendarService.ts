@@ -1,5 +1,5 @@
 /**
- * 📅 GOOGLE CALENDAR SERVICE (Refactored — ORM-Free)
+ * [DATE] GOOGLE CALENDAR SERVICE (Refactored — ORM-Free)
  *
  * Google Calendar API integration for meeting activities:
  * - Create calendar events with Google Meet links

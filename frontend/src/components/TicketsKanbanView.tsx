@@ -195,7 +195,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
     );
 
     try {
-      // 🛡️ FIX: Backend Zod schema requires resolutionType when status is RESOLVED/CLOSED
+      // [SEC] FIX: Backend Zod schema requires resolutionType when status is RESOLVED/CLOSED
       const payload: Record<string, string> = { status: newStatus };
       if (newStatus === "RESOLVED" || newStatus === "CLOSED") {
         payload.resolutionType = "SUPPORT"; // Default for Kanban quick-resolve
@@ -314,10 +314,10 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
           onChange={(e) => setFilterPriority(e.target.value)}
         >
           <option value="ALL">Todas las prioridades</option>
-          <option value="CRITICAL">🔴 Crítico</option>
-          <option value="HIGH">🟠 Alta</option>
-          <option value="MEDIUM">🔵 Media</option>
-          <option value="LOW">⚪ Baja</option>
+          <option value="CRITICAL">[OFFLINE] Crítico</option>
+          <option value="HIGH">[PENDING] Alta</option>
+          <option value="MEDIUM">[INFO] Media</option>
+          <option value="LOW"> Baja</option>
         </select>
       </div>
 

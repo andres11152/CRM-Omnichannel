@@ -1,6 +1,6 @@
 import { dashboardRepository } from "@/repositories/DashboardRepository";
-import { cacheService } from "@/services/cacheService";
-import { planLimitsService } from "@/services/planLimitsService";
+import { cacheService } from "@/services/CacheService";
+import { planLimitsService } from "@/services/PlanLimitsService";
 import { Logger } from "@/utils/logger";
 
 // --- DTOs ---
@@ -155,14 +155,14 @@ export class DashboardService {
               ? `Nuevo ticket: ${t.subject}`
               : `Ticket cerrado: ${t.subject}`,
           time: t.updatedAt,
-          icon: t.status === "OPEN" ? "💬" : "✅",
+          icon: t.status === "OPEN" ? "[CHAT]" : "[OK]",
         })),
         ...recentUsers.map((u) => ({
           id: `user-${u.id}`,
           type: "USER" as const,
           text: `Nuevo agente: ${u.name}`,
           time: u.createdAt,
-          icon: "👥",
+          icon: "[CONTACTS]",
         })),
       ].sort((a, b) => b.time.getTime() - a.time.getTime());
 
@@ -254,18 +254,18 @@ export class DashboardService {
       const limits = await planLimitsService.getPlanLimits(companyId);
       const usage = await planLimitsService.getCurrentUsage(companyId);
 
-      // 🏗️ ENTERPRISE: Build REAL features list from plan config
+      // [BUILD] ENTERPRISE: Build REAL features list from plan config
       const features: { label: string; enabled: boolean; icon: string }[] = [
-        { label: "IA", enabled: limits?.enable_ai ?? false, icon: "🤖" },
-        { label: "API", enabled: limits?.enable_api ?? false, icon: "🔌" },
+        { label: "IA", enabled: limits?.enable_ai || false, icon: "[AI]" },
+        { label: "API", enabled: limits?.enable_api || false, icon: "" },
         {
           label: "White Label",
-          enabled: limits?.enable_whitelabel ?? false,
-          icon: "🏷️",
+          enabled: limits?.enable_whitelabel || false,
+          icon: "[VIP]",
         },
       ];
 
-      // 🏗️ ENTERPRISE: Build COMPLETE usage metrics from real data
+      // [BUILD] ENTERPRISE: Build COMPLETE usage metrics from real data
       const usageMetrics: {
         label: string;
         used: number;
@@ -293,13 +293,13 @@ export class DashboardService {
         {
           label: "Tickets / Mes",
           used: usage.tickets_this_month,
-          limit: limits?.max_tickets_per_month ?? -1,
+          limit: limits?.max_tickets_per_month || -1,
           unit: "tickets",
         },
         {
           label: "Asistentes IA",
           used: usage.ai_assistants,
-          limit: limits?.max_ai_assistants ?? -1,
+          limit: limits?.max_ai_assistants || -1,
           unit: "bots",
         },
         {
@@ -307,25 +307,25 @@ export class DashboardService {
           used:
             Math.round((usage.storage_bytes / (1024 * 1024 * 1024)) * 100) /
             100,
-          limit: limits?.storage_limit_gb ?? -1,
+          limit: limits?.storage_limit_gb || -1,
           unit: "GB",
         },
         {
           label: "Contactos",
           used: usage.contacts,
-          limit: limits?.max_contacts ?? -1,
+          limit: limits?.max_contacts || -1,
           unit: "contactos",
         },
         {
           label: "Empresas (CRM)",
           used: usage.companies,
-          limit: limits?.max_companies ?? -1,
+          limit: limits?.max_companies || -1,
           unit: "cuentas",
         },
         {
           label: "Workflows",
           used: usage.workflows,
-          limit: limits?.max_workflows ?? -1,
+          limit: limits?.max_workflows || -1,
           unit: "activos",
         },
       ];
@@ -334,11 +334,11 @@ export class DashboardService {
         activities,
         plan: {
           name: company?.plan?.name || "Sin Plan",
-          price: company?.plan?.price ?? 0,
+          price: company?.plan?.price || null,
           expiresAt: company?.planExpiresAt,
           trialEndsAt: company?.trialEndsAt,
           status: company?.status || "INACTIVE",
-          isActive: company?.isActive ?? false,
+          isActive: company?.isActive || false,
           features,
           usage: usageMetrics,
         },
@@ -360,7 +360,7 @@ export class DashboardService {
       };
     };
 
-    // 🛡️ CIRCUIT BREAKER: Try cache first, fall back to direct fetch if Redis fails
+    // [SEC] CIRCUIT BREAKER: Try cache first, fall back to direct fetch if Redis fails
     try {
       return await cacheService.wrap(
         `dashboard:stats:${companyId}`,
@@ -445,14 +445,14 @@ export class DashboardService {
           type: "CAMPAIGN" as const,
           text: `Campaña: ${c.name}`,
           time: c.createdAt,
-          icon: "📢",
+          icon: "[GROUP]",
         })),
         ...recentContacts.map((c) => ({
           id: `contact-${c.id}`,
           type: "CONTACT" as const,
           text: `Nuevo contacto: ${c.name}`,
           time: c.createdAt,
-          icon: "👤",
+          icon: "",
         })),
       ].sort((a, b) => b.time.getTime() - a.time.getTime()),
     };

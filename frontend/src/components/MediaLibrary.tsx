@@ -111,7 +111,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
 
   const copyUrl = (url: string) => {
     navigator.clipboard.writeText(url);
-    toast.success("✅ URL copiada al portapapeles");
+    toast.success("[OK] URL copiada al portapapeles");
   };
 
   // Drag & Drop handlers
@@ -155,15 +155,15 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   const getFileIcon = (type: string) => {
     switch (type) {
       case "IMAGE":
-        return "🖼️";
+        return "️";
       case "AUDIO":
-        return "🎵";
+        return "";
       case "VIDEO":
-        return "🎬";
+        return "";
       case "DOCUMENT":
-        return "📄";
+        return "";
       default:
-        return "📁";
+        return "";
     }
   };
 
@@ -214,7 +214,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
       {onClose ? (
         <div className="bg-white dark:bg-reply-panel-dark px-6 py-4 border-b border-gray-200 dark:border-reply-border-dark flex justify-between items-center shadow-sm z-10">
           <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-            <span className="text-2xl">📂</span> Seleccionar Archivo
+            <span className="text-2xl">[DIR]</span> Seleccionar Archivo
           </h2>
           <button
             onClick={onClose}
@@ -416,7 +416,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
                           />
                         </svg>
                       ) : (
-                        <span className="text-4xl">📄</span>
+                        <span className="text-4xl"></span>
                       )}
                       <span className="text-xs font-bold mt-2 uppercase tracking-wide opacity-50">
                         {item.type}
@@ -635,7 +635,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
                 </div>
               ) : (
                 <div className="text-center text-gray-500">
-                  <div className="text-6xl mb-4">📄</div>
+                  <div className="text-6xl mb-4"></div>
                   <p>Vista previa no disponible para documentos.</p>
                   <a
                     href={selectedMedia.url}

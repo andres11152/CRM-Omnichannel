@@ -1,11 +1,11 @@
 import { io, Socket } from "socket.io-client";
 import { jwtDecode } from "jwt-decode";
-import { Message } from "@/types";
 import { BASE_URL } from "./apiConfig";
+import { Logger } from "@/utils/logger";
 
 const SOCKET_URL = BASE_URL;
 
-/** 🛡️ JWT Payload type (replaces `any` from jwtDecode) */
+/** [SEC] JWT Payload type (replaces `any` from jwtDecode) */
 interface JwtPayload {
   id: string;
   companyId: string;
@@ -23,41 +23,56 @@ class SocketService {
   }
 
   connect() {
-    if (this.socket) return;
+    if (this.socket) {
+      if (!this.socket.connected) {
+        const token = localStorage.getItem("token");
+        if (token) {
+          try {
+            const decoded = jwtDecode<JwtPayload>(token);
+            this.socket.auth = { token };
+            if (this.socket.io?.opts?.query) {
+               this.socket.io.opts.query = { agentId: decoded.id };
+            }
+            this.socket.connect();
+          } catch (e) {
+            Logger.error("[SocketService] Invalid token during reconnect", e);
+          }
+        }
+      }
+      return;
+    }
 
     const token = localStorage.getItem("token");
     let agentId = "anonymous";
-    let companyId: string | null = null;
 
     if (token) {
       try {
         const decoded = jwtDecode<JwtPayload>(token);
         agentId = decoded.id;
-        companyId = decoded.companyId;
       } catch (e) {
-        console.error("Invalid token for socket", e);
+        Logger.error("[SocketService] Invalid token for socket init", e);
       }
     }
 
     this.socket = io(SOCKET_URL, {
-      transports: ["polling", "websocket"], // Start with polling, upgrade to websocket (matches backend)
+      transports: ["polling", "websocket"],
       path: "/socket.io/",
       withCredentials: true,
-      autoConnect: true,
+      autoConnect: !!token, // [SEC] ONLY autoconnect if we have a token
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
 
       query: { agentId },
-      auth: { token }, // 🛡️ CRITICAL: Send JWT for handshake auth
+      auth: { token },
     });
 
     this.socket.on("connect", () => {
-      console.log("[Socket] Connected to", SOCKET_URL);
+      Logger.info("[SocketService] [OK] Connected to server", SOCKET_URL);
     });
 
     this.socket.on("disconnect", (reason) => {
-      console.log("[Socket] Disconnected:", reason);
+      Logger.warn(`[SocketService]  Disconnected: ${reason}`);
       if (reason !== "io client disconnect") {
         import("sonner").then(({ toast }) => {
           toast.error("Desconectado del servidor. Intentando reconectar...");
@@ -66,6 +81,7 @@ class SocketService {
     });
 
     this.socket.on("reconnect", (attemptNumber) => {
+      Logger.info(`[SocketService] [SYNC] Reconnected (attempt ${attemptNumber})`);
       import("sonner").then(({ toast }) => {
         toast.success(`Reconectado exitosamente (Intento ${attemptNumber})`);
       });
@@ -79,12 +95,13 @@ class SocketService {
       ) {
         return;
       }
-      console.warn("[Socket] Connection Error:", err.message);
+      Logger.warn(`[SocketService] [WARNING] Connection Error: ${err.message}`);
     });
   }
 
   disconnect() {
     if (this.socket) {
+      Logger.info("[SocketService]  Disconnecting socket");
       this.socket.disconnect();
       this.socket = null;
     }
@@ -92,7 +109,6 @@ class SocketService {
 
   on<T = unknown>(event: string, callback: (data: T) => void) {
     if (!this.socket) this.connect();
-    //console.log(`[SocketService] Registering listener for event: ${event}`);
     this.socket?.on(event, callback as (...args: unknown[]) => void);
   }
 
@@ -103,6 +119,17 @@ class SocketService {
   emit(event: string, data: unknown) {
     if (!this.socket) this.connect();
     this.socket?.emit(event, data);
+  }
+
+  // Convenience Wrappers for Chat
+  onMessageReceived(callback: (payload: any) => void) {
+    this.on("message.received", callback);
+    return () => this.off("message.received", callback);
+  }
+
+  onTypingStatus(callback: (payload: { ticketId: string; isTyping: boolean }) => void) {
+    this.on("typing.status", callback);
+    return () => this.off("typing.status", callback);
   }
 }
 

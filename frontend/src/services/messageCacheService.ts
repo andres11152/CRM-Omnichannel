@@ -14,7 +14,7 @@ class MessageCacheService {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
-        console.log("[MessageCache] ✅ IndexedDB initialized");
+        console.log("[MessageCache] [OK] IndexedDB initialized");
         resolve();
       };
 
@@ -30,7 +30,7 @@ class MessageCacheService {
             unique: false,
           });
           objectStore.createIndex("timestamp", "timestamp", { unique: false });
-          console.log("[MessageCache] 🔧 Object store created");
+          console.log("[MessageCache]  Object store created");
         }
       };
     });
@@ -60,7 +60,7 @@ class MessageCacheService {
 
       transaction.oncomplete = () => {
         console.log(
-          `[MessageCache] ✅ Saved ${messages.length} messages for ${conversationId}`,
+          `[MessageCache] [OK] Saved ${messages.length} messages for ${conversationId}`,
         );
         resolve();
       };
@@ -86,7 +86,7 @@ class MessageCacheService {
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
         );
         console.log(
-          `[MessageCache] 📦 Retrieved ${messages.length} cached messages`,
+          `[MessageCache] [PKG] Retrieved ${messages.length} cached messages`,
         );
         resolve(messages);
       };
@@ -115,7 +115,7 @@ class MessageCacheService {
       };
 
       transaction.oncomplete = () => {
-        console.log(`[MessageCache] 🗑️ Cleared cache for ${conversationId}`);
+        console.log(`[MessageCache] ️ Cleared cache for ${conversationId}`);
         resolve();
       };
       transaction.onerror = () => reject(transaction.error);
@@ -134,7 +134,7 @@ class MessageCacheService {
       const request = store.clear();
 
       request.onsuccess = () => {
-        console.log("[MessageCache] 🗑️ All cache cleared");
+        console.log("[MessageCache] ️ All cache cleared");
         resolve();
       };
       request.onerror = () => reject(request.error);

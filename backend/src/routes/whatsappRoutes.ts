@@ -21,7 +21,7 @@ router.use(protect);
 
 router.post(
   "/sessions",
-  // 🛡️ Override global 30s timeout: QR generation + Baileys init can take up to 20s.
+  // [SEC] Override global 30s timeout: QR generation + Baileys init can take up to 20s.
   requestTimeout({ timeout: 60000 }),
   checkPlanLimit("whatsapp_sessions"),
   whatsappController.createSession,
@@ -43,7 +43,7 @@ router.post(
   whatsappController.reconnectSession,
 );
 
-// 🔄 CHAT SYNC ROUTES
+// [SYNC] CHAT SYNC ROUTES
 router.post(
   "/sync",
   validate(TriggerSyncSchema),

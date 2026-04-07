@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
-import { adminService } from "@/services/adminService";
+import { adminService } from "@/services/AdminService";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
@@ -26,7 +26,7 @@ export const listCompanies = catchAsync(
 
 export const createCompany = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    // 🛡️ Strict Validation
+    // [SEC] Strict Validation
     const companyData = createCompanySchema.parse(req.body);
 
     const newCompany = await adminService.createCompany(companyData);
@@ -45,7 +45,7 @@ export const updateCompanyStatus = catchAsync(
 
     if (!companyId) throw new AppError("Company ID required", 400);
 
-    // 🛡️ Strict Validation of Body
+    // [SEC] Strict Validation of Body
     const { status } = updateCompanyStatusSchema.parse(req.body);
 
     const updated = await adminService.updateCompanyStatus(
@@ -138,7 +138,7 @@ export const listPlans = catchAsync(
 
 export const savePlan = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    // 🛡️ Strict Validation via Zod schema
+    // [SEC] Strict Validation via Zod schema
     const planData = savePlanSchema.parse(req.body);
 
     Logger.info(

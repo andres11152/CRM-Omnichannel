@@ -5,10 +5,10 @@ import { AuthenticatedRequest } from "../../types";
 import {
   accountService,
   CreateAccountDTO,
-} from "../../services/accountService";
+} from "../../services/AccountService";
 
 /**
- * 🏢 ACCOUNT CONTROLLER
+ *  ACCOUNT CONTROLLER
  *
  * HTTP orchestrator for CRM accounts.
  * All data access delegated to accountService (SRP).

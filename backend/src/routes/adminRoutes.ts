@@ -57,7 +57,7 @@ router.put(
   "/companies/:companyId",
   validate(
     z.object({
-      params: z.object({ companyId: z.string().cuid() }),
+      params: z.object({ companyId: z.string().min(1) }),
       body: z.record(z.any()), // Can be more specific later, but must validate param
     }),
   ),
@@ -70,7 +70,7 @@ router.patch(
 );
 // Common param schema
 const companyIdSchema = z.object({
-  params: z.object({ companyId: z.string().cuid() }),
+  params: z.object({ companyId: z.string().min(1) }),
 });
 
 router.post(

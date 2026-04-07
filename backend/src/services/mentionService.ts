@@ -3,7 +3,7 @@ import { notificationRepository } from "@/repositories/NotificationRepository";
 import { Logger } from "@/utils/logger";
 
 /**
- * 💬 MENTION SERVICE
+ * [CHAT] MENTION SERVICE
  * Detección y procesamiento de @menciones en notas internas
  * Diseñado para ser robusto y tolerante a fallos
  */
@@ -180,7 +180,7 @@ export const mentionService = {
           context.type === "note" ? "una nota" : "un comentario"
         }${context.contactName ? ` sobre ${context.contactName}` : ""}`;
 
-        // Crear notificación en DB (🛡️ 100-YEAR FIX: Include companyId and strict metadata typing)
+        // Crear notificación en DB ([SEC] 100-YEAR FIX: Include companyId and strict metadata typing)
         await notificationRepository.create({
           data: {
             userId,
@@ -204,7 +204,7 @@ export const mentionService = {
 
       // 3. Emitir evento Socket.IO (real-time)
       const { emitMentionNotification } =
-        await import("@/services/socketEmitter");
+        await import("@/services/SocketEmitter");
 
       for (const userId of mentionedUserIds) {
         // Evitar notificarse a sí mismo

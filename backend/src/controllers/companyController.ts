@@ -3,10 +3,10 @@ import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
-import { companySettingsService } from "@/services/companySettingsService";
+import { companySettingsService } from "@/services/CompanySettingsService";
 
 /**
- * 🏢 COMPANY CONTROLLER
+ *  COMPANY CONTROLLER
  *
  * HTTP orchestrator for company/tenant settings.
  * All data access delegated to companySettingsService (SRP).
@@ -48,7 +48,7 @@ export const getCompanySettings = catchAsync(
         port: company.smtpPort || 587,
         user: company.smtpUser || "",
         hasPassword: !!company.smtpPassword,
-        secure: company.smtpSecure ?? true,
+        secure: company.smtpSecure || true,
         senderEmail: company.defaultSenderEmail || "",
         senderName: company.defaultSenderName || "",
       },

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ WHATSAPP VALIDATION SCHEMAS
+ * [SEC] WHATSAPP VALIDATION SCHEMAS
  *
  * Covers session management, reconnection, queue assignment,
  * and group participant operations.

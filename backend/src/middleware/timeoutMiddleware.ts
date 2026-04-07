@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ REQUEST TIMEOUT MIDDLEWARE
+ * [SEC] REQUEST TIMEOUT MIDDLEWARE
  *
  * Prevents long-running requests from hogging resources.
  * Critical for preventing server lockup under load.
@@ -18,7 +18,7 @@ interface TimeoutOptions {
 export function requestTimeout(options: TimeoutOptions = {}) {
   const timeout = options.timeout || 30000; // 30 seconds default
 
-  // 🛡️ Routes with custom route-level timeouts.
+  // [SEC] Routes with custom route-level timeouts.
   // The global timeout middleware must skip these so their
   // route-level timeout takes effect instead of competing.
   const EXTENDED_TIMEOUT_PATHS = [
@@ -32,7 +32,7 @@ export function requestTimeout(options: TimeoutOptions = {}) {
       return next();
     }
 
-    // 🛡️ FIX: Skip global timeout for routes that have their own route-level timeout
+    // [SEC] FIX: Skip global timeout for routes that have their own route-level timeout
     if (!options.timeout) {
       const isExtended = EXTENDED_TIMEOUT_PATHS.some(
         (r) => req.method === r.method && req.originalUrl.startsWith(r.path),
@@ -73,7 +73,7 @@ export function requestTimeout(options: TimeoutOptions = {}) {
 }
 
 /**
- * 🛡️ SLOW REQUEST LOGGER
+ * [SEC] SLOW REQUEST LOGGER
  *
  * Logs requests that take longer than threshold.
  * Helps identify performance bottlenecks.

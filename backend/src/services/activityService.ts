@@ -60,7 +60,7 @@ const resolveContactId = async (id: string, companyId: string) => {
 
   try {
     const convo = await conversationRepository.findFirst({
-      where: { id },
+      where: { id, companyId },
       select: { id: true, contactId: true, channelId: true, companyId: true },
     });
 
@@ -84,8 +84,8 @@ const resolveContactId = async (id: string, companyId: string) => {
 
           if (contactByConvo) {
             if (!convo.contactId) {
-              await conversationRepository.update(convo.id, {
-                contact: { connect: { id: contactByConvo.id } },
+              await conversationRepository.update(companyId, convo.id, {
+                contactId: contactByConvo.id,
               });
             }
             return contactByConvo.id;
@@ -119,7 +119,7 @@ const resolveContactId = async (id: string, companyId: string) => {
         );
         // Update with email if available
         if (user.email.includes("@")) {
-          await contactRepository.update(linkedContact.id, {
+          await contactRepository.update(companyId, linkedContact.id, {
             email: user.email,
             tags: ["Auto-creado desde Notas"],
           });

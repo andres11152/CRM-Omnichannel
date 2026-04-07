@@ -1,5 +1,5 @@
 /**
- * 🔔 NOTIFICATION SYSTEM TYPES
+ *  NOTIFICATION SYSTEM TYPES
  * Strict contracts for alerting channels
  */
 
@@ -50,7 +50,7 @@ export interface NotificationData {
   data: Record<string, unknown>;
 }
 
-// ✉️ EMAIL
+// ️ EMAIL
 export interface EmailPayload {
   companyId: string;
   to: string[]; // Strict array to match CreateEmailDTO
@@ -64,7 +64,7 @@ export interface EmailPayload {
   metadata?: Record<string, string>;
 }
 
-// 📱 IN-APP
+// [APP] IN-APP
 export interface InAppNotification {
   id?: string;
   userId: string;
@@ -77,7 +77,7 @@ export interface InAppNotification {
   createdAt: Date;
 }
 
-// 📲 PUSH
+//  PUSH
 export interface PushMetadata {
   fcmToken: string;
   title: string;
@@ -85,10 +85,10 @@ export interface PushMetadata {
   data?: Record<string, string>;
 }
 
-// 📄 TEMPLATES
+//  TEMPLATES
 export type TemplateVariables = Record<string, string | number | boolean>;
 
-// 👥 ADMIN CONTEXT (Optimized fetch)
+// [CONTACTS] ADMIN CONTEXT (Optimized fetch)
 export interface NotificationAdmin {
   id: string;
   email: string;

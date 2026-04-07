@@ -3,7 +3,7 @@ import { useSound } from "./SoundContext";
 import "../styles/SoundSettings.css";
 
 /**
- * 🔊 PROFESSIONAL SOUND SETTINGS PANEL
+ * [SOUND] PROFESSIONAL SOUND SETTINGS PANEL
  * Complete audio configuration for CRM notifications
  */
 

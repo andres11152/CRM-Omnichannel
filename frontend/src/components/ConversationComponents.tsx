@@ -54,7 +54,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   onSelectConversation,
   selectedId,
 }) => {
-  // ✅ STRICTLY TYPED STATE
+  // [OK] STRICTLY TYPED STATE
   const [state, setState] = useState<ConversationState>({
     conversations: [],
     selectedConversation: null,
@@ -66,7 +66,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     },
   });
 
-  // ✅ TYPED ASYNC FUNCTION
+  // [OK] TYPED ASYNC FUNCTION
   const loadConversations = useCallback(async (cursor?: string) => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -103,14 +103,14 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     loadConversations();
   }, [loadConversations]);
 
-  // ✅ TYPED EVENT HANDLER
+  // [OK] TYPED EVENT HANDLER
   const handleLoadMore = useCallback(() => {
     if (state.pagination.nextCursor && !state.loading) {
       loadConversations(state.pagination.nextCursor);
     }
   }, [state.pagination.nextCursor, state.loading, loadConversations]);
 
-  // ✅ TYPED onClick HANDLER
+  // [OK] TYPED onClick HANDLER
   const handleConversationClick = (conversation: ConversationListItem) => {
     onSelectConversation(conversation);
   };
@@ -159,7 +159,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
   isSelected,
   onClick,
 }) => {
-  // ✅ TYPED STATUS BADGE
+  // [OK] TYPED STATUS BADGE
   const getStatusBadge = (status: ConversationStatus): React.ReactNode => {
     const badges: Record<
       ConversationStatus,
@@ -201,8 +201,8 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
             style={{ color: "#25D366", fontWeight: "bold" }}
           >
             {conversation.typingStatus === "recording"
-              ? "🎤 Grabando audio..."
-              : "✍️ Escribiendo..."}
+              ? " Grabando audio..."
+              : "️ Escribiendo..."}
           </span>
         </div>
       ) : (
@@ -241,7 +241,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   hasMore,
   loading,
 }) => {
-  // ✅ TYPED useEffect
+  // [OK] TYPED useEffect
   useEffect(() => {
     // Scroll to bottom on new messages
     const messagesContainer = document.getElementById("messages-container");
@@ -296,7 +296,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               target="_blank"
               rel="noreferrer"
             >
-              📄 {message.metadata.media.name || "Document"}
+               {message.metadata.media.name || "Document"}
             </a>
           )}
         </div>
@@ -322,7 +322,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onSendMessage,
   disabled = false,
 }) => {
-  // ✅ TYPED FORM STATE
+  // [OK] TYPED FORM STATE
   const [content, setContent] = useState<string>("");
   const [sending, setSending] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -331,7 +331,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const { conversation } = useConversation(conversationId);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ✅ TYPING INDICATOR HANDLER
+  // [OK] TYPING INDICATOR HANDLER
   const handleTyping = () => {
     if (!conversation?.contact?.phone) return;
 
@@ -355,7 +355,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }, 3000);
   };
 
-  // ✅ TYPED FORM HANDLER
+  // [OK] TYPED FORM HANDLER
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -396,7 +396,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
-  // ✅ TYPED INPUT HANDLER
+  // [OK] TYPED INPUT HANDLER
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
     if (error) setError(null);
@@ -410,7 +410,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     };
   }, []);
 
-  // ✅ TYPED KEY HANDLER
+  // [OK] TYPED KEY HANDLER
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();

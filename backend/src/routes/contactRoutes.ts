@@ -13,11 +13,11 @@ import { auditLog } from "../middleware/auditMiddleware";
 
 const router = Router();
 
-// 🛡️ All routes require authentication
+// [SEC] All routes require authentication
 router.use(protect);
 
 /**
- * 📋 CONTACT ROUTES
+ *  CONTACT ROUTES
  * All routes include Zod validation for security and data integrity
  */
 

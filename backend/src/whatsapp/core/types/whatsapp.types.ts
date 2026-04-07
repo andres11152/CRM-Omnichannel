@@ -13,6 +13,7 @@ export interface MessagePayload {
   content: string;
   messageId: string;
   timestamp: Date;
+  sender?: string;
   metadata?: Record<string, unknown>;
 }
 

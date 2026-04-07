@@ -7,14 +7,14 @@ import { Logger } from "@/utils/logger";
 import { AuthenticatedRequest } from "@/types/types";
 
 /**
- * 🛡️ ADVANCED RATE LIMITING (ENTERPRISE GRADE)
+ * [SEC] ADVANCED RATE LIMITING (ENTERPRISE GRADE)
  * Uses Redis for distributed rate limiting across clusters.
  * Falls back to memory if Redis is unavailable.
  *
  * STRICT MODE: NO 'any' usage permitted.
  */
 
-// 🔒 Secure Type Guard for Authentication
+//  Secure Type Guard for Authentication
 function isAuthenticated(req: Request): req is AuthenticatedRequest {
   // Use intersection type to safely access 'user' without 'any'
   const safeReq = req as Request & { user?: unknown };
@@ -22,12 +22,12 @@ function isAuthenticated(req: Request): req is AuthenticatedRequest {
 }
 
 /**
- * 🏭 Rate Limiter Factory
- * Creates proper rate limiters with Redis support and standardized error handling.
+ *  Rate Limiter Factory
+ * Creates proper rate limiters with dynamic Redis support and standardized error handling.
  */
 interface RateLimitConfig {
   windowMs: number;
-  max: number;
+  limit: number;
   message: string;
   prefix: string;
   keyGenerator: (req: Request) => string;
@@ -37,49 +37,40 @@ interface RateLimitConfig {
 const createRateLimiter = (
   config: RateLimitConfig,
 ): RateLimitRequestHandler => {
-  // Determine Store: Redis vs Memory
-  let store;
-
-  // 🛡️ 100-YEAR FIX: Safe Redis Initialization
-  // Only use RedisStore if Redis is ALREADY connected.
-  // This avoids "Unexpected Reply" errors during startup race conditions.
-  // If Redis connects later, we stay on MemoryStore until restart, which is safer for stability.
-  if (redisClient?.isOpen) {
-    store = new RedisStore({
-      // Bridge node-redis v4 to rate-limit-redis expected signature
-      sendCommand: async (...args: string[]) => {
-        try {
-          const result = await redisClient!.sendCommand(args);
-          return result as unknown as string;
-        } catch {
-          return null;
-        }
-      },
-      prefix: `rl:${config.prefix}:`,
-    });
-  } else {
-    // Info log instead of Warn to reduce noise
-    if (redisClient) {
-      Logger.info(
-        `[RateLimit] Redis pending for '${config.prefix}'. Using MemoryStore (Local) for stability.`,
-      );
-    }
-  }
+  // [SEC] DYNAMIC DISPATCH: Always try to use Redis if available
+  const store = new RedisStore({
+    sendCommand: async (...args: string[]): Promise<string | number | null> => {
+      // [SEC] Initialization Guard: Handle script loading before Redis is ready
+      if (!redisClient?.isReady) {
+        // If library is loading scripts (SHA detection), return a dummy to prevent crash
+        if (args[0] === "SCRIPT" || args[0] === "script") return "DUMMY_SHA";
+        return null; 
+      }
+      
+      try {
+        const result = await redisClient.sendCommand(args);
+        return result as string | number;
+      } catch {
+        return null;
+      }
+    },
+    prefix: `rl:${config.prefix}:`,
+  });
 
   return rateLimit({
     windowMs: config.windowMs,
-    max: config.max,
+    limit: config.limit,
     message: config.message,
     standardHeaders: true,
     legacyHeaders: false,
-    store, // Defaults to MemoryStore if undefined
+    store: (redisClient?.isReady) ? store : undefined, // Initial choice, but handler handles fallback
 
     keyGenerator: config.keyGenerator,
 
     handler: (req: Request, _res: Response) => {
       const key = config.keyGenerator(req);
       Logger.warn(
-        `[RateLimit] 🛑 Limit exceeded for '${config.prefix}' | Key: ${key} | Path: ${req.path}`,
+        `[RateLimit] [ALERT] Limit exceeded: '${config.prefix}' | Key: ${key} | Path: ${req.path}`,
       );
       throw new AppError(config.message, 429);
     },
@@ -91,14 +82,14 @@ const createRateLimiter = (
 };
 
 /**
- * 🔥 Per-User Rate Limiter
+ *  Per-User Rate Limiter
  * Limits requests per authenticated user (1000 req/15min)
  * Identifier: User ID + Company ID
  */
 export const userRateLimiter = createRateLimiter({
   prefix: "user",
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000,
+  limit: 1000,
   message: "Too many requests from this user, please try again later.",
   keyGenerator: (req: Request) => {
     if (isAuthenticated(req)) {
@@ -113,14 +104,14 @@ export const userRateLimiter = createRateLimiter({
 });
 
 /**
- * 🔥 Strict Auth Rate Limiter
+ *  Strict Auth Rate Limiter
  * For login/register endpoints (10 attempts/15min)
  * Identifier: Email (from body) + IP
  */
 export const authRateLimiter = createRateLimiter({
   prefix: "auth",
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  limit: 10,
   message: "Too many authentication attempts. Please try again in 15 minutes.",
   keyGenerator: (req: Request) => {
     // Safe access to body with strict type assumption or default
@@ -132,13 +123,13 @@ export const authRateLimiter = createRateLimiter({
 });
 
 /**
- * 🔥 Admin Action Rate Limiter (SENSITIVE)
+ *  Admin Action Rate Limiter (SENSITIVE)
  * For critical admin operations (500 req/hour)
  */
 export const adminRateLimiter = createRateLimiter({
   prefix: "admin",
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 500,
+  limit: 500,
   message: "Too many admin actions, please slow down.",
   keyGenerator: (req: Request) => {
     if (isAuthenticated(req)) {
@@ -149,13 +140,13 @@ export const adminRateLimiter = createRateLimiter({
 });
 
 /**
- * 🔥 WhatsApp Message Rate Limiter
+ *  WhatsApp Message Rate Limiter
  * Prevents spam (60 messages/minute per company)
  */
 export const whatsappRateLimiter = createRateLimiter({
   prefix: "whatsapp",
   windowMs: 60 * 1000, // 1 minute
-  max: 60,
+  limit: 60,
   message: "Message sending limit reached. Please wait a moment.",
   keyGenerator: (req: Request) => {
     if (isAuthenticated(req) && req.user.companyId) {

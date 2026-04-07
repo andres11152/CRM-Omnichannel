@@ -40,13 +40,13 @@ export const TeamMetrics: React.FC<{ agents: TeamAgent[] }> = ({ agents }) => {
       <MetricCard
         title="Total Agentes"
         value={totalAgents}
-        icon="👥"
+        icon="[CONTACTS]"
         color="blue"
       />
       <MetricCard
         title="Online Ahora"
         value={onlineAgents}
-        icon="🟢"
+        icon="[ONLINE]"
         color="green"
       />
       <MetricCard
@@ -58,7 +58,7 @@ export const TeamMetrics: React.FC<{ agents: TeamAgent[] }> = ({ agents }) => {
       <MetricCard
         title="Tiempo Resp. (FRT)"
         value={`${avgFrt} min`}
-        icon="⚡"
+        icon=""
         color="purple"
       />
     </div>

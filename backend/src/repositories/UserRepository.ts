@@ -23,6 +23,10 @@ export class UserRepository {
     return this.db.user.findFirst(args);
   }
 
+  async findUnique(args: Prisma.UserFindUniqueArgs) {
+    return this.db.user.findUnique(args);
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     return this.db.user.findUnique({ where: { email } });
   }

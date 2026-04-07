@@ -11,7 +11,7 @@ import { Search, User, History, Trash2, X, MessageSquare } from "lucide-react";
 export const ContactsPage: React.FC = () => {
   const navigate = useNavigate();
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [allTags, setAllTags] = useState<Tag[]>([]); // 🏷️ Store full tag objects
+  const [allTags, setAllTags] = useState<Tag[]>([]); // ️ Store full tag objects
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -151,17 +151,17 @@ export const ContactsPage: React.FC = () => {
         const errorData = await res.json().catch(() => ({}));
         const errorMessage =
           errorData.message || errorData.error || "Error al guardar contacto";
-        console.error("❌ Error saving contact:", errorData);
+        console.error("[ERROR] Error saving contact:", errorData);
         toast.error(errorMessage);
       }
     } catch (error: unknown) {
-      console.error("❌ Error saving contact (catch):", error);
+      console.error("[ERROR] Error saving contact (catch):", error);
       toast.error("Error de conexión al guardar contacto");
     }
   };
 
   const handleDelete = async (id: string, name: string) => {
-    console.log("🛑 [DELETE REQUEST START]");
+    console.log(" [DELETE REQUEST START]");
     console.log("ID:", id);
     console.log("Name:", name);
     console.log("API_BASE_URL:", API_BASE_URL);
@@ -195,7 +195,7 @@ export const ContactsPage: React.FC = () => {
       await fetchContacts();
       toast.success("Contacto eliminado correctamente", { id: toastId });
     } catch (error) {
-      console.error("❌ Error deleting contact:", error);
+      console.error("[ERROR] Error deleting contact:", error);
       toast.error("No se pudo eliminar el contacto", { id: toastId });
     }
   };

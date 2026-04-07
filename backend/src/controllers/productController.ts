@@ -4,10 +4,10 @@ import { AuthenticatedRequest } from "../types/types";
 import {
   productCrudService,
   CreateProductDTO,
-} from "../services/productCrudService";
+} from "../services/ProductCrudService";
 
 /**
- * 📦 PRODUCT CONTROLLER
+ * [PKG] PRODUCT CONTROLLER
  *
  * HTTP orchestrator for product catalog.
  * All data access delegated to productCrudService (SRP).

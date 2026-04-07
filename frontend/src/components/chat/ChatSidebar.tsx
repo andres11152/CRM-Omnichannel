@@ -1,5 +1,6 @@
 import React from "react";
-import { type Conversation } from "@/services/chatService";
+import { type Conversation } from "@/types";
+import { MessageSquare, Mail, Globe, Plus, ChevronRight, User } from "lucide-react";
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -33,7 +34,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   if (conversations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center p-4">
-        <div className="text-4xl mb-4">💬</div>
+        <MessageSquare size={48} className="text-gray-300 dark:text-gray-700 mb-4" />
         <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">
           No hay conversaciones
         </h3>
@@ -67,19 +68,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             onClick={onNewChat}
             className="flex-1 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <Plus size={16} />
             Nuevo
           </button>
           <button
@@ -95,10 +84,10 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       <div className="flex-1 overflow-y-auto">
         {conversations.map((conversation) => (
           <ConversationItem
-            key={conversation.ticketId}
+            key={conversation.ticketId || conversation.id}
             conversation={conversation}
-            isSelected={conversation.ticketId === selectedTicketId}
-            onClick={() => onSelectConversation(conversation.ticketId)}
+            isSelected={(conversation.ticketId || conversation.id) === selectedTicketId}
+            onClick={() => onSelectConversation(conversation.ticketId || conversation.id)}
           />
         ))}
       </div>
@@ -141,24 +130,24 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
 
   const getChannelIcon = () => {
     switch (conversation.channel) {
-      case "whatsapp":
-        return "💬";
-      case "email":
-        return "📧";
-      case "web":
-        return "🌐";
+      case "WHATSAPP":
+        return <MessageSquare size={14} />;
+      case "EMAIL":
+        return <Mail size={14} />;
+      case "WEB_CHAT":
+        return <Globe size={14} />;
       default:
-        return "💬";
+        return <MessageSquare size={14} />;
     }
   };
 
   const getStatusColor = () => {
     switch (conversation.status) {
-      case "open":
+      case "OPEN":
         return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
-      case "pending":
+      case "PENDING":
         return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
-      case "resolved":
+      case "RESOLVED":
         return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
       default:
         return "bg-gray-100 text-gray-700";
@@ -176,8 +165,11 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     >
       <div className="flex items-start gap-3">
         {/* Avatar */}
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-          {getChannelIcon()}
+        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700 flex-shrink-0 relative">
+          <User size={24} />
+          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm">
+            {getChannelIcon()}
+          </div>
         </div>
 
         {/* Content */}
@@ -185,10 +177,10 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
           {/* Name and Time */}
           <div className="flex items-center justify-between mb-1">
             <h4 className="font-semibold text-gray-900 dark:text-white truncate">
-              {conversation.contactName}
+              {(conversation as any).contactName || "Desconocido"}
             </h4>
             <span className="text-xs text-gray-500 ml-2">
-              {formatTime(conversation.lastMessageTime)}
+              {formatTime((conversation as any).lastMessageTime || (conversation as any).lastMessageAt || "")}
             </span>
           </div>
 

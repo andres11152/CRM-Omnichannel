@@ -1,9 +1,9 @@
 import { PrismaClient, Prisma } from "@prisma/client";
-import { getCompanyId, contextStorage } from "../context/requestContext";
+import { contextStorage } from "../context/requestContext";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ PRISMA DATABASE CONFIGURATION (SINGLE SOURCE OF TRUTH)
+ * [SEC] PRISMA DATABASE CONFIGURATION (SINGLE SOURCE OF TRUTH)
  *
  * Capabilities:
  * 1. Connection Pooling Optimized
@@ -14,25 +14,18 @@ import { Logger } from "@/utils/logger";
  */
 
 // ================= CONSTANTS =================
+/**
+ * [SEC] GLOBAL MODELS
+ * Models in this list BYPASS the automatic companyId filtering.
+ * Only add models that are TRULY shared across all tenants or needed for public discovery.
+ */
 const GLOBAL_MODELS = [
   "Company",
-  "User",
   "Plan",
-  "ApiKey",
-  "Webhook",
-  "WhatsAppCredential",
-  "TestModel",
-  // Exempt models from legacy extensions:
-  "Notification",
+  "Role",
   "Permission",
-  "RolePermission",
-  "Stage",
-  "WhatsAppSession",
-  "AIConfig",
-  "AIAssistant",
-  "Media",
-  "AgentSession",
-  "BillingTransaction",
+  "WhatsAppCredential",
+  "User",
 ];
 
 const SOFT_DELETE_MODELS = ["Contact", "Deal", "Ticket", "Campaign"];
@@ -42,7 +35,7 @@ const SOFT_DELETE_MODELS = ["Contact", "Deal", "Ticket", "Campaign"];
 const getDatabaseUrl = (): string => {
   const baseUrl = process.env.DATABASE_URL || "";
   const separator = baseUrl.includes("?") ? "&" : "?";
-  // 🚀 PERFORMANCE FIX: Increased connection limit for better concurrency.
+  //  PERFORMANCE FIX: Increased connection limit for better concurrency.
   // 25 was still too low for burst traffic (health probes + API calls + background jobs).
   // pool_timeout reduced to 30s to release stale connections faster under load.
   const poolParams = [
@@ -97,50 +90,51 @@ const createExtendedClient = () => {
           if (!store) {
             if (process.env.SKIP_SECURITY_CHECK === "true") return query(args);
             throw new Error(
-              `❌ SECURITY VIOLATION: Access to ${model} denied.`,
+              `[ERROR] SECURITY VIOLATION: Access to ${model} denied.`,
             );
           }
 
-          const argsObj = args as Record<string, Prisma.JsonValue | Prisma.JsonValue[] | undefined>;
+          const argsObj = (args || {}) as Record<string, unknown>;
           const isSystem = store.companyId === "__SYSTEM__";
-          const companyId = isSystem ? null : getCompanyId();
+          const companyId = isSystem ? null : store.companyId;
 
-          // Inject companyId into args if not system
+          // --- 2.1 INJECTION LOGIC (Mandatory Tenant Filtering) ---
           if (companyId) {
-            const injectCompanyId = (target: Prisma.JsonObject) => {
-              if (target && typeof target === "object" && !Array.isArray(target) && target !== null) {
-                const record = target as Prisma.JsonObject;
-                if (!record.company) record.companyId = companyId;
+            const injectToRecord = (target: Record<string, unknown>) => {
+              if (target && typeof target === "object" && !Array.isArray(target)) {
+                // [SEC] SECURITY: Only inject if not already present via relation
+                if (!target.company && !target.companyId) {
+                  target.companyId = companyId;
+                }
               }
             };
 
-            if (operation === "create") {
-              if (!argsObj.data) argsObj.data = {};
-              if (!Array.isArray(argsObj.data)) {
-                injectCompanyId(argsObj.data as Prisma.JsonObject);
-              }
-            } else if (operation === "createMany") {
+            // READS & SCALARS
+            const READ_OPS = ["findMany", "findFirst", "findUnique", "findUniqueOrThrow", "count", "aggregate", "groupBy"];
+            if (READ_OPS.includes(operation)) {
+              argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
+            } 
+            // UPDATES & DELETES
+            else if (["update", "updateMany", "delete", "deleteMany", "upsert"].includes(operation)) {
+              argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
+              if (argsObj.data) delete (argsObj.data as Record<string, unknown>).companyId;
+              if (argsObj.update) delete (argsObj.update as Record<string, unknown>).companyId;
+              // [SEC] Always filter the target records by companyId
+              argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
+              
+              if (operation === "upsert") {
+                if (argsObj.create) injectToRecord(argsObj.create as Record<string, unknown>);
+                // [WARNING] On update part of upsert, we DON'T inject companyId to 'update' data (it's immutable)
+              } 
+              // [WARNING] CRITICAL: We NO LONGER inject companyId into 'data' during standalone updates.
+              // This fixes Prisma collisions and reinforces that companyId is IMMUTABLE after creation.
+            }
+            // CREATES
+            else if (operation === "create" || operation === "createMany") {
               if (Array.isArray(argsObj.data)) {
-                (argsObj.data as Prisma.JsonObject[]).forEach((d) => injectCompanyId(d));
-              }
-            } else if (operation === "upsert") {
-              if (argsObj.where) (argsObj.where as Prisma.JsonObject).companyId = companyId;
-              if (argsObj.create) injectCompanyId(argsObj.create as Prisma.JsonObject);
-            } else if (
-              [
-                "findMany",
-                "findFirst",
-                "count",
-                "delete",
-                "deleteMany",
-                "update",
-                "updateMany",
-                "groupBy",
-                "aggregate",
-              ].includes(operation)
-            ) {
-              if (argsObj.where) {
-                argsObj.where = { ...(argsObj.where as Prisma.JsonObject), companyId };
+                (argsObj.data as Record<string, unknown>[]).forEach((d) => injectToRecord(d));
+              } else {
+                injectToRecord((argsObj.data as Record<string, unknown>) || {});
               }
             }
           }
@@ -240,7 +234,7 @@ const globalForPrisma = global as unknown as {
   prisma: ExtendedPrismaClient | undefined;
 };
 
-export const prisma = globalForPrisma.prisma ?? createExtendedClient();
+export const prisma = globalForPrisma.prisma || createExtendedClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
@@ -249,15 +243,15 @@ export const connectDB = async (retries = 5, delay = 2000): Promise<void> => {
     try {
       await prisma.$connect();
       await prisma.$queryRaw`SELECT 1`;
-      Logger.info("✅ Database connected successfully");
+      Logger.info("[OK] Database connected successfully");
       return;
     } catch (e) {
       Logger.warn(
-        `⚠️ Database connection attempt ${i + 1}/${retries} failed: ${(e as Error).message}`,
+        `[WARNING] Database connection attempt ${i + 1}/${retries} failed: ${(e as Error).message}`,
       );
       if (i === retries - 1) {
         Logger.error(
-          "❌ Critical: Database connection failed after multiple attempts.",
+          "[ERROR] Critical: Database connection failed after multiple attempts.",
           e,
         );
         process.exit(1);

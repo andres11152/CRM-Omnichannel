@@ -66,7 +66,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
   onSyncHistory,
 }) => {
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
-  const isTightMode = isChatListVisible && isCustomer360Visible; // ?? Detect "Tight Mode" (Both Panels Open)
+  const isTightMode = isChatListVisible && isCustomer360Visible; // Detect "Tight Mode" (Both Panels Open)
 
   const [slaStatus, setSlaStatus] = useState<"ok" | "warning" | "critical">(
     "ok",
@@ -118,7 +118,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
     }
   };
 
-  // ??? HELPER: Premium Dropdown Menu
+  // HELPER: Premium Dropdown Menu
   const ActionMenu = () => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -138,7 +138,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
     }, []);
 
     const menuItems = [
-      // 📱 MOBILE ONLY ACTIONS (Moved from toolbar to clear space)
+      // [APP] MOBILE ONLY ACTIONS (Moved from toolbar to clear space)
       {
         icon: (
           <svg
@@ -459,7 +459,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
                 )}
               </div>
 
-              {/* 🛡️ WhatsApp-Style: Typing indicator + Tags coexist */}
+              {/* [SEC] WhatsApp-Style: Typing indicator + Tags coexist */}
               <div className="flex flex-col gap-0.5">
                 {/* Typing Indicator — Always shows when active, above tags */}
                 {isTyping && (
@@ -761,7 +761,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
           </div>
         </div>
       </div>
-      {/* 🏷️ TAGS BAR: Dedicated scrollable row below header */}
+      {/* ️ TAGS BAR: Dedicated scrollable row below header */}
       {contact.tags && contact.tags.length > 0 && (
         <div className="bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-100 dark:border-reply-border-dark px-3 sm:px-4 py-0.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full h-7 shrink-0 z-20 transition-all">
           <div className="flex-shrink-0 text-[9px] font-bold text-gray-400/80 uppercase tracking-widest mr-1 select-none">

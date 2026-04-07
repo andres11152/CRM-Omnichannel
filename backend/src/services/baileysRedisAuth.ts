@@ -49,7 +49,7 @@ export const useRedisAuthState = async (
       // CRITICAL: Propagate error on infrastructure failure
       // If we return null here, Baileys will create a NEW session, overwriting the old one!
       Logger.error(
-        `[RedisAuth] 💥 CRITICAL REDIS ERROR reading ${field}:`,
+        `[RedisAuth]  CRITICAL REDIS ERROR reading ${field}:`,
         error as Error,
       );
       throw error;

@@ -2,7 +2,7 @@ import client from "prom-client";
 import { Request, Response, NextFunction } from "express";
 
 /**
- * 📊 PROMETHEUS METRICS INTEGRATION
+ * [STAT] PROMETHEUS METRICS INTEGRATION
  * Production-grade APM for Node.js
  */
 
@@ -16,7 +16,7 @@ client.collectDefaultMetrics({
   gcDurationBuckets: [0.001, 0.01, 0.1, 1, 2, 5],
 });
 
-// 🔥 Custom Business Metrics
+//  Custom Business Metrics
 
 // HTTP Request Duration
 const httpRequestDuration = new client.Histogram({
@@ -101,7 +101,7 @@ setInterval(() => {
 }, 10000);
 
 /**
- * 📊 Metrics Endpoint Handler
+ * [STAT] Metrics Endpoint Handler
  */
 export const metricsHandler = async (req: Request, res: Response) => {
   res.set("Content-Type", register.contentType);
@@ -110,7 +110,7 @@ export const metricsHandler = async (req: Request, res: Response) => {
 };
 
 /**
- * 📊 Middleware to track HTTP metrics
+ * [STAT] Middleware to track HTTP metrics
  */
 export const metricsMiddleware = (
   req: Request,
@@ -139,7 +139,7 @@ export const metricsMiddleware = (
 };
 
 /**
- * 📊 Utility functions for business metrics
+ * [STAT] Utility functions for business metrics
  */
 export const metrics = {
   // Database

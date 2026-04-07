@@ -14,7 +14,7 @@ export interface UserResolverParams {
 }
 
 /**
- * 👤 USER RESOLVER
+ *  USER RESOLVER
  *
  * Single Responsibility: Upserts a shadow User record for WhatsApp contacts.
  * Each WhatsApp phone gets a corresponding User (email: phone@whatsapp.user).

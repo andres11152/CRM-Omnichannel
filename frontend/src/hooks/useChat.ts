@@ -5,10 +5,9 @@ import {
   QueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Message, Conversation, SenderType } from "@/types";
 import {
   chatService,
-  type Message,
-  type Conversation,
   type SendMessageInput,
 } from "@/services/chatService";
 
@@ -84,6 +83,8 @@ export const useSendMessage = (ticketId: string) => {
       const optimisticMessage: Message = {
         id: tempId,
         ticketId,
+        companyId: "",
+        senderType: SenderType.AGENT,
         content: newMessage.content,
         type: newMessage.type || "text",
         sender: "agent",
@@ -93,7 +94,7 @@ export const useSendMessage = (ticketId: string) => {
         metadata: newMessage.metadata,
       };
 
-      console.log(`🚀 [onMutate] Creating optimistic message:`, {
+      console.log(` [onMutate] Creating optimistic message:`, {
         tempId,
         content: newMessage.content.substring(0, 20),
         time: `${(performance.now() - startTime).toFixed(2)}ms`,
@@ -109,10 +110,10 @@ export const useSendMessage = (ticketId: string) => {
     },
 
     // 2. SUCCESS (API call succeeded)
-    // 🚀 100-YEAR FIX: Atomic reconciliation with race condition protection
+    //  100-YEAR FIX: Atomic reconciliation with race condition protection
     onSuccess: (serverMessage: Message, _variables, context) => {
       const reconcileStart = performance.now();
-      console.log(`✅ [onSuccess] API responded:`, {
+      console.log(`[OK] [onSuccess] API responded:`, {
         serverMsgId: serverMessage.id,
         tempId: context?.tempId,
         serverTempId: serverMessage.metadata?.tempId,
@@ -121,7 +122,7 @@ export const useSendMessage = (ticketId: string) => {
       queryClient.setQueryData<Message[]>(
         CHAT_KEYS.messages(ticketId),
         (old = []) => {
-          console.log(`📊 [onSuccess] Cache state:`, {
+          console.log(`[STAT] [onSuccess] Cache state:`, {
             total: old.length,
             temps: old.filter((m) => m.id.startsWith("temp-")).length,
             hasServerMsg: old.some((m) => m.id === serverMessage.id),
@@ -132,7 +133,7 @@ export const useSendMessage = (ticketId: string) => {
           if (serverMsgExists) {
             // Socket beat us to it - just clean up any remaining temp messages
             console.log(
-              `🔄 [onSuccess] Socket won race, cleaning temps (${(performance.now() - reconcileStart).toFixed(2)}ms)`,
+              `[SYNC] [onSuccess] Socket won race, cleaning temps (${(performance.now() - reconcileStart).toFixed(2)}ms)`,
             );
             return old.filter((m) => !m.id.startsWith("temp-"));
           }
@@ -160,7 +161,7 @@ export const useSendMessage = (ticketId: string) => {
           // 4. ATOMIC REPLACEMENT: Replace temp message in-place (prevents re-render flash)
           if (targetIndex !== -1) {
             console.log(
-              `🎯 [onSuccess] Replacing temp at index ${targetIndex} (${(performance.now() - reconcileStart).toFixed(2)}ms)`,
+              ` [onSuccess] Replacing temp at index ${targetIndex} (${(performance.now() - reconcileStart).toFixed(2)}ms)`,
             );
             const updated = [...old];
             updated[targetIndex] = serverMessage;
@@ -169,7 +170,7 @@ export const useSendMessage = (ticketId: string) => {
 
           // 5. Fallback: Append if no temp found (edge case)
           console.warn(
-            `⚠️ [onSuccess] No temp found, appending (${(performance.now() - reconcileStart).toFixed(2)}ms)`,
+            `[WARNING] [onSuccess] No temp found, appending (${(performance.now() - reconcileStart).toFixed(2)}ms)`,
           );
           return [
             ...old.filter((m) => !m.id.startsWith("temp-")),
@@ -197,7 +198,7 @@ export const useSendMessage = (ticketId: string) => {
     },
 
     // 4. SETTLED (Always runs after success or error)
-    // 🚫 DO NOT invalidate messages here!
+    //  DO NOT invalidate messages here!
     // The onSuccess already handles reconciliation properly.
     // Invalidating causes a refetch that briefly shows BOTH temp and server message.
     onSettled: () => {
@@ -217,7 +218,7 @@ export const addMessageToCache = (
   message: Message,
 ) => {
   const socketStart = performance.now();
-  console.log(`📡 [Socket.IO] Message received:`, {
+  console.log(`[WS] [Socket.IO] Message received:`, {
     msgId: message.id,
     tempId: message.metadata?.tempId,
     content: message.content.substring(0, 20),
@@ -226,13 +227,13 @@ export const addMessageToCache = (
   queryClient.setQueryData<Message[]>(
     CHAT_KEYS.messages(ticketId),
     (old = []) => {
-      console.log(`📊 [Socket.IO] Cache state:`, {
+      console.log(`[STAT] [Socket.IO] Cache state:`, {
         total: old.length,
-        temps: old.filter((m) => m.id.startsWith("temp-")).length,
+        temps: old.filter((m) => m.id && String(m.id).startsWith("temp")).length,
         hasMsg: old.some((m) => m.id === message.id),
       });
 
-      // 🛡️ CRITICAL: Early deduplication check (prevents flashback)
+      // [SEC] CRITICAL: Early deduplication check (prevents flashback)
       // If message already exists, don't trigger a re-render
       if (old.some((m) => m.id === message.id)) {
         console.log(
@@ -241,17 +242,18 @@ export const addMessageToCache = (
         return old; // No change = no re-render
       }
 
-      // 2. Deterministic Reconciliation (Metadata tempId check) - 🎯 100% ACCURACY
+      // 2. Deterministic Reconciliation (Metadata tempId check) -  100% ACCURACY
       const tempIdMatchIndex = old.findIndex(
         (m) =>
-          m.id.startsWith("temp-") &&
+          m.id &&
+          String(m.id).startsWith("temp") &&
           message.metadata?.tempId &&
           m.metadata?.tempId === message.metadata.tempId,
       );
 
       if (tempIdMatchIndex !== -1) {
         console.log(
-          `🎯 [Socket.IO] Deterministic match at ${tempIdMatchIndex}: ${old[tempIdMatchIndex].id} -> ${message.id} (${(performance.now() - socketStart).toFixed(2)}ms)`,
+          ` [Socket.IO] Deterministic match at ${tempIdMatchIndex}: ${old[tempIdMatchIndex].id} -> ${message.id} (${(performance.now() - socketStart).toFixed(2)}ms)`,
         );
         const updated = [...old];
         updated[tempIdMatchIndex] = message;
@@ -262,14 +264,15 @@ export const addMessageToCache = (
       const now = new Date().getTime();
       const fuzzyMatchIndex = old.findIndex(
         (m) =>
-          m.id.startsWith("temp-") &&
+          m.id &&
+          String(m.id).startsWith("temp") &&
           m.content?.trim() === message.content?.trim() &&
           now - new Date(m.timestamp).getTime() < 10000,
       );
 
       if (fuzzyMatchIndex !== -1) {
         console.log(
-          `🔄 [Socket.IO] Fuzzy match at ${fuzzyMatchIndex} (${(performance.now() - socketStart).toFixed(2)}ms)`,
+          `[SYNC] [Socket.IO] Fuzzy match at ${fuzzyMatchIndex} (${(performance.now() - socketStart).toFixed(2)}ms)`,
         );
         const updated = [...old];
         updated[fuzzyMatchIndex] = message;
@@ -278,7 +281,7 @@ export const addMessageToCache = (
 
       // 4. Normal Append (new message from other user or no temp found)
       console.log(
-        `➕ [Socket.IO] New message, appending (${(performance.now() - socketStart).toFixed(2)}ms)`,
+        ` [Socket.IO] New message, appending (${(performance.now() - socketStart).toFixed(2)}ms)`,
       );
       return [...old, message];
     },
@@ -347,6 +350,69 @@ export const useDeleteTicket = () => {
 };
 
 /**
+ * CUSTOM HOOK: useReactToMessage
+ * Handles reacting to a message with an emoji
+ */
+export const useReactToMessage = (ticketId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ messageId, reaction }: { messageId: string; reaction: string }) =>
+      chatService.reactToMessage(ticketId, messageId, reaction),
+    
+    onMutate: async ({ messageId, reaction }) => {
+      await queryClient.cancelQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+      const previousMessages = queryClient.getQueryData<Message[]>(CHAT_KEYS.messages(ticketId));
+
+      queryClient.setQueryData<Message[]>(CHAT_KEYS.messages(ticketId), (old = []) => 
+        old.map(m => {
+          if (m.id !== messageId) return m;
+          
+          const existingReactions = m.reactions || [];
+          
+          // WHATSAPP BEHAVIOR: 
+          // 1. If I have a reaction with THIS emoji -> Remove it.
+          // 2. If I have a DIFFERENT reaction -> Add this one too (or replace it? WhatsApp replaces, let's replace).
+          
+          const myMatch = existingReactions.find(
+            (r) => r.content === reaction && (r.reactBy === "me" || (r as any).isMe)
+          );
+          
+          if (myMatch) {
+            return {
+              ...m,
+              reactions: existingReactions.filter(r => r !== myMatch)
+            };
+          } else {
+            // Replace any other reaction I had with this one (WhatsApp style)
+            const otherReactsFromMe = existingReactions.filter(r => r.reactBy === 'me' || (r as any).isMe);
+            const baseReacts = existingReactions.filter(r => !otherReactsFromMe.includes(r));
+            
+            return {
+              ...m,
+              reactions: [...baseReacts, { content: reaction, reactBy: 'me', isMe: true } as any]
+            };
+          }
+        })
+      );
+
+      return { previousMessages };
+    },
+
+    onError: (_err, _variables, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
+      }
+      toast.error("Error al reaccionar");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+    }
+  });
+};
+
+/**
  * CUSTOM HOOK: usePickNextTicket
  * Handles picking next available ticket
  */
@@ -387,7 +453,7 @@ export const updateConversationInCache = (
 
       // Find and update the target conversation
       const targetIndex = old.conversations.findIndex(
-        (c) => c.ticketId === ticketId,
+        (c) => c.ticketId === ticketId || c.id === ticketId,
       );
 
       // If not found, invalidate to fetch fresh list (safer for new tickets)

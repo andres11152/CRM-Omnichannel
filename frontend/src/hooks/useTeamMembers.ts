@@ -9,7 +9,7 @@ export interface TeamMember {
 }
 
 /**
- * 👥 HOOK: Fetch Team Members for @Mentions
+ * [CONTACTS] HOOK: Fetch Team Members for @Mentions
  * Loads company users for autocomplete
  */
 export const useTeamMembers = () => {

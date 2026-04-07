@@ -9,7 +9,7 @@ interface VoiceNotePlayerProps {
 
 export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, duration: initialDuration, variant = 'received' }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0); // 0 to 1
+  const [progress, setProgress] = useState(0); // 0 to || 1
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(initialDuration || 0);
   const [playbackRate, setPlaybackRate] = useState(1);

@@ -1,7 +1,7 @@
 import { Campaign, MessageTemplate } from "@prisma/client";
 
 /**
- * 📦 CAMPAIGN INTERFACES
+ * [PKG] CAMPAIGN INTERFACES
  * Strict contracts for campaign execution engine
  */
 

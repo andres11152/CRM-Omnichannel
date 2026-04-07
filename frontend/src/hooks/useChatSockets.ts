@@ -1,15 +1,15 @@
 import { useEffect } from "react";
 import { useQueryClient, QueryClient } from "@tanstack/react-query";
 import { socketService } from "@/services/socketService";
+import { Logger } from "@/utils/logger";
+import { Message, Conversation, Ticket } from "@/types";
 import {
   addMessageToCache,
   updateConversationInCache,
   CHAT_KEYS,
 } from "./useChat";
-import { type Message, type Conversation } from "@/services/chatService";
-import { type Ticket } from "@/types";
 
-// 🔒 STRICT SOCKET TYPES
+//  STRICT SOCKET TYPES
 interface RawSocketMessage {
   id: string;
   content: string;
@@ -35,31 +35,21 @@ interface SocketConversationPayload {
   updates: Partial<Conversation>;
 }
 
-interface SocketTicketPayload {
-  ticketId: string;
-}
-
 /**
  * CUSTOM HOOK: useChatSockets
  * Integrates-ESocket.IO real-time events with React Query cache
- *
- * Instead of triggering full refetches, this hook directly updates
- * the React Query cache when receiving socket events.
  */
 export const useChatSockets = (currentTicketId: string | null) => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    /**
-     * SOCKET EVENT: message.received
-     * Fires when a new message arrives from customer
-     */
     const handleMessageReceived = (payload: SocketMessagePayload) => {
-      // 1. Normalize Socket Payload to match Frontend Message Interface
       const rawMsg = payload.message;
       const normalizedMessage: Message = {
         ...rawMsg,
         ticketId: payload.ticketId,
+        companyId: (rawMsg.companyId as string) || "",
+        senderType: (rawMsg.senderType as any) || (rawMsg.direction === "OUTBOUND" ? "AGENT" : "USER"),
         type: rawMsg.type || "text",
         timestamp: rawMsg.createdAt
           ? new Date(rawMsg.createdAt).toISOString()
@@ -69,62 +59,56 @@ export const useChatSockets = (currentTicketId: string | null) => {
         sender: rawMsg.direction === "OUTBOUND" ? "agent" : "customer",
       };
 
-      // 2. Add to cache with deduplication logic
-      addMessageToCache(queryClient, payload.ticketId, normalizedMessage);
+      const actualConversationId = payload.ticketId || payload.conversation?.id || currentTicketId;
+      if (!actualConversationId) {
+        Logger.warn("[useChatSockets] Missing conversation/ticket ID in payload");
+        return;
+      }
 
-      // Update conversation metadata
+      addMessageToCache(queryClient, actualConversationId, normalizedMessage);
+
       if (payload.conversation) {
-        updateConversationInCache(queryClient, payload.ticketId, {
+        updateConversationInCache(queryClient, actualConversationId, {
           lastMessage: payload.message.content,
-          lastMessageTime: payload.message.timestamp
+          lastMessageAt: payload.message.timestamp
             ? new Date(payload.message.timestamp).toISOString()
             : new Date().toISOString(),
           unreadCount: payload.conversation.unreadCount || 0,
         });
       }
 
-      // Invalidate conversations to ensure consistency
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
     };
 
-    /**
-     * SOCKET EVENT: conversation.updated
-     * Fires when conversation metadata changes (assigned, status, etc.)
-     */
-    const handleConversationUpdated = (payload: SocketConversationPayload) => {
-      // Update specific conversation in cache
-      updateConversationInCache(queryClient, payload.ticketId, payload.updates);
-
-      // Invalidate to ensure consistency
+    const handleConversationUpdated = (payload: Record<string, any>) => {
+      const convId = payload.id || payload.ticketId || payload.conversation?.id;
+      if (!convId) return;
+      
+      // Handle both { updates } wrappers and flat payloads
+      const updates = payload.updates || payload.conversation || payload;
+      
+      updateConversationInCache(queryClient, convId, updates);
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
     };
 
-    /**
-     * SOCKET EVENT: ticket.deleted
-     * Fires when a ticket is deleted
-     */
     const handleTicketDeleted = (payload: { ticketId: string }) => {
-      // Remove from conversations
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
-
-      // Remove messages from cache
       queryClient.removeQueries({
         queryKey: CHAT_KEYS.messages(payload.ticketId),
       });
     };
 
-    /**
-     * SOCKET EVENT: message.status
-     * Fires when message status changes (sent, delivered, read)
-     */
     const handleMessageStatus = (payload: {
-      ticketId: string;
+      ticketId?: string;
+      conversationId?: string;
       messageId: string;
       status: "sent" | "delivered" | "read";
     }) => {
-      // Update message status in cache
+      const actualConversationId = payload.ticketId || payload.conversationId;
+      if (!actualConversationId) return;
+
       queryClient.setQueryData<Message[]>(
-        CHAT_KEYS.messages(payload.ticketId),
+        CHAT_KEYS.messages(actualConversationId),
         (old = []) =>
           old.map((msg) =>
             msg.id === payload.messageId
@@ -134,51 +118,29 @@ export const useChatSockets = (currentTicketId: string | null) => {
       );
     };
 
-    /**
-     * SOCKET EVENT: ticket.created
-     * Fires when a new ticket is created
-     */
-    const handleTicketCreated = (payload: Ticket) => {
-      // Invalidate conversations to fetch the new ticket
+    const handleTicketCreated = () => {
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
     };
 
-    /**
-     * SOCKET EVENT: conversation.created
-     * Fires when a new conversation is created (real-time sync)
-     */
-    const handleConversationCreated = (payload: Conversation) => {
-      // Invalidate to get latest list with new conversation
+    const handleConversationCreated = () => {
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
     };
 
-    /**
-     * SOCKET EVENT: conversation.closed
-     * Fires when a conversation is closed
-     */
-    const handleConversationClosed = (payload: Partial<Conversation>) => {
-      // Update conversation status in cache
+    const handleConversationClosed = () => {
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
     };
 
-    /**
-     * SOCKET EVENT: conversation:typing
-     * Fires when a customer is typing
-     */
     const handleConversationTyping = (payload: {
       conversationId: string;
       from: string;
       status: "composing" | "recording" | "paused";
     }) => {
-      // 1. Update status immediately
       updateConversationTypingStatus(
         queryClient,
         payload.conversationId,
         payload.status,
       );
 
-      // 2. Auto-clear status after 6 seconds (Safety Net)
-      // This prevents "typing..." from getting stuck if "paused" event is dropped
       if (payload.status !== "paused") {
         setTimeout(() => {
           updateConversationTypingStatus(
@@ -190,17 +152,12 @@ export const useChatSockets = (currentTicketId: string | null) => {
       }
     };
 
-    /**
-     * SOCKET EVENT: message.reaction
-     * Fires when a message receives/loses an emoji reaction
-     */
     const handleMessageReaction = (payload: {
       messageId: string;
       conversationId: string;
       reaction: string;
       participant: string;
     }) => {
-      // Update the message in cache for ALL conversation message lists
       const ticketId = payload.conversationId || currentTicketId;
       if (!ticketId) return;
 
@@ -209,12 +166,7 @@ export const useChatSockets = (currentTicketId: string | null) => {
         (old = []) =>
           old.map((msg) => {
             if (msg.id !== payload.messageId) return msg;
-            const currentReactions =
-              (
-                msg as Message & {
-                  reactions?: { reactBy: string; content: string }[];
-                }
-              ).reactions || [];
+            const currentReactions = msg.reactions || [];
             let newReactions = [...currentReactions];
             if (!payload.reaction) {
               newReactions = newReactions.filter(
@@ -241,37 +193,21 @@ export const useChatSockets = (currentTicketId: string | null) => {
       );
     };
 
-    /**
-     * SOCKET EVENT: sync:started
-     * Fires when an on-demand history sync starts
-     */
-    const handleSyncStarted = (payload: { conversationId: string; type: string }) => {
-      // Set a temporary "isSyncing" flag in the conversation cache
+    const handleSyncStarted = (payload: { conversationId: string }) => {
       updateConversationInCache(queryClient, payload.conversationId, {
         // @ts-ignore - temporary UI flag
         isSyncing: true
       });
     };
 
-    /**
-     * SOCKET EVENT: conversation:history_synced
-     * Fires when history backfill completes
-     */
-    const handleHistorySynced = (payload: { conversationId: string; newMessages: number }) => {
-      // Clear syncing flag and refresh messages
+    const handleHistorySynced = (payload: { conversationId: string }) => {
       updateConversationInCache(queryClient, payload.conversationId, {
         // @ts-ignore - temporary UI flag
         isSyncing: false
       });
-
-      // Force refresh of the message list
       queryClient.invalidateQueries({
         queryKey: CHAT_KEYS.messages(payload.conversationId),
       });
-
-      if (payload.newMessages > 0) {
-        // Optional: show a small notification if messages were actually found
-      }
     };
 
     // Subscribe to socket events
@@ -302,26 +238,18 @@ export const useChatSockets = (currentTicketId: string | null) => {
   }, [queryClient, currentTicketId]);
 
 
-  /**
-   * HELPER: Update Conversation Typing Status
-   * Updates the ephemeral typing state in the conversation list
-   */
   const updateConversationTypingStatus = (
     queryClient: QueryClient,
     conversationId: string,
     status: "composing" | "recording" | "paused",
   ) => {
-    console.log(
-      `[Frontend] 🟢 Updating Typing Status: ${status} for Conv ${conversationId}`,
-    );
+    Logger.info(`[useChatSockets] [ONLINE] Updating Typing Status: ${status} for Conv ${conversationId}`);
 
-    // 100-YEAR FIX: Use setQueriesData to match ALL conversation lists
-    // regardless of status filter (open, pending, resolved, undefined)
     queryClient.setQueriesData<{
       conversations: Conversation[];
       total: number;
     }>(
-      { queryKey: ["conversations"] }, // Partial match on key
+      { queryKey: ["conversations"] }, 
       (old) => {
         if (!old || !old.conversations) return old;
 
@@ -331,9 +259,7 @@ export const useChatSockets = (currentTicketId: string | null) => {
 
         if (targetIndex === -1) return old;
 
-        console.log(
-          `[Frontend] ✅ Found conv in cache at index ${targetIndex}, updating...`,
-        );
+        Logger.info(`[useChatSockets] [OK] Found conv in cache, updating typing status...`);
 
         const updatedConv = {
           ...old.conversations[targetIndex],
@@ -352,7 +278,6 @@ export const useChatSockets = (currentTicketId: string | null) => {
   };
 
   return {
-    // Could expose socket connection status here if needed
     isConnected: socketService.isConnected,
   };
 };

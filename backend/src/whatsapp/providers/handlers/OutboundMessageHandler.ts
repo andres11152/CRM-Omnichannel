@@ -8,13 +8,13 @@ import { MessageMetadata } from "@/types/whatsapp.types";
 import { generateMessageID } from "@whiskeysockets/baileys";
 import { Logger } from "@/utils/logger";
 import { deduplicationService } from "../../services/DeduplicationService";
-import { chatService } from "@/services/chatService";
+import { chatService } from "@/services/ChatService";
 import { cleanupTempFile } from "@/utils/audioConverter";
 import {
   mediaProcessor,
   MediaFileNotFoundError,
 } from "../../services/MediaProcessorService";
-import { SocketEventEmitter } from "@/services/socketEventEmitter";
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
@@ -48,30 +48,49 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
 
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
-      const generatedId = generateMessageID();
+      const generatedId = (metadata?.generatedMessageId as string) || generateMessageID();
       await deduplicationService.markMessageSent(generatedId);
 
       await deduplicationService.markContentSent(conversationId, content);
+
+      // [SYNC] RESOLVE QUOTED MESSAGE (UUID -> WhatsApp ID)
+      let quotedMsg;
+      if (options.quotedMessageId) {
+        const dbQuoted = await messageRepository.findFirst({
+          where: { id: options.quotedMessageId, companyId },
+        });
+        if (dbQuoted && dbQuoted.whatsappMessageId) {
+          quotedMsg = {
+            key: {
+              remoteJid: jid,
+              fromMe: dbQuoted.direction === "OUTBOUND",
+              id: dbQuoted.whatsappMessageId,
+            },
+            message: {
+              conversation:
+                (metadata?.quotedContent as string) ||
+                dbQuoted.content ||
+                "Mensaje original",
+            },
+          };
+        }
+      }
 
       const sentMsg = await sock.sendMessage(
         jid,
         { text: content },
         {
           messageId: generatedId,
-          quoted: options.quotedMessageId
-            ? {
-                key: {
-                  remoteJid: jid,
-                  id: options.quotedMessageId,
-                },
-                message: {
-                  conversation:
-                    (metadata?.quotedContent as string) || "Mensaje original",
-                },
-              }
-            : undefined,
+          quoted: quotedMsg,
         },
       );
+
+      // [SEC] DEDUP FIX: Also mark the FINAL Baileys ID to prevent echo processing.
+      // Baileys may use a different ID than the one we generated.
+      const finalBaileysId = sentMsg?.key?.id;
+      if (finalBaileysId && finalBaileysId !== generatedId) {
+        await deduplicationService.markMessageSent(finalBaileysId);
+      }
 
       const mergedMeta: MessageMetadata = {
         messageId: sentMsg?.key?.id,
@@ -105,12 +124,12 @@ export class OutboundMessageHandler {
 
       if (!isAiGenerated && !isFlowGenerated) {
         try {
-          await chatService.updateConversation(conversationId, {
+          await chatService.updateConversation(companyId, conversationId, {
             aiEnabled: false,
             lastManualIntervention: new Date(),
           });
           Logger.info(
-            `[HITL] ✅ AI muted for conversation ${conversationId} (human agent intervention)`,
+            `[HITL] [OK] AI muted for conversation ${conversationId} (human agent intervention)`,
           );
         } catch (err) {
           Logger.error("[HITL] Failed to auto-mute AI:", err);
@@ -123,9 +142,26 @@ export class OutboundMessageHandler {
         );
       }
 
-      await chatService.updateConversation(conversationId, {});
-      const fullConv = await chatService.getFullConversation(conversationId);
-      if (fullConv) this.socketEmitter.emitMessageSent(savedMessage, fullConv);
+      // Restore socket emission so frontend gets final Baileys ID for read receipts.
+      // Frontend dedupe has been fixed to prevent duplicates when this arrives.
+      await chatService.updateConversation(companyId, conversationId, {});
+      const fullConv = await chatService.getFullConversation(companyId, conversationId);
+      if (fullConv) {
+        // Emit socket so UI updates from temp_ ID to real Baileys ID
+        try {
+          const { gateway } = await import("@/gateways/socketGateway");
+          const { SocketEventEmitter } = await import("@/services/SocketEventEmitter");
+          const socketEmitter = new SocketEventEmitter(gateway);
+          
+          type Emits = InstanceType<typeof import("@/services/SocketEventEmitter").SocketEventEmitter>["emitMessageSent"];
+          socketEmitter.emitMessageSent(
+            savedMessage as unknown as Parameters<Emits>[0],
+            fullConv as unknown as Parameters<Emits>[1]
+          );
+        } catch (err: unknown) {
+          Logger.warn("[OutboundHandler] Failed to emit socket", { error: err instanceof Error ? err.message : String(err) });
+        }
+      }
 
       return savedMessage as unknown as MessagePayload;
     } catch (err: unknown) {
@@ -138,13 +174,13 @@ export class OutboundMessageHandler {
 
       if (isConnectionError && retries > 0) {
         Logger.warn(
-          `[MessageHandler] ⚠️ Send failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
+          `[MessageHandler] [WARNING] Send failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
         );
         await new Promise((resolve) => setTimeout(resolve, 2000));
         return this.sendMessage(to, content, options, retries - 1);
       }
 
-      Logger.error("[MessageHandler] ❌ sendMessage failed final:", err);
+      Logger.error("[MessageHandler] [ERROR] sendMessage failed final:", err);
       throw err;
     }
   }
@@ -171,36 +207,53 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
 
-      // 🏗️ SRP: All media preparation delegated to MediaProcessorService
+      // [BUILD] SRP: All media preparation delegated to MediaProcessorService
       const prepared = await mediaProcessor.prepareOutboundContent(media);
       const { content: messageContent, metaType } = prepared;
       tempFilePath = prepared.tempFilePath;
 
-      const generatedId = generateMessageID();
+      const generatedId = (options.metadata?.generatedMessageId as string) || generateMessageID();
       await deduplicationService.markMessageSent(generatedId);
+
+      // [SYNC] RESOLVE QUOTED (MEDIA)
+      let quotedMsg;
+      if (options.quotedMessageId) {
+        const dbQuoted = await messageRepository.findFirst({
+          where: { id: options.quotedMessageId, companyId },
+        });
+        if (dbQuoted && dbQuoted.whatsappMessageId) {
+          quotedMsg = {
+            key: {
+              remoteJid: jid,
+              fromMe: dbQuoted.direction === "OUTBOUND",
+              id: dbQuoted.whatsappMessageId,
+            },
+            message: {
+              conversation:
+                (options.metadata?.quotedContent as string) ||
+                dbQuoted.content ||
+                "Mensaje original",
+            },
+          };
+        }
+      }
 
       const sentMsg = await sock.sendMessage(jid, messageContent, {
         messageId: generatedId,
-        quoted: options.quotedMessageId
-          ? {
-              key: {
-                remoteJid: jid,
-                id: options.quotedMessageId,
-              },
-              message: {
-                conversation:
-                  (options.metadata?.quotedContent as string) ||
-                  "Media original",
-              },
-            }
-          : undefined,
+        quoted: quotedMsg,
       });
+
+      // [SEC] DEDUP FIX: Also mark the FINAL Baileys ID for media messages.
+      const finalMediaId = sentMsg?.key?.id;
+      if (finalMediaId && finalMediaId !== generatedId) {
+        await deduplicationService.markMessageSent(finalMediaId);
+      }
       const content = media.caption || `[${media.type}]`;
 
       const meta: MessageMetadata = {
         messageId: sentMsg?.key?.id,
         media: { type: metaType, url: media.url },
-        ...(options.metadata || {}), // ❤️ FIX: Preserve quotes/replies metadata
+        ...(options.metadata || {}), // ️ FIX: Preserve quotes/replies metadata
       };
 
       const dbId = options.metadata?.dbId as string | undefined;
@@ -231,12 +284,12 @@ export class OutboundMessageHandler {
 
       if (!isAiGenerated && !isFlowGenerated) {
         try {
-          await chatService.updateConversation(conversationId, {
+          await chatService.updateConversation(companyId, conversationId, {
             aiEnabled: false,
             lastManualIntervention: new Date(),
           });
           Logger.info(
-            `[HITL] ✅ AI muted for conversation ${conversationId} (human agent sent media)`,
+            `[HITL] [OK] AI muted for conversation ${conversationId} (human agent sent media)`,
           );
         } catch (err) {
           Logger.error("[HITL] Failed to auto-mute AI:", err);
@@ -249,18 +302,32 @@ export class OutboundMessageHandler {
         );
       }
 
-      await chatService.updateConversation(conversationId, {});
-      const fullConv = await chatService.getFullConversation(conversationId);
-      if (fullConv) this.socketEmitter.emitMessageSent(savedMessage, fullConv);
+      // Restore socket emission for media messages
+      await chatService.updateConversation(companyId, conversationId, {});
+      const fullConv = await chatService.getFullConversation(companyId, conversationId);
+      if (fullConv) {
+        try {
+          const { gateway } = await import("@/gateways/socketGateway");
+          const { SocketEventEmitter } = await import("@/services/SocketEventEmitter");
+          const socketEmitter = new SocketEventEmitter(gateway);
+          type Emits = InstanceType<typeof import("@/services/SocketEventEmitter").SocketEventEmitter>["emitMessageSent"];
+          socketEmitter.emitMessageSent(
+            savedMessage as Parameters<Emits>[0],
+            fullConv as Parameters<Emits>[1]
+          );
+        } catch (err: unknown) {
+          Logger.warn("[OutboundHandler] Failed to emit socket", { error: err instanceof Error ? err.message : String(err) });
+        }
+      }
 
       return savedMessage as unknown as MessagePayload;
     } catch (err: unknown) {
-      // 🛡️ Handle MediaFileNotFoundError gracefully
+      // [SEC] Handle MediaFileNotFoundError gracefully
       if (err instanceof MediaFileNotFoundError) {
-        Logger.error(`[MessageHandler] ❌ ${err.message}`);
+        Logger.error(`[MessageHandler] [ERROR] ${err.message}`);
         const warningContent = err.caption
-          ? `${err.caption}\n\n(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`
-          : `(⚠️ Audio no disponible: Archivo no encontrado en el servidor)`;
+          ? `${err.caption}\n\n([WARNING] Audio no disponible: Archivo no encontrado en el servidor)`
+          : `([WARNING] Audio no disponible: Archivo no encontrado en el servidor)`;
         return this.sendMessage(to, warningContent, options);
       }
 
@@ -273,7 +340,7 @@ export class OutboundMessageHandler {
 
       if (isConnectionError && retries > 0) {
         Logger.warn(
-          `[MessageHandler] ⚠️ SendMedia failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
+          `[MessageHandler] [WARNING] SendMedia failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
         );
         await new Promise((resolve) => setTimeout(resolve, 2000));
         if (tempFilePath) {
@@ -282,7 +349,7 @@ export class OutboundMessageHandler {
             tempFilePath = null;
           } catch (cleanupErr) {
             Logger.warn(
-              "[MessageHandler] ⚠️ Temp file cleanup failed during retry:",
+              "[MessageHandler] [WARNING] Temp file cleanup failed during retry:",
               cleanupErr,
             );
           }
@@ -290,8 +357,8 @@ export class OutboundMessageHandler {
         return this.sendMedia(to, media, options, retries - 1);
       }
 
-      Logger.error(`[MessageHandler] ❌ sendMedia failed unexpectedly:`, err);
-      const warningContent = `(⚠️ Error enviando archivo multimedia: ${media.type})`;
+      Logger.error(`[MessageHandler] [ERROR] sendMedia failed unexpectedly:`, err);
+      const warningContent = `([WARNING] Error enviando archivo multimedia: ${media.type})`;
       return this.sendMessage(to, warningContent, options);
     } finally {
       if (tempFilePath) {
@@ -370,6 +437,43 @@ export class OutboundMessageHandler {
       });
     } catch (error) {
       Logger.warn(`[Presence] Error in sendPresenceUpdate:`, error);
+    }
+  }
+
+  async sendReaction(
+    to: string,
+    messageId: string,
+    reaction: string,
+    companyId: string,
+    fromMe: boolean = false,
+  ): Promise<void> {
+    try {
+      const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+      if (!activeSession) return;
+
+      const sock = activeSession.socket;
+      if (!sock) return;
+
+      let jid = to;
+      if (!to.includes("@")) {
+        const cleanPhone = to.replace(/\D/g, "");
+        jid = `${cleanPhone}@s.whatsapp.net`;
+      }
+
+      await sock.sendMessage(jid, {
+        react: {
+          text: reaction,
+          key: {
+            remoteJid: jid,
+            fromMe: fromMe, // [DEV] DYNAMIC: Support reacting to both customer and agent messages
+            id: messageId,
+          },
+        },
+      });
+
+      Logger.debug(`[Reaction] Sent reaction ${reaction} to ${messageId}`);
+    } catch (error) {
+      Logger.warn(`[Reaction] Failed to send reaction: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

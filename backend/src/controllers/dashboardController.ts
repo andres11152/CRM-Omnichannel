@@ -1,10 +1,10 @@
 import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
-import { dashboardService } from "@/services/dashboardService";
+import { dashboardService } from "@/services/DashboardService";
 
 /**
- * 🚀 DASHBOARD CONTROLLER (Refactored)
+ *  DASHBOARD CONTROLLER (Refactored)
  * Delivers aggregated stats via specialized DashboardService.
  * Clean, Thin, and Efficient.
  */

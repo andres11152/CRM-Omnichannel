@@ -1,5 +1,5 @@
 /**
- * 🏢 FLOW CRM HANDLER
+ *  FLOW CRM HANDLER
  *
  * CRM mutation nodes:
  * - handleCreateDealNode: Creates deals in the sales pipeline
@@ -88,7 +88,7 @@ export class FlowCRMHandler {
     ) => Promise<void>,
   ): Promise<string | null> {
     Logger.info(
-      `[FlowExecutor] 🏗️ Processing UPDATE_CONTACT node ${node.id} for Contact ${session.contactId}`,
+      `[FlowExecutor] [BUILD] Processing UPDATE_CONTACT node ${node.id} for Contact ${session.contactId}`,
     );
 
     let fieldsToUpdate: Record<string, unknown> = {
@@ -109,7 +109,7 @@ export class FlowCRMHandler {
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           Logger.warn(
-            `[FlowExecutor] ⚠️ Invalid JSON in customFields for node ${node.id}: ${errMsg}`,
+            `[FlowExecutor] [WARNING] Invalid JSON in customFields for node ${node.id}: ${errMsg}`,
           );
         }
       } else if (
@@ -155,7 +155,7 @@ export class FlowCRMHandler {
     if (Object.keys(customFieldsUpdates).length > 0) {
       try {
         const currentContact = await contactRepository.findFirst({
-          where: { id: session.contactId },
+          where: { id: session.contactId, companyId: session.companyId },
           select: { customFields: true },
         });
 
@@ -171,7 +171,7 @@ export class FlowCRMHandler {
         };
       } catch (err) {
         Logger.error(
-          `[FlowExecutor] ❌ Error fetching contact for custom fields merge: ${err}`,
+          `[FlowExecutor] [ERROR] Error fetching contact for custom fields merge: ${err}`,
         );
       }
     }
@@ -179,15 +179,16 @@ export class FlowCRMHandler {
     if (Object.keys(prismaUpdateData).length > 0) {
       try {
         await contactRepository.update(
+          session.companyId,
           session.contactId,
-          prismaUpdateData as Record<string, unknown>,
+          prismaUpdateData as Prisma.ContactUncheckedUpdateInput,
         );
         Logger.info(
-          `[FlowExecutor] ✅ Contact ${session.contactId} updated successfully.`,
+          `[FlowExecutor] [OK] Contact ${session.contactId} updated successfully.`,
         );
       } catch (error) {
         Logger.error(
-          `[FlowExecutor] ❌ Failed to update contact ${session.contactId}: ${error}`,
+          `[FlowExecutor] [ERROR] Failed to update contact ${session.contactId}: ${error}`,
         );
       }
     }

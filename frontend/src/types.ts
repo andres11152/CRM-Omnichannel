@@ -90,7 +90,7 @@ export interface Message {
   companyId: string;
   content: string;
   senderType: SenderType;
-  timestamp: Date;
+  timestamp: Date | string;
   senderName?: string;
   attachment?: {
     id?: string;
@@ -103,7 +103,7 @@ export interface Message {
       | "location"
       | "contact"
       | "contact_list"
-      // 🛡️ HISTORY SYNC: Synthetic types for historical messages that only have placeholders
+      // [SEC] HISTORY SYNC: Synthetic types for historical messages that only have placeholders
       | "image_unavailable"
       | "video_unavailable"
       | "audio_unavailable"
@@ -115,6 +115,7 @@ export interface Message {
   };
   direction?: "INBOUND" | "OUTBOUND";
   status?:
+    | "sending"
     | "sent"
     | "delivered"
     | "read"
@@ -123,7 +124,15 @@ export interface Message {
     | "scheduled"
     | "SCHEDULED"
     | "REVOKED";
-  metadata?: Record<string, unknown>;
+  sender?: "agent" | "customer" | "system"; //  UI Normalization field
+  type?: "text" | "image" | "video" | "audio" | "document" | "sticker" | "location"; //  Match chatService
+  mediaUrl?: string;
+  metadata?: {
+    quotedMessageId?: string;
+    quotedContent?: string;
+    scheduledAt?: string | Date;
+    [key: string]: unknown;
+  };
   reactions?: {
     reactBy: string;
     content: string;
@@ -142,22 +151,23 @@ export interface Contact {
   avatarUrl: string;
   // Fix: Add properties for conversation summary to resolve type errors in multiple components
   lastMessage: string;
-  lastMessageTime: Date;
-  unreadCount: number;
+  lastMessageTime: Date | string;
+  unreadCount?: number;
   tags: string[];
   notes?: string;
-  channel: Channel;
-  assignedMode: "human" | "bot";
+  channel?: Channel;
+  assignedMode?: "human" | "bot";
   // FIXED: Removed 'PENDING' to match Prisma ConversationStatus
   status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
   queueName?: string;
   assignedAgentName?: string;
+  assignedToId?: string | null;
   channelId?: string;
   profilePicUrl?: string; // WhatsApp Profile Picture URL
   about?: string; // WhatsApp Status/About
-  // 🏢 GROUP CHAT SUPPORT
+  //  GROUP CHAT SUPPORT
   isGroup?: boolean;
-  // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
+  // [APP] Multi-WhatsApp Session Identification (#1, #2, #3)
   whatsappSessionIndex?: number;
   whatsappSessionPhone?: string;
 }
@@ -172,9 +182,9 @@ export interface Conversation {
   status: "OPEN" | "CLOSED" | "PENDING" | "RESOLVED";
   unreadCount: number;
   lastMessage?: string;
-  lastMessageAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  lastMessageAt?: Date | string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 export interface TicketContact {
@@ -192,9 +202,9 @@ export interface TicketContact {
   status?: string;
   queueName?: string;
   assignedAgentName?: string;
-  // 🏢 GROUP CHAT SUPPORT
+  //  GROUP CHAT SUPPORT
   isGroup?: boolean;
-  // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
+  // [APP] Multi-WhatsApp Session Identification (#1, #2, #3)
   whatsappSessionIndex?: number;
   whatsappSessionPhone?: string;
 }
@@ -234,7 +244,7 @@ export interface Ticket {
   queueId?: string | null;
   assignedToId?: string | null;
 
-  // 🏢 GROUP CHAT SUPPORT (Enterprise CRM Feature)
+  //  GROUP CHAT SUPPORT (Enterprise CRM Feature)
   isGroup?: boolean;
   groupMetadata?: {
     groupName?: string;

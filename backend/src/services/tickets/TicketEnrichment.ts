@@ -1,5 +1,5 @@
 /**
- * 🏷️ TICKET ENRICHMENT SERVICE
+ * ️ TICKET ENRICHMENT SERVICE
  *
  * Enriches TicketDTOs with:
  * - CRM Contact data (name, avatar, tags)
@@ -8,7 +8,7 @@
 
 import { contactRepository } from "@/repositories/ContactRepository";
 import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionRepository";
-import { cacheService } from "@/services/cacheService";
+import { cacheService } from "@/services/CacheService";
 import { Logger } from "@/utils/logger";
 import type { TicketDTO } from "@/types/ticket.types";
 
@@ -21,7 +21,10 @@ export class TicketEnrichment {
   ): Promise<TicketDTO[]> {
     const phonesToFetch = new Set<string>();
     dtos.forEach((t) => {
-      if (t.contact.phone) phonesToFetch.add(t.contact.phone);
+      if (t.contact.phone) {
+        const cleanPhone = t.contact.phone.replace(/\D/g, "");
+        if (cleanPhone) phonesToFetch.add(cleanPhone);
+      }
     });
 
     let whatsappSessions: {
@@ -136,8 +139,9 @@ export class TicketEnrichment {
     });
 
     return dtos.map((dto) => {
-      const crmData = dto.contact.phone
-        ? crmMap.get(dto.contact.phone)
+      const cleanDtoPhone = dto.contact.phone ? dto.contact.phone.replace(/\D/g, "") : undefined;
+      const crmData = cleanDtoPhone
+        ? crmMap.get(cleanDtoPhone)
         : undefined;
       let whatsappSessionIndex: number | undefined;
       let whatsappSessionPhone: string | undefined;

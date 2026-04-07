@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ EMAIL VALIDATION SCHEMAS
+ * [SEC] EMAIL VALIDATION SCHEMAS
  *
  * Comprehensive validation for email operations:
  * - Sending emails (body validation)

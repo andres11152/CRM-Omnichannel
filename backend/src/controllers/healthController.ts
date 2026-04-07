@@ -4,7 +4,7 @@ import redisClient from "@/config/redis";
 import { HealthStatus, ServiceHealth, MemoryHealth } from "@/types/health";
 
 /**
- * 🛡️ HEALTH CHECK ENDPOINT
+ * [SEC] HEALTH CHECK ENDPOINT
  *
  * Returns the health status of all critical services.
  * Used by load balancers, monitoring systems, and orchestrators (K8s, Docker Swarm).
@@ -102,7 +102,7 @@ function checkMemory(): MemoryHealth {
 }
 
 /**
- * 🛡️ READINESS CHECK
+ * [SEC] READINESS CHECK
  *
  * Simpler check for container orchestrators.
  * Returns 200 if the service can accept traffic.
@@ -118,7 +118,7 @@ export const readinessCheck = async (req: Request, res: Response) => {
 };
 
 /**
- * 🛡️ LIVENESS CHECK
+ * [SEC] LIVENESS CHECK
  *
  * Simplest check - just confirms the process is running.
  * Used by orchestrators to detect if the process needs to be restarted.

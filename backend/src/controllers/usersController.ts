@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { userService } from "@/services/userService";
+import { userService } from "@/services/UserService";
 
 /**
  * ==========================================
@@ -187,9 +187,11 @@ export const getUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     // 1. Extraer ID de params
     const { id } = req.params;
+    const companyId = req.companyId!;
 
     // 2. Llamar al servicio (maneja error 404 internamente)
-    const user = await userService.findUserById(id);
+    // [SEC] SECURITY: Mandatory companyId scoping to prevent BOLA
+    const user = await userService.findUserById(id, companyId);
 
     // 3. Enviar response
     res.status(200).json({

@@ -3,7 +3,7 @@ import { z, ZodError } from "zod";
 import { AppError } from "@/utils/AppError";
 
 /**
- * 🛡️ VALIDATION MIDDLEWARE
+ * [SEC] VALIDATION MIDDLEWARE
  *
  * Validates request data (body, query, params) against a Zod schema.
  * Provides user-friendly error messages and prevents XSS/data corruption.

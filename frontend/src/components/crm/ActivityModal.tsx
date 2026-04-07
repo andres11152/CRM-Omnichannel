@@ -224,7 +224,7 @@ export const ActivityModal: React.FC<Props> = ({
                   {activity ? "Editar Actividad" : "Nueva Actividad"}
                 </h2>
                 <p className="text-white/80 text-sm">
-                  {isMeeting && "📅 Se sincronizar con Google Calendar"}
+                  {isMeeting && "[DATE] Se sincronizar con Google Calendar"}
                 </p>
               </div>
             </div>
@@ -331,11 +331,11 @@ export const ActivityModal: React.FC<Props> = ({
               }
               className="w-full px-4 py-3 min-h-[44px] rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent font-medium transition-all leading-normal"
             >
-              <option value="NOTE">📝 Nota</option>
-              <option value="CALL">📞 Llamada</option>
-              <option value="EMAIL">📧 Email</option>
-              <option value="MEETING">📅 Reunión (Google Calendar)</option>
-              <option value="TASK">✅ Tarea</option>
+              <option value="NOTE"> Nota</option>
+              <option value="CALL">[PHONE] Llamada</option>
+              <option value="EMAIL"> Email</option>
+              <option value="MEETING">[DATE] Reunión (Google Calendar)</option>
+              <option value="TASK">[OK] Tarea</option>
             </select>
           </div>
 

@@ -33,7 +33,7 @@ const initializeEmitter = () => {
   });
 
   redisClient.on("error", (err) => {
-    // 🤫 SILENCE KNOWN NETWORK NOISE
+    //  SILENCE KNOWN NETWORK NOISE
     const msg = err.message || "";
     if (
       msg.includes("ECONNRESET") ||
@@ -53,7 +53,7 @@ const initializeEmitter = () => {
     .catch((err) => Logger.error("Redis Emitter Connection Error", err));
 
   emitter = new Emitter(redisClient);
-  Logger.info("[SocketEmitter] 📡 Emitter Service Ready");
+  Logger.info("[SocketEmitter] [WS] Emitter Service Ready");
   return emitter;
 };
 
@@ -80,7 +80,7 @@ export const SocketEmitter = {
 };
 
 /**
- * 💬 Emit @Mention Notification to specific user
+ * [CHAT] Emit @Mention Notification to specific user
  * Sends real-time notification when user is mentioned in a note
  */
 export const emitMentionNotification = (

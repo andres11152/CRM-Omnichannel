@@ -2,7 +2,7 @@ import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { routingConfigService } from "@/services/routingConfigService";
+import { routingConfigService } from "@/services/RoutingConfigService";
 
 /**
  * GET /api/routing-config

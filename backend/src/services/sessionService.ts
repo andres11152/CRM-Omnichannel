@@ -3,7 +3,7 @@ import { Logger } from "@/utils/logger";
 import crypto from "crypto";
 
 /**
- * 🔐 ENTERPRISE SESSION MANAGEMENT SERVICE
+ * [AUTH] ENTERPRISE SESSION MANAGEMENT SERVICE
  *
  * Redis-backed session store with:
  * - Active session tracking per user
@@ -122,7 +122,7 @@ class SessionService {
 
       await pipeline.exec();
 
-      Logger.info("[SessionService] ✅ Session created", {
+      Logger.info("[SessionService] [OK] Session created", {
         sessionId: sessionId.substring(0, 8),
         userId: input.userId,
       });
@@ -166,7 +166,7 @@ class SessionService {
         await this.blacklistToken(jti);
       }
 
-      Logger.info("[SessionService] 🔒 Session destroyed", {
+      Logger.info("[SessionService]  Session destroyed", {
         sessionId: sessionId.substring(0, 8),
       });
     } catch (error) {
@@ -203,7 +203,7 @@ class SessionService {
 
       await pipeline.exec();
 
-      Logger.info("[SessionService] 🔒 All sessions destroyed", {
+      Logger.info("[SessionService]  All sessions destroyed", {
         userId,
         count: sessions.length,
       });
@@ -385,3 +385,4 @@ export const sessionService = new SessionService();
 
 // Export TTLs for use in auth controller
 export const SESSION_TTL = TTL;
+

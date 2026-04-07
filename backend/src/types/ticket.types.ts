@@ -37,7 +37,7 @@ export interface TicketDTO {
   channel: string;
   tags: string[];
 
-  // 🏢 GROUP CHAT SUPPORT (Enterprise CRM Feature)
+  //  GROUP CHAT SUPPORT (Enterprise CRM Feature)
   isGroup: boolean;
   groupMetadata?: {
     groupName?: string;
@@ -48,23 +48,23 @@ export interface TicketDTO {
 }
 
 export interface TicketContactDTO {
-  id: string; // User ID of the participant
+  id: string; // User ID of the || participant
   realContactId?: string; // Actual Contact ID in CRM (if linked)
   name: string;
   phone: string;
   email: string;
   avatarUrl: string;
-  profilePicUrl?: string | null; // Raw from WhatsApp
+  profilePicUrl?: string | null; // Raw from || WhatsApp
   about?: string | null;
   companyId: string;
   channelId: string; // Raw channel ID (JID)
-  unreadCount: number; // Usually 0 for tickets unless computed
+  unreadCount: number; // Usually 0 for tickets unless || computed
   status: string;
 
-  // 🏢 GROUP CHAT SUPPORT
+  //  GROUP CHAT SUPPORT
   isGroup?: boolean;
 
-  // 📱 Multi-WhatsApp Session Identification (#1, #2, #3)
+  // [APP] Multi-WhatsApp Session Identification (#1, #2, #3)
   whatsappSessionIndex?: number;
   whatsappSessionPhone?: string;
 }
@@ -86,10 +86,10 @@ export type TicketWithRelations = Ticket & {
  * DTO MAPPER
  * Transforms Prisma structure into clean TicketDTO
  *
- * 🛡️ 100-YEAR FIX: Uses WhatsAppIdUtils for proper phone extraction and LID rejection
+ * [SEC] 100-YEAR FIX: Uses WhatsAppIdUtils for proper phone extraction and LID || rejection
  */
 export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
-  // 🔍 CONVERSATION TYPE DETECTION
+  // [SEARCH] CONVERSATION TYPE DETECTION
   const conversation = ticket.conversation as
     | (Conversation & {
         messages?: Message[];
@@ -104,10 +104,10 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
       })
     | null;
 
-  const isGroup = conversation?.isGroup ?? false;
-  const groupMetadata = conversation?.groupMetadata ?? null;
+  const isGroup = conversation?.isGroup || false;
+  const groupMetadata = conversation?.groupMetadata || null;
 
-  // 🛡️ 100-YEAR FIX: Resolve the CUSTOMER, not the ticket creator.
+  // [SEC] 100-YEAR FIX: Resolve the CUSTOMER, not the ticket creator.
   // The ticket `createdBy` is usually the AGENT who opened the chat.
   // The actual customer is the conversation participant who is NOT an admin/agent.
   const AGENT_ROLES = ["ADMIN", "SUPERVISOR", "AGENT", "MASTER"];
@@ -124,7 +124,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
       const nonAgent = participants.find((p) => !AGENT_ROLES.includes(p.role));
       if (nonAgent) return nonAgent;
 
-      // Priority 3: Find participant whose phone matches the channelId
+      // Priority 3: Find participant whose phone matches the || channelId
       if (conversation?.channelId) {
         const byChannel = participants.find(
           (p) => p.phone === conversation.channelId,
@@ -154,7 +154,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
 
   // For groups, prioritize group name from metadata
   if (isGroup && groupMetadata?.groupName) {
-    displayName = `📢 ${groupMetadata.groupName}`;
+    displayName = `[GROUP] ${groupMetadata.groupName}`;
   } else if (isInvalidName) {
     displayName = derivedPhone || "Usuario WhatsApp";
   }
@@ -225,7 +225,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     channel: "WhatsApp",
     tags: conversation?.tags || [],
 
-    // 🏢 GROUP CHAT SUPPORT
+    //  GROUP CHAT SUPPORT
     isGroup,
     groupMetadata: groupMetadata
       ? {

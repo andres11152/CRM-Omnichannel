@@ -21,7 +21,7 @@ export interface UploadResult {
   mimeType: string;
 }
 
-// 🛡️ FILE SIZE LIMITS (Prevent OOM)
+// [SEC] FILE SIZE LIMITS (Prevent OOM)
 const MAX_FILE_SIZE = {
   IMAGE: 10 * 1024 * 1024, // 10MB
   AUDIO: 25 * 1024 * 1024, // 25MB
@@ -102,7 +102,7 @@ export const uploadFile = async (
   },
 ): Promise<UploadResult> => {
   try {
-    // 🛡️ CRITICAL: Validate file size BEFORE processing
+    // [SEC] CRITICAL: Validate file size BEFORE processing
     const maxSize = MAX_FILE_SIZE[options.type];
     if (file.size > maxSize) {
       const maxSizeMB = Math.round(maxSize / (1024 * 1024));
@@ -113,7 +113,7 @@ export const uploadFile = async (
       );
     }
 
-    // 🛡️ Validate buffer exists
+    // [SEC] Validate buffer exists
     if (!file.buffer || file.buffer.length === 0) {
       throw new AppError("File buffer is empty", 400);
     }
@@ -149,7 +149,7 @@ export const uploadFile = async (
         // Using Bucket Policies instead of ACL
       });
 
-      // 🛡️ 100-YEAR FIX: Race against timeout to prevent hanging requests
+      // [SEC] 100-YEAR FIX: Race against timeout to prevent hanging requests
       // If S3 takes >10s, throw timeout error
       await Promise.race([
         s3Client.send(command),

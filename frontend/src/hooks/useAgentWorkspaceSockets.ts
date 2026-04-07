@@ -4,7 +4,7 @@ import { Ticket, User, Channel } from "@/types";
 import { resolveContactName } from "@/utils/contactUtils";
 import { BASE_URL } from "@/services/apiConfig";
 
-// 🏢 100-Year Solution: Strict typing for socket payloads
+//  100-Year Solution: Strict typing for socket payloads
 // Using flexible types for socket data that will be validated before use
 interface SocketContactData {
   id?: string;
@@ -30,10 +30,10 @@ interface ConversationUpdatePayload {
   senderType?: "USER" | "AGENT" | "BOT";
   direction?: "INBOUND" | "OUTBOUND";
   contact?: SocketContactData;
-  assignedToId?: string; // 🟢 Added this field from backend emission
+  assignedToId?: string; // [ONLINE] Added this field from backend emission
 }
 
-// 🏢 100-Year Solution: Payload for ticket.assigned event
+//  100-Year Solution: Payload for ticket.assigned event
 interface TicketAssignedPayload {
   ticket: Ticket;
   message: string;
@@ -60,13 +60,13 @@ export const useAgentWorkspaceSockets = ({
   fetchData,
   triggerBackgroundRefresh,
 }: UseAgentWorkspaceSocketsProps) => {
-  // 🛡️ 100-YEAR FIX: Ref for Debouncing Disconnects
+  // [SEC] 100-YEAR FIX: Ref for Debouncing Disconnects
   // We don't want to show "Offline" for micro-drops (common in cloud Redis)
   const disconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
 
-  // 🔔 NOTIFICATION SOUND (Synthesized Pop - Zero Latency, No CORS issues)
+  //  NOTIFICATION SOUND (Synthesized Pop - Zero Latency, No CORS issues)
   const playNotificationSound = () => {
     try {
       const audioCtx = new (
@@ -103,7 +103,7 @@ export const useAgentWorkspaceSockets = ({
   };
 
   useEffect(() => {
-    console.log("[AgentWorkspace] ✅ Services Initialized");
+    console.log("[AgentWorkspace] [OK] Services Initialized");
     fetchData();
 
     // Connect Socket
@@ -131,15 +131,15 @@ export const useAgentWorkspaceSockets = ({
       }
     }
 
-    // 🛡️ 100-YEAR FIX: Ref for Debouncing Disconnects
+    // [SEC] 100-YEAR FIX: Ref for Debouncing Disconnects
     // We don't want to show "Offline" for micro-drops (common in cloud Redis)
 
     const onConnect = () => {
-      // ✅ Cancel pending disconnect if we reconnected quickly
+      // [OK] Cancel pending disconnect if we reconnected quickly
       if (disconnectTimeoutRef.current) {
         clearTimeout(disconnectTimeoutRef.current);
         disconnectTimeoutRef.current = null;
-        // console.log("[AgentWorkspace] ♻️ Quick reconnect - Suppressed offline state");
+        // console.log("[AgentWorkspace] ️ Quick reconnect - Suppressed offline state");
       }
 
       setSocketConnected(true);
@@ -165,7 +165,7 @@ export const useAgentWorkspaceSockets = ({
 
       disconnectTimeoutRef.current = setTimeout(() => {
         console.warn(
-          "[AgentWorkspace] 🔌 Socket disconnected (grace period expired)",
+          "[AgentWorkspace]  Socket disconnected (grace period expired)",
         );
         setSocketConnected(false);
       }, 5000);
@@ -176,7 +176,7 @@ export const useAgentWorkspaceSockets = ({
 
     const handleConversationUpdated = (payload: ConversationUpdatePayload) => {
       setTickets((prev) => {
-        // 🛡️ Robust Search: Find by ConvID OR ID (handling ghost tickets)
+        // [SEC] Robust Search: Find by ConvID OR ID (handling ghost tickets)
         const ticketIndex = prev.findIndex(
           (t) => t.conversationId === payload.id || t.id === payload.id,
         );
@@ -207,7 +207,7 @@ export const useAgentWorkspaceSockets = ({
           }
         }
 
-        // 🔔 PLAY SOUND if Inbound & Message Content exists
+        //  PLAY SOUND if Inbound & Message Content exists
         const isOutbound =
           payload.senderType === "AGENT" || payload.direction === "OUTBOUND";
         if (
@@ -218,7 +218,7 @@ export const useAgentWorkspaceSockets = ({
         }
 
         if (ticketIndex === -1) {
-          // ✨ OPTIMISTIC APPEND
+          //  OPTIMISTIC APPEND
           let newTicketLastMessage = "Nuevo mensaje";
           if (typeof payload.lastMessage === "string") {
             newTicketLastMessage = payload.lastMessage;
@@ -260,7 +260,7 @@ export const useAgentWorkspaceSockets = ({
             createdAt: new Date().toISOString(),
             unreadCount: 1,
             tags: [],
-            assignedToId: payload.assignedToId || undefined, // 🟢 Correctly set assignment from payload
+            assignedToId: payload.assignedToId || undefined, // [ONLINE] Correctly set assignment from payload
             queueId: null,
 
             // Fix strict Ticket interface requirements
@@ -279,7 +279,7 @@ export const useAgentWorkspaceSockets = ({
         const ticket = updatedTickets[ticketIndex];
         const currentActiveId = activeTicketIdRef.current;
 
-        // 🔢 UNREAD COUNT LOGIC
+        //  UNREAD COUNT LOGIC
         const isCurrentChatActive =
           currentActiveId === ticket.id ||
           currentActiveId === ticket.conversationId;
@@ -287,12 +287,12 @@ export const useAgentWorkspaceSockets = ({
 
         const newUnreadCount = isCurrentChatActive ? 0 : currentCount + 1;
 
-        // 📝 LAST MESSAGE LOGIC ROBUST FIX
+        //  LAST MESSAGE LOGIC ROBUST FIX
         let incomingMessage = ticket.lastMessage;
 
         // Debug payload structure
         console.log(
-          "[AgentWorkspace] 📨 Socket Payload:",
+          "[AgentWorkspace]  Socket Payload:",
           JSON.stringify(payload, null, 2),
         );
 
@@ -306,7 +306,7 @@ export const useAgentWorkspaceSockets = ({
           incomingMessage = payload.lastMessagePreview;
         }
 
-        // 🛡️ Ensure Valid Date
+        // [SEC] Ensure Valid Date
         let newDate = ticket.lastMessageAt;
         if (payload.lastMessageAt) {
           newDate = payload.lastMessageAt;
@@ -344,13 +344,13 @@ export const useAgentWorkspaceSockets = ({
     };
 
     console.log(
-      "[AgentWorkspace] 📡 Registering conversation.updated listener",
+      "[AgentWorkspace] [WS] Registering conversation.updated listener",
     );
     socketService.on("conversation.updated", handleConversationUpdated);
 
     // Listener for Ticket Deletion
     const handleTicketDeleted = (data: { ticketId: string }) => {
-      console.log("[AgentWorkspace] 🗑️ Ticket deleted:", data.ticketId);
+      console.log("[AgentWorkspace] ️ Ticket deleted:", data.ticketId);
       setTickets((prev) => prev.filter((t) => t.id !== data.ticketId));
       if (activeTicketIdRef.current === data.ticketId) {
         setActiveTicketId(null);
@@ -358,20 +358,20 @@ export const useAgentWorkspaceSockets = ({
     };
     socketService.on("ticket_deleted", handleTicketDeleted);
 
-    // 🔄 TICKET TRANSFER/UPDATE LISTENER
+    // [SYNC] TICKET TRANSFER/UPDATE LISTENER
     // This handles when a ticket is reassigned to another agent
-    // 🔄 TICKET TRANSFER/UPDATE LISTENER
+    // [SYNC] TICKET TRANSFER/UPDATE LISTENER
     const handleTicketUpdated = (data: {
       ticket: Ticket;
       changedFields: string[];
     }) => {
-      // 🐛 DEBUG (Console Log)
+      // [DEBUG] DEBUG (Console Log)
       console.log(
         `Update Socket: ${data.ticket.assignedToId ? "Asignado" : "Sin Asignar"}`,
       );
 
       console.log(
-        "[AgentWorkspace] 🔄 Ticket updated payload:",
+        "[AgentWorkspace] [SYNC] Ticket updated payload:",
         data.ticket.id,
         "AssignedTo:",
         data.ticket.assignedToId,
@@ -382,7 +382,7 @@ export const useAgentWorkspaceSockets = ({
       setTickets((prev) => {
         const ticketIndex = prev.findIndex((t) => t.id === data.ticket.id);
 
-        // 🛡️ 100-YEAR FIX: Role-aware visibility
+        // [SEC] 100-YEAR FIX: Role-aware visibility
         // ADMINs/SUPERVISORs see ALL tickets (company-wide view)
         // AGENTs only see tickets assigned to them or unassigned/queue
         const isAdminOrSupervisor = ["ADMIN", "SUPERVISOR", "MASTER"].includes(
@@ -394,7 +394,7 @@ export const useAgentWorkspaceSockets = ({
           // Admins get all tickets
           if (isAdminOrSupervisor) {
             console.log(
-              "[AgentWorkspace] ✨ Admin: Adding ticket to view:",
+              "[AgentWorkspace]  Admin: Adding ticket to view:",
               data.ticket.id,
             );
             return [data.ticket, ...prev];
@@ -406,7 +406,7 @@ export const useAgentWorkspaceSockets = ({
 
           if (isForMe || isForQueue) {
             console.log(
-              "[AgentWorkspace] ✨ Agent: New relevant ticket arrived:",
+              "[AgentWorkspace]  Agent: New relevant ticket arrived:",
               data.ticket.id,
             );
             return [data.ticket, ...prev];
@@ -435,11 +435,11 @@ export const useAgentWorkspaceSockets = ({
         const isAssignedToMe = incoming.assignedToId === user?.id;
         const isUnassigned = !incoming.assignedToId;
 
-        // 🛡️ SECURITY/PRIVACY: If assigned to ANOTHER agent, remove it immediately.
+        // [SEC] SECURITY/PRIVACY: If assigned to ANOTHER agent, remove it immediately.
         // Agents should not see tickets assigned to others.
         if (!isAssignedToMe && !isUnassigned) {
           console.log(
-            "[AgentWorkspace] 🧹 Ticket reassigned to another agent. Removing from view.",
+            "[AgentWorkspace]  Ticket reassigned to another agent. Removing from view.",
             incoming.id,
           );
 
@@ -449,7 +449,7 @@ export const useAgentWorkspaceSockets = ({
             activeTicketIdRef.current === incoming.conversationId
           ) {
             console.log(
-              "[AgentWorkspace] 🧹 Deselecting active ticket as it was transferred",
+              "[AgentWorkspace]  Deselecting active ticket as it was transferred",
             );
             setActiveTicketId(null);
           }
@@ -481,7 +481,7 @@ export const useAgentWorkspaceSockets = ({
         return updatedTickets;
       });
 
-      // 🛡️ 100-YEAR FIX: DO NOT trigger immediate background refresh here.
+      // [SEC] 100-YEAR FIX: DO NOT trigger immediate background refresh here.
       // The socket event already provides complete ticket data.
       // Immediate refresh was causing a race condition where the server hadn't
       // fully propagated the assignment, causing the ticket to disappear.
@@ -489,10 +489,10 @@ export const useAgentWorkspaceSockets = ({
     };
     socketService.on("ticket.updated", handleTicketUpdated);
 
-    // 🏢 ENTERPRISE: Ticket Assigned Listener (for agents receiving new assignments)
+    //  ENTERPRISE: Ticket Assigned Listener (for agents receiving new assignments)
     const handleTicketAssigned = (data: TicketAssignedPayload) => {
       console.log(
-        "[AgentWorkspace] 🎯 Ticket assigned to me:",
+        "[AgentWorkspace]  Ticket assigned to me:",
         data.ticket.id,
         "by",
         data.assignedBy,
@@ -501,7 +501,7 @@ export const useAgentWorkspaceSockets = ({
       // Play notification sound
       playNotificationSound();
 
-      // 🛡️ SECURITY & UX: Enrich ticket before adding to state
+      // [SEC] SECURITY & UX: Enrich ticket before adding to state
       // Ensure it has the correct assignment ID so it passes the 'My Chats' filter
       const enrichedTicket = { ...data.ticket };
 
@@ -512,7 +512,7 @@ export const useAgentWorkspaceSockets = ({
       ) {
         // If I received this event, it MUST be for me (room security).
         console.warn(
-          "[AgentWorkspace] ⚠️ Fixing missing/mismatched assignedToId on incoming ticket",
+          "[AgentWorkspace] [WARNING] Fixing missing/mismatched assignedToId on incoming ticket",
         );
         enrichedTicket.assignedToId = user?.id; // Fallback to current user
       }
@@ -545,10 +545,10 @@ export const useAgentWorkspaceSockets = ({
     };
     socketService.on("ticket.assigned", handleTicketAssigned);
 
-    console.log("[AgentWorkspace] ✅ Listeners registered");
+    console.log("[AgentWorkspace] [OK] Listeners registered");
 
     return () => {
-      console.log("[AgentWorkspace] 🛑 Unmounting - Removing Listeners");
+      console.log("[AgentWorkspace]  Unmounting - Removing Listeners");
       socketService.off("conversation.updated", handleConversationUpdated);
       socketService.off("ticket_deleted", handleTicketDeleted);
       socketService.off("ticket.updated", handleTicketUpdated);

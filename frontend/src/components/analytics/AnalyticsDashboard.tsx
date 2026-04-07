@@ -51,7 +51,7 @@ export const AnalyticsDashboard: React.FC = () => {
       <ModuleHeader
         title="Analítica Avanzada"
         description="Insights operativos para optimizar tu equipo de soporte."
-        icon={<span className="text-2xl">📈</span>}
+        icon={<span className="text-2xl">[STAT]</span>}
         gradient="from-blue-600 to-cyan-600"
         action={
           <div className="flex bg-white/20 backdrop-blur-sm rounded-lg p-0.5">

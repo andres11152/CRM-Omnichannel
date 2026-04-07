@@ -34,7 +34,7 @@ interface BillingStats {
 }
 
 interface BillingResponse {
-  data: Transaction[];
+  transactions: Transaction[];
   stats: BillingStats;
 }
 
@@ -49,7 +49,7 @@ export const BillingOpsPage = () => {
       setLoading(true);
       const res =
         (await adminService.getBillingTransactions()) as unknown as BillingResponse;
-      setTransactions(res.data);
+      setTransactions(res.transactions || []);
       setStats(res.stats);
     } catch (error) {
       console.error(error);

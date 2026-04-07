@@ -20,7 +20,7 @@ import {
 const router = express.Router();
 
 // Public Proxy Route for Media Content (Bypass Auth for <img> tags)
-// 🛡️ Still validates param to prevent path traversal
+// [SEC] Still validates param to prevent path traversal
 router.get("/:id/content", validate(MediaIdParamSchema), getMediaContent);
 
 // Multer configuration for file upload

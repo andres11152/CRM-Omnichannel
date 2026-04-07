@@ -1,6 +1,6 @@
 import { WAMessage, downloadMediaMessage, getContentType } from "@whiskeysockets/baileys";
 import { Logger } from "@/utils/logger";
-import { storageService } from "@/services/storageService";
+import { storageService } from "@/services/StorageService";
 import { Readable } from "stream";
 import mime from "mime-types";
 import { messageRepository } from "@/repositories/MessageRepository";
@@ -73,7 +73,7 @@ export class SyncMediaService {
         Logger.info(`[SyncMedia] 🩹 HEALED media for ${whatsappMessageId} (${baseType}): ${healedUrl}`);
       }
     } catch (healErr: unknown) {
-      Logger.error(`[SyncMedia] ⚠️ Media healing failed for ${whatsappMessageId}`, {
+      Logger.error(`[SyncMedia] [WARNING] Media healing failed for ${whatsappMessageId}`, {
         companyId,
         whatsappMessageId,
         error: healErr instanceof Error ? healErr.message : String(healErr),
@@ -83,7 +83,7 @@ export class SyncMediaService {
   }
 
   /**
-   * 📥 DOWNLOAD AND UPLOAD MEDIA
+   *  DOWNLOAD AND UPLOAD MEDIA
    * Downloads media from WhatsApp servers and uploads it to our storage provider.
    */
   async downloadAndUpload(params: {
@@ -119,7 +119,7 @@ export class SyncMediaService {
           return { url: uploadResult.url, mimetype: rawMime };
         }
       } catch (bufErr: unknown) {
-        Logger.error(`[SyncMedia] ⚠️ Download failed for ${whatsappMessageId} (${mediaType})`, {
+        Logger.error(`[SyncMedia] [WARNING] Download failed for ${whatsappMessageId} (${mediaType})`, {
           companyId,
           whatsappMessageId,
           mediaType,

@@ -2,12 +2,12 @@ import { Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { notificationService } from "@/services/notificationService";
+import { notificationService } from "@/services/NotificationService";
 
 /**
- * 🔔 NOTIFICATIONS CONTROLLER
+ *  NOTIFICATIONS CONTROLLER
  * Manage user notifications (mentions, assignments, etc.)
- * 🛡️ All operations scoped by companyId + userId for multi-tenant isolation
+ * [SEC] All operations scoped by companyId + userId for multi-tenant isolation
  */
 
 // Get user notifications

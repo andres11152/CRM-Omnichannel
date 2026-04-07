@@ -8,10 +8,10 @@ import {
   templateCrudService,
   CreateTemplateDTO,
   UpdateTemplateDTO,
-} from "@/services/templateCrudService";
+} from "@/services/TemplateCrudService";
 
 /**
- * 📝 TEMPLATE CONTROLLER
+ *  TEMPLATE CONTROLLER
  *
  * HTTP orchestrator for WhatsApp message templates.
  * All data access is delegated to templateCrudService (SRP).

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🏢 COMPANY VALIDATION SCHEMAS
+ *  COMPANY VALIDATION SCHEMAS
  *
  * Validation for company (tenant) and settings operations
  */

@@ -3,11 +3,13 @@ import {
   SendMessageOptions,
   MediaPayload,
 } from "../types/whatsapp.types";
+import { proto } from "@whiskeysockets/baileys";
 
 export interface IMessageHandler {
   handleIncoming(
-    payload: { message: unknown } | unknown,
+    message: proto.IWebMessageInfo,
     sessionId: string,
+    companyId: string,
   ): Promise<void>;
   sendMessage(
     to: string,
@@ -24,5 +26,12 @@ export interface IMessageHandler {
     to: string,
     type: "composing" | "recording" | "paused",
     companyId: string,
+  ): Promise<void>;
+  sendReaction(
+    to: string,
+    messageId: string,
+    reaction: string,
+    companyId: string,
+    fromMe?: boolean,
   ): Promise<void>;
 }

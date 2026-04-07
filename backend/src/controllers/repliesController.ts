@@ -1,7 +1,7 @@
 import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { replyService } from "@/services/replyService";
+import { replyService } from "@/services/ReplyService";
 import { AuthenticatedRequest } from "@/types/types";
 
 export const getRepliesForPost = catchAsync(

@@ -2,7 +2,7 @@ import { prisma, ExtendedPrismaClient } from "@/config/database";
 import { AIAssistant, Prisma } from "@prisma/client";
 
 /**
- * 🤖 AI ASSISTANT REPOSITORY
+ * [AI] AI ASSISTANT REPOSITORY
  *
  * Handles all database operations for the AIAssistant model.
  * Used by AITriggerService to fetch assistant configuration.

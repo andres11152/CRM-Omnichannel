@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/axios";
 
 /**
- * 🛡️ CSRF Token Hook
+ * [SEC] CSRF Token Hook
  * Automatically fetches and manages CSRF tokens for the authenticated user
  */
 export const useCsrfToken = () => {

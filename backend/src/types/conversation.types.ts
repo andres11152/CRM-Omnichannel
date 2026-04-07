@@ -4,6 +4,8 @@ import {
   User,
   ConversationStatus,
   Prisma,
+  Contact,
+  Message,
 } from "@prisma/client";
 
 export interface Attachment {
@@ -79,7 +81,7 @@ export interface SendMessageOptions {
   quotedMessageId?: string;
 }
 
-// 📦 MANAGER TYPES
+// [PKG] MANAGER TYPES
 
 export interface FindOrCreateConversationParams {
   companyId: string;
@@ -93,6 +95,22 @@ export interface UpdateConversationParams {
   status?: ConversationStatus;
   assignedToId?: string | null;
   subject?: string;
+}
+
+export interface ConversationWithRelations extends Conversation {
+  participants: User[];
+  assignedTo?: User | null;
+  contact?: Contact | null;
+  messages: (Message & { 
+    sender?: User | "agent" | "customer" | "system"; 
+    senderName?: string; 
+    attachment?: Attachment; 
+    type?: string; 
+    mediaUrl?: string 
+  })[];
+  // Transient properties for frontend UI state
+  lastMessage?: string | null;
+  lastMessageAt?: Date | null;
 }
 
 export interface IConversationEvents {

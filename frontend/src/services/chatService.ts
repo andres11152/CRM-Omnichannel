@@ -1,44 +1,16 @@
 import apiClient from "./apiClient";
-
-/**
- * CHAT SERVICE
- * Handles all chat-related API calls
- */
-
-// Types
-export interface Message {
-  id: string;
-  ticketId: string;
-  content: string;
-  type: "text" | "image" | "video" | "audio" | "document";
-  sender: "agent" | "customer" | "system";
-  senderName?: string;
-  timestamp: string;
-  status?: "sending" | "sent" | "delivered" | "read" | "failed";
-  mediaUrl?: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface Conversation {
-  id: string;
-  ticketId: string;
-  contactName: string;
-  contactPhone: string;
-  lastMessage: string;
-  lastMessageTime: string;
-  unreadCount: number;
-  status: "open" | "pending" | "resolved";
-  assignedTo?: string;
-  channel: "whatsapp" | "email" | "web";
-  tags?: string[];
-  isGroup?: boolean;
-  syncEnabled?: boolean;
-}
+import { Message, Conversation } from "../types";
 
 export interface SendMessageInput {
   content: string;
   type?: "text" | "image" | "video" | "audio" | "document";
   mediaUrl?: string;
+  attachment?: {
+    name: string;
+    type: string;
+    url: string;
+    mimetype?: string;
+  };
   metadata?: Record<string, unknown>;
   quotedMessageId?: string;
   quotedContent?: string;
@@ -58,11 +30,8 @@ export const getConversations = async (params?: {
   page?: number;
   limit?: number;
 }): Promise<{ conversations: Conversation[]; total: number }> => {
-  const response = await apiClient.get<{
-    conversations: Conversation[];
-    total: number;
-  }>("/conversations", { params });
-  return response.data;
+  const response = await apiClient.get<any>("/conversations", { params });
+  return (response.data || response) as { conversations: Conversation[]; total: number };
 };
 
 /**
@@ -70,10 +39,10 @@ export const getConversations = async (params?: {
  * Fetches message history for a specific ticket
  */
 export const getMessages = async (ticketId: string): Promise<Message[]> => {
-  const response = await apiClient.get<Message[]>(
-    `/conversations/${ticketId}/messages`,
-  );
-  return response.data;
+  const response = await apiClient.get<any>(`/conversations/${ticketId}`);
+  // Extracting from data.conversation.messages based on backend structure
+  const data = response.data || response;
+  return data?.conversation?.messages || [];
 };
 
 /**
@@ -84,11 +53,12 @@ export const sendMessage = async (
   ticketId: string,
   input: SendMessageInput,
 ): Promise<Message> => {
-  const response = await apiClient.post<Message>(
-    `/conversations/${ticketId}/messages`,
+  const response = await apiClient.post<any>(
+    `/conversations/${ticketId}/reply`,
     input,
   );
-  return response.data;
+  const data = response.data || response;
+  return data.message || data;
 };
 
 /**
@@ -107,10 +77,9 @@ export const resolveTicket = async (
  * Assigns the next available ticket to the current agent
  */
 export const pickNextTicket = async (): Promise<Conversation | null> => {
-  const response = await apiClient.post<{ conversation: Conversation | null }>(
-    "/conversations/pick-next",
-  );
-  return response.data.conversation;
+  const response = await apiClient.post<any>("/conversations/pick-next");
+  const data = response.data || response;
+  return data.conversation;
 };
 
 /**
@@ -139,11 +108,9 @@ export const createNewChat = async (input: {
   initialMessage?: string;
   addToContacts?: boolean;
 }): Promise<Conversation> => {
-  const response = await apiClient.post<Conversation>(
-    "/conversations/create",
-    input,
-  );
-  return response.data;
+  const response = await apiClient.post<any>("/conversations/create", input);
+  const data = response.data || response;
+  return data.conversation || data;
 };
 
 /**
@@ -154,11 +121,11 @@ export const toggleGroupSync = async (
   ticketId: string,
   enabled: boolean,
 ): Promise<{ syncEnabled: boolean }> => {
-  const response = await apiClient.patch<{ syncEnabled: boolean }>(
+  const response = await apiClient.patch<any>(
     `/conversations/${ticketId}/toggle-sync`,
     { enabled },
   );
-  return response.data;
+  return response.data || response;
 };
 
 export const chatService = {
@@ -171,4 +138,23 @@ export const chatService = {
   markAsRead,
   createNewChat,
   toggleGroupSync,
+  transferTicket: async (
+    ticketId: string,
+    targetId: string,
+    type: "AGENT" | "QUEUE",
+  ): Promise<void> => {
+    const payload =
+      type === "AGENT" ? { assignedToId: targetId } : { queueId: targetId };
+    await apiClient.patch(`/tickets/${ticketId}`, payload);
+  },
+  reactToMessage: async (
+    conversationId: string,
+    messageId: string,
+    reaction: string,
+  ): Promise<void> => {
+    await apiClient.post(
+      `/conversations/${conversationId}/messages/${messageId}/react`,
+      { reaction },
+    );
+  },
 };

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🔄 CHAT SYNC SCHEMAS
+ * [SYNC] CHAT SYNC SCHEMAS
  *
  * Validation for historical message synchronization requests.
  */

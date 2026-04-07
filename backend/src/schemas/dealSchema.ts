@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ DEAL VALIDATION SCHEMAS
+ * [SEC] DEAL VALIDATION SCHEMAS
  *
  * Comprehensive validation for CRM Deal operations
  * Prevents data corruption, XSS, and ensures data integrity
@@ -226,3 +226,4 @@ export type UpdateDealInput = z.infer<typeof UpdateDealSchema>["body"];
 export type UpdateDealOrderInput = z.infer<
   typeof UpdateDealOrderSchema
 >["body"];
+

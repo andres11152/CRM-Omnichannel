@@ -1,5 +1,5 @@
 /**
- * 🛡️ ADMIN SERVICE (Refactored Orchestrator)
+ * [SEC] ADMIN SERVICE (Refactored Orchestrator)
  *
  * Tenant management, plan CRUD, impersonation, and system status.
  * Metrics/analytics delegated to AdminMetricsService.
@@ -10,7 +10,7 @@ import { userRepository } from "@/repositories/UserRepository";
 import { companyRepository } from "@/repositories/CompanyRepository";
 import { planRepository } from "@/repositories/PlanRepository";
 import { signToken } from "@/controllers/authController";
-import { cacheService } from "@/services/cacheService";
+import { cacheService } from "@/services/CacheService";
 import { Logger } from "@/utils/logger";
 import { AppError } from "@/utils/AppError";
 import {
@@ -21,7 +21,7 @@ import {
 import bcrypt from "bcryptjs";
 import { adminMetricsService } from "./admin/AdminMetricsService";
 
-// 🛡️ STRICT TYPING FOR JSON CONFIG
+// [SEC] STRICT TYPING FOR JSON CONFIG
 interface PlanConfig {
   max_users?: number;
   maxLimitUsers?: number;
@@ -195,21 +195,21 @@ export const adminService = {
           throw new AppError("El plan seleccionado no existe.", 400);
 
         const { planLimitsService } =
-          await import("@/services/planLimitsService");
+          await import("@/services/PlanLimitsService");
         const usage = await planLimitsService.getCurrentUsage(companyId);
 
         const targetConfig = (targetPlan.config as unknown as PlanConfig) || {};
         const targetLimits = {
-          max_users: targetConfig.max_users ?? targetConfig.maxLimitUsers ?? 1,
+          max_users: targetConfig.max_users || targetConfig.maxLimitUsers || 1,
           max_whatsapp:
             targetConfig.max_whatsapp_connections ??
             targetConfig.max_whatsapp_sessions ??
             1,
-          max_queues: targetConfig.max_queues ?? 1,
+          max_queues: targetConfig.max_queues || 1,
           storage_gb:
             targetPlan.storageLimitGb !== null
               ? targetPlan.storageLimitGb
-              : (targetConfig.storage_limit_gb ?? 0),
+              : (targetConfig.storage_limit_gb || 0),
         };
 
         const violations: string[] = [];
@@ -265,7 +265,7 @@ export const adminService = {
       }
     }
 
-    // 🔒 SECURITY: Encrypt SMTP password
+    //  SECURITY: Encrypt SMTP password
     if (data.smtpPassword) {
       const { encrypt } = await import("@/utils/encryption");
       updatePayload.smtpPassword = encrypt(data.smtpPassword);
@@ -326,7 +326,7 @@ export const adminService = {
       },
     });
 
-    // 🚀 CASCADING CACHE INVALIDATION
+    //  CASCADING CACHE INVALIDATION
     const affectedCompanies = await companyRepository.findMany({
       where: { planId: plan.id },
       select: { id: true },
@@ -334,7 +334,7 @@ export const adminService = {
 
     if (affectedCompanies.length > 0) {
       const { planLimitsService } =
-        await import("@/services/planLimitsService");
+        await import("@/services/PlanLimitsService");
       const companyIds = affectedCompanies.map((c) => c.id);
 
       const CHUNK_SIZE = 500;

@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "@/types";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { queueService } from "@/services/queueService";
+import { queueService } from "@/services/QueueService";
 
 export const createQueue = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {

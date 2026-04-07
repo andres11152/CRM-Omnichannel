@@ -22,6 +22,16 @@ export class DatabaseAuthProvider implements IAuthProvider {
   }> {
     const creds = await this.loadCreds(sessionId);
 
+    // [SEC] RESILIENCE: If root credentials cannot be decrypted, the whole session is invalid.
+    // We must clear it to prevent mixing old encrypted keys with new session state.
+    if (creds === null) {
+      const exists = await whatsappCredentialRepository.findUnique(sessionId, "creds");
+      if (exists) {
+        Logger.warn(`[AuthProvider] ️ Wiping corrupted session ${sessionId} (Decryption failed). User must re-pair via QR.`);
+        await this.clearCredentials(sessionId);
+      }
+    }
+
     const keys: SignalKeyStore = {
       get: async (type, ids) => {
         const data: { [id: string]: SignalDataTypeMap[typeof type] } = {};
@@ -41,13 +51,13 @@ export class DatabaseAuthProvider implements IAuthProvider {
                 const id = ids[i];
                 try {
                   // Cached value is Encrypted -> Decrypt -> Parse
-                  const decrypted = decrypt(val);
+                  const decrypted = decrypt(val, sessionId);
                   if (decrypted) {
                     data[id] = JSON.parse(decrypted, BufferJSON.reviver);
                   }
                 } catch {
                   Logger.warn(
-                    `[AuthProvider] Cache parse error for ${fullKeys[i]}`,
+                    `[AuthProvider] Cache parse error for ${fullKeys[i]} in session ${sessionId}`,
                   );
                 }
               } else {
@@ -75,11 +85,18 @@ export class DatabaseAuthProvider implements IAuthProvider {
             if (cred.value) {
               try {
                 // DB value is Encrypted -> Decrypt -> Parse
-                // Fallback: If decrypt returns null (legacy data), try parsing raw
-                let rawJson = decrypt(cred.value);
-                if (!rawJson) {
-                  // Try legacy raw JSON (migration path)
+                const decrypted = decrypt(cred.value, sessionId);
+                
+                // [SEC] SECURITY: Only fallback to raw JSON if it doesn't look like encrypted data
+                // This prevents trying to parse ciphertext as JSON when keys change.
+                let rawJson: string | null = decrypted;
+                if (!decrypted && !cred.value.includes(":")) {
                   rawJson = cred.value;
+                }
+
+                if (!rawJson) {
+                  Logger.error(`[AuthProvider] Corrupted key ${cred.key} for ${sessionId}. Skipping.`);
+                  continue;
                 }
 
                 const parsed = JSON.parse(rawJson, BufferJSON.reviver);
@@ -95,7 +112,7 @@ export class DatabaseAuthProvider implements IAuthProvider {
                 }
               } catch (e) {
                 Logger.error(
-                  `[AuthProvider] DB Parse error for ${cred.key}:`,
+                  `[AuthProvider] DB Parse error for ${cred.key} in ${sessionId}:`,
                   e,
                 );
               }
@@ -116,7 +133,7 @@ export class DatabaseAuthProvider implements IAuthProvider {
             const value = data[category][id];
             const key = `${category}-${id}`;
             const json = JSON.stringify(value, BufferJSON.replacer);
-            const encrypted = encrypt(json);
+            const encrypted = encrypt(json, sessionId);
 
             // Prepare DB Upsert Data
             dbData.push({ sessionId, key, value: encrypted });
@@ -177,7 +194,7 @@ export class DatabaseAuthProvider implements IAuthProvider {
           `${REDIS_PREFIX}${sessionId}:${key}`,
         );
         if (cached) {
-          const decrypted = decrypt(cached);
+          const decrypted = decrypt(cached, sessionId);
           if (decrypted) {
             return JSON.parse(decrypted, BufferJSON.reviver);
           }
@@ -193,8 +210,11 @@ export class DatabaseAuthProvider implements IAuthProvider {
     if (!cred || !cred.value) return null;
 
     try {
-      let rawJson = decrypt(cred.value);
-      if (!rawJson) rawJson = cred.value; // Legacy fallback
+      const rawJson = decrypt(cred.value, sessionId);
+      if (!rawJson) {
+        Logger.warn(`[AuthProvider] Decryption failed for ${sessionId}. Session data potentially corrupted or key changed.`);
+        return null; 
+      }
 
       const parsed = JSON.parse(rawJson, BufferJSON.reviver);
 
@@ -218,7 +238,7 @@ export class DatabaseAuthProvider implements IAuthProvider {
   ): Promise<void> {
     const key = "creds";
     const json = JSON.stringify(creds, BufferJSON.replacer);
-    const encrypted = encrypt(json);
+    const encrypted = encrypt(json, sessionId);
 
     const ops: Promise<unknown>[] = [];
 

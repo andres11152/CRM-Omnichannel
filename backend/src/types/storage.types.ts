@@ -2,7 +2,7 @@ import { Readable } from "stream";
 import { MediaType } from "@prisma/client";
 
 /**
- * ☁️ STORAGE PROVIDER TYPES
+ * ️ STORAGE PROVIDER TYPES
  * Agnostic contract for file storage (Local, S3, GCS)
  */
 

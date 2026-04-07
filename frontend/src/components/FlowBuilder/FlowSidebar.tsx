@@ -21,7 +21,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="send_message"
         onClick={() => onAddNode('send_message')} 
-        icon="💬" 
+        icon="[CHAT]" 
         label="Enviar Mensaje" 
         description="Envía un mensaje de texto al usuario y continúa automticamente"
         activeTooltip={activeTooltip}
@@ -30,7 +30,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="send_image"
         onClick={() => onAddNode('send_image')} 
-        icon="🖼️" 
+        icon="️" 
         label="Enviar Imagen" 
         description="Envía una imagen por WhatsApp y avanza al siguiente paso"
         activeTooltip={activeTooltip}
@@ -39,7 +39,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="send_video"
         onClick={() => onAddNode('send_video')} 
-        icon="🎥" 
+        icon="" 
         label="Enviar Video" 
         description="Envía un video al usuario automticamente"
         activeTooltip={activeTooltip}
@@ -48,7 +48,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="send_audio"
         onClick={() => onAddNode('send_audio')} 
-        icon="🎵" 
+        icon="" 
         label="Enviar Audio" 
         description="Envía un archivo de audio o nota de voz"
         activeTooltip={activeTooltip}
@@ -57,7 +57,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="send_document"
         onClick={() => onAddNode('send_document')} 
-        icon="📄" 
+        icon="" 
         label="Enviar Documento" 
         description="Envía un archivo PDF, Word u otro documento"
         activeTooltip={activeTooltip}
@@ -70,7 +70,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="ask_data"
         onClick={() => onAddNode('ask_data')} 
-        icon="✍️" 
+        icon="️" 
         label="Solicitar Datos" 
         description="PAUSA el flujo, hace una pregunta y espera la respuesta del usuario"
         activeTooltip={activeTooltip}
@@ -79,7 +79,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="condition"
         onClick={() => onAddNode('condition')} 
-        icon="❓" 
+        icon="" 
         label="Condición" 
         description="Evalúa una condición y ramifica el flujo según la respuesta"
         activeTooltip={activeTooltip}
@@ -88,7 +88,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="ai_agent"
         onClick={() => onAddNode('ai_agent')} 
-        icon="🤖" 
+        icon="[AI]" 
         label="Agente IA" 
         description="Responde usando inteligencia artificial (OpenAI/Gemini)"
         activeTooltip={activeTooltip}
@@ -101,7 +101,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="create_deal"
         onClick={() => onAddNode('create_deal')} 
-        icon="💰" 
+        icon="[BILLING]" 
         label="Crear Deal" 
         description="Crea un nuevo deal automticamente en el CRM"
         activeTooltip={activeTooltip}
@@ -110,7 +110,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="update_contact"
         onClick={() => onAddNode('update_contact')} 
-        icon="👤" 
+        icon="" 
         label="Actualizar Contacto" 
         description="Actualiza los campos del contacto con datos capturados"
         activeTooltip={activeTooltip}
@@ -123,7 +123,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="assign_agent"
         onClick={() => onAddNode('assign_agent')} 
-        icon="🎯" 
+        icon="" 
         label="Asignar Agente" 
         description="Asigna la conversación a un agente humano específico"
         activeTooltip={activeTooltip}
@@ -132,7 +132,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="ai_handoff"
         onClick={() => onAddNode('ai_handoff')} 
-        icon="🔄" 
+        icon="[SYNC]" 
         label="Transferir a Humano" 
         description="Finaliza el bot y transfiere el caso a un agente humano"
         activeTooltip={activeTooltip}
@@ -154,7 +154,7 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
       <TooltipTool 
         id="end"
         onClick={() => onAddNode('end')} 
-        icon="🏁" 
+        icon="[COMPLETE]" 
         label="Fin del Flujo" 
         description="Termina el flujo de automatización"
         activeTooltip={activeTooltip}

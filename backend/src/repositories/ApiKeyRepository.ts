@@ -12,6 +12,14 @@ export class ApiKeyRepository {
     return this.db.apiKey.create(args);
   }
 
+  async findUnique(args: Prisma.ApiKeyFindUniqueArgs) {
+    return this.db.apiKey.findUnique(args);
+  }
+
+  async update(args: Prisma.ApiKeyUpdateArgs) {
+    return this.db.apiKey.update(args);
+  }
+
   async deleteMany(args: Prisma.ApiKeyDeleteManyArgs) {
     return this.db.apiKey.deleteMany(args);
   }

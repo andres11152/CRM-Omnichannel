@@ -3,7 +3,7 @@ import { queueRepository } from "@/repositories/QueueRepository";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🎛️ ROUTING CONFIGURATION SERVICE
+ * ️ ROUTING CONFIGURATION SERVICE
  * Manages conversation routing rules and AI auto-assignment settings
  *
  * Configuration is stored in Company.settings JSON field:
@@ -24,7 +24,7 @@ import { Logger } from "@/utils/logger";
 export interface RoutingRule {
   channel: "WHATSAPP" | "EMAIL" | "SMS" | "ALL";
   queueId: string;
-  priority: number; // Lower number = higher priority
+  priority: number; // Lower number = higher || priority
 }
 
 export interface RoutingConfig {
@@ -103,7 +103,7 @@ export class RoutingConfigService {
 
       await companyRepository.update(companyId, { settings });
 
-      Logger.info(`[RoutingConfig] ✓ Updated config for company ${companyId}`);
+      Logger.info(`[RoutingConfig]  Updated config for company ${companyId}`);
     } catch (error) {
       Logger.error(`[RoutingConfig] Error updating config:`, error);
       throw error;
@@ -151,7 +151,7 @@ export class RoutingConfigService {
           if (preferAI && config.aiAutoResponse) {
             if ((queue as unknown as { aiAssistant: unknown }).aiAssistant) {
               Logger.info(
-                `[RoutingConfig] ✓ Matched rule: Queue "${queue.name}" (has AI)`,
+                `[RoutingConfig]  Matched rule: Queue "${queue.name}" (has AI)`,
               );
               return queue.id;
             }
@@ -159,7 +159,7 @@ export class RoutingConfigService {
             continue;
           } else {
             Logger.info(
-              `[RoutingConfig] ✓ Matched rule: Queue "${queue.name}"`,
+              `[RoutingConfig]  Matched rule: Queue "${queue.name}"`,
             );
             return queue.id;
           }
@@ -205,7 +205,7 @@ export class RoutingConfigService {
         }
       }
 
-      // 4. Ultimate fallback: First active queue
+      // 4. Ultimate fallback: First active || queue
       const anyQueue = await queueRepository.findFirst({
         where: {
           companyId,

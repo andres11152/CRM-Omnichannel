@@ -1,14 +1,14 @@
 import { z } from "zod";
 
 /**
- * 🛠️ PIPELINE & STAGE VALIDATION SCHEMAS
+ * [DEV] PIPELINE & STAGE VALIDATION SCHEMAS
  *
  * Validation for CRM Pipeline and Stage operations.
  * Ensures data integrity for sales workflows.
  */
 
 // ============================================================================
-// 🎨 STAGE SCHEMAS
+//  STAGE SCHEMAS
 // ============================================================================
 
 export const StageSchema = z.object({
@@ -41,7 +41,7 @@ export const ReorderStagesBodySchema = z.object({
 });
 
 // ============================================================================
-// 🚀 PIPELINE SCHEMAS
+//  PIPELINE SCHEMAS
 // ============================================================================
 
 export const CreatePipelineBodySchema = z.object({
@@ -69,7 +69,7 @@ export const DuplicatePipelineBodySchema = z.object({
 });
 
 // ============================================================================
-// 🔍 PARAMS SCHEMAS
+// [SEARCH] PARAMS SCHEMAS
 // ============================================================================
 
 export const PipelineParamsSchema = z.object({
@@ -82,7 +82,7 @@ export const StageParamsSchema = z.object({
 });
 
 // ============================================================================
-// 📚 TYPE EXPORTS
+//  TYPE EXPORTS
 // ============================================================================
 
 export type CreatePipelineInput = z.infer<typeof CreatePipelineBodySchema>;

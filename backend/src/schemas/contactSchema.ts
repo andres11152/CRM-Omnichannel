@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ CONTACT VALIDATION SCHEMAS
+ * [SEC] CONTACT VALIDATION SCHEMAS
  *
  * Comprehensive validation and sanitization for Contact operations.
  * Prevents XSS, data corruption, and buffer overflow attacks.
@@ -201,3 +201,4 @@ export type UpdateContactInput = z.infer<typeof UpdateContactSchema>["body"];
 export type GetContactDetailInput = z.infer<
   typeof GetContactDetailSchema
 >["query"];
+

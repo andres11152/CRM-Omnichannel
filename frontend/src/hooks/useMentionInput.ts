@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 
 /**
- * 💬 MENTION INPUT HOOK
+ * [CHAT] MENTION INPUT HOOK
  * Detects @username patterns and provides autocomplete
  */
 

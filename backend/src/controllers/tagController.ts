@@ -2,10 +2,10 @@ import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { tagService } from "@/services/tagService";
+import { tagService } from "@/services/TagService";
 
 /**
- * 🏷️ TAG CONTROLLER
+ * ️ TAG CONTROLLER
  *
  * HTTP orchestrator for tags.
  * All data access delegated to tagService (SRP).

@@ -4,7 +4,7 @@ import helmet from "helmet";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🛡️ SECURITY MIDDLEWARE
+ * [SEC] SECURITY MIDDLEWARE
  *
  * Configures production-grade security:
  * - Helmet for HTTP headers
@@ -102,9 +102,9 @@ export const securityMiddleware = (app: Express) => {
     ]),
   ];
 
-  Logger.info(`[CORS] 🛡️ Allowed origins: ${JSON.stringify(allowedOrigins)}`);
+  Logger.info(`[CORS] [SEC] Allowed origins: ${JSON.stringify(allowedOrigins)}`);
   Logger.info(
-    `[CORS] 🌍 Environment: ${process.env.NODE_ENV || "development"}`,
+    `[CORS]  Environment: ${process.env.NODE_ENV || "development"}`,
   );
 
   // Configure CORS
@@ -123,7 +123,7 @@ export const securityMiddleware = (app: Express) => {
         return callback(null, true);
       }
 
-      // 🛡️ 100-YEAR FIX: Allow all subdomains of reply.software
+      // [SEC] 100-YEAR FIX: Allow all subdomains of reply.software
       if (
         origin.endsWith(".reply.software") ||
         origin === "https://reply.software"
@@ -133,7 +133,7 @@ export const securityMiddleware = (app: Express) => {
 
       // Log rejected origins in production for monitoring
       if (!isDevelopment) {
-        Logger.warn(`[CORS] ⚠️ Rejected origin: ${origin}`);
+        Logger.warn(`[CORS] [WARNING] Rejected origin: ${origin}`);
       }
 
       // In production: strict enforcement

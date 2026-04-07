@@ -9,10 +9,10 @@ const router = express.Router();
 
 router.use(protect);
 
-// 🔓 ALL AUTHENTICATED USERS can view tags (Agents need this for chat tagging)
+//  ALL AUTHENTICATED USERS can view tags (Agents need this for chat tagging)
 router.get("/", getTags);
 
-// 🔒 ADMIN+ ONLY: Create and Delete tags (Agents should NOT pollute the tag catalog)
+//  ADMIN+ ONLY: Create and Delete tags (Agents should NOT pollute the tag catalog)
 router.post(
   "/",
   restrictTo("ADMIN", "SUPERVISOR", "MASTER"),

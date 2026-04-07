@@ -4,7 +4,7 @@ import { Prisma, Channel } from "@prisma/client";
 import { templateRepository } from "@/repositories/TemplateRepository";
 
 /**
- * 📝 TEMPLATE CRUD SERVICE
+ *  TEMPLATE CRUD SERVICE
  *
  * Data access layer for WhatsApp message templates.
  * Separated from templateService (rendering) for SRP compliance.

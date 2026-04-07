@@ -3,7 +3,7 @@ import { Logger } from "@/utils/logger";
 import { companyRepository } from "@/repositories/CompanyRepository";
 
 /**
- * 🏢 COMPANY SETTINGS SERVICE
+ *  COMPANY SETTINGS SERVICE
  *
  * Data access layer for company/tenant settings.
  * Handles read and update of general, SMTP, business hours, and automation settings.

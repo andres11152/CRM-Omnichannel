@@ -40,11 +40,11 @@ const InternalNotesComponent: React.FC<Props> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [showTimeline, setShowTimeline] = useState(false);
-  // 🗑️ Modal State
+  // ️ Modal State
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 💬 Mention Support
+  // [CHAT] Mention Support
   const { teamMembers } = useTeamMembers();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -258,12 +258,25 @@ const InternalNotesComponent: React.FC<Props> = ({
             </div>
           ) : (
             <>
+            <div className="relative">
               <textarea
+                ref={textareaRef}
                 value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-                placeholder="Escribe una nota..."
+                onChange={mentionInput.handleChange}
+                onKeyDown={mentionInput.handleKeyDown}
+                placeholder="Escribe una nota mencionando un compañero con @..."
                 className="w-full p-2 text-sm border border-yellow-200 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-surface-dark text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-yellow-400 focus:border-transparent resize-none h-24 placeholder-gray-400"
               />
+              
+              {mentionInput.showSuggestions && (
+                <MentionAutocomplete
+                  suggestions={mentionInput.suggestions}
+                  selectedIndex={mentionInput.selectedIndex}
+                  onSelect={mentionInput.insertMention}
+                  onClose={() => mentionInput.setShowSuggestions(false)}
+                />
+              )}
+
               <button
                 onClick={handleAddNote}
                 disabled={!newNote.trim()}
@@ -271,6 +284,7 @@ const InternalNotesComponent: React.FC<Props> = ({
               >
                 Agregar Nota
               </button>
+            </div>
             </>
           )}
         </div>
@@ -385,7 +399,7 @@ const InternalNotesComponent: React.FC<Props> = ({
       <ConfirmationModal
         isOpen={!!noteToDelete}
         title="¿Eliminar Nota Interna?"
-        message="Esta acción no se puede deshacer. La nota ser eliminada permanentemente del historial del cliente."
+        message="Esta acción no se puede deshacer. La nota será eliminada permanentemente del historial del cliente."
         confirmText="Eliminar Nota"
         cancelText="Cancelar"
         variant="danger"

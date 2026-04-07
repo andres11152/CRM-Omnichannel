@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
-import { stripeService } from "@/services/stripeService";
+import { stripeService } from "@/services/StripeService";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 

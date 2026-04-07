@@ -1,6 +1,6 @@
 import { companyRepository } from "@/repositories/CompanyRepository";
 import { statsRepository } from "@/repositories/StatsRepository";
-import { cacheService } from "@/services/cacheService";
+import { cacheService } from "@/services/CacheService";
 import { Logger } from "@/utils/logger";
 
 export interface PlanLimits {
@@ -101,7 +101,7 @@ export async function getPlanLimits(
       // Robust mapping handles both boolean and string 'true'/'false' values
       const limits = {
         // Frontend Key: max_users
-        max_users: config.max_users ?? config.maxLimitUsers ?? 1,
+        max_users: config.max_users || config.maxLimitUsers || 1,
 
         // Frontend Key: max_whatsapp_connections (legacy: max_whatsapp_sessions)
         max_whatsapp_sessions:
@@ -111,10 +111,10 @@ export async function getPlanLimits(
           1,
 
         // Frontend Key: max_queues
-        max_queues: config.max_queues ?? 1,
+        max_queues: config.max_queues || 1,
 
-        max_tickets_per_month: config.max_tickets_per_month ?? -1,
-        max_ai_assistants: config.max_ai_assistants ?? 1,
+        max_tickets_per_month: config.max_tickets_per_month || -1,
+        max_ai_assistants: config.max_ai_assistants || 1,
 
         // New Feature Flags (Frontend Keys: can_use_ai, can_use_api, can_remove_branding)
         // Must handle boolean true/false AND string 'true'/'false' from select inputs
@@ -135,19 +135,19 @@ export async function getPlanLimits(
         storage_limit_gb:
           plan.storageLimitGb !== null
             ? plan.storageLimitGb
-            : (config.storage_limit_gb ?? -1),
+            : (config.storage_limit_gb || -1),
         max_contacts:
           plan.maxContacts !== null
             ? plan.maxContacts
-            : (config.max_contacts ?? -1),
+            : (config.max_contacts || -1),
         max_companies:
           plan.maxCompanies !== null
             ? plan.maxCompanies
-            : (config.max_companies ?? -1),
+            : (config.max_companies || -1),
         max_workflows:
           plan.maxWorkflows !== null
             ? plan.maxWorkflows
-            : (config.max_workflows ?? -1),
+            : (config.max_workflows || -1),
       } as PlanLimits;
 
       return limits;
@@ -160,7 +160,7 @@ export async function getPlanLimits(
  * Get current usage stats for a company
  */
 export async function getCurrentUsage(companyId: string): Promise<UsageStats> {
-  // 🚀 PERFORMANCE: Cache usage stats for 60s to reduce parallel query spikes on Dashboard load
+  //  PERFORMANCE: Cache usage stats for 60s to reduce parallel query spikes on Dashboard || load
   return cacheService.wrap(
     `company:${companyId}:usage:v1`,
     async () => {
@@ -228,7 +228,7 @@ export async function checkPlanLimit(
   const usage = await getCurrentUsage(companyId);
 
   if (!limits) {
-    // 🛡️ SECURITY FIX: Fail-Safe. If no plan is assigned, DENY access.
+    // [SEC] SECURITY FIX: Fail-Safe. If no plan is assigned, DENY access.
     // Master accounts should have a specific Plan assigned (e.g., "Internal Admin")
     return {
       allowed: false,
@@ -244,20 +244,20 @@ export async function checkPlanLimit(
 
   switch (resourceType) {
     case "storage":
-      limit = limits.storage_limit_gb ?? -1;
+      limit = limits.storage_limit_gb -1;
       current =
         Math.round((usage.storage_bytes / (1024 * 1024 * 1024)) * 100) / 100; // GB
       break;
     case "contacts":
-      limit = limits.max_contacts ?? -1;
+      limit = limits.max_contacts -1;
       current = usage.contacts;
       break;
     case "companies":
-      limit = limits.max_companies ?? -1;
+      limit = limits.max_companies -1;
       current = usage.companies;
       break;
     case "workflows":
-      limit = limits.max_workflows ?? -1;
+      limit = limits.max_workflows -1;
       current = usage.workflows;
       break;
     case "users":
@@ -299,7 +299,7 @@ export async function canCreateResource(
     if (resourceType === "storage") {
       const limits = await getPlanLimits(companyId);
       const usage = await getCurrentUsage(companyId);
-      const limitGb = limits?.storage_limit_gb ?? -1;
+      const limitGb = limits?.storage_limit_gb -1;
 
       if (limitGb === -1) return true;
 
@@ -337,3 +337,4 @@ export const planLimitsService = {
   checkPlanLimit,
   canCreateResource,
 };
+

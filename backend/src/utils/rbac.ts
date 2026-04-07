@@ -1,5 +1,5 @@
 /**
- * 🛡️ RBAC (Role-Based Access Control) System
+ * [SEC] RBAC (Role-Based Access Control) System
  * Granular permission management for enterprise SaaS
  */
 

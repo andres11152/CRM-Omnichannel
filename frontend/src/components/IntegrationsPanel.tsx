@@ -46,19 +46,20 @@ export const IntegrationsPanel: React.FC = () => {
         );
         setSessions(sortedSessions);
 
-        // Fetch using REFS instead of stale closure variables to guarantee accurate state in intervals
-        const currentScanningStatus = isScanningRef.current;
-        const currentQrStatus = currentQrRef.current;
-
-        if (currentScanningStatus && currentQrStatus) {
-          const scanningSession = data.data.sessions.find(
-            (s: WhatsAppSession) => s.qrCode === currentQrStatus,
+        // [SEC] ENTERPRISE: Modal persistence logic
+        const currentScanningId = scanningSessionIdRef.current;
+        if (currentScanningId) {
+          const activeSession = data.data.sessions.find(
+            (s: WhatsAppSession) => s.sessionId === currentScanningId,
           );
-          // If the session we are watching is no longer scanning (e.g. connected or deleted), close the modal
-          if (!scanningSession || scanningSession.status !== "SCANNING") {
+          // Only close if session is GONE or fully CONNECTED
+          if (!activeSession || activeSession.status === "CONNECTED") {
             setIsScanning(false);
             setCurrentQr(null);
             setScanningSessionId(null);
+          } else if (activeSession.qrCode && activeSession.qrCode !== currentQrRef.current) {
+            // If ID matches but QR changed, just update QR without toggling modal
+            setCurrentQr(activeSession.qrCode);
           }
         }
       }
@@ -164,7 +165,7 @@ export const IntegrationsPanel: React.FC = () => {
         const currentQrVal = currentQrRef.current;
         const currentSessions = sessionsRef.current;
 
-        // 🛡️ Robust Modal Closing Logic
+        // [SEC] Robust Modal Closing Logic
         const isTargetSession = data.sessionId === currentScanningId;
         const matchesCurrentQr =
           currentQrVal &&
@@ -179,13 +180,13 @@ export const IntegrationsPanel: React.FC = () => {
           setCurrentQr(null);
           setScanningSessionId(null);
 
-          // ✅ ENTERPRISE UX: Show success message with phone number
+          // [OK] ENTERPRISE UX: Show success message with phone number
           const phoneDisplay = data.phone ? `+${data.phone}` : "tu dispositivo";
           toast.success(
-            `✅ ¡Conectado exitosamente! WhatsApp ${phoneDisplay} vinculado correctamente.`,
+            `[OK] ¡Conectado exitosamente! WhatsApp ${phoneDisplay} vinculado correctamente.`,
             {
               duration: 5000,
-              icon: "🎉",
+              icon: "",
             },
           );
         }
@@ -208,7 +209,7 @@ export const IntegrationsPanel: React.FC = () => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const handleCreateSession = async () => {
-    // 🛡️ GUARD: Prevent duplicate session creation
+    // [SEC] GUARD: Prevent duplicate session creation
     if (loading || isScanning) {
       toast.info("Ya hay una conexión en progreso...");
       return;
@@ -218,7 +219,7 @@ export const IntegrationsPanel: React.FC = () => {
     try {
       const token = localStorage.getItem("token");
 
-      // 🛡️ FIX: Use AbortController with generous timeout
+      // [SEC] FIX: Use AbortController with generous timeout
       // The session init includes fetching WA version + Baileys startup
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -232,7 +233,7 @@ export const IntegrationsPanel: React.FC = () => {
         });
       } catch (fetchErr: unknown) {
         clearTimeout(timeoutId);
-        // 🛡️ If aborted/timeout, the session may still be initializing in the backend.
+        // [SEC] If aborted/timeout, the session may still be initializing in the backend.
         // The QR will arrive via WebSocket. Show scanning state and wait.
         if (fetchErr instanceof DOMException && fetchErr.name === "AbortError") {
           toast.info("Conectando... el QR llegará en unos segundos.", { duration: 5000 });
@@ -269,27 +270,10 @@ export const IntegrationsPanel: React.FC = () => {
           return exists ? prev : [...prev, newSession];
         });
 
-        // ✅ AUTO-CLEANUP: Delete session if still SCANNING after 2 minutes
-        const cleanupSessionId = newSession.sessionId;
-        setTimeout(async () => {
-          const currentSessions = sessionsRef.current;
-          const stillScanning = currentSessions.find(
-            (s) =>
-              s.sessionId === cleanupSessionId && s.status === "SCANNING",
-          );
-          if (stillScanning) {
-            console.log(
-              `[⚠️] Session ${cleanupSessionId} timed out, deleting...`,
-            );
-            await handleDeleteSession(cleanupSessionId);
-            toast.error("Tiempo de escaneo agotado. Intenta de nuevo.");
-          }
-        }, 120000);
-
         fetchSessions();
 
         if (newSession.qrCode) {
-          toast.success("✅ QR generado! Escanea para conectar");
+          toast.success("[OK] QR generado! Escanea para conectar");
         } else {
           toast.info("Generando código QR...", { duration: 3000 });
         }
@@ -321,7 +305,7 @@ export const IntegrationsPanel: React.FC = () => {
       }
 
       fetchSessions();
-      toast.success("✅ Dispositivo desvinculado correctamente");
+      toast.success("[OK] Dispositivo desvinculado correctamente");
     } catch (error) {
       console.error("Failed to delete session", error);
       toast.error("Error al desvincular dispositivo");
@@ -452,7 +436,7 @@ export const IntegrationsPanel: React.FC = () => {
                             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                           </svg>
                         </div>
-                        {/* 📱 SESSION INDEX BADGE */}
+                        {/* [APP] SESSION INDEX BADGE */}
                         <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-[#202c33] shadow-sm z-10">
                           {sessions.findIndex(
                             (s) => s.sessionId === session.sessionId,
@@ -636,20 +620,22 @@ export const IntegrationsPanel: React.FC = () => {
               <IntegrationCard
                 title="Shopify / WooCommerce"
                 desc="Integra tu catlogo y pedidos."
-                icon={<span className="text-2xl">🛍️</span>}
+                icon={<span className="text-2xl">️</span>}
               />
             </div>
           </section>
         </div>
-      </div>
-
-      {/* Scan QR Modal - Clean Enterprise Design */}
-      {isScanning && currentQr && (
+      </div>      {/* Scan QR Modal - Clean Enterprise Design */}
+      {isScanning && (
         <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl w-full max-w-3xl overflow-hidden border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row relative">
             {/* Close Button Absolute (Mobile Optimized) */}
             <button
-              onClick={() => setIsScanning(false)}
+              onClick={() => {
+                setIsScanning(false);
+                setCurrentQr(null);
+                setScanningSessionId(null);
+              }}
               className="absolute top-4 right-4 z-50 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors bg-white/10 rounded-full p-1 scroll-m-2"
             >
               <svg
@@ -669,13 +655,22 @@ export const IntegrationsPanel: React.FC = () => {
 
             {/* Left Panel: QR Scanner */}
             <div className="w-full md:w-5/12 bg-gray-50/50 dark:bg-[#1F2937]/30 flex flex-col items-center justify-center p-8 relative border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-800">
-              <div className="relative z-10 p-4 bg-white rounded-2xl shadow-sm border border-gray-200">
-                <QRCode
-                  value={currentQr}
-                  size={200}
-                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                  viewBox={`0 0 256 256`}
-                />
+              <div className="relative z-10 p-4 bg-white rounded-2xl shadow-sm border border-gray-200 min-h-[233px] flex items-center justify-center w-full">
+                {currentQr ? (
+                  <QRCode
+                    value={currentQr}
+                    size={200}
+                    style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                    viewBox={`0 0 256 256`}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center space-y-4">
+                    <div className="w-12 h-12 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin"></div>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
+                      Generando QR...
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-8 text-center space-y-2 z-10">
@@ -684,7 +679,7 @@ export const IntegrationsPanel: React.FC = () => {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </span>
-                  Esperando conexión...
+                  {currentQr ? "Esperando conexión..." : "Iniciando Baileys..."}
                 </div>
               </div>
             </div>
@@ -712,17 +707,17 @@ export const IntegrationsPanel: React.FC = () => {
                   {
                     title: "Abre WhatsApp",
                     desc: "Configuración > Dispositivos Vinculados",
-                    icon: "📱",
+                    icon: "[APP]",
                   },
                   {
                     title: "Toca 'Vincular'",
                     desc: "Usa tu huella o FaceID si te lo pide",
-                    icon: "👆",
+                    icon: "",
                   },
                   {
                     title: "Escanea el QR",
-                    desc: "Apunta la cmara al código",
-                    icon: "📸",
+                    desc: "Apunta la camara al código",
+                    icon: "",
                   },
                 ].map((step, i) => (
                   <div
@@ -746,7 +741,11 @@ export const IntegrationsPanel: React.FC = () => {
 
               <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 flex justify-end">
                 <button
-                  onClick={() => setIsScanning(false)}
+                  onClick={() => {
+                    setIsScanning(false);
+                    setCurrentQr(null);
+                    setScanningSessionId(null);
+                  }}
                   className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   Cancelar

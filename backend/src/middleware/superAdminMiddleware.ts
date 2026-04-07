@@ -21,7 +21,7 @@ export const superAdminGuard: RequestHandler = (req, res, next) => {
   }
 
   Logger.info(
-    `[SuperAdminGuard] 🛡️ Access granted for Master user: ${authReq.user?.email}`,
+    `[SuperAdminGuard] [SEC] Access granted for Master user: ${authReq.user?.email}`,
   );
   next();
 };

@@ -2,7 +2,7 @@ import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { agentMetricsService } from "@/services/agentMetricsService";
+import { agentMetricsService } from "@/services/AgentMetricsService";
 
 /**
  * AGENT METRICS CONTROLLER

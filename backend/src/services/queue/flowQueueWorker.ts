@@ -1,9 +1,9 @@
 import { Worker, Job } from "bullmq";
 import { connection } from "@/config/bullmq";
 import { Logger } from "@/utils/logger";
-import { flowExecutor } from "@/services/flowExecutor";
+import { flowExecutor } from "@/services/FlowExecutor";
 import { whatsappService } from "@/whatsapp";
-import { chatService } from "@/services/chatService";
+import { chatService } from "@/services/ChatService";
 import { TenantContextManager } from "@/config/tenantContext";
 import mime from "mime-types";
 
@@ -45,7 +45,7 @@ class FlowQueueWorker {
             if (results && results.length > 0) {
               const { companyId, conversationId } = sessionState;
               const conversation =
-                await chatService.getFullConversation(conversationId);
+                await chatService.getFullConversation(companyId, conversationId);
 
               if (!conversation) {
                 Logger.warn(

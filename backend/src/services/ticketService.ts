@@ -1,5 +1,5 @@
 /**
- * 🎫 TICKET SERVICE (Refactored)
+ *  TICKET SERVICE (Refactored)
  *
  * Core ticket CRUD operations with enrichment delegated to TicketEnrichment.
  * Handles: create, getAll, getById, update (with status transitions,
@@ -11,6 +11,7 @@ import {
   TicketStatus,
   TicketPriority,
   TicketResolutionType,
+  ConversationStatus,
 } from "@prisma/client";
 import { ticketRepository } from "@/repositories/TicketRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
@@ -292,7 +293,7 @@ class TicketService {
     if (data.queueId && updatedTicket.queueId && !updatedTicket.assignedToId) {
       try {
         const { assignTicketToAgent } =
-          await import("@/services/autoAssignmentService");
+          await import("@/services/AutoAssignmentService");
         await assignTicketToAgent(updatedTicket.id, updatedTicket.queueId);
       } catch (error) {
         Logger.error("[TicketService] Auto-assignment failed:", error);
@@ -328,8 +329,27 @@ class TicketService {
       }
 
       if (needsSync) {
+        const uncheckedSyncData: Prisma.ConversationUncheckedUpdateInput = {};
+        
+        if (data.status !== undefined) {
+          uncheckedSyncData.status = data.status as ConversationStatus;
+          if (data.status === "RESOLVED" || data.status === "CLOSED") {
+            uncheckedSyncData.resolvedAt = new Date();
+          } else {
+            uncheckedSyncData.resolvedAt = null;
+          }
+        }
+        
+        if (data.queueId !== undefined) {
+          uncheckedSyncData.queueId = (data.queueId as string) || null;
+        }
+        
+        if (data.assignedToId !== undefined) {
+          uncheckedSyncData.assignedToId = (data.assignedToId as string) || null;
+        }
+
         await conversationRepository
-          .updateConversation(updatedTicket.conversationId, syncData)
+          .updateConversation(updatedTicket.companyId, updatedTicket.conversationId, uncheckedSyncData)
           .catch((e) => Logger.error("[TicketService] sync error:", e));
       }
     }
@@ -342,7 +362,7 @@ class TicketService {
           updatedTicket.companyId,
         );
         if (conv?.contactId) {
-          await contactRepository.update(conv.contactId, {
+          await contactRepository.update(updatedTicket.companyId, conv.contactId, {
             isBlocked: true,
             blockedAt: new Date(),
             blockedReason: "SPAM",
@@ -353,7 +373,7 @@ class TicketService {
             conv.channelId,
           );
           if (contact) {
-            await contactRepository.update(contact.id, {
+            await contactRepository.update(updatedTicket.companyId, contact.id, {
               isBlocked: true,
               blockedAt: new Date(),
               blockedReason: "SPAM",
@@ -372,9 +392,10 @@ class TicketService {
       }
     }
 
-    const ticketDto = toTicketDTO(
+    const rawTicketDto = toTicketDTO(
       updatedTicket as unknown as TicketWithRelations,
     );
+    const [ticketDto] = await this.enrichWithCrmData([rawTicketDto], companyId);
 
     // Socket Notifications
     try {

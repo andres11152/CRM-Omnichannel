@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { Request, Response } from "express";
-import { pushNotificationService } from "@/services/pushNotificationService";
+import { pushNotificationService } from "@/services/PushNotificationService";
 import { catchAsync } from "@/utils/catchAsync";
 import { Logger } from "@/utils/logger";
 import { validate } from "@/middleware/validationMiddleware";
@@ -12,7 +12,7 @@ import {
 const router = Router();
 
 /**
- * 🔔 PUSH NOTIFICATION ROUTES
+ *  PUSH NOTIFICATION ROUTES
  */
 
 /**
@@ -93,7 +93,7 @@ if (process.env.NODE_ENV === "development") {
       ).user;
 
       await pushNotificationService.sendToUser(user.id, {
-        title: "🔔 Test Notification",
+        title: " Test Notification",
         body: "This is a test push notification from Reply CRM",
         icon: "/icon-192x192.png",
         data: { type: "test" },

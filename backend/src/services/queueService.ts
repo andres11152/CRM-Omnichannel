@@ -3,7 +3,7 @@ import { Prisma, QueueType } from "@prisma/client";
 import { queueRepository } from "@/repositories/QueueRepository";
 
 /**
- * 📋 QUEUE CRUD SERVICE
+ *  QUEUE CRUD SERVICE
  */
 export const queueService = {
   async findAll(companyId: string) {
@@ -46,7 +46,7 @@ export const queueService = {
     if (data.type !== undefined) updateData.type = data.type as QueueType;
     if (data.config !== undefined)
       updateData.config =
-        (data.config as Prisma.InputJsonValue) ?? Prisma.JsonNull;
+        (data.config as Prisma.InputJsonValue) || Prisma.JsonNull;
     if (data.departmentId !== undefined)
       updateData.departmentId = data.departmentId as string;
     if (data.aiAssistantId !== undefined)

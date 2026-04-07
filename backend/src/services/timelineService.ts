@@ -1,5 +1,5 @@
 /**
- * 📊 TIMELINE SERVICE (Refactored — ORM-Free)
+ * [STAT] TIMELINE SERVICE (Refactored — ORM-Free)
  *
  * Unified timeline of all activities (WhatsApp, Email, etc.)
  * All data access delegated to TimelineRepository and EmailRepository.

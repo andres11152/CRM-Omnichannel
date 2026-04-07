@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🛡️ TICKET VALIDATION SCHEMAS
+ * [SEC] TICKET VALIDATION SCHEMAS
  *
  * Comprehensive validation for support ticket operations
  * Prevents data corruption and ensures proper ticket workflow

@@ -19,7 +19,7 @@ import {
 import { ContactTimelineView } from "./crm/ContactTimelineView";
 import { Avatar } from "@/components/common/Avatar";
 
-// 🎨 100-Year Solution: Omnichannel Badge Component
+//  100-Year Solution: Omnichannel Badge Component
 // Displays the channel icon with session number for multi-account support
 interface ChannelBadgeProps {
   channel: Channel | string;
@@ -213,7 +213,7 @@ const FilterSection: React.FC<FilterSectionProps> = ({
 
 interface Props {
   contacts: Contact[];
-  groups?: Contact[]; // 🏢 Enterprise Grouping
+  groups?: Contact[]; //  Enterprise Grouping
   activeContactId: string;
   onSelectContact: (id: string) => void;
   userRole?: string;
@@ -323,7 +323,7 @@ const ContactListComponent: React.FC<Props> = ({
     if (deletingId) return; // Prevent double click
 
     setDeletingId(contactId); // Lock UI immediately
-    console.log("[ContactList] 🗑️  Delete initiated for:", contactId);
+    console.log("[ContactList] ️  Delete initiated for:", contactId);
 
     // We don't await because the prop is void, but we expect the parent
     // to remove the item from the list, which will unmount this row.
@@ -580,7 +580,7 @@ const ContactListComponent: React.FC<Props> = ({
                 <div className="relative flex-shrink-0">
                   <Avatar
                     src={contact.profilePicUrl || contact.avatarUrl || null}
-                    name={contact.name || ""}
+                    name={(contact.name || "").replace(/^\[GROUP\]\s*/i, "")}
                     className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} shadow-sm`}
                   />
                   {/* Bot Indicator */}
@@ -609,7 +609,7 @@ const ContactListComponent: React.FC<Props> = ({
                   {/* Row 1: Name + Time */}
                   <div className="flex justify-between items-center gap-1">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      {/* 📱 Channel Badge (WhatsApp #1, #2, etc.) */}
+                      {/* [APP] Channel Badge (WhatsApp #1, #2, etc.) */}
                       {contact.channel && (
                         <ChannelBadge
                           channel={contact.channel}
@@ -621,17 +621,17 @@ const ContactListComponent: React.FC<Props> = ({
                       <h3
                         className={`font-semibold truncate text-gray-900 dark:text-white ${viewMode === "compact" ? "text-xs" : "text-sm"}`}
                       >
-                        {contact.name}
+                        {contact.name.replace(/^\[GROUP\]\s*/i, "")}
                       </h3>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {contact.unreadCount > 0 && (
+                      { (contact.unreadCount ?? 0) > 0 && (
                         <span className="bg-green-500 dark:bg-green-600 text-white text-[9px] font-bold px-1.5 min-w-[1rem] h-4 rounded-full flex items-center justify-center shadow-sm">
                           {contact.unreadCount}
                         </span>
                       )}
                       <span
-                        className={`text-[10px] ${contact.unreadCount > 0 ? "text-green-500 dark:text-green-400 font-bold" : "text-gray-400 dark:text-gray-500"}`}
+                        className={`text-[10px] ${ (contact.unreadCount ?? 0) > 0 ? "text-green-500 dark:text-green-400 font-bold" : "text-gray-400 dark:text-gray-500"}`}
                       >
                         {(() => {
                           try {
@@ -660,7 +660,7 @@ const ContactListComponent: React.FC<Props> = ({
                     </span>
                     {/* Inline Tags */}
                     {viewMode !== "compact" &&
-                      (contact.tags?.length ?? 0) > 0 && (
+                      (contact.tags?.length || 0) > 0 && (
                         <div className="flex items-center gap-0.5 flex-shrink-0">
                           {(() => {
                             const tags = contact.tags || [];
@@ -784,7 +784,7 @@ const ContactListComponent: React.FC<Props> = ({
                     <div className="relative flex-shrink-0">
                       <Avatar
                         src={contact.profilePicUrl || contact.avatarUrl || null}
-                        name={contact.name || ""}
+                    name={(contact.name || "").replace(/^\[GROUP\]\s*/i, "")}
                         className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} shadow-sm ring-1 ring-emerald-200/50 dark:ring-emerald-700/30`}
                       />
                       <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full border-2 border-white dark:border-reply-border-dark p-0.5" title="Grupo">
@@ -805,17 +805,17 @@ const ContactListComponent: React.FC<Props> = ({
                             />
                           )}
                           <h3 className={`font-semibold truncate text-gray-900 dark:text-white ${viewMode === "compact" ? "text-xs" : "text-sm"}`}>
-                            {contact.name}
+                            {contact.name.replace(/^\[GROUP\]\s*/i, "")}
                           </h3>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {contact.unreadCount > 0 && (
+                          { (contact.unreadCount ?? 0) > 0 && (
                             <span className="bg-emerald-500 dark:bg-emerald-600 text-white text-[9px] font-bold px-1.5 min-w-[1rem] h-4 rounded-full flex items-center justify-center shadow-sm">
                               {contact.unreadCount}
                             </span>
                           )}
                           <span
-                            className={`text-[10px] ${contact.unreadCount > 0 ? "text-emerald-500 dark:text-emerald-400 font-bold" : "text-gray-400 dark:text-gray-500"}`}
+                            className={`text-[10px] ${ (contact.unreadCount ?? 0) > 0 ? "text-emerald-500 dark:text-emerald-400 font-bold" : "text-gray-400 dark:text-gray-500"}`}
                           >
                             {(() => {
                               try {

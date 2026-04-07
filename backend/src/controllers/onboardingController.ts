@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { onboardingService } from "@/services/onboardingService";
+import { onboardingService } from "@/services/OnboardingService";
 
 /**
  * SaaS ONBOARDING CONTROLLER

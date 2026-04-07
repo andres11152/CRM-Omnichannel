@@ -1,7 +1,7 @@
 import { searchRepository } from "@/repositories/SearchRepository";
 
 /**
- * 🔍 GLOBAL SEARCH SERVICE
+ * [SEARCH] GLOBAL SEARCH SERVICE
  * Búsqueda unificada cross-entity para Command Palette (Cmd+K)
  * Optimizado para respuestas <100ms en bases de datos con ~10k registros
  */

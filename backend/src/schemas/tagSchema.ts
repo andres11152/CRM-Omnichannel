@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🏷️ TAG VALIDATION SCHEMAS
+ * ️ TAG VALIDATION SCHEMAS
  *
  * Validation for system-wide tags
  */

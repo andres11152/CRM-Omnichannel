@@ -7,7 +7,7 @@ import { GlobalSearchSchema } from "@/schemas/searchSchema";
 const router = Router();
 
 /**
- * 🔍 SEARCH ROUTES
+ * [SEARCH] SEARCH ROUTES
  * Global search endpoints for Command Palette
  */
 

@@ -5,7 +5,7 @@ import { trace, SpanStatusCode, Span, Attributes } from "@opentelemetry/api";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🔍 OPENTELEMETRY DISTRIBUTED TRACING
+ * [SEARCH] OPENTELEMETRY DISTRIBUTED TRACING
  * Enterprise-grade observability for microservices
  *
  * Simplified version for compatibility
@@ -41,7 +41,7 @@ const sdk = new NodeSDK({
 export const startTracing = async (): Promise<void> => {
   try {
     await sdk.start();
-    Logger.info("[OpenTelemetry] 🔍 Tracing initialized");
+    Logger.info("[OpenTelemetry] [SEARCH] Tracing initialized");
     Logger.info(
       `[OpenTelemetry] Exporting to: ${
         process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "http://localhost:4318"
@@ -59,14 +59,14 @@ export const startTracing = async (): Promise<void> => {
 export const stopTracing = async (): Promise<void> => {
   try {
     await sdk.shutdown();
-    Logger.info("[OpenTelemetry] 🛑 Tracing shut down");
+    Logger.info("[OpenTelemetry]  Tracing shut down");
   } catch (error) {
     Logger.error("[OpenTelemetry] Shutdown error:", error);
   }
 };
 
 /**
- * 🎯 Utility: Create custom span
+ *  Utility: Create custom span
  */
 export const createSpan = (
   name: string,
@@ -91,7 +91,7 @@ export const createSpan = (
 };
 
 /**
- * 🎯 Utility: Add attributes to current span
+ *  Utility: Add attributes to current span
  */
 export const addSpanAttributes = (
   attributes: Record<string, string | number | boolean>,
@@ -103,7 +103,7 @@ export const addSpanAttributes = (
 };
 
 /**
- * 🎯 Utility: Add event to current span
+ *  Utility: Add event to current span
  */
 export const addSpanEvent = (name: string, attributes?: Attributes) => {
   const span = trace.getActiveSpan();
@@ -113,7 +113,7 @@ export const addSpanEvent = (name: string, attributes?: Attributes) => {
 };
 
 /**
- * 🎯 Utility: Get current trace ID
+ *  Utility: Get current trace ID
  */
 export const getCurrentTraceId = (): string | undefined => {
   const span = trace.getActiveSpan();
@@ -121,7 +121,7 @@ export const getCurrentTraceId = (): string | undefined => {
 };
 
 /**
- * 🎯 Utility: Get current span ID
+ *  Utility: Get current span ID
  */
 export const getCurrentSpanId = (): string | undefined => {
   const span = trace.getActiveSpan();

@@ -2,13 +2,14 @@ import { Response, NextFunction } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { prisma } from "@/config/database";
 import { AuthenticatedRequest } from "@/types/types";
-// 🛡️ SECURITY: Use TenantContextManager for Row-Level Security
+// [SEC] SECURITY: Use Repositories for Layered Isolation
+import { userRepository } from "@/repositories/UserRepository";
+import { apiKeyRepository } from "@/repositories/ApiKeyRepository";
 import TenantContextManager from "@/config/tenantContext";
 import redisClient from "@/config/redis";
 import { Logger } from "@/utils/logger";
-import { sessionService } from "@/services/sessionService";
+import { sessionService } from "@/services/SessionService";
 
 export const protect = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -19,7 +20,7 @@ export const protect = catchAsync(
       const crypto = await import("crypto");
       const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
 
-      const storedKey = await prisma.apiKey.findUnique({
+      const storedKey = await apiKeyRepository.findUnique({
         where: { keyHash },
       });
 
@@ -27,24 +28,36 @@ export const protect = catchAsync(
         return next(new AppError("Invalid API Key", 401));
       }
 
-      // Update last used (async, don't await)
-      prisma.apiKey
+      // Update last used (async, don't await) - Now via repository
+      apiKeyRepository
         .update({
           where: { id: storedKey.id },
           data: { lastUsedAt: new Date() },
         })
         .catch((err) => Logger.error("Failed to update API key", err));
 
-      req.companyId = storedKey.companyId;
-      req.user = {
-        id: "api-system",
-        role: "ADMIN",
-        email: "system@api",
-        name: storedKey.name,
-        companyId: storedKey.companyId,
-      };
+      // Enforce immutability for API Key sessions
+      Object.defineProperty(req, "companyId", {
+        value: storedKey.companyId,
+        writable: false,
+        configurable: false,
+        enumerable: true,
+      });
 
-      // 🛡️ SET TENANT CONTEXT FOR API KEY (Critical for RLS)
+      Object.defineProperty(req, "user", {
+        value: {
+          id: "api-system",
+          role: "ADMIN",
+          email: "system@api",
+          name: storedKey.name,
+          companyId: storedKey.companyId,
+        },
+        writable: false,
+        configurable: false,
+        enumerable: true,
+      });
+
+      // [SEC] SET TENANT CONTEXT FOR API KEY (Critical for RLS)
       // Wrap the next() call in the tenant context
       return TenantContextManager.run(
         {
@@ -81,15 +94,16 @@ export const protect = catchAsync(
     }
 
     // 2) Verificar el token
+    const { getEnv } = await import("@/config/env");
     let decoded: JwtPayload;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+      decoded = jwt.verify(token, getEnv().JWT_SECRET) as JwtPayload;
     } catch (error) {
       Logger.error("[Auth] Token verification failed:", error as Error);
       return next(new AppError("Token inválido o expirado", 401));
     }
 
-    // 2b) 🛡️ ENTERPRISE: Check if token is blacklisted (instant revocation)
+    // 2b) [SEC] ENTERPRISE: Check if token is blacklisted (instant revocation)
     if (decoded.jti) {
       const isBlacklisted = await sessionService.isTokenBlacklisted(
         decoded.jti,
@@ -123,15 +137,14 @@ export const protect = catchAsync(
 
     // B. Si no está en caché, consultar DB (Cache Miss)
     if (!currentUser) {
-      if (!prisma) {
-        Logger.error("[Auth] CRITICAL: Prisma client is undefined!");
-        return next(new AppError("Database connection error", 500));
-      }
-
       try {
-        currentUser = await prisma.user.findUnique({
-          where: { id: decoded.id },
-        });
+        // [SEC] SECURITY BYPASS: Use system context for Initial Authentication
+        // RLS prevents reading Users without a tenant; we must use system mode to identify the user first.
+        currentUser = await TenantContextManager.run({ companyId: "__SYSTEM__", userId: "auth-system" }, () => 
+          userRepository.findUnique({
+            where: { id: decoded.id },
+          })
+        );
 
         // C. Guardar en Redis (TTL: 5 minutos / 300s)
         if (currentUser && redisClient?.isOpen) {
@@ -164,33 +177,63 @@ export const protect = catchAsync(
       );
     }
 
-    // 4) GRANT ACCESS
-
+    // [SEC] GRANT ACCESS & ENFORCE IMMUTABILITY
     // Attach user info to request
-    // 100-Year Fix: Include ALL user profile fields so /me returns complete data
-    req.user = {
+    const userContext = {
       id: decoded.id,
       role: decoded.role,
       email: currentUser.email,
       name: currentUser.name,
-      // Fallback: If companyId is not in token (legacy tokens), use user's companyId from DB
-      companyId: decoded.companyId || currentUser.companyId,
-      preferences: currentUser.preferences,
-      // Profile fields - CRITICAL for profile page persistence
-      profilePicUrl: currentUser.profilePicUrl,
-      phone: currentUser.phone,
-      about: currentUser.about,
+      companyId: (decoded.companyId || currentUser.companyId) as string,
+      preferences: (currentUser.preferences as Record<string, unknown>) || {},
+      profilePicUrl: currentUser.profilePicUrl || "",
+      phone: currentUser.phone || "",
+      about: currentUser.about || "",
     };
-    req.companyId = req.user.companyId;
 
-    // 🏢 Attach JTI and sessionId for logout/revocation support
+    // Use Object.defineProperty to make companyId immutable for the rest of the request
+    // Set configurable: true to avoid crashes if middleware is executed twice for the same request
+    try {
+      const companyIdDescriptor = Object.getOwnPropertyDescriptor(req, "companyId");
+      if (!companyIdDescriptor || companyIdDescriptor.configurable) {
+        Object.defineProperty(req, "companyId", {
+          value: userContext.companyId,
+          writable: false,
+          configurable: true,
+          enumerable: true,
+        });
+      }
+
+      const userDescriptor = Object.getOwnPropertyDescriptor(req, "user");
+      if (!userDescriptor || userDescriptor.configurable) {
+        Object.defineProperty(req, "user", {
+          value: userContext,
+          writable: false,
+          configurable: true,
+          enumerable: true,
+        });
+      }
+    } catch (propertyError) {
+      // Fallback assign if defineProperty fails due to environment restrictions
+      // Using type casting to AuthenticatedRequest instead of any
+      const authReq = req as AuthenticatedRequest;
+      (authReq as { companyId: string }).companyId = userContext.companyId;
+      (authReq as { user: typeof userContext }).user = userContext;
+      
+      Logger.warn("[Auth] Property definition fallback triggered", { 
+        userId: decoded.id,
+        error: propertyError instanceof Error ? propertyError.message : String(propertyError)
+      });
+    }
+
+    //  Attach JTI and sessionId for logout/revocation support
     (req as AuthenticatedRequest & { jti?: string; sessionId?: string }).jti =
       decoded.jti;
     (
       req as AuthenticatedRequest & { jti?: string; sessionId?: string }
     ).sessionId = decoded.sessionId;
 
-    // 🛡️ SET TENANT CONTEXT FOR JWT USER (Critical for RLS)
+    // [SEC] SET TENANT CONTEXT FOR JWT USER (Critical for RLS)
     // This activates Row-Level Security for the entire request lifecycle
     if (req.user.companyId) {
       // Wrap next() in tenant context to ensure all downstream queries are scoped
@@ -205,7 +248,7 @@ export const protect = catchAsync(
     } else {
       // If system user (super admin) or broken state
       Logger.error(
-        `[Auth] 🚨 SECURITY: User ${req.user.id} has no companyId! Blocking request to prevent data leak.`,
+        `[Auth] [ALERT] SECURITY: User ${req.user.id} has no companyId! Blocking request to prevent data leak.`,
       );
       return next(
         new AppError(

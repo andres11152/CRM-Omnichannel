@@ -8,13 +8,13 @@ export const queryClient = new QueryClient({
       // During this time, re-mounting components won't trigger a fetch.
       staleTime: 1000 * 60 * 5,
 
-      // 🔄 Retries: Only retry once on failure (avoids spamming backend on hard errors)
+      // [SYNC] Retries: Only retry once on failure (avoids spamming backend on hard errors)
       retry: 1,
 
-      // 🚫 Focus: Don't auto-refetch when user focuses window (saves resources/flicker)
+      //  Focus: Don't auto-refetch when user focuses window (saves resources/flicker)
       refetchOnWindowFocus: false,
 
-      // 🚫 Reconnect: Don't auto-refetch on network reconnect (optional, keeps UI stable)
+      //  Reconnect: Don't auto-refetch on network reconnect (optional, keeps UI stable)
       refetchOnReconnect: false,
     },
     mutations: {

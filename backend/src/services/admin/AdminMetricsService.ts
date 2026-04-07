@@ -1,5 +1,5 @@
 /**
- * 📊 ADMIN METRICS SERVICE
+ * [STAT] ADMIN METRICS SERVICE
  *
  * All analytics and metrics logic for the admin dashboard:
  * - getCompanyMetrics: Per-tenant usage, engagement, AI, and health metrics
@@ -17,7 +17,7 @@ import { conversationRepository } from "@/repositories/ConversationRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { AppError } from "@/utils/AppError";
 
-// 🛡️ STRICT TYPING FOR JSON CONFIG
+// [SEC] STRICT TYPING FOR JSON CONFIG
 interface PlanConfig {
   max_users?: number;
   maxLimitUsers?: number;
@@ -90,10 +90,10 @@ export const adminMetricsService = {
 
     const planLimits = (company.plan?.config as unknown as PlanConfig) || {};
 
-    const maxUsers = planLimits.max_users ?? 0;
-    const maxWhatsapp = planLimits.max_whatsapp_sessions ?? 0;
-    const maxQueues = planLimits.max_queues ?? 0;
-    const maxAi = planLimits.max_ai_assistants ?? 0;
+    const maxUsers = planLimits.max_users || 0;
+    const maxWhatsapp = planLimits.max_whatsapp_sessions || 0;
+    const maxQueues = planLimits.max_queues || 0;
+    const maxAi = planLimits.max_ai_assistants || 0;
 
     const usagePercentages = {
       users: maxUsers > 0 ? (totalUsers / maxUsers) * 100 : 0,
@@ -309,7 +309,7 @@ export const adminMetricsService = {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 5)
       .map((c) => ({
-        icon: "✨",
+        icon: "",
         text: `Se creó una nueva empresa: ${c.name}`,
         time: c.createdAt,
         color: "text-blue-500",

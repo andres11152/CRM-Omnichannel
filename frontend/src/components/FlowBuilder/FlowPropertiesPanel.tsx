@@ -27,7 +27,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
   >([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
 
-  // 🛡️ ROUTING DATA STATE (Agents & Queues)
+  // [SEC] ROUTING DATA STATE (Agents & Queues)
   const [humanAgents, setHumanAgents] = useState<
     Array<{ id: string; name: string; email?: string }>
   >([]);
@@ -78,7 +78,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
     }
   };
 
-  // 🛡️ FETCH ROUTING DATA (Humans & Queues)
+  // [SEC] FETCH ROUTING DATA (Humans & Queues)
   useEffect(() => {
     if (node.type === "assign_agent") {
       fetchRoutingData();
@@ -193,12 +193,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* 🖼️ SEND_IMAGE NODE */}
+        {/* ️ SEND_IMAGE NODE */}
         {node.type === "send_image" && (
           <>
             <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">🖼️</span>
+                <span className="text-xl">️</span>
                 <p className="text-xs font-bold text-blue-900 dark:text-blue-300">
                   Enviar Imagen
                 </p>
@@ -229,7 +229,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     }}
                     className="text-red-500 hover:text-red-700"
                   >
-                    ✕
+                    
                   </button>
                 </div>
               )}
@@ -247,7 +247,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 >
                   <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
                 </svg>
-                📁 Seleccionar de Biblioteca Multimedia
+                 Seleccionar de Biblioteca Multimedia
               </button>
             </div>
 
@@ -266,12 +266,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* 🎥 SEND_VIDEO NODE */}
+        {/*  SEND_VIDEO NODE */}
         {node.type === "send_video" && (
           <>
             <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 dark:border-purple-800 mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">🎥</span>
+                <span className="text-xl"></span>
                 <p className="text-xs font-bold text-purple-900 dark:text-purple-300">
                   Enviar Video
                 </p>
@@ -302,7 +302,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     }}
                     className="text-red-500 hover:text-red-700"
                   >
-                    ✕
+                    
                   </button>
                 </div>
               )}
@@ -320,7 +320,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                 >
                   <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
                 </svg>
-                📁 Seleccionar de Biblioteca Multimedia
+                 Seleccionar de Biblioteca Multimedia
               </button>
             </div>
 
@@ -339,12 +339,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* 🎵 SEND_AUDIO NODE */}
+        {/*  SEND_AUDIO NODE */}
         {node.type === "send_audio" && (
           <>
             <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800 mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">🎵</span>
+                <span className="text-xl"></span>
                 <p className="text-xs font-bold text-green-900 dark:text-green-300">
                   Enviar Audio
                 </p>
@@ -375,7 +375,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     }}
                     className="text-red-500 hover:text-red-700"
                   >
-                    ✕
+                    
                   </button>
                 </div>
               )}
@@ -397,18 +397,18 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     clipRule="evenodd"
                   />
                 </svg>
-                📁 Seleccionar de Biblioteca Multimedia
+                 Seleccionar de Biblioteca Multimedia
               </button>
             </div>
           </>
         )}
 
-        {/* 📄 SEND_DOCUMENT NODE */}
+        {/*  SEND_DOCUMENT NODE */}
         {node.type === "send_document" && (
           <>
             <div className="bg-reply-bg dark:bg-gray-900/20 p-3 rounded-lg border border-gray-200 dark:border-reply-border-dark mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">📄</span>
+                <span className="text-xl"></span>
                 <p className="text-xs font-bold text-gray-900 dark:text-gray-300">
                   Enviar Documento
                 </p>
@@ -439,7 +439,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     }}
                     className="text-red-500 hover:text-red-700"
                   >
-                    ✕
+                    
                   </button>
                 </div>
               )}
@@ -461,7 +461,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     clipRule="evenodd"
                   />
                 </svg>
-                📁 Seleccionar de Biblioteca Multimedia
+                 Seleccionar de Biblioteca Multimedia
               </button>
             </div>
 
@@ -483,12 +483,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* 💬 SEND_MESSAGE NODE */}
+        {/* [CHAT] SEND_MESSAGE NODE */}
         {node.type === "send_message" && (
           <>
             <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">💬</span>
+                <span className="text-xl">[CHAT]</span>
                 <p className="text-xs font-bold text-blue-900 dark:text-blue-300">
                   Enviar Mensaje de Texto
                 </p>
@@ -513,12 +513,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* ✍️ ASK_DATA NODE */}
+        {/* ️ ASK_DATA NODE */}
         {node.type === "ask_data" && (
           <>
             <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-200 dark:border-orange-800 mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">✍️</span>
+                <span className="text-xl">️</span>
                 <p className="text-xs font-bold text-orange-900 dark:text-orange-300">
                   Solicitar Datos
                 </p>
@@ -559,12 +559,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* ✨ AI AGENT NODE - NUEVA INTEGRACIÓN */}
+        {/*  AI AGENT NODE - NUEVA INTEGRACIÓN */}
         {node.type === "ai_agent" && (
           <>
             <div className="bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 p-4 rounded-lg border border-cyan-200 dark:border-cyan-800 mb-4">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-2xl">🤖</span>
+                <span className="text-2xl">[AI]</span>
                 <p className="text-xs font-bold text-cyan-900 dark:text-cyan-300">
                   Agente IA Inteligente
                 </p>
@@ -577,7 +577,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
-                🎯 Seleccionar Agente IA
+                 Seleccionar Agente IA
               </label>
 
               {loadingAgents ? (
@@ -594,10 +594,10 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     onChange={(e) => onUpdate("aiAssistantId", e.target.value)}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-cyan-500 outline-none"
                   >
-                    <option value="">⚠️ Seleccionar Agente...</option>
+                    <option value="">[WARNING] Seleccionar Agente...</option>
                     {aiAgents.map((agent) => (
                       <option key={agent.id} value={agent.id}>
-                        🤖 {agent.name}
+                        [AI] {agent.name}
                       </option>
                     ))}
                   </select>
@@ -729,12 +729,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
             </div>
           </>
         )}
-        {/* ❓ CONDITION NODE - Ramificación */}
+        {/*  CONDITION NODE - Ramificación */}
         {node.type === "condition" && (
           <>
             <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800 mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">❓</span>
+                <span className="text-xl"></span>
                 <p className="text-xs font-bold text-yellow-900 dark:text-yellow-300">
                   Condición / Ramificación
                 </p>
@@ -793,7 +793,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
 
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <p className="text-xs text-blue-800 dark:text-blue-300">
-                💡 <strong>Cómo funciona:</strong> Conecta diferentes nodos a
+                 <strong>Cómo funciona:</strong> Conecta diferentes nodos a
                 este nodo de condición. Si la condición es verdadera, seguir un
                 camino. Si es falsa, seguir otro.
               </p>
@@ -801,12 +801,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* 💰 CREATE_DEAL NODE - Crear Negocio */}
+        {/* [BILLING] CREATE_DEAL NODE - Crear Negocio */}
         {node.type === "create_deal" && (
           <>
             <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">💰</span>
+                <span className="text-xl">[BILLING]</span>
                 <p className="text-xs font-bold text-emerald-900 dark:text-emerald-300">
                   Crear Deal
                 </p>
@@ -863,12 +863,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* 👤 UPDATE_CONTACT NODE - Actualizar Contacto */}
+        {/*  UPDATE_CONTACT NODE - Actualizar Contacto */}
         {node.type === "update_contact" && (
           <>
             <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800 mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">👤</span>
+                <span className="text-xl"></span>
                 <p className="text-xs font-bold text-indigo-900 dark:text-indigo-300">
                   Actualizar Contacto
                 </p>
@@ -932,12 +932,12 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
           </>
         )}
 
-        {/* 🎯 ASSIGN_AGENT NODE - Asignar Agente */}
+        {/*  ASSIGN_AGENT NODE - Asignar Agente */}
         {node.type === "assign_agent" && (
           <>
             <div className="bg-pink-50 dark:bg-pink-900/20 p-3 rounded-lg border border-pink-200 dark:border-pink-800 mb-4">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">🎯</span>
+                <span className="text-xl"></span>
                 <p className="text-xs font-bold text-pink-900 dark:text-pink-300">
                   Enrutamiento Humano
                 </p>
@@ -947,7 +947,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
               </p>
             </div>
 
-            {/* 🎛️ Routing Mode Selector */}
+            {/* ️ Routing Mode Selector */}
             <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg mb-4">
               <button
                 onClick={() => {
@@ -960,7 +960,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     : "text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
-                👤 Agente
+                 Agente
               </button>
               <button
                 onClick={() => {
@@ -973,11 +973,11 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
                     : "text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
-                👥 Cola
+                [CONTACTS] Cola
               </button>
             </div>
 
-            {/* 👤 AGENT MODE - DROPDOWN */}
+            {/*  AGENT MODE - DROPDOWN */}
             {node.data.assignmentType !== "queue" && (
               <div className="mb-4 animate-fadeIn">
                 <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">
@@ -1009,7 +1009,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
               </div>
             )}
 
-            {/* 👥 QUEUE MODE - DROPDOWN */}
+            {/* [CONTACTS] QUEUE MODE - DROPDOWN */}
             {node.data.assignmentType === "queue" && (
               <div className="mb-4 animate-fadeIn">
                 <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">
@@ -1051,7 +1051,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
             </div>
 
             <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg flex gap-2">
-              <span className="text-lg">⚠️</span>
+              <span className="text-lg">[WARNING]</span>
               <p className="text-xs text-orange-800 dark:text-orange-300">
                 El bot se <strong>detendrá</strong> y el chat pasar a estado{" "}
                 {node.data.assignmentType === "queue"
@@ -1105,19 +1105,19 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
 
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <p className="text-xs text-blue-800 dark:text-blue-300">
-                💡 El flujo continuar automticamente después del tiempo
+                 El flujo continuar automticamente después del tiempo
                 especificado
               </p>
             </div>
           </>
         )}
 
-        {/* 🏁 END NODE - Fin del Flujo */}
+        {/* [COMPLETE] END NODE - Fin del Flujo */}
         {node.type === "end" && (
           <>
             <div className="bg-reply-bg dark:bg-gray-900/20 p-3 rounded-lg border border-gray-200 dark:border-reply-border-dark mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">🏁</span>
+                <span className="text-xl">[COMPLETE]</span>
                 <p className="text-xs font-bold text-gray-900 dark:text-gray-300">
                   Fin del Flujo
                 </p>
@@ -1142,13 +1142,13 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
 
             <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
               <p className="text-xs text-green-800 dark:text-green-300">
-                ✅ El flujo se detendr completamente después de este nodo
+                [OK] El flujo se detendr completamente después de este nodo
               </p>
             </div>
           </>
         )}
 
-        {/* 🔄 AI_HANDOFF NODE */}
+        {/* [SYNC] AI_HANDOFF NODE */}
         {node.type === "ai_handoff" && (
           <>
             <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-200 dark:border-orange-800 mb-2">

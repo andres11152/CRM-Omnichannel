@@ -1,6 +1,14 @@
 import rateLimit from "express-rate-limit";
-import { Request, Response } from "express";
+import RedisStore from "rate-limit-redis";
+import { Request } from "express";
 import { AuthenticatedRequest } from "@/types/types";
+import redisClient from "@/config/redis";
+import { Logger } from "@/utils/logger";
+
+/**
+ * [SEC] ENTERPRISE RATE LIMITER (MULTI-TENANT READY)
+ * Uses Redis as a distributed store to ensure limits are shared across all app instances.
+ */
 
 // Custom key generator for IP-based rate limiting
 const getClientIp = (req: Request): string => {
@@ -11,68 +19,91 @@ const getClientIp = (req: Request): string => {
   );
 };
 
-// Clave personalizada para identificar a los usuarios: por ID de usuario si está autenticado, o por IP si no.
-// USAMOS UNA FUNCIÓN DEFENSIVA QUE YA NO DEPENDE DE ipKeyGenerator
-const keyGenerator = (req: Request, _res: Response): string => {
-  // 1. Intentamos obtener el ID de usuario autenticado
-  const userId = (req as AuthenticatedRequest).user?.id;
-
-  if (userId) {
-    return userId;
+// Distributed Store Setup (Redis v4+ compatible)
+const createStore = (prefix: string) => {
+  if (!redisClient) {
+    Logger.warn(`[RateLimit] [WARN] Redis not found. Falling back to Memory Store for ${prefix}`);
+    return undefined; // Falls back to express-rate-limit default memory store
   }
 
-  // 2. Fallback a IP
-  return getClientIp(req);
+  return new RedisStore({
+    sendCommand: async (...args: string[]): Promise<string | number | null> => {
+      if (!redisClient?.isReady) {
+        // [SEC] Prevent crash during library init scripts (SHA detection)
+        if (args[0]?.toUpperCase() === "SCRIPT") return "DUMMY_SHA";
+        return null;
+      }
+      const result = await redisClient.sendCommand(args);
+      return result as string | number;
+    },
+    prefix: `rl:${prefix}:`,
+  });
+};
+
+
+const tenantKeyGenerator = (req: Request): string => {
+  const authReq = req as AuthenticatedRequest;
+  const userId = authReq.user?.id;
+  const companyId = authReq.user?.companyId;
+
+  // [SaaS] Scope by Company + User if authenticated
+  if (companyId && userId) {
+    return `c:${companyId}:u:${userId}`;
+  }
+  
+  // Scope by Company only if identified (e.g., from subdomain or header)
+  if (companyId) {
+    return `c:${companyId}:ip:${getClientIp(req)}`;
+  }
+
+  // Fallback to IP for public routes
+  return `ip:${getClientIp(req)}`;
 };
 
 /**
- * Limiter general para la mayoría de las rutas de la API.
- * 300 peticiones por minuto por usuario/IP.
- * Aumentado para soportar agentes manejando múltiples chats concurrentes.
+ * Global API Limiter
+ * 600 requests per minute per tenant/user (Distributed)
  */
 export const apiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minuto
-  limit: 600, // Aumentado a 600 (10 req/sec) para empresas grandes
-  keyGenerator: keyGenerator,
+  windowMs: 60 * 1000,
+  limit: 600, 
+  keyGenerator: tenantKeyGenerator,
+  store: createStore("api"),
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     status: "fail",
-    message: "Demasiadas peticiones, por favor intente de nuevo en un minuto.",
+    message: "[SEC] [LIMIT] Demasiadas peticiones. Intente de nuevo en 1 minuto.",
   },
 });
 
 /**
- * Limiter especial para Webhooks.
- * Debe soportar ráfagas altas de mensajes entrantes de WhatsApp/Meta.
+ * High-Burst Webhook Limiter
+ * 3000 requests per minute (Distributed)
  */
 export const webhookLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minuto
-  limit: 3000, // 50 req/sec - Necesario para ráfagas de mensajes
+  windowMs: 60 * 1000,
+  limit: 3000,
   keyGenerator: getClientIp,
+  store: createStore("webhook"),
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: "error", message: "Webhook rate limit exceeded" },
 });
 
 /**
- * Limiter más estricto para rutas sensibles como login, registro o recuperación de contraseña.
- * Previene ataques de fuerza bruta. 10 peticiones por minuto por IP.
+ * Auth/Security Limiter (Brute Force Protection)
+ * 10 attempts per minute per IP (Distributed)
  */
 export const authLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minuto
-  max: 10,
-  // Para endpoints públicos, nos basamos en la IP.
-  // Envolvemos `ipKeyGenerator` en una función anónima para resolver la
-  // incompatibilidad de tipos que detecta TypeScript, y al mismo tiempo
-  // cumplimos con la recomendación de seguridad de la librería.
-  // cumplimos con la recomendación de seguridad de la librería.
+  windowMs: 60 * 1000,
+  limit: 10,
   keyGenerator: getClientIp,
+  store: createStore("auth"),
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     status: "fail",
-    message:
-      "Demasiados intentos de autenticación, por favor intente de nuevo en un minuto.",
+    message: "[SEC] [AUTH] Demasiados intentos. Bloqueo preventivo por 1 minuto.",
   },
 });

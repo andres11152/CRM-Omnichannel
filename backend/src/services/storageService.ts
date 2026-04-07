@@ -125,17 +125,13 @@ class S3StorageService implements IStorageService {
     key: string,
     mimeType: string,
   ): Promise<UploadResult> {
-    let url: string;
-    if (
-      mimeType.startsWith("audio/") ||
-      mimeType.startsWith("video/") ||
-      mimeType.startsWith("image/")
-    ) {
-      url = await this.getSignedUrl(key, 86400);
-    } else {
-      url = `https://${this.bucket}.s3.amazonaws.com/${key}`;
-    }
-    return { url, key, provider: "s3" };
+    // [SEC] AUDIT FIX: No longer exposed direct or pre-calculated Signed URLs.
+    // The CRM must fetch these via the internal /api/media/:id proxy.
+    return { 
+      url: key, // Use key as internal reference
+      key, 
+      provider: "s3" 
+    };
   }
 
   async getSignedUrl(

@@ -165,7 +165,7 @@ export class WhatsAppSessionRepository {
   }
 
   /**
-   * 🛡️ SELF-HEALING: Create/restore a session record (idempotent via upsert).
+   * [SEC] SELF-HEALING: Create/restore a session record (idempotent via upsert).
    * Used when connection.update fires "open" but the DB record was deleted (cleanup).
    */
   async createSessionRecord(data: {

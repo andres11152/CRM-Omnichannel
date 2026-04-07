@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { AppError } from "@/utils/AppError";
-import { aiCrudService } from "@/services/aiCrudService";
+import { aiCrudService } from "@/services/AiCrudService";
 
 /**
  * AI CONTROLLER
@@ -99,7 +99,7 @@ export const testAI = catchAsync(
 
     if (!companyId) return next(new AppError("Company ID missing", 400));
 
-    const { generateAIResponse } = await import("@/services/aiResponseService");
+    const { generateAIResponse } = await import("@/services/AiResponseService");
 
     const response = await generateAIResponse(
       companyId,
@@ -126,7 +126,7 @@ export const copilotAction = catchAsync(
     if (!companyId) return next(new AppError("Company ID missing", 400));
 
     const { generateRawAIResponse } =
-      await import("@/services/aiResponseService");
+      await import("@/services/AiResponseService");
 
     let systemPrompt = "";
     let userMessage = "";

@@ -62,7 +62,7 @@ export const LoginScreen: React.FC<Props> = ({
         role: (decoded.role || "company_admin") as User["role"],
         companyId: decoded.companyId,
         companyStatus: decoded.companyStatus,
-        isActive: decoded.isActive ?? true,
+        isActive: !!decoded.isActive,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         phone: decoded.phone || undefined,
@@ -328,7 +328,7 @@ export const LoginScreen: React.FC<Props> = ({
                 to="/forgot-password"
                 className="text-sm font-medium text-reply-green hover:underline dark:text-reply-green-dark"
               >
-                ¿¿Olvidaste tu contraseña?
+                Olvidaste tu contraseña?
               </Link>
             </div>
 

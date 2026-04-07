@@ -4,13 +4,13 @@ import { fetchAPI } from "@/services/apiConfig";
 import "../styles/PermissionsPanel.css";
 
 /**
- * 🔐 PROFESSIONAL PERMISSIONS PANEL
+ * [AUTH] PROFESSIONAL PERMISSIONS PANEL
  * Granular permission management with modern toggle switches
  * 100-Year Enterprise Solution
  */
 
 // ─────────────────────────────────────────────────────────────────
-// 🛡️ TYPE DEFINITIONS (No ANY types - Strict TypeScript)
+// [SEC] TYPE DEFINITIONS (No ANY types - Strict TypeScript)
 // ─────────────────────────────────────────────────────────────────
 
 interface Permission {
@@ -50,14 +50,14 @@ interface PermissionModule {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 🏢 PERMISSION MODULES CATALOG
+//  PERMISSION MODULES CATALOG
 // ─────────────────────────────────────────────────────────────────
 
 const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "CONVERSATIONS",
     name: "Conversaciónes",
-    icon: "💬",
+    icon: "[CHAT]",
     description: "Gestión de conversaciones y mensajería",
     permissions: [
       {
@@ -101,7 +101,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "TICKETS",
     name: "Tickets",
-    icon: "🎫",
+    icon: "",
     description: "Gestión de tickets de soporte",
     permissions: [
       {
@@ -151,7 +151,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "CONTACTS",
     name: "Contactos",
-    icon: "👥",
+    icon: "[CONTACTS]",
     description: "Gestión de contactos y clientes",
     permissions: [
       {
@@ -207,7 +207,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "DEALS",
     name: "Deals / Ventas",
-    icon: "💰",
+    icon: "[BILLING]",
     description: "Gestión de oportunidades de venta",
     permissions: [
       {
@@ -251,7 +251,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "REPORTS",
     name: "Reportes",
-    icon: "📊",
+    icon: "[STAT]",
     description: "Acceso a reportes y analítica",
     permissions: [
       {
@@ -277,7 +277,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "TEAM",
     name: "Equipo",
-    icon: "👨‍💼",
+    icon: "‍",
     description: "Gestión de equipo y usuarios",
     permissions: [
       {
@@ -315,7 +315,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "SETTINGS",
     name: "Configuración",
-    icon: "⚙️",
+    icon: "️",
     description: "Configuración del sistema",
     permissions: [
       {
@@ -347,7 +347,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "QUEUES",
     name: "Colas",
-    icon: "📋",
+    icon: "",
     description: "Gestión de colas de atención",
     permissions: [
       {
@@ -373,7 +373,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────
-// 🎚️ TOGGLE SWITCH COMPONENT
+// ️ TOGGLE SWITCH COMPONENT
 // ─────────────────────────────────────────────────────────────────
 
 interface ToggleSwitchProps {
@@ -412,7 +412,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
 };
 
 // ─────────────────────────────────────────────────────────────────
-// 🏢 MAIN PERMISSIONS PANEL COMPONENT
+//  MAIN PERMISSIONS PANEL COMPONENT
 // ─────────────────────────────────────────────────────────────────
 
 export const PermissionsPanel: React.FC = () => {
@@ -922,12 +922,12 @@ export const PermissionsPanel: React.FC = () => {
                   <p className="text-xs text-gray-500 mt-1">
                     {currentUserRole === "ADMIN" ? (
                       <>
-                        💡 Como ADMIN, solo puedes crear roles basados en{" "}
+                         Como ADMIN, solo puedes crear roles basados en{" "}
                         <strong>Agente</strong>
                       </>
                     ) : currentUserRole === "MASTER" ? (
                       <>
-                        💡 Como MASTER, puedes crear roles basados en{" "}
+                         Como MASTER, puedes crear roles basados en{" "}
                         <strong>Agente</strong> o <strong>Administrador</strong>
                       </>
                     ) : null}
@@ -958,7 +958,7 @@ export const PermissionsPanel: React.FC = () => {
                 </p>
                 <div className="permissions-summary">
                   <span className="summary-badge">
-                    ✓ {selectedPermissions.size} permisos seleccionados
+                     {selectedPermissions.size} permisos seleccionados
                   </span>
                 </div>
               </div>
@@ -1007,7 +1007,7 @@ export const PermissionsPanel: React.FC = () => {
                               allSelected ? "Desactivar todos" : "Activar todos"
                             }
                           >
-                            {allSelected ? "✓ Todos" : "Seleccionar"}
+                            {allSelected ? " Todos" : "Seleccionar"}
                           </button>
                           <svg
                             className={`expand-icon ${isExpanded ? "rotated" : ""}`}

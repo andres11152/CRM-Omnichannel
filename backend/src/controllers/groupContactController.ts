@@ -6,10 +6,10 @@ import { HTTP_STATUS } from "@/constants/httpStatus";
 import {
   groupContactService,
   AddParticipantParams,
-} from "@/services/groupContactService";
+} from "@/services/GroupContactService";
 
 /**
- * 🔐 GROUP CONTACTS CONTROLLER
+ * [AUTH] GROUP CONTACTS CONTROLLER
  * Enterprise-grade handlers for group participant extraction
  * 100-Year Solution - No ANY types
  */

@@ -20,7 +20,7 @@ export class IngestionService {
       });
 
       if (user && user.companyId !== companyId) {
-        // 🚨 ARCHITECTURAL LIMITATION: User.email is globally unique @unique.
+        // [ALERT] ARCHITECTURAL LIMITATION: User.email is globally unique @unique.
         // If a "contact" uses the same email across two companies that use our CRM,
         // the DB schema links them to the First Company's User record.
         // For now, we block cross-tenant ingestion to prevent data crossover.

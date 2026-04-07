@@ -1,5 +1,5 @@
 /**
- * 🧠 Contact Identity Strategy
+ *  Contact Identity Strategy
  * Encapsulates business logic for resolving naming and identity conflicts.
  * Ensures consistent behavior across the application.
  */
@@ -35,7 +35,7 @@ export class ContactStrategy {
     let contactName: string | undefined = undefined;
 
     if (cleanPushName) {
-      // ✅ We have a verified human name
+      // [OK] We have a verified human name
       const formatted = `~${cleanPushName}`;
       subjectDisplayName = formatted;
       contactName = formatted;
@@ -82,3 +82,4 @@ export class ContactStrategy {
     return trimmed;
   }
 }
+

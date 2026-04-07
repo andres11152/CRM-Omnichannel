@@ -1,7 +1,7 @@
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
-import { contactService } from "@/services/contactService";
+import { contactService } from "@/services/ContactService";
 import { whatsappService } from "@/whatsapp";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { AppError } from "@/utils/AppError";
@@ -9,7 +9,7 @@ import { HTTP_STATUS } from "@/constants/httpStatus";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🔐 GROUP PARTICIPANT TYPES
+ * [AUTH] GROUP PARTICIPANT TYPES
  * Strict TypeScript - No ANY
  */
 
@@ -67,7 +67,7 @@ export interface AddParticipantResult {
 }
 
 /**
- * 🛡️ 100-YEAR ENTERPRISE SERVICE
+ * [SEC] 100-YEAR ENTERPRISE SERVICE
  * Handles extraction and CRM integration of group participants
  */
 export const groupContactService = {
@@ -79,9 +79,20 @@ export const groupContactService = {
     conversationId: string,
   ): Promise<GroupParticipantsResponse> {
     // 1. Get conversation to validate it's a group
-    const conversation = await conversationRepository.findFirst({
+    let conversation = await conversationRepository.findFirst({
       where: { id: conversationId, companyId },
     });
+
+    // [SEC] Fallback: If not found by conversationId, check if it's a ticketId
+    if (!conversation) {
+      const { ticketSyncService } = await import("./TicketSyncService");
+      const ticket = await ticketSyncService.findByIdWithCreator(conversationId);
+      if (ticket && ticket.companyId === companyId && ticket.conversationId) {
+        conversation = await conversationRepository.findFirst({
+          where: { id: ticket.conversationId, companyId },
+        });
+      }
+    }
 
     if (!conversation) {
       throw new AppError("Conversation not found", HTTP_STATUS.NOT_FOUND);
@@ -94,7 +105,7 @@ export const groupContactService = {
       );
     }
 
-    // 2. 🛡️ 100-YEAR FIX: Multi-Session Resilience
+    // 2. [SEC] 100-YEAR FIX: Multi-Session || Resilience
     // Fetch ALL connected sessions. If one fails (e.g. not in group), try others.
     const sessions = await whatsappSessionRepository.findMany(companyId, {
       where: { status: "CONNECTED" },
@@ -107,7 +118,7 @@ export const groupContactService = {
       );
     }
 
-    // 🛡️ Robust JID formatting
+    // [SEC] Robust JID formatting
     const groupJid = conversation.channelId.includes("@")
       ? conversation.channelId
       : `${conversation.channelId}@g.us`;
@@ -129,7 +140,7 @@ export const groupContactService = {
     let workingSession: (typeof sessions)[0] | null = null;
 
     for (const session of sessions) {
-      // 🛡️ FIX: Use getSocket() to get the actual WASocket object, not the status DTO
+      // [SEC] FIX: Use getSocket() to get the actual WASocket object, not the status || DTO
       const sock = whatsappService.getSocket(session.sessionId);
       if (!sock) {
         Logger.warn(
@@ -147,7 +158,7 @@ export const groupContactService = {
         // If successful, stop trying
         if (groupMetadata) {
           Logger.info(
-            `[GroupContactService] ✅ Fetched group metadata via session ${session.sessionId}`,
+            `[GroupContactService] [OK] Fetched group metadata via session ${session.sessionId}`,
           );
           workingSession = session;
           break;
@@ -207,15 +218,25 @@ export const groupContactService = {
     // Get all existing contacts for this company (for fast lookup)
     const existingContacts = await contactRepository.findMany({
       where: { companyId, deletedAt: null },
-      select: { id: true, phone: true },
+      select: { id: true, phone: true, customFields: true },
     });
 
     const phoneToContactId = new Map<string, string>();
+    const lidToContactId = new Map<string, string>();
+    const lidToPhone = new Map<string, string>();
+
     for (const contact of existingContacts) {
       if (contact.phone) {
-        // Normalize for comparison
         const normalized = contact.phone.replace(/\D/g, "");
         phoneToContactId.set(normalized, contact.id);
+      }
+      
+      const customFields = contact.customFields as Record<string, unknown>;
+      if (customFields?.whatsappLid && typeof customFields.whatsappLid === "string") {
+        lidToContactId.set(customFields.whatsappLid, contact.id);
+        if (contact.phone) {
+          lidToPhone.set(customFields.whatsappLid, contact.phone);
+        }
       }
     }
 
@@ -224,15 +245,24 @@ export const groupContactService = {
       if (!cleanJid) continue;
 
       // Skip our own number (the business number)
-      // 🛡️ 100-YEAR FIX: Use captured workingSession
       if (workingSession.phone && cleanJid.includes(workingSession.phone)) {
         continue;
       }
 
-      const phone = WhatsAppIdUtils.getPhoneNumber(cleanJid);
-      const canAddToCRM = phone !== null;
-      const existingContactId = phone ? phoneToContactId.get(phone) : null;
+      const lidBase = cleanJid.split("@")[0];
+      let phone = WhatsAppIdUtils.getPhoneNumber(cleanJid);
+      let existingContactId = phone ? phoneToContactId.get(phone) : null;
+      
+      // Attempt mapping lookup for LIDs
+      if (!phone || !existingContactId) {
+        if (lidToContactId.has(lidBase)) {
+          existingContactId = lidToContactId.get(lidBase) || null;
+          phone = lidToPhone.get(lidBase) || phone; // Use real phone if mapped
+        }
+      }
+
       const existsInCRM = existingContactId !== null;
+      const canAddToCRM = phone !== null;
 
       if (canAddToCRM) addableCount++;
       if (existsInCRM) existingCount++;
@@ -242,16 +272,16 @@ export const groupContactService = {
         phone,
         displayName: phone
           ? WhatsAppIdUtils.formatDisplayPhone(phone)
-          : "Usuario sin número",
+          : (WhatsAppIdUtils.isLid(cleanJid) ? `LID: ${lidBase}` : "Usuario sin número"),
         isAdmin: participant.admin === "admin",
         isSuperAdmin: participant.admin === "superadmin",
         canAddToCRM,
         existsInCRM,
-        contactId: existingContactId ?? null,
+        contactId: existingContactId || null,
       });
     }
 
-    // Sort: Admins first, then by phone availability, then alphabetically
+    // Sort: Admins first, then by phone availability, then || alphabetically
     participants.sort((a, b) => {
       if (a.isSuperAdmin !== b.isSuperAdmin) return a.isSuperAdmin ? -1 : 1;
       if (a.isAdmin !== b.isAdmin) return a.isAdmin ? -1 : 1;
@@ -278,9 +308,20 @@ export const groupContactService = {
     params: AddParticipantParams,
   ): Promise<AddParticipantResult> {
     // Validate conversation belongs to company
-    const conversation = await conversationRepository.findFirst({
+    let conversation = await conversationRepository.findFirst({
       where: { id: conversationId, companyId },
     });
+
+    // [SEC] Fallback: TicketId support
+    if (!conversation) {
+      const { ticketSyncService } = await import("./TicketSyncService");
+      const ticket = await ticketSyncService.findByIdWithCreator(conversationId);
+      if (ticket && ticket.companyId === companyId && ticket.conversationId) {
+        conversation = await conversationRepository.findFirst({
+          where: { id: ticket.conversationId, companyId },
+        });
+      }
+    }
 
     if (!conversation) {
       return { success: false, error: "Conversation not found" };
@@ -324,7 +365,7 @@ export const groupContactService = {
       });
 
       Logger.info(
-        `[GroupContactService] ✅ Added group participant to CRM: ${phone}`,
+        `[GroupContactService] [OK] Added group participant to CRM: ${phone}`,
       );
 
       return {

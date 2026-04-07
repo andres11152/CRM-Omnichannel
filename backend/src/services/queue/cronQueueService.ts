@@ -7,8 +7,8 @@ import TenantContextManager from "@/config/tenantContext";
 import {
   runGDPRCleanup,
   getSoftDeleteStats,
-} from "@/services/gdprCleanupService";
-import { notificationJobs } from "@/services/notificationJobs";
+} from "@/services/GdprCleanupService";
+import { notificationJobs } from "@/services/NotificationJobs";
 import { schedulerRepository } from "@/repositories/SchedulerRepository";
 import { whatsappService } from "@/whatsapp";
 import type { MediaPayload } from "@/whatsapp/core/types/whatsapp.types";
@@ -45,7 +45,7 @@ const withTimeout = <T>(
 export const cronQueue = new Queue(CRON_QUEUE_NAME, { connection });
 
 export const initCronWorker = async () => {
-  Logger.info(`[CronQueue] 🚀 Initializing Cron Queue Worker...`);
+  Logger.info(`[CronQueue]  Initializing Cron Queue Worker...`);
 
   const worker = new Worker(
     CRON_QUEUE_NAME,
@@ -172,7 +172,7 @@ export const initCronWorker = async () => {
   );
 
   worker.on("failed", (job, err) => {
-    Logger.error(`[CronQueue] ❌ Job ${job?.name} failed:`, err);
+    Logger.error(`[CronQueue] [ERROR] Job ${job?.name} failed:`, err);
   });
 
   // Schedule Jobs using BullMQ repeatable feature
@@ -212,7 +212,7 @@ export const initCronWorker = async () => {
     { repeat: { pattern: "0 3 * * *" }, jobId: "rep-failed-backups" },
   );
 
-  Logger.info(`[CronQueue] ✅ Scheduled 7 repeating jobs in Redis.`);
+  Logger.info(`[CronQueue] [OK] Scheduled 7 repeating jobs in Redis.`);
 
   return worker;
 };

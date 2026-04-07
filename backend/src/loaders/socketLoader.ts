@@ -6,16 +6,16 @@ import { WhatsAppEventType } from "@/whatsapp/core/events/WhatsAppEvents";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🏭 Socket & Event Loader
+ *  Socket & Event Loader
  * Initializes WebSocket gateway and bridges domain events to sockets.
  */
 export const initSocketGateway = async (httpServer: Server) => {
-  Logger.info("[Loader] 🔧 Initializing Gateway...");
+  Logger.info("[Loader]  Initializing Gateway...");
   await gateway.initialize(httpServer);
-  Logger.info("[Loader] ✅ Gateway initialized successfully");
+  Logger.info("[Loader] [OK] Gateway initialized successfully");
 
   // BRIDGE: WhatsApp Events -> Socket Gateway
-  Logger.info("[Loader] 🌉 Bridging WhatsApp events to Socket Gateway...");
+  Logger.info("[Loader]  Bridging WhatsApp events to Socket Gateway...");
   const eventBus = EventBus.getInstance();
 
   eventBus.subscribe(WhatsAppEventType.SESSION_CONNECTED, (event) => {
@@ -40,7 +40,7 @@ export const initSocketGateway = async (httpServer: Server) => {
 
     if (isReconnecting) {
       Logger.info(
-        `[Loader] 🔄 Session ${event.sessionId} reconnecting... (UI: CONNECTING)`,
+        `[Loader] [SYNC] Session ${event.sessionId} reconnecting... (UI: CONNECTING)`,
       );
     }
   });
@@ -53,13 +53,13 @@ export const initSocketGateway = async (httpServer: Server) => {
     });
   });
 
-  // 🔥 Legacy direct message propagation removed (Handled gracefully via SocketEventEmitter now)
+  //  Legacy direct message propagation removed (Handled gracefully via SocketEventEmitter now)
   eventBus.subscribe(WhatsAppEventType.MESSAGE_RECEIVED, (_event) => {
     // We strictly use `socketEventEmitter.sendMessageReceived(...)` dynamically from chatService
     // instead of dumping raw Bailey's Protobuf objects onto the Redis Socket bridge which crashed it.
   });
 
-  // 🟢 PRESENCE UPDATES (Typing indicators)
+  // [ONLINE] PRESENCE UPDATES (Typing indicators)
   eventBus.subscribe(WhatsAppEventType.PRESENCE_UPDATE, (event) => {
     try {
       const sanitized = JSON.parse(
@@ -70,11 +70,11 @@ export const initSocketGateway = async (httpServer: Server) => {
       );
       gateway.emitToCompany(event.companyId, "presence.update", sanitized);
     } catch (err) {
-      Logger.error(`[Loader] ❌ Failed to serialize presence for socket`, err);
+      Logger.error(`[Loader] [ERROR] Failed to serialize presence for socket`, err);
     }
   });
 
-  Logger.info("[Loader] ✅ Event Bridge established");
+  Logger.info("[Loader] [OK] Event Bridge established");
 
   // Status Sync on Connection
   const io = gateway.getIO();
@@ -82,11 +82,11 @@ export const initSocketGateway = async (httpServer: Server) => {
     io.on("connection", async (socket) => {
       const user = socket.data.user;
       if (user && user.companyId) {
-        // 🔄 Use Dynamic Import to avoid Circular Dependency OOM
+        // [SYNC] Use Dynamic Import to avoid Circular Dependency OOM
         const { whatsappService } = await import("@/whatsapp");
 
         Logger.debug(
-          `[Loader] 🔄 Syncing session status for ${user.id} (Company: ${user.companyId})`,
+          `[Loader] [SYNC] Syncing session status for ${user.id} (Company: ${user.companyId})`,
         );
 
         // Fetch status from Service (Memory First)
@@ -104,13 +104,13 @@ export const initSocketGateway = async (httpServer: Server) => {
         // ⌨️ TYPING INDICATOR HANDLER moved to socketGateway.ts (Single Responsibility)
         // Eliminado código duplicado para evitar doble ejecución de eventos.
 
-        // 🔄 MANUAL STATUS CHECK HANDLER
+        // [SYNC] MANUAL STATUS CHECK HANDLER
         // Allows frontend to request immediate status update (e.g. on "Update Data" click)
         socket.on("session.check_status", async () => {
           if (!user.companyId) return;
 
           Logger.debug(
-            `[Loader] 🔄 Manual status check requested by ${user.id}`,
+            `[Loader] [SYNC] Manual status check requested by ${user.id}`,
           );
           const { whatsappService } = await import("@/whatsapp");
           const sessions = await whatsappService.listSessions(user.companyId);

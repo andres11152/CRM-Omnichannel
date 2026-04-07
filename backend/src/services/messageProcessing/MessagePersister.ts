@@ -21,7 +21,7 @@ export interface MessagePersistParams {
 }
 
 /**
- * 💾 MESSAGE PERSISTER
+ * [SAVE] MESSAGE PERSISTER
  *
  * Single Responsibility: Deduplicates and persists messages.
  * Also updates conversation/contact timestamps.
@@ -79,7 +79,7 @@ export class MessagePersister {
     });
 
     // 4. TOUCH TIMESTAMPS (non-blocking)
-    await this.touchTimestamps(conversationId, contactId);
+    await this.touchTimestamps(companyId, conversationId, contactId);
 
     return newMessage as MessageWithSender;
   }
@@ -114,16 +114,17 @@ export class MessagePersister {
   }
 
   private async touchTimestamps(
+    companyId: string,
     conversationId: string,
     contactId?: string,
   ): Promise<void> {
-    await conversationRepository.update(conversationId, {
+    await conversationRepository.update(companyId, conversationId, {
       updatedAt: new Date(),
     });
 
     if (contactId) {
       await contactRepository
-        .update(contactId, { updatedAt: new Date() })
+        .update(companyId, contactId, { updatedAt: new Date() })
         .catch((e) =>
           Logger.warn("Contact timestamp update failed", { error: e }),
         );

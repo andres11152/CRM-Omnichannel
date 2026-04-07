@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { rolesService } from "@/services/rolesService";
+import { rolesService } from "@/services/RolesService";
 import { Logger } from "@/utils/logger";
 import { PermissionModule, PermissionAction } from "@/types/role.types";
 import { HTTP_STATUS } from "@/constants/httpStatus";

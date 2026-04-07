@@ -3,7 +3,7 @@ import { Logger } from "@/utils/logger";
 import { addSpanAttributes, getCurrentTraceId } from "@/utils/tracing";
 
 /**
- * 📊 STRUCTURED HTTP LOGGING MIDDLEWARE
+ * [STAT] STRUCTURED HTTP LOGGING MIDDLEWARE
  * Logs all HTTP requests/responses with OpenTelemetry traces
  */
 
@@ -74,7 +74,7 @@ export const httpLogger = (req: Request, res: Response, next: NextFunction) => {
 };
 
 /**
- * 🚨 ERROR LOGGING MIDDLEWARE
+ * [ALERT] ERROR LOGGING MIDDLEWARE
  * Structured error logging with stack traces
  */
 export const errorLogger = (

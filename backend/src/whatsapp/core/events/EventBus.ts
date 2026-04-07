@@ -59,7 +59,7 @@ export class EventBus extends EventEmitter {
     results.forEach((result, idx) => {
       if (result.status === "rejected") {
         console.error(
-          `[EventBus] 🚨 Handler at index ${idx} failed for event ${event.type}:`,
+          `[EventBus] [ALERT] Handler at index ${idx} failed for event ${event.type}:`,
           result.reason,
         );
       }

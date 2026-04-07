@@ -1,7 +1,7 @@
 import { WAMessage } from "@whiskeysockets/baileys";
 
 /**
- * 🛠️ WHATSAPP ID UTILITIES (100-Year Solution)
+ * [DEV] WHATSAPP ID UTILITIES (100-Year Solution)
  *
  * Centralized logic for parsing, sanitizing, and formatting WhatsApp JIDs.
  * Extracts real phone numbers and identifies Group vs User chats robustly.
@@ -27,6 +27,13 @@ export class WhatsAppIdUtils {
     const cleanUser = userPart.split(":")[0];
 
     return `${cleanUser}@${domain}`;
+  }
+
+  /**
+   * Identifies if a JID belongs to a Group.
+   */
+  static cleanChannelId(jid: string): string {
+    return jid.replace(/@.*$/, "").replace(/\D/g, "");
   }
 
   /**
@@ -69,7 +76,7 @@ export class WhatsAppIdUtils {
    * Extracts a standardized Phone Number from a JID.
    * Returns NULL if it's a group, LID, or invalid.
    *
-   * 🛡️ 100-YEAR ENTERPRISE FIX: NEVER returns LIDs as phone numbers.
+   * [SEC] 100-YEAR ENTERPRISE FIX: NEVER returns LIDs as phone numbers.
    * LIDs are internal WhatsApp identifiers and should NEVER be treated as phones.
    */
   static getPhoneNumber(jid: string | null | undefined): string | null {
@@ -78,25 +85,24 @@ export class WhatsAppIdUtils {
 
     if (this.isGroup(clean)) return null; // Groups don't have phone numbers
 
-    // 🛡️ 100-YEAR FIX: LIDs should NEVER be returned as phone numbers
-    if (this.isLid(clean)) {
-      return null; // CRITICAL: Do not return LID as phone
-    }
+    // [SEC] REVERTED: We now ALLOW LIDs to be returned as the identifier
+    // because WhatsApp Communities use these identifiers to mask real phone numbers.
+    // Treating LIDs as the primary ID for the CRM/Contact.
 
     // Remove domain
     const userPart = clean.split("@")[0].split(":")[0];
 
-    // 🛡️ BLACKLIST: Known invalid patterns
+    // [SEC] BLACKLIST: Known invalid patterns
     if (userPart.startsWith("000")) return null;
     if (userPart.startsWith("40000")) return null;
 
     // Ensure it's numeric
     if (!/^\d+$/.test(userPart)) return null;
 
-    // Standard phone length validation (E.164: 7-15 digits)
-    if (userPart.length < 7 || userPart.length > 15) return null;
+    // Standard phone length validation (E.164: usually 15, but LIDs are 20-30)
+    if (userPart.length < 7 || userPart.length > 30) return null;
 
-    // 🛡️ Final validation: Is this a realistic phone number?
+    // [SEC] Final validation: Is this a realistic phone number OR LID?
     if (!this.isRealPhoneNumber(userPart)) {
       return null;
     }
@@ -115,7 +121,7 @@ export class WhatsAppIdUtils {
   }
 
   /**
-   * 🛡️ 100-YEAR ENTERPRISE FIX: Real Phone Number Validation
+   * [SEC] 100-YEAR ENTERPRISE FIX: Real Phone Number Validation
    *
    * Validates that a numeric string is likely a real phone number.
    * Uses heuristics based on E.164 format and known patterns.
@@ -128,15 +134,14 @@ export class WhatsAppIdUtils {
   static isRealPhoneNumber(digits: string): boolean {
     if (!digits || !/^\d+$/.test(digits)) return false;
 
-    // Length validation (E.164: min 7, max 15)
-    if (digits.length < 7 || digits.length > 15) return false;
+    // Length validation (E.164 usually 7-15, but LIDs can be up to 25+)
+    if (digits.length < 7 || digits.length > 30) return false;
 
-    // 🛡️ LID PATTERNS: Internal WhatsApp IDs that look like phones
-    // Pattern 1: Starts with 1 and is roughly 15-20 digits (Typical LID)
-    // Real international numbers max out at 15. We filter ONLY obviously wrong ones.
-    if (digits.length > 15) return false;
+    // [SEC] REVERTED 100-YEAR FIX: LIDs are now allowed and treated as valid recipients
+    // WhatsApp Communities hide real numbers and use 15-20 digit LIDs.
+    // The user explicitly requested to see and interact with these IDs.
 
-    // 🛡️ REVERTED 100-YEAR FIX: The previous rule blocking starting with 4 or 5 was TOO AGGRESSIVE.
+    // [SEC] REVERTED 100-YEAR FIX: The previous rule blocking starting with 4 or 5 was TOO AGGRESSIVE.
     // It blocked valid Colombia (57...), Brazil (55...), Mexico (52...) numbers.
     // We now rely primarily on length and explicit @lid domain checks.
 
@@ -153,7 +158,7 @@ export class WhatsAppIdUtils {
   }
 
   /**
-   * 🛡️ 100-YEAR FIX: Enhanced LID Detection
+   * [SEC] 100-YEAR FIX: Enhanced LID Detection
    *
    * Detects "Linked Device IDs" which hide the real phone number.
    * LIDs have specific patterns:
@@ -171,11 +176,11 @@ export class WhatsAppIdUtils {
     // Only check numeric patterns
     if (!/^\d+$/.test(userPart)) return false;
 
-    // 🔍 OBSERVED LID PATTERNS:
+    // [SEARCH] OBSERVED LID PATTERNS:
     // - LIDs are strictly numeric identifiers used internally by WhatsApp
     // - They resemble phone numbers but follow specific ranges assigned by WhatsApp
 
-    // 🛡️ 100-YEAR FIX: Relied too heavily on heuristics previously.
+    // [SEC] 100-YEAR FIX: Relied too heavily on heuristics previously.
     // If the JID came from Baileys participants list and DOES NOT have @lid,
     // we should assume it is a phone number unless it is blatantly invalid.
     // Real international numbers can start with 1, 2, etc and be 15 digits.

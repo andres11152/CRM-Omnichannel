@@ -318,8 +318,9 @@ model Company {
   // RBAC - Custom Roles
   roles   Role[]
   Message Message[]
-  notifications Notification[]
-  transactions  BillingTransaction[]
+  notifications      Notification[]
+  transactions       BillingTransaction[]
+  workflowExecutions WorkflowExecution[]
 
   @@map("companies")
 }
@@ -446,15 +447,25 @@ model Workflow {
 }
 
 model WorkflowExecution {
-  id          String    @id @default(cuid())
-  workflowId  String
-  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  companyId  String?  // 🛡️ Denormalized for native RLS and high-performance querying
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
   status      String
   startedAt   DateTime  @default(now())
   completedAt DateTime?
   logs        Json?
   error       String?
 
+  // === HIGH-PERFORMANCE ANALYTICS INDEXES ===
+  // 1. Audit Dashboard: "Latest executions for this company"
+  @@index([companyId, startedAt(sort: Desc)])
+  // 2. Health Monitor: "Find failed executions for Workflow X"
+  @@index([workflowId, status, startedAt(sort: Desc)])
+  // 3. Execution History Search
+  @@index([companyId, workflowId, status, startedAt(sort: Desc)])
   @@map("workflow_executions")
 }
 

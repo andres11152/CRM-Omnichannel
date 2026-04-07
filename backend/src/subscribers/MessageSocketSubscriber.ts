@@ -5,7 +5,7 @@ import {
 } from "@/events/DomainEventBus";
 import { gateway } from "@/gateways/socketGateway";
 import { Logger } from "@/utils/logger";
-import { SocketEventEmitter } from "@/services/socketEventEmitter";
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 
@@ -70,14 +70,14 @@ export class MessageSocketSubscriber {
       this.socketEmitter.emitMessageReceived(
         fullMessage,
         fullConversation,
-        activeTicketId, // ✅ Pass ticketId if found
+        activeTicketId, // [OK] Pass ticketId if found
       );
 
       Logger.info(
-        `[SocketSubscriber] ✅ Emitted socket events for ${message.id}`,
+        `[SocketSubscriber] [OK] Emitted socket events for ${message.id}`,
       );
     } catch (error) {
-      Logger.error("[SocketSubscriber] ❌ Failed to emit socket event:", error);
+      Logger.error("[SocketSubscriber] [ERROR] Failed to emit socket event:", error);
     }
   }
 }

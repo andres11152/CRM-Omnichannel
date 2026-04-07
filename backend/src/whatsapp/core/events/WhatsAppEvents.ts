@@ -9,9 +9,9 @@ export enum WhatsAppEventType {
   MESSAGE_SENT = "message.sent",
   MESSAGE_FAILED = "message.failed",
   MESSAGE_UPDATE = "message.update", // Added for status updates
-  MESSAGE_REVOKED = "message.revoked", // 🗑️ Message deleted ("for everyone")
-  MESSAGE_REACTION = "message.reaction", // ❤️ Added for reactions
-  PRESENCE_UPDATE = "presence.update", // ✅ Added for Typing Indicators
+  MESSAGE_REVOKED = "message.revoked", // ️ Message deleted ("for everyone")
+  MESSAGE_REACTION = "message.reaction", // ️ Added for reactions
+  PRESENCE_UPDATE = "presence.update", // [OK] Added for Typing Indicators
   CONTACT_UPDATED = "contact.updated",
   RATE_LIMIT_EXCEEDED = "rate_limit.exceeded",
 }

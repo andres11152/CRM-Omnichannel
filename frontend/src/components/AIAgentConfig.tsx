@@ -478,7 +478,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
                               }}
                               className="w-full appearance-none bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3.5 text-sm font-medium focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all outline-none cursor-pointer"
                             >
-                              <optgroup label="🟢 OpenAI">
+                              <optgroup label="[ONLINE] OpenAI">
                                 <option value="OPENAI|gpt-4o">GPT-4o</option>
                                 <option value="OPENAI|gpt-4-turbo">
                                   GPT-4 Turbo
@@ -487,7 +487,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
                                   GPT-3.5 Turbo
                                 </option>
                               </optgroup>
-                              <optgroup label="✨ Google Gemini">
+                              <optgroup label=" Google Gemini">
                                 <option value="GEMINI|gemini-2.5-flash">
                                   Gemini 2.5 Flash (Recomendado)
                                 </option>

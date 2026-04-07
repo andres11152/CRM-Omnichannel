@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 🔐 AUTHENTICATION SCHEMAS
+ * [AUTH] AUTHENTICATION SCHEMAS
  *
  * Validation for authentication and user management workflows.
  */

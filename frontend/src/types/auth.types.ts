@@ -1,7 +1,7 @@
 import { BaseEntity } from "./common.types";
 
 /**
- * 🔐 Auth & User Types
+ * [AUTH] Auth & User Types
  */
 
 export type UserRole =

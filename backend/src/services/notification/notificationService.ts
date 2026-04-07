@@ -8,13 +8,13 @@ import { NotificationTemplates } from "./notificationTemplates";
 import { CreateEmailDTO } from "@/types/email.types";
 
 /**
- * 📧 NOTIFICATION SERVICE
+ *  NOTIFICATION SERVICE
  * Complete email notification system for SaaS alerts
  */
 
 export class NotificationService {
   /**
-   * 💰 BILLING & SUBSCRIPTION NOTIFICATIONS
+   * [BILLING] BILLING & SUBSCRIPTION NOTIFICATIONS
    */
 
   async sendQuotaWarning(
@@ -27,7 +27,7 @@ export class NotificationService {
     const company = await this.getCompany(companyId);
     const admins = await this.getCompanyAdmins(companyId);
 
-    const subject = `⚠️ ${quotaType} Quota Warning - ${percentage}% Used`;
+    const subject = `[WARNING] ${quotaType} Quota Warning - ${percentage}% Used`;
     const html = NotificationTemplates.quotaWarning(
       quotaType,
       current,
@@ -44,7 +44,7 @@ export class NotificationService {
     const company = await this.getCompany(companyId);
     const admins = await this.getCompanyAdmins(companyId);
 
-    const subject = `🚫 ${quotaType} Quota Exceeded - Action Required`;
+    const subject = ` ${quotaType} Quota Exceeded - Action Required`;
     const html = NotificationTemplates.quotaExceeded(quotaType, company.name);
 
     await this.sendToAdmins(companyId, admins, subject, html);
@@ -70,7 +70,7 @@ export class NotificationService {
       (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
     );
 
-    const subject = `⚠️ Subscription Expiring in ${daysUntilExpiry} Days`;
+    const subject = `[WARNING] Subscription Expiring in ${daysUntilExpiry} Days`;
     const html = NotificationTemplates.subscriptionExpiring(
       expiryDate,
       company.name,
@@ -87,7 +87,7 @@ export class NotificationService {
     const company = await this.getCompany(companyId);
     const admins = await this.getCompanyAdmins(companyId);
 
-    const subject = `❌ Payment Failed - Action Required`;
+    const subject = `[ERROR] Payment Failed - Action Required`;
     const html = NotificationTemplates.paymentFailed(
       amount,
       reason,
@@ -103,7 +103,7 @@ export class NotificationService {
   }
 
   /**
-   * 🎫 TICKET NOTIFICATIONS
+   *  TICKET NOTIFICATIONS
    */
 
   async sendTicketAssigned(ticketId: string, userId: string) {
@@ -115,7 +115,7 @@ export class NotificationService {
     const contactName = ticket.conversation?.contact?.name || "Unknown Contact";
     const assignedName = ticket.assignedTo.name || "Agent";
 
-    const subject = `🎫 New Ticket Assigned: #${ticket.id.substring(0, 8)}`;
+    const subject = ` New Ticket Assigned: #${ticket.id.substring(0, 8)}`;
     const html = NotificationTemplates.ticketAssigned(
       ticket.id,
       assignedName,
@@ -143,7 +143,7 @@ export class NotificationService {
     const contactName = ticket.conversation?.contact?.name || "Unknown Contact";
     const assignedName = ticket.assignedTo.name || "Agent";
 
-    const subject = `💬 New Reply on Ticket #${ticket.id.substring(0, 8)}`;
+    const subject = `[CHAT] New Reply on Ticket #${ticket.id.substring(0, 8)}`;
     const html = NotificationTemplates.ticketReply(
       ticket.id,
       assignedName,
@@ -162,14 +162,14 @@ export class NotificationService {
   }
 
   /**
-   * 📱 WHATSAPP NOTIFICATIONS
+   * [APP] WHATSAPP NOTIFICATIONS
    */
 
   async sendWhatsAppDisconnected(companyId: string, sessionId: string) {
     const company = await this.getCompany(companyId);
     const admins = await this.getCompanyAdmins(companyId);
 
-    const subject = `⚠️ WhatsApp Disconnected - Action Required`;
+    const subject = `[WARNING] WhatsApp Disconnected - Action Required`;
     const html = NotificationTemplates.whatsappDisconnected(
       sessionId,
       company.name,
@@ -183,7 +183,7 @@ export class NotificationService {
   }
 
   /**
-   * 📊 CAMPAIGN NOTIFICATIONS
+   * [STAT] CAMPAIGN NOTIFICATIONS
    */
 
   async sendCampaignCompleted(
@@ -198,7 +198,7 @@ export class NotificationService {
     const successRate =
       stats.total > 0 ? ((stats.sent / stats.total) * 100).toFixed(1) : "0.0";
 
-    const subject = `✅ Campaign "${campaign.name}" Completed`;
+    const subject = `[OK] Campaign "${campaign.name}" Completed`;
     const html = NotificationTemplates.campaignCompleted(
       campaign.id,
       campaign.name,
@@ -222,7 +222,7 @@ export class NotificationService {
   }
 
   /**
-   * 🔒 SECURITY NOTIFICATIONS
+   *  SECURITY NOTIFICATIONS
    */
 
   async sendSecurityAlert(
@@ -233,7 +233,7 @@ export class NotificationService {
     const company = await this.getCompany(companyId);
     const admins = await this.getCompanyAdmins(companyId);
 
-    const subject = `🔒 Security Alert: ${alertType}`;
+    const subject = ` Security Alert: ${alertType}`;
     const html = NotificationTemplates.securityAlert(
       alertType,
       details,
@@ -249,14 +249,14 @@ export class NotificationService {
   }
 
   /**
-   * 💾 BACKUP NOTIFICATIONS
+   * [SAVE] BACKUP NOTIFICATIONS
    */
 
   async sendBackupFailed(companyId: string, backupType: string, error: string) {
     const company = await this.getCompany(companyId);
     const admins = await this.getCompanyAdmins(companyId);
 
-    const subject = `⚠️ Backup Failed: ${backupType}`;
+    const subject = `[WARNING] Backup Failed: ${backupType}`;
     const html = NotificationTemplates.backupFailed(
       backupType,
       error,
@@ -272,7 +272,7 @@ export class NotificationService {
   }
 
   /**
-   * 📦 STORAGE NOTIFICATIONS
+   * [PKG] STORAGE NOTIFICATIONS
    */
 
   async sendStorageWarning(
@@ -287,7 +287,7 @@ export class NotificationService {
     const usedMB = (used / 1024 / 1024).toFixed(2);
     const limitMB = (limit / 1024 / 1024).toFixed(2);
 
-    const subject = `⚠️ Storage Warning - ${percentage}% Used`;
+    const subject = `[WARNING] Storage Warning - ${percentage}% Used`;
     const html = NotificationTemplates.storageWarning(
       usedMB,
       limitMB,
@@ -300,7 +300,7 @@ export class NotificationService {
   }
 
   /**
-   * 🔧 HELPER METHODS
+   *  HELPER METHODS
    */
 
   private async getCompany(companyId: string) {

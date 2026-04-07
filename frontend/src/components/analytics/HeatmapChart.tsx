@@ -61,7 +61,7 @@ export const HeatmapChart: React.FC<Props> = ({ data }) => {
   return (
     <div className="h-80 w-full bg-white dark:bg-reply-surface-dark rounded-xl p-4 border border-gray-100 dark:border-reply-border-dark">
       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-        <span className="text-xl">🔥</span> Mapa de Calor: Volumen de Mensajes
+        <span className="text-xl"></span> Mapa de Calor: Volumen de Mensajes
       </h3>
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>

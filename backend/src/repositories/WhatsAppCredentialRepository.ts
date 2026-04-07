@@ -2,7 +2,7 @@ import { prisma } from "@/config/database";
 import { WhatsAppCredential, Prisma } from "@prisma/client";
 
 /**
- * 🔐 WHATSAPP CREDENTIAL REPOSITORY
+ * [AUTH] WHATSAPP CREDENTIAL REPOSITORY
  *
  * Handles all database operations for WhatsApp authentication credentials.
  * Used exclusively by AuthProvider for session key management.

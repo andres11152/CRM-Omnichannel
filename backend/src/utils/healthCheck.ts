@@ -4,10 +4,10 @@ import redisClient from "@/config/redis";
 import { Logger } from "@/utils/logger";
 
 /**
- * 🏥 COMPREHENSIVE HEALTH CHECK SYSTEM
+ *  COMPREHENSIVE HEALTH CHECK SYSTEM
  * Checks all critical services and returns detailed status.
  *
- * 🛡️ PERFORMANCE: DB and Redis checks are cached for HEALTH_CACHE_TTL_MS
+ * [SEC] PERFORMANCE: DB and Redis checks are cached for HEALTH_CACHE_TTL_MS
  * to prevent connection pool exhaustion under concurrent load (e.g., K8s probes,
  * load balancers, or stress tests hitting /health simultaneously).
  */
@@ -54,7 +54,7 @@ interface MemoryStatus extends ServiceStatus {
 }
 
 /**
- * 🏥 Detailed Health Check Endpoint
+ *  Detailed Health Check Endpoint
  */
 export const healthCheckHandler = async (
   req: Request,
@@ -104,7 +104,7 @@ export const healthCheckHandler = async (
   };
 
   // Set appropriate HTTP status code
-  // 🛡️ FIX: "degraded" means the service works but with warnings — NOT a 503.
+  // [SEC] FIX: "degraded" means the service works but with warnings — NOT a 503.
   // Only "unhealthy" should return 503 (Service Unavailable).
   const httpStatus = overallStatus === "unhealthy" ? 503 : 200;
 
@@ -112,7 +112,7 @@ export const healthCheckHandler = async (
 };
 
 /**
- * 🔍 Check Database Connection (with TTL cache)
+ * [SEARCH] Check Database Connection (with TTL cache)
  * Prevents connection pool exhaustion under concurrent health probes.
  */
 async function checkDatabase(): Promise<ServiceStatus> {
@@ -154,7 +154,7 @@ async function checkDatabase(): Promise<ServiceStatus> {
 }
 
 /**
- * 🔍 Check Redis Connection (with TTL cache)
+ * [SEARCH] Check Redis Connection (with TTL cache)
  * Prevents Redis ping flood under concurrent health probes.
  */
 async function checkRedis(): Promise<ServiceStatus> {
@@ -210,7 +210,7 @@ async function checkRedis(): Promise<ServiceStatus> {
 }
 
 /**
- * 🔍 Check Memory Usage
+ * [SEARCH] Check Memory Usage
  */
 function checkMemory(): MemoryStatus {
   const usage = process.memoryUsage();
@@ -230,7 +230,7 @@ function checkMemory(): MemoryStatus {
 }
 
 /**
- * 🏥 Simple Liveness Probe (for Kubernetes)
+ *  Simple Liveness Probe (for Kubernetes)
  */
 export const livenessProbe = (req: Request, res: Response): void => {
   res.status(200).json({
@@ -240,7 +240,7 @@ export const livenessProbe = (req: Request, res: Response): void => {
 };
 
 /**
- * 🏥 Readiness Probe (for Kubernetes)
+ *  Readiness Probe (for Kubernetes)
  * Uses the cached DB check to avoid pool exhaustion.
  */
 export const readinessProbe = async (

@@ -1,7 +1,7 @@
 import { WAMessage } from "@whiskeysockets/baileys";
 import { User, Conversation, MediaType } from "@prisma/client";
 import { Logger } from "@/utils/logger";
-import { chatService } from "@/services/chatService";
+import { chatService } from "@/services/ChatService";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 import { IdentityResolverService } from "./IdentityResolverService";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
@@ -16,7 +16,9 @@ export interface OrchestratedEntities {
   customerUser: User | null;
   conversation: Conversation & { participants: User[] };
   isGroup: boolean;
+  isFromMe: boolean;
   cleanRemoteJid: string;
+  remoteJid: string;
 }
 
 export class InboundOrchestratorService {
@@ -27,7 +29,7 @@ export class InboundOrchestratorService {
   ) {}
 
   /**
-   * 🔍 ENTITY RESOLUTION
+   * ENTITY RESOLUTION
    * Resolves or creates the User and Conversation associated with an incoming message.
    */
   async resolveEntities(
@@ -36,8 +38,8 @@ export class InboundOrchestratorService {
     companyId: string,
     sessionPhone?: string,
   ): Promise<OrchestratedEntities | null> {
-    // 🔍 1. Identity Resolution
-    const { cleanRemoteJid } = await this.identityResolver.resolveMessageJid(
+    // 1. Identity Resolution
+    const { cleanRemoteJid, remoteJid } = await this.identityResolver.resolveMessageJid(
       message,
       sessionId,
       companyId,
@@ -49,14 +51,16 @@ export class InboundOrchestratorService {
     let isFromMe = message.key.fromMe || false;
 
     // Detect if "fromMe" even if Baileys doesn't report it (multi-device)
-    if (!isFromMe && isGroup && message.key.participant) {
-      const senderPhone = WhatsAppIdUtils.getPhoneNumber(message.key.participant);
-      if (senderPhone && sessionPhone && senderPhone === sessionPhone) {
-        isFromMe = true;
-      }
+    // Checks if the sender matches our session phone
+    const senderJid = this.identityResolver.resolveSenderJid(message, cleanRemoteJid, isGroup);
+    if (!isFromMe && senderJid) {
+       const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
+       if (senderPhone && sessionPhone && senderPhone === sessionPhone) {
+         isFromMe = true;
+       }
     }
 
-    // 🛡️ 2. Spam Gate
+    // 2. Spam Gate
     if (!isFromMe && !isGroup) {
       const senderPhone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
       if (senderPhone) {
@@ -65,13 +69,13 @@ export class InboundOrchestratorService {
           select: { id: true },
         });
         if (blocked) {
-          Logger.info(`[Orchestrator] 🚫 Blocked: ${senderPhone}`);
+          Logger.info(`[Orchestrator] BLOCKED: ${senderPhone}`);
           return null;
         }
       }
     }
 
-    // 👤 3. User Resolution
+    // 3. User Resolution
     let customerUser: User | null = null;
     const chatUniqueId = cleanRemoteJid.split("@")[0];
     const chatEmail = `${chatUniqueId}@whatsapp.user`;
@@ -103,8 +107,8 @@ export class InboundOrchestratorService {
       });
     }
 
-    // 💬 4. Conversation Resolution
-    // 🛡️ ENTERPRISE FIX: Only attempt LID-based lookup if the JID is actually a LID.
+    // 4. Conversation Resolution
+    // ENTERPRISE FIX: Only attempt LID-based lookup if the JID is actually a LID.
     // Running LID heuristics (name matching, brute force store) for @g.us or normal JIDs
     // risks matching the WRONG conversation (e.g., routing a group message to an individual chat).
     let conversation: (Conversation & { participants: User[] }) | null = null;
@@ -122,7 +126,7 @@ export class InboundOrchestratorService {
 
     if (!conversation) {
       const found = await chatService.findConversation(companyId, chatUniqueId, chatEmail);
-      if (found) conversation = await chatService.getFullConversation(found.id) as (Conversation & { participants: User[] });
+      if (found) conversation = await chatService.getFullConversation(companyId, found.id) as (Conversation & { participants: User[] });
     }
 
     if (!conversation) {
@@ -130,14 +134,14 @@ export class InboundOrchestratorService {
       let groupMetadata;
 
       if (isGroup) {
-        conversationSubject = `📢 Grupo ${chatUniqueId.slice(0, 8)}...`;
+        conversationSubject = `[Grupo] ${chatUniqueId.slice(0, 8)}...`;
         const sock = this.sessionManager.getSession(sessionId);
         if (sock) {
           try {
-            const info = await sock.groupMetadata(cleanRemoteJid);
-            conversationSubject = `📢 ${info.subject || "Grupo"}`;
+            const info = await sock.groupMetadata(remoteJid);
+            conversationSubject = info.subject || "Grupo";
 
-            // 🏗️ ENTERPRISE: Build rich participant list for sidebar display
+            // ENTERPRISE: Build rich participant list for sidebar display
             const participantNames = info.participants
               ?.slice(0, 10)
               .map((p) => p.id?.split("@")[0])
@@ -145,7 +149,7 @@ export class InboundOrchestratorService {
 
             let groupPicUrl: string | null = null;
             try {
-              groupPicUrl = await sock.profilePictureUrl(cleanRemoteJid, "image").catch(() => null);
+              groupPicUrl = await sock.profilePictureUrl(remoteJid, "image").catch(() => null);
             } catch { /* ignore */ }
 
             groupMetadata = {
@@ -156,7 +160,7 @@ export class InboundOrchestratorService {
               participants: participantNames,
             };
           } catch (e) {
-            Logger.warn(`[Orchestrator] Failed to fetch group metadata for ${cleanRemoteJid}`, e);
+            Logger.warn(`[Orchestrator] Failed to fetch group metadata for ${remoteJid}`, e);
           }
         }
       }
@@ -186,18 +190,18 @@ export class InboundOrchestratorService {
         });
       }
 
-      conversation = (await chatService.getFullConversation(newConv.id)) as Conversation & { participants: User[] };
+      conversation = (await chatService.getFullConversation(companyId, newConv.id)) as Conversation & { participants: User[] };
     }
 
     if (conversation && ["CLOSED", "RESOLVED"].includes(conversation.status)) {
-      await chatService.updateConversation(conversation.id, { status: "OPEN" });
+      await chatService.updateConversation(companyId, conversation.id, { status: "OPEN" });
     }
 
-    return { customerUser, conversation: conversation!, isGroup, cleanRemoteJid };
+    return { customerUser, conversation: conversation!, isGroup, isFromMe, cleanRemoteJid, remoteJid };
   }
 
   /**
-   * 💾 PERSISTENCE & TICKETING
+   * PERSISTENCE & TICKETING
    * Saves the message to DB and ensures an active ticket exists.
    */
   async saveMessageAndTicket(params: {
@@ -211,9 +215,9 @@ export class InboundOrchestratorService {
     defaultQueueId?: string | null;
   }) {
     const { message, messageId, entities, content, companyId, sessionPhone, defaultQueueId } = params;
-    const { conversation, customerUser, isGroup } = entities;
+    const { conversation, customerUser, isGroup, isFromMe } = entities;
 
-    const isOutbound = message.key.fromMe;
+    const isOutbound = isFromMe;
     let dbSenderId = customerUser?.id;
 
     if (isOutbound) {
@@ -245,7 +249,7 @@ export class InboundOrchestratorService {
     });
 
     let ticketId: string | undefined;
-    if (!isOutbound && customerUser && !isGroup) {
+    if (!isOutbound && customerUser) {
       try {
         const ticket = await chatService.ensureTicket(
           companyId,
@@ -259,6 +263,11 @@ export class InboundOrchestratorService {
       } catch (e) {
         Logger.error("[Orchestrator] Ticket creation failed", e);
       }
+    } else {
+      // For outbound (phone) messages, resolve the active ticket if it exists
+      // to ensure frontend Query Cache alignment
+      const activeTicket = await chatService.findActiveTicket(companyId, conversation.id);
+      ticketId = activeTicket?.id;
     }
 
     return { savedMessage, ticketId };

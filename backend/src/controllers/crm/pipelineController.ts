@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { AuthenticatedRequest } from "../../types";
-import { pipelineService } from "../../services/pipelineService";
+import { pipelineService } from "../../services/PipelineService";
 import { Logger } from "../../utils/logger";
 import {
   CreatePipelineBodySchema,

@@ -30,7 +30,7 @@ import {
 const router = Router();
 
 /**
- * 🔐 AUTHENTICATION ROUTES
+ * [AUTH] AUTHENTICATION ROUTES
  * All routes include appropriate rate limiting to prevent abuse
  */
 
@@ -70,14 +70,14 @@ router.patch(
   validate(UpdatePasswordSchema),
   updatePassword,
 );
-// 🏢 ENTERPRISE: Server-side logout (destroy session + blacklist token)
+//  ENTERPRISE: Server-side logout (destroy session + blacklist token)
 router.post("/logout", protect, logout);
 
-// 🔄 TOKEN REFRESH: Exchange refresh cookie for new access token
+// [SYNC] TOKEN REFRESH: Exchange refresh cookie for new access token
 // No protect needed — uses refresh_token cookie instead
 router.post("/refresh", refreshToken);
 
-// 📋 ACTIVE SESSIONS: List/manage user's devices
+//  ACTIVE SESSIONS: List/manage user's devices
 router.get("/sessions", protect, getActiveSessions);
 router.delete(
   "/sessions/:sessionId",

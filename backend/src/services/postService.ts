@@ -3,7 +3,7 @@ import { postRepository } from "@/repositories/PostRepository";
 import { Prisma } from "@prisma/client";
 
 /**
- * 🛠️ STRICT TYPES FOR POSTS
+ * [DEV] STRICT TYPES FOR POSTS
  */
 type PostWithAuthor = Prisma.PostGetPayload<{
   include: { author: { select: { id: true, name: true, companyId: true } } };
@@ -19,10 +19,10 @@ type PostWithAuthorAndReplies = Prisma.PostGetPayload<{
 }>;
 
 /**
- * 📝 POST CRUD SERVICE
+ *  POST CRUD SERVICE
  *
  * Business logic for internal posts/feed.
- * 🛡️ All queries scoped by author.companyId for multi-tenant isolation.
+ * [SEC] All queries scoped by author.companyId for multi-tenant isolation.
  */
 
 export const postService = {
@@ -73,7 +73,7 @@ export const postService = {
       throw new AppError("No se encontró ningún post con ese ID", 404);
     }
 
-    // 🛡️ Multi-tenant + ownership check
+    // [SEC] Multi-tenant + ownership check
     if (post.author.companyId !== companyId) {
       throw new AppError("Post not found", 404);
     }
@@ -98,7 +98,7 @@ export const postService = {
       throw new AppError("No se encontró ningún post con ese ID", 404);
     }
 
-    // 🛡️ Multi-tenant + ownership check
+    // [SEC] Multi-tenant + ownership check
     if (post.author.companyId !== companyId) {
       throw new AppError("Post not found", 404);
     }
@@ -110,3 +110,4 @@ export const postService = {
     await postRepository.delete({ where: { id } });
   },
 };
+

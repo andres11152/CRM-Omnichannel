@@ -3,7 +3,7 @@ import { usePushNotifications, registerServiceWorker } from '@/hooks/usePushNoti
 import '../styles/PushNotificationSettings.css';
 
 /**
- * 🔔 PUSH NOTIFICATION SETTINGS COMPONENT
+ *  PUSH NOTIFICATION SETTINGS COMPONENT
  * UI for managing push notification preferences
  */
 
@@ -38,7 +38,7 @@ export const PushNotificationSettings: React.FC = () => {
     <div className="push-notification-settings">
       <div className="setting-card">
         <div className="setting-header">
-          <h3>🔔 Push Notifications</h3>
+          <h3> Push Notifications</h3>
           <div className={`status-badge ${isSubscribed ? 'active' : 'inactive'}`}>
             {isSubscribed ? 'Enabled' : 'Disabled'}
           </div>
@@ -51,7 +51,7 @@ export const PushNotificationSettings: React.FC = () => {
         <div className="permission-status">
           <strong>Permission Status:</strong>{' '}
           <span className={`permission-${permission}`}>
-            {permission === 'granted' ? '✅ Granted' : permission === 'denied' ? '❌ Denied' : '⚠️ Not requested'}
+            {permission === 'granted' ? '[OK] Granted' : permission === 'denied' ? '[ERROR] Denied' : '[WARNING] Not requested'}
           </span>
         </div>
 
@@ -84,7 +84,7 @@ export const PushNotificationSettings: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span>🔔</span>
+                  <span></span>
                   Enable Push Notifications
                 </>
               )}
@@ -102,7 +102,7 @@ export const PushNotificationSettings: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span>🔕</span>
+                  <span></span>
                   Disable Push Notifications
                 </>
               )}
@@ -114,12 +114,12 @@ export const PushNotificationSettings: React.FC = () => {
           <div className="notification-info">
             <h4>You'll receive notifications for:</h4>
             <ul>
-              <li>✉️ New messages from customers</li>
-              <li>🎫 Tickets assigned to you</li>
-              <li>📊 Campaign completion updates</li>
-              <li>⚠️ Quota warnings and billing alerts</li>
-              <li>📱 WhatsApp connection status</li>
-              <li>🔐 Security alerts</li>
+              <li>️ New messages from customers</li>
+              <li> Tickets assigned to you</li>
+              <li>[STAT] Campaign completion updates</li>
+              <li>[WARNING] Quota warnings and billing alerts</li>
+              <li>[APP] WhatsApp connection status</li>
+              <li>[AUTH] Security alerts</li>
             </ul>
           </div>
         )}

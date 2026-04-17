@@ -4,6 +4,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
 import { webhookService } from "@/services/WebhookService";
+import { runWithCompanyId } from "@/context/requestContext";
 import {
   whatsappWebhookSchema,
   createWebhookSchema,
@@ -39,8 +40,10 @@ export const handleWhatsappWebhook = catchAsync(
     // 2. Respond immediately
     res.status(200).json({ status: "received" });
 
-    // 3. Delegate Async Logic to Service
-    webhookService.processIncomingWhatsapp(companyId, payload.data);
+    // 3. Delegate Async Logic to Service with Security Context
+    runWithCompanyId(companyId, () =>
+      webhookService.processIncomingWhatsapp(companyId, payload.data),
+    );
   },
 );
 
@@ -130,7 +133,7 @@ export const getWebhookLogs = catchAsync(
     const companyId = req.user?.companyId;
     if (!companyId) throw new AppError("Unauthorized", 401);
 
-    const logs = webhookService.getLogs(companyId);
+    const logs = await webhookService.getLogs(companyId);
 
     return res.status(200).json({ status: "success", data: logs });
   },
@@ -149,5 +152,19 @@ export const getSigningSecret = catchAsync(
     return res
       .status(200)
       .json({ status: "success", data: { secretKey: secret } });
+  },
+);
+
+export const replayLog = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.user?.companyId;
+    if (!companyId) throw new AppError("Unauthorized", 401);
+
+    const { id } = req.params;
+    if (!id) throw new AppError("Log ID is required", 400);
+
+    const result = await webhookService.replayLog(companyId, id);
+
+    return res.status(200).json({ status: "success", data: result });
   },
 );

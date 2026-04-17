@@ -72,19 +72,19 @@ export const NotificationIdParamSchema = z.object({
 
 export const UpdateAIConfigSchema = z.object({
   body: z.object({
-    openaiApiKey: z.string().max(500).optional(),
-    defaultModel: z.string().max(100).optional(),
-    enabled: z.boolean().optional(),
+    openaiKey: z.string().max(500).optional().nullable(),
+    geminiKey: z.string().max(500).optional().nullable(),
   }),
 });
 
 export const CreateAssistantSchema = z.object({
   body: z.object({
     name: z.string().min(1, "Name is required").max(100).trim(),
-    instructions: z.string().max(5000, "Instructions too long").optional(),
-    model: z.string().max(100).optional(),
+    description: z.string().max(1000).optional().nullable(),
+    modelProvider: z.string().max(100).optional().nullable(),
+    modelName: z.string().max(100).optional().nullable(),
+    systemPrompt: z.string().max(5000).optional().nullable(),
     temperature: z.number().min(0).max(2).optional(),
-    isDefault: z.boolean().optional(),
   }),
 });
 
@@ -94,10 +94,11 @@ export const UpdateAssistantSchema = z.object({
   }),
   body: z.object({
     name: z.string().min(1).max(100).trim().optional(),
-    instructions: z.string().max(5000).optional(),
-    model: z.string().max(100).optional(),
+    description: z.string().max(1000).optional().nullable(),
+    modelProvider: z.string().max(100).optional().nullable(),
+    modelName: z.string().max(100).optional().nullable(),
+    systemPrompt: z.string().max(5000).optional().nullable(),
     temperature: z.number().min(0).max(2).optional(),
-    isDefault: z.boolean().optional(),
   }),
 });
 
@@ -110,8 +111,9 @@ export const TestAISchema = z.object({
 
 export const CopilotActionSchema = z.object({
   body: z.object({
-    action: z.enum(["suggest_reply", "summarize", "translate", "sentiment"]),
-    context: z.string().max(5000).optional(),
+    action: z.enum(["suggest", "summarize", "formal", "generate_template", "suggest_reply", "translate", "sentiment"]),
+    text: z.string().optional(),
+    context: z.string().max(10000).optional(),
     conversationId: z.string().cuid().optional(),
     targetLanguage: z.string().max(10).optional(),
   }),

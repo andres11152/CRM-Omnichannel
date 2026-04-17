@@ -111,7 +111,7 @@ export const flowService = {
       throw new AppError("Flow not found", 404);
     }
 
-    await workflowRepository.delete(id);
+    await workflowRepository.delete(id, companyId);
     await cacheService.delete(`workflow:${id}`);
     Logger.info(`[Flow] Deleted: ${existing.name} (${id})`);
   },

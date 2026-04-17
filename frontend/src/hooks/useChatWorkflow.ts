@@ -72,8 +72,8 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         companyId: (rawMsg.companyId as string) || '',
         senderType: (rawMsg.senderType as SenderType) || (rawMsg.direction === 'OUTBOUND' ? SenderType.AGENT : SenderType.USER),
         content: (rawMsg.content as string) || '',
-        type: (rawMsg.type as Message['type']) || 'text',
-        mediaUrl: rawMsg.mediaUrl as string | undefined,
+        type: (rawMsg.type as Message['type']) || ((rawMsg.metadata as Record<string, any>)?.type as Message['type']) || 'text',
+        mediaUrl: (rawMsg.mediaUrl as string) || ((rawMsg.metadata as Record<string, any>)?.mediaUrl as string) || undefined,
         direction: rawMsg.direction as 'INBOUND' | 'OUTBOUND' | undefined,
         timestamp: rawMsg.createdAt
           ? new Date(rawMsg.createdAt as string).toISOString()
@@ -152,9 +152,11 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         attachment: mediaUrl ? {
           url: mediaUrl,
           type: detectedType,
-          name: mediaFile?.name || "Adjunto"
+          name: mediaFile?.name || "Adjunto",
+          mimetype: mediaFile?.type || "application/octet-stream"
         } : undefined,
-        replyToId: replyingTo?.id,
+        quotedMessageId: replyingTo?.id,
+        quotedContent: replyingTo?.content,
         metadata: {
           quotedMessageId: replyingTo?.id,
           quotedContent: replyingTo?.content,
@@ -171,8 +173,25 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
   };
 
   const syncHistory = async () => {
-    // [SEC] Placeholder for manual sync if implemented in chatService
-    console.log("Sync requested for:", ticketId);
+    if (!ticketId || isSyncing) return;
+    
+    try {
+      setIsSyncing(true);
+      const loadingToast = toast.loading("Sincronizando historial desde WhatsApp...");
+      
+      await chatService.syncFullHistory(ticketId);
+      
+      // Invalidate query to refresh messages
+      await queryClient.invalidateQueries({ queryKey: ["messages", ticketId] });
+      
+      toast.dismiss(loadingToast);
+      toast.success("Historial sincronizado correctamente.");
+    } catch (err) {
+      console.error("[Workflow] Sync error:", err);
+      toast.error("Error al sincronizar historial. Revisa tu conexión.");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return {

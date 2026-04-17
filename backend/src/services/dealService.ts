@@ -2,11 +2,13 @@ import { DealRepository } from "../repositories/DealRepository";
 import { PipelineRepository } from "../repositories/PipelineRepository";
 import { StageRepository } from "../repositories/StageRepository";
 import { AppError } from "../utils/AppError";
-import { workflowEngine } from "./workflowEngine";
+import { workflowEngine } from "./WorkflowEngine";
 import { Prisma } from "@prisma/client";
 import { CreateDealInput, UpdateDealInput } from "../schemas/dealSchema";
 import { activityRepository } from "@/repositories/ActivityRepository";
 import { Logger } from "@/utils/logger";
+import { webhookDispatcher } from "@/services/WebhookDispatcher";
+import { WebhookEvents } from "@/types/types";
 
 export class DealService {
   private dealRepo: DealRepository;
@@ -134,6 +136,16 @@ export class DealService {
       pipelineId: deal.pipelineId,
     });
 
+    // [WEBHOOK] Dispatch deal.created event
+    void webhookDispatcher.dispatch(companyId, WebhookEvents.DEAL_CREATED, {
+      id: deal.id,
+      title: deal.title,
+      value: deal.value,
+      currency: deal.currency,
+      stageId: deal.stageId,
+      pipelineId: deal.pipelineId,
+    });
+
     return deal;
   }
 
@@ -189,7 +201,7 @@ export class DealService {
       }
     }
 
-    const updatedDeal = await this.dealRepo.update(id, updateData);
+    const updatedDeal = await this.dealRepo.update(id, companyId, updateData);
 
     if (deal.stageId !== updatedDeal.stageId) {
       workflowEngine.emit("DEAL_UPDATED", {
@@ -200,6 +212,27 @@ export class DealService {
         previousStageName: deal.stage.name,
         newStageName: updatedDeal.stage.name,
       });
+
+      // [WEBHOOK] Dispatch deal.stage_changed
+      void webhookDispatcher.dispatch(companyId, WebhookEvents.DEAL_STAGE_CHANGED, {
+        id: deal.id,
+        title: deal.title,
+        previousStage: deal.stage.name,
+        newStage: updatedDeal.stage.name,
+        value: updatedDeal.value,
+      });
+
+      // [WEBHOOK] Detect Won/Lost transitions
+      const newStageName = updatedDeal.stage.name;
+      if (/ganado|won/i.test(newStageName)) {
+        void webhookDispatcher.dispatch(companyId, WebhookEvents.DEAL_WON, {
+          id: deal.id, title: deal.title, value: updatedDeal.value, closedAt: updatedDeal.closedAt,
+        });
+      } else if (/perdido|lost/i.test(newStageName)) {
+        void webhookDispatcher.dispatch(companyId, WebhookEvents.DEAL_LOST, {
+          id: deal.id, title: deal.title, value: updatedDeal.value, lostReason: updatedDeal.lostReason,
+        });
+      }
     }
 
     return updatedDeal;
@@ -225,7 +258,7 @@ export class DealService {
       updateData.stageId = newStageId;
     }
 
-    const updatedDeal = await this.dealRepo.update(id, updateData);
+    const updatedDeal = await this.dealRepo.update(id, companyId, updateData);
 
     if (newStageId && newStageId !== deal.stageId) {
       workflowEngine.emit("DEAL_UPDATED", {
@@ -242,7 +275,7 @@ export class DealService {
   async deleteDeal(id: string, companyId: string) {
     const deal = await this.dealRepo.findById(id, companyId);
     if (!deal) throw new AppError("Deal not found", 404);
-    await this.dealRepo.delete(id);
+    await this.dealRepo.delete(id, companyId);
   }
 }
 

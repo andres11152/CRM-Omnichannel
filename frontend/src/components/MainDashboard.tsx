@@ -11,6 +11,10 @@ import {
   SystemStatusModule,
   TopTenantsModule,
   RecentActivityModule,
+  SalesFunnelWidget,
+  ActiveLoadChart,
+  AgentLeaderboardWidget,
+  ChannelDistributionWidget
 } from "./DashboardWidgets";
 import { updateUserPreferences } from "@/services/userService";
 import {
@@ -442,6 +446,10 @@ interface DashboardPlan {
 interface DashboardData {
   metrics: DashboardMetrics;
   plan: DashboardPlan;
+  salesFunnel?: { name: string; count: number; value: number; color?: string }[];
+  agentWorkload?: { name: string; pending: number; inProgress: number }[];
+  channelDistribution?: { name: string; percentage: number; color?: string; iconClass?: string }[];
+  topAgents?: { name: string; score: number; sales: number; avatar?: string }[];
 }
 
 // --- STATUS BADGE COMPONENT ---
@@ -799,35 +807,49 @@ const CompanyAdminDashboard: React.FC<{
       <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
         {/* 2. TOP METRICS GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Active Tickets */}
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-900/20 relative overflow-hidden group hover:shadow-xl transition-all">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
+          {/* Active Tickets & Operational Volume */}
+          <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-900/20 relative overflow-hidden group hover:shadow-xl transition-all flex flex-col h-full">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+            <div className="absolute top-1/2 right-0 transform -translate-y-1/2 p-4 opacity-10 group-hover:opacity-20 transition-all duration-500 group-hover:scale-110">
               <MessageSquare className="w-24 h-24 text-white" />
             </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-2 opacity-90">
+            
+            <div className="relative z-10 flex-1 flex flex-col">
+              <div className="flex items-center gap-2 opacity-90 mb-2">
                 <MessageSquare className="w-5 h-5" />
                 <span className="text-sm font-medium uppercase tracking-wide">
                   Tickets Activos
                 </span>
               </div>
+              
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold">
                   {loading ? "-" : data?.metrics?.activeTickets || 0}
                 </span>
                 <span className="text-sm opacity-80">pendientes</span>
               </div>
-              <div className="mt-4 pt-4 border-t border-white/20 flex items-center justify-between">
-                <span className="text-xs font-medium bg-white/20 px-2 py-1 rounded">
-                  En tiempo real
-                </span>
-                <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+              <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t border-white/20">
+                <div>
+                  <p className="text-[10px] uppercase font-bold opacity-70 mb-0.5 tracking-wider">Conversaciones</p>
+                  <p className="font-mono text-lg font-semibold flex items-center gap-1">
+                    {data?.metrics?.activeConversations || 0}
+                    <Activity className="w-3 h-3 opacity-50" />
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold opacity-70 mb-0.5 tracking-wider">Msjs Hoy</p>
+                  <p className="font-mono text-lg font-semibold flex items-center gap-1">
+                    {data?.metrics?.totalMessages || 0}
+                    <Zap className="w-3 h-3 opacity-50" />
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Response Time — REAL DATA, no hardcoded trend */}
-          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-amber-400/50 transition-colors group">
+          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-amber-400/50 transition-colors group flex flex-col h-full">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-amber-600 dark:text-amber-400">
                 <Clock className="w-6 h-6" />
@@ -836,7 +858,8 @@ const CompanyAdminDashboard: React.FC<{
                 KPI
               </span>
             </div>
-            <div>
+            
+            <div className="flex-1 flex flex-col">
               <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">
                 Tiempo Respuesta
               </span>
@@ -845,15 +868,17 @@ const CompanyAdminDashboard: React.FC<{
                   {loading ? "..." : data?.metrics?.avgResponseTime || "0s"}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-                <Activity className="w-3 h-3" />
-                Promedio úÚÚÚltimos 7 días
-              </p>
+              <div className="mt-auto pt-4">
+                <p className="text-xs text-slate-400 flex items-center gap-1">
+                  <Activity className="w-3 h-3" />
+                  Promedio últimos 7 días
+                </p>
+              </div>
             </div>
           </div>
 
           {/* AI Efficiency — REAL DATA, no BETA badge */}
-          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-purple-400/50 transition-colors group">
+          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-purple-400/50 transition-colors group flex flex-col h-full">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-600 dark:text-purple-400">
                 <Zap className="w-6 h-6" />
@@ -862,7 +887,8 @@ const CompanyAdminDashboard: React.FC<{
                 KPI
               </span>
             </div>
-            <div>
+            
+            <div className="flex-1 flex flex-col">
               <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">
                 Resolución IA
               </span>
@@ -871,9 +897,12 @@ const CompanyAdminDashboard: React.FC<{
                   {loading ? "..." : data?.metrics?.aiResolution || "0%"}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-2">
-                Tickets cerrados automticamente
-              </p>
+              <div className="mt-auto pt-4">
+                <p className="text-xs text-slate-400 flex items-center gap-1">
+                  <Bot className="w-3 h-3" />
+                  Cerrados automáticamente
+                </p>
+              </div>
             </div>
           </div>
 
@@ -997,14 +1026,42 @@ const CompanyAdminDashboard: React.FC<{
           </div>
         </div>
 
-        {/* 3. MAIN WORKSPACE (KANBAN) */}
-        <div className="flex flex-col h-[650px] min-h-[650px]">
+        {/* 3. ENTERPRISE ANALYTICS GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            {/* Sales Pipeline & Lead Conversion */}
+            <div className="h-[360px]">
+              <SalesFunnelWidget data={data?.salesFunnel} />
+            </div>
+            
+            {/* Team Workload & Efficiency (SLA / Workload) */}
+            <div className="h-[360px]">
+              <ActiveLoadChart data={data?.agentWorkload} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-6">
+            {/* Omni-Channel Distribution */}
+            <div className="h-[360px]">
+              <ChannelDistributionWidget channels={data?.channelDistribution} />
+            </div>
+
+            {/* Agent Leaderboard & Performance */}
+            <div className="h-[360px]">
+              <AgentLeaderboardWidget agents={data?.topAgents} />
+            </div>
+          </div>
+        </div>
+
+        {/* 4. MAIN WORKSPACE (KANBAN) */}
+        <div className="flex flex-col h-[550px]">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-indigo-500" />
               Gestión de Tickets en Curso
             </h2>
-            <div className="flex gap-2">{/* View Toggles could go here */}</div>
+            <div className="flex gap-2 text-sm text-slate-500 dark:text-slate-400">
+               Vista rápida de la carga actual del equipo
+            </div>
           </div>
 
           <div className="flex-1 bg-slate-100 dark:bg-[#162028] rounded-xl border border-slate-200 dark:border-reply-border-dark overflow-hidden shadow-inner">

@@ -88,7 +88,7 @@ export class PipelineService {
       );
     }
 
-    return this.pipelineRepo.update(id, data);
+    return this.pipelineRepo.update(id, companyId, data);
   }
 
   async deletePipeline(id: string, companyId: string) {
@@ -114,7 +114,7 @@ export class PipelineService {
         );
     }
 
-    await this.pipelineRepo.delete(id);
+    await this.pipelineRepo.delete(id, companyId);
   }
 
   async duplicatePipeline(id: string, companyId: string, name?: string) {

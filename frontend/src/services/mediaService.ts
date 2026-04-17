@@ -50,7 +50,7 @@ export const uploadMedia = async (data: UploadMediaData): Promise<Media> => {
     timeout: 60000, // 60s for large file uploads
   });
 
-  return response.data.data.media;
+  return response.data as Media;
 };
 
 /**
@@ -62,12 +62,7 @@ export const getMedia = async (filters?: {
   search?: string;
   page?: number;
   limit?: number;
-}): Promise<{
-  media: Media[];
-  total: number;
-  page: number;
-  totalPages: number;
-}> => {
+}): Promise<Media[]> => {
   const params = new URLSearchParams();
 
   if (filters?.type) params.append("type", filters.type);
@@ -77,7 +72,7 @@ export const getMedia = async (filters?: {
   if (filters?.limit) params.append("limit", filters.limit.toString());
 
   const response = await api.get(`/media?${params.toString()}`);
-  return response.data.data;
+  return response.data as Media[];
 };
 
 /**
@@ -99,7 +94,7 @@ export const updateMedia = async (
   },
 ): Promise<Media> => {
   const response = await api.patch(`/media/${id}`, data);
-  return response.data.data.media;
+  return response.data as Media;
 };
 
 // === KNOWLEDGE BASE (RAG) HELPERS ===
@@ -119,9 +114,9 @@ export const uploadKnowledgeDoc = async (file: File): Promise<Media> => {
  * Get all Knowledge Base documents
  */
 export const getKnowledgeDocs = async (): Promise<Media[]> => {
-  const result = await getMedia({
+  const result: Media[] = await getMedia({
     category: "KNOWLEDGE_BASE",
     type: "DOCUMENT",
   });
-  return result.media;
+  return result;
 };

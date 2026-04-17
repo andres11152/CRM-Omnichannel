@@ -134,17 +134,12 @@ export class WhatsAppIdUtils {
   static isRealPhoneNumber(digits: string): boolean {
     if (!digits || !/^\d+$/.test(digits)) return false;
 
-    // Length validation (E.164 usually 7-15, but LIDs can be up to 25+)
-    if (digits.length < 7 || digits.length > 30) return false;
+    // [SEC] 100-YEAR FIX: LIDs are now STRICTLY excluded from being treated as phone numbers.
+    // LIDs are internal identifiers and shouldn't be saved as 'phone' in the CRM.
+    if (this.isLid(digits)) return false;
 
-    // [SEC] REVERTED 100-YEAR FIX: LIDs are now allowed and treated as valid recipients
-    // WhatsApp Communities hide real numbers and use 15-20 digit LIDs.
-    // The user explicitly requested to see and interact with these IDs.
-
-    // [SEC] REVERTED 100-YEAR FIX: The previous rule blocking starting with 4 or 5 was TOO AGGRESSIVE.
-    // It blocked valid Colombia (57...), Brazil (55...), Mexico (52...) numbers.
-    // We now rely primarily on length and explicit @lid domain checks.
-
+    // Length validation (E.164 strictly 7-15)
+    if (digits.length < 7 || digits.length > 15) return false;
     // Pattern 3: Repeated digits patterns (fake/test numbers)
     if (/^(\d)\1{6,}$/.test(digits)) return false;
 
@@ -167,6 +162,7 @@ export class WhatsAppIdUtils {
    * - Patterns like 45xxxxxx... with 12+ digits (observed in production)
    */
   static isLid(jid: string): boolean {
+    if (!jid) return false;
     // Standard LID domain check
     if (jid.includes("@lid")) return true;
 
@@ -176,16 +172,26 @@ export class WhatsAppIdUtils {
     // Only check numeric patterns
     if (!/^\d+$/.test(userPart)) return false;
 
-    // [SEARCH] OBSERVED LID PATTERNS:
-    // - LIDs are strictly numeric identifiers used internally by WhatsApp
-    // - They resemble phone numbers but follow specific ranges assigned by WhatsApp
-
-    // [SEC] 100-YEAR FIX: Relied too heavily on heuristics previously.
-    // If the JID came from Baileys participants list and DOES NOT have @lid,
-    // we should assume it is a phone number unless it is blatantly invalid.
-    // Real international numbers can start with 1, 2, etc and be 15 digits.
-    // We strictly check for @lid suffix at the start of this function.
-    // Here we only catch strictly known impossible patterns if necessary.
+    /**
+     * [SEC] 100-YEAR LID HEURISTICS
+     * Real phone numbers (E.164) are max 15 digits.
+     * WhatsApp LIDs are typically 15-18 digits and start with specific prefixes.
+     * Common LID prefixes: 102..., 245..., 274..., 103...
+     */
+    if (userPart.length >= 15) {
+      if (userPart.startsWith("102") || 
+          userPart.startsWith("103") || 
+          userPart.startsWith("137") || 
+          userPart.startsWith("112") || 
+          userPart.startsWith("245") || 
+          userPart.startsWith("274") ||
+          userPart.startsWith("656")) {
+        return true;
+      }
+      
+      // If it's very long (17+), it's almost certainly a LID
+      if (userPart.length > 15) return true;
+    }
 
     return false;
   }

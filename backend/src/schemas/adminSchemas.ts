@@ -74,3 +74,26 @@ export type CreateCompanyDto = z.infer<typeof createCompanySchema>;
 export type UpdateCompanyDto = z.infer<typeof updateCompanySchema>;
 export type UpdateCompanyStatusDto = z.infer<typeof updateCompanyStatusSchema>;
 export type SavePlanDto = z.infer<typeof savePlanSchema>;
+
+// [SEC] Route Validators (Wrapped for validate middleware)
+export const CreateCompanyValidator = z.object({
+  body: createCompanySchema,
+});
+
+export const UpdateCompanyValidator = z.object({
+  params: z.object({ companyId: z.string().min(1) }),
+  body: updateCompanySchema,
+});
+
+export const UpdateCompanyStatusValidator = z.object({
+  params: z.object({ companyId: z.string().min(1) }),
+  body: updateCompanyStatusSchema,
+});
+
+export const SavePlanValidator = z.object({
+  body: savePlanSchema,
+});
+
+export const DeletePlanValidator = z.object({
+  params: z.object({ planId: z.string().min(1) }),
+});

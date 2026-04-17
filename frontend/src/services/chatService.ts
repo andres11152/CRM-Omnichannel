@@ -23,47 +23,42 @@ export interface ResolveTicketInput {
 
 /**
  * GET CONVERSATIONS
- * Fetches list of conversations/tickets
  */
 export const getConversations = async (params?: {
   status?: "open" | "pending" | "resolved";
   page?: number;
   limit?: number;
 }): Promise<{ conversations: Conversation[]; total: number }> => {
-  const response = await apiClient.get<any>("/conversations", { params });
-  return (response.data || response) as { conversations: Conversation[]; total: number };
+  const res = await apiClient.get<any>("/conversations", { params });
+  return res.data || res;
 };
 
 /**
  * GET MESSAGES
- * Fetches message history for a specific ticket
  */
 export const getMessages = async (ticketId: string): Promise<Message[]> => {
-  const response = await apiClient.get<any>(`/conversations/${ticketId}`);
-  // Extracting from data.conversation.messages based on backend structure
-  const data = response.data || response;
-  return data?.conversation?.messages || [];
+  const res = await apiClient.get<any>(`/conversations/${ticketId}`);
+  const payload = res.data || res;
+  return payload?.conversation?.messages || [];
 };
 
 /**
  * SEND MESSAGE
- * Sends a new message to a conversation
  */
 export const sendMessage = async (
   ticketId: string,
   input: SendMessageInput,
 ): Promise<Message> => {
-  const response = await apiClient.post<any>(
+  const res = await apiClient.post<any>(
     `/conversations/${ticketId}/reply`,
     input,
   );
-  const data = response.data || response;
-  return data.message || data;
+  const payload = res.data || res;
+  return payload.message || payload;
 };
 
 /**
  * RESOLVE TICKET
- * Marks a ticket as resolved
  */
 export const resolveTicket = async (
   ticketId: string,
@@ -74,17 +69,15 @@ export const resolveTicket = async (
 
 /**
  * PICK NEXT TICKET
- * Assigns the next available ticket to the current agent
  */
 export const pickNextTicket = async (): Promise<Conversation | null> => {
-  const response = await apiClient.post<any>("/conversations/pick-next");
-  const data = response.data || response;
-  return data.conversation;
+  const res = await apiClient.post<any>("/conversations/pick-next");
+  const payload = res.data || res;
+  return payload.conversation || null;
 };
 
 /**
  * DELETE TICKET
- * Deletes a conversation/ticket
  */
 export const deleteTicket = async (ticketId: string): Promise<void> => {
   await apiClient.delete(`/conversations/${ticketId}`);
@@ -92,7 +85,6 @@ export const deleteTicket = async (ticketId: string): Promise<void> => {
 
 /**
  * MARK AS READ
- * Marks all messages in a conversation as read
  */
 export const markAsRead = async (ticketId: string): Promise<void> => {
   await apiClient.post(`/conversations/${ticketId}/mark-read`);
@@ -100,7 +92,6 @@ export const markAsRead = async (ticketId: string): Promise<void> => {
 
 /**
  * CREATE NEW CHAT
- * Initiates a new conversation
  */
 export const createNewChat = async (input: {
   phone: string;
@@ -108,24 +99,30 @@ export const createNewChat = async (input: {
   initialMessage?: string;
   addToContacts?: boolean;
 }): Promise<Conversation> => {
-  const response = await apiClient.post<any>("/conversations/create", input);
-  const data = response.data || response;
-  return data.conversation || data;
+  const res = await apiClient.post<any>("/conversations/create", input);
+  const payload = res.data || res;
+  return payload.conversation || payload;
 };
 
 /**
  * TOGGLE GROUP SYNC
- * Enables or disables automatic contact synchronization for a group
  */
 export const toggleGroupSync = async (
   ticketId: string,
   enabled: boolean,
 ): Promise<{ syncEnabled: boolean }> => {
-  const response = await apiClient.patch<any>(
+  const res = await apiClient.patch<any>(
     `/conversations/${ticketId}/toggle-sync`,
     { enabled },
   );
-  return response.data || response;
+  return res.data || res;
+};
+
+/**
+ * SYNC FULL HISTORY
+ */
+export const syncFullHistory = async (ticketId: string): Promise<void> => {
+  await apiClient.post(`/conversations/${ticketId}/sync`);
 };
 
 export const chatService = {
@@ -138,6 +135,7 @@ export const chatService = {
   markAsRead,
   createNewChat,
   toggleGroupSync,
+  syncFullHistory,
   transferTicket: async (
     ticketId: string,
     targetId: string,

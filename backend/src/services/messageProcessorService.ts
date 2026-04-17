@@ -245,7 +245,7 @@ export const messageProcessor = {
           parts: msg.content,
         }));
 
-      const { generateAIResponse } = await import("./aiResponseService");
+      const { generateAIResponse } = await import("./AiResponseService");
       const aiResponseText = await generateAIResponse(
         companyId,
         aiAssistant.id,

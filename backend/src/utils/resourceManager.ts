@@ -1,5 +1,6 @@
 import { Logger } from "./logger";
 import v8 from "v8";
+import { whatsappService } from "@/whatsapp/WhatsAppService";
 
 /**
  * [SEC] RESOURCE CLEANUP MANAGER
@@ -220,7 +221,14 @@ class MemoryMonitor {
       );
 
       // [SEC] Memory is critical - GC will be forced below.
-      // Store pruning is handled automatically by SimpleInMemoryStore's caps.
+      // Store pruning is handled automatically by SimpleInMemoryStore's caps,
+      // but under extreme pressure, we evict all caches.
+      try {
+        Logger.warn("[MemoryMonitor] Flushing all Baileys memory stores due to extreme pressure");
+        whatsappService.getSessionManager().flushAllMemoryStores();
+      } catch (err) {
+        Logger.error("[MemoryMonitor] Failed to flush session stores:", err);
+      }
 
       // Force garbage collection if available
       if (global.gc) {

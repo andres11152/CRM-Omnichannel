@@ -242,19 +242,22 @@ const InternalNotesComponent: React.FC<Props> = ({
                   />
                 </svg>
                 <span className="text-xs font-bold block">
-                  Contacto No Guardado
+                  {contact?.isGroup ? "Modo Grupo" : "Contacto No Guardado"}
                 </span>
               </div>
               <p className="text-[10px] text-yellow-700 dark:text-gray-300 mb-3 leading-tight">
-                Para agregar notas, primero debes guardar este contacto en el
-                CRM.
+                {contact?.isGroup 
+                  ? "Las funciones de CRM extendido no están disponibles para grupos de WhatsApp."
+                  : "Para agregar notas, primero debes guardar este contacto en el CRM."}
               </p>
-              <button
-                onClick={onEditContact}
-                className="w-full bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-bold py-2 px-3 rounded shadow-sm transition-colors"
-              >
-                Guardar Contacto
-              </button>
+              {!contact?.isGroup && (
+                <button
+                  onClick={onEditContact}
+                  className="w-full bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-bold py-2 px-3 rounded shadow-sm transition-colors"
+                >
+                  Guardar Contacto
+                </button>
+              )}
             </div>
           ) : (
             <>

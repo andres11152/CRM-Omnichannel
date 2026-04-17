@@ -1,33 +1,41 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
-// Service is in root/services, so we go up from hooks -> src -> root
-import { socketService } from "@/services/socketService";
 import { useAuthStore } from "@/stores/authStore";
+import { useSocketStore } from "@/stores/socketStore";
 
+/**
+ * Global Socket Initializer — called once in MainLayout.
+ * 
+ * Responsibilities:
+ *   1. Initialize the centralized socket store on auth
+ *   2. Register global notification listeners (agent_assigned toast)
+ *   3. Teardown on logout
+ */
 export const useSocketInit = () => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
+  const { initialize, teardown, subscribe } = useSocketStore();
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !user) return;
 
-    socketService.connect();
+    // Initialize centralized socket connection + room management
+    initialize(user.role, user.id, user.companyId);
 
-    // Type payload loosely for now as we integrate
-    const handleAgentAssigned = (payload: {
-      ticketId: string;
-      agentName: string;
-    }) => {
-      // console.log("Socket Event:", payload); // Removed for prod
-      toast.info(`Ticket ${payload.ticketId} asignado a ${payload.agentName}`, {
-        description: "Nueva asignación desde la cola.",
-      });
-      // Play sound if needed (requires-ESoundContext hook)
-    };
-
-    socketService.on("agent_assigned", handleAgentAssigned);
+    // Global notification: agent_assigned (CRM-wide toast)
+    const unsubscribe = subscribe<{ ticketId: string; agentName: string }>(
+      "agent_assigned",
+      (payload) => {
+        toast.info(
+          `Ticket ${payload.ticketId} asignado a ${payload.agentName}`,
+          { description: "Nueva asignación desde la cola." },
+        );
+      },
+    );
 
     return () => {
-      socketService.off("agent_assigned", handleAgentAssigned);
+      unsubscribe();
+      teardown();
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.id]);
 };

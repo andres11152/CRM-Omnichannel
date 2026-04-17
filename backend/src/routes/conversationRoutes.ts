@@ -7,6 +7,7 @@ import {
   createConversation,
   toggleGroupSync,
   reactToMessage,
+  syncFullHistory
 } from "../controllers/conversationController";
 import {
   getGroupParticipants,
@@ -20,6 +21,7 @@ import {
   CreateConversationSchema,
   ReplyToConversationSchema,
   UpdateTagsSchema,
+  ReactToMessageSchema,
 } from "../schemas/conversationSchemas";
 import {
   GetGroupParticipantsSchema,
@@ -62,7 +64,11 @@ router
   .patch(validate(ConversationIdParamSchema), toggleGroupSync);
 
 router
+  .route("/:id/sync")
+  .post(validate(ConversationIdParamSchema), syncFullHistory);
+
+router
   .route("/:id/messages/:messageId/react")
-  .post(reactToMessage);
+  .post(validate(ReactToMessageSchema), reactToMessage);
 
 export default router;

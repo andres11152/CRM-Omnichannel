@@ -110,8 +110,9 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   isSelected,
   onClick,
 }) => {
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
+  const formatTime = (timestamp: string | Date) => {
+    if (!timestamp) return "";
+    const date = typeof timestamp === "string" ? new Date(timestamp) : timestamp;
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
@@ -177,10 +178,10 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
           {/* Name and Time */}
           <div className="flex items-center justify-between mb-1">
             <h4 className="font-semibold text-gray-900 dark:text-white truncate">
-              {(conversation as any).contactName || "Desconocido"}
+              {conversation.contactName || "Desconocido"}
             </h4>
             <span className="text-xs text-gray-500 ml-2">
-              {formatTime((conversation as any).lastMessageTime || (conversation as any).lastMessageAt || "")}
+              {formatTime(conversation.lastMessageTime || conversation.lastMessageAt || "")}
             </span>
           </div>
 

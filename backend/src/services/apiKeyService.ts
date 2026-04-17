@@ -1,4 +1,4 @@
-import { auditLogService } from "./auditLogService";
+import { auditLogService } from "./AuditLogService";
 import { apiKeyRepository } from "@/repositories/ApiKeyRepository";
 import cryptoModule from "crypto"; // To avoid naming conflicts
 

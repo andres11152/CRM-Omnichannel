@@ -141,7 +141,14 @@ export const TenantMetricsModal: React.FC<Props> = ({
 };
 
 // Helper Components
-const MetricCard = ({ label, value, sub, color }: any) => (
+interface MetricCardProps {
+  label: string;
+  value: string | number;
+  sub: string;
+  color?: string;
+}
+
+const MetricCard: React.FC<MetricCardProps> = ({ label, value, sub, color }) => (
   <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
     <div className="text-sm text-gray-500 mb-1">{label}</div>
     <div className={`text-2xl font-bold ${color || "text-gray-800 dark:text-white"}`}>{value}</div>
@@ -149,7 +156,15 @@ const MetricCard = ({ label, value, sub, color }: any) => (
   </div>
 );
 
-const ProgressBar = ({ label, current, limit, percentage, color }: any) => (
+interface ProgressBarProps {
+  label: string;
+  current?: number;
+  limit?: number;
+  percentage?: number;
+  color: string;
+}
+
+const ProgressBar: React.FC<ProgressBarProps> = ({ label, current, limit, percentage, color }) => (
   <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-100 dark:border-gray-700">
     <div className="flex justify-between items-center mb-2">
       <span className="text-sm font-medium">{label}</span>
@@ -162,7 +177,13 @@ const ProgressBar = ({ label, current, limit, percentage, color }: any) => (
   </div>
 );
 
-const SmallStatCard = ({ label, value, color }: any) => (
+interface SmallStatCardProps {
+  label: string;
+  value: string | number;
+  color?: string;
+}
+
+const SmallStatCard: React.FC<SmallStatCardProps> = ({ label, value, color }) => (
   <div className="bg-gray-50 dark:bg-gray-900/40 p-3 rounded-lg">
     <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 font-bold">{label}</div>
     <div className={`text-lg font-bold ${color || "text-gray-700 dark:text-gray-200"}`}>{value}</div>

@@ -10,6 +10,21 @@ import {
   chatService,
   type SendMessageInput,
 } from "@/services/chatService";
+import { jwtDecode } from "jwt-decode";
+
+// Cache token decoding for performance
+let cachedUserId: string | null = null;
+const getCurrentUserId = () => {
+  if (cachedUserId) return cachedUserId;
+  try {
+    const token = localStorage.getItem("token");
+    if (token) {
+      cachedUserId = (jwtDecode<{ id: string }>(token)).id;
+      return cachedUserId;
+    }
+  } catch (e) {}
+  return "me"; // fallback
+};
 
 /**
  * QUERY KEYS
@@ -370,29 +385,21 @@ export const useReactToMessage = (ticketId: string) => {
           
           const existingReactions = m.reactions || [];
           
-          // WHATSAPP BEHAVIOR: 
-          // 1. If I have a reaction with THIS emoji -> Remove it.
-          // 2. If I have a DIFFERENT reaction -> Add this one too (or replace it? WhatsApp replaces, let's replace).
-          
-          const myMatch = existingReactions.find(
-            (r) => r.content === reaction && (r.reactBy === "me" || (r as any).isMe)
-          );
-          
-          if (myMatch) {
-            return {
-              ...m,
-              reactions: existingReactions.filter(r => r !== myMatch)
-            };
-          } else {
-            // Replace any other reaction I had with this one (WhatsApp style)
-            const otherReactsFromMe = existingReactions.filter(r => r.reactBy === 'me' || (r as any).isMe);
-            const baseReacts = existingReactions.filter(r => !otherReactsFromMe.includes(r));
-            
-            return {
-              ...m,
-              reactions: [...baseReacts, { content: reaction, reactBy: 'me', isMe: true } as any]
-            };
+          // WHATSAPP BEHAVIOR: EXPLICIT REMOVAL
+          const currentUserId = getCurrentUserId();
+          if (reaction === "") {
+             const baseReacts = existingReactions.filter(r => r.reactBy !== 'me' && !r.isMe && r.reactBy !== currentUserId);
+             return { ...m, reactions: baseReacts };
           }
+          
+          // OTHERWISE: REPLACE EXISTING WITH NEW EMOJI
+          const otherReactsFromMe = existingReactions.filter(r => r.reactBy === 'me' || r.isMe || r.reactBy === currentUserId);
+          const baseReacts = existingReactions.filter(r => !otherReactsFromMe.includes(r));
+          
+          return {
+            ...m,
+            reactions: [...baseReacts, { content: reaction, reactBy: 'me', isMe: true }]
+          };
         })
       );
 

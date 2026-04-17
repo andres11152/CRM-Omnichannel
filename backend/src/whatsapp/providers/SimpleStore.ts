@@ -30,8 +30,8 @@ const MAX_TOTAL_CHATS = parseInt(process.env.WA_STORE_MAX_CHATS || "5000", 10);
 
 export class SimpleInMemoryStore {
   public contacts: { [jid: string]: Contact } = {};
-  public chats: Map<string, unknown> = new Map();
-  public messages: { [jid: string]: unknown[] } = {};
+  public chats: Map<string, import("@whiskeysockets/baileys").Chat> = new Map();
+  public messages: { [jid: string]: import("@whiskeysockets/baileys").proto.IWebMessageInfo[] } = {};
   public lidToPhone: { [lid: string]: string } = {};
 
   // ────────────────────────────────────────────────
@@ -76,7 +76,7 @@ export class SimpleInMemoryStore {
     }
   }
 
-  private appendMessage(jid: string, msg: unknown): void {
+  private appendMessage(jid: string, msg: import("@whiskeysockets/baileys").proto.IWebMessageInfo): void {
     if (!this.messages[jid]) {
       this.messages[jid] = [];
     }
@@ -134,18 +134,12 @@ export class SimpleInMemoryStore {
       }
       if (messages) {
         for (const msgObj of messages) {
-          const msg = msgObj as {
-            key?: {
-              remoteJid?: string;
-              remoteJidAlt?: string;
-              senderPn?: string;
-              participant?: string;
-            };
-            message?: unknown;
+          const msg = msgObj as import("@whiskeysockets/baileys").proto.IWebMessageInfo & {
+            key: { remoteJidAlt?: string; senderPn?: string };
           };
           if (msg.key?.remoteJid && msg.message) {
             const jid = msg.key.remoteJid;
-            this.appendMessage(jid, msg);
+            this.appendMessage(jid, msg as import("@whiskeysockets/baileys").proto.IWebMessageInfo);
             if (jid.includes("@lid")) {
               const lidBase = jid.split("@")[0].split(":")[0];
               if (

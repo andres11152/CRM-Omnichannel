@@ -121,7 +121,7 @@ export const EditTenantModal: React.FC<Props> = ({
                         name="status"
                         value={status}
                         checked={formData.status === status}
-                        onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.value as CompanyStatus })}
                         className="w-4 h-4 text-indigo-600"
                       />
                       <span className="font-bold text-sm uppercase">{status}</span>

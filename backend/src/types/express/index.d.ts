@@ -13,6 +13,8 @@ declare global {
         phone?: string;
         about?: string;
         profilePicUrl?: string;
+        apiKeyId?: string;
+        scopes?: string[];
       };
       file?: Express.Multer.File;
       files?: Express.Multer.File[];

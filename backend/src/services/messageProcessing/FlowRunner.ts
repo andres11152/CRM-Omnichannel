@@ -30,7 +30,7 @@ export class FlowRunner {
     senderId: string,
   ): Promise<boolean> {
     try {
-      const { flowExecutor } = await import("../flowExecutor");
+      const { flowExecutor } = await import("../FlowExecutor");
 
       const flowResults: FlowResult[] | null =
         await flowExecutor.processMessage(

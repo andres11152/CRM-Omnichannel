@@ -12,6 +12,7 @@
  *  STRICT TYPING: Guaranteed 100% type safety.
  */
 
+import { Prisma, ContactFlowSession } from "@prisma/client";
 import { flowSessionRepository } from "@/repositories/FlowSessionRepository";
 import { Logger } from "@/utils/logger";
 import { getErrorMessage } from "@/utils/errorHelpers";
@@ -283,7 +284,7 @@ export class FlowExecutorService {
     return s && s.flow?.isActive ? this.toState(s) : null;
   }
 
-  private toState(p: any): FlowSessionState {
+  private toState(p: ContactFlowSession): FlowSessionState {
     return {
       ...p,
       conversationId: p.conversationId || "",

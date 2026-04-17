@@ -1,9 +1,8 @@
 import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
-import { AuthenticatedRequest } from "@/types/types";
+import { AuthenticatedRequest, Channel } from "@/types/types";
 import { conversationService } from "@/services/ConversationService";
-import { Channel, Conversation } from "@prisma/client";
 import { Logger } from "@/utils/logger";
 
 export const createConversation = catchAsync(
@@ -196,7 +195,7 @@ export const toggleGroupSync = catchAsync(
       throw new AppError("Enabled must be a boolean", 400);
     }
 
-    const conversation: Conversation =
+    const conversation =
       await conversationService.updateSyncEnabled(
         req.companyId,
         req.params.id,
@@ -232,4 +231,45 @@ export const reactToMessage = catchAsync(
       data: { reaction },
     });
   },
+);
+
+export const syncFullHistory = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId || !req.user) throw new AppError("Not authorized", 401);
+
+    const { id: conversationId } = req.params;
+    
+    // 1. Get Conversation to find the real JID/ChannelId
+    const conversation = await conversationService.getConversation(req.companyId, conversationId);
+    if (!conversation) throw new AppError("Conversation not found", 404);
+
+    // 2. Identify the active session
+    const { whatsappService } = await import("@/whatsapp");
+    const activeSession = await whatsappService.getSessionManager().findActiveSessionForCompany(req.companyId);
+    
+    if (!activeSession) {
+      throw new AppError("No hay una sesión de WhatsApp activa para sincronizar.", 400);
+    }
+
+    // 3. Trigger Sync via ChatSyncService
+    const { chatSyncService } = await import("@/services/ChatSyncService");
+    
+    // We send the JID (channelId) to the sync service
+    const result = await chatSyncService.syncMessages({
+      companyId: req.companyId,
+      sessionId: activeSession.sessionId,
+      conversationId: conversation.channelId, // This should be the JID (e.g. 57312...@s.whatsapp.net or @g.us)
+      limit: 100, // Default to 100 messages for manual sync
+      dryRun: false
+    }, req.user.id);
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        newMessages: result.messagesNew,
+        duplicates: result.messagesDuplicate,
+        errors: result.errors
+      }
+    });
+  }
 );

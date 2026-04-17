@@ -13,6 +13,8 @@ import { contactRepository } from "@/repositories/ContactRepository";
 import { dealRepository } from "@/repositories/DealRepository";
 import { ticketRepository } from "@/repositories/TicketRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
+import { webhookDispatcher } from "@/services/WebhookDispatcher";
+import { WebhookEvents } from "@/types/types";
 
 interface ContactUpsertParams {
   id?: string;
@@ -273,6 +275,15 @@ export const contactService = {
           customFields: data.customFields || {},
         },
       );
+
+      // [WEBHOOK] Dispatch contact.created event
+      void webhookDispatcher.dispatch(companyId, WebhookEvents.CONTACT_CREATED, {
+        id: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+      });
+
       return toContactDTO(contact);
     }
 
@@ -354,6 +365,15 @@ export const contactService = {
       ...(data.notes && { notes: data.notes }),
       ...(data.customFields && { customFields: data.customFields }),
       ...(data.avatarUrl && { avatarUrl: data.avatarUrl }),
+    });
+
+    // [WEBHOOK] Dispatch contact.updated event
+    void webhookDispatcher.dispatch(companyId, WebhookEvents.CONTACT_UPDATED, {
+      id: updated.id,
+      name: updated.name,
+      phone: updated.phone,
+      email: updated.email,
+      changedFields: Object.keys(data),
     });
 
     return toContactDTO(updated);

@@ -118,6 +118,7 @@ export class WhatsAppMessaging {
         content: savedMessage.content,
         timestamp: savedMessage.createdAt,
         metadata: savedMessage.metadata as Record<string, Prisma.JsonValue>,
+        dbId: savedMessage.id,
       };
     } catch (error: unknown) {
       if (!(error instanceof AppError)) {

@@ -1,10 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { Logger } from "../src/utils/logger";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting Clean Database Seed for Reply CRM...");
+  Logger.info("🌱 Starting Clean Database Seed for Reply CRM...");
 
   // 1. CREATE PLANS (Para que los tenants puedan suscribirse)
   // IDs uuid v4 para cumplir con validaciones del backend
@@ -73,7 +74,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Plans created");
+  Logger.info("✅ Plans created");
 
   // =========================================================================
   // 1. MASTER ACCOUNT (Dueño del Software) - NO TIENE PLAN
@@ -113,7 +114,7 @@ async function main() {
     },
   });
 
-  console.log(
+  Logger.info(
     `👑 MASTER Created: ${masterUser.email} (Company: ${masterCompany.name})`,
   );
 
@@ -155,7 +156,7 @@ async function main() {
     },
   });
 
-  console.log(
+  Logger.info(
     `🏢 TENANT Created: ${tenantUser.email} (Company: ${tenantCompany.name})`,
   );
 
@@ -183,14 +184,14 @@ async function main() {
     },
   });
 
-  console.log("✅ Default assets created for Tenant");
+  Logger.info("✅ Default assets created for Tenant");
 
-  console.log("\n🎉 Database Seed Completed Successfully!");
+  Logger.info("\n🎉 Database Seed Completed Successfully!");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    Logger.error(e);
     process.exit(1);
   })
   .finally(async () => {

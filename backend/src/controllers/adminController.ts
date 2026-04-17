@@ -1,10 +1,9 @@
 import { Response } from "express";
-import { AuthenticatedRequest } from "@/types/types";
+import { AuthenticatedRequest, CompanyStatus } from "@/types/types";
 import { adminService } from "@/services/AdminService";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
-import { CompanyStatus } from "@prisma/client";
 import {
   createCompanySchema,
   updateCompanySchema,

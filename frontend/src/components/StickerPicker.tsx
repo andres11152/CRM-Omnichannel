@@ -57,7 +57,7 @@ export const StickerPicker: React.FC<StickerPickerProps> = ({
     try {
       setLoading(true);
       const data = await getMedia({ category: "STICKER" }); // Assuming backend supports this category
-      setStickers(data.media);
+      setStickers(data);
     } catch (error: unknown) {
       console.error(error);
       toast.error("Error al cargar stickers");

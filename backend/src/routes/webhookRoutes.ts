@@ -5,9 +5,10 @@ import {
   getCompanyWebhooks,
   createWebhook,
   deleteWebhook,
-  toggleWebhook,
   getWebhookLogs,
   getSigningSecret,
+  toggleWebhook,
+  replayLog,
 } from "@/controllers/webhookController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
@@ -15,7 +16,7 @@ import { z } from "zod";
 import { IdParamSchema } from "@/schemas/commonSchemas";
 
 const CompanyIdParamSchema = z.object({
-  params: z.object({ companyId: z.string().cuid() }),
+  params: z.object({ companyId: z.string().min(1) }),
 });
 
 const CreateWebhookSchema = z.object({
@@ -57,6 +58,7 @@ router.delete("/:id", validate(IdParamSchema), deleteWebhook); // DELETE
 router.patch("/:id/toggle", validate(IdParamSchema), toggleWebhook); // TOGGLE
 
 router.get("/logs", getWebhookLogs);
+router.post("/logs/:id/retry", validate(IdParamSchema), replayLog);
 router.get("/secret", getSigningSecret);
 
 export default router;

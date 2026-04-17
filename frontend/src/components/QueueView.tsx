@@ -13,6 +13,7 @@ import {
   ArrowRightLeft,
 } from "lucide-react";
 import { Ticket, Contact } from "@/types";
+import { Avatar } from "@/components/common/Avatar";
 
 // 100-Year Solution: Strict Types
 type PriorityLevel = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
@@ -183,17 +184,11 @@ export const QueueView: React.FC<QueueViewProps> = ({
           className="relative flex-shrink-0"
           onClick={() => onSelectTicket(ticket.id)}
         >
-          {ticket.contact.profilePicUrl || ticket.contact.avatarUrl ? (
-            <img
-              src={ticket.contact.profilePicUrl || ticket.contact.avatarUrl}
-              alt={ticket.contact.name}
-              className="w-10 h-10 rounded-full object-cover shadow-sm"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-              {ticket.contact.name.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <Avatar
+            src={ticket.contact.profilePicUrl || ticket.contact.avatarUrl || null}
+            name={ticket.contact.name || "Usuario"}
+            className="w-10 h-10 shadow-sm"
+          />
         </div>
 
         {/* Content - Clickable to select */}

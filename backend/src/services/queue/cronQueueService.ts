@@ -11,6 +11,7 @@ import {
 import { notificationJobs } from "@/services/NotificationJobs";
 import { schedulerRepository } from "@/repositories/SchedulerRepository";
 import { whatsappService } from "@/whatsapp";
+import { cleanupTempDirectory } from "@/utils/tempFileCleanup";
 import type { MediaPayload } from "@/whatsapp/core/types/whatsapp.types";
 
 /**
@@ -160,6 +161,13 @@ export const initCronWorker = async () => {
             );
             break;
           }
+          case "temp-cleanup": {
+            await TenantContextManager.runAsSystem(async () => {
+              Logger.info("[CronQueue] Starting Temp Directory Cleanup...");
+              await cleanupTempDirectory();
+            });
+            break;
+          }
           default:
             Logger.warn(`[CronQueue] Unknown job name: ${job.name}`);
         }
@@ -211,8 +219,14 @@ export const initCronWorker = async () => {
     {},
     { repeat: { pattern: "0 3 * * *" }, jobId: "rep-failed-backups" },
   );
+  await cronQueue.add(
+    "temp-cleanup",
+    {},
+    // Run every 1 hour (3.6M milliseconds)
+    { repeat: { every: 60 * 60 * 1000 }, jobId: "rep-temp-cleanup" },
+  );
 
-  Logger.info(`[CronQueue] [OK] Scheduled 7 repeating jobs in Redis.`);
+  Logger.info(`[CronQueue] [OK] Scheduled 8 repeating jobs in Redis.`);
 
   return worker;
 };

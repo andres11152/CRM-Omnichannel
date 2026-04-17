@@ -1,5 +1,6 @@
 import { EventEmitter } from "events";
 import { WhatsAppEvent, WhatsAppEventType } from "./WhatsAppEvents";
+import { Logger } from "@/utils/logger";
 
 type EventHandler<T extends WhatsAppEventType> = (
   event: WhatsAppEvent<T>,
@@ -58,7 +59,7 @@ export class EventBus extends EventEmitter {
     // Provide robust logging to catch isolated subsystem failures
     results.forEach((result, idx) => {
       if (result.status === "rejected") {
-        console.error(
+        Logger.error(
           `[EventBus] [ALERT] Handler at index ${idx} failed for event ${event.type}:`,
           result.reason,
         );

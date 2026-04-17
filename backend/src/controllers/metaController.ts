@@ -1,30 +1,41 @@
-// THIS IS BACKEND CODE (Node.js)
 import { Logger } from "@/utils/logger";
-import { gateway } from "@/gateways/socketGateway"; // Import the socket gateway
-import { metaMediaService } from "@/services/MetaMediaService";
-import { queueProducer } from "@/services/QueueProducer";
-import { webhookDispatcher } from "@/services/WebhookDispatcher";
-import type { Message } from "@prisma/client";
-import { MessageDirection, Channel } from "@prisma/client";
-
+import { metaWebhookService } from "@/services/MetaWebhookService";
+import type { MetaWebhookBody } from "@/services/MetaWebhookService";
 import type { Request, Response } from "express";
 
-// Configuration Constants
+// ─────────────────────────────────────────────────────
+// 🛡️ META CONTROLLER (Audit Hardened — Production Grade)
+//
+// Pure HTTP orchestrator for Meta Cloud API / WhatsApp Business API.
+// ALL business logic is delegated to MetaWebhookService (SRP).
+//
+// Responsibilities:
+// - Parse HTTP request (body, query params)
+// - Respond with correct HTTP status codes
+// - Delegate to MetaWebhookService
+//
+// NO business logic, NO database access, NO Prisma imports.
+// ─────────────────────────────────────────────────────
+
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
 
 /**
  * 1. WEBHOOK VERIFICATION (Handshake)
+ *
+ * Meta sends a GET request to verify our webhook endpoint.
+ * We validate the token and return the challenge.
  */
-export const verifyWebhook = (req: Request, res: Response) => {
+export const verifyWebhook = (req: Request, res: Response): void => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
   if (mode && token) {
     if (mode === "subscribe" && token === META_VERIFY_TOKEN) {
-      Logger.info("[Meta] Webhook Verified! [ONLINE]");
+      Logger.info("[MetaController] ✅ Webhook Verified! [ONLINE]");
       res.status(200).send(challenge);
     } else {
+      Logger.warn("[MetaController] ❌ Verification failed: Token mismatch");
       res.sendStatus(403);
     }
   } else {
@@ -34,186 +45,24 @@ export const verifyWebhook = (req: Request, res: Response) => {
 
 /**
  * 2. PROCESS INCOMING WEBHOOK (Entry Point)
- * Receives the POST from Meta, saves to DB, and notifies the agent via Socket.
+ *
+ * Meta sends a POST with the incoming message payload.
+ * We ALWAYS return 200 to Meta to prevent retries, regardless of internal processing.
+ * Internal errors are logged and monitored, not reflected to Meta.
  */
-export const handleIncomingWebhook = async (req: Request, res: Response) => {
+export const handleIncomingWebhook = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  // [SEC] CRITICAL: Always respond 200 to Meta FIRST to prevent retry storms.
+  // Meta will retry up to 7 times with exponential backoff if we return non-2xx.
+  res.sendStatus(200);
+
   try {
-    const body = req.body;
-
-    // 1. Parse the complex Meta JSON
-    const parsedData = await processMetaJSON(body);
-
-    if (!parsedData.isValid || !parsedData.data) {
-      return res.sendStatus(200); // Always return 200 to Meta to prevent retries
-    }
-
-    const data = parsedData.data;
-    Logger.info(
-      `[Meta]  Received message from ${data.phoneNumber} (Type: ${data.type})`,
-    );
-
-    // 2. CONSTRUCT MESSAGE OBJECT
-    // Este objeto ahora es compatible con el service
-    const messageToSave: Omit<Message, "createdAt" | "updatedAt"> = {
-      id: data.messageId,
-      conversationId: "c1", // TODO: Lógica para encontrar o crear conversación
-      content: data.messageBody,
-      channel: Channel.WHATSAPP, // Asumimos WhatsApp para Meta
-      direction: MessageDirection.INBOUND,
-      status: "SENT",
-      senderId: "user_placeholder",
-      metadata: null,
-      companyId: "comp_123", // Added missing field
-      whatsappMessageId: data.messageId, // Added missing field
-    };
-
-    // TODO: Usar messageRepository o messageService para guardar el mensaje
-    // const savedMessage = await messageService.create(messageToSave);
-
-    // 3. TRIGGER OUTGOING WEBHOOKS (Developer API)
-    // Notify external customer systems that a message arrived
-    webhookDispatcher.dispatch("comp_123", "message.received", messageToSave);
-
-    // 4. ASYNC AI PROCESSING
-    // Instead of calling AI directly, we push to queue for scalability
-    queueProducer.addAITaskToQueue({
-      messageId: messageToSave.id,
-      text: messageToSave.content,
-      history: [], // Should fetch from DB
-      companyId: "comp_123",
-    });
-
-    // 5. REAL-TIME NOTIFICATION
-    const assignedAgentId = "a1"; // Simulated assignment
-    if (assignedAgentId) {
-      // Use the gateway's socket interface to emit the message to the assigned agent
-      gateway
-        .getIO()
-        ?.to(assignedAgentId)
-        .emit("message.received", messageToSave);
-    }
-
-    res.sendStatus(200);
-  } catch (error) {
-    Logger.error("[Meta] Error processing webhook:", error);
-    res.sendStatus(500);
+    const body = req.body as MetaWebhookBody;
+    await metaWebhookService.processIncomingMessage(body);
+  } catch (error: unknown) {
+    // Log but NEVER crash — the 200 is already sent.
+    Logger.error("[MetaController] 🚨 Webhook processing failed:", error);
   }
-};
-
-interface MetaWebhookBody {
-  object?: string;
-  entry?: Array<{
-    changes?: Array<{
-      value: {
-        messages?: Array<{
-          id: string;
-          from: string;
-          timestamp: string;
-          type: string;
-          text?: { body: string };
-          image?: { id: string; caption?: string };
-          video?: { id: string; caption?: string };
-          audio?: { id: string };
-          document?: { id: string; filename?: string; caption?: string };
-          [key: string]: unknown;
-        }>;
-        contacts?: Array<{ profile: { name: string } }>;
-        metadata?: { phone_number_id?: string };
-      };
-    }>;
-  }>;
-}
-
-// Helper to extract data and PROCESS MEDIA
-const processMetaJSON = async (body: MetaWebhookBody) => {
-  if (body.object) {
-    if (
-      body.entry &&
-      body.entry[0].changes &&
-      body.entry[0].changes[0] &&
-      body.entry[0].changes[0].value.messages &&
-      body.entry[0].changes[0].value.messages[0]
-    ) {
-      const change = body.entry[0].changes[0].value;
-      const message = change.messages[0];
-      const contact = change.contacts ? change.contacts[0] : null;
-      const companyId = "comp_123"; // In real app: Look up by WABA ID (change.metadata.phone_number_id)
-
-      let content = "";
-      let attachment = undefined;
-      const type = message.type;
-
-      // HANDLE TEXT
-      if (type === "text") {
-        content = message.text.body;
-      }
-      // HANDLE MEDIA (Image, Audio, Video, Document)
-      else if (["image", "video", "audio", "document"].includes(type)) {
-        const mediaObj = message[type as keyof typeof message] as {
-          id: string;
-          caption?: string;
-          filename?: string;
-          mime_type?: string;
-        };
-        content = mediaObj?.caption || `[${type.toUpperCase()}]`;
-
-        // --- DOWNLOAD FROM META & UPLOAD TO S3 ---
-        try {
-          if (mediaObj?.id) {
-            const s3Result = await metaMediaService.processMedia(
-              mediaObj.id,
-              companyId,
-            );
-
-            attachment = {
-              id: mediaObj.id,
-              type: s3Result.type,
-              url: s3Result.url, // The S3 URL!
-              name: mediaObj.filename || `${type}_${mediaObj.id}`,
-              mimeType: mediaObj.mime_type || `${type}/unknown`,
-            };
-          }
-        } catch (e) {
-          Logger.error("Error processing media:", e);
-          content = `[ERROR DOWNLOADING ${type}]`;
-        }
-      }
-
-      return {
-        isValid: true,
-        data: {
-          phoneNumber: message.from,
-          senderName: contact ? contact.profile.name : "Unknown",
-          messageBody: content,
-          messageId: message.id,
-          timestamp: message.timestamp,
-          type,
-          attachment,
-        },
-      };
-    }
-  }
-  return { isValid: false };
-};
-
-/**
- * 3. SEND WHATSAPP MESSAGE (Redirects to Queue)
- */
-export const sendWhatsAppMessage = async (to: string, messageBody: string) => {
-  // Call the producer to enqueue
-  await queueProducer.addMessageToQueue({
-    to,
-    text: messageBody,
-    type: "text",
-    companyId: "comp_123",
-  });
-
-  // Trigger webhook event for sent message
-  webhookDispatcher.dispatch("comp_123", "message.sent", {
-    to,
-    text: messageBody,
-    timestamp: new Date(),
-  });
-
-  return { success: true };
 };

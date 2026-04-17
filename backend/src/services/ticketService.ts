@@ -2,42 +2,28 @@
  *  TICKET SERVICE (Refactored)
  *
  * Core ticket CRUD operations with enrichment delegated to TicketEnrichment.
- * Handles: create, getAll, getById, update (with status transitions,
- * auto-assignment, SPAM blocking, socket notifications), delete.
+ * Handles: create, getAll, getById, update, delete.
+ * Update side-effects are delegated to TicketTransitionManager and TicketNotificationService.
  */
 
-import {
-  Prisma,
-  TicketStatus,
-  TicketPriority,
-  TicketResolutionType,
-  ConversationStatus,
-} from "@prisma/client";
+import { Prisma, TicketStatus, TicketPriority } from "@prisma/client";
 import { ticketRepository } from "@/repositories/TicketRepository";
-import { contactRepository } from "@/repositories/ContactRepository";
-import { conversationRepository } from "@/repositories/ConversationRepository";
 import { userRepository } from "@/repositories/UserRepository";
-import { notificationRepository } from "@/repositories/NotificationRepository";
-import { gateway } from "@/gateways/socketGateway";
-// webhookDispatcher import removed due to unused
 import { Logger } from "@/utils/logger";
-import {
-  toTicketDTO,
-  TicketDTO,
-  TicketWithRelations,
-} from "@/types/ticket.types";
+import { toTicketDTO, TicketDTO, TicketWithRelations } from "@/types/ticket.types";
 import { AppError } from "@/utils/AppError";
 import { ticketEnrichment } from "./tickets/TicketEnrichment";
+import { ticketTransitionManager } from "./tickets/TicketTransitionManager";
+import { ticketNotificationService } from "./tickets/TicketNotificationService";
+import { webhookDispatcher } from "@/services/WebhookDispatcher";
+import { WebhookEvents } from "@/types/types";
 
 class TicketService {
   /**
    * Enrich TicketDTOs with CRM Contact Data AND WhatsApp Session Index
    * (Delegated to TicketEnrichment)
    */
-  async enrichWithCrmData(
-    dtos: TicketDTO[],
-    companyId: string,
-  ): Promise<TicketDTO[]> {
+  async enrichWithCrmData(dtos: TicketDTO[], companyId: string): Promise<TicketDTO[]> {
     return ticketEnrichment.enrichWithCrmData(dtos, companyId);
   }
 
@@ -86,12 +72,17 @@ class TicketService {
     });
 
     const dto = toTicketDTO(ticket as unknown as TicketWithRelations);
+    await ticketNotificationService.notifyTicketCreated(data.companyId, dto);
 
-    try {
-      gateway.emitToCompany(data.companyId, "ticket.created", { ticket: dto });
-    } catch (e) {
-      Logger.error("[TicketService] Socket emit failed:", e);
-    }
+    // [WEBHOOK] Dispatch ticket.created event
+    void webhookDispatcher.dispatch(data.companyId, WebhookEvents.TICKET_CREATED, {
+      id: dto.id,
+      ticketNumber: dto.ticketNumber,
+      subject: dto.subject,
+      priority: dto.priority,
+      status: dto.status,
+      assignedToId: dto.assignedTo?.id || null,
+    });
 
     return dto;
   }
@@ -122,11 +113,7 @@ class TicketService {
       });
 
       const queueIds =
-        (
-          user as unknown as {
-            queues: { id: string }[];
-          } | null
-        )?.queues?.map((q) => q.id) || [];
+        (user as unknown as { queues: { id: string }[] } | null)?.queues?.map((q) => q.id) || [];
 
       where.OR = [
         { assignedToId: data.userId },
@@ -151,10 +138,7 @@ class TicketService {
       },
     });
 
-    const dtos = tickets.map((t) =>
-      toTicketDTO(t as unknown as TicketWithRelations),
-    );
-
+    const dtos = tickets.map((t) => toTicketDTO(t as unknown as TicketWithRelations));
     return this.enrichWithCrmData(dtos, data.companyId);
   }
 
@@ -179,10 +163,8 @@ class TicketService {
       },
     });
 
-    if (!ticket || ticket.deletedAt)
-      throw new AppError("Ticket not found", 404);
-    if (ticket.companyId !== companyId)
-      throw new AppError("Permission denied", 403);
+    if (!ticket || ticket.deletedAt) throw new AppError("Ticket not found", 404);
+    if (ticket.companyId !== companyId) throw new AppError("Permission denied", 403);
 
     const dto = toTicketDTO(ticket as unknown as TicketWithRelations);
     const [enriched] = await this.enrichWithCrmData([dto], companyId);
@@ -196,9 +178,7 @@ class TicketService {
     updaterName: string,
     data: Record<string, unknown>,
   ): Promise<TicketDTO> {
-    let existingTicket = await ticketRepository.findUnique({
-      where: { id: ticketId },
-    });
+    let existingTicket = await ticketRepository.findUnique({ where: { id: ticketId } });
 
     if (!existingTicket) {
       const ticketByConv = await ticketRepository.findFirst({
@@ -211,59 +191,9 @@ class TicketService {
     }
 
     if (!existingTicket) throw new AppError("Ticket not found", 404);
-    if (existingTicket.companyId !== companyId)
-      throw new AppError("Permission denied", 403);
+    if (existingTicket.companyId !== companyId) throw new AppError("Permission denied", 403);
 
-    const updateData: Prisma.TicketUpdateInput = {};
-
-    if (data.status === "RESOLVED" || data.status === "CLOSED") {
-      if (
-        existingTicket.status !== "RESOLVED" &&
-        existingTicket.status !== "CLOSED"
-      ) {
-        updateData.resolvedAt = new Date();
-      }
-    } else if (data.status === "OPEN" || data.status === "IN_PROGRESS") {
-      if (
-        existingTicket.status === "RESOLVED" ||
-        existingTicket.status === "CLOSED"
-      ) {
-        // Enterprise: Reset resolution audit if reopened
-        updateData.resolvedAt = null;
-        updateData.resolutionType = null as unknown as TicketResolutionType; 
-        updateData.resolutionNotes = null as unknown as string;
-      }
-    }
-
-    if (data.subject !== undefined) updateData.subject = data.subject as string;
-    if (data.description !== undefined)
-      updateData.description = data.description as string;
-    if (data.priority !== undefined)
-      updateData.priority = data.priority as TicketPriority;
-    if (data.status !== undefined)
-      updateData.status = data.status as TicketStatus;
-
-    if (data.queueId !== undefined) {
-      updateData.queue = data.queueId
-        ? { connect: { id: data.queueId as string } }
-        : { disconnect: true };
-    }
-
-    if (data.assignedToId !== undefined) {
-      updateData.assignedTo = data.assignedToId
-        ? { connect: { id: data.assignedToId as string } }
-        : { disconnect: true };
-      if (data.status === undefined) {
-        updateData.status = data.assignedToId ? "IN_PROGRESS" : "OPEN";
-      }
-    }
-
-    if (data.resolvedAt !== undefined)
-      updateData.resolvedAt = data.resolvedAt as Date;
-    if (data.resolutionType !== undefined)
-      updateData.resolutionType = data.resolutionType as TicketResolutionType;
-    if (data.resolutionNotes !== undefined)
-      updateData.resolutionNotes = data.resolutionNotes as string;
+    const updateData = await ticketTransitionManager.evaluateStatusTransitions(existingTicket, data);
 
     let updatedTicket;
     try {
@@ -284,208 +214,76 @@ class TicketService {
       });
     } catch (error: unknown) {
       const prismaError = error as { code?: string };
-      if (prismaError?.code === "P2003")
-        throw new AppError("Invalid Queue ID or User ID", 400);
+      if (prismaError?.code === "P2003") throw new AppError("Invalid Queue ID or User ID", 400);
       throw error;
     }
 
-    // Auto-assignment if routed to queue without agent
-    if (data.queueId && updatedTicket.queueId && !updatedTicket.assignedToId) {
-      try {
-        const { assignTicketToAgent } =
-          await import("@/services/AutoAssignmentService");
-        await assignTicketToAgent(updatedTicket.id, updatedTicket.queueId);
-      } catch (error) {
-        Logger.error("[TicketService] Auto-assignment failed:", error);
-      }
-    }
+    await ticketTransitionManager.triggerAutoAssignment(updatedTicket.id, updatedTicket.queueId, updatedTicket.assignedToId);
+    await ticketTransitionManager.syncConversation({ companyId: updatedTicket.companyId, conversationId: updatedTicket.conversationId }, data);
+    await ticketTransitionManager.handleSpamAction(updaterId, { id: updatedTicket.id, companyId: updatedTicket.companyId, conversationId: updatedTicket.conversationId }, data);
 
-    // Sync Conversation Queue & Assignment
-    if (updatedTicket.conversationId) {
-      const syncData: Prisma.ConversationUpdateInput = {};
-      let needsSync = false;
-
-      if (data.queueId !== undefined) {
-        syncData.queue = data.queueId
-          ? { connect: { id: data.queueId as string } }
-          : { disconnect: true };
-        needsSync = true;
-      }
-      if (data.assignedToId !== undefined) {
-        syncData.assignedTo = data.assignedToId
-          ? { connect: { id: data.assignedToId as string } }
-          : { disconnect: true };
-        needsSync = true;
-      }
-      if (data.status !== undefined) {
-        syncData.status = data.status as
-          | "OPEN"
-          | "IN_PROGRESS"
-          | "RESOLVED"
-          | "CLOSED";
-        needsSync = true;
-        if (data.status === "RESOLVED" || data.status === "CLOSED")
-          syncData.resolvedAt = new Date();
-      }
-
-      if (needsSync) {
-        const uncheckedSyncData: Prisma.ConversationUncheckedUpdateInput = {};
-        
-        if (data.status !== undefined) {
-          uncheckedSyncData.status = data.status as ConversationStatus;
-          if (data.status === "RESOLVED" || data.status === "CLOSED") {
-            uncheckedSyncData.resolvedAt = new Date();
-          } else {
-            uncheckedSyncData.resolvedAt = null;
-          }
-        }
-        
-        if (data.queueId !== undefined) {
-          uncheckedSyncData.queueId = (data.queueId as string) || null;
-        }
-        
-        if (data.assignedToId !== undefined) {
-          uncheckedSyncData.assignedToId = (data.assignedToId as string) || null;
-        }
-
-        await conversationRepository
-          .updateConversation(updatedTicket.companyId, updatedTicket.conversationId, uncheckedSyncData)
-          .catch((e) => Logger.error("[TicketService] sync error:", e));
-      }
-    }
-
-    // SPAM handling
-    if (data.resolutionType === "SPAM" && updatedTicket.conversationId) {
-      try {
-        const conv = await conversationRepository.findByIdAndCompanyId(
-          updatedTicket.conversationId,
-          updatedTicket.companyId,
-        );
-        if (conv?.contactId) {
-          await contactRepository.update(updatedTicket.companyId, conv.contactId, {
-            isBlocked: true,
-            blockedAt: new Date(),
-            blockedReason: "SPAM",
-          });
-        } else if (conv?.channelId) {
-          const contact = await contactRepository.findWithDeleted(
-            updatedTicket.companyId,
-            conv.channelId,
-          );
-          if (contact) {
-            await contactRepository.update(updatedTicket.companyId, contact.id, {
-              isBlocked: true,
-              blockedAt: new Date(),
-              blockedReason: "SPAM",
-            });
-          }
-        }
-        await ticketRepository.update({
-          where: { id: updatedTicket.id },
-          data: { deletedAt: new Date(), deletedBy: updaterId || "system" },
-        });
-      } catch (error) {
-        Logger.error(
-          "[TicketService] Failed to auto-block SPAM contact:",
-          error,
-        );
-      }
-    }
-
-    const rawTicketDto = toTicketDTO(
-      updatedTicket as unknown as TicketWithRelations,
-    );
+    const rawTicketDto = toTicketDTO(updatedTicket as unknown as TicketWithRelations);
     const [ticketDto] = await this.enrichWithCrmData([rawTicketDto], companyId);
 
-    // Socket Notifications
-    try {
-      const io = gateway.getIO();
-      const previousAssignee = existingTicket.assignedToId;
-      const newAssignee = updatedTicket.assignedToId;
-
-      io.to(`company:${updatedTicket.companyId}`).emit("ticket.updated", {
-        ticket: ticketDto,
-        changedFields: Object.keys(updateData),
-      });
-
-      const affectedAgents = new Set<string>();
-      if (updatedTicket.assignedToId)
-        affectedAgents.add(updatedTicket.assignedToId);
-      if (previousAssignee) affectedAgents.add(previousAssignee);
-
-      affectedAgents.forEach((agentId) => {
-        io.to(`agent:${agentId}`).emit("ticket.updated", {
-          ticket: ticketDto,
-          changedFields: Object.keys(updateData),
-        });
-      });
-
-      if (previousAssignee !== newAssignee && newAssignee !== null) {
-        io.to(`agent:${newAssignee}`).emit("ticket.assigned", {
-          ticket: ticketDto,
-          message: `Se te ha asignado el ticket #${updatedTicket.ticketNumber}: ${updatedTicket.subject}`,
-          assignedBy: updaterName || "Sistema",
-          timestamp: new Date().toISOString(),
-        });
-
-        await notificationRepository
-          .create({
-            data: {
-              companyId: updatedTicket.companyId,
-              userId: newAssignee,
-              type: "TICKET_ASSIGNED",
-              title: `Ticket #${updatedTicket.ticketNumber} asignado`,
-              message: `Se te ha asignado: ${updatedTicket.subject}`,
-              link: `/tickets/${updatedTicket.id}`,
-              metadata: {
-                ticketId: updatedTicket.id,
-                ticketNumber: updatedTicket.ticketNumber,
-                conversationId: updatedTicket.conversationId,
-                assignedBy: updaterId,
-              } as unknown as Prisma.InputJsonValue,
-              read: false,
-            },
-          })
-          .catch((e) =>
-            Logger.error("[TicketService] Notification failed:", e),
-          );
+    await ticketNotificationService.notifyTicketUpdated(
+      updatedTicket.companyId,
+      ticketDto,
+      Object.keys(updateData),
+      existingTicket.assignedToId,
+      updatedTicket.assignedToId,
+      updaterName,
+      updaterId,
+      {
+        id: updatedTicket.id,
+        ticketNumber: updatedTicket.ticketNumber,
+        subject: updatedTicket.subject,
+        conversationId: updatedTicket.conversationId
       }
+    );
 
-      if (updatedTicket.conversationId) {
-        io.to(`company:${updatedTicket.companyId}`).emit(
-          "conversation.updated",
-          {
-            id: updatedTicket.conversationId,
-            ticketId: updatedTicket.id,
-            queueId: updatedTicket.queueId,
-            assignedToId: updatedTicket.assignedToId,
-            contact: {
-              queueName: updatedTicket.queue?.name,
-              assignedAgentName: updatedTicket.assignedTo?.name,
-              assignedAgentId: updatedTicket.assignedToId,
-            },
+    if (updatedTicket.conversationId) {
+      await ticketNotificationService.notifyConversationUpdated(
+        updatedTicket.companyId, 
+        updatedTicket.conversationId, 
+        {
+          ticketId: updatedTicket.id,
+          queueId: updatedTicket.queueId,
+          assignedToId: updatedTicket.assignedToId,
+          contact: {
+            queueName: updatedTicket.queue?.name,
+            assignedAgentName: updatedTicket.assignedTo?.name,
+            assignedAgentId: updatedTicket.assignedToId,
           },
-        );
-      }
-    } catch (e) {
-      Logger.error("[TicketService] Socket emit failed:", e);
+        });
+    }
+
+    // [WEBHOOK] Dispatch ticket events based on what changed
+    if (data.status && existingTicket.status !== updatedTicket.status) {
+      void webhookDispatcher.dispatch(companyId, WebhookEvents.TICKET_STATUS_CHANGED, {
+        id: updatedTicket.id,
+        ticketNumber: updatedTicket.ticketNumber,
+        previousStatus: existingTicket.status,
+        newStatus: updatedTicket.status,
+        subject: updatedTicket.subject,
+      });
+    }
+    if (existingTicket.assignedToId !== updatedTicket.assignedToId) {
+      void webhookDispatcher.dispatch(companyId, WebhookEvents.TICKET_ASSIGNED, {
+        id: updatedTicket.id,
+        ticketNumber: updatedTicket.ticketNumber,
+        previousAgentId: existingTicket.assignedToId,
+        newAgentId: updatedTicket.assignedToId,
+        agentName: updatedTicket.assignedTo?.name || null,
+      });
     }
 
     return ticketDto;
   }
 
-  async deleteTicket(
-    ticketId: string,
-    companyId: string,
-    userId: string,
-  ): Promise<void> {
-    const ticket = await ticketRepository.findUnique({
-      where: { id: ticketId },
-    });
-    if (!ticket || ticket.deletedAt)
-      throw new AppError("Ticket not found", 404);
-    if (ticket.companyId !== companyId)
-      throw new AppError("Permission denied", 403);
+  async deleteTicket(ticketId: string, companyId: string, userId: string): Promise<void> {
+    const ticket = await ticketRepository.findUnique({ where: { id: ticketId } });
+    if (!ticket || ticket.deletedAt) throw new AppError("Ticket not found", 404);
+    if (ticket.companyId !== companyId) throw new AppError("Permission denied", 403);
 
     await ticketRepository.update({
       where: { id: ticketId },
@@ -496,17 +294,7 @@ class TicketService {
       },
     });
 
-    try {
-      gateway.emitToCompany(companyId, "ticket.deleted", { ticketId });
-      if (ticket.assignedToId) {
-        gateway
-          .getIO()
-          .to(`agent:${ticket.assignedToId}`)
-          .emit("ticket.deleted", { ticketId });
-      }
-    } catch (e) {
-      Logger.error("[TicketService] Socket emit failed:", e);
-    }
+    await ticketNotificationService.notifyTicketDeleted(companyId, ticketId, ticket.assignedToId);
   }
 }
 

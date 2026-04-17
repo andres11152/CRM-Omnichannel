@@ -19,10 +19,7 @@ export const createFlow = catchAsync(
       return next(new AppError("Company ID missing", 400));
     }
 
-    const flow = await flowService.create(
-      companyId,
-      req.body as Parameters<typeof flowService.create>[1],
-    );
+    const flow = await flowService.create(companyId, req.body);
     res.status(201).json(flow);
   },
 );

@@ -156,6 +156,27 @@ export const whatsappRateLimiter = createRateLimiter({
   },
 });
 
+/**
+ *  External API Rate Limiter (STRICT)
+ * For public API endpoints authenticated via API Key (100 req/min per key)
+ * Identifier: API Key header hash
+ */
+export const externalApiLimiter = createRateLimiter({
+  prefix: "external-api",
+  windowMs: 60 * 1000, // 1 minute
+  limit: 100,
+  message:
+    "API rate limit exceeded. Maximum 100 requests per minute. Please throttle your requests.",
+  keyGenerator: (req: Request) => {
+    // Use the API key as identifier (hashed for privacy in Redis)
+    const apiKey = req.headers["x-api-key"] as string;
+    if (apiKey) {
+      return `apikey:${apiKey.substring(0, 15)}`;
+    }
+    return `ip:${req.ip || "unknown"}`;
+  },
+});
+
 // Re-export apiLimiter with explicit resolution to avoid module loading errors
 // Note: Ensure rateLimitMiddleware exists. If not, this line should be removed.
 export { apiLimiter } from "./rateLimitMiddleware";

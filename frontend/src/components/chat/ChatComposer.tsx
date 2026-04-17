@@ -4,6 +4,7 @@ import { AudioRecorder } from "../AudioRecorder";
 import { QuickReply, Message } from "@/types";
 import { QuickReplies } from "../QuickReplies";
 import { InlineQuickReplies } from "./InlineQuickReplies";
+import EmojiPicker, { Theme } from "emoji-picker-react";
 
 interface ChatComposerProps {
   inputValue: string;
@@ -67,6 +68,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
 
   const [showQuickReplies, setShowQuickReplies] = React.useState(false);
   const [showSlashMenu, setShowSlashMenu] = React.useState(false);
+  const [showEmojiMenu, setShowEmojiMenu] = React.useState(false);
   const [slashQuery, setSlashQuery] = React.useState("");
 
   // Auto-trigger Quick Replies and Slash Menu
@@ -97,7 +99,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             onInputChange={setInputValue}
             onSend={onSend}
             onAttachmentClick={triggerFileSelect}
-            onEmojiToggle={onEmojiToggle}
+            onEmojiToggle={() => setShowEmojiMenu((prev) => !prev)}
             isRecording={isRecording}
             onVoiceNoteClick={() => setIsRecording(true)}
             selectedFile={selectedFile}
@@ -152,6 +154,24 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             }}
             onClose={() => setShowQuickReplies(false)}
           />
+        )}
+
+        {/* EMOJI PICKER MODAL */}
+        {showEmojiMenu && (
+          <div className="absolute bottom-[calc(100%+10px)] left-4 z-50 animate-in slide-in-from-bottom-2 duration-200">
+            <div className="fixed inset-0 z-[-1]" onClick={() => setShowEmojiMenu(false)} />
+            <EmojiPicker
+              theme={
+                typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+                  ? Theme.DARK
+                  : Theme.LIGHT
+              }
+              onEmojiClick={(emojiData) => {
+                setInputValue(inputValue + emojiData.emoji);
+              }}
+              lazyLoadEmojis={true}
+            />
+          </div>
         )}
       </div>
     </div>

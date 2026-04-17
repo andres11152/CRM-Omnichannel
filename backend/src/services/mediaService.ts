@@ -236,7 +236,7 @@ export const mediaService = {
     await storageProvider.delete(media.key);
 
     // Delete from DB via repository
-    await mediaRepository.delete(mediaId);
+    await mediaRepository.delete(mediaId, companyId);
   },
 
   /**

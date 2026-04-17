@@ -11,6 +11,12 @@ import { quickReplyService } from "@/services/QuickReplyService";
  * All data access delegated to quickReplyService (SRP).
  */
 
+interface QuickReplyBody {
+  title: string;
+  content: string;
+  category?: string;
+}
+
 export const getQuickReplies = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     if (!req.companyId) {
@@ -28,7 +34,7 @@ export const getQuickReplies = catchAsync(
 );
 
 export const createQuickReply = catchAsync(
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest<any, any, QuickReplyBody>, res: Response) => {
     if (!req.companyId) {
       throw new AppError("Not authorized", 401);
     }
@@ -53,7 +59,7 @@ export const createQuickReply = catchAsync(
 );
 
 export const updateQuickReply = catchAsync(
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest<any, any, QuickReplyBody>, res: Response) => {
     if (!req.companyId) {
       throw new AppError("Not authorized", 401);
     }

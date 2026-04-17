@@ -26,6 +26,7 @@ import { SessionData } from "@/types/whatsapp.types";
 import { getWhatsAppQueue } from "../queue/WhatsAppQueue";
 import { InboundWorker } from "../queue/workers/InboundWorker";
 import { OutboundWorker } from "../queue/workers/OutboundWorker";
+import { InboundCircuitBreaker } from "../services/InboundCircuitBreaker";
 
 /**
  * [BUILD] MESSAGE HANDLER (Thin Orchestrator)
@@ -193,10 +194,15 @@ export class MessageHandler implements IMessageHandler {
   async handleIncoming(message: proto.IWebMessageInfo, sessionId: string, companyId: string): Promise<void> {
     const plainMessage = this.deepCopyPlain(message) as proto.IWebMessageInfo;
 
+    // [SEC] CIRCUIT BREAKER: Evaluate if company is flooding the system
+    const delayMs = await InboundCircuitBreaker.getDelayFor(companyId);
+
     await getWhatsAppQueue().inboundQueue.add("process-message", {
       message: plainMessage,
       sessionId,
       companyId,
+    }, {
+      delay: delayMs
     });
   }
 

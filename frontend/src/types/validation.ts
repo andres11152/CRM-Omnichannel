@@ -10,10 +10,9 @@ import {
   Channel,
   MessageDirection,
   ConversationStatus,
-  UserRole,
   MessageStatus,
-  CompanyStatus,
 } from "./domain";
+import { UserRole, CompanyStatus } from "../types";
 
 // ============================================
 // ENUM SCHEMAS
@@ -22,9 +21,9 @@ import {
 export const ChannelSchema = z.nativeEnum(Channel);
 export const MessageDirectionSchema = z.nativeEnum(MessageDirection);
 export const ConversationStatusSchema = z.nativeEnum(ConversationStatus);
-export const UserRoleSchema = z.nativeEnum(UserRole);
+export const UserRoleSchema = z.enum(["MASTER", "ADMIN", "AGENT", "company_admin", "master", "agent"]);
 export const MessageStatusSchema = z.nativeEnum(MessageStatus);
-export const CompanyStatusSchema = z.nativeEnum(CompanyStatus);
+export const CompanyStatusSchema = z.enum(["ACTIVE", "INACTIVE", "OVERDUE", "CANCELED", "BANNED", "TRIAL"]);
 
 // ============================================
 // BASE SCHEMAS
@@ -41,14 +40,13 @@ export const BaseEntitySchema = z.object({
 // ============================================
 
 export const UserPreferencesSchema = z.object({
+  darkMode: z.boolean().optional(),
+  language: z.string().optional(),
   notifications: z.object({
     email: z.boolean(),
-    push: z.boolean(),
-    sms: z.boolean(),
-  }),
-  language: z.string(),
-  timezone: z.string(),
-  theme: z.enum(["light", "dark", "auto"]),
+    browser: z.boolean(),
+  }).optional(),
+  sidebarOrder: z.array(z.string()).optional(),
 });
 
 export const UserListItemSchema = z.object({
@@ -64,10 +62,10 @@ export const UserSchema = BaseEntitySchema.extend({
   name: z.string().min(1),
   role: UserRoleSchema,
   companyId: z.string(),
-  phone: z.string().nullable(),
-  avatarUrl: z.string().url().nullable(),
+  phone: z.string().nullish().transform(v => v ?? undefined),
+  avatarUrl: z.string().url().nullish().transform(v => v ?? undefined),
   isActive: z.boolean(),
-  preferences: UserPreferencesSchema.nullable(),
+  preferences: UserPreferencesSchema.nullish().transform(v => v ?? undefined),
 });
 
 // ============================================

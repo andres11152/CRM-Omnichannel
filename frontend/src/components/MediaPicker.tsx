@@ -31,9 +31,9 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
       });
 
       // Filter by allowed types if specified
-      let filteredMedia = data.media;
+      let filteredMedia = data;
       if (allowedTypes && allowedTypes.length > 0) {
-        filteredMedia = data.media.filter((m) => allowedTypes.includes(m.type));
+        filteredMedia = data.filter((m: Media) => allowedTypes.includes(m.type));
       }
 
       setMedia(filteredMedia);

@@ -18,7 +18,12 @@ import makeWASocket, {
   isJidBroadcast,
   proto,
   jidNormalizedUser,
+  Contact,
 } from "@whiskeysockets/baileys";
+
+interface ExtendedWASocket extends WASocket {
+  getLidToPhoneNumberMap?: (lids: string[]) => Promise<{ [lid: string]: string }>;
+}
 import { SimpleInMemoryStore } from "./SimpleStore";
 import { ConnectionHealer } from "./ConnectionHealer";
 import {
@@ -132,18 +137,67 @@ export class SessionManager implements ISessionManager {
     sessionId: string,
     lid: string,
   ): Promise<string | null> {
-    const sock = this.sessions.get(sessionId);
+    const sock = this.sessions.get(sessionId) as ExtendedWASocket;
     if (!sock) return null;
 
+    // 1. Immediate Store Check (Strategy 1)
     const fromStore = this.findContactByLid(sessionId, lid);
-    if (fromStore?.id) {
+    if (fromStore?.id && !fromStore.id.includes("@lid")) {
       return fromStore.id.split("@")[0].split(":")[0];
     }
 
-    logger.warn(
-      `[SessionManager] [WARNING] Could not resolve LID ${lid}. Waiting for history sync...`,
-    );
+    // 2. [SYNC] FORCE QUERY (Strategy 2 - Swiss Watch Trigger)
+    // We trigger multiple queries to force WhatsApp to reveal the mapping
+    try {
+      const fullLid = lid.includes("@lid") ? lid : `${lid}@lid`;
+      
+      // Warm up with multiple triggers (Forces metadata sync)
+      sock.onWhatsApp(fullLid).catch(() => {});
+      sock.profilePictureUrl(fullLid, 'image').catch(() => {});
+      sock.fetchStatus(fullLid).catch(() => {});
+      
+      // Attempt MEX Query (The alternate direct way)
+      const queryId = '6631627993539868'; 
+      sock.query({
+         tag: 'iq',
+         attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'w:mex' },
+         content: [
+           {
+             tag: 'query',
+             attrs: { query_id: queryId },
+             content: Buffer.from(JSON.stringify({ variables: { lids: [fullLid] } }))
+           }
+         ]
+      }).catch(() => {});
+    } catch (err) {
+      // Ignore trigger errors
+    }
+
+    // 3. [SYNC] POLL STORE (Strategy 3 - Swiss Watch Precision)
+    // Many LID mappings arrive asynchronously via push events. 
+    // We wait and poll the store to catch the update.
+    for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r, 400));
+        const resolved = this.findContactByLid(sessionId, lid);
+        if (resolved?.id && !resolved.id.includes("@lid")) {
+            return resolved.id.split("@")[0].split(":")[0];
+        }
+    }
+
     return null;
+  }
+
+  public async resolveLidsToPhones(
+    sessionId: string,
+    lids: string[],
+  ): Promise<Record<string, string>> {
+     const results: Record<string, string> = {};
+     // Run in parallel for efficiency
+     await Promise.all(lids.map(async (lid) => {
+        const phone = await this.resolveLidToPhone(sessionId, lid);
+        if (phone) results[lid] = phone;
+     }));
+     return results;
   }
 
   // ────────────────────────────────────────────────
@@ -422,7 +476,12 @@ export class SessionManager implements ISessionManager {
     return false;
   }
 
-  getSessionStore(sessionId: string): unknown {
+  getSessionStore(sessionId: string): {
+    chats: Map<string, import("@whiskeysockets/baileys").Chat>;
+    messages: Record<string, import("@whiskeysockets/baileys").proto.IWebMessageInfo[]>;
+    contacts: Record<string, Contact>;
+    lidToPhone: Record<string, string>;
+  } | null {
     const store = this.sessionStores.get(sessionId);
     if (!store) return null;
     return {
@@ -431,5 +490,18 @@ export class SessionManager implements ISessionManager {
       contacts: store.contacts,
       lidToPhone: store.lidToPhone,
     };
+  }
+
+  // ────────────────────────────────────────────────
+  // MEMORY MANAGEMENT
+  // ────────────────────────────────────────────────
+
+  public flushAllMemoryStores(): void {
+    let count = 0;
+    for (const [sessionId, store] of this.sessionStores.entries()) {
+      store.flush();
+      count++;
+    }
+    logger.warn(`[SessionManager] [MEM_MONITOR] Flushed memory stores for ${count} sessions to free RAM.`);
   }
 }

@@ -1,6 +1,6 @@
 import { userRepository } from "@/repositories/UserRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
-import { contactService } from "./contactService";
+import { contactService } from "./ContactService";
 import { gateway } from "@/gateways/socketGateway";
 import { ticketSyncService } from "./TicketSyncService";
 import { AppError } from "@/utils/AppError";

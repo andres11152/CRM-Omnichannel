@@ -179,9 +179,13 @@ export class MessageRepository {
   }
 
   /**
-   * Update a specific message by ID.
+   * [SEC] Update a specific message by ID, scoped by companyId.
    */
-  async update(id: string, data: Prisma.MessageUpdateInput) {
+  async update(id: string, data: Prisma.MessageUpdateInput, companyId?: string) {
+    if (companyId) {
+      const exists = await prisma.message.findFirst({ where: { id, companyId } });
+      if (!exists) throw new Error(`Message ${id} not found in company ${companyId}`);
+    }
     return prisma.message.update({
       where: { id },
       data,

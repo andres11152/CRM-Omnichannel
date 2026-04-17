@@ -26,7 +26,7 @@ export class ConversationMessageService {
    */
   async replyToConversation(
     dto: ReplyDTO,
-  ): Promise<Message | { id: string; content: string; timestamp?: Date; status?: string, sender?: string }> {
+  ): Promise<Message | { id: string; content: string; timestamp?: Date; status?: string, sender?: string; metadata?: unknown; type?: string; mediaUrl?: string }> {
     const {
       companyId,
       userId,
@@ -73,7 +73,8 @@ export class ConversationMessageService {
       throw new AppError("No se pudo determinar el numero de teléfono del destinatario.", 400);
     }
 
-    const messageContent = content || (attachment ? `[FILE] Archivo: ${attachment.name || "Adjunto"}` : "");
+    const isAudio = attachment?.type === "audio";
+    const messageContent = content || (attachment && !isAudio ? `[FILE] Archivo: ${attachment.name || "Adjunto"}` : "");
 
     // C. Handle Scheduling
     if (scheduledAt) {
@@ -83,6 +84,8 @@ export class ConversationMessageService {
         attachment,
         quotedMessageId,
         quotedContent,
+        type: attachment ? attachment.type : "text",
+        mediaUrl: attachment ? attachment.url : undefined,
       };
 
       return await messageRepository.create({
@@ -111,18 +114,33 @@ export class ConversationMessageService {
         filename: attachment.name,
         caption: attachment.name,
       } : undefined,
-      metadata: { ...metadata, quotedMessageId, quotedContent },
+      metadata: { 
+        ...metadata, 
+        quotedMessageId, 
+        quotedContent, 
+        attachment, 
+        type: attachment ? attachment.type : "text", 
+        mediaUrl: attachment ? attachment.url : undefined 
+      },
       quotedMessageId,
     };
 
     const sent = await whatsappService.sendMessage(targetPhone, messageContent, options);
 
     return {
-      id: sent.messageId,
+      id: sent.dbId || sent.messageId,
       content: sent.content,
       timestamp: sent.timestamp,
       status: "SENT",
       sender: "agent",
+      metadata: {
+        ...(sent.metadata || {}),
+        attachment,
+        type: attachment ? attachment.type : "text",
+        mediaUrl: attachment ? attachment.url : undefined,
+      },
+      type: attachment ? attachment.type : "text",
+      mediaUrl: attachment ? attachment.url : undefined,
     };
   }
 

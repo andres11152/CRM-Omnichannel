@@ -1,4 +1,4 @@
-import { emailService } from "./emailService";
+import { emailService } from "./EmailService";
 import { Logger } from "@/utils/logger";
 
 interface LoginNotificationData {

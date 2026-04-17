@@ -554,10 +554,26 @@ model ApiKey {
   name       String // Un nombre descriptivo dado por el usuario
   companyId  String
   company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  scopes     String[]  @default(["*"]) // e.g. ["contacts:read", "messages:write"]
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime? // Opcional: para rastrear el uso
 
   @@map("api_keys")
+}
+
+model ApiAccessLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  apiKeyId   String?  // Optional because key might be deleted
+  endpoint   String
+  method     String
+  statusCode Int
+  ipAddress  String?
+  durationMs Int
+  createdAt  DateTime @default(now())
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("api_access_logs")
 }
 
 model Webhook {
@@ -570,7 +586,29 @@ model Webhook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  deliveryLogs WebhookDeliveryLog[]
+
+  @@index([companyId, isActive])
   @@map("webhooks")
+}
+
+model WebhookDeliveryLog {
+  id        String   @id @default(cuid())
+  companyId String
+  webhookId String
+  webhook   Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventType String
+  url       String   // Denormalized for fast log queries
+  status    Int      // HTTP status code (200, 500, etc.)
+  duration  Int      // Response time in milliseconds
+  error     String?  // Error message if delivery failed
+  payload   Json?    // The event payload sent (for debugging)
+  attempt   Int      @default(1) // Retry attempt number
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([webhookId, createdAt(sort: Desc)])
+  @@map("webhook_delivery_logs")
 }
 
 // --- Modelos del Foro/Blog ---

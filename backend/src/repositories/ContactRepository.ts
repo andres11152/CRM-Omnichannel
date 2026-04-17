@@ -44,7 +44,7 @@ export class ContactRepository {
       data: {
         companyId,
         phone,
-        name,
+        name: name || phone,
         tags: ["WHATSAPP_LEAD"],
       },
     });

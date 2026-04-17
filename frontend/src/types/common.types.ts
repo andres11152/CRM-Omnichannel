@@ -2,6 +2,24 @@
  * [DEV] Common Types & API Responses
  */
 
+export enum Channel {
+  EMAIL = "EMAIL",
+  WHATSAPP = "WHATSAPP",
+  SMS = "SMS",
+  WEB_CHAT = "WEB_CHAT",
+  TELEGRAM = "TELEGRAM",
+  FACEBOOK_MESSENGER = "FACEBOOK_MESSENGER",
+  INSTAGRAM_DM = "INSTAGRAM_DM",
+  INSTAGRAM = "INSTAGRAM", // Added for compatibility
+}
+
+export enum SenderType {
+  USER = "USER",
+  AGENT = "AGENT",
+  BOT = "BOT",
+  SYSTEM = "SYSTEM",
+}
+
 // Generic API Response Wrapper
 export interface ApiResponse<T = unknown> {
   status: "success" | "fail" | "error";

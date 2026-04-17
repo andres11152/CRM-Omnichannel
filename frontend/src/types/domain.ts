@@ -5,9 +5,8 @@
  * These types match the backend Prisma schema exactly
  */
 
-// ============================================
-// ENUMS (Match backend exactly)
-// ============================================
+import { BaseEntity, Nullable } from "./common.types";
+import { UserRole, CompanyStatus, User as AuthUser, Company as AuthCompany, UserPreferences as AuthUserPreferences } from "./auth.types";
 
 export enum Channel {
   EMAIL = "EMAIL",
@@ -31,14 +30,6 @@ export enum ConversationStatus {
   CLOSED = "CLOSED",
 }
 
-export enum UserRole {
-  USER = "USER",
-  AGENT = "AGENT",
-  SUPERVISOR = "SUPERVISOR",
-  ADMIN = "ADMIN",
-  MASTER = "MASTER",
-}
-
 export enum MessageStatus {
   SENT = "SENT",
   DELIVERED = "DELIVERED",
@@ -46,47 +37,18 @@ export enum MessageStatus {
   FAILED = "FAILED",
 }
 
-export enum CompanyStatus {
-  ACTIVE = "ACTIVE",
-  SUSPENDED = "SUSPENDED",
-  TRIAL = "TRIAL",
-}
-
 // ============================================
 // BASE TYPES
 // ============================================
 
-export interface BaseEntity {
-  id: string;
-  createdAt: string; // ISO 8601 date string
-  updatedAt: string;
-}
+// re-exporting BaseEntity from common
 
 // ============================================
 // USER TYPES
 // ============================================
 
-export interface User extends BaseEntity {
-  email: string;
-  name: string;
-  role: UserRole;
-  companyId: string;
-  phone: string | null;
-  avatarUrl: string | null;
-  isActive: boolean;
-  preferences: UserPreferences | null;
-}
-
-export interface UserPreferences {
-  notifications: {
-    email: boolean;
-    push: boolean;
-    sms: boolean;
-  };
-  language: string;
-  timezone: string;
-  theme: "light" | "dark" | "auto";
-}
+export type User = AuthUser;
+export type UserPreferences = AuthUserPreferences;
 
 export interface UserListItem {
   id: string;
@@ -100,15 +62,7 @@ export interface UserListItem {
 // COMPANY TYPES
 // ============================================
 
-export interface Company extends BaseEntity {
-  name: string;
-  status: CompanyStatus;
-  planId: string | null;
-  email: string | null;
-  phone: string | null;
-  website: string | null;
-  logoUrl: string | null;
-}
+export type Company = AuthCompany;
 
 // ============================================
 // CONTACT TYPES
@@ -361,7 +315,7 @@ export interface AuthState {
 // UTILITY TYPES
 // ============================================
 
-export type Nullable<T> = T | null;
+// Optional re-definition avoided
 
 export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 

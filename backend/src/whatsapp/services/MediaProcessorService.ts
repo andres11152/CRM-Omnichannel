@@ -119,12 +119,15 @@ export class MediaProcessorService {
         try {
           mediaType = this.mapBaileysToMediaType(messageType);
           const stream = await downloadMediaMessage(message, "stream", {});
-          const content = message.message as unknown as Record<string, any>;
+          const content = message.message as unknown as Record<string, unknown>;
           
           // Baileys unwrapping for documentWithCaptionMessage
-          let msgObj = content[messageType] as Record<string, any> | undefined;
-          if (messageType === "documentWithCaptionMessage" && msgObj?.message?.documentMessage) {
-              msgObj = msgObj.message.documentMessage;
+          let msgObj = content[messageType] as Record<string, unknown> | undefined;
+          if (messageType === "documentWithCaptionMessage") {
+              const innerMessage = msgObj?.message as Record<string, unknown> | undefined;
+              if (innerMessage?.documentMessage) {
+                  msgObj = innerMessage.documentMessage as Record<string, unknown>;
+              }
           }
 
           textContent =
@@ -229,6 +232,16 @@ export class MediaProcessorService {
   ): Promise<PreparedMediaResult> {
     let tempFilePath: string | null = null;
 
+    // 0. Resolve Raw S3 Keys gracefully
+    if (media.url && media.url.startsWith("companies/")) {
+      try {
+        media.url = await storageService.getSignedUrl(media.url, 3600);
+      } catch (e) {
+        Logger.error(`[MediaProcessor] Failed to generate signed URL for S3 key: ${media.url}`);
+        throw new MediaFileNotFoundError(media.url, media.caption);
+      }
+    }
+
     // 1. URL Adjustment for Internal API
     if (media.url && media.url.startsWith("/api/")) {
       const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
@@ -311,8 +324,9 @@ export class MediaProcessorService {
     if (proxyMatch && proxyMatch[1]) {
       try {
         const mediaId = proxyMatch[1];
-        const dbMedia = await mediaRepository.findById(mediaId, {
-          mimeType: true,
+        const dbMedia = await mediaRepository.findFirst({
+          where: { id: mediaId },
+          select: { mimeType: true },
         });
         if (dbMedia?.mimeType) {
           realMimeType = dbMedia.mimeType;
@@ -323,18 +337,19 @@ export class MediaProcessorService {
     }
 
     const isWebM =
-      realMimeType === "audio/webm" ||
-      media.url.toLowerCase().endsWith(".webm");
+      (realMimeType && realMimeType.includes("audio/webm")) ||
+      media.url.toLowerCase().includes(".webm");
     const needsConversion = isBase64 || isWebM;
 
     if (needsConversion) {
+      Logger.info(`[MediaProcessor] Starting audio conversion (isBase64: ${isBase64}, isWebM: ${isWebM})`);
       try {
         tempFilePath = await convertAudioToMP4(media.url);
-        const audioBuffer = fs.readFileSync(tempFilePath);
+        Logger.info(`[MediaProcessor] Conversion success: ${tempFilePath}`);
 
         return {
           content: {
-            audio: audioBuffer,
+            audio: { url: tempFilePath },
             mimetype: "audio/ogg; codecs=opus",
             ptt: true,
           },
@@ -402,9 +417,9 @@ export class MediaProcessorService {
     if (proxyMatch && proxyMatch[1]) {
       try {
         const mediaId = proxyMatch[1];
-        const dbMedia = await mediaRepository.findById(mediaId, {
-          mimeType: true,
-          filename: true,
+        const dbMedia = await mediaRepository.findFirst({
+          where: { id: mediaId },
+          select: { mimeType: true, filename: true },
         });
         if (dbMedia?.mimeType) docMime = dbMedia.mimeType;
         if (dbMedia?.filename) fileName = dbMedia.filename;

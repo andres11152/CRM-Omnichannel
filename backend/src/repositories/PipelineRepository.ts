@@ -52,7 +52,10 @@ export class PipelineRepository {
     return prisma.pipeline.create({ data });
   }
 
-  async update(id: string, data: Prisma.PipelineUpdateInput) {
+  async update(id: string, companyId: string, data: Prisma.PipelineUpdateInput) {
+    // [SEC] Verify ownership before update
+    const exists = await prisma.pipeline.findFirst({ where: { id, companyId } });
+    if (!exists) throw new Error(`Pipeline ${id} not found in company ${companyId}`);
     return prisma.pipeline.update({
       where: { id },
       data,
@@ -62,7 +65,10 @@ export class PipelineRepository {
     });
   }
 
-  async delete(id: string) {
+  async delete(id: string, companyId: string) {
+    // [SEC] Verify ownership before delete
+    const exists = await prisma.pipeline.findFirst({ where: { id, companyId } });
+    if (!exists) throw new Error(`Pipeline ${id} not found in company ${companyId}`);
     return prisma.pipeline.delete({ where: { id } });
   }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { toast } from "sonner";
-import { Company, CompanyStatus, Plan } from "@/types";
+import { Company, CompanyStatus, Plan, User } from "@/types";
 import { adminService, CompanyMetrics } from "@/services/adminService";
 import { Logger } from "@/utils/logger";
 
@@ -55,7 +55,7 @@ export function useTenantManagement() {
     const filtered = companies.filter(
       (company) =>
         company.name.toLowerCase().includes(lowercasedFilter) ||
-        (company as any).slug?.toLowerCase().includes(lowercasedFilter),
+        (company as Company & { slug?: string }).slug?.toLowerCase().includes(lowercasedFilter),
     );
     setFilteredCompanies(filtered);
   }, [searchTerm, companies]);
@@ -121,7 +121,7 @@ export function useTenantManagement() {
       }
 
       // Login and force redirect
-      login(userToLogin as any, result.token);
+      login(userToLogin as User, result.token);
 
       // Use href to force full reload and clear any Master Admin state/sockets
       window.location.href = "/dashboard";

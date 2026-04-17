@@ -7,6 +7,7 @@ import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { Logger } from "@/utils/logger";
+import { Contact } from "@whiskeysockets/baileys";
 
 /**
  * [AUTH] GROUP PARTICIPANT TYPES
@@ -86,7 +87,7 @@ export const groupContactService = {
     // [SEC] Fallback: If not found by conversationId, check if it's a ticketId
     if (!conversation) {
       const { ticketSyncService } = await import("./TicketSyncService");
-      const ticket = await ticketSyncService.findByIdWithCreator(conversationId);
+      const ticket = await ticketSyncService.findByIdWithCreator(conversationId, companyId);
       if (ticket && ticket.companyId === companyId && ticket.conversationId) {
         conversation = await conversationRepository.findFirst({
           where: { id: ticket.conversationId, companyId },
@@ -218,12 +219,22 @@ export const groupContactService = {
     // Get all existing contacts for this company (for fast lookup)
     const existingContacts = await contactRepository.findMany({
       where: { companyId, deletedAt: null },
-      select: { id: true, phone: true, customFields: true },
+      select: { id: true, phone: true, name: true, customFields: true },
     });
+
+    // 4. [UX] BATCH IDENTITY RESOLUTION (LID -> Phone)
+    // Perform a single network request to resolve all IDs in the group at once
+    const lidsToResolve = groupMetadata.participants
+      .map(p => p.id)
+      .filter(id => WhatsAppIdUtils.isLid(id));
+
+    const resolvedBatch = lidsToResolve.length > 0
+      ? await whatsappService.getSessionManager().resolveLidsToPhones(workingSession.sessionId, lidsToResolve)
+      : {};
 
     const phoneToContactId = new Map<string, string>();
     const lidToContactId = new Map<string, string>();
-    const lidToPhone = new Map<string, string>();
+    const lidToPhoneMap = new Map<string, string>();
 
     for (const contact of existingContacts) {
       if (contact.phone) {
@@ -233,12 +244,15 @@ export const groupContactService = {
       
       const customFields = contact.customFields as Record<string, unknown>;
       if (customFields?.whatsappLid && typeof customFields.whatsappLid === "string") {
-        lidToContactId.set(customFields.whatsappLid, contact.id);
+        const lidBase = customFields.whatsappLid.split("@")[0];
+        lidToContactId.set(lidBase, contact.id);
         if (contact.phone) {
-          lidToPhone.set(customFields.whatsappLid, contact.phone);
+          lidToPhoneMap.set(lidBase, contact.phone);
         }
       }
     }
+
+    const store = whatsappService.getSessionStore(workingSession.sessionId);
 
     for (const participant of groupMetadata.participants) {
       const cleanJid = WhatsAppIdUtils.getCleanJid(participant.id);
@@ -252,13 +266,53 @@ export const groupContactService = {
       const lidBase = cleanJid.split("@")[0];
       let phone = WhatsAppIdUtils.getPhoneNumber(cleanJid);
       let existingContactId = phone ? phoneToContactId.get(phone) : null;
+      let displayName = "";
       
-      // Attempt mapping lookup for LIDs
+      // Attempt mapping lookup for LIDs via Batch Resolution Results, Store or CRM index
+      if ((!phone || !existingContactId)) {
+        // Priority 1: Batch Results from current fetch
+        let resolvedPhone = resolvedBatch[cleanJid] || resolvedBatch[`${lidBase}@lid`];
+        
+        // Priority 2: Memory Store
+        if (!resolvedPhone && store) {
+          const fromStore = store.lidToPhone[lidBase];
+          if (fromStore) resolvedPhone = fromStore.split("@")[0];
+        }
+
+        if (resolvedPhone) {
+          phone = resolvedPhone;
+          existingContactId = phoneToContactId.get(phone) || null;
+        }
+      }
+
+      // Priority 3: CRM LID index fallback
       if (!phone || !existingContactId) {
         if (lidToContactId.has(lidBase)) {
           existingContactId = lidToContactId.get(lidBase) || null;
-          phone = lidToPhone.get(lidBase) || phone; // Use real phone if mapped
+          phone = lidToPhoneMap.get(lidBase) || phone; 
         }
+      }
+
+      // Resolve Display Name (Priority Order)
+      // 1. WhatsApp Store (Phone-based preferred for resolved LIDs)
+      const resolvedJid = phone ? `${phone}@s.whatsapp.net` : null;
+      const contactFromStore = (resolvedJid ? store?.contacts[resolvedJid] : null) || store?.contacts[cleanJid];
+      
+      if (contactFromStore?.notify || contactFromStore?.verifiedName || contactFromStore?.name) {
+        displayName = contactFromStore.notify || contactFromStore.verifiedName || contactFromStore.name || "";
+      } 
+      // 2. CRM Contact (if exists)
+      else if (existingContactId) {
+        const crmContact = existingContacts.find(c => c.id === existingContactId);
+        displayName = crmContact?.name || (phone ? WhatsAppIdUtils.formatDisplayPhone(phone) : "");
+      }
+      // 3. Formatted Phone
+      else if (phone) {
+        displayName = WhatsAppIdUtils.formatDisplayPhone(phone);
+      } 
+      // 4. LID Base
+      else {
+        displayName = `ID: ${lidBase}`;
       }
 
       const existsInCRM = existingContactId !== null;
@@ -270,9 +324,7 @@ export const groupContactService = {
       participants.push({
         jid: cleanJid,
         phone,
-        displayName: phone
-          ? WhatsAppIdUtils.formatDisplayPhone(phone)
-          : (WhatsAppIdUtils.isLid(cleanJid) ? `LID: ${lidBase}` : "Usuario sin número"),
+        displayName: displayName || `ID: ${lidBase}`,
         isAdmin: participant.admin === "admin",
         isSuperAdmin: participant.admin === "superadmin",
         canAddToCRM,
@@ -315,7 +367,7 @@ export const groupContactService = {
     // [SEC] Fallback: TicketId support
     if (!conversation) {
       const { ticketSyncService } = await import("./TicketSyncService");
-      const ticket = await ticketSyncService.findByIdWithCreator(conversationId);
+      const ticket = await ticketSyncService.findByIdWithCreator(conversationId, companyId);
       if (ticket && ticket.companyId === companyId && ticket.conversationId) {
         conversation = await conversationRepository.findFirst({
           where: { id: ticket.conversationId, companyId },

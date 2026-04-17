@@ -51,6 +51,8 @@ export const protect = catchAsync(
           email: "system@api",
           name: storedKey.name,
           companyId: storedKey.companyId,
+          apiKeyId: storedKey.id,
+          scopes: storedKey.scopes,
         },
         writable: false,
         configurable: false,

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { socketService } from "@/services/socketService";
 import { Ticket, User, Channel } from "@/types";
 import { resolveContactName } from "@/utils/contactUtils";
@@ -45,7 +45,6 @@ interface UseAgentWorkspaceSocketsProps {
   user: User | undefined | null;
   setTickets: React.Dispatch<React.SetStateAction<Ticket[]>>;
   activeTicketIdRef: React.MutableRefObject<string | null>;
-  setSocketConnected: (connected: boolean) => void;
   setActiveTicketId: (id: string | null) => void;
   fetchData: (isBackground?: boolean) => void;
   triggerBackgroundRefresh: () => void;
@@ -55,16 +54,10 @@ export const useAgentWorkspaceSockets = ({
   user,
   setTickets,
   activeTicketIdRef,
-  setSocketConnected,
   setActiveTicketId,
   fetchData,
   triggerBackgroundRefresh,
 }: UseAgentWorkspaceSocketsProps) => {
-  // [SEC] 100-YEAR FIX: Ref for Debouncing Disconnects
-  // We don't want to show "Offline" for micro-drops (common in cloud Redis)
-  const disconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
 
   //  NOTIFICATION SOUND (Synthesized Pop - Zero Latency, No CORS issues)
   const playNotificationSound = () => {
@@ -103,76 +96,8 @@ export const useAgentWorkspaceSockets = ({
   };
 
   useEffect(() => {
-    console.log("[AgentWorkspace] [OK] Services Initialized");
+    console.log("[AgentWorkspace] [OK] Business event listeners initializing");
     fetchData();
-
-    // Connect Socket
-    socketService.connect();
-
-    // Initial check
-    if (socketService.isConnected) {
-      setSocketConnected(true);
-    }
-
-    // Join Rooms Logic
-    if (user) {
-      // 1. Always join personal agent room (for direct assignments)
-      // Backend Gateway auto-joins this, but we reinforce it here
-      socketService.emit("join_room", {
-        conversationId: `agent:${user.id}`,
-      });
-
-      // 2. Join company room ONLY if Admin/Supervisor (for global view)
-      // Agents are restricted to their own room to prevent ghost tickets
-      if (["ADMIN", "SUPERVISOR", "MASTER"].includes(user.role)) {
-        socketService.emit("join_room", {
-          conversationId: `company:${user.companyId}`,
-        });
-      }
-    }
-
-    // [SEC] 100-YEAR FIX: Ref for Debouncing Disconnects
-    // We don't want to show "Offline" for micro-drops (common in cloud Redis)
-
-    const onConnect = () => {
-      // [OK] Cancel pending disconnect if we reconnected quickly
-      if (disconnectTimeoutRef.current) {
-        clearTimeout(disconnectTimeoutRef.current);
-        disconnectTimeoutRef.current = null;
-        // console.log("[AgentWorkspace] ️ Quick reconnect - Suppressed offline state");
-      }
-
-      setSocketConnected(true);
-      if (user) {
-        // Re-join on reconnect
-        socketService.emit("join_room", {
-          conversationId: `agent:${user.id}`,
-        });
-
-        if (["ADMIN", "SUPERVISOR", "MASTER"].includes(user.role)) {
-          socketService.emit("join_room", {
-            conversationId: `company:${user.companyId}`,
-          });
-        }
-      }
-    };
-
-    const onDisconnect = () => {
-      // ⏳ Start Grace Period
-      // Only show offline if disconnected for > 5 seconds
-      if (disconnectTimeoutRef.current)
-        clearTimeout(disconnectTimeoutRef.current);
-
-      disconnectTimeoutRef.current = setTimeout(() => {
-        console.warn(
-          "[AgentWorkspace]  Socket disconnected (grace period expired)",
-        );
-        setSocketConnected(false);
-      }, 5000);
-    };
-
-    socketService.on("connect", onConnect);
-    socketService.on("disconnect", onDisconnect);
 
     const handleConversationUpdated = (payload: ConversationUpdatePayload) => {
       setTickets((prev) => {

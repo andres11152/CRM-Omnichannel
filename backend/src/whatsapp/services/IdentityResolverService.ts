@@ -129,11 +129,14 @@ export class IdentityResolverService {
         `[IdentityResolver]  Retried & Resolved LID ${cleanRemoteJid}`,
       );
       // Persist the mapping for future lookups
-      await chatService.saveLidPhoneMapping(
-        companyId,
-        originalLidBase,
-        realPhone,
-      );
+      const cleanPhone = WhatsAppIdUtils.getPhoneNumber(realPhone);
+      if (cleanPhone) {
+        await chatService.saveLidPhoneMapping(
+          companyId,
+          originalLidBase,
+          cleanPhone,
+        );
+      }
       return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
     }
 
@@ -212,23 +215,25 @@ export class IdentityResolverService {
           fullLidJid,
         );
 
-        if (resolvedPhone) {
-          Logger.info(
-            `[IdentityResolver] [OK] Actively resolved LID ${lidBase} -> ${resolvedPhone}`,
-          );
-          const realChannelId = resolvedPhone.replace(/\D/g, "");
-          const realChatEmail = `${realChannelId}@whatsapp.user`;
+          if (resolvedPhone) {
+            Logger.info(
+              `[IdentityResolver] [OK] Actively resolved LID ${lidBase} -> ${resolvedPhone}`,
+            );
+            const cleanPhone = WhatsAppIdUtils.getPhoneNumber(resolvedPhone);
+            if (cleanPhone) {
+              await chatService.saveLidPhoneMapping(
+                companyId,
+                lidBase,
+                cleanPhone,
+              );
+            }
 
-          await chatService.saveLidPhoneMapping(
-            companyId,
-            lidBase,
-            resolvedPhone,
-          );
+            const realChannelId = resolvedPhone.replace(/\D/g, "");
 
           const phoneConv = await chatService.findConversation(
             companyId,
             realChannelId,
-            realChatEmail,
+            undefined // was realChatEmail
           );
 
           if (phoneConv) {

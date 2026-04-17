@@ -4,6 +4,7 @@ import { promises as fs } from "fs";
 import * as path from "path";
 import { Buffer } from "buffer";
 import { Logger } from "@/utils/logger";
+import axios from "axios";
 
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
@@ -44,14 +45,31 @@ export async function convertAudioToMP4(inputSource: string): Promise<string> {
           "[AudioConverter] Malformed data URI, trying as is or failing.",
         );
       }
+    } else if (inputSource.startsWith("http://") || inputSource.startsWith("https://")) {
+      // Robustly download S3/HTTP URLs to local file before FFmpeg processing to avoid SSL/pipe errors
+      Logger.info(`[AudioConverter] Downloading remote media: ${inputSource.split('?')[0]}`);
+      const response = await axios.get(inputSource, { responseType: "arraybuffer", timeout: 30000 });
+      inputFile = path.join(tempDir, `input_${Date.now()}.webm`);
+      await fs.writeFile(inputFile, response.data);
+      inputPath = inputFile;
     }
-    // If not data URI, we treat 'inputSource' as a file path or URL directly.
+    // If not data URI or HTTP, we treat 'inputSource' as a local file path directly.
 
     // Convert using ffmpeg
     await new Promise<void>((resolve, reject) => {
       ffmpeg(inputPath)
-        .audioCodec("libopus")
+        .outputOptions([
+          "-c:a libopus",
+          "-b:a 16k", // Standard PTT bitrate
+          "-vbr on",
+          "-compression_level 10",
+          "-application voip", // Specialized for PTT
+          "-map_metadata -1", // Strip all metadata headers
+          "-avoid_negative_ts make_zero" // Fixes Chrome WebM negative PTS issues
+        ])
         .format("ogg")
+        .audioChannels(1) // WhatsApp PTT strict requirement (Mono)
+        .audioFrequency(16000) // Optimal for voice 16kHz
         .on("end", () => {
           Logger.info("[AudioConverter] Conversion completed successfully");
           resolve();

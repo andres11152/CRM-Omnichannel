@@ -84,9 +84,17 @@ export class InboundOrchestratorService {
       const senderJid = this.identityResolver.resolveSenderJid(message, cleanRemoteJid, isGroup);
       if (senderJid) {
         const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
+        
+        // [UX] Resolve Name from Store if message.pushName is missing
+        let resolvedName = message.pushName;
+        if (!resolvedName) {
+           const storeContact = this.sessionManager.getContactInfo(sessionId, senderJid);
+           resolvedName = storeContact?.notify || storeContact?.verifiedName || storeContact?.name;
+        }
+
         customerUser = await chatService.upsertWhatsAppUser({
           email: `${senderJid.split("@")[0]}@whatsapp.user`,
-          name: message.pushName || (senderPhone ? `+${senderPhone}` : "Usuario WhatsApp"),
+          name: resolvedName || (senderPhone ? `+${senderPhone}` : `ID: ${senderJid.split("@")[0]}`),
           companyId,
           phone: senderPhone,
           role: "USER",
@@ -98,9 +106,17 @@ export class InboundOrchestratorService {
       }
     } else if (!isGroup) {
       const destPhone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
+      
+      // [UX] Resolve Name from Store for destination if possible
+      let resolvedName = message.pushName;
+      if (!resolvedName) {
+         const storeContact = this.sessionManager.getContactInfo(sessionId, cleanRemoteJid);
+         resolvedName = storeContact?.notify || storeContact?.verifiedName || storeContact?.name;
+      }
+
       customerUser = await chatService.upsertWhatsAppUser({
         email: chatEmail,
-        name: destPhone ? `+${destPhone}` : chatUniqueId,
+        name: resolvedName || (destPhone ? `+${destPhone}` : `ID: ${chatUniqueId}`),
         companyId,
         phone: destPhone,
         role: "USER",
@@ -234,7 +250,7 @@ export class InboundOrchestratorService {
       });
     }
 
-    const metadata = this.prepareMetadata(message, messageId, content, isGroup, isOutbound);
+    const metadata = await this.prepareMetadata(message, messageId, content, isGroup, isOutbound, companyId);
 
     const savedMessage = await chatService.upsertMessage({
       whatsappMessageId: messageId,
@@ -295,7 +311,15 @@ export class InboundOrchestratorService {
     return defaultAgent?.id;
   }
 
-  private prepareMetadata(msg: WAMessage, _id: string, content: { textContent: string, mediaUrl?: string, mediaType?: MediaType, mediaSize?: number }, isGroup: boolean, isOutbound: boolean): MessageMetadata {
+  private async prepareMetadata(
+    msg: WAMessage, 
+    _id: string, 
+    content: { textContent: string, mediaUrl?: string, mediaType?: MediaType, mediaSize?: number }, 
+    isGroup: boolean, 
+    isOutbound: boolean,
+    companyId: string
+  ): Promise<MessageMetadata> {
+    const quotedInfo = await this.extractQuotedInfo(msg, companyId);
     return {
       messageId: _id,
       media: content.mediaUrl && content.mediaType ? {
@@ -307,16 +331,43 @@ export class InboundOrchestratorService {
       } : undefined,
       origin: isOutbound ? "phone_sync" : "whatsapp",
       isGroup,
-      quotedMessageId: this.extractQuotedId(msg),
+      senderJid: WhatsAppIdUtils.getSenderJid(msg) || undefined,
+      ...quotedInfo,
     };
   }
 
-  private extractQuotedId(msg: WAMessage): string | undefined {
+  private async extractQuotedInfo(msg: WAMessage, companyId: string): Promise<{ quotedMessageId?: string, quotedParticipant?: string, quotedDbId?: string, quotedContent?: string }> {
     const ctx = msg.message?.extendedTextMessage?.contextInfo ||
                 msg.message?.imageMessage?.contextInfo ||
                 msg.message?.videoMessage?.contextInfo ||
                 msg.message?.audioMessage?.contextInfo ||
                 msg.message?.documentMessage?.contextInfo;
-    return ctx?.stanzaId || undefined;
+    
+    if (!ctx?.stanzaId) return {};
+
+    const info: { quotedMessageId: string, quotedParticipant?: string, quotedDbId?: string, quotedContent?: string } = {
+      quotedMessageId: ctx.stanzaId,
+      quotedParticipant: WhatsAppIdUtils.getCleanJid(ctx.participant) || undefined
+    };
+
+    // Try to find the internal DB ID for the quoted message to help the frontend
+    try {
+      const dbQuoted = await messageRepository.findFirst({
+        where: { 
+          whatsappMessageId: ctx.stanzaId,
+          companyId
+        },
+        select: { id: true, content: true }
+      });
+      if (dbQuoted) {
+        info.quotedDbId = dbQuoted.id;
+        info.quotedMessageId = dbQuoted.id; // Override Baileys ID with DB UUID for frontend scrolling
+        info.quotedContent = dbQuoted.content || "Mensaje multimedia";
+      }
+    } catch (_) {
+      // Non-blocking
+    }
+
+    return info;
   }
 }

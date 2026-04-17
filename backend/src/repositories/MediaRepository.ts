@@ -16,10 +16,11 @@ export class MediaRepository {
 
   async findById(
     id: string,
+    companyId: string,
     select?: Prisma.MediaSelect,
   ): Promise<Partial<Media> | null> {
-    return this.db.media.findUnique({
-      where: { id },
+    return this.db.media.findFirst({
+      where: { id, companyId },
       select,
     });
   }
@@ -40,7 +41,10 @@ export class MediaRepository {
     return this.db.media.update(args);
   }
 
-  async delete(id: string) {
+  async delete(id: string, companyId: string) {
+    // [SEC] Verify ownership before delete
+    const exists = await this.db.media.findFirst({ where: { id, companyId } });
+    if (!exists) throw new Error(`Media ${id} not found in company ${companyId}`);
     return this.db.media.delete({ where: { id } });
   }
 

@@ -9,6 +9,7 @@ import {
   Activity,
   CheckCircle,
   XCircle,
+  Code,
 } from "lucide-react";
 
 interface ApiKey {
@@ -20,7 +21,7 @@ interface ApiKey {
 }
 
 export const DeveloperSettings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"webhooks" | "api-keys">(
+  const [activeTab, setActiveTab] = useState<"webhooks" | "api-keys" | "api-docs">(
     "webhooks",
   );
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
@@ -184,6 +185,16 @@ export const DeveloperSettings: React.FC = () => {
     "message.sent",
     "ticket.created",
     "ticket.status_changed",
+    "ticket.assigned",
+    "contact.created",
+    "contact.updated",
+    "deal.created",
+    "deal.stage_changed",
+    "deal.won",
+    "deal.lost",
+    "campaign.completed",
+    "session.connected",
+    "session.disconnected",
   ];
 
   return (
@@ -229,6 +240,13 @@ export const DeveloperSettings: React.FC = () => {
             >
               <ShieldCheck className="w-3.5 h-3.5" />
               API Keys
+            </button>
+            <button
+              onClick={() => setActiveTab("api-docs")}
+              className={`px-3 md:px-5 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-2 ${activeTab === "api-docs" ? "bg-white text-gray-900 shadow-lg" : "text-white/70 hover:text-white"}`}
+            >
+              <Code className="w-3.5 h-3.5" />
+              API Docs
             </button>
           </div>
         }
@@ -735,6 +753,107 @@ export const DeveloperSettings: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* --- API DOCS TAB --- */}
+          {activeTab === "api-docs" && (
+            <div className="animate-in fade-in duration-500 space-y-6">
+              <div className="bg-white dark:bg-reply-panel-dark p-6 rounded-2xl border border-gray-200 dark:border-reply-border-dark shadow-sm">
+                <div className="mb-6">
+                  <h3 className="font-bold text-gray-800 dark:text-white text-xl flex items-center gap-2">
+                    <Code className="w-6 h-6 text-indigo-500" />
+                    Referencia de API REST
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Integra Reply con tus sistemas internos. Autentícate enviando tu API Key en el header <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-indigo-600 dark:text-indigo-400">X-API-Key</code>.
+                    Todas las peticiones deben usar el Content-Type <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-indigo-600 dark:text-indigo-400">application/json</code>. Base URL: <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-indigo-600 dark:text-indigo-400">https://api.tudominio.com/api/v1/external</code>
+                  </p>
+                </div>
+
+                <div className="space-y-8">
+                  {/* Endpoint 1: Mensajes */}
+                  <div className="border border-gray-100 dark:border-reply-border-dark rounded-xl overflow-hidden">
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-100 dark:border-reply-border-dark flex items-center gap-4">
+                      <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-lg text-xs font-bold uppercase">POST</span>
+                      <span className="font-mono text-sm text-gray-700 dark:text-gray-300 font-bold">/messages/send</span>
+                      <span className="text-sm text-gray-500 ml-auto hidden sm:block">Enviar Mensaje WhatsApp</span>
+                    </div>
+                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
+                      <pre>
+{`curl -X POST https://api.tudominio.com/api/v1/external/messages/send \\
+  -H "X-API-Key: tu_api_key_aqui" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "to": "573001234567",
+    "text": "Hola, este es un mensaje automtico desde la API de Reply."
+  }'`}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Endpoint 2: Crear Contacto */}
+                  <div className="border border-gray-100 dark:border-reply-border-dark rounded-xl overflow-hidden">
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-100 dark:border-reply-border-dark flex items-center gap-4">
+                      <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-lg text-xs font-bold uppercase">POST</span>
+                      <span className="font-mono text-sm text-gray-700 dark:text-gray-300 font-bold">/contacts</span>
+                      <span className="text-sm text-gray-500 ml-auto hidden sm:block">Crear o Actualizar Contacto</span>
+                    </div>
+                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
+                      <pre>
+{`curl -X POST https://api.tudominio.com/api/v1/external/contacts \\
+  -H "X-API-Key: tu_api_key_aqui" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "Juan Perez",
+    "phone": "573001234567",
+    "email": "juan@empresa.com",
+    "tags": ["Cliente VIP", "API"]
+  }'`}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Endpoint 3: Crear Deal */}
+                  <div className="border border-gray-100 dark:border-reply-border-dark rounded-xl overflow-hidden">
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-100 dark:border-reply-border-dark flex items-center gap-4">
+                      <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-lg text-xs font-bold uppercase">POST</span>
+                      <span className="font-mono text-sm text-gray-700 dark:text-gray-300 font-bold">/deals</span>
+                      <span className="text-sm text-gray-500 ml-auto hidden sm:block">Crear Oportunidad (Deal)</span>
+                    </div>
+                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
+                      <pre>
+{`curl -X POST https://api.tudominio.com/api/v1/external/deals \\
+  -H "X-API-Key: tu_api_key_aqui" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Renovación 2025",
+    "value": 15000,
+    "currency": "USD",
+    "pipelineId": "cuid_pipeline_123",
+    "stageId": "cuid_stage_123"
+  }'`}
+                      </pre>
+                    </div>
+                  </div>
+                  
+                  {/* Endpoint 4: Listar Tickets */}
+                  <div className="border border-gray-100 dark:border-reply-border-dark rounded-xl overflow-hidden">
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-100 dark:border-reply-border-dark flex items-center gap-4">
+                      <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-3 py-1 rounded-lg text-xs font-bold uppercase">GET</span>
+                      <span className="font-mono text-sm text-gray-700 dark:text-gray-300 font-bold">/tickets</span>
+                      <span className="text-sm text-gray-500 ml-auto hidden sm:block">Listar Tickets</span>
+                    </div>
+                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
+                      <pre>
+{`curl -X GET https://api.tudominio.com/api/v1/external/tickets \\
+  -H "X-API-Key: tu_api_key_aqui"`}
+                      </pre>
+                    </div>
+                  </div>
+
+                </div>
               </div>
             </div>
           )}

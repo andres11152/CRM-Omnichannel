@@ -1,5 +1,5 @@
 import { Logger } from "../utils/logger";
-import { storageService } from "./storageService"; // Assuming storageService exists
+import { storageService } from "./StorageService"; // Assuming storageService exists
 import { Buffer } from "buffer";
 
 // We use native fetch (Node 18+) to avoid extra deps, or we could use axios.

@@ -211,7 +211,7 @@ class MessageQueueWorker {
   ): Promise<MediaPayload> {
     if (!media) return media;
 
-    const { storageService } = await import("../storageService");
+    const { storageService } = await import("../StorageService");
 
     // Check if it's already a URL (not data URI)
     if (!media.url.startsWith("data:")) {

@@ -20,7 +20,10 @@ export class CampaignRepository {
     return this.db.campaign.update(args);
   }
 
-  async delete(id: string) {
+  async delete(id: string, companyId: string) {
+    // [SEC] Verify ownership before delete
+    const exists = await this.db.campaign.findFirst({ where: { id, companyId } });
+    if (!exists) throw new Error(`Campaign ${id} not found in company ${companyId}`);
     return this.db.campaign.delete({ where: { id } });
   }
 

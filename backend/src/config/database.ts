@@ -39,7 +39,7 @@ const getDatabaseUrl = (): string => {
   // 25 was still too low for burst traffic (health probes + API calls + background jobs).
   // pool_timeout reduced to 30s to release stale connections faster under load.
   const poolParams = [
-    "connection_limit=40",
+    "connection_limit=50",
     "pool_timeout=30",
     "connect_timeout=30",
   ].join("&");

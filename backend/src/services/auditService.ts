@@ -1,4 +1,4 @@
-import { prisma } from "@/config/database";
+import { auditLogRepository } from "@/repositories/AuditLogRepository";
 import { Logger } from "@/utils/logger";
 import { Prisma } from "@prisma/client";
 
@@ -7,6 +7,8 @@ import { Prisma } from "@prisma/client";
  * 
  * Captures all critical administrative and system actions for compliance and security.
  * Every action is scoped by companyId to preserve multi-tenant integrity.
+ * 
+ * [ARCH] Uses AuditLogRepository — zero direct Prisma access.
  */
 export class AuditService {
   /**
@@ -23,7 +25,7 @@ export class AuditService {
     userAgent?: string;
   }): Promise<void> {
     try {
-      await prisma.auditLog.create({
+      await auditLogRepository.create({
         data: {
           companyId: params.companyId,
           userId: params.userId || null,

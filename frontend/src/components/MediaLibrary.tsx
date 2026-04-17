@@ -53,7 +53,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
         type: filter === "ALL" ? undefined : filter,
         search: search || undefined,
       });
-      setMedia(data.media);
+      setMedia(data);
     } catch (error: unknown) {
       console.error(error);
       toast.error(

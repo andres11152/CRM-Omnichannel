@@ -9,6 +9,13 @@ import { getEnv } from "@/config/env";
 import { emailService } from "@/services/EmailService";
 import { authCrudService } from "@/services/AuthCrudService";
 import { sessionService, SESSION_TTL } from "@/services/SessionService";
+import {
+  SignupSchema,
+  LoginSchema,
+  ForgotPasswordSchema,
+  ResetPasswordSchema,
+  UpdatePasswordSchema,
+} from "@/schemas/authSchema";
 
 export interface TokenPayload {
   id: string;
@@ -79,7 +86,8 @@ const clearAuthCookies = (res: Response) => {
 
 export const signup = catchAsync(
   async (req: Request, res: Response, _next: NextFunction) => {
-    const { name, email, password, companyId } = req.body;
+    const parsed = SignupSchema.parse({ body: req.body });
+    const { name, email, password, companyId } = parsed.body;
 
     const newUser = await authCrudService.createUser({
       name,
@@ -112,7 +120,8 @@ export const signup = catchAsync(
 
 export const login = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { email, password } = req.body;
+    const parsed = LoginSchema.parse({ body: req.body });
+    const { email, password } = parsed.body;
 
     Logger.info(`[Auth] Attempting login for email: ${email}`);
     const user = await authCrudService.findUserByEmail(email);
@@ -355,7 +364,8 @@ export const updatePassword = catchAsync(
     const user = await authCrudService.findUserById(req.user?.id || "");
     if (!user) return next(new AppError("User not found", 404));
 
-    const { currentPassword, newPassword } = req.body;
+    const parsed = UpdatePasswordSchema.parse({ body: req.body });
+    const { currentPassword, newPassword } = parsed.body;
 
     if (
       !(await authCrudService.verifyPassword(currentPassword, user.password))
@@ -381,7 +391,8 @@ export const updatePassword = catchAsync(
 
 export const forgotPassword = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { email } = req.body;
+    const parsed = ForgotPasswordSchema.parse({ body: req.body });
+    const { email } = parsed.body;
 
     const { user, resetToken } =
       await authCrudService.generateResetToken(email);
@@ -422,7 +433,8 @@ export const forgotPassword = catchAsync(
 
 export const resetPassword = catchAsync(
   async (req: Request, res: Response, _next: NextFunction) => {
-    const { password } = req.body;
+    const parsed = ResetPasswordSchema.parse({ body: req.body });
+    const { password } = parsed.body;
 
     const user = await authCrudService.resetPasswordWithToken(
       req.params.token,

@@ -80,17 +80,17 @@ export class TicketSyncService {
   }
 
   async findConversationIdByTicket(ticketId: string, companyId: string): Promise<string | null> {
-    const ticket = await ticketRepository.findById(ticketId);
-    if (!ticket || ticket.companyId !== companyId) return null;
+    const ticket = await ticketRepository.findById(ticketId, companyId);
+    if (!ticket) return null;
     return ticket.conversationId;
   }
 
-  async findByIdWithCreator(ticketId: string) {
-    return ticketRepository.findByIdWithCreator(ticketId);
+  async findByIdWithCreator(ticketId: string, companyId: string) {
+    return ticketRepository.findByIdWithCreator(ticketId, companyId);
   }
 
-  async updateConversationId(ticketId: string, conversationId: string): Promise<void> {
-    await ticketRepository.updateConversationId(ticketId, conversationId);
+  async updateConversationId(ticketId: string, companyId: string, conversationId: string): Promise<void> {
+    await ticketRepository.updateConversationId(ticketId, companyId, conversationId);
   }
 }
 

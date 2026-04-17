@@ -11,6 +11,10 @@ import { Buffer } from "buffer";
 import { Readable } from "stream";
 import { Upload } from "@aws-sdk/lib-storage"; // Better for streaming
 import { AppError } from "../utils/AppError";
+import * as fs from "fs/promises";
+import * as fsSync from "fs";
+import * as path from "path";
+import os from "os";
 
 // INTERFACE: The Contract
 export interface IStorageService {
@@ -153,12 +157,100 @@ class S3StorageService implements IStorageService {
 }
 
 /**
+ * LOCAL FS STORAGE IMPLEMENTATION
+ * For development & environments without AWS.
+ */
+class LocalStorageService implements IStorageService {
+  private uploadDir: string;
+
+  constructor() {
+    this.uploadDir = path.join(os.tmpdir(), "omnicrm_uploads");
+    if (!fsSync.existsSync(this.uploadDir)) {
+      fsSync.mkdirSync(this.uploadDir, { recursive: true });
+    }
+  }
+
+  async uploadFile(
+    companyId: string,
+    buffer: Buffer,
+    filename: string,
+    mimeType: string,
+    _isPrivate: boolean = false,
+  ): Promise<UploadResult> {
+    const key = `companies/${companyId}/uploads/${Date.now()}_${filename}`;
+    const destinationPath = path.join(this.uploadDir, key);
+
+    try {
+      await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+      await fs.writeFile(destinationPath, buffer);
+      return { url: key, key, provider: "local" };
+    } catch (error) {
+      Logger.error("Local Upload Failed", error);
+      throw new AppError("Local Upload Failed", 500);
+    }
+  }
+
+  async uploadStream(
+    companyId: string,
+    stream: Readable,
+    filename: string,
+    mimeType: string,
+    _isPrivate: boolean = false,
+  ): Promise<UploadResult> {
+    const key = `companies/${companyId}/uploads/${Date.now()}_${filename}`;
+    const destinationPath = path.join(this.uploadDir, key);
+
+    try {
+      await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+      const writeStream = fsSync.createWriteStream(destinationPath);
+      
+      await new Promise((resolve, reject) => {
+        stream.pipe(writeStream);
+        stream.on("end", resolve);
+        stream.on("error", reject);
+        writeStream.on("error", reject);
+      });
+      return { url: key, key, provider: "local" };
+    } catch (error) {
+      Logger.error("Local Stream Upload Failed", error);
+      throw new AppError("Local Stream Upload Failed", 500);
+    }
+  }
+
+  async getSignedUrl(key: string, expiresInSeconds: number = 900): Promise<string> {
+    // For local dev, return a fast temporary token route if needed, 
+    // or just proxy locally through /api/media proxy as designed.
+    const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+    return `${backendUrl}/api/local-media/${encodeURIComponent(key)}`;
+  }
+
+  async deleteFile(key: string): Promise<void> {
+    const targetPath = path.join(this.uploadDir, key);
+    try {
+      await fs.unlink(targetPath);
+    } catch (error: unknown) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code !== "ENOENT") {
+        throw new AppError("Failed to delete local file", 500);
+      }
+    }
+  }
+}
+
+/**
  * FACTORY
  * Returns the correct service based on environment.
- * Forcing S3 as per requirements.
  */
 export const getStorageService = (): IStorageService => {
-  return new S3StorageService();
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+  
+  if (accessKeyId && secretAccessKey) {
+    return new S3StorageService();
+  } else {
+    Logger.info("[StorageService] No AWS keys found. Falling back to Local FS Storage.");
+    return new LocalStorageService();
+  }
 };
 
 export const storageService = getStorageService();

@@ -2,6 +2,7 @@ import { webhookRepository } from "@/repositories/WebhookRepository";
 import { AppError } from "@/utils/AppError";
 import { messageProcessor } from "@/services/MessageProcessorService";
 import { webhookDispatcher } from "@/services/WebhookDispatcher";
+import crypto from "crypto";
 import { Logger } from "@/utils/logger";
 import {
   CreateWebhookDto,
@@ -21,11 +22,13 @@ export const webhookService = {
    * Create a new webhook
    */
   async createWebhook(companyId: string, data: CreateWebhookDto) {
+    // [SEC] Mandatory Secret Generation: Ensure all webhooks are cryptographically signed
+    const secret = data.secretKey || crypto.randomBytes(32).toString("hex");
     return webhookRepository.create(
       companyId,
       data.url,
       data.events,
-      data.secretKey || null,
+      secret,
     );
   },
 
@@ -116,8 +119,12 @@ export const webhookService = {
     }
   },
 
-  getLogs(companyId: string) {
+  async getLogs(companyId: string) {
     return webhookDispatcher.getLogs(companyId);
+  },
+
+  async replayLog(companyId: string, logId: string) {
+    return webhookDispatcher.replayLog(companyId, logId);
   },
 
   getSigningSecret(companyId: string) {

@@ -15,6 +15,7 @@ export interface MessagePayload {
   timestamp: Date;
   sender?: string;
   metadata?: Record<string, unknown>;
+  dbId?: string;
 }
 
 export interface MediaPayload {

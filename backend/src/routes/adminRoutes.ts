@@ -15,10 +15,12 @@ import {
 } from "@/controllers/adminController";
 import { validate } from "@/middleware/validationMiddleware";
 import {
-  updateCompanyStatusSchema,
-  createCompanySchema,
-  savePlanSchema,
-} from "@/middleware/adminSchemas";
+  CreateCompanyValidator,
+  UpdateCompanyValidator,
+  UpdateCompanyStatusValidator,
+  SavePlanValidator,
+  DeletePlanValidator,
+} from "@/schemas/adminSchemas";
 
 const router = Router();
 
@@ -52,20 +54,15 @@ router.post(
   retryTransaction,
 );
 router.get("/companies", listCompanies);
-router.post("/companies", validate(createCompanySchema), createCompany);
+router.post("/companies", validate(CreateCompanyValidator), createCompany);
 router.put(
   "/companies/:companyId",
-  validate(
-    z.object({
-      params: z.object({ companyId: z.string().min(1) }),
-      body: z.record(z.any()), // Can be more specific later, but must validate param
-    }),
-  ),
+  validate(UpdateCompanyValidator),
   updateCompany,
 );
 router.patch(
   "/companies/:companyId/status",
-  validate(updateCompanyStatusSchema), // <-- APLICAMOS LA VALIDACIÓN AQUÍ
+  validate(UpdateCompanyStatusValidator), // <-- APLICAMOS LA VALIDACIÓN AQUÍ
   updateCompanyStatus,
 );
 // Common param schema
@@ -85,14 +82,10 @@ router.get(
 );
 
 router.get("/plans", listPlans);
-router.post("/plans", validate(savePlanSchema), savePlan);
+router.post("/plans", validate(SavePlanValidator), savePlan);
 router.delete(
   "/plans/:planId",
-  validate(
-    z.object({
-      params: z.object({ planId: z.string().min(1) }),
-    }),
-  ),
+  validate(DeletePlanValidator),
   deletePlan,
 );
 

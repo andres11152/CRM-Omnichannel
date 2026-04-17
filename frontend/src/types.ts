@@ -20,6 +20,7 @@ export enum SenderType {
   USER = "USER",
   AGENT = "AGENT",
   BOT = "BOT",
+  SYSTEM = "SYSTEM",
 }
 
 // Added UserRole to match Prisma
@@ -110,6 +111,7 @@ export interface Message {
       | "document_unavailable";
     url?: string;
     name?: string;
+    size?: number;
     mimeType?: string;
     isPrivate?: boolean;
   };
@@ -124,18 +126,26 @@ export interface Message {
     | "scheduled"
     | "SCHEDULED"
     | "REVOKED";
-  sender?: "agent" | "customer" | "system"; //  UI Normalization field
-  type?: "text" | "image" | "video" | "audio" | "document" | "sticker" | "location"; //  Match chatService
+  sender?: "agent" | "customer" | "system" | { id: string; name: string; phone?: string; email?: string };
+  type?: "text" | "image" | "video" | "audio" | "document" | "sticker" | "location" | string;
   mediaUrl?: string;
   metadata?: {
     quotedMessageId?: string;
     quotedContent?: string;
     scheduledAt?: string | Date;
+    attachment?: {
+      id?: string;
+      name?: string;
+      url?: string;
+      size?: number;
+    };
+    source?: string;
     [key: string]: unknown;
   };
   reactions?: {
     reactBy: string;
     content: string;
+    isMe?: boolean;
   }[];
 }
 
@@ -179,12 +189,21 @@ export interface Conversation {
   channel: Channel;
   ticketId?: string;
   contactId?: string;
+  contactName?: string;
   status: "OPEN" | "CLOSED" | "PENDING" | "RESOLVED";
   unreadCount: number;
   lastMessage?: string;
   lastMessageAt?: Date | string;
+  lastMessageTime?: Date | string;
   createdAt: Date | string;
   updatedAt: Date | string;
+  syncEnabled?: boolean;
+  contact?: {
+    id: string;
+    name: string;
+    phone?: string;
+    profilePicUrl?: string;
+  };
 }
 
 export interface TicketContact {
@@ -485,7 +504,17 @@ export type WebhookEventType =
   | "message.received"
   | "message.sent"
   | "ticket.created"
-  | "ticket.status_changed";
+  | "ticket.status_changed"
+  | "ticket.assigned"
+  | "contact.created"
+  | "contact.updated"
+  | "deal.created"
+  | "deal.stage_changed"
+  | "deal.won"
+  | "deal.lost"
+  | "campaign.completed"
+  | "session.connected"
+  | "session.disconnected";
 export interface WebhookEndpoint {
   id: string;
   companyId: string;

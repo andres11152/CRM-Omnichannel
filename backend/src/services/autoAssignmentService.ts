@@ -58,7 +58,7 @@ export const assignTicketToAgent = async (
           try {
             // Dynamic import to avoid circular dep risks
             const { messageProcessor } =
-              await import("./messageProcessorService");
+              await import("./MessageProcessorService");
             await messageProcessor._handleAIAutoResponse(
               ticket.conversationId!,
               lastMsg.id,

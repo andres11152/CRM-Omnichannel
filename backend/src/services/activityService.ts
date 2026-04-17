@@ -1,5 +1,5 @@
-import { GoogleCalendarService } from "./googleCalendarService";
-import { mentionService } from "./mentionService";
+import { GoogleCalendarService } from "./GoogleCalendarService";
+import { mentionService } from "./MentionService";
 import { ActivityType, Prisma } from "@prisma/client";
 import { AppError } from "../utils/AppError";
 import { contactRepository } from "@/repositories/ContactRepository";

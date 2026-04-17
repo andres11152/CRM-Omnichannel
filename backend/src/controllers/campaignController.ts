@@ -3,7 +3,16 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
 import { campaignService } from "@/services/CampaignService";
+import { campaignExecutionService } from "@/services/CampaignExecutionService";
 import { Logger } from "@/utils/logger";
+import {
+  CreateCampaignSchema,
+  GetCampaignsSchema,
+  GetCampaignSchema,
+  UpdateCampaignSchema,
+  DeleteCampaignSchema,
+  SendCampaignSchema,
+} from "@/schemas/campaignSchema";
 
 /**
  * [GROUP] CAMPAIGN CONTROLLER
@@ -17,7 +26,8 @@ import { Logger } from "@/utils/logger";
  */
 export const createCampaign = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const data = req.body;
+    const parsed = CreateCampaignSchema.parse({ body: req.body });
+    const data = parsed.body;
     const companyId = req.companyId || req.user?.companyId;
     const userId = req.user?.id;
 
@@ -45,7 +55,7 @@ export const createCampaign = catchAsync(
       Logger.info(
         `[Campaign] Auto-launching campaign ${campaign.id} (status=sending)`,
       );
-      campaignService
+      campaignExecutionService
         .executeCampaign(campaign.id, companyId)
         .catch((err: unknown) => {
           Logger.error(`[Campaign] Auto-launch error for ${campaign.id}:`, err);
@@ -68,10 +78,11 @@ export const getCampaigns = catchAsync(
         .json({ status: "success", results: 0, data: { campaigns: [] } });
     }
 
-    // Rely on Zod schema to validate req.query
+    const parsed = GetCampaignsSchema.parse({ query: req.query });
+
     const campaigns = await campaignService.getCampaigns(
       companyId,
-      req.query as Record<string, string | undefined>,
+      parsed.query as unknown as Record<string, string | undefined>,
     );
 
     res.status(200).json({
@@ -88,7 +99,8 @@ export const getCampaigns = catchAsync(
  */
 export const getCampaign = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
+    const parsed = GetCampaignSchema.parse({ params: req.params });
+    const { id } = parsed.params;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
@@ -154,9 +166,10 @@ export const getCampaign = catchAsync(
  */
 export const updateCampaign = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
+    const parsed = UpdateCampaignSchema.parse({ params: req.params, body: req.body });
+    const { id } = parsed.params;
+    const data = parsed.body;
     const companyId = req.companyId || req.user?.companyId;
-    const data = req.body;
 
     if (!companyId) {
       return next(new AppError("Company ID missing", 400));
@@ -189,7 +202,7 @@ export const updateCampaign = catchAsync(
       Logger.info(
         `[Campaign] Launching campaign ${campaign.id} (status updated to sending)`,
       );
-      campaignService.executeCampaign(id, companyId).catch((err: unknown) => {
+      campaignExecutionService.executeCampaign(id, companyId).catch((err: unknown) => {
         Logger.error(`[Campaign] Launch error for ${id}:`, err);
       });
     }
@@ -202,7 +215,8 @@ export const updateCampaign = catchAsync(
  */
 export const deleteCampaign = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
+    const parsed = DeleteCampaignSchema.parse({ params: req.params });
+    const { id } = parsed.params;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {
@@ -216,7 +230,7 @@ export const deleteCampaign = catchAsync(
       return next(new AppError("Campaign not found", 404));
     }
 
-    await campaignService.deleteCampaign(id);
+    await campaignService.deleteCampaign(id, companyId);
 
     Logger.info(`[Campaign] Deleted campaign: ${existing.name} (${id})`);
 
@@ -233,7 +247,8 @@ export const deleteCampaign = catchAsync(
  */
 export const launchCampaign = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
+    const parsed = SendCampaignSchema.parse({ params: req.params });
+    const { id } = parsed.params;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) {

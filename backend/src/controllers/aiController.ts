@@ -3,6 +3,14 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { AppError } from "@/utils/AppError";
 import { aiCrudService } from "@/services/AiCrudService";
+import {
+  UpdateAIConfigSchema,
+  CreateAssistantSchema,
+  UpdateAssistantSchema,
+  IdParamSchema,
+  TestAISchema,
+  CopilotActionSchema,
+} from "@/schemas/commonSchemas";
 
 /**
  * AI CONTROLLER
@@ -25,7 +33,8 @@ export const getAIConfig = catchAsync(
 
 export const updateAIConfig = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { openaiKey, geminiKey } = req.body;
+    const parsed = UpdateAIConfigSchema.parse({ body: req.body });
+    const { openaiKey, geminiKey } = parsed.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) return next(new AppError("Company ID missing", 400));
@@ -53,9 +62,11 @@ export const createAssistant = catchAsync(
     const companyId = req.companyId || req.user?.companyId;
     if (!companyId) return next(new AppError("Company ID missing", 400));
 
+    const parsed = CreateAssistantSchema.parse({ body: req.body });
+
     const assistant = await aiCrudService.createAssistant(
       companyId,
-      req.body as Parameters<typeof aiCrudService.createAssistant>[1],
+      parsed.body as unknown as Parameters<typeof aiCrudService.createAssistant>[1],
     );
 
     res.status(201).json(assistant);
@@ -64,15 +75,15 @@ export const createAssistant = catchAsync(
 
 export const updateAssistant = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
     const companyId = req.companyId || req.user?.companyId;
-
     if (!companyId) return next(new AppError("Company ID missing", 400));
 
+    const parsed = UpdateAssistantSchema.parse({ params: req.params, body: req.body });
+
     const assistant = await aiCrudService.updateAssistant(
-      id,
+      parsed.params.id,
       companyId,
-      req.body,
+      parsed.body as Record<string, unknown>,
     );
 
     res.status(200).json(assistant);
@@ -81,12 +92,12 @@ export const updateAssistant = catchAsync(
 
 export const deleteAssistant = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
+    const parsed = IdParamSchema.parse({ params: req.params });
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) return next(new AppError("Company ID missing", 400));
 
-    await aiCrudService.deleteAssistant(id, companyId);
+    await aiCrudService.deleteAssistant(parsed.params.id, companyId);
 
     res.status(204).send();
   },
@@ -94,7 +105,8 @@ export const deleteAssistant = catchAsync(
 
 export const testAI = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { assistantId, message } = req.body;
+    const parsed = TestAISchema.parse({ body: req.body });
+    const { assistantId, message } = parsed.body;
     const companyId = req.companyId || req.user?.companyId;
 
     if (!companyId) return next(new AppError("Company ID missing", 400));
@@ -121,7 +133,8 @@ export const testAI = catchAsync(
 
 export const copilotAction = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { action, text, context } = req.body;
+    const parsed = CopilotActionSchema.parse({ body: req.body });
+    const { action, text, context } = parsed.body;
     const companyId = req.companyId || req.user?.companyId;
     if (!companyId) return next(new AppError("Company ID missing", 400));
 

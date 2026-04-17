@@ -19,7 +19,7 @@ import { gateway } from "@/gateways/socketGateway";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { TenantContextManager } from "@/config/tenantContext";
-import { Prisma } from "@prisma/client";
+import { Prisma, Message } from "@prisma/client";
 
 const prepareMetadataForDB = (meta: MessageMetadata): Prisma.InputJsonValue => {
   return JSON.parse(JSON.stringify(meta));
@@ -30,6 +30,25 @@ export class OutboundMessageHandler {
 
   constructor(private sessionManager: ISessionManager) {
     this.socketEmitter = new SocketEventEmitter(gateway);
+  }
+
+  private mapToMessagePayload(
+    msg: Message & { whatsappMessageId: string | null },
+    sessionId: string,
+    to: string,
+  ): MessagePayload {
+    return {
+      sessionId,
+      companyId: msg.companyId,
+      from: msg.direction === "INBOUND" ? "customer" : "agent",
+      sender: msg.direction === "INBOUND" ? "customer" : "agent",
+      to,
+      content: msg.content || "",
+      messageId: msg.whatsappMessageId || "",
+      timestamp: msg.createdAt,
+      metadata: msg.metadata as Record<string, unknown>,
+      dbId: msg.id,
+    };
   }
   async sendMessage(
     to: string,
@@ -48,7 +67,8 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
 
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
-      const generatedId = (metadata?.generatedMessageId as string) || generateMessageID();
+      const generatedId =
+        (metadata?.generatedMessageId as string) || generateMessageID();
       await deduplicationService.markMessageSent(generatedId);
 
       await deduplicationService.markContentSent(conversationId, content);
@@ -65,6 +85,9 @@ export class OutboundMessageHandler {
               remoteJid: jid,
               fromMe: dbQuoted.direction === "OUTBOUND",
               id: dbQuoted.whatsappMessageId,
+              participant: dbQuoted.direction === "INBOUND" && jid.endsWith("@g.us")
+                ? ((dbQuoted.metadata as Prisma.JsonObject)?.senderJid as string | undefined) 
+                : undefined,
             },
             message: {
               conversation:
@@ -145,25 +168,33 @@ export class OutboundMessageHandler {
       // Restore socket emission so frontend gets final Baileys ID for read receipts.
       // Frontend dedupe has been fixed to prevent duplicates when this arrives.
       await chatService.updateConversation(companyId, conversationId, {});
-      const fullConv = await chatService.getFullConversation(companyId, conversationId);
+      const fullConv = await chatService.getFullConversation(
+        companyId,
+        conversationId,
+      );
       if (fullConv) {
         // Emit socket so UI updates from temp_ ID to real Baileys ID
         try {
           const { gateway } = await import("@/gateways/socketGateway");
-          const { SocketEventEmitter } = await import("@/services/SocketEventEmitter");
+          const { SocketEventEmitter } =
+            await import("@/services/SocketEventEmitter");
           const socketEmitter = new SocketEventEmitter(gateway);
-          
-          type Emits = InstanceType<typeof import("@/services/SocketEventEmitter").SocketEventEmitter>["emitMessageSent"];
+
+          type Emits = InstanceType<
+            typeof import("@/services/SocketEventEmitter").SocketEventEmitter
+          >["emitMessageSent"];
           socketEmitter.emitMessageSent(
-            savedMessage as unknown as Parameters<Emits>[0],
-            fullConv as unknown as Parameters<Emits>[1]
+            savedMessage as Parameters<Emits>[0],
+            fullConv as Parameters<Emits>[1],
           );
         } catch (err: unknown) {
-          Logger.warn("[OutboundHandler] Failed to emit socket", { error: err instanceof Error ? err.message : String(err) });
+          Logger.warn("[OutboundHandler] Failed to emit socket", {
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       }
 
-      return savedMessage as unknown as MessagePayload;
+      return this.mapToMessagePayload(savedMessage as Message & { whatsappMessageId: string | null }, activeSession.sessionId, to);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
       const isConnectionError =
@@ -208,11 +239,16 @@ export class OutboundMessageHandler {
       const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
 
       // [BUILD] SRP: All media preparation delegated to MediaProcessorService
+      Logger.debug(`[OutboundHandler] Preparing media for ${jid}: type=${media.type}, url=${media.url?.substring(0, 50)}...`);
       const prepared = await mediaProcessor.prepareOutboundContent(media);
       const { content: messageContent, metaType } = prepared;
       tempFilePath = prepared.tempFilePath;
+      
+      const hasAudio = typeof messageContent === 'object' && messageContent !== null && 'audio' in messageContent;
+      Logger.debug(`[OutboundHandler] Preparation complete: metaType=${metaType}, hasBuffer=${hasAudio}, hasTempFile=${!!tempFilePath}`);
 
-      const generatedId = (options.metadata?.generatedMessageId as string) || generateMessageID();
+      const generatedId =
+        (options.metadata?.generatedMessageId as string) || generateMessageID();
       await deduplicationService.markMessageSent(generatedId);
 
       // [SYNC] RESOLVE QUOTED (MEDIA)
@@ -227,6 +263,9 @@ export class OutboundMessageHandler {
               remoteJid: jid,
               fromMe: dbQuoted.direction === "OUTBOUND",
               id: dbQuoted.whatsappMessageId,
+              participant: dbQuoted.direction === "INBOUND" && jid.endsWith("@g.us")
+                ? ((dbQuoted.metadata as Prisma.JsonObject)?.senderJid as string | undefined) 
+                : undefined,
             },
             message: {
               conversation:
@@ -242,6 +281,8 @@ export class OutboundMessageHandler {
         messageId: generatedId,
         quoted: quotedMsg,
       });
+
+      Logger.info(`[OutboundHandler] Baileys sentMsg result for ${generatedId}: ${!!sentMsg}`);
 
       // [SEC] DEDUP FIX: Also mark the FINAL Baileys ID for media messages.
       const finalMediaId = sentMsg?.key?.id;
@@ -304,23 +345,31 @@ export class OutboundMessageHandler {
 
       // Restore socket emission for media messages
       await chatService.updateConversation(companyId, conversationId, {});
-      const fullConv = await chatService.getFullConversation(companyId, conversationId);
+      const fullConv = await chatService.getFullConversation(
+        companyId,
+        conversationId,
+      );
       if (fullConv) {
         try {
           const { gateway } = await import("@/gateways/socketGateway");
-          const { SocketEventEmitter } = await import("@/services/SocketEventEmitter");
+          const { SocketEventEmitter } =
+            await import("@/services/SocketEventEmitter");
           const socketEmitter = new SocketEventEmitter(gateway);
-          type Emits = InstanceType<typeof import("@/services/SocketEventEmitter").SocketEventEmitter>["emitMessageSent"];
+          type Emits = InstanceType<
+            typeof import("@/services/SocketEventEmitter").SocketEventEmitter
+          >["emitMessageSent"];
           socketEmitter.emitMessageSent(
             savedMessage as Parameters<Emits>[0],
-            fullConv as Parameters<Emits>[1]
+            fullConv as Parameters<Emits>[1],
           );
         } catch (err: unknown) {
-          Logger.warn("[OutboundHandler] Failed to emit socket", { error: err instanceof Error ? err.message : String(err) });
+          Logger.warn("[OutboundHandler] Failed to emit socket", {
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       }
 
-      return savedMessage as unknown as MessagePayload;
+      return this.mapToMessagePayload(savedMessage as Message & { whatsappMessageId: string | null }, activeSession.sessionId, to);
     } catch (err: unknown) {
       // [SEC] Handle MediaFileNotFoundError gracefully
       if (err instanceof MediaFileNotFoundError) {
@@ -357,7 +406,10 @@ export class OutboundMessageHandler {
         return this.sendMedia(to, media, options, retries - 1);
       }
 
-      Logger.error(`[MessageHandler] [ERROR] sendMedia failed unexpectedly:`, err);
+      Logger.error(
+        `[MessageHandler] [ERROR] sendMedia failed unexpectedly:`,
+        err,
+      );
       const warningContent = `([WARNING] Error enviando archivo multimedia: ${media.type})`;
       return this.sendMessage(to, warningContent, options);
     } finally {
@@ -393,7 +445,10 @@ export class OutboundMessageHandler {
         );
 
         if (msg && msg.metadata) {
-          const meta = msg.metadata as Record<string, Prisma.JsonValue | undefined>;
+          const meta = msg.metadata as Record<
+            string,
+            Prisma.JsonValue | undefined
+          >;
           const remoteMessageId = meta.messageId as string | undefined;
           let remoteJid = msg.conversation?.channelId;
           if (remoteJid && !remoteJid.includes("@"))
@@ -448,7 +503,8 @@ export class OutboundMessageHandler {
     fromMe: boolean = false,
   ): Promise<void> {
     try {
-      const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+      const activeSession =
+        await this.sessionManager.findActiveSessionForCompany(companyId);
       if (!activeSession) return;
 
       const sock = activeSession.socket;
@@ -473,7 +529,9 @@ export class OutboundMessageHandler {
 
       Logger.debug(`[Reaction] Sent reaction ${reaction} to ${messageId}`);
     } catch (error) {
-      Logger.warn(`[Reaction] Failed to send reaction: ${error instanceof Error ? error.message : String(error)}`);
+      Logger.warn(
+        `[Reaction] Failed to send reaction: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

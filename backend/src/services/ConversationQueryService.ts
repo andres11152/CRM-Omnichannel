@@ -78,7 +78,7 @@ export class ConversationQueryService {
 
     // B. Link Ticket if not found directly
     if (!conversation) {
-      const ticket = await ticketSyncService.findByIdWithCreator(id);
+      const ticket = await ticketSyncService.findByIdWithCreator(id, companyId);
       if (ticket && ticket.companyId === companyId) {
         if (ticket.conversationId) {
           conversation = await conversationRepository.findByIdWithRelations(
@@ -151,7 +151,7 @@ export class ConversationQueryService {
   }
 
   private triggerContextSync(companyId: string, conversationId: string, phone: string) {
-    import("./chatSyncService").then(({ chatSyncService }) => {
+    import("./ChatSyncService").then(({ chatSyncService }) => {
       chatSyncService.contextSync(companyId, conversationId, phone).catch((err: Error) =>
         Logger.warn(`[QueryService] Context sync failed:`, { error: err.message }),
       );

@@ -126,7 +126,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             <ExternalLink className="w-5 h-5" />
           </button>
 
-          {!displayContact.realContactId && (
+          {!displayContact.realContactId && !displayContact.isGroup && (
             <button
               onClick={onEditContact}
               className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg text-emerald-500 transition-all active:scale-95"

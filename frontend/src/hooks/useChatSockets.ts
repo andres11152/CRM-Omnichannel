@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient, QueryClient } from "@tanstack/react-query";
 import { socketService } from "@/services/socketService";
 import { Logger } from "@/utils/logger";
-import { Message, Conversation, Ticket } from "@/types";
+import { Message, Conversation, Ticket, SenderType } from "@/types";
 import {
   addMessageToCache,
   updateConversationInCache,
@@ -49,7 +49,7 @@ export const useChatSockets = (currentTicketId: string | null) => {
         ...rawMsg,
         ticketId: payload.ticketId,
         companyId: (rawMsg.companyId as string) || "",
-        senderType: (rawMsg.senderType as any) || (rawMsg.direction === "OUTBOUND" ? "AGENT" : "USER"),
+        senderType: (rawMsg.senderType as SenderType) || (rawMsg.direction === "OUTBOUND" ? SenderType.AGENT : SenderType.USER),
         type: rawMsg.type || "text",
         timestamp: rawMsg.createdAt
           ? new Date(rawMsg.createdAt).toISOString()

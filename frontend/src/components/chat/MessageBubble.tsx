@@ -1,7 +1,23 @@
 import React, { useState } from "react";
 import { Message } from "@/types";
 import EmojiPicker, { Theme } from "emoji-picker-react";
-import { Plus, Smile, Reply } from "lucide-react";
+import { Plus, Smile, Reply, FileText, Download } from "lucide-react";
+import { VoiceNotePlayer } from "./VoiceNotePlayer";
+import { jwtDecode } from "jwt-decode";
+
+// Cache token decoding for performance
+let cachedUserId: string | null = null;
+const getCurrentUserId = () => {
+  if (cachedUserId) return cachedUserId;
+  try {
+    const token = localStorage.getItem("token");
+    if (token) {
+      cachedUserId = (jwtDecode<{ id: string }>(token)).id;
+      return cachedUserId;
+    }
+  } catch (e) {}
+  return "me"; // fallback
+};
 
 interface MessageBubbleProps {
   message: Message;
@@ -30,19 +46,41 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const [showFullPicker, setShowFullPicker] = useState(false);
 
   // Extract actual sender name from possible backend populated relations
-  const senderNameObj = (message as any).sender;
-  const rawSenderName = message.senderName || (typeof senderNameObj === "object" ? (senderNameObj?.name || senderNameObj?.phone) : undefined);
+  const senderNameObj = message.sender;
+  const rawSenderName = message.senderName || (senderNameObj && typeof senderNameObj === "object" ? ((senderNameObj as { name?: string; phone?: string }).name || (senderNameObj as { name?: string; phone?: string }).phone) : undefined);
   const displaySenderName = typeof rawSenderName === "string" ? rawSenderName : undefined;
 
   // [SEC] Detect dark mode for inline style fallback
   const isDark =
-    (typeof window !== "undefined" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches) ||
-    document.documentElement.classList.contains("dark");
+    typeof document !== "undefined" &&
+    (document.documentElement.classList.contains("dark") || document.body.classList.contains("dark"));
 
   const handleReact = (emoji: string) => {
-    if (onReact) onReact(message.id, emoji);
+    // Determine if user has already reacted with this exact emoji
+    const reactions = message.reactions || [];
+    const currentUserId = getCurrentUserId();
+    const hasMyReact = reactions.some(
+      (r) => r.content === emoji && (r.reactBy === "me" || r.isMe || r.reactBy === currentUserId)
+    );
+
+    // If already reacted, send empty string to remove reaction (like WhatsApp)
+    const finalEmoji = hasMyReact ? "" : emoji;
+
+    if (onReact) onReact(message.id, finalEmoji);
     setShowPicker(false);
+  };
+
+  // Ensure mediaUrls are absolute to avoid React Router catching relative paths
+  const resolveMediaUrl = (url: string | undefined): string => {
+    if (!url) return "";
+    if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+    
+    // Resolve relative URL against API server
+    const apiUrl = import.meta.env.DEV
+       ? "http://localhost:4000"
+       : (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/api\/?$/, "").replace(/\/$/, "");
+       
+    return `${apiUrl}${url.startsWith("/") ? "" : "/"}${url}`;
   };
 
   // System messages (e.g., "Ticket resolved")
@@ -68,7 +106,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const nameColor = displaySenderName ? colors[Math.abs(stringToHash(displaySenderName)) % colors.length] : undefined;
 
   return (
-    <div className={`flex ${isAgent ? "justify-end" : "justify-start"} group/row relative py-1`}>
+    <div id={`msg-${message.id}`} className={`flex ${isAgent ? "justify-end" : "justify-start"} group/row relative py-1`}>
       <div
         className={`flex flex-col max-w-[85%] md:max-w-[70%] ${
           isAgent ? "items-end" : "items-start"
@@ -101,15 +139,22 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           <div
             className={`absolute bottom-full mb-3 ${isAgent ? "right-0" : "left-0"} z-50 bg-white/90 dark:bg-[#1f2c34]/95 backdrop-blur-xl rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200/50 dark:border-white/10 p-1.5 flex items-center gap-1.5 animate-in fade-in zoom-in-90 slide-in-from-bottom-2 duration-200`}
           >
-            {["❤️", "👍", "😂", "😮", "😢", "🙏"].map((emoji) => (
+            {["❤️", "👍", "😂", "😮", "😢", "🙏"].map((emoji) => {
+              const reactions = message.reactions || [];
+              const  currentUserId = getCurrentUserId();
+              const hasMyReact = reactions.some(
+                (r) => r.content === emoji && (r.reactBy === "me" || r.isMe || r.reactBy === currentUserId)
+              );
+              return (
               <button
                 key={emoji}
                 onClick={() => handleReact(emoji)}
-                className="text-xl hover:scale-125 hover:-translate-y-1 active:scale-95 transition-all duration-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
+                className={`text-xl hover:scale-125 hover:-translate-y-1 active:scale-95 transition-all duration-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 ${hasMyReact ? "bg-indigo-100 dark:bg-indigo-500/30" : ""}`}
+                title={hasMyReact ? "Quitar reacción" : "Reaccionar"}
               >
                 {emoji}
               </button>
-            ))}
+            )})}
             <div className="w-px h-6 bg-gray-200 dark:bg-white/10 mx-0.5" />
             <button
               onClick={() => {
@@ -127,7 +172,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         {/* [NEW] Full Emoji Picker Overlay */}
         {showFullPicker && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setShowFullPicker(false)}>
-            <div className="relative animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+             <div className="relative animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
                <EmojiPicker 
                  theme={isDark ? Theme.DARK : Theme.LIGHT}
                  onEmojiClick={(emojiData) => {
@@ -140,7 +185,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         )}
 
         {/* AI Bot Badge */}
-        {isAgent && ((message as any).senderName?.toLowerCase() === "bot" || (message as any).senderType === "BOT") && (
+        {isAgent && (message.senderName?.toLowerCase() === "bot" || message.senderType === "BOT") && (
           <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mb-1 flex items-center gap-1 ml-auto">
              [AI] Agente IA
           </div>
@@ -149,23 +194,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         {/* Message Bubble */}
         <div
           className={`rounded-2xl px-4 py-2 shadow-md transition-all relative group ${
-            isAgent ? "rounded-br-none" : "rounded-bl-none border"
-          }`}
-          style={
             isAgent
-              ? { backgroundColor: "#00a884", color: "#ffffff" }
-              : isDark
-                ? {
-                    backgroundColor: "#202c33",
-                    color: "#e9edef",
-                    borderColor: "#2a3942",
-                  }
-                : {
-                    backgroundColor: "#ffffff",
-                    color: "#111b21",
-                    borderColor: "#e9edef",
-                  }
-          }
+              ? "rounded-br-none bg-[#00a884] text-white"
+              : "rounded-bl-none border bg-[#f1f5f9] text-[#0f172a] border-[#e2e8f0] dark:bg-[#202c33] dark:text-[#e9edef] dark:border-[#2a3942]"
+          }`}
         >
           {/* Group Sender Name (Inside Bubble) - ONLY for groups */}
           {!isAgent && isGroup && displaySenderName && (
@@ -179,18 +211,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           {/* Quoted Message (Reply Context) */}
           {message.metadata?.quotedMessageId && (
             <div
-              className={`mb-2 p-2 rounded-lg border-l-4 bg-black/5 dark:bg-white/5 ${isAgent ? "border-white/40" : "border-indigo-500"} cursor-pointer hover:opacity-80 transition-opacity`}
+              className={`mb-2 p-2 rounded-lg border-l-4 bg-black/10 dark:bg-white/10 ${isAgent ? "border-white/40" : "border-indigo-500"} cursor-pointer hover:opacity-80 transition-opacity`}
               onClick={() => onQuoteClick && onQuoteClick()}
             >
               <div
                 className={`text-[10px] font-bold mb-0.5 ${isAgent ? "text-white/80" : "text-indigo-600 dark:text-indigo-400"}`}
               >
-                {(message.metadata as any).quotedContent ? "Respondiendo a:" : "Respondiendo a mensaje multimedia"}
+                {message.metadata?.quotedContent ? "Respondiendo a:" : "Respondiendo a mensaje multimedia"}
               </div>
               <div
                 className={`text-xs italic line-clamp-2 ${isAgent ? "text-white/70" : "text-gray-500 dark:text-gray-400"}`}
               >
-                {(message.metadata as any).quotedContent || "Haga clic para ver el original"}
+                {message.metadata?.quotedContent || "Haga clic para ver el original"}
               </div>
             </div>
           )}
@@ -199,10 +231,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           {(message.type === "image" || (message.type as string) === "image_unavailable") && (
             message.mediaUrl ? (
               <img
-                src={message.mediaUrl}
+                src={resolveMediaUrl(message.mediaUrl)}
                 alt="Imagen"
                 className="rounded-lg mb-2 max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => window.open(message.mediaUrl, "_blank")}
+                onClick={() => window.open(resolveMediaUrl(message.mediaUrl), "_blank")}
               />
             ) : (
               <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
@@ -216,7 +248,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           {(message.type === "video" || (message.type as string) === "video_unavailable") && (
             message.mediaUrl ? (
               <video
-                src={message.mediaUrl}
+                src={resolveMediaUrl(message.mediaUrl)}
                 controls
                 className="rounded-lg mb-2 max-w-full h-auto"
               />
@@ -231,10 +263,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
           {(message.type === "audio" || (message.type as string) === "audio_unavailable") && (
             message.mediaUrl ? (
-              <audio
-                src={message.mediaUrl}
-                controls
-                className="mb-2 max-w-full"
+              <VoiceNotePlayer 
+                url={resolveMediaUrl(message.mediaUrl)} 
+                isAgent={isAgent}
               />
             ) : (
               <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
@@ -247,31 +278,45 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
           {(message.type === "document" || (message.type as string) === "document_unavailable") && (
             message.mediaUrl ? (
-              <a
-                href={message.mediaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg mb-2 border border-blue-100 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/30 transition-colors"
+              <div
+                onClick={() => {
+                  const fullUrl = resolveMediaUrl(message.mediaUrl);
+                  window.open(fullUrl, "_blank");
+                }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl mb-1 cursor-pointer transition-colors shadow-sm ${
+                  isAgent 
+                    ? "bg-black/10 hover:bg-black/20" 
+                    : "bg-white dark:bg-[#111b21] hover:bg-gray-50 dark:hover:bg-[#182329]"
+                }`}
+                title="Descargar o ver archivo"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                <div className="flex flex-col overflow-hidden">
-                  <span className="text-sm font-medium truncate">
-                    Descargar archivo
-                  </span>
+                {/* Icon Box */}
+                <div className={`p-2.5 rounded-lg flex items-center justify-center shrink-0 ${
+                  isAgent ? "bg-white/20 text-white" : "bg-red-50 dark:bg-red-500/10 text-red-500"
+                }`}>
+                  <FileText className="w-6 h-6" />
                 </div>
-              </a>
+                
+                {/* File Info */}
+                <div className="flex flex-col overflow-hidden min-w-[150px] max-w-[200px] flex-1">
+                  <span className={`text-[13.5px] font-medium truncate ${isAgent ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
+                    {(message.metadata as any)?.attachment?.name || 
+                     (message.metadata as any)?.name || 
+                     message.content || 
+                     "Documento.pdf"}
+                  </span>
+                  <div className={`flex items-center gap-1.5 mt-0.5 text-[11px] uppercase tracking-wider font-semibold ${isAgent ? 'text-white/70' : 'text-gray-500'}`}>
+                    <span>{(message.metadata as any)?.attachment?.name?.split('.').pop() || "PDF"}</span>
+                    <span>•</span>
+                    <span>{(message.metadata as any)?.attachment?.size ? `${Math.round((message.metadata as any).attachment.size / 1024)} KB` : "Documento"}</span>
+                  </div>
+                </div>
+                
+                {/* Download Icon */}
+                <div className={`p-2 rounded-full shrink-0 ${isAgent ? "hover:bg-white/10" : "hover:bg-gray-100 dark:hover:bg-white/5"}`}>
+                  <Download className="w-5 h-5 opacity-70" />
+                </div>
+              </div>
             ) : (
               <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
                 <span className="text-xl"></span>
@@ -286,7 +331,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             const content = message.content;
             
             // ️ SCHEDULED MESSAGE
-            if (content.includes("MENSAJE PROGRAMADO:") || (message as any).status === "SCHEDULED") {
+            if (content.includes("MENSAJE PROGRAMADO:") || message.status === "SCHEDULED") {
               let realMsg = content;
               let dateDisplay = "Programado";
 
@@ -358,7 +403,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             >
               <div className="flex items-center -space-x-0.5">
                 {Array.from(new Set(reactions.map((r) => r.content))).slice(0, 3).map((emoji, idx) => {
-                  const myReact = reactions.find(r => r.content === emoji && (r.reactBy === 'me' || (r as any).isMe));
+                  const currentUserId = getCurrentUserId();
+                  const myReact = reactions.find(r => r.content === emoji && (r.reactBy === 'me' || r.isMe || r.reactBy === currentUserId));
                   const hasMyReact = !!myReact;
                   
                   return (

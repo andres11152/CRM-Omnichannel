@@ -4,8 +4,8 @@ import { prisma, ExtendedPrismaClient } from "@/config/database";
 export class TicketRepository {
   constructor(private db: ExtendedPrismaClient = prisma) {}
 
-  async findById(id: string): Promise<Ticket | null> {
-    return this.db.ticket.findUnique({ where: { id } });
+  async findById(id: string, companyId: string): Promise<Ticket | null> {
+    return this.db.ticket.findFirst({ where: { id, companyId } });
   }
 
   async findUnique(args: Prisma.TicketFindUniqueArgs) {
@@ -33,9 +33,9 @@ export class TicketRepository {
   }
 
   // Backwards compatibility for existing codebase callers
-  async findByIdWithCreator(id: string) {
-    return this.db.ticket.findUnique({
-      where: { id },
+  async findByIdWithCreator(id: string, companyId: string) {
+    return this.db.ticket.findFirst({
+      where: { id, companyId },
       include: { createdBy: true },
     });
   }
@@ -49,8 +49,12 @@ export class TicketRepository {
 
   async updateConversationId(
     id: string,
+    companyId: string,
     conversationId: string,
   ): Promise<Ticket> {
+    // [SEC] Verify ownership before update
+    const exists = await this.db.ticket.findFirst({ where: { id, companyId } });
+    if (!exists) throw new Error(`Ticket ${id} not found in company ${companyId}`);
     return this.db.ticket.update({
       where: { id },
       data: { conversationId },

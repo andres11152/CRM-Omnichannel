@@ -51,7 +51,7 @@ export const ContactsPage: React.FC = () => {
         : Array.isArray(data.data)
           ? data.data
           : [];
-      console.log("[ContactsPage] Parsed tags:", tagsData);
+      
       setAllTags(tagsData);
     } catch (error) {
       console.error("Error fetching tags:", error);
@@ -65,7 +65,7 @@ export const ContactsPage: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      console.log("[ContactsPage] Contacts data:", data);
+      
       if (data.status === "success" && data.data?.contacts) {
         setContacts(data.data.contacts);
       } else if (Array.isArray(data)) {
@@ -161,10 +161,10 @@ export const ContactsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    console.log(" [DELETE REQUEST START]");
-    console.log("ID:", id);
-    console.log("Name:", name);
-    console.log("API_BASE_URL:", API_BASE_URL);
+    
+    
+    
+    
 
     // Temp: Bypass confirm to test event firing
     // if (!confirm(`¿Ests seguro de eliminar a ${name}?`)) return;
@@ -174,7 +174,7 @@ export const ContactsPage: React.FC = () => {
     try {
       const token = localStorage.getItem("token");
       const url = `${API_BASE_URL}/contacts/${id}`;
-      console.log("Fetching URL:", url);
+      
 
       const res = await fetch(url, {
         method: "DELETE",
@@ -184,7 +184,7 @@ export const ContactsPage: React.FC = () => {
         },
       });
 
-      console.log("Response status:", res.status);
+      
 
       if (!res.ok) {
         const errText = await res.text();
@@ -257,11 +257,11 @@ export const ContactsPage: React.FC = () => {
       c.phone?.includes(searchTerm),
   );
 
-  console.log("[ContactsPage] Total contacts:", contacts.length);
-  console.log("[ContactsPage] Filtered contacts:", filteredContacts.length);
-  console.log("[ContactsPage] Search term:", searchTerm);
-  console.log("[ContactsPage] First contact:", contacts[0]);
-  console.log("[ContactsPage] Loading:", loading);
+  
+  
+  
+  
+  
 
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark">

@@ -12,8 +12,8 @@ export class WorkflowRepository {
     return this.db.workflow.findFirst(args);
   }
 
-  async findUnique(id: string) {
-    return this.db.workflow.findUnique({ where: { id } });
+  async findUnique(id: string, companyId: string) {
+    return this.db.workflow.findFirst({ where: { id, companyId } });
   }
 
   async create(args: Prisma.WorkflowCreateArgs) {
@@ -24,7 +24,10 @@ export class WorkflowRepository {
     return this.db.workflow.update(args);
   }
 
-  async delete(id: string) {
+  async delete(id: string, companyId: string) {
+    // [SEC] Verify ownership before delete
+    const exists = await this.db.workflow.findFirst({ where: { id, companyId } });
+    if (!exists) throw new Error(`Workflow ${id} not found in company ${companyId}`);
     return this.db.workflow.delete({ where: { id } });
   }
 }

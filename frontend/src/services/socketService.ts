@@ -122,7 +122,7 @@ class SocketService {
   }
 
   // Convenience Wrappers for Chat
-  onMessageReceived(callback: (payload: any) => void) {
+  onMessageReceived(callback: (payload: Record<string, unknown>) => void) {
     this.on("message.received", callback);
     return () => this.off("message.received", callback);
   }

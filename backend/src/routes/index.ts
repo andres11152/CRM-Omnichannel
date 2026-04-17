@@ -5,8 +5,13 @@ import {
   readinessProbe,
 } from "@/utils/healthCheck";
 import { metricsHandler } from "@/utils/metrics";
+import { storageService } from "@/services/StorageService";
+import { AppError } from "@/utils/AppError";
 import { protect } from "@/middleware/authMiddleware";
 import { getCsrfTokenHandler } from "@/middleware/csrfMiddleware";
+import path from "path";
+import fs from "fs";
+import os from "os";
 import {
   verifyWebhook,
   handleIncomingWebhook,
@@ -61,6 +66,7 @@ import rolesRouter from "@/routes/roles";
 import searchRouter from "@/routes/searchRoutes";
 import notificationsRouter from "@/routes/notificationsRoutes";
 import paymentRouter from "@/routes/paymentRoutes";
+import externalApiRouter from "@/routes/externalApiRoutes";
 
 const router = Router();
 
@@ -78,6 +84,46 @@ router.get("/health/liveness", livenessProbe);
 router.get("/health/readiness", readinessProbe);
 router.get("/metrics", metricsHandler);
 
+// ==================== RAW MEDIA PROXY (SYNC) ====================
+// Legacy/Synced media URLs are stored directly as S3 keys without DB records.
+// This route converts the requested key directly to a secure S3 Signed URL.
+router.get(
+  "/companies/:companyId/uploads/:filename",
+  async (req, res, next) => {
+    try {
+      const { companyId, filename } = req.params;
+      const key = `companies/${companyId}/uploads/${filename}`;
+      const signedUrl = await storageService.getSignedUrl(key);
+      res.redirect(signedUrl);
+    } catch (error) {
+      next(new AppError("Archivo no encontrado o expirado", 404));
+    }
+  },
+);
+
+// ==================== LOCAL MEDIA PROXY (DEV MODE) ====================
+// Used by LocalStorageService to serve files securely without AWS S3.
+router.get("/local-media/*", (req, res, next) => {
+  try {
+    const key = req.params[0];
+    const uploadDir = path.join(os.tmpdir(), "omnicrm_uploads");
+    const filePath = path.join(uploadDir, key);
+
+    // Prevent directory traversal attacks
+    if (!filePath.startsWith(uploadDir)) {
+      return next(new AppError("Acceso denegado", 403));
+    }
+
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      next(new AppError("Archivo no encontrado en almacenamiento local", 404));
+    }
+  } catch (error) {
+    next(new AppError("Error sirviendo archivo local", 500));
+  }
+});
+
 // ==================== PUBLIC ROUTES ====================
 router.get("/api/csrf-token", protect, getCsrfTokenHandler);
 router.use("/api/onboarding", advancedAuthLimiter, onboardingRouter);
@@ -88,6 +134,10 @@ router.post(
   validate(metaIncomingWebhookSchema),
   handleIncomingWebhook,
 );
+
+// ==================== EXTERNAL PUBLIC API ====================
+// Authenticated via X-API-Key header only. Strict rate limiting.
+router.use("/api/v1/external", externalApiRouter);
 
 // ==================== PROTECTED ROUTES ====================
 
@@ -106,7 +156,7 @@ router.use("/api/roles", apiLimiter, protect, rolesRouter);
 router.use("/api/company", apiLimiter, protect, companyRouter);
 router.use("/api/usage", apiLimiter, protect, usageRouter);
 router.use("/api/api-keys", apiLimiter, protect, apiKeyRouter);
-router.use("/api/webhooks", apiLimiter, protect, webhookRouter);
+router.use("/api/webhooks", webhookRouter);
 router.use("/api/integrations", apiLimiter, protect, integrationRouter);
 router.use(
   "/api/push-notifications",

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { flowSessionRepository } from "@/repositories/FlowSessionRepository";
 import { Logger } from "@/utils/logger";
-import { cacheService } from "../cacheService";
+import { cacheService } from "../CacheService";
 import {
   FlowSessionState,
   FlowVariables,

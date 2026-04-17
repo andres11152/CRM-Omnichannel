@@ -61,8 +61,9 @@ export const CreateTenantModal: React.FC<Props> = ({
       onSuccess();
       onClose();
       resetModal();
-    } catch (error: any) {
-      toast.error(error.message || "Error al crear la empresa.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Error al crear la empresa.";
+      toast.error(message);
     } finally {
       setIsCreating(false);
     }

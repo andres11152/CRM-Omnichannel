@@ -58,8 +58,12 @@ export class DealRepository {
 
   async update(
     id: string,
+    companyId: string,
     data: Prisma.DealUpdateInput | Prisma.DealUncheckedUpdateInput,
   ) {
+    // [SEC] Verify ownership before update
+    const exists = await prisma.deal.findFirst({ where: { id, companyId } });
+    if (!exists) throw new Error(`Deal ${id} not found in company ${companyId}`);
     return prisma.deal.update({
       where: { id },
       data,
@@ -73,7 +77,10 @@ export class DealRepository {
     });
   }
 
-  async delete(id: string) {
+  async delete(id: string, companyId: string) {
+    // [SEC] Verify ownership before delete
+    const exists = await prisma.deal.findFirst({ where: { id, companyId } });
+    if (!exists) throw new Error(`Deal ${id} not found in company ${companyId}`);
     return prisma.deal.delete({ where: { id } });
   }
 

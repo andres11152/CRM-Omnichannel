@@ -111,9 +111,9 @@ export class IdentityResolverService {
       }
     }
 
-    // Strategy 6: Async retry with resolveLidToPhone
+    // Strategy 6: Async retry with resolveLidToPhone (reduced from 10 to 3 iterations)
     let realPhone = null;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 3; i++) {
       realPhone = await this.sessionManager.resolveLidToPhone(
         sessionId,
         cleanRemoteJid,

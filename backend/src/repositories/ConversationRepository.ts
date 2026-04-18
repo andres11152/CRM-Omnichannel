@@ -342,9 +342,30 @@ export class ConversationRepository {
 
   /**
    * Generic create with full Prisma args (for unchecked creates with raw fields).
+   * Includes race-condition protection for concurrent inbound workers.
    */
   async createRaw(args: Prisma.ConversationCreateArgs) {
-    return this.db.conversation.create(args);
+    try {
+      return await this.db.conversation.create(args);
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        Logger.warn(`[ConvRepo] Race condition caught on createRaw. Resolving to existing conversation...`);
+        const companyId = args.data.companyId as string | undefined;
+        const channelId = args.data.channelId as string | undefined;
+        
+        if (companyId && channelId) {
+             const existing = await this.db.conversation.findFirst({
+                 where: { companyId, channelId },
+                 include: args.include as any
+             });
+             if (existing) return existing as any;
+        }
+      }
+      throw error;
+    }
   }
 
   /**

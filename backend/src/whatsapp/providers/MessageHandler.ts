@@ -162,43 +162,25 @@ export class MessageHandler implements IMessageHandler {
   // IMessageHandler INTERFACE (Delegation)
   // ────────────────────────────────────────────────
 
-  // Helper to strip defective Baileys prototypes before BullMQ serialization
-  private deepCopyPlain(obj: unknown): unknown {
-    if (obj === null || typeof obj !== 'object') return obj;
-    
-    // Convert Buffer/Uint8Array to standard Base64 string for safe Redis transport
-    // rather than relying on BullMQ's default buffer handling
-    if (Buffer.isBuffer(obj) || obj instanceof Uint8Array) {
-      return Buffer.from(obj);
-    }
-
-    // Convert Long.js objects (used aggressively by Baileys for messageTimestamps) into JS Numbers
-    if ('toNumber' in obj && typeof (obj as { toNumber: () => number }).toNumber === 'function') {
-      return (obj as { toNumber: () => number }).toNumber();
-    }
-
-    if (Array.isArray(obj)) return obj.map((item) => this.deepCopyPlain(item));
-    
-    const result: Record<string, unknown> = {};
-    for (const key of Object.keys(obj as Record<string, unknown>)) {
-      const val = (obj as Record<string, unknown>)[key];
-      // [SEC] CRITICAL: Never copy functions (like toJSON) into the serialized object
-      // This prevents Baileys defective prototypes from crashing BullMQ serialization
-      if (typeof val === 'function') continue;
-      
-      result[key] = this.deepCopyPlain(val);
-    }
-    return result;
+  // [SEC] PROTOBUF SERIALIZATION: Use binary encoding to preserve byte fields
+  // JSON.stringify destroys Uint8Array fields (mediaKey, fileEncSha256) → causes 'bad decrypt'
+  // Protobuf binary encoding preserves ALL fields with full fidelity.
+  private serializeForQueue(message: proto.IWebMessageInfo): string {
+    const encoded = proto.WebMessageInfo.encode(
+      proto.WebMessageInfo.create(message)
+    ).finish();
+    return Buffer.from(encoded).toString('base64');
   }
 
   async handleIncoming(message: proto.IWebMessageInfo, sessionId: string, companyId: string): Promise<void> {
-    const plainMessage = this.deepCopyPlain(message) as proto.IWebMessageInfo;
+    // [SEC] PROTOBUF BINARY: Serialize via proto.encode → Base64 for lossless Redis transport
+    const encodedMessage = this.serializeForQueue(message);
 
     // [SEC] CIRCUIT BREAKER: Evaluate if company is flooding the system
     const delayMs = await InboundCircuitBreaker.getDelayFor(companyId);
 
     await getWhatsAppQueue().inboundQueue.add("process-message", {
-      message: plainMessage,
+      encodedMessage,
       sessionId,
       companyId,
     }, {

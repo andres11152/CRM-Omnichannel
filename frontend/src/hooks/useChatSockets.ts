@@ -18,6 +18,7 @@ interface RawSocketMessage {
   direction?: "INBOUND" | "OUTBOUND";
   senderId?: string;
   type?: "text" | "image" | "video" | "audio" | "document";
+  mediaType?: string;
   ticketId?: string;
   mediaUrl?: string;
   metadata?: Record<string, unknown>;
@@ -45,12 +46,19 @@ export const useChatSockets = (currentTicketId: string | null) => {
   useEffect(() => {
     const handleMessageReceived = (payload: SocketMessagePayload) => {
       const rawMsg = payload.message;
+      
+      // Resolve the message type from socket payload (mediaType takes priority over type)
+      const resolvedType = rawMsg.mediaType 
+        ? String(rawMsg.mediaType).toLowerCase() 
+        : (rawMsg.type || "text");
+
       const normalizedMessage: Message = {
         ...rawMsg,
         ticketId: payload.ticketId,
         companyId: (rawMsg.companyId as string) || "",
         senderType: (rawMsg.senderType as SenderType) || (rawMsg.direction === "OUTBOUND" ? SenderType.AGENT : SenderType.USER),
-        type: rawMsg.type || "text",
+        type: resolvedType,
+        mediaUrl: (rawMsg.mediaUrl as string) || undefined,
         timestamp: rawMsg.createdAt
           ? new Date(rawMsg.createdAt).toISOString()
           : typeof rawMsg.timestamp === "string"

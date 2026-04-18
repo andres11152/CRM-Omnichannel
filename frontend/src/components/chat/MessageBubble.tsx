@@ -24,6 +24,7 @@ interface MessageBubbleProps {
   onReply?: (message: Message) => void;
   onReact?: (messageId: string, reaction: string) => void;
   onQuoteClick?: () => void | null;
+  onImageClick?: (mediaUrl: string) => void;
   isGroup?: boolean;
 }
 
@@ -37,6 +38,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   onReply,
   onReact,
   onQuoteClick,
+  onImageClick,
   isGroup,
 }) => {
   const isOutbound = message.direction === "OUTBOUND" || message.sender === "agent";
@@ -95,6 +97,22 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   }
 
   const reactions = message.reactions || [];
+
+  // Safely resolve media info since the API schema strictness might move it to metadata
+  const mediaObj = message.metadata?.media as { type?: string, url?: string, size?: number } | undefined;
+  const legacyFallback = 
+    message.content === "[AUDIO]" ? "audio" : 
+    message.content === "[IMAGE]" ? "image" : 
+    message.content === "[VIDEO]" ? "video" : 
+    message.content === "[DOCUMENT]" ? "document" : undefined;
+
+  const msgType = 
+    mediaObj?.type?.toLowerCase() || 
+    legacyFallback || 
+    (message.type !== "text" ? (message.type as string)?.toLowerCase() : undefined) || 
+    "text";
+    
+  const mediaUrl = (message.mediaUrl as string) || mediaObj?.url;
   
   // Consistent color gen for group participant names
   const stringToHash = (str: string) => {
@@ -228,13 +246,13 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
 
           {/* Media Content */}
-          {(message.type === "image" || (message.type as string) === "image_unavailable") && (
-            message.mediaUrl ? (
+          {(msgType === "image" || msgType === "image_unavailable") && (
+            mediaUrl ? (
               <img
-                src={resolveMediaUrl(message.mediaUrl)}
+                src={resolveMediaUrl(mediaUrl)}
                 alt="Imagen"
                 className="rounded-lg mb-2 max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => window.open(resolveMediaUrl(message.mediaUrl), "_blank")}
+                onClick={() => onImageClick ? onImageClick(resolveMediaUrl(mediaUrl)) : window.open(resolveMediaUrl(mediaUrl), "_blank")}
               />
             ) : (
               <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
@@ -245,10 +263,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               </div>
             ))}
 
-          {(message.type === "video" || (message.type as string) === "video_unavailable") && (
-            message.mediaUrl ? (
+          {(msgType === "video" || msgType === "video_unavailable") && (
+            mediaUrl ? (
               <video
-                src={resolveMediaUrl(message.mediaUrl)}
+                src={resolveMediaUrl(mediaUrl)}
                 controls
                 className="rounded-lg mb-2 max-w-full h-auto"
               />
@@ -261,10 +279,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               </div>
             ))}
 
-          {(message.type === "audio" || (message.type as string) === "audio_unavailable") && (
-            message.mediaUrl ? (
+          {(msgType === "audio" || msgType === "audio_unavailable") && (
+            mediaUrl ? (
               <VoiceNotePlayer 
-                url={resolveMediaUrl(message.mediaUrl)} 
+                url={resolveMediaUrl(mediaUrl)} 
                 isAgent={isAgent}
               />
             ) : (
@@ -276,11 +294,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               </div>
             ))}
 
-          {(message.type === "document" || (message.type as string) === "document_unavailable") && (
-            message.mediaUrl ? (
+          {(msgType === "document" || msgType === "document_unavailable") && (
+            mediaUrl ? (
               <div
                 onClick={() => {
-                  const fullUrl = resolveMediaUrl(message.mediaUrl);
+                  const fullUrl = resolveMediaUrl(mediaUrl);
                   window.open(fullUrl, "_blank");
                 }}
                 className={`flex items-center gap-3 p-2.5 rounded-xl mb-1 cursor-pointer transition-colors shadow-sm ${
@@ -383,6 +401,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             }
 
             // DEFAULT TEXT
+            // Don't render redundant placeholder texts if media renderer successfully captured it
+            if (
+              msgType !== "text" && 
+              (content === `[${msgType.toUpperCase()}]` || content === `[${msgType}]`)
+            ) {
+              return null;
+            }
+
             return (
               <p
                 className="whitespace-pre-wrap"

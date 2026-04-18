@@ -28,7 +28,29 @@ export class ContactRepository {
   }
 
   async createRaw(args: Prisma.ContactCreateArgs) {
-    return this.db.contact.create(args);
+    try {
+      return await this.db.contact.create(args);
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        // Use a functional safe import check for Logger if it was not imported, but wait we didn't import Logger.
+        // Actually, we can just console.warn since Logger might not be imported in ContactRepository.
+        console.warn(`[ContactRepo] Race condition caught on createRaw. Resolving to existing contact...`);
+        const companyId = args.data.companyId as string | undefined;
+        const phone = args.data.phone as string | undefined;
+
+        if (companyId && phone) {
+            const existing = await this.db.contact.findFirst({
+                where: { companyId, phone },
+                include: args.include as any
+            });
+            if (existing) return existing as any;
+        }
+      }
+      throw error;
+    }
   }
 
   async upsert(args: Prisma.ContactUpsertArgs) {

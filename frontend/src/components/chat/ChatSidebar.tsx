@@ -187,7 +187,11 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
 
           {/* Last Message */}
           <p className="text-sm text-gray-600 dark:text-gray-400 truncate mb-2">
-            {conversation.lastMessage}
+            {conversation.lastMessage === "[AUDIO]" && <><span className="text-indigo-500 font-bold mr-1">🎤</span> Audio</>}
+            {conversation.lastMessage === "[IMAGE]" && <><span className="text-blue-500 font-bold mr-1">📷</span> Imagen</>}
+            {conversation.lastMessage === "[VIDEO]" && <><span className="text-purple-500 font-bold mr-1">🎥</span> Video</>}
+            {conversation.lastMessage === "[DOCUMENT]" && <><span className="text-red-500 font-bold mr-1">📄</span> Documento</>}
+            {!["[AUDIO]", "[IMAGE]", "[VIDEO]", "[DOCUMENT]"].includes(conversation.lastMessage || "") && conversation.lastMessage}
           </p>
 
           {/* Status and Unread Badge */}

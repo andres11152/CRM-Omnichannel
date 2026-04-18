@@ -140,44 +140,27 @@ export class SessionManager implements ISessionManager {
     const sock = this.sessions.get(sessionId) as ExtendedWASocket;
     if (!sock) return null;
 
+    // [SEC] GUARD: Never attempt to resolve group JIDs or standard user JIDs as LIDs
+    if (lid.includes("@g.us") || lid.includes("@s.whatsapp.net")) return null;
+
     // 1. Immediate Store Check (Strategy 1)
     const fromStore = this.findContactByLid(sessionId, lid);
     if (fromStore?.id && !fromStore.id.includes("@lid")) {
       return fromStore.id.split("@")[0].split(":")[0];
     }
 
-    // 2. [SYNC] FORCE QUERY (Strategy 2 - Swiss Watch Trigger)
-    // We trigger multiple queries to force WhatsApp to reveal the mapping
+    // 2. [SYNC] Single safe query to trigger LID resolution (avoid stream corruption)
     try {
       const fullLid = lid.includes("@lid") ? lid : `${lid}@lid`;
-      
-      // Warm up with multiple triggers (Forces metadata sync)
+      // Only use onWhatsApp — profilePictureUrl/fetchStatus/MEX cause xml-not-well-formed
       sock.onWhatsApp(fullLid).catch(() => {});
-      sock.profilePictureUrl(fullLid, 'image').catch(() => {});
-      sock.fetchStatus(fullLid).catch(() => {});
-      
-      // Attempt MEX Query (The alternate direct way)
-      const queryId = '6631627993539868'; 
-      sock.query({
-         tag: 'iq',
-         attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'w:mex' },
-         content: [
-           {
-             tag: 'query',
-             attrs: { query_id: queryId },
-             content: Buffer.from(JSON.stringify({ variables: { lids: [fullLid] } }))
-           }
-         ]
-      }).catch(() => {});
-    } catch (err) {
+    } catch {
       // Ignore trigger errors
     }
 
-    // 3. [SYNC] POLL STORE (Strategy 3 - Swiss Watch Precision)
-    // Many LID mappings arrive asynchronously via push events. 
-    // We wait and poll the store to catch the update.
-    for (let i = 0; i < 5; i++) {
-        await new Promise((r) => setTimeout(r, 400));
+    // 3. [SYNC] POLL STORE — reduced iterations to avoid session overload
+    for (let i = 0; i < 3; i++) {
+        await new Promise((r) => setTimeout(r, 500));
         const resolved = this.findContactByLid(sessionId, lid);
         if (resolved?.id && !resolved.id.includes("@lid")) {
             return resolved.id.split("@")[0].split(":")[0];

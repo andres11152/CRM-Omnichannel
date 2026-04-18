@@ -217,11 +217,10 @@ class LocalStorageService implements IStorageService {
     }
   }
 
-  async getSignedUrl(key: string, expiresInSeconds: number = 900): Promise<string> {
-    // For local dev, return a fast temporary token route if needed, 
-    // or just proxy locally through /api/media proxy as designed.
+  async getSignedUrl(key: string, _expiresInSeconds: number = 900): Promise<string> {
+    // For local dev, serve files through the local-media proxy route
     const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
-    return `${backendUrl}/api/local-media/${encodeURIComponent(key)}`;
+    return `${backendUrl}/api/local-media/${key}`;
   }
 
   async deleteFile(key: string): Promise<void> {
@@ -242,13 +241,14 @@ class LocalStorageService implements IStorageService {
  * Returns the correct service based on environment.
  */
 export const getStorageService = (): IStorageService => {
+  const provider = (process.env.STORAGE_PROVIDER || "local").toLowerCase();
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
   
-  if (accessKeyId && secretAccessKey) {
+  if (provider === "s3" && accessKeyId && secretAccessKey) {
     return new S3StorageService();
   } else {
-    Logger.info("[StorageService] No AWS keys found. Falling back to Local FS Storage.");
+    Logger.info(`[StorageService] Storage mode: LOCAL (via ${provider})`);
     return new LocalStorageService();
   }
 };

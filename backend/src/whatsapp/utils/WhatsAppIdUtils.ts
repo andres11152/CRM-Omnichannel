@@ -166,6 +166,9 @@ export class WhatsAppIdUtils {
     // Standard LID domain check
     if (jid.includes("@lid")) return true;
 
+    // [SEC] CRITICAL: Groups (@g.us) and normal users (@s.whatsapp.net) are NEVER LIDs
+    if (jid.includes("@g.us") || jid.includes("@s.whatsapp.net")) return false;
+
     // Extract user part for pattern analysis
     const userPart = jid.split("@")[0].split(":")[0];
 

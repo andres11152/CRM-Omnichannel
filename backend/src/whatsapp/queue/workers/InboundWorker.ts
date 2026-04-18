@@ -2,7 +2,7 @@ import { Worker, Job } from "bullmq";
 import IORedis from "ioredis";
 import { getEnv } from "@/config/env";
 import { Logger } from "@/utils/logger";
-import { WAMessage } from "@whiskeysockets/baileys";
+import { proto, WAMessage } from "@whiskeysockets/baileys";
 import { InboundMessageHandler } from "../../providers/handlers/InboundMessageHandler";
 import { runWithCompanyId } from "@/context/requestContext";
 
@@ -10,12 +10,22 @@ import { runWithCompanyId } from "@/context/requestContext";
  *  INBOUND WORKER
  * 
  * Processes raw WhatsApp messages from the queue.
+ * Uses protobuf binary decoding (Base64 → proto.decode) for lossless
+ * deserialization of byte fields (mediaKey, fileEncSha256, etc.).
+ *
  * - Mutex Locks
  * - Identity Resolution (LID/Phone)
  * - Message Persistence (DB)
  * - AI Triggering
  * - Workflow Activation
  */
+
+interface InboundJobData {
+  encodedMessage: string;
+  sessionId: string;
+  companyId: string;
+}
+
 export class InboundWorker {
   private worker: Worker;
 
@@ -31,14 +41,16 @@ export class InboundWorker {
     this.worker = new Worker(
       "whatsapp-inbound",
       async (job: Job) => {
-        const { message, sessionId, companyId } = job.data as {
-          message: WAMessage;
-          sessionId: string;
-          companyId: string;
-        };
+        const { encodedMessage, sessionId, companyId } = job.data as InboundJobData;
+
+        // [SEC] PROTOBUF BINARY DECODE: Lossless reconstruction of WAMessage
+        // Base64 → Buffer → proto.WebMessageInfo.decode() preserves ALL byte fields
+        // (mediaKey, fileEncSha256, fileSha256) that JSON serialization would destroy.
+        const binaryData = Buffer.from(encodedMessage, "base64");
+        const message = proto.WebMessageInfo.decode(binaryData) as WAMessage;
 
         try {
-          Logger.debug(`[InboundWorker]  [${companyId}] Processing message ${message.key.id} for session ${sessionId}`);
+          Logger.debug(`[InboundWorker]  [${companyId}] Processing message ${message.key?.id} for session ${sessionId}`);
 
           // [SEC] SECURITY: Inject company context for the RLS interceptor
           // Background jobs don't have middleware context, so we set it manually from the Job data
@@ -47,9 +59,9 @@ export class InboundWorker {
             await this.inboundHandler.handleIncoming(message, sessionId);
           });
 
-          Logger.info(`[InboundWorker] [OK] Message ${message.key.id} processed successfully`);
+          Logger.info(`[InboundWorker] [OK] Message ${message.key?.id} processed successfully`);
         } catch (error) {
-          Logger.error(`[InboundWorker] [ERROR] Failed to process message ${message.key.id}: ${error instanceof Error ? error.message : error}`);
+          Logger.error(`[InboundWorker] [ERROR] Failed to process message ${message.key?.id}: ${error instanceof Error ? error.message : error}`);
           throw error; // Let BullMQ handle the retry
         }
       },

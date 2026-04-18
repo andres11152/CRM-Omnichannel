@@ -103,7 +103,7 @@ router.get(
 
 // ==================== LOCAL MEDIA PROXY (DEV MODE) ====================
 // Used by LocalStorageService to serve files securely without AWS S3.
-router.get("/local-media/*", (req, res, next) => {
+router.get("/api/local-media/*", (req, res, next) => {
   try {
     const key = req.params[0];
     const uploadDir = path.join(os.tmpdir(), "omnicrm_uploads");

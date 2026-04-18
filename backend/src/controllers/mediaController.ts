@@ -21,22 +21,27 @@ export const getMediaContent = async (req: AuthenticatedRequest, res: Response):
   const userCompanyId = req.user?.companyId;
 
   try {
-    const media = await mediaRepository.findById(mediaId, userCompanyId || '', {
-      id: true,
-      key: true,
-      companyId: true,
-    });
+    // Public proxy: query by ID only. If user is authenticated, also enforce tenant.
+    // [SEC] Must use TenantContextManager to bypass RLS when accessed globally via <img> tags
+    const media = await TenantContextManager.run(
+      { companyId: userCompanyId || "__SYSTEM__", userId: req.user?.id || "PUBLIC", requestId: "media-proxy" },
+      async () => {
+        return userCompanyId
+          ? await mediaRepository.findById(mediaId, userCompanyId, { id: true, key: true, companyId: true })
+          : await mediaRepository.findFirst({ where: { id: mediaId }, select: { id: true, key: true, companyId: true } });
+      }
+    );
 
     if (!media) return res.status(404).json({ error: "Media not found" });
 
-    // Enforce Tenant Access
+    // Enforce Tenant Access only for authenticated users
     if (userCompanyId && media.companyId !== userCompanyId) {
       Logger.warn(`[MediaProxy] Tenant mismatch: User ${userCompanyId} accessing ${mediaId}`);
       return res.status(403).json({ error: "Access denied" });
     }
 
     if (!media.key) {
-      Logger.error(`[MediaProxy] [ERROR] Missing S3 key for media ${mediaId}`);
+      Logger.error(`[MediaProxy] [ERROR] Missing storage key for media ${mediaId}`);
       return res.status(500).json({ error: "Missing file key" });
     }
 

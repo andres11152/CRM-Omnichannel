@@ -124,8 +124,14 @@ export class InboundMessageHandler {
         const entities = await this.orchestrator.resolveEntities(message, sessionId, companyId, sessionPhone);
         if (!entities) return;
 
-        // 3. Extract Content (Handle Media/Text)
-        const contentData = await mediaProcessor.extractMessageContent(companyId, message, messageId);
+        // 3. Extract Content (Handle Media/Text) — pass live socket for reuploadRequest
+        const contentData = await mediaProcessor.extractMessageContent(
+          companyId,
+          message,
+          messageId,
+          sessionId,
+          (sid) => this.sessionManager.getSession(sid),
+        );
         if (!contentData) return;
 
         // [SEC] CRITICAL ECHO FIX: Skip echoes where Baileys ID didn't match but content did!

@@ -12,6 +12,7 @@ interface MessageStreamProps {
   scrollToMessage: (id: string) => void;
   onReact: (id: string, emoji: string) => void;
   onReply: (msg: Message) => void;
+  onImageClick?: (url: string) => void;
   isGroup?: boolean;
 }
 
@@ -53,6 +54,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   scrollToMessage,
   onReact,
   onReply,
+  onImageClick,
   isGroup,
 }) => {
   // Group messages by day for professional sticky header behavior
@@ -97,6 +99,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
               }
               onReact={(id, emoji) => onReact(id, emoji)}
               onReply={() => onReply(message)}
+              onImageClick={onImageClick}
             />
           ))}
         </div>

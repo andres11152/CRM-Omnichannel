@@ -322,7 +322,7 @@ export class InboundOrchestratorService {
     const quotedInfo = await this.extractQuotedInfo(msg, companyId);
     return {
       messageId: _id,
-      media: content.mediaUrl && content.mediaType ? {
+      media: content.mediaType ? {
         type: content.mediaType === MediaType.IMAGE ? "image" :
               content.mediaType === MediaType.VIDEO ? "video" :
               content.mediaType === MediaType.AUDIO ? "audio" : "document",

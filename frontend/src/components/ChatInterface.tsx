@@ -24,6 +24,7 @@ import { ContactEditModal } from "./ContactEditModal";
 import { TransferModal } from "./TransferModal";
 import { ActionModals } from "./ActionModals";
 import { ResolveTicketModal } from "./ResolveTicketModal";
+import { ImageLightbox, LightboxImage } from "./chat/ImageLightbox";
 
 // Modular Hooks
 import { useChatWorkflow } from "@/hooks/useChatWorkflow";
@@ -95,6 +96,60 @@ export const ChatInterface: React.FC<Props> = ({
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [activeActionModal, setActiveActionModal] = useState<"SCHEDULE" | "PRODUCT" | "PAYMENT" | "DATA" | null>(null);
 
+  // Lightbox State
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  // Extract all images from conversation for the Lightbox gallery
+  const lightboxImages = useMemo(() => {
+    return messages
+      .filter((msg) => {
+        const mediaObj = msg.metadata?.media as { type?: string, url?: string } | undefined;
+        // Strictly check for image type to avoid putting PDFs/Audio in the gallery
+        const type = mediaObj?.type?.toLowerCase() || 
+                     (msg.content === "[IMAGE]" ? "image" : undefined) || 
+                     ((msg.type && msg.type !== "text") ? msg.type.toLowerCase() : undefined);
+        return type === "image" && (msg.mediaUrl || mediaObj?.url);
+      })
+      .map((msg) => {
+        const mediaObj = msg.metadata?.media as { url?: string } | undefined;
+        const rawUrl = msg.mediaUrl || mediaObj?.url || "";
+        const apiUrl = import.meta.env.DEV
+          ? "http://localhost:4000"
+          : (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/api\/?$/, "").replace(/\/$/, "");
+        
+        const fullUrl = rawUrl.startsWith("http") || rawUrl.startsWith("blob:") || rawUrl.startsWith("data:") 
+          ? rawUrl 
+          : `${apiUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
+
+        // Get readable sender
+        const senderObj = msg.sender;
+        let senderName = "Imagen";
+        if (msg.direction === "OUTBOUND" || msg.sender === "agent") senderName = "Agente";
+        else if (msg.senderName) senderName = msg.senderName;
+        else if (senderObj && typeof senderObj === "object") senderName = (senderObj as any).name || (senderObj as any).phone || "Cliente";
+
+        return {
+          id: msg.id,
+          url: fullUrl,
+          sender: senderName,
+          timestamp: msg.timestamp ? new Date(msg.timestamp) : undefined,
+        } as LightboxImage;
+      });
+  }, [messages]);
+
+  const handleImageClick = useCallback((url: string) => {
+    // Find index of clicked image
+    const idx = lightboxImages.findIndex((img) => img.url === url);
+    if (idx !== -1) {
+      setLightboxIndex(idx);
+      setLightboxOpen(true);
+    } else {
+      // Fallback if not found in gallery map for some reason
+      window.open(url, "_blank");
+    }
+  }, [lightboxImages]);
+
   // 3. EVENT HANDLERS
   const onSend = useCallback(async () => {
     if (!inputValue.trim() && !selectedFile && !isRecording) return;
@@ -152,6 +207,7 @@ export const ChatInterface: React.FC<Props> = ({
           }}
           onReact={handleReact}
           onReply={setReplyingTo}
+          onImageClick={handleImageClick}
         />
 
         {/* BOTTOM: Composer */}
@@ -256,6 +312,15 @@ export const ChatInterface: React.FC<Props> = ({
           setActiveActionModal(null);
         }}
       />
+
+      {/* IMAGE LIGHTBOX MODAL */}
+      {lightboxOpen && lightboxImages.length > 0 && (
+        <ImageLightbox 
+          images={lightboxImages}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
 
     </div>
   );

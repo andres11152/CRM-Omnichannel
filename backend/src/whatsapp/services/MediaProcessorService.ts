@@ -1,5 +1,6 @@
 import {
   downloadMediaMessage,
+  downloadContentFromMessage,
   WAMessage,
   AnyMessageContent,
   getContentType,
@@ -7,12 +8,14 @@ import {
 import { MediaType } from "@prisma/client";
 import { mediaRepository } from "@/repositories/MediaRepository";
 import { storageService } from "@/services/StorageService";
+import redisClient from "@/config/redis";
 import { Logger } from "@/utils/logger";
 import { Readable } from "stream";
 import mime from "mime-types";
 import { MediaPayload } from "../core/types/whatsapp.types";
 import { convertAudioToMP4 } from "@/utils/audioConverter";
 import fs from "fs";
+import { prisma } from "@/config/database";
 
 /** Result type for outbound media preparation */
 export interface PreparedMediaResult {
@@ -48,6 +51,8 @@ export class MediaProcessorService {
     companyId: string,
     message: WAMessage,
     messageId: string,
+    sessionId?: string,
+    getSession?: (id: string) => import("@whiskeysockets/baileys").WASocket | undefined,
   ): Promise<{
     textContent: string;
     mediaUrl?: string;
@@ -118,7 +123,6 @@ export class MediaProcessorService {
       if (supportedMedia.includes(messageType)) {
         try {
           mediaType = this.mapBaileysToMediaType(messageType);
-          const stream = await downloadMediaMessage(message, "stream", {});
           const content = message.message as unknown as Record<string, unknown>;
           
           // Baileys unwrapping for documentWithCaptionMessage
@@ -146,7 +150,32 @@ export class MediaProcessorService {
              return { textContent: "[WARNING] Archivo demasiado grande (>50MB)" };
           }
 
-          if (stream) {
+          // [SEC] HISTORY SYNC GUARD: Skip media download for old messages entirely.
+          // History sync messages have stale CDN keys that ALWAYS fail with 'bad decrypt'.
+          // Attempting download + HEAL for hundreds of these kills the socket via rate-limits.
+          // We preserve the message type/caption in the CRM but skip the binary download.
+          const MAX_MEDIA_AGE_SECONDS = 300; // 5 minutes
+          const ts = message.messageTimestamp;
+          let msgAgeSeconds = 0;
+          if (ts) {
+            const tsNum = typeof ts === "number" ? ts
+              : (typeof ts === "object" && ts !== null && "toNumber" in ts
+                && typeof (ts as unknown as Record<string, unknown>).toNumber === "function")
+                ? (ts as { toNumber: () => number }).toNumber()
+                : Number(ts);
+            if (tsNum > 0) {
+              msgAgeSeconds = Math.floor(Date.now() / 1000) - tsNum;
+            }
+          }
+          if (msgAgeSeconds > MAX_MEDIA_AGE_SECONDS) {
+             Logger.warn(`[MediaProcessor] [SKIP] Skipping media download for ${messageId} (age: ${msgAgeSeconds}s > ${MAX_MEDIA_AGE_SECONDS}s). History sync media keys are stale.`);
+             return { textContent: textContent || `[${mediaType}]`, mediaType };
+          }
+
+          // Robust dual-method download with retry (with session-based reupload support)
+          const buffer = await this.downloadWithRetry(message, messageType, msgObj, messageId, sessionId, getSession);
+
+          if (buffer && buffer.length > 0) {
             mediaType = this.mapBaileysToMediaType(messageType);
             const mimetype: string =
               (msgObj?.mimetype as string | undefined) ||
@@ -155,13 +184,20 @@ export class MediaProcessorService {
             const originalName = (msgObj?.fileName as string) || `${messageId}.${ext}`;
             const filename = `${messageId}.${ext}`;
 
-            // 1. Upload to S3 (Private by default now)
-            const uploadResult = await storageService.uploadStream(
+            // 1. Upload to Storage (S3 or Local)
+            const uploadResult = await storageService.uploadFile(
               companyId,
-              stream as Readable,
+              buffer,
               filename,
               mimetype,
             );
+
+            // [SEC] FIX: uploadedById is mandatory for Media schema. Find a valid user in the company.
+            // Since incoming messages are from customers, we assign the media to any admin/user in the tenant.
+            const fallbackUser = await prisma.user.findFirst({
+              where: { companyId },
+              select: { id: true },
+            });
 
             // 2. Persist to DB (Permanent Reference)
             const mediaRecord = await mediaRepository.create({
@@ -169,16 +205,18 @@ export class MediaProcessorService {
               filename: uploadResult.key,
               originalName: originalName,
               mimeType: mimetype,
-              size: reportedSize || 0,
-              url: uploadResult.url, // This is the S3 Key now
+              size: buffer.length || reportedSize || 0,
+              url: uploadResult.url,
               key: uploadResult.key,
               type: mediaType,
-              uploadedBy: { connect: { email: "system@reply.ai" } }, // Fallback to system user
+              uploadedBy: fallbackUser?.id 
+                ? { connect: { id: fallbackUser.id } } 
+                : { connect: { email: "system@reply.ai" } },
             });
 
             // 3. Return internal Proxy URL (Audit-Ready & Persistent)
             mediaUrl = `/api/media/${mediaRecord.id}/content`;
-            mediaSize = reportedSize;
+            mediaSize = buffer.length || reportedSize;
           }
         } catch (e: unknown) {
           if ((e as Error)?.name === "InvalidAccessKeyId") {
@@ -190,6 +228,11 @@ export class MediaProcessorService {
               `[MediaProcessor] Download failed for ${messageId}`,
               e,
             );
+          }
+          
+          // Provide fallback text so the frontend knows the media type even if download failed
+          if (!textContent) {
+            textContent = `[${mediaType || "DOCUMENT"}]`;
           }
         }
       } else {
@@ -203,11 +246,165 @@ export class MediaProcessorService {
       }
     }
 
+    // Force preserving mediaType even if mediaUrl is missing so Metadata is built in Orchestrator
     if (!textContent && !mediaUrl && !mediaType) {
       return null;
     }
 
     return { textContent, mediaUrl, mediaType, mediaSize };
+  }
+
+  // ────────────────────────────────────────────────
+  // PRIVATE: Robust dual-method download with retry
+  // ────────────────────────────────────────────────
+
+  /**
+   * Attempts media download using two Baileys methods with retry.
+   * Primary: downloadMediaMessage (higher-level, handles type detection internally)
+   * Fallback: downloadContentFromMessage (lower-level, manual chunk collection)
+   */
+  private async downloadWithRetry(
+    message: WAMessage,
+    messageType: string,
+    msgObj: Record<string, unknown> | undefined,
+    messageId: string,
+    sessionId?: string,
+    getSession?: (id: string) => import("@whiskeysockets/baileys").WASocket | undefined,
+  ): Promise<Buffer | null> {
+    const MAX_RETRIES = 2;
+
+    // Method 1: downloadMediaMessage with reuploadRequest for fresh keys
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        Logger.info(`[MediaProcessor] [ATTEMPT ${attempt}/${MAX_RETRIES}] downloadMediaMessage for ${messageId}`);
+        const sock = sessionId && getSession ? getSession(sessionId) : undefined;
+        const reuploadRequest = sock?.updateMediaMessage
+          ? (msg: WAMessage) => sock.updateMediaMessage(msg)
+          : undefined;
+        const result = await downloadMediaMessage(
+          message,
+          "buffer",
+          {},
+          reuploadRequest
+            ? { reuploadRequest, logger: undefined as unknown as import("pino").Logger }
+            : undefined,
+        );
+        const buffer = Buffer.isBuffer(result) ? result : Buffer.from(result as Uint8Array);
+        if (buffer.length > 0) {
+          Logger.info(`[MediaProcessor] [OK] Downloaded ${buffer.length} bytes via downloadMediaMessage`);
+          return buffer;
+        }
+      } catch (err: unknown) {
+        const errorMsg = (err instanceof Error) ? err.message : String(err);
+        Logger.warn(`[MediaProcessor] [RETRY] downloadMediaMessage attempt ${attempt} failed: ${errorMsg}`);
+
+        // [SEC] WORKAROUND: Baileys only triggers reuploadRequest for HTTP 404/410 Axios errors.
+        // It entirely bypasses its own reupload handler for Crypto 'bad decrypt' errors.
+        // We MUST manually update the media keys here to ensure the next attempt succeeds.
+        if (errorMsg.includes("bad decrypt") || errorMsg.includes("mac check failed")) {
+            const ts = message.messageTimestamp;
+            let tsSeconds = 0;
+            if (ts) {
+                if (typeof ts === "number") {
+                    tsSeconds = ts;
+                } else if (typeof ts === "object" && ts !== null && "toNumber" in ts && typeof (ts as unknown as Record<string, unknown>).toNumber === "function") {
+                    tsSeconds = (ts as { toNumber: () => number }).toNumber();
+                } else {
+                    tsSeconds = Number(ts);
+                }
+            }
+            const ageSeconds = tsSeconds ? Math.floor(Date.now() / 1000) - tsSeconds : 0;
+            
+            // [SEC] DDoS PROTECTION: WhatsApp servers heavily rate-limit 'updateMediaMessage' IQ requests.
+            // If this is a HistorySync message (> 2 hours old), WA will throw 'Failed to re-upload media (3)'.
+            // We abort the retry loop immediately to save the socket connection from 'init queries' timeouts!
+            if (tsSeconds > 0 && ageSeconds > 7200) {
+                 Logger.warn(`[MediaProcessor] [HEAL] Aborting updateMediaMessage for ${messageId} (Age: ${ageSeconds}s > 2h). Old media keys cannot form new IQ stanzas without risking socket bans.`);
+                 break; // Skip the rest of the retries to protect the socket.
+            }
+
+            // [SEC] CIRCUIT BREAKER: Check if we are currently rate-limited by WA.
+            if (redisClient?.isOpen) {
+                const isCircuitOpen = await redisClient.get(`cb:heal:${sessionId}`);
+                if (isCircuitOpen) {
+                     Logger.warn(`[MediaProcessor] [HEAL] Circuit breaker OPEN for ${sessionId}. Skipping updateMediaMessage for ${messageId} to protect socket.`);
+                     break; 
+                }
+            }
+
+            const sock = sessionId && getSession ? getSession(sessionId) : undefined;
+            if (sock?.updateMediaMessage) {
+                try {
+                     Logger.info(`[MediaProcessor] [HEAL] Forcing WhatsApp server to issue fresh media keys for ${messageId}...`);
+                     const freshMessage = await sock.updateMediaMessage(message);
+                     message = freshMessage; // Re-assign the entire message
+
+                     // We must also update `msgObj` because the Fallback method uses it directly.
+                     if (message.message) {
+                        const newContent = message.message as unknown as Record<string, unknown>;
+                        let newMsgObj = newContent[messageType] as Record<string, unknown> | undefined;
+                        if (messageType === "documentWithCaptionMessage") {
+                            const innerMsg = newMsgObj?.message as Record<string, unknown> | undefined;
+                            newMsgObj = (innerMsg?.documentMessage || newMsgObj) as Record<string, unknown> | undefined;
+                        }
+                        if (newMsgObj) msgObj = newMsgObj;
+                     }
+                     Logger.info(`[MediaProcessor] [HEAL] Keys completely refreshed. Ready for next attempt.`);
+                } catch(healErr: unknown) {
+                     const healErrorMsg = (healErr instanceof Error) ? healErr.message : String(healErr);
+                     Logger.warn(`[MediaProcessor] [HEAL] updateMediaMessage failed: ${healErrorMsg}`);
+                     
+                     // Open the circuit breaker for 10 minutes if WA rejects the keys request.
+                     if (redisClient?.isOpen && (healErrorMsg.includes("Failed to re-upload media") || healErrorMsg.includes("rate-limit") || healErrorMsg.includes("timed out"))) {
+                         Logger.error(`[MediaProcessor] [HEAL] Rate limit or rejection detected from WA Server. Opening Circuit Breaker for session ${sessionId} for 10 minutes.`);
+                         await redisClient.setEx(`cb:heal:${sessionId}`, 600, "1"); // 600s = 10 minutes
+                     }
+                }
+            }
+        }
+
+        // Small delay before retry
+        if (attempt < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+    }
+
+    // Method 2: downloadContentFromMessage (fallback – lower-level chunk approach)
+    try {
+      Logger.info(`[MediaProcessor] [FALLBACK] Trying downloadContentFromMessage for ${messageId}`);
+      const mappedStreamType = messageType.replace("Message", "");
+      const streamType = (mappedStreamType === "documentWithCaption" ? "document" : mappedStreamType) as
+        "image" | "video" | "audio" | "document" | "sticker";
+
+      type DownloadableMsg = {
+        mediaKey?: Uint8Array;
+        directPath?: string;
+        url?: string;
+        mediaKeyTimestamp?: number;
+      };
+
+      const stream = await downloadContentFromMessage(
+        msgObj as DownloadableMsg,
+        streamType,
+      );
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk));
+      }
+
+      const buffer = Buffer.concat(chunks);
+      if (buffer.length > 0) {
+        Logger.info(`[MediaProcessor] [OK] Downloaded ${buffer.length} bytes via downloadContentFromMessage`);
+        return buffer;
+      }
+    } catch (err: unknown) {
+      const errorMsg = (err instanceof Error) ? err.message : String(err);
+      Logger.error(`[MediaProcessor] [FINAL] All download methods failed for ${messageId}: ${errorMsg}`);
+    }
+
+    return null;
   }
 
   // ────────────────────────────────────────────────

@@ -12,14 +12,15 @@ export const CreateUserSchema = z.object({
     email: z.string().email("Email no válido."),
     password: z
       .string()
-      .min(8, "La contraseña debe tener al menos 8 caracteres.")
-      .optional(),
+      .min(8, "La contraseña debe tener al menos 8 caracteres."),
     role: z
       .enum(["USER", "AGENT", "SUPERVISOR", "ADMIN", "MASTER"])
       .optional()
       .default("AGENT"),
     phone: z.string().optional(),
     queueIds: z.array(z.string().cuid()).optional(),
+    maxConcurrency: z.number().int().min(0).max(100).optional().default(5),
+    skills: z.array(z.string()).optional().default([]),
   }),
 });
 

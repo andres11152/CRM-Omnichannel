@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Message } from "@/types";
 import { MessageBubble } from "./MessageBubble";
+import { ChevronDown } from "lucide-react";
 
 interface MessageListProps {
   messages: Message[];
@@ -17,6 +18,7 @@ export const MessageList: React.FC<MessageListProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -24,6 +26,20 @@ export const MessageList: React.FC<MessageListProps> = ({
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  const handleScroll = () => {
+    if (!containerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    // Show button if we are more than 300px away from the bottom
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 300;
+    setShowScrollButton(!isAtBottom);
+  };
+
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   if (loading) {
     return (
@@ -53,25 +69,39 @@ export const MessageList: React.FC<MessageListProps> = ({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 overflow-y-auto p-4 space-y-4 bg-reply-bg dark:bg-reply-bg-dark"
-    >
-      {messages.map((message, index) => {
-        const showDateDivider =
-          index === 0 ||
-          isNewDay(messages[index - 1].timestamp, message.timestamp);
+    <div className="flex-1 relative overflow-hidden flex flex-col">
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-reply-bg dark:bg-reply-bg-dark scroll-smooth"
+      >
+        {messages.map((message, index) => {
+          const showDateDivider =
+            index === 0 ||
+            isNewDay(messages[index - 1].timestamp, message.timestamp);
 
-        return (
-          <React.Fragment key={message.id}>
-            {showDateDivider && <DateDivider date={message.timestamp} />}
-            <MessageBubble message={message} />
-          </React.Fragment>
-        );
-      })}
+          return (
+            <React.Fragment key={message.id}>
+              {showDateDivider && <DateDivider date={message.timestamp} />}
+              <MessageBubble message={message} />
+            </React.Fragment>
+          );
+        })}
 
-      {/* Invisible element at the end for auto-scroll */}
-      <div ref={messagesEndRef} />
+        {/* Invisible element at the end for auto-scroll */}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Scroll to Bottom Button */}
+      {showScrollButton && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-6 right-6 p-3 bg-reply-surface dark:bg-reply-panel-dark text-reply-brand rounded-full shadow-lg border border-reply-border dark:border-reply-border-dark hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 animate-in fade-in zoom-in slide-in-from-bottom-4 cursor-pointer z-10"
+          title="Bajar al final"
+        >
+          <ChevronDown size={24} className="animate-bounce" />
+        </button>
+      )}
     </div>
   );
 };

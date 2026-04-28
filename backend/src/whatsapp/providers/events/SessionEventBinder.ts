@@ -256,38 +256,65 @@ export function bindSessionEvents(
 
   // Message listener (notify only)
   sock.ev.on("messages.upsert", async (rawData: unknown) => {
+    console.log(`[DEBUG-BAILEYS] 🔔 messages.upsert FIRED for session ${sessionId}`);
     const validated = validateBaileysEvent(MessagesUpsertSchema, rawData, "messages.upsert", { sessionId, companyId });
+    if (!validated) {
+      console.log(`[DEBUG-BAILEYS] ❌ Zod validation FAILED for messages.upsert`);
+      return;
+    }
+    console.log(`[DEBUG-BAILEYS] ✅ Validated. Type: ${validated.type}, Count: ${validated.messages?.length}`);
     if (validated && validated.type === "notify") {
+      console.log(`[DEBUG-BAILEYS] 📨 Processing ${validated.messages.length} notify messages`);
       for (const msg of validated.messages) {
-        if (!msg.message) continue;
-        let msgContent = msg.message;
+        if (!msg.message) {
+          console.log(`[DEBUG-BAILEYS] ⏭️ Skipping msg with no .message: ${msg.key?.id}`);
+          continue;
+        }
+        let msgContent = msg.message as Record<string, unknown>;
 
         // Unwrap specific types
-        if (msgContent.ephemeralMessage) msgContent = msgContent.ephemeralMessage.message!;
-        if (msgContent.viewOnceMessageV2) msgContent = msgContent.viewOnceMessageV2.message!;
+        if (msgContent["ephemeralMessage"]) {
+          const eph = msgContent["ephemeralMessage"] as Record<string, unknown>;
+          if (eph["message"]) msgContent = eph["message"] as Record<string, unknown>;
+        }
+        if (msgContent["viewOnceMessageV2"]) {
+          const v2 = msgContent["viewOnceMessageV2"] as Record<string, unknown>;
+          if (v2["message"]) msgContent = v2["message"] as Record<string, unknown>;
+        }
         
-        // Revocation check
-        const proto = msgContent.protocolMessage;
-        if (proto && (proto.type === 0 || proto.type === "REVOKE" || !proto.type) && proto.key?.id) {
-          eventBus.publish({
-            type: WhatsAppEventType.MESSAGE_REVOKED,
-            sessionId, companyId, timestamp: new Date(),
-            data: { revokedMessageId: proto.key.id, revokedBy: msg.key.remoteJid || "unknown", fromMe: msg.key.fromMe || false },
-          });
-          continue;
+        // Protocol message handling (revocations, internal messages)
+        const proto = msgContent["protocolMessage"] as Record<string, unknown> | undefined;
+        if (proto) {
+          // Revocation (Delete for Everyone)
+          const protoType = proto["type"];
+          const protoKey = proto["key"] as Record<string, unknown> | undefined;
+          if ((protoType === 0 || protoType === "REVOKE" || !protoType) && protoKey?.["id"]) {
+            eventBus.publish({
+              type: WhatsAppEventType.MESSAGE_REVOKED,
+              sessionId, companyId, timestamp: new Date(),
+              data: { revokedMessageId: String(protoKey["id"]), revokedBy: msg.key.remoteJid || "unknown", fromMe: msg.key.fromMe || false },
+            });
+          } else {
+            console.log(`[DEBUG-BAILEYS] ⏭️ Skipping internal protocolMessage type: ${protoType} for ${msg.key?.id}`);
+          }
+          continue; // ALL protocolMessages are internal — never process as chat messages
         }
 
         // Reaction check
-        const react = msgContent.reactionMessage;
-        if (react && react.key?.id) {
-          eventBus.publish({
-            type: WhatsAppEventType.MESSAGE_REACTION,
-            sessionId, companyId, timestamp: new Date(),
-            data: { messageId: react.key.id, reaction: react.text || "", participant: msg.key.participant || msg.key.remoteJid || "unknown" },
-          });
-          continue;
+        const react = msgContent["reactionMessage"] as Record<string, unknown> | undefined;
+        if (react) {
+          const reactKey = react["key"] as Record<string, unknown> | undefined;
+          if (reactKey?.["id"]) {
+            eventBus.publish({
+              type: WhatsAppEventType.MESSAGE_REACTION,
+              sessionId, companyId, timestamp: new Date(),
+              data: { messageId: String(reactKey["id"]), reaction: String(react["text"] || ""), participant: msg.key.participant || msg.key.remoteJid || "unknown" },
+            });
+            continue;
+          }
         }
 
+        console.log(`[DEBUG-BAILEYS] 📤 Publishing MESSAGE_RECEIVED to EventBus: ${msg.key?.id}`);
         eventBus.publish({
           type: WhatsAppEventType.MESSAGE_RECEIVED,
           sessionId, companyId, timestamp: new Date(),
@@ -296,6 +323,8 @@ export function bindSessionEvents(
           data: { message: msg as unknown as WAMessage },
         });
       }
+    } else {
+      console.log(`[DEBUG-BAILEYS] ⏭️ Skipping non-notify upsert type: ${validated?.type}`);
     }
   });
 

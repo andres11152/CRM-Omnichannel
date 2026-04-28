@@ -23,28 +23,29 @@ export const securityMiddleware = (app: Express) => {
         directives: {
           defaultSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Required for development
-          imgSrc: ["'self'", "data:", "https:"],
-          connectSrc: ["'self'", "https:"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          imgSrc: ["'self'", "data:", "https:", "blob:"],
+          connectSrc: ["'self'", "https:", "http://localhost:4000"],
           fontSrc: ["'self'", "data:"],
           objectSrc: ["'none'"],
-          mediaSrc: ["'self'"],
-          frameSrc: ["'none'"],
+          mediaSrc: ["'self'", "blob:", "data:"],
+          frameSrc: ["'self'", "blob:", "data:"],
+          frameAncestors: ["'self'", "http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "https://reply.software", "https://*.reply.software"],
         },
       },
 
       // Cross-Origin-Embedder-Policy
-      crossOriginEmbedderPolicy: false, // Disable for third-party integrations
+      crossOriginEmbedderPolicy: false, 
 
       // Cross-Origin-Resource-Policy
       crossOriginResourcePolicy: { policy: "cross-origin" },
 
-      // Hide X-Powered-By header (don't reveal Express)
+      // Hide X-Powered-By header
       hidePoweredBy: true,
 
       // HTTP Strict Transport Security (HSTS)
       hsts: {
-        maxAge: 31536000, // 1 year
+        maxAge: 31536000, 
         includeSubDomains: true,
         preload: true,
       },
@@ -52,10 +53,9 @@ export const securityMiddleware = (app: Express) => {
       // Prevent MIME type sniffing
       noSniff: true,
 
-      // Prevent clickjacking
-      frameguard: {
-        action: "deny",
-      },
+      // [SEC] Clickjacking Protection
+      // We use CSP 'frame-ancestors' instead of X-Frame-Options for better granularity.
+      frameguard: false, 
 
       // XSS Protection (legacy browsers)
       xssFilter: true,

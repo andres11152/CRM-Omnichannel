@@ -43,7 +43,7 @@ export const resolveContactName = (
     normalized.includes("usuario whatsapp") ||
     normalized.includes("usuario de whatsapp") ||
     normalized.trim() === "" ||
-    /^\d+$/.test(normalized);
+    /^\+?\d+$/.test(normalized.replace(/\s/g, "")); // Catch phone numbers (even with + or spaces)
 
   if (isInvalid) {
     let phone = contact.phone ? String(contact.phone) : ""; // Force String

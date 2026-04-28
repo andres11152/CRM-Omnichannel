@@ -36,7 +36,7 @@ export const GetMediaListSchema = z.object({
       .optional()
       .default("20"),
     search: z.string().max(200, "Search query too long").optional(),
-    type: z.enum(["image", "video", "audio", "document", "other"]).optional(),
+    type: z.enum(["IMAGE", "VIDEO", "AUDIO", "DOCUMENT", "OTHER"]).optional(),
     category: z.string().max(50, "Category too long").optional(),
   }),
 });

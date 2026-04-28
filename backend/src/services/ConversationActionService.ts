@@ -17,10 +17,14 @@ export class ConversationActionService {
   async createConversation(dto: CreateConversationDTO): Promise<ConversationWithRelations> {
     const { companyId, agentId, phone, name, message, addToContacts } = dto;
 
-    const cleanPhone = phone.replace(/[^\d]/g, "");
-    if (cleanPhone.length < 5) throw new AppError("Invalid phone number", 400);
+    // [SEC] Robust Group Detection
+    const isGroup = phone.includes("@g.us") || (phone.length === 15 && phone.startsWith("120"));
+    
+    // Clean only if NOT a group, otherwise preserve full JID for groups
+    const cleanPhone = isGroup ? phone : phone.replace(/[^\d]/g, "");
+    if (!isGroup && cleanPhone.length < 5) throw new AppError("Invalid phone number", 400);
 
-    const email = `${cleanPhone}@whatsapp.user`;
+    const email = isGroup ? `${phone}@whatsapp.user` : `${cleanPhone}@whatsapp.user`;
 
     // A. Sync User Identity (Shadow User)
     const existingUser = await userRepository.findByEmail(email);
@@ -29,8 +33,8 @@ export class ConversationActionService {
 
     const customer = await userRepository.upsertShadowUser({
       email,
-      name: name || cleanPhone,
-      phone: cleanPhone,
+      name: name || (isGroup ? `[Grupo] ${cleanPhone.slice(0, 8)}` : cleanPhone),
+      phone: isGroup ? null : cleanPhone, // Never save group JID as a phone number
       companyId,
       password: securePassword,
     });
@@ -38,10 +42,11 @@ export class ConversationActionService {
     // B. Create/Resolve Conversation (Unit of Work)
     const conversation = await conversationRepository.findOrCreate({
       companyId,
-      channelId: cleanPhone,
+      channelId: isGroup ? cleanPhone.split("@")[0] : cleanPhone,
       customerId: customer.id,
-      subject: customer.name || cleanPhone,
+      subject: customer.name || (isGroup ? "[Grupo]" : cleanPhone),
       status: "OPEN",
+      isGroup, // Explicitly set group flag
     });
 
     gateway.emitToCompany(companyId, "conversation:new", conversation);
@@ -52,13 +57,13 @@ export class ConversationActionService {
         companyId,
         conversation.id,
         agentId,
-        cleanPhone,
+        isGroup ? `${cleanPhone.split("@")[0]}@g.us` : cleanPhone,
         message,
       );
     }
 
-    // D. Link Contact
-    if (addToContacts) {
+    // D. Link Contact (SKIP for groups)
+    if (addToContacts && !isGroup) {
       const contact = await contactService.upsert(companyId, {
         phone: cleanPhone,
         name: name || cleanPhone,

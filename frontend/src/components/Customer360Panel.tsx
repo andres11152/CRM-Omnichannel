@@ -15,8 +15,12 @@ import {
   Info,
   Clock,
   Users,
+  Tag as TagIcon,
+  Plus,
+  X,
 } from "lucide-react";
-import { Contact } from "@/types";
+import { Contact, Tag } from "@/types";
+import { API_BASE_URL } from "@/services/apiConfig";
 import { InternalNotes } from "./InternalNotes";
 import { toast } from "sonner";
 import { ImageLightbox } from "./ImageLightbox";
@@ -27,6 +31,7 @@ interface Customer360PanelProps {
   onEditContact: () => void;
   onCreateTask?: () => void;
   onScheduleMeeting?: () => void;
+  onContactUpdate?: (contact: Contact) => void;
 }
 
 const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
@@ -34,12 +39,36 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
   onEditContact,
   onCreateTask,
   onScheduleMeeting,
+  onContactUpdate,
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<{
     url: string;
     alt: string;
   } | null>(null);
+
+  // Enterprise Tags State (Deprecated in favor of TagsNavbar)
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+
+  // Fetch all available tags
+  React.useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE_URL}/tags`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) setAllTags(data);
+          else if (data && Array.isArray(data.data)) setAllTags(data.data);
+        }
+      } catch (e) {
+        console.error("Error loading tags in Customer360", e);
+      }
+    };
+    fetchTags();
+  }, []);
 
   //  GROUP DETECTION
   const isGroup = contact.isGroup || false;

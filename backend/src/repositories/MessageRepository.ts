@@ -10,6 +10,9 @@ export class MessageRepository {
     conversationId: string;
     status: string;
     companyId: string;
+    content: string;
+    senderId: string;
+    metadata: Prisma.JsonValue | null;
   } | null> {
     return prisma.message.findFirst({
       where: { whatsappMessageId, companyId },
@@ -18,7 +21,21 @@ export class MessageRepository {
         conversationId: true,
         status: true,
         companyId: true,
+        content: true,
+        senderId: true,
+        metadata: true,
       },
+    });
+  }
+
+  async updateByWhatsAppId(
+    whatsappMessageId: string,
+    companyId: string,
+    data: Prisma.MessageUpdateInput,
+  ): Promise<void> {
+    await prisma.message.updateMany({
+      where: { whatsappMessageId, companyId },
+      data: data as Prisma.MessageUpdateManyMutationInput,
     });
   }
 
@@ -103,8 +120,10 @@ export class MessageRepository {
   /**
    * Generic findUnique with full Prisma args.
    */
-  async findUnique(args: Prisma.MessageFindUniqueArgs) {
-    return prisma.message.findUnique(args);
+  async findUnique<T extends Prisma.MessageFindUniqueArgs>(
+    args: Prisma.SelectSubset<T, Prisma.MessageFindUniqueArgs>
+  ): Promise<Prisma.MessageGetPayload<T> | null> {
+    return prisma.message.findUnique(args as Prisma.MessageFindUniqueArgs) as unknown as Promise<Prisma.MessageGetPayload<T> | null>;
   }
 
   /**
@@ -131,15 +150,19 @@ export class MessageRepository {
   /**
    * Generic findFirst with full Prisma args.
    */
-  async findFirst(args: Prisma.MessageFindFirstArgs) {
-    return prisma.message.findFirst(args);
+  async findFirst<T extends Prisma.MessageFindFirstArgs>(
+    args: Prisma.SelectSubset<T, Prisma.MessageFindFirstArgs>
+  ): Promise<Prisma.MessageGetPayload<T> | null> {
+    return prisma.message.findFirst(args as Prisma.MessageFindFirstArgs) as unknown as Promise<Prisma.MessageGetPayload<T> | null>;
   }
 
   /**
    * Generic findMany with full Prisma args.
    */
-  async findMany(args: Prisma.MessageFindManyArgs) {
-    return prisma.message.findMany(args);
+  async findMany<T extends Prisma.MessageFindManyArgs>(
+    args: Prisma.SelectSubset<T, Prisma.MessageFindManyArgs>
+  ): Promise<Prisma.MessageGetPayload<T>[]> {
+    return prisma.message.findMany(args as Prisma.MessageFindManyArgs) as unknown as Promise<Prisma.MessageGetPayload<T>[]>;
   }
 
   /**
@@ -167,8 +190,10 @@ export class MessageRepository {
   /**
    * Upsert a message (create if not exists, update if exists).
    */
-  async upsert(args: Prisma.MessageUpsertArgs) {
-    return prisma.message.upsert(args);
+  async upsert<T extends Prisma.MessageUpsertArgs>(
+    args: Prisma.SelectSubset<T, Prisma.MessageUpsertArgs>
+  ): Promise<Prisma.MessageGetPayload<T>> {
+    return prisma.message.upsert(args as Prisma.MessageUpsertArgs) as unknown as Promise<Prisma.MessageGetPayload<T>>;
   }
 
   /**

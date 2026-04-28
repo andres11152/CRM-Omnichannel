@@ -86,7 +86,7 @@ model Conversation {
 
   // 🔄 GROUP SYNC CONTROL
   // Determines if participants of this group should be auto-indexed into CRM
-  syncEnabled Boolean @default(true)
+  syncEnabled Boolean @default(false)
 
   // === HIGH-PERFORMANCE COMPOSITE INDEXES ===
 
@@ -129,7 +129,7 @@ model Message {
   senderId String
   sender   User   @relation("SenderMessages", fields: [senderId], references: [id], onDelete: NoAction)
 
-  metadata Json? // For attachments, etc.
+  metadata  Json? // For attachments, etc.
   reactions MessageReaction[]
 
   // 🛡️ DATA INTEGRITY: Prevent duplicate processing of same WhatsApp message
@@ -154,13 +154,13 @@ model MessageReaction {
   id        String   @id @default(cuid())
   messageId String
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  reactBy   String   // Phone/JID of the person who reacted
-  content   String   // The emoji
+  reactBy   String // Phone/JID of the person who reacted
+  content   String // The emoji
   createdAt DateTime @default(now())
-  companyId String   // 🛡️ REQUIRED for multi-tenant isolation
+  companyId String // 🛡️ REQUIRED for multi-tenant isolation
 
   @@unique([messageId, reactBy]) // Only one emoji per message per person
-  @@index([companyId])           // 🛡️ Performance index for tenant-scoped queries
+  @@index([companyId]) // 🛡️ Performance index for tenant-scoped queries
   @@map("message_reactions")
 }
 
@@ -187,7 +187,7 @@ model Contact {
   // 🚫 SPAM BLACKLIST (Enterprise Anti-Spam)
   isBlocked     Boolean   @default(false)
   blockedAt     DateTime?
-  blockedReason String?   // "SPAM", "MANUAL", "ABUSE"
+  blockedReason String? // "SPAM", "MANUAL", "ABUSE"
 
   // CRM Relations
   accountId  String?
@@ -207,9 +207,8 @@ model Contact {
   @@index([companyId, phone])
   // 2. Fast Email Lookup
   @@index([companyId, email])
-  // 3. Recent Contacts View (Dashboard)
-  // Partial index logic for deletedAt is handled by query
-  @@index([companyId, updatedAt(sort: Desc)])
+  // 3. Recent Contacts View (Dashboard / List)
+  @@index([companyId, deletedAt, createdAt(sort: Desc)])
   // 4. Name Autocomplete (Prefix search)
   @@index([companyId, name])
   // 5. Blocked Contact Lookup (Critical for Spam Gate on incoming messages)
@@ -293,7 +292,7 @@ model Company {
   // Chatbot Flows
   // Link to 'workflows' is the single source of truth (line 251)
   // Cleaned up deprecated 'flows' reference.
-  
+
   flowSessions ContactFlowSession[]
 
   // Multimedia Library
@@ -316,8 +315,8 @@ model Company {
   pushSubscriptions PushSubscription[]
 
   // RBAC - Custom Roles
-  roles   Role[]
-  Message Message[]
+  roles              Role[]
+  Message            Message[]
   notifications      Notification[]
   transactions       BillingTransaction[]
   workflowExecutions WorkflowExecution[]
@@ -345,10 +344,10 @@ model User {
   about         String? // WhatsApp Status/About info
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  
+
   // Activity Tracking
   lastSeen      DateTime?
-  isOnline      Boolean  @default(false)
+  isOnline      Boolean        @default(false)
   agentSessions AgentSession[]
 
   // Relación con Compañía (Tenant)
@@ -422,7 +421,6 @@ model User {
   @@map("users")
 }
 
-
 model Workflow {
   id          String  @id @default(cuid())
   companyId   String
@@ -440,7 +438,7 @@ model Workflow {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  executions WorkflowExecution[]
+  executions   WorkflowExecution[]
   flowSessions ContactFlowSession[]
 
   @@map("workflows")
@@ -448,7 +446,7 @@ model Workflow {
 
 model WorkflowExecution {
   id         String   @id @default(cuid())
-  companyId  String?  // 🛡️ Denormalized for native RLS and high-performance querying
+  companyId  String? // 🛡️ Denormalized for native RLS and high-performance querying
   company    Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
   workflowId String
   workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
@@ -507,17 +505,17 @@ model WhatsAppCredential {
 }
 
 model AgentSession {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  connectedAt    DateTime @default(now())
+  connectedAt    DateTime  @default(now())
   disconnectedAt DateTime?
-  duration       Int?     // Duration in seconds
+  duration       Int? // Duration in seconds
 
-  socketId  String?  // Useful for debugging specific socket drops
+  socketId String? // Useful for debugging specific socket drops
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -564,7 +562,7 @@ model ApiKey {
 model ApiAccessLog {
   id         String   @id @default(cuid())
   companyId  String
-  apiKeyId   String?  // Optional because key might be deleted
+  apiKeyId   String? // Optional because key might be deleted
   endpoint   String
   method     String
   statusCode Int
@@ -598,11 +596,11 @@ model WebhookDeliveryLog {
   webhookId String
   webhook   Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
   eventType String
-  url       String   // Denormalized for fast log queries
-  status    Int      // HTTP status code (200, 500, etc.)
-  duration  Int      // Response time in milliseconds
-  error     String?  // Error message if delivery failed
-  payload   Json?    // The event payload sent (for debugging)
+  url       String // Denormalized for fast log queries
+  status    Int // HTTP status code (200, 500, etc.)
+  duration  Int // Response time in milliseconds
+  error     String? // Error message if delivery failed
+  payload   Json? // The event payload sent (for debugging)
   attempt   Int      @default(1) // Retry attempt number
   createdAt DateTime @default(now())
 
@@ -805,17 +803,17 @@ model AIAssistant {
 }
 
 model Campaign {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   companyId      String
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name           String
-  channel        Channel  @default(WHATSAPP)
+  channel        Channel          @default(WHATSAPP)
   subject        String?
   templateId     String?
   template       MessageTemplate? @relation(fields: [templateId], references: [id])
   messageContent String
   targetTags     String[]
-  status         String   @default("draft")
+  status         String           @default("draft")
   config         Json?
   stats          Json?
 
@@ -1176,7 +1174,7 @@ model ContactFlowSession {
 
   // 🛡️ UNIFICATION: Link to Workflow (Single Source of Truth)
   flowId String
-  flow   Workflow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  flow   Workflow @relation(fields: [flowId], references: [id], onDelete: Cascade)
 
   conversationId String?
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
@@ -1516,16 +1514,16 @@ model Notification {
 // 💳 BILLING TRANSACTIONS (MASTER ADMIN)
 // Stores history of SaaS charges to tenants
 model BillingTransaction {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   description String
-  amount      Int      // Cents (USD/COP/MXN)
-  currency    String   @default("USD")
-  status      String   // succeeded, failed, refunded, pending
-  
-  invoiceId       String?  @unique
+  amount      Int // Cents (USD/COP/MXN)
+  currency    String @default("USD")
+  status      String // succeeded, failed, refunded, pending
+
+  invoiceId       String? @unique
   stripePaymentId String?
 
   billingDate DateTime @default(now())
@@ -1537,6 +1535,5 @@ model BillingTransaction {
   @@index([status, billingDate(sort: Desc)])
   // 2. Tenant billing history
   @@index([companyId, billingDate(sort: Desc)])
-  
   @@map("billing_transactions")
 }

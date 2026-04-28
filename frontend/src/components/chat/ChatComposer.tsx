@@ -71,14 +71,24 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   const [showEmojiMenu, setShowEmojiMenu] = React.useState(false);
   const [slashQuery, setSlashQuery] = React.useState("");
 
-  // Auto-trigger Quick Replies and Slash Menu
+  // [SEC] Advanced Trigger for Quick Replies and Slash Menu
   React.useEffect(() => {
-    // [SEC] Trigger Slash Menu when input starts with '/'
-    // This allows for inline search like WhatsApp Business
-    if (inputValue.startsWith("/")) {
+    // We look for the last slash that isn't preceded by non-space characters
+    // Matches: "/shortcut" at start or " /shortcut" anywhere
+    const lastSlashIndex = inputValue.lastIndexOf("/");
+    
+    if (lastSlashIndex !== -1 && (lastSlashIndex === 0 || inputValue[lastSlashIndex - 1] === " ")) {
+      const query = inputValue.slice(lastSlashIndex + 1);
+      
+      // Reset if there's a space after the slash (user likely just typing a path or divider)
+      if (query.includes(" ")) {
+        setShowSlashMenu(false);
+        return;
+      }
+
       setShowSlashMenu(true);
-      setSlashQuery(inputValue.slice(1)); // Text after '/'
-      setShowQuickReplies(false); // Hide the full modal if it was open
+      setSlashQuery(query);
+      setShowQuickReplies(false);
     } else {
       setShowSlashMenu(false);
     }
@@ -138,7 +148,9 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           <InlineQuickReplies
             query={slashQuery}
             onSelect={(content) => {
-              setInputValue(content);
+              const lastSlashIndex = inputValue.lastIndexOf("/");
+              const prefix = inputValue.substring(0, lastSlashIndex);
+              setInputValue(prefix + content);
               setShowSlashMenu(false);
             }}
             onClose={() => setShowSlashMenu(false)}

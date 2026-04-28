@@ -134,29 +134,15 @@ export class WhatsAppEventWiring {
       },
     );
 
-    this.eventBus.on(
-      WhatsAppEventType.MESSAGE_RECEIVED,
-      async (event: WhatsAppEvent<WhatsAppEventType.MESSAGE_RECEIVED>) => {
-        const { companyId, sessionId } = event;
-        try {
-          await TenantContextManager.run(
-            {
-              companyId,
-              userId: "system",
-              requestId: `wa:msg:${event.data.message?.key?.id || "unknown"}`,
-            },
-            async () => {
-              await this.messageHandler.handleIncoming(
-                event.data.message,
-                sessionId,
-                companyId,
-              );
-            },
-          );
-        } catch (err) {
-          Logger.error(`[WA] Error processing message for ${sessionId}:`, err);
-        }
-      },
-    );
+    // [FIX] DISABLED: This handler is REDUNDANT.
+    // MessageHandler.subscribeToEvents() already subscribes to MESSAGE_RECEIVED
+    // via eventBus.subscribe() and enqueues to BullMQ.
+    // Having TWO subscribers caused every message to be processed TWICE.
+    // this.eventBus.on(
+    //   WhatsAppEventType.MESSAGE_RECEIVED,
+    //   async (event: WhatsAppEvent<WhatsAppEventType.MESSAGE_RECEIVED>) => {
+    //     ...
+    //   },
+    // );
   }
 }

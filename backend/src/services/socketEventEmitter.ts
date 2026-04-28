@@ -26,6 +26,15 @@ type ConversationWithRelations = Conversation & {
   assignedTo?: User | null;
   messages?: Message[];
   unreadCount?: number | null; // Explicitly allowed for type safety
+  contact?: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    profilePicUrl?: string | null;
+    avatarUrl?: string | null;
+    about?: string | null;
+  } | null;
 };
 
 type MessageWithSender = Message & {
@@ -112,7 +121,7 @@ export class SocketEventEmitter {
     );
     if (this.socketGateway.emitToRoom) {
       this.socketGateway.emitToRoom(
-        conversation.id,
+        `conversation:${conversation.id}`,
         "conversation.new_message",
         messagePayload,
       );
@@ -167,7 +176,7 @@ export class SocketEventEmitter {
     );
     if (this.socketGateway.emitToRoom) {
       this.socketGateway.emitToRoom(
-        conversation.id,
+        `conversation:${conversation.id}`,
         "conversation.new_message",
         messagePayload,
       );
@@ -216,7 +225,7 @@ export class SocketEventEmitter {
       timestamp: new Date().toISOString(),
     });
     if (this.socketGateway.emitToRoom) {
-      this.socketGateway.emitToRoom(conversationId, "message.status", {
+      this.socketGateway.emitToRoom(`conversation:${conversationId}`, "message.status", {
         messageId,
         conversationId,
         status,
@@ -310,7 +319,7 @@ export class SocketEventEmitter {
 
     this.socketGateway.emitToCompany(companyId, "message.revoked", payload);
     if (this.socketGateway.emitToRoom) {
-      this.socketGateway.emitToRoom(conversationId, "message.revoked", payload);
+      this.socketGateway.emitToRoom(`conversation:${conversationId}`, "message.revoked", payload);
     }
   }
 
@@ -358,10 +367,42 @@ export class SocketEventEmitter {
     this.socketGateway.emitToCompany(companyId, "message.reaction", payload);
     if (this.socketGateway.emitToRoom) {
       this.socketGateway.emitToRoom(
-        conversationId,
+        `conversation:${conversationId}`,
         "message.reaction",
         payload,
       );
+    }
+  }
+
+  /**
+   * Emit when a message is pinned/unpinned in WhatsApp
+   *
+   * Frontend: Shows/hides pinned message banner in chat
+   */
+  emitMessagePinned(
+    messageId: string,
+    conversationId: string,
+    companyId: string,
+    isPinned: boolean,
+    content: string,
+    senderId: string,
+  ): void {
+    Logger.info(
+      `[SocketEvents] [PIN] Emitting message.pinned: ${messageId} (${isPinned ? "PINNED" : "UNPINNED"})`,
+    );
+
+    const payload = {
+      messageId,
+      conversationId,
+      isPinned,
+      content,
+      senderId,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.socketGateway.emitToCompany(companyId, "message.pinned", payload);
+    if (this.socketGateway.emitToRoom) {
+      this.socketGateway.emitToRoom(`conversation:${conversationId}`, "message.pinned", payload);
     }
   }
 
@@ -373,24 +414,47 @@ export class SocketEventEmitter {
     const lastMessage = conversation.messages?.[0];
 
     //  LOGIC: Identify the Customer (Contact)
-    // The participant that is NOT the agent/admin/system
-    // Fallback: Use the one matching channelId if participants list is weird
-    const customerParticipant = conversation.participants?.find(
-      (p) => p.role === "USER" || p.phone === conversation.channelId,
-    );
+    // Priority: authoritative CRM contact info
+    const isGroup = (conversation as Record<string, unknown>).isGroup === true;
+    const groupMetadata = (conversation as Record<string, unknown>).groupMetadata as {
+      groupPicUrl?: string | null;
+      groupName?: string;
+    } | null | undefined;
 
-    const contact = customerParticipant
+    const contact = conversation.contact
       ? {
-          id: customerParticipant.id,
-          name: customerParticipant.name || customerParticipant.phone,
-          phone: customerParticipant.phone,
-          email: customerParticipant.email,
-          profilePicUrl: customerParticipant.profilePicUrl,
-          about: customerParticipant.about,
-          role: customerParticipant.role,
+          id: conversation.contact.id,
+          name: conversation.contact.name,
+          phone: conversation.contact.phone,
+          email: conversation.contact.email,
+          // [SEC] GROUP PHOTO FIX: Use group's own photo for groups
+          profilePicUrl: isGroup
+            ? groupMetadata?.groupPicUrl || conversation.contact.profilePicUrl || conversation.contact.avatarUrl
+            : conversation.contact.profilePicUrl || conversation.contact.avatarUrl,
+          about: conversation.contact.about,
+          role: "USER" as const,
           channelId: conversation.channelId,
         }
-      : null;
+      : (() => {
+          const customerParticipant = conversation.participants?.find(
+            (p) => p.role === "USER" || p.phone === conversation.channelId,
+          );
+          return customerParticipant
+            ? {
+                id: customerParticipant.id,
+                name: customerParticipant.name || customerParticipant.phone,
+                phone: customerParticipant.phone,
+                email: customerParticipant.email,
+                // [SEC] GROUP PHOTO FIX: Use group's own photo for groups
+                profilePicUrl: isGroup
+                  ? groupMetadata?.groupPicUrl || customerParticipant.profilePicUrl
+                  : customerParticipant.profilePicUrl,
+                about: customerParticipant.about,
+                role: customerParticipant.role,
+                channelId: conversation.channelId,
+              }
+            : null;
+        })();
 
     return {
       id: conversation.id,
@@ -398,6 +462,7 @@ export class SocketEventEmitter {
       channelId: conversation.channelId,
       subject: conversation.subject,
       status: conversation.status,
+      isGroup,
       assignedTo: conversation.assignedTo
         ? {
             id: conversation.assignedTo.id,
@@ -434,6 +499,7 @@ export class SocketEventEmitter {
   private formatMessage(message: MessageWithSender) {
     return {
       id: message.id,
+      senderId: message.senderId,
       conversationId: message.conversationId,
       content: message.content,
       direction: message.direction,

@@ -23,7 +23,10 @@ export class TicketEnrichment {
     dtos.forEach((t) => {
       if (t.contact.phone) {
         const cleanPhone = t.contact.phone.replace(/\D/g, "");
-        if (cleanPhone) phonesToFetch.add(cleanPhone);
+        if (cleanPhone) {
+          phonesToFetch.add(cleanPhone);
+          phonesToFetch.add(`+${cleanPhone}`);
+        }
       }
     });
 
@@ -110,6 +113,7 @@ export class TicketEnrichment {
         phone: true,
         name: true,
         avatarUrl: true,
+        profilePicUrl: true,
         tags: true,
       },
     });
@@ -121,21 +125,22 @@ export class TicketEnrichment {
         phone: string | null;
         name: string | null;
         avatarUrl: string | null;
+        profilePicUrl: string | null;
         tags: string[];
       }
     >();
     contacts.forEach((c) => {
-      if (c.phone)
-        crmMap.set(
-          c.phone,
-          c as {
-            id: string;
-            phone: string | null;
-            name: string | null;
-            avatarUrl: string | null;
-            tags: string[];
-          },
-        );
+      if (c.phone) {
+        const key = c.phone.replace(/\D/g, "");
+        crmMap.set(key, c as {
+          id: string;
+          phone: string | null;
+          name: string | null;
+          avatarUrl: string | null;
+          profilePicUrl: string | null;
+          tags: string[];
+        });
+      }
     });
 
     return dtos.map((dto) => {
@@ -181,6 +186,14 @@ export class TicketEnrichment {
       }
 
       if (crmData) {
+        // [SEC] 100-YEAR FIX: Aggressive name resolution
+        // If CRM has a name and it's NOT just the phone number, use it!
+        const crmName = crmData.name?.trim();
+        const isCrmNameValid = crmName && 
+                              crmName !== crmData.phone && 
+                              !crmName.startsWith("+") && 
+                              !/^\d+$/.test(crmName.replace(/\D/g, ""));
+
         return {
           ...dto,
           tags:
@@ -188,11 +201,9 @@ export class TicketEnrichment {
           contact: {
             ...dto.contact,
             realContactId: crmData.id,
-            name:
-              crmData.name && crmData.name !== dto.contact.phone
-                ? crmData.name
-                : dto.contact.name,
+            name: isCrmNameValid ? crmName : dto.contact.name,
             avatarUrl: crmData.avatarUrl || dto.contact.avatarUrl,
+            profilePicUrl: crmData.profilePicUrl || dto.contact.profilePicUrl,
             whatsappSessionIndex,
             whatsappSessionPhone,
           },

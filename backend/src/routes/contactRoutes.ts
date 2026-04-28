@@ -38,8 +38,22 @@ router.get("/", validate(GetContactsSchema), contactController.getContacts);
 router.post(
   "/",
   validate(CreateContactSchema),
-  auditLog("Contact", (req) => req.body.phone || req.body.email || "unknown"), // Log Upsert intent
+  auditLog("Contact", (req) => {
+    const body = req.body as Record<string, unknown>;
+    return (body?.phone as string) || (body?.email as string) || "unknown";
+  }), // Log Upsert intent
   contactController.upsertContact,
+);
+
+import { UpdateContactSchema } from "../schemas/contactSchema";
+
+// PATCH /contacts/:id
+// Partial update for specific fields (like tags)
+router.patch(
+  "/:id",
+  validate(UpdateContactSchema),
+  auditLog("Contact", () => "partial_update"),
+  contactController.updateContact,
 );
 
 import { IdParamSchema } from "../schemas/commonSchemas";

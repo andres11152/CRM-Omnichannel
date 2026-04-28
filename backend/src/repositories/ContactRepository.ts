@@ -44,9 +44,9 @@ export class ContactRepository {
         if (companyId && phone) {
             const existing = await this.db.contact.findFirst({
                 where: { companyId, phone },
-                include: args.include as any
+                include: args.include as Prisma.ContactInclude
             });
-            if (existing) return existing as any;
+            if (existing) return existing as unknown as Prisma.Prisma__ContactClient<Contact>;
         }
       }
       throw error;

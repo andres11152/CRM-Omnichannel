@@ -1,4 +1,5 @@
 import { Logger } from "@/utils/logger";
+import { getMediaPlaceholder } from "@/utils/mediaUtils";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
@@ -267,7 +268,7 @@ export class MetaWebhookService {
         mime_type?: string;
       } | undefined;
 
-      content = mediaObj?.caption || `[${type.toUpperCase()}]`;
+      content = mediaObj?.caption || getMediaPlaceholder(type);
 
       if (mediaObj?.id) {
         try {

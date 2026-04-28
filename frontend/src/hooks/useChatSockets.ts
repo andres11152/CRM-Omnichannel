@@ -141,15 +141,19 @@ export const useChatSockets = (currentTicketId: string | null) => {
     const handleConversationTyping = (payload: {
       conversationId: string;
       from: string;
-      status: "composing" | "recording" | "paused";
+      status: string;
     }) => {
+      const activeStatus = (payload.status === "composing" || payload.status === "recording") 
+        ? payload.status 
+        : "paused";
+
       updateConversationTypingStatus(
         queryClient,
         payload.conversationId,
-        payload.status,
+        activeStatus as any,
       );
 
-      if (payload.status !== "paused") {
+      if (activeStatus !== "paused") {
         setTimeout(() => {
           updateConversationTypingStatus(
             queryClient,

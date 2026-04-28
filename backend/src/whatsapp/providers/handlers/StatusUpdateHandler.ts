@@ -7,6 +7,7 @@ import { messageRepository } from "@/repositories/MessageRepository";
 import { SessionData } from "@/types/whatsapp.types";
 import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
+import { Prisma } from "@prisma/client";
 
 /**
  * [STAT] STATUS UPDATE HANDLER
@@ -47,21 +48,43 @@ export class StatusUpdateHandler {
       return;
     }
 
+    const companyId = this.sessionCache.get(sessionId)?.companyId as string;
+    if (!companyId) return;
+
+    // ─── PIN DETECTION ───────────────────────────────────────────────
+    interface PinData {
+      type?: number;
+      sendingDevice?: number;
+    }
+
+    const rawUpdate = update as unknown as Record<string, unknown>;
+    const updateObj = (rawUpdate.update as Record<string, unknown>) || {};
+    
+    const pinInChat = (
+      rawUpdate.pinInChat || 
+      updateObj.pinInChat || 
+      rawUpdate.pinInChatMessage || 
+      updateObj.pinInChatMessage
+    ) as PinData | undefined;
+    
+    if (pinInChat) {
+      await this.handlePinEvent(whatsappMessageId, companyId, pinInChat, update.key?.remoteJid);
+      return; // Pin events don't carry status updates
+    }
+
+    // ─── STATUS UPDATE ───────────────────────────────────────────────
     const currentStatus = update.update?.status;
     if (typeof currentStatus !== "number") return;
 
     try {
-      const statusMap: Record<number, "sent" | "delivered" | "read"> = {
-        2: "sent",
-        3: "delivered",
-        4: "read",
+      const statusMap: Record<number, "SENT" | "DELIVERED" | "READ"> = {
+        2: "SENT",
+        3: "DELIVERED",
+        4: "READ",
       };
 
       const newStatus = statusMap[currentStatus];
       if (!newStatus) return;
-
-      const companyId = this.sessionCache.get(sessionId)?.companyId as string;
-      if (!companyId) return;
 
       const msg = await TenantContextManager.runAsSystem(() =>
         messageRepository.findMessageByWhatsAppId(whatsappMessageId, companyId),
@@ -80,13 +103,76 @@ export class StatusUpdateHandler {
         msg.id,
         msg.conversationId,
         msg.companyId || companyId,
-        newStatus,
+        newStatus.toLowerCase() as "sent" | "delivered" | "read",
       );
     } catch (error) {
       Logger.error(
         `[StatusHandler] Failed to update message status for ${whatsappMessageId}:`,
         error,
       );
+    }
+  }
+
+  /**
+   * Handle pin/unpin events from WhatsApp.
+   * Baileys sends pinInChat.type: 1 = pin, 2 = unpin
+   */
+  private async handlePinEvent(
+    whatsappMessageId: string,
+    companyId: string,
+    pinData?: { type?: number } | null,
+    remoteJid?: string | null,
+  ): Promise<void> {
+    // type 1 = PIN, type 2 = UNPIN (Baileys convention)
+    const isPinned = !pinData?.type || pinData.type === 1;
+
+    try {
+      const msg = await TenantContextManager.runAsSystem(() =>
+        messageRepository.findMessageByWhatsAppId(whatsappMessageId, companyId),
+      );
+
+      // Resolve conversationId from JID if msg not found (crucial for unpinning old messages)
+      let conversationId = msg?.conversationId;
+      if (!conversationId && remoteJid) {
+         const conv = await TenantContextManager.runAsSystem(() => 
+           chatService.findOrCreateConversationByJid(companyId, remoteJid)
+         );
+         conversationId = conv.id;
+      }
+
+      if (msg) {
+        // Update metadata with pin state
+        const existingMeta = (msg.metadata as Prisma.JsonObject) || {};
+        const updatedMeta: Prisma.JsonObject = {
+          ...existingMeta,
+          isPinned,
+          pinnedAt: isPinned ? new Date().toISOString() : null,
+        };
+
+        await TenantContextManager.runAsSystem(() =>
+          messageRepository.updateByWhatsAppId(whatsappMessageId, companyId, {
+            metadata: updatedMeta,
+          }),
+        );
+      }
+
+      // ALWAYS emit if we have a conversationId (to clear the UI banner)
+      if (conversationId) {
+        this.socketEmitter.emitMessagePinned(
+          msg?.id || whatsappMessageId,
+          conversationId,
+          companyId,
+          isPinned,
+          msg?.content || (isPinned ? "Mensaje de WhatsApp" : ""),
+          msg?.senderId || "",
+        );
+
+        Logger.info(
+          `[StatusHandler] [PIN] Message ${whatsappMessageId} ${isPinned ? "PINNED" : "UNPINNED"}. UI sync emitted.`,
+        );
+      }
+    } catch (error) {
+      Logger.error(`[StatusHandler] [PIN] Failed to handle pin event:`, error);
     }
   }
 }

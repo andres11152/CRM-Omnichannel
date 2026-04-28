@@ -63,6 +63,8 @@ export interface ConversationListItem {
   ticketId: string;
   contactName: string;
   contactPhone: string;
+  avatarUrl?: string | null;
+  profilePicUrl?: string | null;
   lastMessage: string;
   lastMessageTime: Date;
   unreadCount: number;

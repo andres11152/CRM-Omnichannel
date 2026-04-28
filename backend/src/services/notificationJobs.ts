@@ -78,7 +78,7 @@ export class NotificationJobs {
           include: {
             assignedTo: true,
           },
-        }),
+        }, "__SYSTEM__"),
     );
     const inactiveTickets =
       inactiveTicketsOutput as ((typeof inactiveTicketsOutput)[0] & {

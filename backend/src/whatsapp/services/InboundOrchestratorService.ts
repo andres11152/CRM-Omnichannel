@@ -11,7 +11,7 @@ import { contactRepository } from "@/repositories/ContactRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { MessageMetadata } from "@/types/whatsapp.types";
 import { deduplicationService } from "./DeduplicationService";
-
+import { companyRepository } from "@/repositories/CompanyRepository";
 export interface OrchestratedEntities {
   customerUser: User | null;
   conversation: Conversation & { participants: User[] };
@@ -50,14 +50,86 @@ export class InboundOrchestratorService {
     const isGroup = WhatsAppIdUtils.isGroup(cleanRemoteJid);
     let isFromMe = message.key.fromMe || false;
 
+    // [DIAG] Log group message detection details
+    if (isGroup) {
+      Logger.info(`[Orchestrator] [DIAG] Group msg fromMe=${message.key.fromMe}, participant=${message.key.participant}, sessionPhone=${sessionPhone}`);
+    }
+
     // Detect if "fromMe" even if Baileys doesn't report it (multi-device)
     // Checks if the sender matches our session phone
-    const senderJid = this.identityResolver.resolveSenderJid(message, cleanRemoteJid, isGroup);
+    const senderJid = this.identityResolver.resolveSenderJid(message, cleanRemoteJid, isGroup, sessionId);
+    
+    if (isGroup) {
+      Logger.info(`[Orchestrator] [DIAG] resolveSenderJid returned: ${senderJid}`);
+    }
+
     if (!isFromMe && senderJid) {
        const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
        if (senderPhone && sessionPhone && senderPhone === sessionPhone) {
          isFromMe = true;
+         Logger.info(`[Orchestrator] [OK] Detected own message via sender phone match: ${senderPhone}`);
        }
+    }
+
+    // [SEC] ASYNC FALLBACK: If still not fromMe in a group, try async LID resolution
+    if (!isFromMe && isGroup && senderJid && WhatsAppIdUtils.isLid(senderJid)) {
+      
+      // 1. Check if the sender LID is literally OUR own session's LID
+      const sock = this.sessionManager.getSession(sessionId);
+      const userWithLid = sock?.user as { lid?: string, name?: string, verifiedName?: string } | undefined;
+      let meLid: string | undefined;
+      try {
+        // Safe typed access to internal Baileys state
+        const typedSock = sock as unknown as { authState?: { creds?: { me?: { lid?: string } } } };
+        meLid = typedSock?.authState?.creds?.me?.lid || userWithLid?.lid;
+      } catch (e) {
+        // Ignored
+      }
+      
+      const cleanSenderLid = senderJid.split("@")[0].split(":")[0];
+      Logger.info(`[Orchestrator] [DIAG] LID Match Check - meLid: ${meLid}, senderLid: ${cleanSenderLid}`);
+
+      if (meLid) {
+        const cleanMeLid = meLid.split("@")[0].split(":")[0];
+        if (cleanSenderLid === cleanMeLid) {
+          isFromMe = true;
+          Logger.info(`[Orchestrator] [OK] Detected own message via own LID match: ${cleanSenderLid} === ${cleanMeLid}`);
+        }
+      }
+
+      // 2. Finally attempt active resolution if it wasn't us (or if meLid is missing)
+      if (!isFromMe) {
+        Logger.info(`[Orchestrator] [DIAG] Attempting async LID resolution for sender: ${senderJid}`);
+        const resolvedPhone = await this.sessionManager.resolveLidToPhone(sessionId, senderJid);
+        if (resolvedPhone && sessionPhone && resolvedPhone === sessionPhone) {
+          isFromMe = true;
+          Logger.info(`[Orchestrator] [OK] Async LID resolution matched session phone: ${resolvedPhone}`);
+        }
+      }
+
+      // 3. [SEC] ULTIMATE FALLBACK: Name matching to bypass Baileys MD LID sync bug
+      if (!isFromMe && message.pushName) {
+        try {
+          // If Baileys fails to link LID to the device, we check if the message's profile name matches OUR business name
+          const companyInfo = await companyRepository.findById(companyId);
+          
+          const msgName = message.pushName.trim().toLowerCase();
+          const compName = companyInfo?.name?.trim().toLowerCase();
+          // Also check session's runtime profile name
+          const sessionName = userWithLid?.name?.trim().toLowerCase() || userWithLid?.verifiedName?.trim().toLowerCase();
+
+          if ((compName && msgName === compName) || (sessionName && msgName === sessionName)) {
+            isFromMe = true;
+            Logger.info(`[Orchestrator] [OK] Detected own message via pushName exact match: "${message.pushName}"`);
+          }
+        } catch {
+           // Ignored
+        }
+      }
+    }
+
+    if (isGroup) {
+      Logger.info(`[Orchestrator] [DIAG] Final isFromMe=${isFromMe} for group ${cleanRemoteJid}`);
     }
 
     // 2. Spam Gate
@@ -78,10 +150,11 @@ export class InboundOrchestratorService {
     // 3. User Resolution
     let customerUser: User | null = null;
     const chatUniqueId = cleanRemoteJid.split("@")[0];
-    const chatEmail = `${chatUniqueId}@whatsapp.user`;
+    // [SEC] Preserve the domain (e.g. @g.us) in the email to allow ChatIdentityService to detect groups
+    const chatEmail = `${cleanRemoteJid}@whatsapp.user`;
 
     if (!isFromMe) {
-      const senderJid = this.identityResolver.resolveSenderJid(message, cleanRemoteJid, isGroup);
+      const senderJid = this.identityResolver.resolveSenderJid(message, cleanRemoteJid, isGroup, sessionId);
       if (senderJid) {
         const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
         

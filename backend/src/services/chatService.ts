@@ -121,7 +121,10 @@ export class ChatServiceFacade {
     return chatMessageService.upsertMessage(data);
   }
 
-  async updateMessageStatus(whatsappMessageId: string, status: string) {
+  async updateMessageStatus(
+    whatsappMessageId: string,
+    status: "SENT" | "DELIVERED" | "READ" | "FAILED",
+  ) {
     return chatMessageService.updateMessageStatus(whatsappMessageId, status);
   }
 
@@ -141,6 +144,25 @@ export class ChatServiceFacade {
   }
 
   // --- CROSS-CUTTING LOGIC ---
+
+  /**
+   * Helper to resolve a conversation by JID, creating it if it doesn't exist.
+   * Useful for events where the specific message might be missing (e.g. Pin/Unpin).
+   */
+  async findOrCreateConversationByJid(companyId: string, remoteJid: string) {
+    const chatUniqueId = remoteJid.split("@")[0];
+    const chatEmail = `${remoteJid}@whatsapp.user`;
+
+    let conv = await this.findConversation(companyId, chatUniqueId, chatEmail);
+    if (!conv) {
+      conv = await this.createConversation({
+        companyId,
+        channelId: chatUniqueId,
+        subject: chatUniqueId, // Fallback
+      });
+    }
+    return conv;
+  }
 
   async migrateConversationHistory(
     companyId: string,

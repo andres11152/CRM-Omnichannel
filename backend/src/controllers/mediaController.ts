@@ -84,6 +84,7 @@ export const uploadMedia = async (req: AuthenticatedRequest, res: Response): Pro
         url: uploadResult.url,
         key: uploadResult.key,
         type: mapMimeToType(file.mimetype),
+        category: req.body.category || "media-library", // Default to library asset for manual uploads
         uploadedBy: { connect: { id: req.user!.id } },
       })
     );
@@ -103,9 +104,25 @@ export const getMedia = async (req: AuthenticatedRequest, res: Response): Promis
   const companyId = req.user?.companyId;
   if (!companyId) return res.status(403).json({ error: "No company context" });
 
+  const { type, category, search } = req.query as { type?: MediaType; category?: string; search?: string };
+
   try {
+    const categories = category 
+      ? (Array.isArray(category) ? category : [category])
+      : (type === MediaType.AUDIO 
+          ? ["media-library", "template-assets"] 
+          : ["media-library", "template-assets", "chat-attachments", "RAG", "KNOWLEDGE_BASE"]);
+
     const mediaList = await mediaRepository.findMany({
-      where: { companyId },
+      where: { 
+        companyId,
+        type: type || undefined,
+        // ENTERPRISE FILTER: 
+        // - Audio: Only show permanent recordings (library/templates).
+        // - Other: Show library, templates, and chat-attachments.
+        category: { in: categories },
+        originalName: search ? { contains: search, mode: "insensitive" } : undefined,
+      },
       orderBy: { createdAt: "desc" },
     });
     return res.json(mediaList);

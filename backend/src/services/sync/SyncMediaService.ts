@@ -73,12 +73,22 @@ export class SyncMediaService {
         Logger.info(`[SyncMedia] 🩹 HEALED media for ${whatsappMessageId} (${baseType}): ${healedUrl}`);
       }
     } catch (healErr: unknown) {
-      Logger.error(`[SyncMedia] [WARNING] Media healing failed for ${whatsappMessageId}`, {
-        companyId,
-        whatsappMessageId,
-        error: healErr instanceof Error ? healErr.message : String(healErr),
-        stack: healErr instanceof Error ? healErr.stack : undefined
-      });
+      // [SEC] ENTERPRISE FIX: WhatsApp CDN URLs expire after ~2 weeks.
+      // Historical messages from history sync will ALWAYS fail with 403/410/404.
+      // These are expected and should NOT spam the error log.
+      const errMsg = healErr instanceof Error ? healErr.message : String(healErr);
+      const isExpiredMedia = errMsg.includes("403") || errMsg.includes("410") || errMsg.includes("404");
+
+      if (isExpiredMedia) {
+        Logger.debug(`[SyncMedia] [EXPIRED] Media CDN expired for ${whatsappMessageId} (${baseType}). Skipping heal.`);
+      } else {
+        Logger.error(`[SyncMedia] [WARNING] Media healing failed for ${whatsappMessageId}`, {
+          companyId,
+          whatsappMessageId,
+          error: errMsg,
+          stack: healErr instanceof Error ? healErr.stack : undefined
+        });
+      }
     }
   }
 
@@ -119,14 +129,17 @@ export class SyncMediaService {
           return { url: uploadResult.url, mimetype: rawMime };
         }
       } catch (bufErr: unknown) {
-        Logger.error(`[SyncMedia] [WARNING] Download failed for ${whatsappMessageId} (${mediaType})`, {
-          companyId,
-          whatsappMessageId,
-          mediaType,
-          errorDl: dlErr instanceof Error ? dlErr.message : String(dlErr),
-          errorBuf: bufErr instanceof Error ? bufErr.message : String(bufErr),
-          stack: bufErr instanceof Error ? bufErr.stack : undefined
-        });
+        const errorDl = dlErr instanceof Error ? dlErr.message : String(dlErr);
+        const errorBuf = bufErr instanceof Error ? bufErr.message : String(bufErr);
+        const isExpired = 
+          errorDl.includes("403") || errorDl.includes("410") || errorDl.includes("404") ||
+          errorBuf.includes("403") || errorBuf.includes("410") || errorBuf.includes("404");
+
+        if (isExpired) {
+          Logger.debug(`[SyncMedia] [EXPIRED] ${whatsappMessageId} (${mediaType}) no longer on WA servers.`);
+        } else {
+          Logger.debug(`[SyncMedia] [FAILED] ${whatsappMessageId} (${mediaType}): ${errorBuf}`);
+        }
       }
     }
 

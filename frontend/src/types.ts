@@ -83,10 +83,12 @@ export interface Tag {
   name: string;
   color: string;
   createdAt?: string | Date;
+  count?: number;
 }
 
 export interface Message {
   id: string;
+  senderId?: string;
   ticketId: string;
   companyId: string;
   content: string;
@@ -180,6 +182,9 @@ export interface Contact {
   // [APP] Multi-WhatsApp Session Identification (#1, #2, #3)
   whatsappSessionIndex?: number;
   whatsappSessionPhone?: string;
+  // Ticket-specific metadata for UI
+  priority?: string;
+  ticketCreatedAt?: Date | string;
 }
 
 // NEW: Represents the conversation/case

@@ -16,6 +16,7 @@ import { MediaPayload } from "../core/types/whatsapp.types";
 import { convertAudioToMP4 } from "@/utils/audioConverter";
 import fs from "fs";
 import { prisma } from "@/config/database";
+import { getMediaPlaceholder } from "@/utils/mediaUtils";
 
 /** Result type for outbound media preparation */
 export interface PreparedMediaResult {
@@ -75,6 +76,7 @@ export class MediaProcessorService {
       "reactionMessage",
       "keepInChatMessage",
       "pollUpdateMessage",
+      "pinInChatMessage",
     ];
 
     if (ignoredTypes.includes(messageType)) {
@@ -138,7 +140,7 @@ export class MediaProcessorService {
             (msgObj?.caption as string) ||
             (msgObj?.text as string) ||
             (msgObj?.fileName as string) ||
-            `[${mediaType}]`;
+            getMediaPlaceholder(mediaType);
 
           // [SEC] MAX-SIZE GUARD (50MB Limit for WhatsApp)
           const MAX_SIZE = 50 * 1024 * 1024;
@@ -150,27 +152,8 @@ export class MediaProcessorService {
              return { textContent: "[WARNING] Archivo demasiado grande (>50MB)" };
           }
 
-          // [SEC] HISTORY SYNC GUARD: Skip media download for old messages entirely.
-          // History sync messages have stale CDN keys that ALWAYS fail with 'bad decrypt'.
-          // Attempting download + HEAL for hundreds of these kills the socket via rate-limits.
-          // We preserve the message type/caption in the CRM but skip the binary download.
-          const MAX_MEDIA_AGE_SECONDS = 300; // 5 minutes
-          const ts = message.messageTimestamp;
-          let msgAgeSeconds = 0;
-          if (ts) {
-            const tsNum = typeof ts === "number" ? ts
-              : (typeof ts === "object" && ts !== null && "toNumber" in ts
-                && typeof (ts as unknown as Record<string, unknown>).toNumber === "function")
-                ? (ts as { toNumber: () => number }).toNumber()
-                : Number(ts);
-            if (tsNum > 0) {
-              msgAgeSeconds = Math.floor(Date.now() / 1000) - tsNum;
-            }
-          }
-          if (msgAgeSeconds > MAX_MEDIA_AGE_SECONDS) {
-             Logger.warn(`[MediaProcessor] [SKIP] Skipping media download for ${messageId} (age: ${msgAgeSeconds}s > ${MAX_MEDIA_AGE_SECONDS}s). History sync media keys are stale.`);
-             return { textContent: textContent || `[${mediaType}]`, mediaType };
-          }
+          // Robust dual-method download with retry (with session-based reupload support)
+          // Old Historical Media uses a safe-retry loop inside downloadWithRetry that aborts HEAL if age > 2 Hours.
 
           // Robust dual-method download with retry (with session-based reupload support)
           const buffer = await this.downloadWithRetry(message, messageType, msgObj, messageId, sessionId, getSession);
@@ -209,6 +192,7 @@ export class MediaProcessorService {
               url: uploadResult.url,
               key: uploadResult.key,
               type: mediaType,
+              category: "chat-attachments", // Classify as chat-origin media
               uploadedBy: fallbackUser?.id 
                 ? { connect: { id: fallbackUser.id } } 
                 : { connect: { email: "system@reply.ai" } },
@@ -232,7 +216,7 @@ export class MediaProcessorService {
           
           // Provide fallback text so the frontend knows the media type even if download failed
           if (!textContent) {
-            textContent = `[${mediaType || "DOCUMENT"}]`;
+            textContent = "";
           }
         }
       } else {
@@ -241,7 +225,7 @@ export class MediaProcessorService {
           | Record<string, unknown>
           | undefined;
         if (msgObj) {
-          textContent = `[${messageType}]`;
+          textContent = getMediaPlaceholder(messageType);
         }
       }
     }

@@ -14,6 +14,7 @@ export interface SendMessageInput {
   metadata?: Record<string, unknown>;
   quotedMessageId?: string;
   quotedContent?: string;
+  scheduledAt?: string | Date;
 }
 
 export interface ResolveTicketInput {

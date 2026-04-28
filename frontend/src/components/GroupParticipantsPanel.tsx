@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { fetchAPI } from "@/services/apiConfig";
 import { 
@@ -11,13 +11,18 @@ import {
   ShieldAlert,
   Info,
   RefreshCcw,
-  UserCheck
+  UserCheck,
+  CheckSquare,
+  Square,
+  Download,
+  MinusSquare
 } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 
 interface GroupParticipant {
   jid: string;
   phone: string | null;
+  isLid: boolean;
   displayName: string;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -42,8 +47,9 @@ interface Props {
 }
 
 /**
- * [UX] BRUTAL GROUP PARTICIPANTS PANEL
- * Premium interface for group extraction and CRM management.
+ * [UX] ENTERPRISE GROUP PARTICIPANTS PANEL
+ * Premium interface for selective group extraction and CRM management.
+ * Supports: Select All, Select Filtered, Individual Select, Bulk Import
  */
 export const GroupParticipantsPanel: React.FC<Props> = ({
   conversationId,
@@ -53,6 +59,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
   const [processing, setProcessing] = useState(false);
   const [data, setData] = useState<GroupData | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedJids, setSelectedJids] = useState<Set<string>>(new Set());
 
   const fetchParticipants = async () => {
     try {
@@ -61,6 +68,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
         `/conversations/${conversationId}/participants`,
       );
       setData(res.data);
+      setSelectedJids(new Set()); // Reset selection on refresh
     } catch (error) {
       console.error("Failed to fetch participants", error);
       toast.error("Error al cargar participantes");
@@ -86,6 +94,50 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
     );
   }, [data, searchQuery]);
 
+  // Selectable participants (can add to CRM and not already there)
+  const selectableParticipants = useMemo(() => {
+    return filteredParticipants.filter(p => p.canAddToCRM && !p.existsInCRM);
+  }, [filteredParticipants]);
+
+  // Selection stats
+  const selectedCount = selectedJids.size;
+  const allSelectableSelected = selectableParticipants.length > 0 && 
+    selectableParticipants.every(p => selectedJids.has(p.jid));
+  const someSelected = selectableParticipants.some(p => selectedJids.has(p.jid));
+
+  // Toggle single selection
+  const toggleSelect = useCallback((jid: string) => {
+    setSelectedJids(prev => {
+      const next = new Set(prev);
+      if (next.has(jid)) {
+        next.delete(jid);
+      } else {
+        next.add(jid);
+      }
+      return next;
+    });
+  }, []);
+
+  // Toggle all selectable (within current filter)
+  const toggleSelectAll = useCallback(() => {
+    if (allSelectableSelected) {
+      // Deselect all visible
+      setSelectedJids(prev => {
+        const next = new Set(prev);
+        selectableParticipants.forEach(p => next.delete(p.jid));
+        return next;
+      });
+    } else {
+      // Select all visible
+      setSelectedJids(prev => {
+        const next = new Set(prev);
+        selectableParticipants.forEach(p => next.add(p.jid));
+        return next;
+      });
+    }
+  }, [allSelectableSelected, selectableParticipants]);
+
+  // Add single participant
   const handleAddOne = async (participant: GroupParticipant) => {
     if (!participant.canAddToCRM || participant.existsInCRM) return;
     try {
@@ -116,6 +168,12 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           ),
         };
       });
+      // Remove from selection
+      setSelectedJids(prev => {
+        const next = new Set(prev);
+        next.delete(participant.jid);
+        return next;
+      });
     } catch (error) {
       toast.error("Error al añadir contacto");
     } finally {
@@ -123,6 +181,60 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
     }
   };
 
+  // Import selected participants (bulk)
+  const handleImportSelected = async () => {
+    if (selectedCount === 0 || !data) return;
+    
+    const participantsToImport = data.participants
+      .filter(p => selectedJids.has(p.jid) && p.canAddToCRM && !p.existsInCRM)
+      .map(p => ({
+        jid: p.jid,
+        customName: p.displayName,
+        tags: ["Importado de Grupo"],
+      }));
+
+    if (participantsToImport.length === 0) {
+      toast.info("No hay contactos seleccionados válidos para importar");
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      const res = await fetchAPI(
+        `/conversations/${conversationId}/participants/add-bulk`,
+        {
+          method: "POST",
+          body: JSON.stringify({ participants: participantsToImport }),
+        },
+      );
+      
+      const result = res.data;
+      toast.success(`${result.successful} contactos importados exitosamente`);
+      
+      // Update local state
+      setData((prev) => {
+        if (!prev) return null;
+        const importedJids = new Set(participantsToImport.map(p => p.jid));
+        return {
+          ...prev,
+          existingCount: prev.existingCount + result.successful,
+          addableCount: prev.addableCount - result.successful,
+          participants: prev.participants.map((p) =>
+            importedJids.has(p.jid)
+              ? { ...p, existsInCRM: true, canAddToCRM: false }
+              : p
+          ),
+        };
+      });
+      setSelectedJids(new Set()); // Clear selection
+    } catch (error) {
+      toast.error("Error al importar contactos");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Import ALL valid participants
   const handleAddAll = async () => {
     if (!data || data.addableCount === 0) return;
     
@@ -135,7 +247,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           body: JSON.stringify({}),
         },
       );
-      toast.success(res.message);
+      toast.success(res.message || `${res.data?.successful || 0} contactos importados`);
       fetchParticipants(); // Full refresh
     } catch (error) {
       toast.error("Error al añadir contactos masivamente");
@@ -218,12 +330,12 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Sync Settings */}
+        {/* Sync Settings — Defaults OFF to prevent spam */}
         <div className="p-3 bg-gray-50/50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5">
           <label className="flex items-center justify-between cursor-pointer">
             <div className="flex-1 pr-4">
               <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5 uppercase tracking-wider">
-                Sincronización Total
+                Sincronización Automática
               </span>
               <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight block mt-0.5">
                 Auto-guardar miembros nuevos en el CRM
@@ -234,7 +346,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
               <input
                 type="checkbox"
                 className="sr-only peer"
-                checked={data.syncEnabled ?? true}
+                checked={data.syncEnabled ?? false}
                 onChange={(e) => handleToggleSync(e.target.checked)}
                 disabled={processing}
               />
@@ -244,45 +356,80 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Bulk Action Area */}
-      {data.addableCount > 0 && (
-        <div className="px-5 py-4 bg-gradient-to-br from-indigo-50 via-white to-transparent dark:from-indigo-900/10 dark:via-transparent dark:to-transparent border-b border-indigo-50 dark:border-white/5">
-          <div className="flex justify-between items-center text-[11px] font-bold mb-3 tracking-wider uppercase">
-            <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-              Disponibles: {data.addableCount}
-            </div>
-            <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-              <UserCheck className="w-3.5 h-3.5" />
-              CRM: {data.existingCount}
-            </div>
+      {/* Stats & Selection Bar */}
+      <div className="px-5 py-3 bg-gradient-to-br from-indigo-50 via-white to-transparent dark:from-indigo-900/10 dark:via-transparent dark:to-transparent border-b border-indigo-50 dark:border-white/5">
+        {/* Counters */}
+        <div className="flex justify-between items-center text-[11px] font-bold mb-3 tracking-wider uppercase">
+          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+            Disponibles: {data.addableCount}
           </div>
-          <button
-            onClick={handleAddAll}
-            disabled={processing}
-            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 flex justify-center items-center gap-2"
-          >
-            {processing ? (
-              <RefreshCcw className="w-4 h-4 animate-spin" />
-            ) : (
-              <UserPlus className="w-4 h-4" />
-            )}
-            Importar {data.addableCount} Contactos Nuevos
-          </button>
+          <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+            <UserCheck className="w-3.5 h-3.5" />
+            CRM: {data.existingCount}
+          </div>
         </div>
-      )}
 
-      {/* Search Bar */}
-      <div className="px-5 py-3 sticky top-[168px] z-10 bg-white/50 dark:bg-[#0b141a]/50 backdrop-blur-sm">
-        <div className="relative group">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Buscar por nombre o número..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl text-xs text-gray-800 dark:text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-          />
+        {/* Action Buttons Row */}
+        <div className="flex gap-2">
+          {/* Import Selected Button */}
+          {selectedCount > 0 ? (
+            <button
+              onClick={handleImportSelected}
+              disabled={processing}
+              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 flex justify-center items-center gap-2"
+            >
+              {processing ? (
+                <RefreshCcw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              Importar {selectedCount} Seleccionados
+            </button>
+          ) : (
+            <button
+              onClick={handleAddAll}
+              disabled={processing || data.addableCount === 0}
+              className="flex-1 py-2.5 bg-gray-100 dark:bg-white/5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-30 flex justify-center items-center gap-2 border border-gray-200 dark:border-white/10"
+            >
+              <UserPlus className="w-4 h-4" />
+              Importar Todos ({data.addableCount})
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Search Bar + Select All */}
+      <div className="px-5 py-3 sticky top-[168px] z-10 bg-white/50 dark:bg-[#0b141a]/50 backdrop-blur-sm border-b border-gray-50 dark:border-white/5">
+        <div className="flex items-center gap-2">
+          {/* Select All Toggle */}
+          {selectableParticipants.length > 0 && (
+            <button
+              onClick={toggleSelectAll}
+              className="p-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all shrink-0"
+              title={allSelectableSelected ? "Deseleccionar todos" : "Seleccionar todos disponibles"}
+            >
+              {allSelectableSelected ? (
+                <CheckSquare className="w-5 h-5 text-indigo-500" />
+              ) : someSelected ? (
+                <MinusSquare className="w-5 h-5 text-indigo-400" />
+              ) : (
+                <Square className="w-5 h-5" />
+              )}
+            </button>
+          )}
+          
+          {/* Search */}
+          <div className="relative group flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Buscar por nombre o número..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl text-xs text-gray-800 dark:text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+            />
+          </div>
         </div>
       </div>
 
@@ -297,81 +444,111 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           </div>
         ) : (
           <div className="space-y-1">
-            {filteredParticipants.map((p) => (
-              <div
-                key={p.jid}
-                className="group relative flex items-center gap-3 p-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-white/5 border border-transparent hover:border-gray-100 dark:hover:border-white/5 transition-all duration-200"
-              >
-                {/* Avatar Column */}
-                <div className="relative">
-                  <Avatar 
-                    name={p.displayName} 
-                    className="w-10 h-10 border-2 border-white dark:border-gray-800 shadow-sm"
-                  />
-                  {(p.isAdmin || p.isSuperAdmin) && (
-                    <div className="absolute -bottom-1 -right-1 p-0.5 bg-white dark:bg-gray-900 rounded-full">
-                      <div className={`p-0.5 rounded-full ${p.isSuperAdmin ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'} dark:bg-opacity-20` }>
-                        <ShieldCheck className="w-3 h-3" />
-                      </div>
-                    </div>
-                  )}
-                </div>
+            {filteredParticipants.map((p) => {
+              const isSelectable = p.canAddToCRM && !p.existsInCRM;
+              const isSelected = selectedJids.has(p.jid);
 
-                {/* Info Column */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-bold text-gray-800 dark:text-gray-100 truncate">
-                      {p.displayName}
-                    </span>
-                    {p.isSuperAdmin && (
-                      <span className="text-[9px] bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-bold uppercase border border-amber-100 dark:border-amber-900/50">
-                        Creador
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {p.phone ? (
-                      <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono tracking-tighter">
-                        +{p.phone}
-                      </span>
+              return (
+                <div
+                  key={p.jid}
+                  onClick={() => isSelectable && toggleSelect(p.jid)}
+                  className={`group relative flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 ${
+                    isSelectable ? "cursor-pointer" : ""
+                  } ${
+                    isSelected 
+                      ? "bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 shadow-sm" 
+                      : "hover:bg-gray-50 dark:hover:bg-white/5 border border-transparent hover:border-gray-100 dark:hover:border-white/5"
+                  }`}
+                >
+                  {/* Checkbox / Status Column */}
+                  <div className="shrink-0 w-6 flex items-center justify-center">
+                    {p.existsInCRM ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                    ) : isSelectable ? (
+                      <div className={`w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center transition-all ${
+                        isSelected 
+                          ? "bg-indigo-500 border-indigo-500" 
+                          : "border-gray-300 dark:border-gray-600 group-hover:border-indigo-400"
+                      }`}>
+                        {isSelected && (
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
                     ) : (
-                      <div className="flex items-center gap-1 group/lid" title={p.jid}>
-                        <span className="text-[10px] text-gray-400 dark:text-gray-500 italic bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 rounded cursor-help">
-                           ID Protegido
-                        </span>
-                        <Info className="w-3 h-3 text-gray-300 opacity-0 group-hover/lid:opacity-100 transition-opacity" />
+                      <div className="w-[18px] h-[18px] rounded-md border-2 border-gray-200 dark:border-gray-700 opacity-30" />
+                    )}
+                  </div>
+
+                  {/* Avatar Column */}
+                  <div className="relative">
+                    <Avatar 
+                      name={p.displayName} 
+                      className="w-10 h-10 border-2 border-white dark:border-gray-800 shadow-sm"
+                    />
+                    {(p.isAdmin || p.isSuperAdmin) && (
+                      <div className="absolute -bottom-1 -right-1 p-0.5 bg-white dark:bg-gray-900 rounded-full">
+                        <div className={`p-0.5 rounded-full ${p.isSuperAdmin ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'} dark:bg-opacity-20` }>
+                          <ShieldCheck className="w-3 h-3" />
+                        </div>
                       </div>
                     )}
                   </div>
-                </div>
 
-                {/* Action Column */}
-                <div className="flex items-center">
-                  {p.existsInCRM ? (
-                    <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-xl" title="En CRM">
-                      <CheckCircle2 className="w-5 h-5" />
+                  {/* Info Column */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-bold text-gray-800 dark:text-gray-100 truncate">
+                        {p.displayName}
+                      </span>
+                      {p.isSuperAdmin && (
+                        <span className="text-[9px] bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-bold uppercase border border-amber-100 dark:border-amber-900/50">
+                          Creador
+                        </span>
+                      )}
+                      {p.existsInCRM && (
+                        <span className="text-[9px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-md font-bold uppercase border border-emerald-100 dark:border-emerald-900/50">
+                          CRM
+                        </span>
+                      )}
                     </div>
-                  ) : p.canAddToCRM ? (
-                    <button
-                      onClick={() => handleAddOne(p)}
-                      disabled={processing}
-                      className="p-2.5 bg-gray-50 dark:bg-white/5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-all transform hover:rotate-12 active:scale-95"
-                      title="Importar al CRM"
-                    >
-                      <UserPlus className="w-5 h-5" />
-                    </button>
-                  ) : (
-                    <div 
-                      className="p-2.5 text-gray-200 dark:text-gray-800"
-                      title="Sin número real detectable"
-                    >
-                      <UserPlus className="w-5 h-5 opacity-20" />
+                    
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {p.phone && !p.isLid ? (
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono tracking-tighter">
+                          +{p.phone}
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1 group/lid" title={p.jid}>
+                          <span className="text-[10px] text-gray-400 dark:text-gray-500 italic bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 rounded cursor-help">
+                             ID Oculto (Nº Privado)
+                          </span>
+                          <Info className="w-3 h-3 text-gray-300 opacity-0 group-hover/lid:opacity-100 transition-opacity" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick Add Button (only if not selected — row click handles selection) */}
+                  {isSelectable && !isSelected && (
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddOne(p);
+                        }}
+                        disabled={processing}
+                        className="p-2 bg-gray-50 dark:bg-white/5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-all transform hover:rotate-12 active:scale-95"
+                        title="Importar directo al CRM"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -382,7 +559,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           <Info className="w-4 h-4" />
         </div>
         <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
-          WhatsApp oculta los números reales de algunos miembros para proteger su privacidad en comunidades y grupos grandes.
+          Selecciona los contactos que deseas importar. La sincronización automática está {data.syncEnabled ? "activa" : "desactivada"} — solo los contactos importados manualmente se guardan en tu agenda.
         </p>
       </div>
     </div>

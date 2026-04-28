@@ -323,7 +323,7 @@ export const DealModal: React.FC<Props> = ({
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        value: parseFloat(e.target.value),
+                        value: e.target.value ? parseFloat(e.target.value) : 0,
                       })
                     }
                     className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
@@ -473,7 +473,7 @@ export const DealModal: React.FC<Props> = ({
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        probability: parseInt(e.target.value),
+                        probability: e.target.value ? parseInt(e.target.value) : 0,
                       })
                     }
                     className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"

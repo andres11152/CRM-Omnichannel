@@ -320,9 +320,28 @@ export const TagsManager: React.FC = () => {
                           <h4 className="font-black text-gray-900 dark:text-white text-lg truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                             {tag.name}
                           </h4>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                          <div className="flex items-center gap-3 mt-1.5">
+                            {/* Enterprise Usage Metric */}
+                            <div 
+                              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md ${tag.count && tag.count > 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'bg-gray-50 dark:bg-gray-800/50'} border border-gray-100 dark:border-gray-700`}
+                              title={`${tag.count || 0} conversaciones activas con esta etiqueta`}
+                            >
+                              {tag.count && tag.count > 0 ? (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                                  <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400">
+                                    {tag.count} activas
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">
+                                  0 uso
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
+                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest" title="Fecha de creación">
                               {new Date(
                                 tag.createdAt || Date.now(),
                               ).toLocaleDateString("es-ES", {

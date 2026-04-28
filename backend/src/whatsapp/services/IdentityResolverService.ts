@@ -148,12 +148,14 @@ export class IdentityResolverService {
 
   /**
    * Resolve sender JID for inbound messages.
-   * If sender is a LID, attempts to resolve to a phone-based JID.
+   * If sender is a LID, attempts to resolve to a phone-based JID
+   * using the in-memory store so isFromMe detection works in groups.
    */
   resolveSenderJid(
     message: WAMessage,
     cleanRemoteJid: string,
     isGroup: boolean,
+    sessionId?: string,
   ): string | undefined {
     let senderJid = WhatsAppIdUtils.getSenderJid(message);
 
@@ -161,10 +163,24 @@ export class IdentityResolverService {
       senderJid = cleanRemoteJid;
     }
 
-    if (senderJid && WhatsAppIdUtils.isLid(senderJid)) {
-      // Best effort: Try all sessions for this company? No, we need a sessionId.
-      // But resolveSenderJid doesn't have it.
-      // Wait! I'll check where it's called.
+    // [SEC] CRITICAL FIX: Resolve LID sender JIDs to real phone JIDs.
+    // Without this, messages sent by our own session in groups are classified
+    // as INBOUND because the LID never matches the sessionPhone.
+    if (senderJid && WhatsAppIdUtils.isLid(senderJid) && sessionId) {
+      const resolvedContact = this.sessionManager.findContactByLid(
+        sessionId,
+        senderJid,
+      );
+      if (resolvedContact?.id && !WhatsAppIdUtils.isLid(resolvedContact.id)) {
+        const realJid = WhatsAppIdUtils.getCleanJid(resolvedContact.id);
+        if (realJid) {
+          Logger.info(
+            `[IdentityResolver] [OK] Resolved sender LID ${senderJid} → ${realJid}`,
+          );
+          return realJid;
+        }
+      }
+      // LID not resolved from store, return as-is
       return senderJid;
     }
 

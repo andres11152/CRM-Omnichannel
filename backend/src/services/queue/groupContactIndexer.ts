@@ -109,15 +109,16 @@ async function indexGroupParticipants(
     return;
   }
 
-  // [SEC] ENTERPRISE: Check if synchronization is enabled for this specific group
+  // [SEC] ENTERPRISE: Auto-sync is OPT-IN to prevent spam contamination.
+  // Only auto-import participants if the user explicitly enabled sync for this group.
   const conversation = await conversationRepository.findFirst({
     where: { companyId, channelId: groupJid.split("@")[0] },
     select: { id: true, syncEnabled: true },
   });
 
-  if (conversation && !conversation.syncEnabled) {
+  if (!conversation || conversation.syncEnabled !== true) {
     Logger.info(
-      `[GroupIndexer]  Skipping group ${groupJid} (Sync is DISABLED by user)`,
+      `[GroupIndexer] ⏩ Skipping group ${groupJid} (Auto-sync is OFF — user must enable or import manually)`,
     );
     return;
   }

@@ -12,6 +12,7 @@ export interface Tag extends BaseEntity {
   name: string;
   color: string; // Tailwind class e.g., 'bg-red-500 text-white'
   companyId: string;
+  count?: number; // Active conversations count
 }
 
 export interface Contact extends BaseEntity {

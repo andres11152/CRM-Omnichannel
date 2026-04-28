@@ -623,6 +623,15 @@ const ContactListComponent: React.FC<Props> = ({
                       >
                         {contact.name.replace(/^\[GROUP\]\s*/i, "")}
                       </h3>
+                      {contact.priority && contact.priority !== "MEDIUM" && (
+                        <span className={`text-[8px] px-1 py-0.5 rounded font-bold uppercase shrink-0 ${
+                          contact.priority === "HIGH" || contact.priority === "URGENT" || contact.priority === "CRITICAL"
+                            ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                            : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                        }`}>
+                          {contact.priority}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       { (contact.unreadCount ?? 0) > 0 && (
@@ -807,6 +816,15 @@ const ContactListComponent: React.FC<Props> = ({
                           <h3 className={`font-semibold truncate text-gray-900 dark:text-white ${viewMode === "compact" ? "text-xs" : "text-sm"}`}>
                             {contact.name.replace(/^\[GROUP\]\s*/i, "")}
                           </h3>
+                          {contact.priority && contact.priority !== "MEDIUM" && (
+                            <span className={`text-[8px] px-1 py-0.5 rounded font-bold uppercase shrink-0 ${
+                              contact.priority === "HIGH" || contact.priority === "URGENT" || contact.priority === "CRITICAL"
+                                ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                                : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                            }`}>
+                              {contact.priority}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           { (contact.unreadCount ?? 0) > 0 && (

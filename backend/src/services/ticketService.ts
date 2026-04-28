@@ -6,7 +6,7 @@
  * Update side-effects are delegated to TicketTransitionManager and TicketNotificationService.
  */
 
-import { Prisma, TicketStatus, TicketPriority } from "@prisma/client";
+import { Prisma, TicketStatus, TicketPriority, User } from "@prisma/client";
 import { ticketRepository } from "@/repositories/TicketRepository";
 import { userRepository } from "@/repositories/UserRepository";
 import { Logger } from "@/utils/logger";
@@ -38,7 +38,6 @@ class TicketService {
     assignedToId?: string;
   }): Promise<TicketDTO> {
     const lastTicket = await ticketRepository.findFirst({
-      where: { companyId: data.companyId },
       orderBy: { ticketNumber: "desc" },
       select: { ticketNumber: true },
     });
@@ -53,10 +52,8 @@ class TicketService {
         priority: data.priority || "MEDIUM",
         status: data.status || "OPEN",
         ticketNumber: nextNumber,
-        ...(data.queueId && { queue: { connect: { id: data.queueId } } }),
-        ...(data.assignedToId && {
-          assignedTo: { connect: { id: data.assignedToId } },
-        }),
+        queue: data.queueId ? { connect: { id: data.queueId } } : undefined,
+        assignedTo: data.assignedToId ? { connect: { id: data.assignedToId } } : undefined,
       },
       include: {
         createdBy: true,
@@ -65,13 +62,14 @@ class TicketService {
         conversation: {
           include: {
             participants: true,
+            contact: true,
             messages: { take: 1, orderBy: { createdAt: "desc" } },
           },
         },
       },
     });
 
-    const dto = toTicketDTO(ticket as unknown as TicketWithRelations);
+    const dto = toTicketDTO(ticket as TicketWithRelations);
     await ticketNotificationService.notifyTicketCreated(data.companyId, dto);
 
     // [WEBHOOK] Dispatch ticket.created event
@@ -95,7 +93,13 @@ class TicketService {
     priority?: string | TicketPriority;
     queueId?: string;
     assignedToId?: string;
-  }): Promise<TicketDTO[]> {
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: TicketDTO[]; meta: { total: number; page: number; limit: number; pages: number } }> {
+    const page = Number(data.page) || 1;
+    const limit = Number(data.limit) || 50;
+    const skip = (page - 1) * limit;
+
     const where: Prisma.TicketWhereInput = {
       companyId: data.companyId,
       deletedAt: null,
@@ -107,13 +111,12 @@ class TicketService {
     if (data.assignedToId) where.assignedToId = data.assignedToId;
 
     if (data.userRole === "AGENT") {
-      const user = await userRepository.findFirst({
+      const user = (await userRepository.findFirst({
         where: { id: data.userId },
         include: { queues: { select: { id: true } } },
-      });
+      })) as (User & { queues: { id: string }[] }) | null;
 
-      const queueIds =
-        (user as unknown as { queues: { id: string }[] } | null)?.queues?.map((q) => q.id) || [];
+      const queueIds = user?.queues?.map((q) => q.id) || [];
 
       where.OR = [
         { assignedToId: data.userId },
@@ -122,24 +125,40 @@ class TicketService {
       ];
     }
 
-    const tickets = await ticketRepository.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: {
-        createdBy: true,
-        assignedTo: true,
-        queue: true,
-        conversation: {
-          include: {
-            participants: true,
-            messages: { take: 1, orderBy: { createdAt: "desc" } },
+    const [total, tickets] = await Promise.all([
+      ticketRepository.count({ where }),
+      ticketRepository.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          createdBy: true,
+          assignedTo: true,
+          queue: true,
+          conversation: {
+            include: {
+              participants: true,
+              contact: true,
+              messages: { take: 1, orderBy: { createdAt: "desc" } },
+            },
           },
         },
-      },
-    });
+      }),
+    ]);
 
-    const dtos = tickets.map((t) => toTicketDTO(t as unknown as TicketWithRelations));
-    return this.enrichWithCrmData(dtos, data.companyId);
+    const dtos = tickets.map((t) => toTicketDTO(t as TicketWithRelations));
+    const enriched = await this.enrichWithCrmData(dtos, data.companyId);
+
+    return {
+      data: enriched,
+      meta: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async getTicketById(
@@ -157,6 +176,7 @@ class TicketService {
         conversation: {
           include: {
             participants: true,
+            contact: true,
             messages: { take: 1, orderBy: { createdAt: "desc" } },
           },
         },
@@ -166,7 +186,7 @@ class TicketService {
     if (!ticket || ticket.deletedAt) throw new AppError("Ticket not found", 404);
     if (ticket.companyId !== companyId) throw new AppError("Permission denied", 403);
 
-    const dto = toTicketDTO(ticket as unknown as TicketWithRelations);
+    const dto = toTicketDTO(ticket as TicketWithRelations);
     const [enriched] = await this.enrichWithCrmData([dto], companyId);
     return enriched;
   }
@@ -182,7 +202,7 @@ class TicketService {
 
     if (!existingTicket) {
       const ticketByConv = await ticketRepository.findFirst({
-        where: { conversationId: ticketId, companyId },
+        where: { conversationId: ticketId },
       });
       if (ticketByConv) {
         existingTicket = ticketByConv;
@@ -207,6 +227,7 @@ class TicketService {
           conversation: {
             include: {
               participants: true,
+              contact: true,
               messages: { take: 1, orderBy: { createdAt: "desc" } },
             },
           },
@@ -218,11 +239,11 @@ class TicketService {
       throw error;
     }
 
-    await ticketTransitionManager.triggerAutoAssignment(updatedTicket.id, updatedTicket.queueId, updatedTicket.assignedToId);
+    await ticketTransitionManager.triggerAutoAssignment(updatedTicket.companyId, updatedTicket.id, updatedTicket.queueId, updatedTicket.assignedToId);
     await ticketTransitionManager.syncConversation({ companyId: updatedTicket.companyId, conversationId: updatedTicket.conversationId }, data);
     await ticketTransitionManager.handleSpamAction(updaterId, { id: updatedTicket.id, companyId: updatedTicket.companyId, conversationId: updatedTicket.conversationId }, data);
 
-    const rawTicketDto = toTicketDTO(updatedTicket as unknown as TicketWithRelations);
+    const rawTicketDto = toTicketDTO(updatedTicket as TicketWithRelations);
     const [ticketDto] = await this.enrichWithCrmData([rawTicketDto], companyId);
 
     await ticketNotificationService.notifyTicketUpdated(
@@ -250,6 +271,7 @@ class TicketService {
           queueId: updatedTicket.queueId,
           assignedToId: updatedTicket.assignedToId,
           contact: {
+            ...ticketDto.contact, // Use ENRICHED contact data!
             queueName: updatedTicket.queue?.name,
             assignedAgentName: updatedTicket.assignedTo?.name,
             assignedAgentId: updatedTicket.assignedToId,

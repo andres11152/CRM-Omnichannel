@@ -26,6 +26,7 @@ interface MessageBubbleProps {
   onQuoteClick?: () => void | null;
   onImageClick?: (mediaUrl: string) => void;
   isGroup?: boolean;
+  groupedMessages?: Message[];
 }
 
 /**
@@ -40,6 +41,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   onQuoteClick,
   onImageClick,
   isGroup,
+  groupedMessages,
 }) => {
   const isOutbound = message.direction === "OUTBOUND" || message.sender === "agent";
   const isAgent = isOutbound;
@@ -246,12 +248,40 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
 
           {/* Media Content */}
-          {(msgType === "image" || msgType === "image_unavailable") && (
+          {groupedMessages && groupedMessages.length > 1 ? (
+            <div className={`grid gap-1 mb-2 ${
+              groupedMessages.length === 2 ? 'grid-cols-2' : 
+              groupedMessages.length === 3 ? 'grid-cols-2' : 
+              'grid-cols-2'
+            }`}>
+              {groupedMessages.slice(0, 4).map((msg, idx) => {
+                const groupMediaUrl = (msg.mediaUrl as string) || (msg.metadata?.media as any)?.url;
+                const isFourth = idx === 3;
+                const remaining = groupedMessages.length - 4;
+                
+                return (
+                  <div key={msg.id} className="relative aspect-square overflow-hidden rounded-md group/media hover:opacity-90 transition-opacity cursor-pointer shadow-sm border border-black/5 dark:border-white/5"
+                       onClick={() => onImageClick ? onImageClick(resolveMediaUrl(groupMediaUrl)) : window.open(resolveMediaUrl(groupMediaUrl), "_blank")}>
+                    <img
+                      src={resolveMediaUrl(groupMediaUrl)}
+                      className="w-full h-full object-cover"
+                      alt="Media"
+                    />
+                    {isFourth && remaining > 0 && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-[2px]">
+                        <span className="text-white text-2xl font-bold">+{remaining}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : ((msgType === "image" || msgType === "image_unavailable") && (
             mediaUrl ? (
               <img
                 src={resolveMediaUrl(mediaUrl)}
                 alt="Imagen"
-                className="rounded-lg mb-2 max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
+                className="rounded-lg mb-1 max-w-[300px] max-h-[350px] object-cover cursor-pointer hover:opacity-90 transition-opacity shadow-sm border border-black/5 dark:border-white/5"
                 onClick={() => onImageClick ? onImageClick(resolveMediaUrl(mediaUrl)) : window.open(resolveMediaUrl(mediaUrl), "_blank")}
               />
             ) : (
@@ -261,14 +291,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                   Imagen no disponible
                 </span>
               </div>
-            ))}
+            )))}
 
           {(msgType === "video" || msgType === "video_unavailable") && (
             mediaUrl ? (
               <video
                 src={resolveMediaUrl(mediaUrl)}
                 controls
-                className="rounded-lg mb-2 max-w-full h-auto"
+                className="rounded-lg mb-1 max-w-[300px] max-h-[350px] shadow-sm"
               />
             ) : (
               <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
@@ -318,15 +348,34 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 {/* File Info */}
                 <div className="flex flex-col overflow-hidden min-w-[150px] max-w-[200px] flex-1">
                   <span className={`text-[13.5px] font-medium truncate ${isAgent ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
-                    {(message.metadata as any)?.attachment?.name || 
-                     (message.metadata as any)?.name || 
-                     message.content || 
-                     "Documento.pdf"}
+                    {(() => {
+                      const media = message.metadata?.media as { url?: string; filename?: string; mimetype?: string } | undefined;
+                      const urlPath = media?.url || mediaUrl || "";
+                      const fromUrl = urlPath.split("/").pop()?.split("?")[0] || "";
+                      return media?.filename || fromUrl || message.content || "Archivo";
+                    })()}
                   </span>
                   <div className={`flex items-center gap-1.5 mt-0.5 text-[11px] uppercase tracking-wider font-semibold ${isAgent ? 'text-white/70' : 'text-gray-500'}`}>
-                    <span>{(message.metadata as any)?.attachment?.name?.split('.').pop() || "PDF"}</span>
+                    <span>{(() => {
+                      const media = message.metadata?.media as { url?: string; mimetype?: string; size?: number } | undefined;
+                      const urlPath = media?.url || mediaUrl || "";
+                      const ext = urlPath.split(".").pop()?.split("?")[0]?.toUpperCase();
+                      if (ext && ext.length <= 5 && ext.length >= 2) return ext;
+                      const mime = media?.mimetype || "";
+                      if (mime.includes("pdf")) return "PDF";
+                      if (mime.includes("mp4") || mime.includes("video")) return "MP4";
+                      if (mime.includes("doc")) return "DOCX";
+                      if (mime.includes("xls")) return "XLSX";
+                      return "ARCHIVO";
+                    })()}</span>
                     <span>•</span>
-                    <span>{(message.metadata as any)?.attachment?.size ? `${Math.round((message.metadata as any).attachment.size / 1024)} KB` : "Documento"}</span>
+                    <span>{(() => {
+                      const media = message.metadata?.media as { size?: number } | undefined;
+                      const size = media?.size;
+                      if (!size) return "Documento";
+                      if (size > 1048576) return `${(size / 1048576).toFixed(1)} MB`;
+                      return `${Math.round(size / 1024)} KB`;
+                    })()}</span>
                   </div>
                 </div>
                 
@@ -374,13 +423,13 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             }
 
             //  PAYMENT REQUEST
-            if (content.includes(" *SOLICITUD DE PAGO*")) {
+            if (content.includes("*SOLICITUD DE PAGO*")) {
               return (
                 <div className="bg-white/10 p-3 rounded-lg border border-white/20 my-1">
                    <div className="flex items-center gap-2 mb-2">
                     <span className="text-emerald-400 font-bold"> Pago Solicitado</span>
                   </div>
-                  <p className="text-sm opacity-90 mb-3">{content.replace(" *SOLICITUD DE PAGO*", "").trim()}</p>
+                  <p className="text-sm opacity-90 mb-3">{content.replace("*SOLICITUD DE PAGO*", "").trim()}</p>
                   <button className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-xs transition-colors shadow-sm">
                     Pagar Ahora
                   </button>
@@ -389,24 +438,31 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             }
 
             //  DATA REQUEST
-            if (content.includes(" *SOLICITUD DE DATOS*")) {
+            if (content.includes("*SOLICITUD DE DATOS*")) {
               return (
                 <div className="bg-teal-500/10 p-3 rounded-lg border border-teal-500/30 my-1">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-teal-400 font-bold"> Datos Requeridos</span>
                   </div>
-                  <p className="text-sm opacity-90">{content.replace(" *SOLICITUD DE DATOS*", "").trim()}</p>
+                  <p className="text-sm opacity-90 whitespace-pre-wrap">{content.replace("*SOLICITUD DE DATOS*", "").trim()}</p>
                 </div>
               );
             }
 
             // DEFAULT TEXT
             // Don't render redundant placeholder texts if media renderer successfully captured it
-            if (
-              msgType !== "text" && 
-              (content === `[${msgType.toUpperCase()}]` || content === `[${msgType}]`)
-            ) {
-              return null;
+            if (msgType !== "text") {
+              const upperContent = content.toUpperCase();
+              const isRedundant = 
+                upperContent === `[${msgType.toUpperCase()}]` || 
+                upperContent === `[${msgType}]` ||
+                // Spanish Fallbacks
+                (msgType === "image" && upperContent === "[IMAGEN]") ||
+                (msgType === "video" && upperContent === "[VIDEO]") ||
+                (msgType === "audio" && upperContent === "[AUDIO]") ||
+                (msgType === "document" && (upperContent === "[DOCUMENTO]" || upperContent === "[ARCHIVO]"));
+                
+              if (isRedundant) return null;
             }
 
             return (
@@ -514,6 +570,16 @@ const MessageStatus: React.FC<{ status: Message["status"] }> = ({ status }) => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         );
+      case "scheduled":
+      case "SCHEDULED":
+        return (
+          <div className="flex items-center gap-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded text-[10px] font-bold animate-pulse">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>PROGRAMADO</span>
+          </div>
+        );
       default:
         return null;
     }
@@ -534,22 +600,9 @@ const formatTime = (timestamp: string | Date): string => {
     return "";
   }
 
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-
-  if (isToday) {
-    return date.toLocaleTimeString("es-ES", { 
-      hour: "2-digit", 
-      minute: "2-digit",
-      hour12: false 
-    });
-  }
-
-  return date.toLocaleDateString("es-ES", { 
-    day: "2-digit", 
-    month: "2-digit",
-    year: "2-digit" 
-  }) + " " + date.toLocaleTimeString("es-ES", { 
+  // Always show only time (HH:mm) to save space and avoid redundancy 
+  // since DateDividers already show the date context.
+  return date.toLocaleTimeString("es-ES", { 
     hour: "2-digit", 
     minute: "2-digit",
     hour12: false 

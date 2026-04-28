@@ -9,19 +9,22 @@ export const WAMessageSchema = z
       participant: z.string().optional(),
     }),
     messageTimestamp: z
-      .union([z.number(), z.string(), z.any()]) // Allow valid Long objects
+      .union([z.number(), z.string(), z.unknown()]) // Allow valid Long objects
       .transform((val) => {
         if (typeof val === "number") return new Date(val * 1000);
         if (typeof val === "string") return new Date(parseInt(val) * 1000); // Strings are usually unix timestamps too
         // Handle Long (protobuf)
         if (typeof val === "object" && val !== null) {
+          const valObj = val as Record<string, unknown>;
           // If it has toNumber check
-          if ("toNumber" in val && typeof val.toNumber === "function") {
-            return new Date(val.toNumber() * 1000);
+          const toNumber = valObj["toNumber"];
+          if (typeof toNumber === "function") {
+            return new Date(toNumber.call(valObj) * 1000);
           }
           // If it has low/high bits
-          if ("low" in val) {
-            return new Date(val.low * 1000);
+          const low = valObj["low"];
+          if (typeof low === "number") {
+            return new Date(low * 1000);
           }
         }
         return new Date(); // Fallback

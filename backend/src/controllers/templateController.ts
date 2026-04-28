@@ -91,7 +91,7 @@ export const createTemplate = catchAsync(
 
     const template = await templateCrudService.create(
       companyId,
-      req.body as CreateTemplateDTO,
+      req.body as unknown as CreateTemplateDTO,
     );
 
     res.status(201).json({
@@ -117,7 +117,7 @@ export const updateTemplate = catchAsync(
     const template = await templateCrudService.update(
       id,
       companyId,
-      req.body as UpdateTemplateDTO,
+      req.body as unknown as UpdateTemplateDTO,
     );
 
     res.status(200).json({
@@ -153,7 +153,11 @@ export const deleteTemplate = catchAsync(
 export const testTemplateSend = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const { to, parameters, conversationId, senderId } = req.body;
+    const body = req.body as Record<string, unknown>;
+    const to = body.to as string;
+    const parameters = body.parameters as Record<string, string> | undefined;
+    const conversationId = body.conversationId as string | undefined;
+    const senderId = body.senderId as string | undefined;
     const companyId = req.companyId || req.user?.companyId;
     const userId = req.user?.id;
 

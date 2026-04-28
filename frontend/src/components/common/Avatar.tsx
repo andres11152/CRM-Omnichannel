@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from "react";
 
+// Assuming we have an API config or we can derive it from window.location
+// If API_BASE_URL is imported from elsewhere in the app we can use it, but
+// for a robust solution we'll strip '/api' from the api endpoint if needed,
+// or just rely on a standard import. Let's use Vite's env.
+const BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/api$/, "") || "http://localhost:4000";
+
 interface AvatarProps {
   src?: string | null;
   name: string;
@@ -33,8 +39,12 @@ export const Avatar: React.FC<AvatarProps> = ({
 
   // If we have a valid src and it hasn't errored yet, try rendering the img
   if (src && !imgError) {
-    // Ensure src points correctly if it's a relative path just in case
-    const validSrc = src;
+    // [SEC] 100-YEAR FIX: Automatic formatting to absolute URLs for backend uploads.
+    // If the src is not an absolute HTTP or DATA URL, assume it's a local upload from the API backend.
+    const isAbsolute = src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:") || src.startsWith("blob:") || src.startsWith("//");
+    const validSrc = !isAbsolute 
+      ? `${BASE_URL}${src.startsWith("/") ? src : `/${src}`}` 
+      : src;
     
     return (
       <img

@@ -3,7 +3,8 @@ import React, {
   useCallback, 
   useEffect, 
   useMemo, 
-  memo 
+  memo,
+  useRef
 } from "react";
 import { 
   Contact,
@@ -19,12 +20,14 @@ import { ChatHeader } from "./chat/ChatHeader";
 import { MessageStream } from "./chat/MessageStream";
 import { ChatComposer } from "./chat/ChatComposer";
 import { Customer360Panel } from "./Customer360Panel";
+import { TagsNavbar } from "./chat/TagsNavbar";
 import { GroupParticipantsPanel } from "./GroupParticipantsPanel";
 import { ContactEditModal } from "./ContactEditModal";
 import { TransferModal } from "./TransferModal";
 import { ActionModals } from "./ActionModals";
 import { ResolveTicketModal } from "./ResolveTicketModal";
 import { ImageLightbox, LightboxImage } from "./chat/ImageLightbox";
+import { ActivityModal } from "./crm/ActivityModal";
 
 // Modular Hooks
 import { useChatWorkflow } from "@/hooks/useChatWorkflow";
@@ -60,16 +63,31 @@ export const ChatInterface: React.FC<Props> = ({
     isTyping,
     isRemoteTyping,
     isSyncing,
+    pinnedMessage,
     chatEndRef,
     handleSendMessage,
     syncHistory,
     handleReact,
     handleTransfer,
     scrollToBottom,
+    emitTyping,
   } = useChatWorkflow({ activeContact, aiConfig });
 
   // 2. UI STATE (Local Modals)
   const [inputValue, setInputValue] = useState("");
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleInputChange = useCallback((val: string) => {
+    setInputValue(val);
+    
+    emitTyping("composing");
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      emitTyping("paused");
+    }, 3000);
+  }, [emitTyping]);
+
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -95,6 +113,10 @@ export const ChatInterface: React.FC<Props> = ({
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [activeActionModal, setActiveActionModal] = useState<"SCHEDULE" | "PRODUCT" | "PAYMENT" | "DATA" | null>(null);
+
+  // CRM Activity Modals (Task / Meeting from 360 Panel)
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [activityType, setActivityType] = useState<"TASK" | "MEETING">("TASK");
 
   // Lightbox State
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -127,7 +149,10 @@ export const ChatInterface: React.FC<Props> = ({
         let senderName = "Imagen";
         if (msg.direction === "OUTBOUND" || msg.sender === "agent") senderName = "Agente";
         else if (msg.senderName) senderName = msg.senderName;
-        else if (senderObj && typeof senderObj === "object") senderName = (senderObj as any).name || (senderObj as any).phone || "Cliente";
+        else if (senderObj && typeof senderObj === "object") {
+          const s = senderObj as { name?: string; phone?: string };
+          senderName = s.name || s.phone || "Cliente";
+        }
 
         return {
           id: msg.id,
@@ -162,14 +187,31 @@ export const ChatInterface: React.FC<Props> = ({
     setInputValue("");
     setReplyingTo(null);
     setSelectedFile(null);
+
+    // Stop typing immediately
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    emitTyping("paused");
     
     await handleSendMessage(textToSend, fileToSend, replyTarget);
     scrollToBottom();
   }, [inputValue, selectedFile, isRecording, replyingTo, handleSendMessage, scrollToBottom]);
 
   const onSlashSelect = (reply: QuickReply) => {
-    setInputValue(reply.content);
+    handleInputChange(reply.content);
   };
+
+  const handlePriorityChange = useCallback(async (newPriority: "LOW" | "MEDIUM" | "HIGH") => {
+    if (!activeContact.ticketId) return;
+    try {
+      const { updatePriority } = await import("@/services/ticketService");
+      await updatePriority(activeContact.ticketId, newPriority);
+      onTicketUpdate?.(activeContact.ticketId, { priority: newPriority });
+      toast.success(`Prioridad actualizada a ${newPriority}`);
+    } catch (error) {
+      toast.error("Error al actualizar la prioridad");
+      console.error(error);
+    }
+  }, [activeContact.ticketId, onTicketUpdate]);
 
   const openResolveModal = () => setShowResolveModal(true);
   const openTransferModal = () => setShowTransferModal(true);
@@ -191,6 +233,13 @@ export const ChatInterface: React.FC<Props> = ({
           toggleCustomer360={() => setIs360Visible(!is360Visible)}
           showParticipants={() => setShowParticipants(true)}
           isCustomer360Visible={is360Visible}
+          onChangePriority={handlePriorityChange}
+        />
+
+        {/* ENTERPRISE TAGS NAVBAR: Space-efficient horizontal scroll */}
+        <TagsNavbar 
+          contact={activeContact} 
+          onContactUpdate={onContactUpdate} 
         />
 
         {/* MIDDLE: Message Stream */}
@@ -208,13 +257,14 @@ export const ChatInterface: React.FC<Props> = ({
           onReact={handleReact}
           onReply={setReplyingTo}
           onImageClick={handleImageClick}
+          pinnedMessage={pinnedMessage}
         />
 
         {/* BOTTOM: Composer */}
         {!readOnly && (
           <ChatComposer
             inputValue={inputValue}
-            setInputValue={setInputValue}
+            setInputValue={handleInputChange}
             selectedFile={selectedFile}
             setSelectedFile={setSelectedFile}
             replyingTo={replyingTo}
@@ -236,7 +286,10 @@ export const ChatInterface: React.FC<Props> = ({
             onPayment={() => setActiveActionModal("PAYMENT")}
             onRequestData={() => setActiveActionModal("DATA")}
             isRecording={isRecording}
-            setIsRecording={setIsRecording}
+            setIsRecording={(rec) => {
+              setIsRecording(rec);
+              emitTyping(rec ? "recording" : "paused");
+            }}
           />
         )}
       </div>
@@ -244,10 +297,19 @@ export const ChatInterface: React.FC<Props> = ({
       {/* RIGHT: Customer 360 Panel */}
       {is360Visible && (
         <div className="hidden lg:block w-[380px] h-full border-l border-gray-200 dark:border-white/5 bg-white dark:bg-[#0b141a] animate-in slide-in-from-right duration-300">
-           <Customer360Panel 
-             contact={activeContact} 
-             onEditContact={() => setShowEditModal(true)}
-           />
+            <Customer360Panel 
+              contact={activeContact} 
+              onEditContact={() => setShowEditModal(true)}
+              onContactUpdate={onContactUpdate}
+              onCreateTask={() => {
+                setActivityType("TASK");
+                setShowActivityModal(true);
+              }}
+              onScheduleMeeting={() => {
+                setActivityType("MEETING");
+                setShowActivityModal(true);
+              }}
+            />
         </div>
       )}
 
@@ -296,22 +358,51 @@ export const ChatInterface: React.FC<Props> = ({
         type={activeActionModal}
         onClose={() => setActiveActionModal(null)}
         onSchedule={(date, msg) => {
-          handleSendMessage(msg, null, replyingTo); // Placeholder for scheduled logic
+          handleSendMessage(msg, null, replyingTo, date);
           setActiveActionModal(null);
         }}
         onProduct={(p) => {
           handleSendMessage(`Interesado en: ${p.name}\n${p.imageUrl || ""}`, null, replyingTo);
           setActiveActionModal(null);
         }}
-        onPayment={(amt, concept) => {
-          handleSendMessage(`Solicitud de pago: ${concept} - $${amt}`, null, replyingTo);
+        onPayment={(amt, concept, currency) => {
+          const formatted = new Intl.NumberFormat(currency === "COP" ? "es-CO" : "en-US", {
+            style: "currency",
+            currency: currency,
+            minimumFractionDigits: 0
+          }).format(parseFloat(amt));
+          
+          handleSendMessage(`*SOLICITUD DE PAGO*\n${concept}\n\nMonto: ${formatted}`, null, replyingTo);
           setActiveActionModal(null);
         }}
-        onRequestData={(data) => {
-          handleSendMessage(`Por favor, comparte tu ${data}`, null, replyingTo);
+        onRequestData={(fields) => {
+          const list = fields.map(f => `• ${f}`).join("\n");
+          handleSendMessage(`*SOLICITUD DE DATOS*\n\nPara continuar con el proceso, requerimos la siguiente información:\n\n${list}\n\nQuedamos atentos a tu respuesta.`, null, replyingTo);
           setActiveActionModal(null);
         }}
       />
+
+      {/* CRM ACTIVITY MODAL */}
+      {showActivityModal && (
+        <ActivityModal
+          isOpen={showActivityModal}
+          onClose={() => setShowActivityModal(false)}
+          onSave={() => {
+            setShowActivityModal(false);
+            toast.success(
+              activityType === "TASK"
+                ? "Tarea asignada correctamente."
+                : "Reunión agendada correctamente."
+            );
+          }}
+          initialType={activityType}
+          preselectedContact={{
+            id: activeContact.id,
+            name: activeContact.name,
+            email: activeContact.email,
+          }}
+        />
+      )}
 
       {/* IMAGE LIGHTBOX MODAL */}
       {lightboxOpen && lightboxImages.length > 0 && (

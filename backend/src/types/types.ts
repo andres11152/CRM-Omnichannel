@@ -156,9 +156,9 @@ export type JsonValue =
  */
 export interface AuthenticatedRequest<
   P = ParamsDictionary,
-  ResBody = any,
-  ReqBody = any,
-  ReqQuery = any,
+  ResBody = unknown,
+  ReqBody = { [key: string]: never },
+  ReqQuery = ParsedQs,
 > extends Request<P, ResBody, ReqBody, ReqQuery> {
   user: NonNullable<Request["user"]>;
   companyId?: string;

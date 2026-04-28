@@ -78,7 +78,7 @@ class MessageQueueService {
           type: "exponential",
           delay: 1000,
         },
-        removeOnComplete: 100,
+        removeOnComplete: true,
         removeOnFail: 1000,
       };
 

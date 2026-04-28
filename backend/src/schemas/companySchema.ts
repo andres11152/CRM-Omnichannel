@@ -53,5 +53,19 @@ export const UpdateCompanySettingsSchema = z.object({
         oooEnabled: z.boolean().optional(),
       })
       .optional(),
+    dataRequest: z
+      .object({
+        suggestedFields: z
+          .array(
+            z.object({
+              id: z.string(),
+              label: z.string(),
+              iconName: z.string().optional(),
+              color: z.string().optional(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
   }),
 });

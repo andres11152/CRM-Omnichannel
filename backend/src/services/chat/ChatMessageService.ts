@@ -9,7 +9,7 @@ import { Logger } from "@/utils/logger";
  * Handles message persistence and automated ticketing logic.
  */
 export class ChatMessageService {
-  async doesMessageExist(whatsappMessageId: string) {
+  async doesMessageExist(whatsappMessageId: string): Promise<boolean> {
     const exists = await messageRepository.findUnique({
       where: { whatsappMessageId },
       select: { id: true },
@@ -27,10 +27,10 @@ export class ChatMessageService {
     direction: "INBOUND" | "OUTBOUND";
     conversationId: string;
     senderId: string;
-    status: "SENT" | "DELIVERED" | "QUEUED" | "REVOKED";
+    status: "SENT" | "DELIVERED" | "QUEUED" | "REVOKED" | "READ" | "FAILED";
     metadata: Prisma.InputJsonValue;
     createdAt?: Date;
-  }) {
+  }): Promise<Prisma.MessageGetPayload<{ include: { sender: true } }>> {
     return messageRepository.upsert({
       where: { whatsappMessageId: data.whatsappMessageId },
       create: {
@@ -53,7 +53,10 @@ export class ChatMessageService {
   /**
    * Update message status (DELIVERED, READ, FAILED)
    */
-  async updateMessageStatus(whatsappMessageId: string, status: string) {
+  async updateMessageStatus(
+    whatsappMessageId: string, 
+    status: "SENT" | "DELIVERED" | "READ" | "FAILED"
+  ): Promise<Prisma.BatchPayload> {
     return messageRepository.updateMany({
       where: { whatsappMessageId },
       data: { status },
@@ -62,10 +65,9 @@ export class ChatMessageService {
 
   // --- Ticket Methods ---
 
-  async findActiveTicket(companyId: string, conversationId: string) {
+  async findActiveTicket(companyId: string, conversationId: string): Promise<Prisma.TicketGetPayload<object> | null> {
     return ticketRepository.findFirst({
       where: {
-        companyId,
         conversationId,
         status: { in: ["OPEN", "IN_PROGRESS"] },
       },
@@ -79,14 +81,13 @@ export class ChatMessageService {
     subject: string,
     description: string,
     queueId?: string | null,
-  ) {
+  ): Promise<Prisma.TicketGetPayload<object>> {
     const lockKey = `ticket_create:${conversationId}`;
     return await DistributedLock.run(
       lockKey,
       async () => {
         let ticket = await ticketRepository.findFirst({
           where: {
-            companyId,
             conversationId,
             status: { in: ["OPEN", "IN_PROGRESS"] },
           },
@@ -94,7 +95,6 @@ export class ChatMessageService {
 
         if (!ticket) {
           const lastTicket = await ticketRepository.findFirst({
-            where: { companyId },
             orderBy: { ticketNumber: "desc" },
             select: { ticketNumber: true },
           });
@@ -102,21 +102,21 @@ export class ChatMessageService {
 
           ticket = await ticketRepository.create({
             data: {
+              company: { connect: { id: companyId } },
               ticketNumber: nextNum,
               subject,
               description: description.substring(0, 100),
               status: "OPEN",
               priority: "MEDIUM",
-              companyId,
-              createdById: customerId,
-              conversationId,
-              queueId: queueId || null,
+              createdBy: { connect: { id: customerId } },
+              conversation: { connect: { id: conversationId } },
+              queue: queueId ? { connect: { id: queueId } } : undefined,
             },
           });
         } else if (queueId && !ticket.queueId) {
           ticket = await ticketRepository.update({
             where: { id: ticket.id },
-            data: { queueId },
+            data: { queue: { connect: { id: queueId } } },
           });
           Logger.info(
             `[ChatMessageService] 🩹 Self-healed ticket ${ticket.id} with queueId ${queueId}`,

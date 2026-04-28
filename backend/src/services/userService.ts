@@ -233,8 +233,10 @@ export const userService = {
       // [SEC] SECURITY: Last Man Standing (Anti-Lockout)
       if (targetUser.role === "ADMIN" || targetUser.role === "MASTER") {
         const adminCount = await userRepository.count({
-          companyId,
-          role: { in: ["ADMIN", "MASTER"] as UserRole[] },
+          where: {
+            companyId,
+            role: { in: ["ADMIN", "MASTER"] as UserRole[] },
+          },
         });
 
         if (adminCount <= 1) {

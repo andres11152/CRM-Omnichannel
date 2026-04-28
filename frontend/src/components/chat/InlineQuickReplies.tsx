@@ -35,13 +35,29 @@ export const InlineQuickReplies: React.FC<InlineQuickRepliesProps> = ({
   }, []);
 
   useEffect(() => {
-    const term = query.toLowerCase();
-    const matches = replies.filter(
-      (r) =>
-        r.title.toLowerCase().includes(term) ||
-        r.content.toLowerCase().includes(term) ||
-        (r.shortcut && r.shortcut.toLowerCase().includes(term))
-    );
+    const term = query.trim().toLowerCase();
+    
+    // [SEC] 100-YEAR FIX: Smart Filtering
+    // Prioritize exactly what the user is looking for (shortcut > title > content)
+    const matches = replies.filter((r) => {
+      if (!term) return true; // Show all if just "/"
+      
+      const shortcutMatch = r.shortcut?.toLowerCase().includes(term);
+      const titleMatch = r.title.toLowerCase().includes(term);
+      const contentMatch = r.content.toLowerCase().includes(term);
+      
+      return shortcutMatch || titleMatch || contentMatch;
+    });
+
+    // Sort: items starting with the term first (predictive behavior)
+    matches.sort((a, b) => {
+      const aStarts = a.shortcut?.toLowerCase().startsWith(term) || a.title.toLowerCase().startsWith(term);
+      const bStarts = b.shortcut?.toLowerCase().startsWith(term) || b.title.toLowerCase().startsWith(term);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return 0;
+    });
+
     setFiltered(matches);
     setSelectedIndex(0);
   }, [query, replies]);
@@ -50,6 +66,7 @@ export const InlineQuickReplies: React.FC<InlineQuickRepliesProps> = ({
     (e: KeyboardEvent) => {
       if (filtered.length === 0) return;
 
+      // [UX] Intercept keys only when the menu is active
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((prev) => (prev + 1) % filtered.length);
@@ -57,8 +74,11 @@ export const InlineQuickReplies: React.FC<InlineQuickRepliesProps> = ({
         e.preventDefault();
         setSelectedIndex((prev) => (prev - 1 + filtered.length) % filtered.length);
       } else if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        onSelect(filtered[selectedIndex].content);
+        // Only select if not using Shift+Enter (which should still allow new lines)
+        if (!e.shiftKey) {
+          e.preventDefault();
+          onSelect(filtered[selectedIndex].content);
+        }
       } else if (e.key === "Escape") {
         e.preventDefault();
         onClose();

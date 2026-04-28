@@ -22,6 +22,8 @@ interface SidebarProps {
     path: string;
     icon: React.ReactNode;
     title: string;
+    disabled?: boolean;
+    badge?: string;
   }>;
   currentPath: string;
   onNavigate: (path: string) => void;
@@ -40,23 +42,35 @@ const NavIcon: React.FC<{
   icon: React.ReactNode;
   title: string;
   isExpanded: boolean;
+  disabled?: boolean;
+  badge?: string;
   dragHandleProps?:
     | import("@hello-pangea/dnd").DraggableProvidedDragHandleProps
     | null;
-}> = ({ active, onClick, icon, title, isExpanded, dragHandleProps }) => {
+}> = ({
+  active,
+  onClick,
+  icon,
+  title,
+  isExpanded,
+  disabled,
+  badge,
+  dragHandleProps,
+}) => {
   return (
     <div
       className={`relative group w-full flex ${isExpanded ? "justify-start px-3" : "justify-center px-2"}`}
     >
       {/* Active Indicator (Left Border) */}
-      {active && (
+      {active && !disabled && (
         <div
           className={`absolute left-0 top-1/2 -translate-y-1/2 bg-reply-blue rounded-r-full transition-all duration-300 ${isExpanded ? "h-10 w-1" : "h-8 w-1"}`}
         />
       )}
 
       <button
-        onClick={onClick}
+        onClick={disabled ? undefined : onClick}
+        disabled={disabled}
         className={`
                     flex items-center gap-3 relative
                     transition-all duration-300 ease-out
@@ -66,19 +80,23 @@ const NavIcon: React.FC<{
                         : "w-14 h-14 rounded-2xl justify-center"
                     }
                     ${
-                      active
-                        ? "bg-blue-50 text-reply-blue dark:bg-blue-900/20 dark:text-blue-400 shadow-sm"
-                        : "text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                      disabled
+                        ? "opacity-50 grayscale cursor-not-allowed"
+                        : active
+                          ? "bg-blue-50 text-reply-blue dark:bg-blue-900/20 dark:text-blue-400 shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50"
                     }
                 `}
       >
         {/* Drag Handle (Only visible on hover) */}
-        <div
-          {...dragHandleProps}
-          className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 hover:!opacity-100 cursor-grab active:cursor-grabbing p-1 -ml-1.5"
-        >
-          {/* We might hide drag handle in expanded mode or style it differently */}
-        </div>
+        {!disabled && (
+          <div
+            {...dragHandleProps}
+            className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 hover:!opacity-100 cursor-grab active:cursor-grabbing p-1 -ml-1.5"
+          >
+            {/* We might hide drag handle in expanded mode or style it differently */}
+          </div>
+        )}
 
         <div
           className={`flex-shrink-0 transition-transform duration-300 ${active && !isExpanded ? "scale-100" : "group-hover:scale-110"}`}
@@ -87,19 +105,31 @@ const NavIcon: React.FC<{
         </div>
 
         {/* Text Label (Expanded Mode) */}
-        <span
+        <div
           className={`
-                    overflow-hidden whitespace-nowrap font-medium text-sm transition-all duration-300
+                    flex flex-col items-start overflow-hidden whitespace-nowrap transition-all duration-300
                     ${isExpanded ? "w-auto opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-4"}
                 `}
         >
-          {title}
-        </span>
+          <span className="font-medium text-sm">{title}</span>
+          {isExpanded && badge && (
+            <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400 leading-none mt-0.5">
+              {badge}
+            </span>
+          )}
+        </div>
 
         {/* Tooltip (Collapsed Mode ONLY) */}
         {!isExpanded && (
           <div className="absolute left-16 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 shadow-xl translate-x-2 group-hover:translate-x-0">
-            {title}
+            <div className="flex flex-col">
+              <span>{title}</span>
+              {badge && (
+                <span className="text-[10px] text-blue-300 font-bold">
+                  {badge}
+                </span>
+              )}
+            </div>
             {/* Arrow */}
             <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-2 bg-gray-900 transform rotate-45" />
           </div>
@@ -219,6 +249,8 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                           }}
                           icon={item.icon}
                           title={item.title}
+                          disabled={item.disabled}
+                          badge={item.badge}
                           isExpanded={isExpanded || isMobileMenuOpen}
                           dragHandleProps={provided.dragHandleProps}
                         />

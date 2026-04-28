@@ -30,6 +30,37 @@ export interface UploadMediaData {
   tags?: string[];
 }
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+
+/**
+ * Normalizes media URLs to be absolute
+ */
+const normalizeMedia = (media: Media): Media => {
+  if (!media.url) return media;
+
+  // If it's already an absolute URL (http:// or https://), leave it alone
+  // EXCEPT if it points to the WRONG host (e.g. localhost:5173 when it should be localhost:4000)
+  const currentOrigin = window.location.origin;
+  const backendBase = API_URL.replace(/\/api\/?$/, "");
+
+  if (media.url.startsWith("http://") || media.url.startsWith("https://")) {
+    // If for some reason it points to the frontend origin, redirect it to backend
+    if (media.url.startsWith(currentOrigin) && !backendBase.startsWith(currentOrigin)) {
+       media.url = media.url.replace(currentOrigin, backendBase);
+    }
+    return media;
+  }
+
+  // If it's a relative key (like companies/...), prepend host and /
+  if (media.url.startsWith("/")) {
+    media.url = `${backendBase}${media.url}`;
+  } else {
+    media.url = `${backendBase}/${media.url}`;
+  }
+  
+  return media;
+};
+
 /**
  * Upload a media file
  */
@@ -44,13 +75,10 @@ export const uploadMedia = async (data: UploadMediaData): Promise<Media> => {
   }
 
   const response = await api.post("/media/upload", formData, {
-    // [WARNING] No Content-Type header here!
-    // Axios auto-generates "multipart/form-data; boundary=..." when it detects FormData.
-    // Setting it manually breaks the boundary and causes parse errors on the backend.
-    timeout: 60000, // 60s for large file uploads
+    timeout: 60000,
   });
 
-  return response.data as Media;
+  return normalizeMedia(response.data as Media);
 };
 
 /**
@@ -72,7 +100,8 @@ export const getMedia = async (filters?: {
   if (filters?.limit) params.append("limit", filters.limit.toString());
 
   const response = await api.get(`/media?${params.toString()}`);
-  return response.data as Media[];
+  const mediaList = response.data as Media[];
+  return mediaList.map(normalizeMedia);
 };
 
 /**
@@ -94,7 +123,7 @@ export const updateMedia = async (
   },
 ): Promise<Media> => {
   const response = await api.patch(`/media/${id}`, data);
-  return response.data as Media;
+  return normalizeMedia(response.data as Media);
 };
 
 // === KNOWLEDGE BASE (RAG) HELPERS ===

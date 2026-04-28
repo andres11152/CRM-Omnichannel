@@ -49,6 +49,8 @@ export const getAllTickets = catchAsync(
 
     // 1. Query Params validated by Zod Middleware
     const query = req.query;
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 50;
 
     const userId = req.user?.id;
     const userRole = req.user?.role || "USER";
@@ -60,7 +62,7 @@ export const getAllTickets = catchAsync(
     }
 
     // 2. Delegate to Service
-    const finalTickets = await ticketService.getAllTickets({
+    const result = await ticketService.getAllTickets({
       companyId,
       userId,
       userRole,
@@ -68,12 +70,15 @@ export const getAllTickets = catchAsync(
       priority: query.priority as TicketPriority | undefined,
       queueId: query.queueId as string | undefined,
       assignedToId: query.assignedToId as string | undefined,
+      page,
+      limit,
     });
 
     res.status(200).json({
       status: "success",
-      results: finalTickets.length,
-      data: { tickets: finalTickets },
+      results: result.data.length,
+      data: { tickets: result.data },
+      meta: result.meta,
     });
   },
 );

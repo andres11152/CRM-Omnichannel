@@ -38,6 +38,8 @@ export interface GroupParticipantDTO {
   existsInCRM: boolean;
   /** Contact ID if exists */
   contactId: string | null;
+  /** True if the participant has a LID identity */
+  isLid: boolean;
 }
 
 /** Response for group participants list */
@@ -289,7 +291,10 @@ export const groupContactService = {
       if (!phone || !existingContactId) {
         if (lidToContactId.has(lidBase)) {
           existingContactId = lidToContactId.get(lidBase) || null;
-          phone = lidToPhoneMap.get(lidBase) || phone; 
+          const crmPhone = lidToPhoneMap.get(lidBase);
+          if (crmPhone && WhatsAppIdUtils.isRealPhoneNumber(crmPhone)) {
+            phone = crmPhone;
+          }
         }
       }
 
@@ -310,9 +315,9 @@ export const groupContactService = {
       else if (phone) {
         displayName = WhatsAppIdUtils.formatDisplayPhone(phone);
       } 
-      // 4. LID Base
+      // 4. LID Base (Masked for Enterprise UI)
       else {
-        displayName = `ID: ${lidBase}`;
+        displayName = `Usuario Protegido`;
       }
 
       const existsInCRM = existingContactId !== null;
@@ -324,7 +329,8 @@ export const groupContactService = {
       participants.push({
         jid: cleanJid,
         phone,
-        displayName: displayName || `ID: ${lidBase}`,
+        isLid: WhatsAppIdUtils.isLid(cleanJid),
+        displayName: displayName || `Usuario Protegido`,
         isAdmin: participant.admin === "admin",
         isSuperAdmin: participant.admin === "superadmin",
         canAddToCRM,

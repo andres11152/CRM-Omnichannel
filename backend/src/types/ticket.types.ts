@@ -78,6 +78,15 @@ export type TicketWithRelations = Ticket & {
     | (Conversation & {
         messages?: Message[];
         participants?: User[];
+        contact?: {
+          id: string;
+          name: string;
+          phone: string | null;
+          email: string | null;
+          avatarUrl: string | null;
+          profilePicUrl?: string | null;
+          about?: string | null;
+        } | null;
       })
     | null;
 };
@@ -94,6 +103,15 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     | (Conversation & {
         messages?: Message[];
         participants?: User[];
+        contact?: {
+          id: string;
+          name: string;
+          phone: string | null;
+          email: string | null;
+          avatarUrl: string | null;
+          profilePicUrl?: string | null;
+          about?: string | null;
+        } | null;
         isGroup?: boolean;
         groupMetadata?: {
           groupName?: string;
@@ -111,7 +129,23 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
   // The ticket `createdBy` is usually the AGENT who opened the chat.
   // The actual customer is the conversation participant who is NOT an admin/agent.
   const AGENT_ROLES = ["ADMIN", "SUPERVISOR", "AGENT", "MASTER"];
-  const customer: User | null | undefined = (() => {
+
+  // Priority 0: Use the CRM Contact linked to the conversation (most authoritative source)
+  const crmContact = conversation?.contact;
+
+  const customer: { id: string; name: string | null; email: string | null; phone: string | null; profilePicUrl?: string | null; about?: string | null; role?: string } | null | undefined = (() => {
+    // Priority 0: CRM Contact (authoritative — set by Orchestrator when conversation is created)
+    if (crmContact) {
+      return {
+        id: crmContact.id,
+        name: crmContact.name,
+        email: crmContact.email,
+        phone: crmContact.phone,
+        profilePicUrl: crmContact.profilePicUrl || crmContact.avatarUrl,
+        about: crmContact.about,
+      };
+    }
+
     const participants = conversation?.participants;
     if (participants && participants.length > 0) {
       // Priority 1: Find participant whose email is a shadow user (WhatsApp pattern)
@@ -124,7 +158,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
       const nonAgent = participants.find((p) => !AGENT_ROLES.includes(p.role));
       if (nonAgent) return nonAgent;
 
-      // Priority 3: Find participant whose phone matches the || channelId
+      // Priority 3: Find participant whose phone matches the channelId
       if (conversation?.channelId) {
         const byChannel = participants.find(
           (p) => p.phone === conversation.channelId,

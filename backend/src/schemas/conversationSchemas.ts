@@ -8,10 +8,9 @@ export const CreateConversationSchema = z.object({
   body: z.object({
     phone: z
       .string()
-      .regex(
-        phoneRegex,
-        "Phone number must be in E.164 format (e.g., +1234567890)",
-      ),
+      .transform((val) => val.replace(/[\s\-()]/g, ""))
+      .transform((val) => (val.startsWith("+") ? val : `+${val}`))
+      .pipe(z.string().regex(phoneRegex, "Phone number must be in E.164 format (e.g., +1234567890)")),
     name: z.string().optional(),
     message: z.string().optional(),
     addToContacts: z.boolean().optional(),
@@ -23,8 +22,8 @@ export const ReplyToConversationSchema = z.object({
     .object({
       content: z.string().optional().default(""),
       channel: z.nativeEnum(Channel).optional(),
-      attachment: z.any().optional(),
-      metadata: z.record(z.any()).optional(),
+      attachment: z.unknown().optional(),
+      metadata: z.record(z.unknown()).optional(),
       scheduledAt: z.string().datetime().optional(),
       quotedMessageId: z.string().optional(),
       quotedContent: z.string().optional(),

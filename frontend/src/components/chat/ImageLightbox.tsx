@@ -2,6 +2,15 @@ import React, { useState, useEffect, useCallback } from "react";
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download } from "lucide-react";
 import { createPortal } from "react-dom";
 
+// [SEC] 100-YEAR FIX: Centralized Base URL resolution for backend uploads
+const BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/api$/, "") || "http://localhost:4000";
+
+const resolveUrl = (url: string) => {
+  if (!url) return "";
+  const isAbsolute = url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:") || url.startsWith("//");
+  return !isAbsolute ? `${BASE_URL}${url.startsWith("/") ? url : `/${url}`}` : url;
+};
+
 export interface LightboxImage {
   id: string;
   url: string;
@@ -118,7 +127,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, initialInd
         {/* IMAGE */}
         <div className="w-full h-full flex items-center justify-center p-8 md:p-16 relative">
              <img
-               src={currentImage.url}
+               src={resolveUrl(currentImage.url)}
                alt="Vista previa"
                className="max-w-full max-h-full object-contain shadow-2xl transition-transform duration-200"
                style={{ transform: `scale(${scale})` }}
@@ -144,9 +153,9 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, initialInd
                   key={img.id}
                   onClick={() => { setCurrentIndex(idx); setScale(1); }}
                   className={`relative flex-shrink-0 w-16 h-16 rounded-md overflow-hidden transition-all ${idx === currentIndex ? 'ring-2 ring-indigo-500 scale-110 opacity-100' : 'opacity-40 hover:opacity-100 ring-1 ring-white/20'}`}
-                >
-                   <img src={img.url} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
-                </button>
+               >
+                  <img src={resolveUrl(img.url)} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+               </button>
              ))}
           </div>
         </div>

@@ -1,84 +1,93 @@
-import { Ticket, Prisma } from "@prisma/client";
+import { Prisma, Ticket } from "@prisma/client";
 import { prisma, ExtendedPrismaClient } from "@/config/database";
+import TenantContextManager from "@/config/tenantContext";
+import { BaseRepository } from "./BaseRepository";
+import { TicketWithRelations } from "@/types/ticket.types";
 
-export class TicketRepository {
-  constructor(private db: ExtendedPrismaClient = prisma) {}
+export class TicketRepository extends BaseRepository {
+  constructor(db: ExtendedPrismaClient = prisma) {
+    super(db);
+  }
 
   async findById(id: string, companyId: string): Promise<Ticket | null> {
     return this.db.ticket.findFirst({ where: { id, companyId } });
   }
 
-  async findUnique(args: Prisma.TicketFindUniqueArgs) {
-    return this.db.ticket.findUnique(args);
+  async findUnique(args: Prisma.TicketFindUniqueArgs, companyId?: string): Promise<Ticket | null> {
+    return this.db.ticket.findFirst(this.applyTenantFilter(args, companyId));
   }
 
-  async findFirst(args: Prisma.TicketFindFirstArgs) {
-    return this.db.ticket.findFirst(args);
+  async findFirst(args: Prisma.TicketFindFirstArgs, companyId?: string): Promise<Ticket | null> {
+    return this.db.ticket.findFirst(this.applyTenantFilter(args, companyId));
   }
 
-  async findMany(args: Prisma.TicketFindManyArgs) {
-    return this.db.ticket.findMany(args);
+  async findMany(args: Prisma.TicketFindManyArgs, companyId?: string): Promise<Ticket[]> {
+    return this.db.ticket.findMany(this.applyTenantFilter(args, companyId));
   }
 
-  async create(args: Prisma.TicketCreateArgs) {
-    return this.db.ticket.create(args);
+  async create(args: Prisma.TicketCreateArgs, companyIdOverride?: string): Promise<Ticket> {
+    const companyId = companyIdOverride || TenantContextManager.getCompanyId();
+    const data = {
+      ...args.data,
+      company: { connect: { id: companyId } },
+    } as Prisma.TicketCreateInput;
+    return this.db.ticket.create({ ...args, data });
   }
 
-  async update(args: Prisma.TicketUpdateArgs) {
-    return this.db.ticket.update(args);
+  async update(args: Prisma.TicketUpdateArgs, companyId?: string): Promise<Ticket> {
+    return this.db.ticket.update(this.applyTenantFilter(args, companyId));
   }
 
-  async count(args: Prisma.TicketCountArgs) {
-    return this.db.ticket.count(args);
+  async count(args: Prisma.TicketCountArgs, companyId?: string): Promise<number> {
+    return this.db.ticket.count(this.applyTenantFilter(args, companyId));
   }
 
   // Backwards compatibility for existing codebase callers
-  async findByIdWithCreator(id: string, companyId: string) {
-    return this.db.ticket.findFirst({
+  async findByIdWithCreator(id: string, companyId: string): Promise<TicketWithRelations | null> {
+    return (await this.db.ticket.findFirst({
       where: { id, companyId },
-      include: { createdBy: true },
-    });
+      include: {
+        createdBy: true,
+        assignedTo: true,
+        queue: true,
+        conversation: {
+          include: {
+            participants: true,
+            contact: true, // [SOUND] Authoritative Name Resolve
+          },
+        },
+      },
+    })) as TicketWithRelations | null;
   }
 
-  async findByConversationId(conversationId: string) {
+  async findByConversationId(companyId: string, conversationId: string) {
     return this.db.ticket.findFirst({
-      where: { conversationId },
+      where: { conversationId, companyId },
       include: { createdBy: true },
     });
   }
 
-  async updateConversationId(
-    id: string,
-    companyId: string,
-    conversationId: string,
-  ): Promise<Ticket> {
-    // [SEC] Verify ownership before update
-    const exists = await this.db.ticket.findFirst({ where: { id, companyId } });
-    if (!exists) throw new Error(`Ticket ${id} not found in company ${companyId}`);
-    return this.db.ticket.update({
-      where: { id },
+  async updateConversationId(id: string, companyId: string, conversationId: string): Promise<void> {
+    await this.db.ticket.update({
+      where: { id, companyId },
       data: { conversationId },
     });
   }
 
   async getTicketsForExport(companyId: string, start: Date, end: Date) {
     return this.db.ticket.findMany({
-      where: { companyId, createdAt: { gte: start, lte: end } },
-      select: {
-        ticketNumber: true,
-        subject: true,
-        status: true,
-        priority: true,
-        createdAt: true,
-        resolvedAt: true,
-        assignedTo: { select: { name: true } },
-        createdBy: { select: { name: true, email: true } },
+      where: {
+        companyId,
+        createdAt: { gte: start, lte: end },
+        deletedAt: null,
       },
+      include: {
+        createdBy: true,
+        assignedTo: true,
+      },
+      orderBy: { createdAt: "desc" },
     });
   }
-
-  async countByCompanyId(companyId: string): Promise<number> {
-    return this.db.ticket.count({ where: { companyId } });
-  }
 }
+
 export const ticketRepository = new TicketRepository();

@@ -138,7 +138,7 @@ export class TicketTransitionManager {
         await ticketRepository.update({
           where: { id: updatedTicket.id },
           data: { deletedAt: new Date(), deletedBy: updaterId || "system" },
-        });
+        }, updatedTicket.companyId);
       } catch (error) {
         Logger.error(
           "[TicketTransitionManager] Failed to auto-block SPAM contact:",
@@ -148,11 +148,11 @@ export class TicketTransitionManager {
     }
   }
 
-  async triggerAutoAssignment(ticketId: string, queueId: string | null, assignedToId: string | null) {
+  async triggerAutoAssignment(companyId: string, ticketId: string, queueId: string | null, assignedToId: string | null) {
     if (queueId && !assignedToId) {
       try {
         const { assignTicketToAgent } = await import("@/services/AutoAssignmentService");
-        await assignTicketToAgent(ticketId, queueId);
+        await assignTicketToAgent(companyId, ticketId, queueId);
       } catch (error) {
         Logger.error("[TicketTransitionManager] Auto-assignment failed:", error);
       }

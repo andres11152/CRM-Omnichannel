@@ -155,7 +155,6 @@ export const messageProcessor = {
         originalLid: payload.originalLid,
       });
 
-      // 5. PERSIST MESSAGE (with deduplication)
       const newMessage = await messagePersister.persist({
         companyId,
         conversationId: conversation.id,
@@ -165,6 +164,7 @@ export const messageProcessor = {
         hasMedia,
         media,
         contactId: contact?.id,
+        messageId: payload.messageId,
       });
 
       if (!newMessage) return; // Duplicate — skip events

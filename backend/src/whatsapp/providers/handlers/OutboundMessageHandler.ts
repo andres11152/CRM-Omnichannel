@@ -6,6 +6,7 @@ import {
 } from "../../core/types/whatsapp.types";
 import { MessageMetadata } from "@/types/whatsapp.types";
 import { generateMessageID } from "@whiskeysockets/baileys";
+import { WhatsAppIdUtils } from "../../utils/WhatsAppIdUtils";
 import { Logger } from "@/utils/logger";
 import { deduplicationService } from "../../services/DeduplicationService";
 import { chatService } from "@/services/ChatService";
@@ -14,6 +15,7 @@ import {
   mediaProcessor,
   MediaFileNotFoundError,
 } from "../../services/MediaProcessorService";
+import { getMediaPlaceholder } from "@/utils/mediaUtils";
 import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
@@ -66,7 +68,8 @@ export class OutboundMessageHandler {
       }
       const sock = activeSession.socket;
 
-      const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
+      // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to properly detect groups vs DMs
+      const jid = WhatsAppIdUtils.getTargetJid(to);
       const generatedId =
         (metadata?.generatedMessageId as string) || generateMessageID();
       await deduplicationService.markMessageSent(generatedId);
@@ -236,7 +239,8 @@ export class OutboundMessageHandler {
         throw new Error(`No active WhatsApp session for company: ${companyId}`);
       }
       const sock = activeSession.socket;
-      const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
+      // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to properly detect groups vs DMs
+      const jid = WhatsAppIdUtils.getTargetJid(to);
 
       // [BUILD] SRP: All media preparation delegated to MediaProcessorService
       Logger.debug(`[OutboundHandler] Preparing media for ${jid}: type=${media.type}, url=${media.url?.substring(0, 50)}...`);
@@ -289,7 +293,7 @@ export class OutboundMessageHandler {
       if (finalMediaId && finalMediaId !== generatedId) {
         await deduplicationService.markMessageSent(finalMediaId);
       }
-      const content = media.caption || `[${media.type}]`;
+      const content = media.caption || getMediaPlaceholder(media.type);
 
       const meta: MessageMetadata = {
         messageId: sentMsg?.key?.id,
@@ -452,7 +456,7 @@ export class OutboundMessageHandler {
           const remoteMessageId = meta.messageId as string | undefined;
           let remoteJid = msg.conversation?.channelId;
           if (remoteJid && !remoteJid.includes("@"))
-            remoteJid += "@s.whatsapp.net";
+            remoteJid = WhatsAppIdUtils.getTargetJid(remoteJid);
 
           if (remoteMessageId && remoteJid) {
             await sock.readMessages([
@@ -481,11 +485,7 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
       if (!sock) return;
 
-      let jid = to;
-      if (!to.includes("@")) {
-        const cleanPhone = to.replace(/\D/g, "");
-        jid = `${cleanPhone}@s.whatsapp.net`;
-      }
+      const jid = WhatsAppIdUtils.getTargetJid(to);
 
       await sock.sendPresenceUpdate(type, jid).catch((err) => {
         Logger.warn(`[Presence] Failed to send ${type} to ${jid}`, err);
@@ -510,11 +510,7 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
       if (!sock) return;
 
-      let jid = to;
-      if (!to.includes("@")) {
-        const cleanPhone = to.replace(/\D/g, "");
-        jid = `${cleanPhone}@s.whatsapp.net`;
-      }
+      const jid = WhatsAppIdUtils.getTargetJid(to);
 
       await sock.sendMessage(jid, {
         react: {

@@ -103,7 +103,8 @@ export class SyncMessageParser {
    */
   parseContent(msg: WAMessage): ParsedMessage | null {
     const msgContent = this.unwrapContent(msg);
-    const messageType = msg.message ? getContentType(msg.message) : undefined;
+    // Use the correctly unwrapped content to determine the actual message type
+    const messageType = msgContent ? getContentType(msgContent as import("@whiskeysockets/baileys").proto.IMessage) : undefined;
 
     let textContent = "";
     let mediaType: string | undefined;
@@ -112,7 +113,7 @@ export class SyncMessageParser {
 
     if (
       messageType &&
-      ["senderKeyDistributionMessage", "keepInChatMessage", "pollUpdateMessage"].includes(messageType)
+      ["senderKeyDistributionMessage", "keepInChatMessage", "pollUpdateMessage", "pinInChatMessage"].includes(messageType)
     ) {
       return null;
     }
@@ -144,27 +145,27 @@ export class SyncMessageParser {
     else if (messageType === "imageMessage") {
       mediaType = "image";
       mediaCaption = (msgContent.imageMessage as Record<string, unknown>)?.caption as string || undefined;
-      textContent = mediaCaption || "[ Imagen]";
+      textContent = mediaCaption || "";
     } else if (messageType === "videoMessage") {
       mediaType = "video";
       mediaCaption = (msgContent.videoMessage as Record<string, unknown>)?.caption as string || undefined;
-      textContent = mediaCaption || "[ Video]";
+      textContent = mediaCaption || "";
     } else if (messageType === "audioMessage") {
       mediaType = "audio";
-      textContent = "[ Audio]";
+      textContent = "";
     } else if (messageType === "documentMessage") {
       mediaType = "document";
       mediaFilename = (msgContent.documentMessage as Record<string, unknown>)?.fileName as string || undefined;
-      textContent = mediaFilename || "[ Documento]";
+      textContent = mediaFilename || "";
     } else if (messageType === "stickerMessage") {
       mediaType = "sticker";
-      textContent = "[Sticker]";
+      textContent = "";
     } else if (messageType === "contactMessage") {
       mediaType = "contact";
-      textContent = "[Contacto]";
+      textContent = "";
     } else if (messageType === "locationMessage") {
       mediaType = "location";
-      textContent = "[Ubicación]";
+      textContent = "";
     } else if (messageType === "buttonsResponseMessage") {
       textContent = (msgContent.buttonsResponseMessage as Record<string, unknown>)?.selectedButtonId as string || "[Respuesta de Botón]";
     } else if (messageType === "listResponseMessage") {
@@ -172,10 +173,13 @@ export class SyncMessageParser {
     } else if (messageType === "templateButtonReplyMessage") {
       textContent = (msgContent.templateButtonReplyMessage as Record<string, unknown>)?.selectedId as string || "[Respuesta de Plantilla]";
     } else {
-      textContent = "[Mensaje]";
+      textContent = "";
     }
 
-    if (!textContent || textContent.trim().length === 0) textContent = "[Mensaje]";
+    if (!textContent || textContent.trim().length === 0) {
+       // Only force [Mensaje] if it's NOT media. If it's media, we want it empty.
+       textContent = mediaType ? "" : "[Mensaje]";
+    }
 
     const contextInfo = this.extractContextInfo(msgContent);
 

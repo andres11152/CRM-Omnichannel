@@ -177,8 +177,12 @@ async function main() {
       stages: {
         create: [
           { name: "Nuevo Lead", color: "#3B82F6", order: 1 },
-          { name: "Contactado", color: "#F59E0B", order: 2 },
-          { name: "Cerrado Ganado", color: "#10B981", order: 3 },
+          { name: "Contactado", color: "#6366F1", order: 2 },
+          { name: "Calificado", color: "#8B5CF6", order: 3 },
+          { name: "Propuesta", color: "#F59E0B", order: 4 },
+          { name: "Negociación", color: "#EC4899", order: 5 },
+          { name: "Cerrado Ganado", color: "#10B981", order: 6 },
+          { name: "Cerrado Perdido", color: "#EF4444", order: 7 },
         ],
       },
     },

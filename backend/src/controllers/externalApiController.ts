@@ -238,7 +238,7 @@ export const listTickets = catchAsync(
     const companyId = req.companyId || req.user?.companyId;
     if (!companyId) throw new AppError("Unauthorized", 401);
 
-    const tickets = await ticketService.getAllTickets({
+    const result = await ticketService.getAllTickets({
       companyId,
       userId: req.user?.id || "api-system",
       userRole: "ADMIN", // API keys have full visibility
@@ -246,8 +246,8 @@ export const listTickets = catchAsync(
 
     res.status(200).json({
       status: "success",
-      data: tickets,
-      meta: { total: tickets.length },
+      data: result.data,
+      meta: result.meta,
     });
   },
 );

@@ -35,9 +35,9 @@ export class UserResolver {
 
     Logger.debug(`[UserResolver] Upserting user for: ${phone}`);
 
-    return userRepository.upsert(
-      { email: userEmail },
-      {
+    return userRepository.upsert({
+      where: { email: userEmail },
+      create: {
         company: { connect: { id: companyId } },
         email: userEmail,
         name: identity.subjectDisplayName,
@@ -47,8 +47,8 @@ export class UserResolver {
         profilePicUrl,
         about,
       },
-      updateData,
-    );
+      update: updateData,
+    });
   }
 }
 

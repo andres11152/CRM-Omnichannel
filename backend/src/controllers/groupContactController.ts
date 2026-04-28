@@ -57,7 +57,7 @@ export const addParticipantToCRM = catchAsync(
       throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
     }
 
-    const { jid, customName, tags } = req.body as {
+    const { jid, customName, tags } = req.body as unknown as {
       jid: string;
       customName?: string;
       tags?: string[];
@@ -105,7 +105,7 @@ export const addBulkParticipantsToCRM = catchAsync(
       throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
     }
 
-    const { participants } = req.body as {
+    const { participants } = req.body as unknown as {
       participants: AddParticipantParams[];
     };
 
@@ -124,7 +124,7 @@ export const addBulkParticipantsToCRM = catchAsync(
     }
 
     // Limit bulk operations to prevent abuse
-    const MAX_BULK = 50;
+    const MAX_BULK = 500;
     if (participants.length > MAX_BULK) {
       throw new AppError(
         `Maximum ${MAX_BULK} participants per request`,
@@ -159,7 +159,7 @@ export const addAllValidParticipantsToCRM = catchAsync(
       throw new AppError("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
     }
 
-    const { tags } = req.body as { tags?: string[] };
+    const { tags } = req.body as unknown as { tags?: string[] };
 
     // First get all participants
     const groupData = await groupContactService.getGroupParticipants(

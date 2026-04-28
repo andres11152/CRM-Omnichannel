@@ -107,7 +107,7 @@ export class PresenceHandler {
           this.socketEmitter.emitConversationTyping(
             conv.id,
             sessionData.companyId,
-            originalJid,
+            targetJid,
             status,
           );
         } else {

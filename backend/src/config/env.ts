@@ -49,7 +49,6 @@ const EnvSchema = z.object({
   SESSION_SECRET: z
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters for encryption")
-    .default("dev-secret-key-at-least-32-characters-long-crm-reply")
     .describe("Master secret for multi-tenant data encryption"),
 
   JWT_EXPIRES_IN: z

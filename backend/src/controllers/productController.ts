@@ -51,7 +51,7 @@ class ProductController {
 
       const product = await productCrudService.create(
         companyId,
-        req.body as CreateProductDTO,
+        req.body as unknown as CreateProductDTO,
       );
 
       res.status(201).json({

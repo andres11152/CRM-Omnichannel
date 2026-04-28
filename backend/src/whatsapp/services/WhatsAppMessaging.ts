@@ -20,6 +20,7 @@ import {
   MediaPayload,
 } from "../core/types/whatsapp.types";
 import { Prisma } from "@prisma/client";
+import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 import { messageTemplateRepository } from "@/repositories/MessageTemplateRepository";
 import { AppError } from "@/utils/AppError";
 
@@ -182,7 +183,7 @@ export class WhatsAppMessaging {
   async simulateTyping(sessionId: string, to: string) {
     const sock = this.sessionManager.getSession(sessionId);
     if (sock) {
-      const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
+      const jid = WhatsAppIdUtils.getTargetJid(to);
       await sock.sendPresenceUpdate("composing", jid);
     }
   }

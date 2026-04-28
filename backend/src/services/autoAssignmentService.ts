@@ -10,6 +10,7 @@ import type {
 } from "@prisma/client";
 
 export const assignTicketToAgent = async (
+  companyId: string,
   ticketId: string,
   queueId: string,
 ) => {
@@ -22,7 +23,7 @@ export const assignTicketToAgent = async (
           where: { isOnline: true },
         },
       },
-    })) as (Queue & { agents: User[] }) | null;
+    }, companyId)) as (Queue & { agents: User[] }) | null;
 
     if (!queue) {
       Logger.warn(`[AutoAssign] Queue ${queueId} not found.`);
@@ -48,7 +49,7 @@ export const assignTicketToAgent = async (
             },
           },
         },
-      })) as Ticket & { conversation: Conversation & { messages: Message[] } };
+      }, companyId)) as Ticket & { conversation: Conversation & { messages: Message[] } };
 
       if (ticket?.conversation?.messages?.[0]) {
         const lastMsg = ticket.conversation.messages[0];
@@ -124,7 +125,7 @@ export const assignTicketToAgent = async (
           assignedToId: agent.id,
           status: { in: ["OPEN", "IN_PROGRESS"] },
         },
-      });
+      }, companyId);
 
       // CHECK MAX CONCURRENCY from Agent settings
       // Enterprise Config: Default to 10 if not set in DB
@@ -164,10 +165,10 @@ export const assignTicketToAgent = async (
       await ticketRepository.update({
         where: { id: ticketId },
         data: {
-          assignedToId: candidate.agentId,
+          assignedTo: { connect: { id: candidate.agentId } },
           status: "IN_PROGRESS",
         },
-      });
+      }, companyId);
     }
   } catch (error) {
     Logger.error("[AutoAssign] Error assigning ticket:", error);

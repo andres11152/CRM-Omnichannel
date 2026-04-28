@@ -35,6 +35,7 @@ export interface BaileysStore {
   messages: Record<string, WAMessage[]>;
   lidToPhone?: Record<string, string>;
   getPhoneFromLid?: (lid: string) => string | undefined;
+  chats: Map<string, { id: string; conversationTimestamp?: number | string | { toNumber?: () => number; low?: number } }>;
 }
 
 /**
@@ -129,13 +130,11 @@ export class ChatSyncIngest {
       const admin = await syncRepositoryHelper.getAdminUser(companyId);
       if (!admin) return;
 
-      const targetJid = this.getTargetJid(channelId);
-      let messages = this.extractMessagesFromStore(store, undefined, targetJid);
+      const targetJid = WhatsAppIdUtils.getTargetJid(channelId);
+      const messages = this.extractMessagesFromStore(store, undefined, targetJid);
 
-      // Server Fetch Fallback
-      if (messages.length < 20) {
-        messages = await this.fetchFromServer(session.sessionId, targetJid, 40) || messages;
-      }
+      // WhatsApp Multi-Device (Companion) does not support on-demand server history fetching.
+      // History is only synced during the initial QR pairing or read from the memory store.
 
       const recent = messages.slice(-500);
       for (const msg of recent) {
@@ -280,9 +279,34 @@ export class ChatSyncIngest {
       const parsed: ParsedMessage | null = syncMessageParser.parseContent(msg);
       if (!parsed || parsed.type !== "message") continue;
 
+      let mediaMeta: Record<string, unknown> = {};
+      if (parsed.mediaType) {
+        // [SEC] RESTORE: Actually download the historical media instead of just saving text placeholders
+        const { url, mimetype } = await syncMediaService.downloadAndUpload({
+          companyId,
+          whatsappMessageId: msg.key.id!,
+          msg,
+          mediaType: parsed.mediaType,
+          msgContent: parsed.msgContent as Record<string, unknown>
+        });
+
+        mediaMeta = {
+          mediaType: parsed.mediaType,
+          mediaCaption: parsed.mediaCaption,
+          mediaFilename: parsed.mediaFilename,
+          media: {
+            type: url ? parsed.mediaType : `${parsed.mediaType}_unavailable`,
+            url: url || "",
+            mimetype,
+            name: parsed.mediaFilename || (parsed.mediaType === "audio" ? "Nota de voz" : "Adjunto"),
+            size: 0
+          }
+        };
+      }
+
       const metadata: Record<string, unknown> = { 
         origin: "history_sync", 
-        mediaType: parsed.mediaType,
+        ...mediaMeta,
         ...(parsed.contextInfo || {})
       };
 
@@ -376,10 +400,6 @@ export class ChatSyncIngest {
     return store;
   }
 
-  private getTargetJid(channelId: string) {
-    if (channelId.includes("@g.us")) return channelId;
-    return `${channelId.replace(/\D/g, "")}@s.whatsapp.net`;
-  }
 
   private async getSessionStore(sessionId: string): Promise<BaileysStore | null> {
     const { whatsappService } = await import("@/whatsapp");
@@ -417,34 +437,7 @@ export class ChatSyncIngest {
     return sorted;
   }
 
-  private async fetchFromServer(sessionId: string, jid: string, count: number): Promise<WAMessage[] | null> {
-    const { whatsappService } = await import("@/whatsapp");
-    const sock = whatsappService.getSocket(sessionId);
-    
-    // Check if sock is available
-    if (!sock) return null;
 
-    // [SEC] Baileys standard history fetch method is usually called 'fetchMessagesFromWA'
-    // in modern versions or requires a manual query execution.
-    const augmentedSock = sock as WASocket & { 
-      fetchMessagesFromWA?: (jid: string, count: number, cursor?: unknown) => Promise<WAMessage[]> 
-    };
-
-    try {
-      if (augmentedSock?.fetchMessagesFromWA) {
-        Logger.info(`[ChatSync] Calling fetchMessagesFromWA for ${jid} (count: ${count})`);
-        return await augmentedSock.fetchMessagesFromWA(jid, count);
-      }
-      
-      // Fallback: If no direct method, the history should eventually arrive via events 
-      // if syncFullHistory is true. But for on-demand, we really need this.
-      Logger.warn(`[ChatSync] WARNING: Socket for ${sessionId} does not support fetchMessagesFromWA.`);
-    } catch (err) {
-      Logger.error(`[ChatSync] ERROR: Error fetching from WA server for ${jid}:`, err);
-    }
-    
-    return null;
-  }
 }
 
 export const chatSyncIngest = new ChatSyncIngest();

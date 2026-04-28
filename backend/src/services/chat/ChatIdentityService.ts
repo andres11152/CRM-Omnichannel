@@ -3,6 +3,7 @@ import { contactService } from "@/services/ContactService";
 import { Logger } from "@/utils/logger";
 import { userRepository } from "@/repositories/UserRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
+import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 
 /**
  * [CHAT] CHAT IDENTITY SERVICE
@@ -82,9 +83,9 @@ export class ChatIdentityService {
       }
 
       // 1. Upsert System User (Authentication/Chat Identity)
-      user = await userRepository.upsert(
-        { email: params.email },
-        {
+      user = await userRepository.upsert({
+        where: { email: params.email },
+        create: {
           email: params.email,
           name: nameToPersist,
           password: "$2a$10$DummyHashForWhatsAppUser",
@@ -92,12 +93,12 @@ export class ChatIdentityService {
           company: { connect: { id: params.companyId } },
           phone: params.phone,
         },
-        {
+        update: {
           name: nameToPersist,
           ...(params.phone && { phone: params.phone }),
           updatedAt: new Date(),
         },
-      );
+      });
     } catch (error: unknown) {
       const isUniqueError =
         error instanceof Error &&
@@ -121,14 +122,19 @@ export class ChatIdentityService {
     }
 
     // 2. [SEC] 100-YEAR ENTERPRISE FIX: CRM Contact Sync with Real Phone Validation
-    const isGroup = params.email.includes("@g.us");
+    const isGroup = params.email.includes("@g.us") || 
+                   (params.phone ? !WhatsAppIdUtils.isRealPhoneNumber(params.phone) && params.phone.startsWith("120") : false);
+
     const hasRealPhone =
-      params.phone && params.phone.length >= 7 && params.phone.length <= 15;
+      params.phone && 
+      params.phone.length >= 7 && 
+      params.phone.length <= 15 &&
+      WhatsAppIdUtils.isRealPhoneNumber(params.phone);
 
     if (user.role === "USER" && !isGroup && hasRealPhone) {
       try {
         await contactService.upsert(params.companyId, {
-          phone: params.phone,
+          phone: params.phone!,
           name: user.name,
           email: null,
           customFields: {
@@ -149,10 +155,10 @@ export class ChatIdentityService {
       }
     } else {
       if (isGroup) {
-        Logger.info(`[ChatIdentityService] ⏩ Skipped CRM sync: Group chat`);
+        Logger.info(`[ChatIdentityService] ⏩ Skipped CRM sync: Group chat detected (${params.email})`);
       } else if (!hasRealPhone) {
         Logger.info(
-          `[ChatIdentityService] ⏩ Skipped CRM sync: No real phone (LID or invalid)`,
+          `[ChatIdentityService] ⏩ Skipped CRM sync: No real phone (LID or invalid format): ${params.phone || "N/A"}`,
         );
       }
     }

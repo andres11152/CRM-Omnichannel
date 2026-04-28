@@ -34,7 +34,7 @@ class WhatsAppQueueManager {
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: "exponential", delay: 1000 },
-        removeOnComplete: { count: 100 },
+        removeOnComplete: true,
         removeOnFail: { count: 1000 },
       },
     });
@@ -45,7 +45,7 @@ class WhatsAppQueueManager {
       defaultJobOptions: {
         attempts: 5,
         backoff: { type: "exponential", delay: 2000 },
-        removeOnComplete: { count: 100 },
+        removeOnComplete: true,
         removeOnFail: { count: 5000 },
       },
     });

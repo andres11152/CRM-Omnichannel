@@ -40,6 +40,8 @@ export interface NavItem {
   )[];
   masterOnly?: boolean;
   agentOnly?: boolean;
+  disabled?: boolean;
+  badge?: string;
 }
 
 // Helper to render icon consistently with stroke width
@@ -97,10 +99,12 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     id: "products",
-    title: "Catlogo",
+    title: "Catálogo",
     path: "/products",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={Package} />,
+    disabled: true,
+    badge: "Próximamente",
   },
   {
     id: "marketing",
@@ -108,6 +112,8 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/marketing",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={Megaphone} />,
+    disabled: true,
+    badge: "Próximamente",
   },
   {
     id: "flows",
@@ -115,6 +121,8 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/chatbot/flujos",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={Bot} />,
+    disabled: true,
+    badge: "Próximamente",
   },
   {
     id: "queue",

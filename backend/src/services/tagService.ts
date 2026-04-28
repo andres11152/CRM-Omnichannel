@@ -21,7 +21,7 @@ export const tagService = {
       tags.map(async (tag) => {
         const count = await contactRepository.count({
           companyId,
-          tags: { has: tag.name },
+          tags: { has: tag.id },
         });
         return { ...tag, count };
       }),

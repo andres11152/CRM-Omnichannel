@@ -4,6 +4,7 @@ import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest, Channel } from "@/types/types";
 import { conversationService } from "@/services/ConversationService";
 import { Logger } from "@/utils/logger";
+import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 
 export const createConversation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
@@ -116,7 +117,7 @@ export const replyToConversation = catchAsync(
       } = req.body;
 
       Logger.info(`[ConversationController] Replying to ${req.params.id}`, {
-        contentSample: content?.substring(0, 50),
+        contentSample: (content as string | undefined)?.substring(0, 50),
         hasAttachment: !!attachment,
       });
 
@@ -254,11 +255,13 @@ export const syncFullHistory = catchAsync(
     // 3. Trigger Sync via ChatSyncService
     const { chatSyncService } = await import("@/services/ChatSyncService");
     
-    // We send the JID (channelId) to the sync service
+    // [SEC] JID HARDENING: Use central utility for consistent domain suffixing
+    const targetJid = WhatsAppIdUtils.getTargetJid(conversation.channelId);
+
     const result = await chatSyncService.syncMessages({
       companyId: req.companyId,
       sessionId: activeSession.sessionId,
-      conversationId: conversation.channelId, // This should be the JID (e.g. 57312...@s.whatsapp.net or @g.us)
+      conversationId: targetJid,
       limit: 100, // Default to 100 messages for manual sync
       dryRun: false
     }, req.user.id);

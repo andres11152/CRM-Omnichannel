@@ -233,7 +233,7 @@ class WebSocketGateway {
       // Agents should NOT receive all company traffic. They only care about their assigned work.
       // Admins and Supervisors need full visibility (Company Room).
       if (user.companyId) {
-        if (["ADMIN", "SUPERVISOR", "MASTER"].includes(user.role)) {
+        if (["ADMIN", "SUPERVISOR", "MASTER", "AGENT"].includes(user.role)) {
           const companyRoom = `company:${user.companyId}`;
           socket.join(companyRoom);
           Logger.debug(
@@ -274,7 +274,7 @@ class WebSocketGateway {
 
       // [SEC] SECURITY AUDIT FIX: SECURE ROOM JOINING
       // Prevents tenants from joining other tenants' rooms
-      socket.on("join", (room: string) => {
+      socket.on("join", async (room: string) => {
         if (!room) return;
 
         // 1. Allow Generic Agent Room (Self)
@@ -284,7 +284,6 @@ class WebSocketGateway {
         }
 
         // 2. Strict Company Room Validation
-        // If it looks like a company room "company:123"
         if (room.startsWith("company:")) {
           const expectedRoom = `company:${user.companyId}`;
 
@@ -293,7 +292,7 @@ class WebSocketGateway {
               `[Gateway] [ALERT] SECURITY ALERT: User ${user.id} (Company: ${user.companyId}) tried to join unauthorized room: ${room}`,
             );
 
-            //  PENALTY: Disconnect suspicious client
+            // PENALTY: Disconnect suspicious client
             socket.emit("error", {
               message: "Unauthorized access detected. Reported.",
             });
@@ -302,24 +301,55 @@ class WebSocketGateway {
           }
 
           // Authorize if role permits
-          if (["ADMIN", "SUPERVISOR", "MASTER"].includes(user.role)) {
+          if (["ADMIN", "SUPERVISOR", "MASTER", "AGENT"].includes(user.role)) {
             socket.join(room);
             Logger.debug(`[Gateway] Authorized join to ${room}`);
           } else {
             Logger.warn(
-              `[Gateway]  Role ${user.role} denied access to global company room`,
+              `[Gateway] Role ${user.role} denied access to global company room`,
             );
           }
           return;
         }
 
-        // 3. Conversation Rooms
-        // "conversation:UUID" - Hard to enumerate, but ideally we should check ownership.
-        // For now, we allow them assuming the frontend only requests what it sees.
-        // FUTURE: Query Redis/DB to verify User belongs to Company of Conversation.
+        // 3. [SEC] SECURED Conversation & Ticket Rooms
+        // Validates ownership in DB before allowing the join
         if (room.startsWith("conversation:") || room.startsWith("ticket:")) {
-          // Basic structure validation could go here
-          socket.join(room);
+          const [type, resourceId] = room.split(":");
+          if (!resourceId || !user.companyId) return;
+
+          try {
+            const { prisma: db } = await import("@/config/database");
+            let hasAccess = false;
+
+            if (type === "conversation") {
+              const conv = await db.conversation.findFirst({
+                where: { id: resourceId, companyId: user.companyId },
+                select: { id: true },
+              });
+              hasAccess = !!conv;
+            } else if (type === "ticket") {
+              const ticket = await db.ticket.findFirst({
+                where: { id: resourceId, companyId: user.companyId },
+                select: { id: true },
+              });
+              hasAccess = !!ticket;
+            }
+
+            if (hasAccess) {
+              socket.join(room);
+              Logger.debug(`[Gateway] Authorized join to ${room}`);
+            } else {
+              Logger.warn(
+                `[Gateway] [ALERT] Security Violation: User ${user.id} (Company: ${user.companyId}) tried to join unauthorized ${type} room: ${room}`,
+              );
+              socket.emit("error", {
+                message: "Access denied: Resource belongs to another tenant.",
+              });
+            }
+          } catch (err) {
+            Logger.error(`[Gateway] Error validating ownership for ${room}`, err);
+          }
           return;
         }
 
@@ -327,13 +357,11 @@ class WebSocketGateway {
         Logger.warn(`[Gateway] Denied join to unknown room type: ${room}`);
       });
 
+      // [SEC] DEPRECATED/REMOVED: Generic insecure join_room event
+      // Redirigimos a la lógica segura de 'join' si se intenta usar
       socket.on("join_room", (data) => {
         if (data?.conversationId) {
-          // Reuse logic or keep simple
-          socket.join(data.conversationId);
-          Logger.debug(
-            `[Gateway] ${user.id} joined conv: ${data.conversationId}`,
-          );
+          socket.emit("join", `conversation:${data.conversationId}`);
         }
       });
 
@@ -359,15 +387,13 @@ class WebSocketGateway {
             const { whatsappService } =
               await import("@/whatsapp/WhatsAppService");
 
-            // Check if 'to' is a UUID (Conversation ID) or JID
-            const isUuid =
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-                data.to,
-              );
+            // Check if 'to' is a UUID (Conversation ID) or JID or CUID
+            const isConversationId =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.to) || /^c[a-z0-9]{20,}$/i.test(data.to);
 
             let targetJid = data.to;
 
-            if (isUuid) {
+            if (isConversationId) {
               // Resolve Conversation specific channel ID
               const conv = await prisma.conversation.findUnique({
                 where: { id: data.to },

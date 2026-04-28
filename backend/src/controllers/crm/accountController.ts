@@ -67,7 +67,7 @@ export const createAccount = catchAsync(
 
     const account = await accountService.create(
       companyId,
-      req.body as CreateAccountDTO,
+      req.body as unknown as CreateAccountDTO,
     );
 
     res.status(201).json({

@@ -18,6 +18,7 @@ export interface MessagePersistParams {
   hasMedia?: boolean;
   media?: MessagingMediaPayload;
   contactId?: string;
+  messageId?: string;
 }
 
 /**
@@ -45,8 +46,8 @@ export class MessagePersister {
       contactId,
     } = params;
 
-    // 1. DEDUPLICATION (5s window)
-    const isDuplicate = await this.checkDuplicate(conversationId, text);
+    // 1. DEDUPLICATION (Exact ID match or 5s window for text)
+    const isDuplicate = await this.checkDuplicate(conversationId, text, params.messageId, hasMedia);
     if (isDuplicate) {
       Logger.debug(
         `[MessagePersister] ⏩ Duplicate message skipped: "${text?.substring(0, 50)}"`,
@@ -71,6 +72,7 @@ export class MessagePersister {
           : MessageDirection.INBOUND,
         content: text,
         senderId: effectiveSenderId,
+        whatsappMessageId: params.messageId || undefined,
         metadata: hasMedia
           ? { media: media as unknown as Prisma.InputJsonObject }
           : Prisma.JsonNull,
@@ -89,7 +91,16 @@ export class MessagePersister {
   private async checkDuplicate(
     conversationId: string,
     text: string,
+    messageId?: string,
+    hasMedia?: boolean,
   ): Promise<boolean> {
+    if (messageId) {
+       const existing = await messageRepository.findUnique({ where: { whatsappMessageId: messageId } });
+       if (existing) return true;
+    }
+
+    if (hasMedia) return false;
+
     const recent = await messageRepository.findFirst({
       where: {
         conversationId,

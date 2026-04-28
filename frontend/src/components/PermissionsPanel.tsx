@@ -1,6 +1,26 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { fetchAPI } from "@/services/apiConfig";
+import { 
+  Shield, 
+  Plus, 
+  Users, 
+  Lock, 
+  MessageSquare, 
+  Ticket, 
+  Contact, 
+  DollarSign, 
+  BarChart, 
+  Settings, 
+  List,
+  ChevronDown,
+  ChevronRight,
+  Save,
+  Trash2,
+  AlertCircle,
+  CheckCircle2,
+  X
+} from "lucide-react";
 import "../styles/PermissionsPanel.css";
 
 /**
@@ -44,7 +64,7 @@ interface PermissionDefinition {
 interface PermissionModule {
   id: string;
   name: string;
-  icon: string;
+  icon: React.ReactNode;
   description: string;
   permissions: PermissionDefinition[];
 }
@@ -57,7 +77,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "CONVERSATIONS",
     name: "Conversaciónes",
-    icon: "[CHAT]",
+    icon: <MessageSquare size={18} />,
     description: "Gestión de conversaciones y mensajería",
     permissions: [
       {
@@ -101,7 +121,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "TICKETS",
     name: "Tickets",
-    icon: "",
+    icon: <Ticket size={18} />,
     description: "Gestión de tickets de soporte",
     permissions: [
       {
@@ -151,7 +171,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "CONTACTS",
     name: "Contactos",
-    icon: "[CONTACTS]",
+    icon: <Contact size={18} />,
     description: "Gestión de contactos y clientes",
     permissions: [
       {
@@ -207,7 +227,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "DEALS",
     name: "Deals / Ventas",
-    icon: "[BILLING]",
+    icon: <DollarSign size={18} />,
     description: "Gestión de oportunidades de venta",
     permissions: [
       {
@@ -251,14 +271,14 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "REPORTS",
     name: "Reportes",
-    icon: "[STAT]",
+    icon: <BarChart size={18} />,
     description: "Acceso a reportes y analítica",
     permissions: [
       {
         action: "VIEW",
         resource: "basic",
-        label: "Ver bsicos",
-        description: "Ver reportes bsicos",
+        label: "Ver básicos",
+        description: "Ver reportes básicos",
       },
       {
         action: "VIEW",
@@ -277,7 +297,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "TEAM",
     name: "Equipo",
-    icon: "‍",
+    icon: <Users size={18} />,
     description: "Gestión de equipo y usuarios",
     permissions: [
       {
@@ -315,7 +335,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "SETTINGS",
     name: "Configuración",
-    icon: "️",
+    icon: <Settings size={18} />,
     description: "Configuración del sistema",
     permissions: [
       {
@@ -347,7 +367,7 @@ const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: "QUEUES",
     name: "Colas",
-    icon: "",
+    icon: <List size={18} />,
     description: "Gestión de colas de atención",
     permissions: [
       {
@@ -642,19 +662,7 @@ export const PermissionsPanel: React.FC = () => {
       <div className="permissions-header">
         <div className="header-content">
           <div className="header-icon">
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-              />
-            </svg>
+            <Shield size={32} className="text-white" />
           </div>
           <div>
             <h2>Gestión de Permisos</h2>
@@ -665,19 +673,7 @@ export const PermissionsPanel: React.FC = () => {
         </div>
         {activeTab === "roles" && (
           <button className="btn-primary" onClick={handleCreateRole}>
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <Plus size={18} />
             Crear Rol Personalizado
           </button>
         )}
@@ -689,19 +685,7 @@ export const PermissionsPanel: React.FC = () => {
           className={`tab ${activeTab === "roles" ? "active" : ""}`}
           onClick={() => setActiveTab("roles")}
         >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-            />
-          </svg>
+          <Users size={18} />
           Roles
         </button>
         <button
@@ -713,19 +697,7 @@ export const PermissionsPanel: React.FC = () => {
           }
           disabled={!isCreating && !selectedRole}
         >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-            />
-          </svg>
+          <Lock size={18} />
           Permisos
           {(isCreating || selectedRole) && (
             <span className="tab-badge">Editando</span>
@@ -744,19 +716,7 @@ export const PermissionsPanel: React.FC = () => {
               </div>
             ) : roles.length === 0 ? (
               <div className="empty-state">
-                <svg
-                  className="w-16 h-16"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
+                <Shield size={64} className="opacity-20 mb-4" />
                 <h3>No hay roles personalizados</h3>
                 <p>
                   Crea roles personalizados para gestionar permisos granulares
@@ -798,35 +758,11 @@ export const PermissionsPanel: React.FC = () => {
 
                     <div className="role-stats">
                       <div className="stat">
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                          />
-                        </svg>
+                        <Users size={16} />
                         <span>{role._count?.users || 0} usuarios</span>
                       </div>
                       <div className="stat">
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                          />
-                        </svg>
+                        <Shield size={16} />
                         <span>{role.permissions?.length || 0} permisos</span>
                       </div>
                     </div>
@@ -837,19 +773,7 @@ export const PermissionsPanel: React.FC = () => {
                         onClick={() => handleEditRole(role)}
                         disabled={role.isSystem}
                       >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                          />
-                        </svg>
+                        <Plus size={14} className="rotate-45" />
                         {role.isSystem ? "Ver" : "Editar"}
                       </button>
                       {!role.isSystem && (
@@ -857,19 +781,7 @@ export const PermissionsPanel: React.FC = () => {
                           className="btn-danger"
                           onClick={() => handleDeleteRole(role.id)}
                         >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
+                          <Trash2 size={14} />
                           Eliminar
                         </button>
                       )}
@@ -1009,19 +921,7 @@ export const PermissionsPanel: React.FC = () => {
                           >
                             {allSelected ? " Todos" : "Seleccionar"}
                           </button>
-                          <svg
-                            className={`expand-icon ${isExpanded ? "rotated" : ""}`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 9l-7 7-7-7"
-                            />
-                          </svg>
+                          <ChevronDown size={20} className={`expand-icon ${isExpanded ? "rotated" : ""}`} />
                         </div>
                       </div>
 
@@ -1067,19 +967,7 @@ export const PermissionsPanel: React.FC = () => {
                     setActiveTab("roles");
                   }}
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
+                  <X size={18} />
                   Cancelar
                 </button>
                 <button
@@ -1094,19 +982,7 @@ export const PermissionsPanel: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
+                      <Save size={18} />
                       {isCreating ? "Crear Rol" : "Guardar Cambios"}
                     </>
                   )}

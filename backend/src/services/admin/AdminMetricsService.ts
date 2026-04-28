@@ -16,6 +16,17 @@ import { ticketRepository } from "@/repositories/TicketRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { AppError } from "@/utils/AppError";
+import TenantContextManager from "@/config/tenantContext";
+
+// [SEC] STRICT TYPING FOR METRICS
+type CompanyWithPlan = Company & { plan: Plan | null };
+type TicketWithQueue = { 
+  id: string; 
+  status: string; 
+  resolvedAt: Date | null; 
+  createdAt: Date; 
+  queue: { type: string } | null; 
+};
 
 // [SEC] STRICT TYPING FOR JSON CONFIG
 interface PlanConfig {
@@ -43,10 +54,10 @@ export const adminMetricsService = {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    const company = (await companyRepository.findUnique({
+    const company = await companyRepository.findUnique({
       where: { id: companyId },
       include: { plan: true },
-    })) as Company & { plan: Plan | null };
+    }) as CompanyWithPlan | null;
 
     if (!company) {
       throw new AppError("Company not found", 404);
@@ -71,24 +82,23 @@ export const adminMetricsService = {
       ticketsLastMonth,
       aiAssistants,
     ] = await Promise.all([
-      userRepository.count({ companyId }),
+      userRepository.count({}),
       whatsappSessionRepository.count(companyId, {
         where: { status: "CONNECTED" },
       }),
       statsRepository.countQueues({ where: { companyId } }),
       ticketRepository.count({
-        where: { companyId, createdAt: { gte: startOfMonth } },
+        where: { createdAt: { gte: startOfMonth } },
       }),
       ticketRepository.count({
         where: {
-          companyId,
           createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         },
       }),
       statsRepository.countAIAssistants({ where: { companyId } }),
     ]);
 
-    const planLimits = (company.plan?.config as unknown as PlanConfig) || {};
+    const planLimits = company.plan?.config as unknown as PlanConfig || {};
 
     const maxUsers = planLimits.max_users || 0;
     const maxWhatsapp = planLimits.max_whatsapp_sessions || 0;
@@ -109,7 +119,7 @@ export const adminMetricsService = {
 
     // === ENGAGEMENT METRICS ===
     const lastAdminLogin = await userRepository.findFirst({
-      where: { companyId, role: "ADMIN" },
+      where: { role: "ADMIN" },
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     });
@@ -128,7 +138,6 @@ export const adminMetricsService = {
     // === AI METRICS ===
     const resolvedTickets = await ticketRepository.findMany({
       where: {
-        companyId,
         status: "RESOLVED",
         resolvedAt: { not: null },
         createdAt: { gte: startOfMonth },
@@ -140,9 +149,7 @@ export const adminMetricsService = {
     let aiResolvedCount = 0;
     let totalResolutionTime = 0;
 
-    for (const ticket of resolvedTickets as ((typeof resolvedTickets)[0] & {
-      queue: { type: string } | null;
-    })[]) {
+    for (const ticket of resolvedTickets as unknown as TicketWithQueue[]) {
       if (ticket.queue?.type === "AI") {
         aiResolvedCount++;
       }
@@ -273,7 +280,7 @@ export const adminMetricsService = {
     });
 
     // 2. Calculate MRR
-    const mrr = (companies as (Company & { plan: Plan | null })[])
+    const mrr = (companies as CompanyWithPlan[])
       .filter((c) => c.isActive && c.plan)
       .reduce((sum: number, c) => sum + (c.plan?.price || 0), 0);
 
@@ -292,7 +299,7 @@ export const adminMetricsService = {
     const revenueTrend = [];
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const mrrAtDate = (companies as (Company & { plan: Plan | null })[])
+      const mrrAtDate = (companies as CompanyWithPlan[])
         .filter(
           (c) =>
             c.createdAt <
@@ -316,8 +323,10 @@ export const adminMetricsService = {
       }));
 
     // 7. Global Usage Stats
-    const totalUsers = await userRepository.count({});
-    const totalTickets = await ticketRepository.count({});
+    const [totalUsers, totalTickets] = await TenantContextManager.runAsSystem(async () => [
+      await userRepository.count({}),
+      await ticketRepository.count({}),
+    ]);
     const totalMessages = await messageRepository.count({});
 
     // 8. Top Tenants by Activity

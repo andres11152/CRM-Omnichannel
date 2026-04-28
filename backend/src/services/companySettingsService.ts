@@ -56,6 +56,7 @@ export const companySettingsService = {
       businessHours?: Record<string, unknown>;
       automation?: Record<string, unknown>;
       smtp?: Record<string, unknown>;
+      dataRequest?: Record<string, unknown>;
     },
   ) {
     const updateData: Record<string, unknown> = {};
@@ -89,7 +90,7 @@ export const companySettingsService = {
     }
 
     // 3. JSON settings (merge)
-    if (data.businessHours || data.automation) {
+    if (data.businessHours || data.automation || data.dataRequest) {
       const currentCompany = await companyRepository.findUnique({
         where: { id: companyId },
         select: { settings: true },
@@ -102,6 +103,7 @@ export const companySettingsService = {
         ...currentSettings,
         ...(data.businessHours ? { businessHours: data.businessHours } : {}),
         ...(data.automation ? { automation: data.automation } : {}),
+        ...(data.dataRequest ? { dataRequest: data.dataRequest } : {}),
       };
     }
 

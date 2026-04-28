@@ -141,18 +141,17 @@ export const GetContactDetailSchema = z.object({
 export const GetContactsSchema = z.object({
   query: z.object({
     search: z.string().max(100, "Search query too long").optional(),
-    limit: z
-      .string()
-      .transform((val) => parseInt(val))
-      .pipe(z.number().min(1).max(100))
+    limit: z.coerce
+      .number()
+      .min(1)
+      .max(2000)
       .optional()
-      .default("50"),
-    offset: z
-      .string()
-      .transform((val) => parseInt(val))
-      .pipe(z.number().min(0))
+      .default(50),
+    offset: z.coerce
+      .number()
+      .min(0)
       .optional()
-      .default("0"),
+      .default(0),
   }),
 });
 

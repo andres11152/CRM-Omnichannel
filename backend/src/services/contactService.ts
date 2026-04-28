@@ -61,7 +61,6 @@ export const contactService = {
         orderBy: { createdAt: "desc" },
         skip,
         take: limit,
-        // Optimized Select: Fetch only necessary fields for list view
         select: {
           id: true,
           name: true,
@@ -69,12 +68,8 @@ export const contactService = {
           phone: true,
           avatarUrl: true,
           tags: true,
-          notes: false, // Heavy text skipped for list
-          customFields: false, // Json skipped for list
           createdAt: true,
           updatedAt: true,
-          companyId: false, // Redundant
-          deletedAt: false,
         },
       }),
     ]);
@@ -126,6 +121,14 @@ export const contactService = {
     // 1. Sanitize
     let email = data.email?.toLowerCase().trim() || null;
     const phone = data.phone?.replace(/\D/g, "") || null;
+
+    // [SEC] 100-YEAR ENTERPRISE GUARD: STRICT PHONE VALIDATION
+    const isGroupJid = data.phone?.includes("@g.us") || (phone && phone.startsWith("120") && phone.length >= 15);
+    
+    if (isGroupJid) {
+      Logger.warn(`[ContactService] [BLOCK] Attempted to upsert group JID as contact: ${data.phone}`);
+      throw new AppError("Cannot save a group as a contact. Groups are handled in the Conversations module.", HTTP_STATUS.BAD_REQUEST);
+    }
 
     // [SEC] 100-YEAR FIX: Handle WhatsApp Internal Emails
     const isInternalEmail =

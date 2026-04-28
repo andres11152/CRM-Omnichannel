@@ -75,6 +75,9 @@ export const getCompanySettings = catchAsync(
           "Actualmente estamos fuera de nuestro horario laboral. Te responderemos pronto.",
         oooEnabled: true,
       },
+      dataRequest: (jsonSettings.dataRequest as Record<string, unknown>) || {
+        suggestedFields: [],
+      },
       billing: {
         plan: company.plan,
         subscriptionEndsAt: company.subscriptionEndsAt,
@@ -88,7 +91,7 @@ export const getCompanySettings = catchAsync(
 export const updateCompanySettings = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const companyId = req.user?.companyId;
-    const { general, businessHours, automation, smtp } = req.body;
+    const { general, businessHours, automation, smtp, dataRequest } = req.body;
 
     if (!companyId) {
       throw new AppError("Usuario no tiene compañía asignada", 400);
@@ -96,7 +99,7 @@ export const updateCompanySettings = catchAsync(
 
     const updatedCompany = await companySettingsService.updateSettings(
       companyId,
-      { general, businessHours, automation, smtp },
+      { general, businessHours, automation, smtp, dataRequest },
     );
 
     Logger.info(

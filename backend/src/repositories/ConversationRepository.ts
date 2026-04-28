@@ -93,7 +93,6 @@ export class ConversationRepository {
   }
 
   // Extended Methods for Service
-
   async count(args: Prisma.ConversationCountArgs): Promise<number> {
     return this.db.conversation.count(args);
   }
@@ -110,6 +109,7 @@ export class ConversationRepository {
       include: {
         participants: true,
         assignedTo: true,
+        contact: true,
         messages: {
           orderBy: { createdAt: "desc" },
           take: 50,
@@ -154,6 +154,7 @@ export class ConversationRepository {
         participants: true,
         assignedTo: true,
         queue: { include: { aiAssistant: true } },
+        contact: true, // [SOUND] AUTHORITATIVE NAME FIX
       },
     });
   }
@@ -210,8 +211,9 @@ export class ConversationRepository {
     customerId: string;
     subject?: string;
     status?: ConversationStatus;
+    isGroup?: boolean;
   }): Promise<Conversation> {
-    const { companyId, channelId, customerId, subject, status } = params;
+    const { companyId, channelId, customerId, subject, status, isGroup } = params;
 
     return this.db.$transaction(
       async (tx) => {
@@ -229,7 +231,11 @@ export class ConversationRepository {
 
           return tx.conversation.update({
             where: { id: conversation.id },
-            data: { status: newStatus, updatedAt: new Date() },
+            data: { 
+              status: newStatus, 
+              updatedAt: new Date(),
+              isGroup: isGroup !== undefined ? isGroup : conversation.isGroup
+            },
             include: { participants: true, assignedTo: true },
           });
         }
@@ -238,8 +244,10 @@ export class ConversationRepository {
           return await tx.conversation.create({
             data: {
               companyId,
-              channelId: subject || channelId,
+              channelId: channelId,
+              subject: subject || channelId,
               status: status || "OPEN",
+              isGroup: isGroup || false,
               participants: { connect: [{ id: customerId }] },
             },
             include: { participants: true, assignedTo: true },
@@ -359,9 +367,9 @@ export class ConversationRepository {
         if (companyId && channelId) {
              const existing = await this.db.conversation.findFirst({
                  where: { companyId, channelId },
-                 include: args.include as any
+                 include: args.include as Prisma.ConversationFindFirstArgs["include"]
              });
-             if (existing) return existing as any;
+             if (existing) return existing as unknown as Prisma.Prisma__ConversationClient<Conversation, never>;
         }
       }
       throw error;

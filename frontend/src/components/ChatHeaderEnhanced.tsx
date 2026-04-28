@@ -311,7 +311,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
       <div className="relative" ref={menuRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-reply-border-dark transition-all hover:shadow-sm active:scale-95"
+          className={`p-2 rounded-md transition-all h-9 w-9 flex items-center justify-center border ${isOpen ? "bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-white" : "text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-reply-border-dark hover:border-gray-300 dark:hover:border-gray-500 shadow-sm"}`}
           title="M�s Acciónes"
         >
           <svg
@@ -390,7 +390,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
           {onToggleChatList && (
             <button
               onClick={onToggleChatList}
-              className="hidden md:flex p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 transition-all active:scale-95 border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
+              className="hidden md:flex p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-500 dark:text-gray-400 transition-all active:scale-95 border border-transparent hover:border-gray-200 dark:hover:border-gray-600 h-9 w-9 items-center justify-center"
               title={isChatListVisible ? "Ocultar lista" : "Mostrar lista"}
             >
               <svg
@@ -498,27 +498,27 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
         {/* RIGHT: Actions Toolbar */}
         <div className="flex items-center gap-1 sm:gap-2 pl-2">
           <div className="flex items-center gap-2 hidden lg:flex">
-            {/* SLA Timer (Hidden in Tight Mode to save space) */}
-            {!isTightMode && ticketCreatedAt && (
-              <div className="flex items-center gap-1.5 bg-reply-bg dark:bg-gray-800 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-reply-border-dark">
-                <div className={`w-2 h-2 rounded-full ${getSLAColor()}`}></div>
-                <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300">
+            {/* SLA Timer (Enterprise Refined) */}
+            {ticketCreatedAt && (
+              <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/50 px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 h-9 shrink-0">
+                <div className={`w-2 h-2 rounded-full animate-pulse ${getSLAColor()}`}></div>
+                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 tracking-tight">
                   {timeElapsed}m
                 </span>
               </div>
             )}
           </div>
 
-          {/* PRIORITY SELECTOR (NOW ALWAYS VISIBLE) */}
+          {/* PRIORITY SELECTOR (Enterprise Standardized) */}
           <div className="relative group">
             <button
               onClick={() => setShowPriorityMenu(!showPriorityMenu)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all shadow-sm hover:shadow-md ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[11px] font-bold border transition-all h-9 shrink-0 select-none ${
                 currentPriority === "HIGH"
-                  ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800"
+                  ? "bg-red-50/50 text-red-700 border-red-200 hover:bg-red-50 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50"
                   : currentPriority === "MEDIUM"
-                    ? "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800"
-                    : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
+                    ? "bg-orange-50/50 text-orange-700 border-orange-200 hover:bg-orange-50 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800/50"
+                    : "bg-blue-50/50 text-blue-700 border-blue-200 hover:bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50"
               }`}
             >
               {/* ICON: HIGH */}
@@ -660,16 +660,16 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             )}
           </div>
 
-          {/* 2. Direct Actions (Hidden on Mobile, moved to Menu) */}
-          <div className="hidden md:flex items-center gap-2 border-l border-gray-200 dark:border-reply-border-dark pl-2 ml-2">
+          {/* 2. Direct Actions (Enterprise Refined) */}
+          <div className="hidden md:flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-2 ml-1">
             {onTransfer && (
               <button
                 onClick={onTransfer}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-all border border-transparent hover:border-blue-100 dark:hover:border-blue-800/50 h-9 w-9 flex items-center justify-center"
                 title="Transferir"
               >
                 <svg
-                  className="w-4 h-4"
+                  className="w-4.5 h-4.5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -685,14 +685,14 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             )}
           </div>
 
-          {/* 3. Primary Action: Resolve (Hidden on Mobile, moved to Menu) */}
+          {/* 3. Primary Action: Resolve (Enterprise Polished) */}
           <button
             onClick={onResolve}
             className={`
-              hidden md:flex items-center gap-2 px-3 sm:px-4 py-1.5 
-              bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700  
-              text-white rounded-lg text-xs font-bold shadow-md shadow-green-500/20 
-              transition-all transform hover:scale-105 active:scale-95
+              hidden md:flex items-center gap-2 px-4 py-1.5 h-9 shrink-0
+              bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600
+              text-white rounded-md text-[11px] font-bold shadow-sm hover:shadow-md
+              transition-all transform active:scale-95
               ${isTightMode ? "aspect-square p-2 justify-center" : ""}
             `}
             title="Resolver Ticket"
@@ -706,22 +706,22 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
+                strokeWidth={2.5}
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            {!isTightMode && <span>Resolver</span>}
+            {!isTightMode && <span className="tracking-wide">RESOLVER</span>}
           </button>
 
           {/* 4. Dropdown Menu (Secondary Actions) */}
           <ActionMenu />
 
-          {/* 5. Right Sidebar Toggles (Hidden on Mobile) */}
-          <div className="hidden md:flex items-center gap-1 border-l border-gray-200 dark:border-reply-border-dark pl-2 ml-1">
+          {/* 5. Right Sidebar Toggles (Enterprise Refined) */}
+          <div className="hidden md:flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-2 ml-1">
             {onToggleParticipantsPanel && (
               <button
                 onClick={onToggleParticipantsPanel}
-                className={`p-2 rounded-lg transition-all ${isParticipantsPanelVisible ? "bg-indigo-50 text-indigo-600" : "text-gray-400 hover:bg-gray-100"}`}
+                className={`p-2 rounded-md transition-all h-9 w-9 flex items-center justify-center ${isParticipantsPanelVisible ? "bg-indigo-50 text-indigo-600 border border-indigo-100" : "text-gray-400 hover:bg-gray-100 border border-transparent"}`}
               >
                 <svg
                   className="w-5 h-5"
@@ -741,7 +741,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             {onToggleCustomer360 && !onToggleParticipantsPanel && (
               <button
                 onClick={onToggleCustomer360}
-                className={`p-2 rounded-lg transition-all ${isCustomer360Visible ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-100"}`}
+                className={`p-2 rounded-md transition-all h-9 w-9 flex items-center justify-center ${isCustomer360Visible ? "bg-blue-50 text-blue-600 border border-blue-100" : "text-gray-400 hover:bg-gray-100 border border-transparent"}`}
               >
                 <svg
                   className={`w-5 h-5 transition-transform ${!isCustomer360Visible ? "rotate-180" : ""}`}
@@ -761,28 +761,6 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
           </div>
         </div>
       </div>
-      {/* ️ TAGS BAR: Dedicated scrollable row below header */}
-      {contact.tags && contact.tags.length > 0 && (
-        <div className="bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-100 dark:border-reply-border-dark px-3 sm:px-4 py-0.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full h-7 shrink-0 z-20 transition-all">
-          <div className="flex-shrink-0 text-[9px] font-bold text-gray-400/80 uppercase tracking-widest mr-1 select-none">
-            Etiquetas
-          </div>
-          {contact.tags.map((tagId: string) => {
-            const tag = availableTags.find(
-              (t) => t.id === tagId || t.name === tagId,
-            );
-            if (!tag) return null;
-            return (
-              <span
-                key={tagId}
-                className={`px-2 py-[1px] rounded text-[9px] font-bold shadow-sm border border-black/5 whitespace-nowrap shrink-0 flex items-center gap-1 hover:scale-105 transition-transform cursor-default ${tag.color || "bg-white text-gray-600 border-gray-200"}`}
-              >
-                {tag.name}
-              </span>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 };

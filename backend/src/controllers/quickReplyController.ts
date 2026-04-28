@@ -34,7 +34,7 @@ export const getQuickReplies = catchAsync(
 );
 
 export const createQuickReply = catchAsync(
-  async (req: AuthenticatedRequest<any, any, QuickReplyBody>, res: Response) => {
+  async (req: AuthenticatedRequest<Record<string, string>, unknown, QuickReplyBody>, res: Response) => {
     if (!req.companyId) {
       throw new AppError("Not authorized", 401);
     }
@@ -59,7 +59,7 @@ export const createQuickReply = catchAsync(
 );
 
 export const updateQuickReply = catchAsync(
-  async (req: AuthenticatedRequest<any, any, QuickReplyBody>, res: Response) => {
+  async (req: AuthenticatedRequest<Record<string, string>, unknown, QuickReplyBody>, res: Response) => {
     if (!req.companyId) {
       throw new AppError("Not authorized", 401);
     }

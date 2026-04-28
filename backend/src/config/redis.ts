@@ -65,11 +65,50 @@ export const connectRedis = async () => {
   try {
     await redisClient.connect();
     Logger.info("[OK] Redis Client Connected");
+
+    // Iniciar Monitoreo de Memoria
+    startMemoryMonitor();
   } catch {
     Logger.warn("[Redis] Failed to connect. Will run in Memory/File Mode.");
     // We intentionally catch this so we don't crash the server startup
     // The app should be able to run without Redis (using in-memory fallbacks)
   }
+};
+
+/**
+ * [SEC] REDIS MEMORY MONITOR
+ * Verifica la salud y capacidad de Redis periódicamente para evitar Out Of Memory (OOM).
+ */
+const startMemoryMonitor = () => {
+  const CHECK_INTERVAL_MS = 5 * 60 * 1000; // Revisar cada 5 minutos
+
+  setInterval(async () => {
+    if (!redisClient || !redisClient.isOpen) return;
+
+    try {
+      const info = await redisClient.info("memory");
+      
+      const extractValue = (key: string) => {
+        const match = info.match(new RegExp(`${key}:(\\d+)`));
+        return match ? parseInt(match[1], 10) : null;
+      };
+
+      const usedMemory = extractValue("used_memory");
+      const maxMemory = extractValue("maxmemory");
+
+      if (usedMemory !== null && maxMemory !== null && maxMemory > 0) {
+        const usagePercentage = (usedMemory / maxMemory) * 100;
+
+        if (usagePercentage >= 80) {
+          Logger.error(`[🚨 CRITICAL] REDIS MEMORY LIMIT REACHED! Usando ${usagePercentage.toFixed(2)}% de la capacidad máxima. Por favor purga cachés o escala Redis.`);
+        } else if (usagePercentage >= 70) {
+          Logger.warn(`[⚠️ WARNING] Redis Memory Warning. Usando ${usagePercentage.toFixed(2)}% de la capacidad.`);
+        }
+      }
+    } catch (error) {
+      Logger.warn("[Redis] Memory Check Failed", error);
+    }
+  }, CHECK_INTERVAL_MS);
 };
 
 export default redisClient;

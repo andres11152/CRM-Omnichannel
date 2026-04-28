@@ -19,6 +19,18 @@ export const contactController = {
     },
   ),
 
+  updateContact: catchAsync(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const companyId = req.companyId!;
+      const { id } = req.params;
+      const contact = await contactService.update(companyId, id, req.body);
+      res.status(HTTP_STATUS.OK).json({
+        status: "success",
+        data: contact,
+      });
+    },
+  ),
+
   getContacts: catchAsync(async (req: AuthenticatedRequest, res: Response) => {
     const companyId = req.companyId!;
     const { search, limit, offset } = req.query as ParsedQs;
@@ -32,8 +44,8 @@ export const contactController = {
     const result = await contactService.findAll(companyId, query);
     res.status(HTTP_STATUS.OK).json({
       status: "success",
-      results: result.meta.total,
       data: result.data,
+      meta: result.meta, // Standardized pagination meta
     });
   }),
 

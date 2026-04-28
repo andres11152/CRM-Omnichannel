@@ -33,7 +33,10 @@ export class WhatsAppIdUtils {
    * Identifies if a JID belongs to a Group.
    */
   static cleanChannelId(jid: string): string {
-    return jid.replace(/@.*$/, "").replace(/\D/g, "");
+    const isGroup = this.isGroup(jid);
+    const userPart = jid.replace(/@.*$/, "");
+    // [SEC] Preserve dashes for groups as legacy IDs (e.g. 57312...-123456) require them.
+    return isGroup ? userPart : userPart.replace(/\D/g, "");
   }
 
   /**
@@ -41,6 +44,23 @@ export class WhatsAppIdUtils {
    */
   static isGroup(jid: string): boolean {
     return jid.endsWith("@g.us");
+  }
+
+  /**
+   * 🆕 GET TARGET JID (Standardizer)
+   * Ensures a string is converted to a full WhatsApp JID (@s.whatsapp.net or @g.us).
+   */
+  static getTargetJid(channelId: string): string {
+    if (!channelId) return "";
+    if (channelId.includes("@g.us")) return channelId;
+    if (channelId.includes("@s.whatsapp.net")) return channelId;
+    
+    // [SEC] Heuristics for missing domain
+    if (channelId.includes("-") || channelId.length > 15) {
+      return `${channelId}@g.us`;
+    }
+    
+    return `${channelId.replace(/\D/g, "")}@s.whatsapp.net`;
   }
 
   /**
@@ -84,10 +104,9 @@ export class WhatsAppIdUtils {
     if (!clean) return null;
 
     if (this.isGroup(clean)) return null; // Groups don't have phone numbers
-
-    // [SEC] REVERTED: We now ALLOW LIDs to be returned as the identifier
-    // because WhatsApp Communities use these identifiers to mask real phone numbers.
-    // Treating LIDs as the primary ID for the CRM/Contact.
+    
+    // [SEC] REVERTED: We now ALLOW LIDs to be returned as the identifier 
+    // because the user wants to import them into the CRM to send messages to them.
 
     // Remove domain
     const userPart = clean.split("@")[0].split(":")[0];
@@ -103,7 +122,8 @@ export class WhatsAppIdUtils {
     if (userPart.length < 7 || userPart.length > 30) return null;
 
     // [SEC] Final validation: Is this a realistic phone number OR LID?
-    if (!this.isRealPhoneNumber(userPart)) {
+    const isLidMode = this.isLid(clean);
+    if (!isLidMode && !this.isRealPhoneNumber(userPart)) {
       return null;
     }
 
@@ -134,16 +154,19 @@ export class WhatsAppIdUtils {
   static isRealPhoneNumber(digits: string): boolean {
     if (!digits || !/^\d+$/.test(digits)) return false;
 
-    // [SEC] 100-YEAR FIX: LIDs are now STRICTLY excluded from being treated as phone numbers.
+    // [SEC] 100-YEAR FIX: LIDs and Group JIDs are now STRICTLY excluded from being treated as phone numbers.
     // LIDs are internal identifiers and shouldn't be saved as 'phone' in the CRM.
     if (this.isLid(digits)) return false;
 
+    // [SEC] Group JID Detection: WhatsApp groups often have 15-digit or longer IDs starting with 120.
+    // Real phone numbers in North America (prefix 1) are exactly 11 digits. 
+    // Any number 15+ digits starting with 120 is almost certainly a group JID stripped of @g.us.
+    if (digits.length >= 15 && digits.startsWith("120")) return false;
+
     // Length validation (E.164 strictly 7-15)
     if (digits.length < 7 || digits.length > 15) return false;
+    
     // Pattern 3: Repeated digits patterns (fake/test numbers)
-    if (/^(\d)\1{6,}$/.test(digits)) return false;
-
-    // Pattern 4: Repeated digits patterns (fake/test numbers)
     if (/^(\d)\1{6,}$/.test(digits)) return false;
 
     // Pattern 5: Sequential patterns (1234567890)
@@ -166,8 +189,8 @@ export class WhatsAppIdUtils {
     // Standard LID domain check
     if (jid.includes("@lid")) return true;
 
-    // [SEC] CRITICAL: Groups (@g.us) and normal users (@s.whatsapp.net) are NEVER LIDs
-    if (jid.includes("@g.us") || jid.includes("@s.whatsapp.net")) return false;
+    // [SEC] CRITICAL: Groups (@g.us) are NEVER LIDs
+    if (jid.includes("@g.us")) return false;
 
     // Extract user part for pattern analysis
     const userPart = jid.split("@")[0].split(":")[0];
@@ -188,7 +211,9 @@ export class WhatsAppIdUtils {
           userPart.startsWith("112") || 
           userPart.startsWith("245") || 
           userPart.startsWith("274") ||
-          userPart.startsWith("656")) {
+          userPart.startsWith("656") ||
+          userPart.startsWith("159") ||
+          userPart.startsWith("122")) {
         return true;
       }
       

@@ -91,10 +91,6 @@ class ChatSyncService {
     const { companyId, sessionId, sinceDate, limit, dryRun, conversationId } =
       request;
 
-    // [SEC] Type definition for Baileys socket with server fetch capability
-    interface WASocketWithFetch extends WASocket {
-      fetchMessagesFromWAServer?: (jid: string, count: number) => Promise<WAMessage[]>;
-    }
 
     if (this.activeSyncs.get(companyId)) {
       return {
@@ -155,63 +151,25 @@ class ChatSyncService {
       }
 
       // 3. Extract messages
-      let targetJid: string | undefined = undefined;
-      if (conversationId) {
-        if (WhatsAppIdUtils.isGroup(conversationId)) {
-          targetJid = conversationId; // It's already a group JID (@g.us)
-        } else if (conversationId.includes("@s.whatsapp.net")) {
-          targetJid = conversationId; // It's a full user JID
-        } else {
-          // It's a raw number or channelId. Treat as phone if no @g.us suffix.
-          const clean = conversationId.replace(/\D/g, "");
-          targetJid = `${clean}@s.whatsapp.net`;
-        }
-      }
+      const targetJid = conversationId ? WhatsAppIdUtils.getTargetJid(conversationId) : undefined;
 
       Logger.info(`[ChatSync] [SEARCH] STORE DIAG: targetJid=${targetJid || "ALL"}`);
 
-      let allMessages = this.ingest.extractMessagesFromStore(
+      const allMessages = this.ingest.extractMessagesFromStore(
         store,
         sinceDate,
         targetJid,
       );
 
-      // ── ENHANCEMENT: If targeted sync and store is empty, fetch from server ──
-      if (allMessages.length === 0 && targetJid) {
-        const { whatsappService } = await import("@/whatsapp");
-        const sock = whatsappService.getSocket(sessionId) as WASocketWithFetch;
-        
-        // [SEC] Type-safe access to history fetch methods
-        const augmentedSock = sock as WASocket & { 
-          fetchMessagesFromWA?: (jid: string, count: number) => Promise<WAMessage[]>;
-          fetchMessagesFromWAServer?: (jid: string, count: number) => Promise<WAMessage[]>;
-        };
-
-        const fetchMethod = augmentedSock.fetchMessagesFromWA || augmentedSock.fetchMessagesFromWAServer;
-        
-        if (sock && typeof fetchMethod === "function") {
-          try {
-            Logger.info(`[ChatSync] [WEB] Store empty for ${targetJid}. Fetching from server...`);
-            const fetched: WAMessage[] = await fetchMethod.call(sock, targetJid, limit);
-            if (fetched && fetched.length > 0) {
-              Logger.info(`[ChatSync] [OK] Fetched ${fetched.length} messages from server for ${targetJid}`);
-              const { syncMessageParser } = await import("./sync/SyncMessageParser");
-              allMessages = fetched.sort((a, b) => {
-                return syncMessageParser.getTimestamp(a.messageTimestamp) - syncMessageParser.getTimestamp(b.messageTimestamp);
-              });
-            }
-          } catch (fetchErr) {
-            Logger.warn(`[ChatSync] Failed to fetch from server for ${targetJid}:`, fetchErr);
-          }
-        }
-      }
+      // WhatsApp Multi-Device does not support on-demand server history fetching.
+      // We can only sync messages that are already present in the Baileys memory store.
 
       // Get the MOST RECENT `limit` messages (slice from the end)
       const limitedMessages = allMessages.slice(-limit);
       messagesFound = limitedMessages.length;
 
       Logger.info(
-        `[ChatSync] [SEARCH] Found ${messagesFound} messages (limit: ${limit})`,
+        `[ChatSync] [SEARCH] Found ${messagesFound} messages for JID: ${targetJid || "ALL"} (limit: ${limit})`,
       );
 
       // 4. Group by conversation

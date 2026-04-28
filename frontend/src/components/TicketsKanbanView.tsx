@@ -211,22 +211,28 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
   // ─── COMPUTED DATA ───
   const filteredTickets = useMemo(() => {
     return tickets.filter((t) => {
+      // [CRM] Filter: Do not show group chats in the Kanban view
+      if (t.isGroup) return false;
+
       if (filterPriority === "ALL") return true;
       return t.priority?.toUpperCase() === filterPriority;
     });
   }, [tickets, filterPriority]);
 
   const stats = useMemo(() => {
-    const urgent = tickets.filter(
+    // [CRM] Filter groups for consistent statistics
+    const nonGroupTickets = tickets.filter(t => !t.isGroup);
+    
+    const urgent = nonGroupTickets.filter(
       (t) =>
         t.priority?.toUpperCase() === "CRITICAL" ||
         t.priority?.toUpperCase() === "HIGH",
     ).length;
-    const inProgress = tickets.filter(
+    const inProgress = nonGroupTickets.filter(
       (t) => t.status === "IN_PROGRESS",
     ).length;
-    const open = tickets.filter((t) => t.status === "OPEN").length;
-    return { total: tickets.length, urgent, inProgress, open };
+    const open = nonGroupTickets.filter((t) => t.status === "OPEN").length;
+    return { total: nonGroupTickets.length, urgent, inProgress, open };
   }, [tickets]);
 
   // ─── ASSIGN HANDLER ───

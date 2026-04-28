@@ -25,6 +25,7 @@ export class TicketSyncService {
       lockKey,
       async () => {
         const existingTicket = await ticketRepository.findByConversationId(
+          companyId,
           conversationId,
         );
 
@@ -35,25 +36,24 @@ export class TicketSyncService {
 
         if (!isTicketActive) {
           const lastTicket = await ticketRepository.findFirst({
-            where: { companyId },
             orderBy: { ticketNumber: "desc" },
             select: { ticketNumber: true },
-          });
+          }, companyId);
 
           const nextTicketNumber = (lastTicket?.ticketNumber || 0) + 1;
 
           await ticketRepository.create({
             data: {
               ticketNumber: nextTicketNumber,
-              companyId,
-              conversationId,
+              conversation: { connect: { id: conversationId } },
               subject,
               description,
-              createdById: agentId,
-              assignedToId: agentId, // Auto-assign to the creator (Agent)
+              company: { connect: { id: companyId } },
+              createdBy: { connect: { id: agentId } },
+              assignedTo: { connect: { id: agentId } }, // Auto-assign to the creator (Agent)
               status: TicketStatus.IN_PROGRESS, // Active state
             },
-          });
+          }, companyId);
 
           Logger.info(
             `[TicketSyncService] Created auto-ticket #${nextTicketNumber} for conversation ${conversationId}`,
@@ -69,8 +69,8 @@ export class TicketSyncService {
    * [SEARCH] FIND RECIPIENT PHONE FROM TICKET
    * Fallback for when conversation.channelId is not a clean phone.
    */
-  async findPhoneByConversation(conversationId: string): Promise<string | null> {
-    const ticket = await ticketRepository.findByConversationId(conversationId);
+  async findPhoneByConversation(companyId: string, conversationId: string): Promise<string | null> {
+    const ticket = await ticketRepository.findByConversationId(companyId, conversationId);
     if (!ticket) return null;
 
     const emailPhone = ticket.createdBy.email.split("@")[0];

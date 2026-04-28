@@ -1,4 +1,5 @@
 import { whatsappService, SendMessageOptions } from "@/whatsapp";
+import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { gateway } from "@/gateways/socketGateway";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
@@ -53,19 +54,24 @@ export class ConversationMessageService {
       throw new AppError("Conversation not found", 404);
     }
 
-    // B. Determine Destination Phone
-    // For WhatsApp, we need the clean phone number.
-    // If the channelId is already a phone, use it. Otherwise, look up the contact or ticket.
+    // B. Determine Destination Phone / JID
+    // For groups: channelId is the group ID (e.g. 120363408109782390) which needs @g.us
+    // For DMs: channelId is the phone number (e.g. 573138081081) which needs @s.whatsapp.net
+    const isGroup = resolvedConv.isGroup || false;
     let targetPhone = resolvedConv.channelId;
-    const isCleanPhone = !!(targetPhone && /^\d+$/.test(targetPhone.replace("@s.whatsapp.net", "")));
 
-    if (!isCleanPhone) {
-      // Priority 1: Use linked contact phone
-      if (resolvedConv.contact?.phone) {
-        targetPhone = resolvedConv.contact.phone;
-      } else {
-        // Priority 2: Fallback to ticket search
-        targetPhone = (await ticketSyncService.findPhoneByConversation(resolvedConv.id)) || null;
+    if (!isGroup) {
+      // Only for DMs: try to resolve a clean phone number if channelId is not one
+      const isCleanPhone = !!(targetPhone && /^\d+$/.test(targetPhone.replace("@s.whatsapp.net", "")));
+
+      if (!isCleanPhone) {
+        // Priority 1: Use linked contact phone
+        if (resolvedConv.contact?.phone) {
+          targetPhone = resolvedConv.contact.phone;
+        } else {
+          // Priority 2: Fallback to ticket search
+          targetPhone = (await ticketSyncService.findPhoneByConversation(companyId, resolvedConv.id)) || null;
+        }
       }
     }
 
@@ -73,8 +79,13 @@ export class ConversationMessageService {
       throw new AppError("No se pudo determinar el numero de teléfono del destinatario.", 400);
     }
 
+    // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to construct proper JID
+    // Groups: 120363408109782390 → 120363408109782390@g.us
+    // DMs:    573138081081       → 573138081081@s.whatsapp.net
+    targetPhone = WhatsAppIdUtils.getTargetJid(targetPhone);
+
     const isAudio = attachment?.type === "audio";
-    const messageContent = content || (attachment && !isAudio ? `[FILE] Archivo: ${attachment.name || "Adjunto"}` : "");
+    const messageContent = content || "";
 
     // C. Handle Scheduling
     if (scheduledAt) {
@@ -112,7 +123,7 @@ export class ConversationMessageService {
         url: attachment.url,
         mimetype: attachment.mimetype || attachment.mimeType || "application/octet-stream",
         filename: attachment.name,
-        caption: attachment.name,
+        caption: content || undefined,
       } : undefined,
       metadata: { 
         ...metadata, 
@@ -165,7 +176,7 @@ export class ConversationMessageService {
         url: attachment.url,
         mimetype: attachment.mimetype || attachment.mimeType || "application/octet-stream",
         filename: attachment.name,
-        caption: attachment.name,
+        caption: content || undefined,
       } : undefined,
       metadata,
     };
@@ -221,7 +232,7 @@ export class ConversationMessageService {
 
     let targetPhone = conv.channelId;
     if (!targetPhone || !/^\d+$/.test(targetPhone)) {
-      targetPhone = (await ticketSyncService.findPhoneByConversation(conv.id)) || null;
+      targetPhone = (await ticketSyncService.findPhoneByConversation(companyId, conv.id)) || null;
     }
 
     if (!targetPhone) throw new AppError("Target phone not found", 400);

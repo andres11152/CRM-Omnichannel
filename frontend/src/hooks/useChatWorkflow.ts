@@ -25,21 +25,72 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
   const [isRemoteTyping, setIsRemoteTyping] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [sentiment, setSentiment] = useState("Neutral");
+  const [pinnedMessage, setPinnedMessage] = useState<{
+    id: string;
+    content: string;
+    senderId?: string;
+  } | null>(null);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // ────────────────────────────────────────────────
   // AUTO-SCROLL
   // ────────────────────────────────────────────────
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((instant = false) => {
     if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+      chatEndRef.current.scrollIntoView({ 
+        behavior: instant ? "auto" : "smooth",
+        block: "end"
+      });
     }
   }, []);
 
+  // Track if this is the first render for this contact
+  const isFirstLoadRef = useRef(true);
   useEffect(() => {
-    scrollToBottom();
+    isFirstLoadRef.current = true;
+  }, [activeContact.id]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      if (isFirstLoadRef.current) {
+        scrollToBottom(true); // Instant scroll on mount
+        isFirstLoadRef.current = false;
+        // Small delay to account for content rendering/images
+        setTimeout(() => scrollToBottom(true), 100);
+      } else {
+        scrollToBottom(); // Smooth scroll for new messages
+      }
+    }
   }, [messages, isRemoteTyping, scrollToBottom]);
+
+  // Detect pinned messages from DB metadata on load
+  useEffect(() => {
+    if (messages.length > 0) {
+      const pinned = messages.find(
+        (m) => (m.metadata as Record<string, unknown>)?.isPinned === true
+      );
+      if (pinned) {
+        const sender = pinned.sender;
+        let senderId = pinned.senderId;
+
+        if (!senderId) {
+          if (sender && typeof sender === "object") {
+            senderId = sender.id;
+          } else if (typeof sender === "string") {
+            senderId = sender;
+          }
+        }
+
+        setPinnedMessage({
+          id: pinned.id,
+          content: pinned.content,
+          senderId,
+        });
+      }
+    }
+  }, [messages]);
 
   // ────────────────────────────────────────────────
   // SOCKET LISTENERS
@@ -55,25 +106,50 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       
       // Extract the actual message object
       const rawMsg = (payload.message || payload) as Record<string, unknown>;
-      const msgConversationId = (rawMsg.conversationId as string) || '';
+      const msgConversationId = (rawMsg.conversationId as string) || (payload.conversationId as string) || '';
       const payloadTicketId = (payload.ticketId as string) || '';
+      // Attempt to extract contact phone from payload structure
+      const incomingPhone = (payload.conversation as Record<string, any>)?.contact?.phone || (rawMsg.from as string);
       
-      // Match against the active ticket's ID
+      // Extract phone numbers for comparison (normalized)
+      const normalizePhone = (p?: string) => p?.replace(/\D/g, '') || '';
+      const activePhone = normalizePhone(activeContact.phone);
+      const payloadPhone = normalizePhone(incomingPhone);
+      
+      // Match against the active ticket's ID or conversation fallback
       const isForThisChat = 
-        payloadTicketId === ticketId || 
-        msgConversationId === ticketId;
+        (!!payloadTicketId && payloadTicketId === ticketId) || 
+        (!!msgConversationId && (msgConversationId === ticketId || msgConversationId === activeContact.id)) ||
+        (!!activePhone && !!payloadPhone && activePhone === payloadPhone);
       
-      if (!isForThisChat) return;
+      if (!isForThisChat) {
+        console.warn(`[Workflow] [WS] ❌ Skipping message.`, {
+          event: payload.message ? 'message.received' : 'conversation.new_message',
+          reason: 'No match found',
+          ticketMatch: `${payloadTicketId} === ${ticketId}`,
+          convMatch: `${msgConversationId} === ${ticketId} OR ${activeContact.id}`,
+          phoneMatch: `${activePhone} === ${payloadPhone}`,
+          activeContactId: activeContact.id,
+          msgId: rawMsg.id
+        });
+        return;
+      }
+
+      console.log(`[Workflow] [WS] ✅ Message accepted for current chat! clearing typing...`);
+      // Clear typing indicator when a message is actually received
+      setIsRemoteTyping(false);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
       // Normalize the message for the React Query cache
       const normalizedMessage: Message = {
         id: rawMsg.id as string,
+        senderId: (rawMsg.senderId as string) || undefined,
         ticketId: ticketId,
         companyId: (rawMsg.companyId as string) || '',
         senderType: (rawMsg.senderType as SenderType) || (rawMsg.direction === 'OUTBOUND' ? SenderType.AGENT : SenderType.USER),
         content: (rawMsg.content as string) || '',
-        type: (rawMsg.type as Message['type']) || ((rawMsg.metadata as Record<string, any>)?.type as Message['type']) || 'text',
-        mediaUrl: (rawMsg.mediaUrl as string) || ((rawMsg.metadata as Record<string, any>)?.mediaUrl as string) || undefined,
+        type: (rawMsg.type as Message['type']) || ((rawMsg.metadata as Record<string, unknown>)?.type as Message['type']) || 'text',
+        mediaUrl: (rawMsg.mediaUrl as string) || ((rawMsg.metadata as Record<string, unknown>)?.mediaUrl as string) || undefined,
         direction: rawMsg.direction as 'INBOUND' | 'OUTBOUND' | undefined,
         timestamp: rawMsg.createdAt
           ? new Date(rawMsg.createdAt as string).toISOString()
@@ -86,7 +162,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       addMessageToCache(queryClient, ticketId, normalizedMessage);
       
       // Sentiment analysis if enabled
-      if (aiConfig.isActive && normalizedMessage.sender === 'customer' && normalizedMessage.content) {
+      if (aiConfig.isActive && normalizedMessage.senderType === SenderType.USER && normalizedMessage.content) {
         analyzeSentiment(normalizedMessage.content).then(setSentiment);
       }
     };
@@ -97,24 +173,73 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     // Also catch outbound echoes (messages from phone)
     socketService.on('message.sent', handleIncomingMessage);
 
-    const cleanupTyping = socketService.onTypingStatus((payload) => {
-       if (payload.ticketId === ticketId) {
-         setIsRemoteTyping(payload.isTyping);
+    const handleTypingStatus = (payload: { conversationId: string; from: string; status: string }) => {
+       const isMatch = 
+         payload.conversationId === activeContact.id || 
+         payload.conversationId === ticketId || 
+         (!!activeContact.phone && !!payload.from && payload.from.includes(activeContact.phone));
+
+       if (isMatch) {
+         console.log(`[Workflow] [WS] Typing status: ${payload.status} from ${payload.from}`);
+         const isTypingNow = payload.status === "composing" || payload.status === "recording";
+         setIsRemoteTyping(isTypingNow);
+
+         // Safety: Clear existing timeout
+         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+         // If they are typing, set a safety valve to clear it after 15s in case 'paused' event is missed
+         if (isTypingNow) {
+           typingTimeoutRef.current = setTimeout(() => {
+             console.log("[Workflow] [SAFETY] Clearing stuck typing indicator (Timeout)");
+             setIsRemoteTyping(false);
+           }, 15000);
+         }
        }
-    });
+    };
+    socketService.on('conversation:typing', handleTypingStatus);
+
+    // Pin/Unpin events
+    const handlePinEvent = (payload: {
+      messageId: string;
+      conversationId: string;
+      isPinned: boolean;
+      content: string;
+      senderId: string;
+    }) => {
+      // Match against the active chat
+      if (
+        payload.conversationId === ticketId ||
+        payload.conversationId === activeContact.id
+      ) {
+        if (payload.isPinned) {
+          setPinnedMessage({
+            id: payload.messageId,
+            content: payload.content,
+            senderId: payload.senderId,
+          });
+        } else {
+          // [SEC] 100-YEAR FIX: Clear pinned message if ANY message is unpinned in this conversation.
+          // WhatsApp only supports one pinned message, so an unpin event is effectively a conversation-wide clear.
+          setPinnedMessage(null);
+        }
+      }
+    };
+    socketService.on('message.pinned', handlePinEvent);
 
     return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       socketService.off('message.received', handleIncomingMessage);
       socketService.off('conversation.new_message', handleIncomingMessage);
       socketService.off('message.sent', handleIncomingMessage);
-      cleanupTyping();
+      socketService.off('conversation:typing', handleTypingStatus);
+      socketService.off('message.pinned', handlePinEvent);
     };
-  }, [ticketId, queryClient, aiConfig.isActive]);
+  }, [ticketId, activeContact.id, activeContact.phone, queryClient, aiConfig.isActive]);
 
   // ────────────────────────────────────────────────
   // ACTIONS
   // ────────────────────────────────────────────────
-  const handleSendMessage = async (content: string, mediaFile?: File | null, replyingTo?: Message | null) => {
+  const handleSendMessage = async (content: string, mediaFile?: File | null, replyingTo?: Message | null, scheduledAt?: string | Date) => {
     if (!content.trim() && !mediaFile) return;
 
     try {
@@ -157,6 +282,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         } : undefined,
         quotedMessageId: replyingTo?.id,
         quotedContent: replyingTo?.content,
+        scheduledAt,
         metadata: {
           quotedMessageId: replyingTo?.id,
           quotedContent: replyingTo?.content,
@@ -165,6 +291,11 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       };
 
       await sendMessageMutation.mutateAsync(payload);
+      
+      if (scheduledAt) {
+        toast.success("Mensaje programado correctamente.");
+      }
+
       setIsTyping(false);
     } catch (err) {
       setIsTyping(false);
@@ -202,10 +333,21 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     isRemoteTyping,
     isSyncing,
     sentiment,
+    pinnedMessage,
     chatEndRef,
     handleSendMessage,
     syncHistory,
     scrollToBottom,
+    emitTyping: (status: "composing" | "recording" | "paused") => {
+      if (!ticketId && !activeContact.id) return;
+      const toId = activeContact.id || activeContact.ticketId || activeContact.phone;
+      if (toId) {
+        socketService.emit("conversation:typing", {
+          to: toId,
+          status
+        });
+      }
+    },
     handleReact: async (messageId: string, reaction: string) => {
       await reactMutation.mutateAsync({ messageId, reaction });
     },

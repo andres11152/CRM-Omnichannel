@@ -1,6 +1,36 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { 
+  DollarSign, 
+  CreditCard, 
+  Tag, 
+  Wallet, 
+  CheckCircle2, 
+  BadgeDollarSign,
+  AlertCircle,
+  Mail,
+  Phone,
+  MapPin,
+  IdCard,
+  UserSquare2,
+  Fingerprint,
+  FileCheck,
+  Calendar,
+  Clock,
+  Send,
+  Package,
+  ArrowRight,
+  Info,
+  Save,
+  Loader2,
+  Check, 
+  Plus, 
+  Trash2
+} from "lucide-react";
+import { companyService, SuggestedField, CompanySettings } from "../services/companyService";
+import { Product } from "../types";
+import { API_BASE_URL } from "@/services/apiConfig";
 
 // --- Shared Components ---
 const ModalBackdrop: React.FC<{
@@ -69,23 +99,23 @@ export const ScheduleModal: React.FC<{
   };
 
   return (
-    <ModalBackdrop onClose={onClose} title="Programar Mensaje">
-      <div className="space-y-4">
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-start gap-3">
-          <span className="text-xl"></span>
-          <p className="text-sm text-blue-700 dark:text-blue-200">
-            El sistema enviar este mensaje automticamente en la fecha
-            seleccionada.
+    <ModalBackdrop onClose={onClose} title="Programación Enterprise">
+      <div className="space-y-5">
+        <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-start gap-3 border border-indigo-100 dark:border-indigo-500/20">
+          <Info className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5" />
+          <p className="text-[12px] text-indigo-800 dark:text-indigo-200 font-medium">
+            El sistema procesará y enviará este mensaje automáticamente a través de la API oficial de WhatsApp en el momento exacto programado.
           </p>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-gray-500 uppercase">
-            Mensaje
-          </label>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase ml-1">
+            <Send className="w-3.5 h-3.5" />
+            Contenido del Mensaje
+          </div>
           <textarea
-            className="w-full p-3 bg-reply-bg dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-reply-border-dark focus:ring-2 focus:ring-purple-500 outline-none resize-none h-24 text-sm"
-            placeholder="Escribe aquíí el mensaje a enviar..."
+            className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-white/5 focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-32 text-sm transition-all shadow-inner"
+            placeholder="Escribe aquí el mensaje que deseas programar..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             autoFocus
@@ -93,32 +123,36 @@ export const ScheduleModal: React.FC<{
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">
-              Fecha
-            </label>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase ml-1">
+              <Calendar className="w-3.5 h-3.5" />
+              Fecha de Envío
+            </div>
             <input
               type="date"
-              className="w-full p-2.5 bg-reply-bg dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-reply-border-dark focus:ring-2 focus:ring-purple-500 outline-none"
+              className="w-full p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-white/5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
               onChange={(e) => setDate(e.target.value)}
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">
-              Hora
-            </label>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase ml-1">
+              <Clock className="w-3.5 h-3.5" />
+              Hora Local
+            </div>
             <input
               type="time"
-              className="w-full p-2.5 bg-reply-bg dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-reply-border-dark focus:ring-2 focus:ring-purple-500 outline-none"
+              className="w-full p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-white/5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
               onChange={(e) => setTime(e.target.value)}
             />
           </div>
         </div>
+
         <button
           onClick={handleConfirm}
-          className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-purple-500/30 mt-2"
+          className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all shadow-lg shadow-indigo-500/30 mt-2 flex items-center justify-center gap-2 group active:scale-[0.98]"
         >
-          Programar Envío
+          <Calendar className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+          PROGRAMAR ENVÍO OFICIAL
         </button>
       </div>
     </ModalBackdrop>
@@ -126,17 +160,6 @@ export const ScheduleModal: React.FC<{
 };
 
 // --- 2. Product Picker ---
-import { API_BASE_URL } from "@/services/apiConfig";
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  currency: string;
-  description?: string;
-  imageUrl?: string;
-  status?: string;
-}
 
 export const ProductPicker: React.FC<{
   onClose: () => void;
@@ -188,63 +211,73 @@ export const ProductPicker: React.FC<{
   };
 
   return (
-    <ModalBackdrop onClose={onClose} title="Enviar Producto">
-      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+    <ModalBackdrop onClose={onClose} title="Catálogo de Productos">
+      <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="sticky top-0 z-10 bg-white dark:bg-[#1f2c34] pb-2">
+           <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center gap-3 border border-gray-100 dark:border-white/5">
+              <Package className="w-5 h-5 text-purple-500" />
+              <p className="text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                Selecciona un producto para enviar
+              </p>
+           </div>
+        </div>
+
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <div className="flex flex-col items-center justify-center py-12 gap-4">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
+              <Package className="absolute inset-0 m-auto w-5 h-5 text-purple-500 animate-pulse" />
+            </div>
+            <p className="text-sm font-bold text-gray-400 animate-pulse">Cargando catálogo...</p>
           </div>
         ) : products.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            <p className="font-medium">No hay productos disponibles</p>
-            <p className="text-sm mt-1">Crea productos en el catlogo primero</p>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4 text-gray-400">
+               <Package size={32} />
+            </div>
+            <p className="font-black text-gray-800 dark:text-gray-100">No hay productos</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px]">Crea productos en el catálogo para verlos aquí.</p>
           </div>
         ) : (
-          products.map((p) => (
-            <div
-              key={p.id}
-              onClick={() => onSelect(p)}
-              className="flex items-center gap-4 p-3 rounded-xl border border-gray-100 dark:border-reply-border-dark hover:border-purple-500 dark:hover:border-purple-500 cursor-pointer transition-all hover:bg-reply-bg dark:hover:bg-gray-800 group"
-            >
-              {p.imageUrl ? (
-                <img
-                  src={p.imageUrl}
-                  alt={p.name}
-                  className="w-16 h-16 rounded-lg object-cover bg-gray-200"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 flex items-center justify-center">
-                  <span className="text-2xl">[PKG]</span>
+          <div className="grid grid-cols-1 gap-3 pb-4">
+            {products.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => onSelect(p)}
+                className="group flex items-center gap-4 p-4 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-white/5 hover:border-purple-500/50 hover:shadow-xl hover:shadow-purple-500/10 cursor-pointer transition-all active:scale-[0.98]"
+              >
+                <div className="relative w-20 h-20 shrink-0">
+                  {p.imageUrl ? (
+                    <img
+                      src={p.imageUrl}
+                      alt={p.name}
+                      className="w-full h-full rounded-xl object-cover shadow-sm bg-gray-100"
+                    />
+                  ) : (
+                    <div className="w-full h-full rounded-xl bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 flex items-center justify-center">
+                      <Package className="w-8 h-8 text-purple-400 dark:text-purple-600" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/5" />
                 </div>
-              )}
-              <div className="flex-1">
-                <h4 className="font-bold text-gray-800 dark:text-gray-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                  {p.name}
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
-                  {p.description || "Sin descripción"}
-                </p>
-                <span className="font-mono text-sm font-bold text-green-600 dark:text-green-400">
-                  {formatPrice(p.price, p.currency)}
-                </span>
+
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-black text-gray-800 dark:text-gray-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
+                    {p.name}
+                  </h4>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1 mb-2 font-medium">
+                    {p.description || "Sin descripción detallada"}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20">
+                      {formatPrice(p.price, p.currency)}
+                    </span>
+                    <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
+                  </div>
+                </div>
               </div>
-              <button className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full group-hover:bg-purple-100 dark:group-hover:bg-purple-900/50 text-gray-400 group-hover:text-purple-600 transition-colors">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                  />
-                </svg>
-              </button>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </ModalBackdrop>
@@ -254,40 +287,141 @@ export const ProductPicker: React.FC<{
 // --- 3. Payment Creator ---
 export const PaymentCreator: React.FC<{
   onClose: () => void;
-  onCreate: (amount: string, concept: string) => void;
+  onCreate: (amount: string, concept: string, currency: string) => void;
 }> = ({ onClose, onCreate }) => {
   const [amount, setAmount] = useState("");
   const [concept, setConcept] = useState("");
+  const [currency, setCurrency] = useState("COP");
+  const [isFocused, setIsFocused] = useState(false);
+
+  const quickAmounts = currency === "COP" 
+    ? ["50000", "100000", "200000", "500000"]
+    : ["10", "20", "50", "100"];
+
+  const handleGenerate = () => {
+    if (!amount || parseFloat(amount) <= 0) return toast.error("Ingresa un monto válido");
+    const formattedAmount = new Intl.NumberFormat(currency === "COP" ? "es-CO" : "en-US", {
+      style: "currency",
+      currency: currency,
+      minimumFractionDigits: 0
+    }).format(parseFloat(amount));
+
+    onCreate(amount, concept || "Servicios Profesionales", currency);
+  };
 
   return (
-    <ModalBackdrop onClose={onClose} title="Generar Link de Pago">
-      <div className="space-y-4">
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">
-            $
-          </span>
-          <input
-            type="number"
-            placeholder="0.00"
-            autoFocus
-            className="w-full pl-8 pr-4 py-4 text-3xl font-bold bg-transparent border-b-2 border-gray-200 dark:border-reply-border-dark focus:border-green-500 outline-none text-center"
-            onChange={(e) => setAmount(e.target.value)}
-          />
+    <ModalBackdrop onClose={onClose} title="Generar Cobro Enterprise">
+      <div className="space-y-6">
+        {/* Market Selector / Currency Tabs */}
+        <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+          <button
+            onClick={() => setCurrency("COP")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${
+              currency === "COP" 
+                ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <Wallet className="w-4 h-4" />
+            Mercado Colombia (COP)
+          </button>
+          <button
+            onClick={() => setCurrency("USD")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${
+              currency === "USD" 
+                ? "bg-white dark:bg-gray-700 text-green-600 dark:text-green-400 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <DollarSign className="w-4 h-4" />
+            Dólares (USD)
+          </button>
         </div>
-        <input
-          type="text"
-          placeholder="Concepto (ej: Renovación Anual)"
-          className="w-full p-3 bg-reply-bg dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-reply-border-dark focus:ring-2 focus:ring-green-500 outline-none resize-none"
-          onChange={(e) => setConcept(e.target.value)}
-        />
+
+        {/* Big Amount Input */}
+        <div className={`relative transition-all duration-300 rounded-2xl p-6 border-2 ${
+          isFocused ? "border-indigo-500 bg-indigo-50/30 dark:bg-indigo-500/5 shadow-inner" : "border-gray-100 dark:border-reply-border-dark bg-gray-50/50 dark:bg-gray-800/30"
+        }`}>
+          <div className="flex flex-col items-center justify-center gap-2">
+             <span className={`text-sm font-bold uppercase tracking-widest ${currency === "COP" ? "text-indigo-500" : "text-green-500"}`}>
+               Monto Total
+             </span>
+             <div className="flex items-center gap-1">
+                <span className="text-2xl font-light text-gray-400">
+                  {currency === "USD" ? "$" : "$"}
+                </span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  autoFocus
+                  className="w-full max-w-[200px] text-5xl font-black bg-transparent outline-none text-center placeholder:text-gray-300 dark:placeholder:text-gray-700"
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+             </div>
+             {currency === "COP" && amount && (
+               <span className="text-[10px] text-gray-400 font-medium">
+                 {new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(parseFloat(amount) || 0)}
+               </span>
+             )}
+          </div>
+        </div>
+
+        {/* Quick Selections */}
+        <div className="grid grid-cols-4 gap-2">
+          {quickAmounts.map(val => (
+            <button
+              key={val}
+              onClick={() => setAmount(val)}
+              className="py-2 px-1 text-[11px] font-bold border border-gray-200 dark:border-white/10 rounded-lg hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all dark:text-gray-400"
+            >
+              +{currency === "USD" ? "$" : ""}{parseInt(val).toLocaleString()}
+            </button>
+          ))}
+        </div>
+
+        {/* Concept Input */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase ml-1">
+            <Tag className="w-3 h-3" />
+            Referencia de Pago
+          </div>
+          <div className="relative group">
+            <input
+              type="text"
+              placeholder="Ej: Mensualidad SaaS, Servicios Cloud..."
+              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-reply-border-dark focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
+              value={concept}
+              onChange={(e) => setConcept(e.target.value)}
+            />
+            <Wallet className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+          </div>
+        </div>
+
+        {/* Security / Enterprise Badge */}
+        <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-100 dark:border-emerald-500/20">
+          <div className="p-2 bg-emerald-500 text-white rounded-lg">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 leading-none">Link de Pago Seguro</p>
+            <p className="text-[10px] text-emerald-600/70 dark:text-emerald-500/70 mt-1">Soporta Tarjetas, PSE y Nequi/Daviplata</p>
+          </div>
+          <BadgeDollarSign className="ml-auto w-5 h-5 text-emerald-500 opacity-30" />
+        </div>
+
         <button
-          onClick={() => {
-            if (!amount) return toast.error("Ingresa un monto");
-            onCreate(amount, concept || "Servicios Profesionales");
-          }}
-          className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-green-500/30"
+          onClick={handleGenerate}
+          className={`w-full py-4 rounded-xl font-black text-white transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 group overflow-hidden relative ${
+            currency === "COP" 
+              ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/30" 
+              : "bg-green-600 hover:bg-green-700 shadow-green-500/30"
+          }`}
         >
-          Generar Link
+          <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+          GENERAR LINK DE PAGO {currency}
         </button>
       </div>
     </ModalBackdrop>
@@ -295,57 +429,231 @@ export const PaymentCreator: React.FC<{
 };
 
 // --- 4. Data Request ---
+
+const DEFAULT_FIELDS = [
+  { id: "email", label: "Correo Electrónico", icon: Mail, color: "bg-blue-500" },
+  { id: "phone", label: "Número de Teléfono", icon: Phone, color: "bg-emerald-500" },
+  { id: "location", label: "Ubicación GPS", icon: MapPin, color: "bg-rose-500" },
+  { id: "id_doc", label: "Documento Identidad", icon: IdCard, color: "bg-indigo-500" },
+  { id: "fiscal", label: "Datos Fiscales / RUT", icon: FileCheck, color: "bg-amber-500" },
+  { id: "kyc", label: "Validación KYC", icon: Fingerprint, color: "bg-purple-500" },
+];
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  Mail, Phone, MapPin, IdCard, FileCheck, Fingerprint, Tag
+};
+
 export const DataRequestPicker: React.FC<{
   onClose: () => void;
-  onSelect: (type: string) => void;
-}> = ({ onClose, onSelect }) => {
-  const options = [
-    {
-      id: "email",
-      label: "Correo Electrónico",
-      icon: "",
-      desc: "Solicitar email al cliente",
-    },
-    {
-      id: "phone",
-      label: "Número de Teléfono",
-      icon: "[APP]",
-      desc: "Confirmar número de contacto",
-    },
-    {
-      id: "location",
-      label: "Ubicación Actual",
-      icon: "[LOC]",
-      desc: "Pedir ubicación GPS",
-    },
-    {
-      id: "id_doc",
-      label: "Documento de Identidad",
-      icon: "🪪",
-      desc: "Foto del documento",
-    },
-  ];
+  onConfirm: (fields: string[]) => void;
+}> = ({ onClose, onConfirm }) => {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [customFields, setCustomFields] = useState<string[]>([]);
+  const [suggestedFields, setSuggestedFields] = useState<SuggestedField[]>(DEFAULT_FIELDS.map(f => ({ ...f, iconName: f.id })));
+  const [newCustomField, setNewCustomField] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const settings: CompanySettings = await companyService.getSettings();
+      if (settings?.dataRequest?.suggestedFields && settings.dataRequest.suggestedFields.length > 0) {
+        // Map stored fields to include icons if they match defaults
+        const mapped: SuggestedField[] = settings.dataRequest.suggestedFields.map((f: SuggestedField) => ({
+          ...f,
+          icon: f.iconName ? (ICON_MAP[f.iconName] || Tag) : Tag
+        }));
+        setSuggestedFields(mapped);
+      }
+    } catch (error) {
+      console.error("Failed to load data request settings", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleSelection = (label: string) => {
+    setSelectedIds(prev => 
+      prev.includes(label) ? prev.filter(i => i !== label) : [...prev, label]
+    );
+  };
+
+  const addCustomField = () => {
+    if (!newCustomField.trim()) return;
+    if (!customFields.includes(newCustomField.trim())) {
+      setCustomFields([...customFields, newCustomField.trim()]);
+      setSelectedIds([...selectedIds, newCustomField.trim()]);
+    }
+    setNewCustomField("");
+  };
+
+  const saveToConfig = async (label: string) => {
+    setIsSaving(true);
+    try {
+      const newField = { 
+        id: `custom_${Date.now()}`, 
+        label, 
+        iconName: "Tag", 
+        color: "bg-purple-500" 
+      };
+      
+      const updatedFields = [...suggestedFields.map(f => ({
+        id: f.id,
+        label: f.label,
+        iconName: f.iconName || "Tag",
+        color: f.color
+      })), newField];
+
+      await companyService.updateSettings({
+        dataRequest: { suggestedFields: updatedFields }
+      });
+      
+      toast.success(`Campo "${label}" guardado en la configuración`);
+      setCustomFields(prev => prev.filter(f => f !== label));
+      setSuggestedFields([...suggestedFields, { ...newField, icon: Tag }]);
+    } catch (error) {
+      toast.error("Error al guardar configuración");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (selectedIds.length === 0) return toast.error("Selecciona al menos un dato");
+    onConfirm(selectedIds);
+  };
+
+  const handleSelectAll = () => {
+    const allLabels = [...suggestedFields.map(o => o.label), ...customFields];
+    setSelectedIds(allLabels);
+  };
 
   return (
-    <ModalBackdrop onClose={onClose} title="Solicitar Datos">
-      <div className="grid grid-cols-2 gap-3">
-        {options.map((opt) => (
-          <button
-            key={opt.id}
-            onClick={() => onSelect(opt.label)}
-            className="p-4 bg-reply-bg dark:bg-gray-800 border border-gray-100 dark:border-reply-border-dark rounded-xl hover:ring-2 hover:ring-teal-500 transition-all text-left group"
+    <ModalBackdrop onClose={onClose} title="Solicitud Dinámica Configurable">
+      <div className="space-y-6">
+        {/* Info & Select All */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl flex flex-1 items-center gap-3 border border-indigo-100 dark:border-indigo-500/20">
+            <UserSquare2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <p className="text-[11px] text-indigo-800 dark:text-indigo-200 font-medium leading-tight">
+              Configura y guarda los datos requeridos para tus procesos oficiales.
+            </p>
+          </div>
+          <button 
+            onClick={handleSelectAll}
+            className="px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest transition-all shadow-sm"
           >
-            <div className="text-2xl mb-2 group-hover:scale-110 transition-transform origin-left">
-              {opt.icon}
-            </div>
-            <div className="font-bold text-gray-800 dark:text-gray-100 text-sm">
-              {opt.label}
-            </div>
-            <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-              {opt.desc}
-            </div>
+            Seleccionar Todo
           </button>
-        ))}
+        </div>
+
+        {/* Suggested Grid */}
+        {isLoading ? (
+           <div className="flex justify-center py-8">
+              <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+           </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
+            {suggestedFields.map((opt) => {
+              const isSelected = selectedIds.includes(opt.label);
+                const Icon = opt.icon || Tag;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => toggleSelection(opt.label)}
+                    className={`p-3 border-2 rounded-2xl transition-all text-left group relative overflow-hidden ${
+                      isSelected 
+                        ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-500/10 shadow-lg shadow-indigo-500/10" 
+                        : "border-gray-100 dark:border-white/5 bg-white dark:bg-gray-800/40 hover:border-indigo-200 dark:hover:border-indigo-500/30"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg ${opt.color} flex items-center justify-center text-white mb-2 shadow-sm group-hover:scale-110 transition-transform`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                  
+                  <div className="font-bold text-gray-800 dark:text-gray-100 text-[12px] leading-tight">
+                    {opt.label}
+                  </div>
+
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center text-white animate-in zoom-in duration-200">
+                      <Check size={12} strokeWidth={4} />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Custom Fields List */}
+        {customFields.length > 0 && (
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Campos Temporales (Sin Guardar)</label>
+            <div className="flex flex-wrap gap-2">
+              {customFields.map(field => (
+                <div key={field} className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-500/20 px-3 py-1.5 rounded-full animate-in slide-in-from-left-2 duration-200">
+                  <span className="text-xs font-bold text-amber-700 dark:text-amber-300">{field}</span>
+                  <div className="flex items-center gap-1 ml-1 border-l border-amber-200 dark:border-amber-700/50 pl-2">
+                    <button 
+                      onClick={() => saveToConfig(field)}
+                      disabled={isSaving}
+                      title="Guardar permanentemente en configuración"
+                      className="text-emerald-500 hover:text-emerald-600 transition-colors"
+                    >
+                      {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                    </button>
+                    <button onClick={() => {
+                      setCustomFields(customFields.filter(f => f !== field));
+                      setSelectedIds(selectedIds.filter(f => f !== field));
+                    }} className="text-red-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Add Custom Field Input */}
+        <div className="flex gap-2 p-1 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-white/10">
+          <input
+            type="text"
+            placeholder="¿Qué más necesitas? (Ej: Dirección, NIT...)"
+            className="flex-1 bg-transparent px-3 py-2 text-xs outline-none text-gray-700 dark:text-gray-300"
+            value={newCustomField}
+            onChange={(e) => setNewCustomField(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addCustomField()}
+          />
+          <button 
+            onClick={addCustomField}
+            className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-md active:scale-90"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex gap-3 pt-2">
+           <button
+             onClick={onClose}
+             className="flex-1 py-3 px-4 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-bold rounded-xl hover:bg-gray-200 transition-all"
+           >
+             Cancelar
+           </button>
+           <button
+             onClick={handleConfirm}
+             className="flex-[2] py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-lg shadow-indigo-500/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+           >
+             <Send size={18} />
+             SOLICITAR {selectedIds.length > 0 ? `(${selectedIds.length})` : ""} DATOS
+           </button>
+        </div>
       </div>
     </ModalBackdrop>
   );
@@ -357,8 +665,8 @@ interface ActionModalsProps {
   onClose: () => void;
   onSchedule: (date: Date, message: string) => void;
   onProduct: (product: Product) => void;
-  onPayment: (amount: string, concept: string) => void;
-  onRequestData: (type: string) => void;
+  onPayment: (amount: string, concept: string, currency: string) => void;
+  onRequestData: (data: string[]) => void;
 }
 
 export const ActionModals: React.FC<ActionModalsProps> = ({
@@ -383,7 +691,7 @@ export const ActionModals: React.FC<ActionModalsProps> = ({
         <PaymentCreator onClose={onClose} onCreate={onPayment} />
       )}
       {type === "DATA" && (
-        <DataRequestPicker onClose={onClose} onSelect={onRequestData} />
+        <DataRequestPicker onClose={onClose} onConfirm={onRequestData} />
       )}
     </>
   );

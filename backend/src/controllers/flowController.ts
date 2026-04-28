@@ -19,7 +19,7 @@ export const createFlow = catchAsync(
       return next(new AppError("Company ID missing", 400));
     }
 
-    const flow = await flowService.create(companyId, req.body);
+    const flow = await flowService.create(companyId, req.body as unknown as Parameters<typeof flowService.create>[1]);
     res.status(201).json(flow);
   },
 );
@@ -65,7 +65,7 @@ export const updateFlow = catchAsync(
       return next(new AppError("Company ID missing", 400));
     }
 
-    const updatedFlow = await flowService.update(id, companyId, req.body);
+    const updatedFlow = await flowService.update(id, companyId, req.body as unknown as Parameters<typeof flowService.update>[2]);
     res.status(200).json(updatedFlow);
   },
 );

@@ -259,6 +259,24 @@ export class SessionManager implements ISessionManager {
       syncFullHistory,
       msgRetryCounterCache: new NodeCache(),
       shouldIgnoreJid: (jid) => isJidBroadcast(jid),
+      // [FIX] CRITICAL: Disable init queries that block the event buffer.
+      // When executeInitQueries times out (which happens consistently),
+      // Baileys' internal event buffer NEVER flushes, causing messages.upsert
+      // to never fire. This was the ROOT CAUSE of messages not arriving.
+      fireInitQueries: false,
+      // [FIX] HISTORY SYNC: Accept history sync messages from WhatsApp
+      // so that the store is populated with historical messages during
+      // QR pairing. We conditionally accept based on sync type:
+      // - INITIAL_BOOTSTRAP (2) and RECENT (0) are always accepted
+      // - FULL (3) and PUSH_NAME (1) are accepted when syncFullHistory is enabled
+      // Previously this returned `false` which silently rejected ALL history,
+      // making on-demand sync impossible (store was always empty).
+      shouldSyncHistoryMessage: (msg) => {
+        if (syncFullHistory) return true;
+        // Accept recent history types only (types 0=RECENT, 2=INITIAL_BOOTSTRAP)
+        const syncType = msg.syncType;
+        return syncType === 0 || syncType === 2;
+      },
       getMessage: async (key) => {
         if (!key.id) return undefined;
         try {
@@ -288,8 +306,9 @@ export class SessionManager implements ISessionManager {
       },
     });
 
-    // Bind store & events (delegated to SessionEventBinder)
-    sessionStore.bind(sock.ev);
+    // Bind events (delegated to SessionEventBinder — store.bind is called inside)
+    // [FIX] Removed duplicate sessionStore.bind(sock.ev) that was here.
+    // SessionEventBinder.bindSessionEvents already calls store.bind(sock.ev) on line 74.
     bindSessionEvents(sock, sessionId, companyId, saveCreds, {
       eventBus: this.eventBus,
       healer: this.healer,
@@ -317,11 +336,21 @@ export class SessionManager implements ISessionManager {
     // Delegate timer cleanup to healer
     this.healer.cleanupSession(sessionId);
 
-    // [SEC] CLEANUP ISOLATED STORE
+    // [SEC] STORE LIFECYCLE: Only destroy on hard logout, preserve on reconnect
     const store = this.sessionStores.get(sessionId);
     if (store) {
-      store.flush();
-      this.sessionStores.delete(sessionId);
+      if (clearAuth) {
+        // Hard termination (logout): wipe everything
+        store.flush();
+        this.sessionStores.delete(sessionId);
+      } else {
+        // Soft reconnect: persist current store to Redis before socket teardown
+        // so history is preserved across reconnections
+        const meta = this.sessionMetadata.get(sessionId);
+        if (meta?.companyId) {
+          await store.writeToRedis(`${meta.companyId}_${sessionId}`).catch(() => {});
+        }
+      }
     }
 
     const sock = this.sessions.get(sessionId);

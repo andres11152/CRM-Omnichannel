@@ -11,15 +11,21 @@ import { Search, User, History, Trash2, X, MessageSquare } from "lucide-react";
 export const ContactsPage: React.FC = () => {
   const navigate = useNavigate();
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [allTags, setAllTags] = useState<Tag[]>([]); // ️ Store full tag objects
+  const [allTags, setAllTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const [limit] = useState(50); // Default items per page
+
   const [showModal, setShowModal] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [showTimeline, setShowTimeline] = useState(false);
-  const [timelineContactId, setTimelineContactId] = useState<string | null>(
-    null,
-  );
+  const [timelineContactId, setTimelineContactId] = useState<string | null>(null);
 
   // Email State
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -33,8 +39,20 @@ export const ContactsPage: React.FC = () => {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [newNotes, setNewNotes] = useState("");
 
+  // Debounce search input
   useEffect(() => {
-    fetchContacts();
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1); // Reset to first page on search
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchContacts(page, debouncedSearch);
+  }, [page, debouncedSearch]);
+
+  useEffect(() => {
     fetchTags();
   }, []);
 
@@ -58,21 +76,39 @@ export const ContactsPage: React.FC = () => {
     }
   };
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (pageNum: number, search: string) => {
+    setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/contacts`, {
+      const offset = (pageNum - 1) * limit;
+      const url = new URL(`${API_BASE_URL}/contacts`);
+      url.searchParams.append("limit", limit.toString());
+      url.searchParams.append("offset", offset.toString());
+      if (search) url.searchParams.append("search", search);
+
+      const res = await fetch(url.toString(), {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       
-      if (data.status === "success" && data.data?.contacts) {
-        setContacts(data.data.contacts);
+      if (data.status === "success") {
+        setContacts(Array.isArray(data.data) ? data.data : data.data?.contacts || []);
+        
+        // Handle standardized meta or legacy results field
+        if (data.meta) {
+          setTotalPages(data.meta.pages || 1);
+          setTotalResults(data.meta.total || 0);
+        } else if (typeof data.results === "number") {
+          setTotalResults(data.results);
+          setTotalPages(Math.ceil(data.results / limit));
+        }
       } else if (Array.isArray(data)) {
         setContacts(data);
+        setTotalResults(data.length);
       }
     } catch (error) {
       console.error("Error fetching contacts:", error);
+      toast.error("Error al cargar contactos");
     } finally {
       setLoading(false);
     }
@@ -146,7 +182,7 @@ export const ContactsPage: React.FC = () => {
             : "Contacto creado correctamente",
         );
         setShowModal(false);
-        fetchContacts();
+        fetchContacts(page, debouncedSearch);
       } else {
         const errorData = await res.json().catch(() => ({}));
         const errorMessage =
@@ -192,7 +228,7 @@ export const ContactsPage: React.FC = () => {
         throw new Error(`Failed to delete: ${res.status}`);
       }
 
-      await fetchContacts();
+      await fetchContacts(page, debouncedSearch);
       toast.success("Contacto eliminado correctamente", { id: toastId });
     } catch (error) {
       console.error("[ERROR] Error deleting contact:", error);
@@ -250,12 +286,8 @@ export const ContactsPage: React.FC = () => {
     }
   };
 
-  const filteredContacts = contacts.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone?.includes(searchTerm),
-  );
+  // Server-side filtering is active, so we use contacts directly
+    const displayContacts = contacts;
 
   
   
@@ -286,7 +318,7 @@ export const ContactsPage: React.FC = () => {
         gradient="from-cyan-600 to-sky-600 dark:from-cyan-800 dark:to-sky-800"
         stats={{
           label: "Total Contactos",
-          value: contacts.length,
+          value: totalResults,
         }}
         action={
           <button
@@ -329,7 +361,7 @@ export const ContactsPage: React.FC = () => {
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex px-4 py-2 bg-reply-surface dark:bg-reply-panel-dark rounded-2xl border border-reply-border dark:border-reply-border-dark shadow-sm text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-                {filteredContacts.length} Contactos
+                {totalResults} Contactos
               </div>
             </div>
           </div>
@@ -344,16 +376,16 @@ export const ContactsPage: React.FC = () => {
                 />
               ))}
             </div>
-          ) : filteredContacts.length === 0 ? (
+          ) : displayContacts.length === 0 ? (
             <div className="text-center py-24 bg-reply-surface dark:bg-reply-panel-dark rounded-[3rem] border border-dashed border-reply-border dark:border-reply-border-dark shadow-inner">
               <div className="w-24 h-24 bg-reply-bg dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform hover:scale-110">
                 <User className="w-10 h-10 text-gray-300" />
               </div>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                {searchTerm ? "Sin resultados" : "Tu lista está vacía"}
+                {debouncedSearch ? "Sin resultados" : "Tu lista está vacía"}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
-                {searchTerm
+                {debouncedSearch
                   ? "No encontramos nada que coincida con tu búsqueda."
                   : "Parece que aún no tienes contactos. ¡Agrega el primero ahora!"}
               </p>
@@ -361,8 +393,8 @@ export const ContactsPage: React.FC = () => {
           ) : (
             <>
               {/* MOBILE CARDS */}
-              <div className="grid grid-cols-1 gap-4 md:hidden pb-10">
-                {filteredContacts.map((contact) => (
+              <div className="grid grid-cols-1 gap-4 md:hidden pb-4">
+                {displayContacts.map((contact) => (
                   <div
                     key={contact.id}
                     className="bg-reply-surface dark:bg-reply-surface-dark p-6 rounded-[2.5rem] border border-reply-border dark:border-reply-border-dark shadow-sm transition-all relative overflow-hidden group"
@@ -383,21 +415,10 @@ export const ContactsPage: React.FC = () => {
                         </div>
                       </div>
                       <button
-                        onClick={() =>
-                          toast.info(
-                            "Función Enterprise: Próximamente disponible",
-                            {
-                              description:
-                                "Estamos trabajando para integrar WhatsApp Directo.",
-                            },
-                          )
-                        }
-                        className="p-2 text-gray-300 hover:text-gray-400 cursor-not-allowed transition-colors relative group"
+                        onClick={() => handleOpenChat(contact)}
+                        className="p-2 text-reply-brand hover:text-cyan-600 transition-colors"
                       >
-                        <MessageSquare className="w-5 h-5 opacity-50" />
-                        <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                          Próximamente
-                        </span>
+                        <MessageSquare className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => handleDelete(contact.id, contact.name)}
@@ -420,12 +441,7 @@ export const ContactsPage: React.FC = () => {
                           </svg>
                         </div>
                         <span className="text-sm font-semibold truncate">
-                          {contact.email && !contact.email.includes("@")
-                            ? "-"
-                            : contact.email?.includes("whatsapp.user") ||
-                                contact.email?.includes("c.us")
-                              ? "WhatsApp User"
-                              : contact.email || "Sin email"}
+                          {contact.email || "Sin email"}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
@@ -440,10 +456,7 @@ export const ContactsPage: React.FC = () => {
                           </svg>
                         </div>
                         <span className="text-sm font-black tracking-tight">
-                          {contact.phone ||
-                            (contact.email?.includes("whatsapp.user")
-                              ? contact.email.split("@")[0]
-                              : "Sin teléfono")}
+                          {contact.phone || "Sin teléfono"}
                         </span>
                       </div>
                     </div>
@@ -470,7 +483,7 @@ export const ContactsPage: React.FC = () => {
               </div>
 
               {/* DESKTOP TABLE */}
-              <div className="hidden md:block bg-reply-surface dark:bg-reply-surface-dark rounded-[2rem] border border-reply-border dark:border-reply-border-dark shadow-xl shadow-gray-200/50 dark:shadow-none overflow-visible">
+              <div className="hidden md:block bg-reply-surface dark:bg-reply-surface-dark rounded-[2rem] border border-reply-border dark:border-reply-border-dark shadow-xl shadow-gray-200/50 dark:shadow-none overflow-visible mb-6">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-reply-bg/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
@@ -482,7 +495,7 @@ export const ContactsPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                    {filteredContacts.map((contact) => (
+                    {displayContacts.map((contact) => (
                       <tr
                         key={contact.id}
                         className="hover:bg-reply-bg/50 dark:hover:bg-cyan-500/[0.02] transition-all group"
@@ -499,7 +512,7 @@ export const ContactsPage: React.FC = () => {
                               <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                 <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                                  {contact.channel || "Cliente"}
+                                  {contact.phone ? "WhatsApp" : "Cliente"}
                                 </span>
                               </div>
                             </div>
@@ -517,12 +530,7 @@ export const ContactsPage: React.FC = () => {
                                 <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                               </svg>
                               <span className="truncate max-w-[150px]">
-                                {contact.email && !contact.email.includes("@")
-                                  ? "-"
-                                  : contact.email?.includes("whatsapp.user") ||
-                                      contact.email?.includes("c.us")
-                                    ? "WhatsApp User"
-                                    : contact.email || "Sin correo"}
+                                {contact.email || "Sin correo"}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-900 dark:text-white tracking-wider bg-reply-bg dark:bg-gray-800/50 w-fit px-2 py-0.5 rounded-md border border-gray-100 dark:border-reply-border-dark">
@@ -534,10 +542,7 @@ export const ContactsPage: React.FC = () => {
                               >
                                 <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                               </svg>
-                              {contact.phone ||
-                                (contact.email?.includes("whatsapp.user")
-                                  ? contact.email.split("@")[0]
-                                  : "-")}
+                              {contact.phone || "-"}
                             </div>
                           </div>
                         </td>
@@ -576,22 +581,11 @@ export const ContactsPage: React.FC = () => {
                         <td className="px-6 py-3 whitespace-nowrap text-right">
                           <div className="flex justify-end items-center gap-2">
                             <button
-                              onClick={() =>
-                                toast.info(
-                                  "Función Enterprise: Próximamente disponible",
-                                  {
-                                    description:
-                                      "Estamos trabajando para integrar WhatsApp Directo.",
-                                  },
-                                )
-                              }
-                              className="p-2 bg-reply-bg dark:bg-gray-800/50 text-gray-300 cursor-not-allowed rounded-xl border border-gray-100 dark:border-reply-border-dark relative group"
-                              title="Enterprise (Pronto)"
+                              onClick={() => handleOpenChat(contact)}
+                              className="p-2 bg-reply-bg dark:bg-gray-800/50 text-reply-brand hover:bg-reply-brand hover:text-white rounded-xl border border-gray-100 dark:border-reply-border-dark transition-all"
+                              title="WhatsApp"
                             >
-                              <MessageSquare className="w-4 h-4 opacity-50" />
-                              <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                                Próximamente
-                              </span>
+                              <MessageSquare className="w-4 h-4" />
                             </button>
 
                             <button
@@ -603,24 +597,6 @@ export const ContactsPage: React.FC = () => {
                               title="Actividad"
                             >
                               <History className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setSelectedEmailContact(contact);
-                                setShowEmailModal(true);
-                              }}
-                              className="p-2 bg-white dark:bg-gray-800 hover:bg-indigo-600 hover:text-white text-gray-400 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-reply-border-dark active:scale-95"
-                              title="Email"
-                            >
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
                             </button>
 
                             <div className="w-px h-6 bg-gray-100 dark:bg-gray-800 mx-1" />
@@ -646,6 +622,63 @@ export const ContactsPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* MODERN PAGINATION CONTROLS */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between bg-reply-surface dark:bg-reply-panel-dark px-6 py-4 rounded-[2rem] border border-reply-border dark:border-reply-border-dark shadow-sm mt-4 mb-10">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                      P gina <span className="text-reply-brand dark:text-cyan-400">{page}</span> de {totalPages}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1 || loading}
+                      className="p-2 rounded-xl bg-reply-bg dark:bg-gray-800 border border-reply-border dark:border-reply-border-dark text-gray-500 dark:text-gray-400 hover:bg-reply-brand hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    
+                    <div className="flex items-center gap-1">
+                      {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                        let pageNum = page;
+                        if (page <= 3) pageNum = i + 1;
+                        else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+                        else pageNum = page - 2 + i;
+                        
+                        if (pageNum <= 0 || pageNum > totalPages) return null;
+
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setPage(pageNum)}
+                            className={`w-10 h-10 rounded-xl font-bold text-sm transition-all border ${
+                              page === pageNum
+                                ? "bg-cyan-600 border-cyan-600 text-white shadow-lg shadow-cyan-500/20"
+                                : "bg-white dark:bg-gray-800 border-reply-border dark:border-reply-border-dark text-gray-500 dark:text-gray-400 hover:border-cyan-500"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages || loading}
+                      className="p-2 rounded-xl bg-reply-bg dark:bg-gray-800 border border-reply-border dark:border-reply-border-dark text-gray-500 dark:text-gray-400 hover:bg-reply-brand hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

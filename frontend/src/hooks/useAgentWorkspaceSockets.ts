@@ -240,6 +240,12 @@ export const useAgentWorkspaceSockets = ({
           newDate = new Date().toISOString();
         }
 
+        const isPhone = (val: string | undefined | null) => 
+          !val || /^\+?\d+$/.test(val.replace(/\s/g, ""));
+
+        const isIncomingNameBetter = resolvedName && !isPhone(resolvedName) && resolvedName !== "Usuario WhatsApp" && resolvedName !== "Sin Nombre";
+        const isExistingNameBetter = ticket.contact?.name && !isPhone(ticket.contact.name) && ticket.contact.name !== "Usuario WhatsApp" && ticket.contact.name !== "Sin Nombre";
+
         updatedTickets[ticketIndex] = {
           ...ticket,
           lastMessage: incomingMessage,
@@ -248,7 +254,7 @@ export const useAgentWorkspaceSockets = ({
           contact: {
             ...ticket.contact,
             ...(payload.contact || {}),
-            name: resolvedName,
+            name: (isExistingNameBetter && !isIncomingNameBetter) ? ticket.contact.name : resolvedName,
             profilePicUrl:
               (payload.contact?.profilePicUrl?.startsWith("/")
                 ? `${BASE_URL}${payload.contact.profilePicUrl}`
@@ -345,12 +351,21 @@ export const useAgentWorkspaceSockets = ({
         // Admins always keep tickets in their view
         if (isAdminOrSupervisor) {
           const updatedTickets = [...prev];
+          const existingTicket = updatedTickets[ticketIndex];
+          const isPhone = (val: string | undefined | null) => 
+            !val || /^\+?\d+$/.test(val.replace(/\s/g, ""));
+            
+          const isIncomingNameBetter = incoming.contact?.name && !isPhone(incoming.contact.name) && incoming.contact.name !== "Usuario WhatsApp" && incoming.contact.name !== "Sin Nombre";
+          const isExistingNameBetter = existingTicket.contact?.name && !isPhone(existingTicket.contact.name) && existingTicket.contact.name !== "Usuario WhatsApp" && existingTicket.contact.name !== "Sin Nombre";
+
           updatedTickets[ticketIndex] = {
-            ...updatedTickets[ticketIndex],
+            ...existingTicket,
             ...incoming,
             contact: {
-              ...updatedTickets[ticketIndex].contact,
+              ...existingTicket.contact,
               ...incoming.contact,
+              name: (isExistingNameBetter && !isIncomingNameBetter) ? existingTicket.contact.name : (incoming.contact?.name || existingTicket.contact?.name),
+              profilePicUrl: (incoming.contact?.profilePicUrl?.startsWith("/") ? `${BASE_URL}${incoming.contact.profilePicUrl}` : incoming.contact?.profilePicUrl) || existingTicket.contact?.profilePicUrl
             },
           };
           return updatedTickets;
@@ -393,13 +408,22 @@ export const useAgentWorkspaceSockets = ({
         }
 
         const updatedTickets = [...prev];
+        const existingTicket = updatedTickets[ticketIndex];
+        const isPhone = (val: string | undefined | null) => 
+          !val || /^\+?\d+$/.test(val.replace(/\s/g, ""));
+          
+        const isIncomingNameBetter = incoming.contact?.name && !isPhone(incoming.contact.name) && incoming.contact.name !== "Usuario WhatsApp" && incoming.contact.name !== "Sin Nombre";
+        const isExistingNameBetter = existingTicket.contact?.name && !isPhone(existingTicket.contact.name) && existingTicket.contact.name !== "Usuario WhatsApp" && existingTicket.contact.name !== "Sin Nombre";
+
         updatedTickets[ticketIndex] = {
-          ...updatedTickets[ticketIndex],
+          ...existingTicket,
           ...incoming,
           // Ensure contact info is merged not lost
           contact: {
-            ...updatedTickets[ticketIndex].contact,
+            ...existingTicket.contact,
             ...incoming.contact,
+            name: (isExistingNameBetter && !isIncomingNameBetter) ? existingTicket.contact.name : (incoming.contact?.name || existingTicket.contact?.name),
+            profilePicUrl: (incoming.contact?.profilePicUrl?.startsWith("/") ? `${BASE_URL}${incoming.contact.profilePicUrl}` : incoming.contact?.profilePicUrl) || existingTicket.contact?.profilePicUrl
           },
         };
 

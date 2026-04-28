@@ -107,6 +107,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       const filename = `voice_note_${Date.now()}.webm`;
       formData.append("file", audioBlob, filename);
       formData.append("type", "AUDIO");
+      formData.append("category", "media-library"); // Mark as library asset for automations
 
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE_URL}/media/upload`, {

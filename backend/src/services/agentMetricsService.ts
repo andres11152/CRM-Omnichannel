@@ -31,7 +31,6 @@ export const agentMetricsService = {
 
     const agentsOutput = await userRepository.findMany({
       where: {
-        companyId,
         role: { in: ["AGENT", "ADMIN"] },
       },
       select: {
@@ -56,7 +55,7 @@ export const agentMetricsService = {
           },
         },
       },
-    });
+    }, companyId);
 
     const agents = agentsOutput as ((typeof agentsOutput)[0] & {
       assignedTickets: unknown[];
@@ -74,7 +73,7 @@ export const agentMetricsService = {
           status: "RESOLVED",
           resolvedAt: { gte: today },
         },
-      });
+      }, companyId);
 
       const ticketsResolved = await ticketRepository.count({
         where: {
@@ -82,7 +81,7 @@ export const agentMetricsService = {
           status: "RESOLVED",
           resolvedAt: { gte: thirtyDaysAgo },
         },
-      });
+      }, companyId);
 
       const ticketsClosed = await ticketRepository.count({
         where: {
@@ -90,7 +89,7 @@ export const agentMetricsService = {
           status: "CLOSED",
           updatedAt: { gte: thirtyDaysAgo },
         },
-      });
+      }, companyId);
 
       const totalHandled = ticketsResolved + ticketsClosed;
       const csatScore =

@@ -167,6 +167,8 @@ export function ticketToContact(ticket: Ticket): Contact {
     channel: ticket.channel as Channel,
     isGroup: ticket.isGroup || ticket.contact.isGroup || false,
     whatsappSessionIndex: ticket.contact.whatsappSessionIndex,
+    priority: ticket.priority,
+    ticketCreatedAt: ticket.createdAt,
   };
 }
 
@@ -293,7 +295,11 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
-      .then((data) => (Array.isArray(data) ? setAllTags(data) : setAllTags([])))
+      .then((data) => {
+        if (Array.isArray(data)) setAllTags(data);
+        else if (data && Array.isArray(data.data)) setAllTags(data.data);
+        else setAllTags([]);
+      })
       .catch((err) => console.error("Error loading tags", err));
   }, []);
 
@@ -384,6 +390,15 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
           setTickets((prev) =>
             prev.filter((t) => t.id !== transferringTicketId),
           );
+          // [UX] If we transferred the active ticket, close the chat view
+          const activeTicket = tickets.find(t => t.id === activeTicketId);
+          if (
+            activeTicketId === transferringTicketId || 
+            activeTicket?.id === transferringTicketId ||
+            activeTicket?.conversationId === transferringTicketId
+          ) {
+            setActiveTicketId(null);
+          }
         } else {
           setTickets((prev) =>
             prev.map((t) =>
@@ -397,6 +412,15 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
                 : t,
             ),
           );
+          // [UX] If moved to queue, also deselect it from "My Chats"
+          const activeTicket = tickets.find(t => t.id === activeTicketId);
+          if (
+            activeTicketId === transferringTicketId || 
+            activeTicket?.id === transferringTicketId ||
+            activeTicket?.conversationId === transferringTicketId
+          ) {
+            setActiveTicketId(null);
+          }
         }
 
         toast.success(
@@ -572,9 +596,15 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
   const handleContactUpdate = useCallback((updatedContact: Contact) => {
     setTickets((prev) =>
       prev.map((t) =>
+        t.id === updatedContact.id ||
+        t.conversationId === updatedContact.id ||
         t.contact.id === updatedContact.id ||
-        t.conversationId === updatedContact.id
-          ? { ...t, contact: { ...t.contact, ...updatedContact } }
+        t.contact.realContactId === updatedContact.id
+          ? { 
+              ...t, 
+              tags: updatedContact.tags !== undefined ? updatedContact.tags : t.tags,
+              contact: { ...t.contact, ...updatedContact } 
+            }
           : t,
       ),
     );
@@ -621,6 +651,19 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
     displayedTickets = myTickets.filter(
       (t) => t.status !== "CLOSED" && t.status !== "RESOLVED",
     );
+
+    // [SEC] Admin Empowerment: Include ALL active groups in the display context
+    // so they can be opened even if not assigned to the current admin.
+    if (isAdminRole) {
+      const allActiveGroupTickets = curatedTickets.filter(
+        (t) =>
+          (t.isGroup || t.contact?.isGroup) &&
+          t.status !== "CLOSED" &&
+          t.status !== "RESOLVED" &&
+          !displayedTickets.some(dt => dt.id === t.id) // Avoid duplicates
+      );
+      displayedTickets = [...displayedTickets, ...allActiveGroupTickets];
+    }
   } else if (activeTab === "queue") {
     displayedTickets = queueTickets.filter(
       (t) => t.status !== "CLOSED" && t.status !== "RESOLVED",
@@ -682,7 +725,9 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
   }
 
   // Active ticket/contact resolution
-  const activeTicket = tickets.find((t) => t.id === activeTicketId);
+  // [SEC] 100-YEAR FIX: Only resolve active ticket if it exists in the CURRENT displayed context
+  // This prevents "ghost" chats staying open when a ticket is transferred or reassigned away from the current view.
+  const activeTicket = displayedTickets.find((t) => t.id === activeTicketId || t.conversationId === activeTicketId);
   const activeContact: Contact | null = activeTicket
     ? {
         ...activeTicket.contact,
@@ -710,6 +755,8 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         assignedToId: activeTicket.assignedToId,
         isGroup:
           activeTicket.isGroup || activeTicket.contact.isGroup || false,
+        priority: activeTicket.priority,
+        ticketCreatedAt: activeTicket.createdAt,
       }
     : null;
 

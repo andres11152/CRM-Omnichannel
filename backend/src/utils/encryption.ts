@@ -1,20 +1,26 @@
 import crypto from "crypto";
 import { Logger } from "@/utils/logger";
+import { getEnv } from "@/config/env";
 
 const ALGORITHM = "aes-256-cbc";
-// Usar una clave fija derivada del JWT_SECRET o una variable de entorno específica
-// Fallback seguro para desarrollo si no hay ENV
-const ENCRYPTION_KEY = crypto.scryptSync(
-  process.env.JWT_SECRET || "secret-fallback-key-do-not-use-prod",
-  "salt",
-  32,
-);
+
+/**
+ * [SEC] SECURITY FIX: Use standardized getEnv() and SESSION_SECRET
+ * Derives a consistent key for internal data encryption.
+ */
+const getEncryptionKey = (): Buffer => {
+  const secret = getEnv().SESSION_SECRET;
+  // Use a fixed salt for internal encryption to keep keys stable
+  return crypto.scryptSync(secret, "reply-internal-salt", 32);
+};
+
 const IV_LENGTH = 16;
 
 export const encrypt = (text: string): string => {
   if (!text) return text;
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+  const key = getEncryptionKey();
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   let encrypted = cipher.update(text);
   encrypted = Buffer.concat([encrypted, cipher.final()]);
   return iv.toString("hex") + ":" + encrypted.toString("hex");
@@ -29,7 +35,8 @@ export const decrypt = (text: string): string => {
     const textParts = text.split(":");
     const iv = Buffer.from(textParts.shift()!, "hex");
     const encryptedText = Buffer.from(textParts.join(":"), "hex");
-    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+    const key = getEncryptionKey();
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     let decrypted = decipher.update(encryptedText);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString();

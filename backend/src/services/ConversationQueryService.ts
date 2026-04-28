@@ -3,6 +3,7 @@ import { contactRepository } from "@/repositories/ContactRepository";
 import { ticketSyncService } from "./TicketSyncService";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
+import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import {
   ConversationListItem,
   ConversationWithRelations,
@@ -51,11 +52,28 @@ export class ConversationQueryService {
         }
       }
 
+      // [SEC] GROUP PHOTO FIX: For groups, use the group's own photo, not the last sender's
+      const isGroup = conv.isGroup || false;
+      const groupMetadata = (conv.groupMetadata || null) as {
+        groupName?: string;
+        groupPicUrl?: string | null;
+      } | null;
+
+      // For groups: use groupPicUrl; for DMs: use customer profilePicUrl
+      const resolvedAvatarUrl = isGroup
+        ? groupMetadata?.groupPicUrl || conv.contact?.avatarUrl || null
+        : conv.contact?.avatarUrl || null;
+      const resolvedProfilePicUrl = isGroup
+        ? groupMetadata?.groupPicUrl || null
+        : customer?.profilePicUrl || conv.contact?.profilePicUrl || null;
+
       return {
         id: conv.id,
         ticketId: conv.id,
         contactName: customer?.name || conv.subject || "Usuario",
         contactPhone: customer?.phone || conv.channelId || "",
+        avatarUrl: resolvedAvatarUrl,
+        profilePicUrl: resolvedProfilePicUrl,
         lastMessage: lastMsgSnippet,
         lastMessageTime: lastMsg?.createdAt || conv.updatedAt,
         unreadCount,
@@ -136,11 +154,14 @@ export class ConversationQueryService {
 
     //  ON-DEMAND CONTEXT SYNC (Async)
     const CONTEXT_SYNC_THRESHOLD = 20;
-    const cleanChannelId = (conversation.channelId || "").replace(/\D/g, "");
+    // [SEC] JID HARDENING: Use central utility for target JID
+    const targetJid = WhatsAppIdUtils.getTargetJid(conversation.channelId || "");
+    const cleanChannelId = WhatsAppIdUtils.cleanChannelId(targetJid);
+    
     const hasValidPhone = cleanChannelId && (conversation.isGroup || /^\d{5,15}$/.test(cleanChannelId));
 
     if (messagesWithProps.length < CONTEXT_SYNC_THRESHOLD && hasValidPhone) {
-      this.triggerContextSync(companyId, conversation.id, conversation.channelId!);
+      this.triggerContextSync(companyId, conversation.id, targetJid);
     }
 
     return {
@@ -152,7 +173,7 @@ export class ConversationQueryService {
 
   private triggerContextSync(companyId: string, conversationId: string, phone: string) {
     import("./ChatSyncService").then(({ chatSyncService }) => {
-      chatSyncService.contextSync(companyId, conversationId, phone).catch((err: Error) =>
+      chatSyncService.contextSync(companyId, conversationId, WhatsAppIdUtils.getTargetJid(phone)).catch((err: Error) =>
         Logger.warn(`[QueryService] Context sync failed:`, { error: err.message }),
       );
     });

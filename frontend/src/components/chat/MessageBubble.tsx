@@ -4,6 +4,8 @@ import EmojiPicker, { Theme } from "emoji-picker-react";
 import { Plus, Smile, Reply, FileText, Download } from "lucide-react";
 import { VoiceNotePlayer } from "./VoiceNotePlayer";
 import { jwtDecode } from "jwt-decode";
+import { api } from "@/lib/axios";
+import { toast } from "sonner";
 
 // Cache token decoding for performance
 let cachedUserId: string | null = null;
@@ -285,12 +287,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 onClick={() => onImageClick ? onImageClick(resolveMediaUrl(mediaUrl)) : window.open(resolveMediaUrl(mediaUrl), "_blank")}
               />
             ) : (
-              <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
-                <span className="text-xl"></span>
-                <span className="text-xs text-gray-500 italic">
-                  Imagen no disponible
-                </span>
-              </div>
+              <UnavailableMediaFallback message={message} type="image" />
             )))}
 
           {(msgType === "video" || msgType === "video_unavailable") && (
@@ -301,12 +298,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 className="rounded-lg mb-1 max-w-[300px] max-h-[350px] shadow-sm"
               />
             ) : (
-              <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
-                <span className="text-xl"></span>
-                <span className="text-xs text-gray-500 italic">
-                  Video no disponible
-                </span>
-              </div>
+              <UnavailableMediaFallback message={message} type="video" />
             ))}
 
           {(msgType === "audio" || msgType === "audio_unavailable") && (
@@ -316,12 +308,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 isAgent={isAgent}
               />
             ) : (
-              <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
-                <span className="text-xl"></span>
-                <span className="text-xs text-gray-500 italic">
-                  Audio no disponible
-                </span>
-              </div>
+              <UnavailableMediaFallback message={message} type="audio" />
             ))}
 
           {(msgType === "document" || msgType === "document_unavailable") && (
@@ -385,12 +372,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
-                <span className="text-xl"></span>
-                <span className="text-xs text-gray-500 italic">
-                  Archivo no disponible
-                </span>
-              </div>
+              <UnavailableMediaFallback message={message} type="document" />
             ))}
 
           {/* Text Content & Specialized Renderers */}
@@ -607,6 +589,65 @@ const formatTime = (timestamp: string | Date): string => {
     minute: "2-digit",
     hour12: false 
   });
+};
+
+const UnavailableMediaFallback: React.FC<{ message: Message; type: string }> = ({ message, type }) => {
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    try {
+      const response = await api.post(`/conversations/${message.ticketId || "0"}/messages/${message.id}/retry-media`);
+      
+      if (response.data.status === "success") {
+        toast.success("Archivo recuperado correctamente. Refresca para verlo.");
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || error.message || "Error al recuperar el archivo.";
+      toast.error(errorMsg);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const getLabel = () => {
+    switch (type) {
+      case "image": return "Imagen";
+      case "video": return "Video";
+      case "audio": return "Audio";
+      default: return "Archivo";
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 p-3 bg-black/5 dark:bg-white/5 rounded-lg mb-2 border border-dashed border-gray-300 dark:border-gray-600">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500 italic">
+          {getLabel()} no disponible
+        </span>
+      </div>
+      <button 
+        onClick={handleRetry}
+        disabled={isRetrying}
+        className="flex items-center justify-center gap-2 text-[11px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 py-1.5 px-3 rounded-md font-medium transition-colors border border-indigo-200 dark:border-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isRetrying ? (
+          <>
+            <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Recuperando...
+          </>
+        ) : (
+          <>
+            <Download className="w-3 h-3" />
+            Reintentar Descarga
+          </>
+        )}
+      </button>
+    </div>
+  );
 };
 
 /**

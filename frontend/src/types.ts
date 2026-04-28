@@ -90,6 +90,7 @@ export interface Message {
   id: string;
   senderId?: string;
   ticketId: string;
+  conversationId?: string;
   companyId: string;
   content: string;
   senderType: SenderType;

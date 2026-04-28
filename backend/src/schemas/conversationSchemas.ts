@@ -52,3 +52,10 @@ export const ReactToMessageSchema = z.object({
     reaction: z.string().max(10, "Reaction must be a single emoji."),
   }),
 });
+
+export const RetryMediaSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Conversation ID is required."),
+    messageId: z.string().min(1, "Message ID is required."),
+  }),
+});

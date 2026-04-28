@@ -145,6 +145,88 @@ export class SyncMediaService {
 
     return { url: undefined, mimetype: rawMime };
   }
+
+  /**
+   * ON-DEMAND MEDIA RETRY
+   * Tries to fetch the raw message from the memory/Redis store and redownload the media.
+   */
+  async retryMedia(companyId: string, messageId: string) {
+    const { messageRepository } = await import("@/repositories/MessageRepository");
+    const { whatsappService } = await import("@/whatsapp/WhatsAppService");
+
+    const message = await messageRepository.findFirst({
+      where: { id: messageId, companyId },
+    });
+
+    if (!message || !message.whatsappMessageId) {
+      throw new Error("Mensaje no encontrado o sin ID de WhatsApp asociado.");
+    }
+
+    const meta = message.metadata as Prisma.JsonObject | null;
+    const mediaObj = meta?.media as Prisma.JsonObject | undefined;
+    
+    if (!mediaObj) {
+      throw new Error("El mensaje no contiene información multimedia.");
+    }
+
+    const activeSession = await whatsappService.getSessionManager().findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error("No hay una sesión de WhatsApp activa para esta empresa.");
+    }
+
+    const store = whatsappService.getSessionStore(activeSession.sessionId);
+    if (!store) {
+      throw new Error("El almacén de sesión no está disponible.");
+    }
+
+    // Try to find the message in the Baileys store
+    let rawMsg: WAMessage | undefined;
+    for (const jid in store.messages) {
+      const msgs = store.messages[jid];
+      rawMsg = msgs.find(m => m.key.id === message.whatsappMessageId);
+      if (rawMsg) break;
+    }
+
+    if (!rawMsg) {
+      throw new Error("El mensaje es muy antiguo y ya no está en la memoria caché del teléfono. Sincroniza de nuevo.");
+    }
+
+    // Attempt to download and upload again
+    const mediaType = (meta.mediaType as string) || "document";
+    const msgContent = rawMsg.message as Record<string, unknown> | undefined;
+
+    if (!msgContent) {
+      throw new Error("El mensaje crudo no tiene contenido.");
+    }
+
+    const result = await this.downloadAndUpload({
+      companyId,
+      whatsappMessageId: message.whatsappMessageId,
+      msg: rawMsg,
+      mediaType,
+      msgContent,
+    });
+
+    if (!result.url) {
+      throw new Error("Falló la descarga. Es posible que el archivo haya expirado en los servidores de WhatsApp.");
+    }
+
+    // Update DB
+    const updatedMedia = { ...mediaObj, type: mediaType, url: result.url };
+    const updatedMeta = { ...meta, media: updatedMedia };
+
+    const updatedMessage = await messageRepository.update(message.id, {
+      metadata: updatedMeta as Prisma.InputJsonValue,
+    });
+
+    Logger.info(`[MediaRetry] Successfully recovered media for message ${messageId}: ${result.url}`);
+
+    return {
+      success: true,
+      url: result.url,
+      message: updatedMessage
+    };
+  }
 }
 
 export const syncMediaService = new SyncMediaService();

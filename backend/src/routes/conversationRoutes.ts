@@ -7,7 +7,8 @@ import {
   createConversation,
   toggleGroupSync,
   reactToMessage,
-  syncFullHistory
+  syncFullHistory,
+  retryMediaDownload
 } from "../controllers/conversationController";
 import {
   getGroupParticipants,
@@ -22,6 +23,7 @@ import {
   ReplyToConversationSchema,
   UpdateTagsSchema,
   ReactToMessageSchema,
+  RetryMediaSchema,
 } from "../schemas/conversationSchemas";
 import {
   GetGroupParticipantsSchema,
@@ -70,5 +72,9 @@ router
 router
   .route("/:id/messages/:messageId/react")
   .post(validate(ReactToMessageSchema), reactToMessage);
+
+router
+  .route("/:id/messages/:messageId/retry-media")
+  .post(validate(RetryMediaSchema), retryMediaDownload);
 
 export default router;

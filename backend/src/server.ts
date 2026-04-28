@@ -1,3 +1,4 @@
+// Triggering restart after node_modules restore
 // [SEARCH] INITIALIZE TRACING FIRST
 process.env.UV_THREADPOOL_SIZE = "16"; // Prevent Baileys AES Crypto starvation
 import "./utils/tracing";

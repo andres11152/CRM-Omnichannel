@@ -1,1 +1,0 @@
-type NeverRecord = { [key: string]: never }; const body: NeverRecord = {} as NeverRecord; const name: string = body.name; console.log('Success');

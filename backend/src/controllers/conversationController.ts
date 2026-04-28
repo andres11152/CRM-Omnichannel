@@ -276,3 +276,20 @@ export const syncFullHistory = catchAsync(
     });
   }
 );
+
+export const retryMediaDownload = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+
+    const { messageId } = req.params;
+
+    const { syncMediaService } = await import("@/services/sync/SyncMediaService");
+
+    const result = await syncMediaService.retryMedia(req.companyId, messageId);
+
+    res.status(200).json({
+      status: "success",
+      data: result,
+    });
+  }
+);

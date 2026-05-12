@@ -115,13 +115,13 @@ const resolveContactId = async (id: string, companyId: string) => {
         linkedContact = await contactRepository.create(
           companyId,
           !user.email.includes("@") ? user.email : "",
-          user.name || "Usuario Chat",
+          user.name || "Chat User",
         );
         // Update with email if available
         if (user.email.includes("@")) {
           await contactRepository.update(companyId, linkedContact.id, {
             email: user.email,
-            tags: ["Auto-creado desde Notas"],
+            tags: ["Auto-created from Notes"],
           });
         }
       }

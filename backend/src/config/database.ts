@@ -35,13 +35,17 @@ const SOFT_DELETE_MODELS = ["Contact", "Deal", "Ticket", "Campaign"];
 const getDatabaseUrl = (): string => {
   const baseUrl = process.env.DATABASE_URL || "";
   const separator = baseUrl.includes("?") ? "&" : "?";
-  //  PERFORMANCE FIX: Increased connection limit for better concurrency.
-  // 25 was still too low for burst traffic (health probes + API calls + background jobs).
-  // pool_timeout reduced to 30s to release stale connections faster under load.
+  // [SEC] ENTERPRISE POOL SIZING:
+  // Each PM2/Docker process opens its OWN pool. At 50 connections × N processes,
+  // we'd exhaust PostgreSQL's max_connections instantly.
+  // Formula: connection_limit = max_db_connections / (api_instances + worker_instances)
+  // Conservative: 15 per process → 8 processes = 120 connections (safe for most PG configs).
+  // For 1000+ tenants, MANDATORY: Use PgBouncer in Transaction Mode.
+  const connLimit = parseInt(process.env.DB_POOL_SIZE || "15", 10);
   const poolParams = [
-    "connection_limit=50",
-    "pool_timeout=30",
-    "connect_timeout=30",
+    `connection_limit=${connLimit}`,
+    "pool_timeout=20",
+    "connect_timeout=15",
   ].join("&");
   return `${baseUrl}${separator}${poolParams}`;
 };

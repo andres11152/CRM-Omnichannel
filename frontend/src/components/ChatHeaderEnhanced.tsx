@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Contact, Tag } from "@/types";
 import { Avatar } from "@/components/common/Avatar";
 
@@ -72,6 +73,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
     "ok",
   );
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!ticketCreatedAt) return;
@@ -155,7 +157,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             />
           </svg>
         ),
-        label: "Resolver Ticket",
+        label: t("chat.resolve_ticket", "Resolver Ticket"),
         onClick: onResolve,
         visible: true,
         className:
@@ -178,7 +180,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             />
           </svg>
         ),
-        label: "Transferir",
+        label: t("chat.transfer", "Transferir"),
         onClick: onTransfer,
         visible: !!onTransfer,
         className: "md:hidden",
@@ -199,7 +201,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             />
           </svg>
         ),
-        label: "Participantes",
+        label: t("chat.participants", "Participantes"),
         onClick: onToggleParticipantsPanel,
         visible: !!onToggleParticipantsPanel,
         className: "md:hidden",
@@ -220,7 +222,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             />
           </svg>
         ),
-        label: "Info. Cliente (360)",
+        label: t("chat.customer_360", "Info. Cliente (360)"),
         onClick: onToggleCustomer360,
         visible: !!onToggleCustomer360 && !onToggleParticipantsPanel,
         className: "md:hidden",
@@ -241,7 +243,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             />
           </svg>
         ),
-        label: "Enviar Email",
+        label: t("chat.send_email", "Enviar Email"),
         onClick: onEmail,
         visible: !!onEmail,
       },
@@ -261,7 +263,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             />
           </svg>
         ),
-        label: "Copiar Historial",
+        label: t("chat.copy_history", "Copiar Historial"),
         onClick: onCopyChat,
         visible: true,
       },
@@ -281,7 +283,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             />
           </svg>
         ),
-        label: "Sincronizar Historial",
+        label: t("chat.sync_history", "Sincronizar Historial"),
         onClick: onSyncHistory,
         visible: !!onSyncHistory,
       },
@@ -301,7 +303,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             />
           </svg>
         ),
-        label: "Editar Contacto",
+        label: t("chat.edit_contact", "Editar Contacto"),
         onClick: onEditContact,
         visible: true,
       },
@@ -312,7 +314,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`p-2 rounded-md transition-all h-9 w-9 flex items-center justify-center border ${isOpen ? "bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-white" : "text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-reply-border-dark hover:border-gray-300 dark:hover:border-gray-500 shadow-sm"}`}
-          title="M�s Acciónes"
+          title={t("chat.more_actions", "Más Acciones")}
         >
           <svg
             className="w-5 h-5"
@@ -357,7 +359,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             {isTightMode && (
               <div className="border-t border-gray-100 dark:border-reply-border-dark p-2 bg-reply-bg dark:bg-gray-800/50">
                 <div className="text-[10px] font-bold text-gray-400 mb-1 px-2 uppercase">
-                  Prioridad
+                  {t("chat.priority", "Prioridad")}
                 </div>
                 <div className="flex gap-1">
                   {(["LOW", "MEDIUM", "HIGH"] as const).map((p) => (
@@ -391,7 +393,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             <button
               onClick={onToggleChatList}
               className="hidden md:flex p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-500 dark:text-gray-400 transition-all active:scale-95 border border-transparent hover:border-gray-200 dark:hover:border-gray-600 h-9 w-9 items-center justify-center"
-              title={isChatListVisible ? "Ocultar lista" : "Mostrar lista"}
+              title={isChatListVisible ? t("chat.hide_list", "Ocultar lista") : t("chat.show_list", "Mostrar lista")}
             >
               <svg
                 className={`w-5 h-5 transition-transform duration-300 ${isChatListVisible ? "rotate-180" : ""}`}
@@ -465,7 +467,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
                 {isTyping && (
                   <div className="flex items-center gap-1.5 h-4 overflow-hidden">
                     <span className="text-[11px] text-green-500 dark:text-green-400 font-semibold italic tracking-tight animate-pulse">
-                      escribiendo
+                      {t("chat.typing", "escribiendo")}
                     </span>
                     <span className="flex gap-[3px] items-end h-3">
                       <span
@@ -666,7 +668,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
               <button
                 onClick={onTransfer}
                 className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-all border border-transparent hover:border-blue-100 dark:hover:border-blue-800/50 h-9 w-9 flex items-center justify-center"
-                title="Transferir"
+                title={t("chat.transfer", "Transferir")}
               >
                 <svg
                   className="w-4.5 h-4.5"
@@ -695,7 +697,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
               transition-all transform active:scale-95
               ${isTightMode ? "aspect-square p-2 justify-center" : ""}
             `}
-            title="Resolver Ticket"
+            title={t("chat.resolve_ticket", "Resolver Ticket")}
           >
             <svg
               className="w-4 h-4"
@@ -710,7 +712,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            {!isTightMode && <span className="tracking-wide">RESOLVER</span>}
+            {!isTightMode && <span className="tracking-wide">{t("chat.resolve", "RESOLVER")}</span>}
           </button>
 
           {/* 4. Dropdown Menu (Secondary Actions) */}

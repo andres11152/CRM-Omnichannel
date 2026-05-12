@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Message } from "@/types";
 import { MessageBubble } from "./MessageBubble";
 import { ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface MessageListProps {
   messages: Message[];
@@ -19,6 +20,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const { t } = useTranslation();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -46,7 +48,7 @@ export const MessageList: React.FC<MessageListProps> = ({
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-reply-brand mx-auto mb-4"></div>
-          <p className="text-gray-500">Cargando mensajes...</p>
+          <p className="text-gray-500">{t("message_list.loading", "Cargando mensajes...")}</p>
         </div>
       </div>
     );
@@ -58,10 +60,10 @@ export const MessageList: React.FC<MessageListProps> = ({
         <div className="text-center">
           <div className="text-6xl mb-4">[CHAT]</div>
           <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-            No hay mensajes
+            {t("message_list.no_messages", "No hay mensajes")}
           </h3>
           <p className="text-gray-500">
-            Envía el primer mensaje para iniciar la conversación
+            {t("message_list.send_first", "Envía el primer mensaje para iniciar la conversación")}
           </p>
         </div>
       </div>
@@ -97,7 +99,7 @@ export const MessageList: React.FC<MessageListProps> = ({
         <button
           onClick={scrollToBottom}
           className="absolute bottom-6 right-6 p-3 bg-reply-surface dark:bg-reply-panel-dark text-reply-brand rounded-full shadow-lg border border-reply-border dark:border-reply-border-dark hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 animate-in fade-in zoom-in slide-in-from-bottom-4 cursor-pointer z-10"
-          title="Bajar al final"
+          title={t("message_list.scroll_down", "Bajar al final")}
         >
           <ChevronDown size={24} className="animate-bounce" />
         </button>
@@ -111,6 +113,8 @@ export const MessageList: React.FC<MessageListProps> = ({
  * Shows date separator between messages
  */
 const DateDivider: React.FC<{ date: string | Date }> = ({ date }) => {
+  const { t, i18n } = useTranslation();
+
   const formatDate = (timestamp: string | Date) => {
     const messageDate = new Date(timestamp);
     const today = new Date();
@@ -120,10 +124,10 @@ const DateDivider: React.FC<{ date: string | Date }> = ({ date }) => {
     const isToday = messageDate.toDateString() === today.toDateString();
     const isYesterday = messageDate.toDateString() === yesterday.toDateString();
 
-    if (isToday) return "Hoy";
-    if (isYesterday) return "Ayer";
+    if (isToday) return t("message_list.today", "Hoy");
+    if (isYesterday) return t("message_list.yesterday", "Ayer");
 
-    return messageDate.toLocaleDateString("es-ES", {
+    return messageDate.toLocaleDateString(i18n.language === "es" ? "es-ES" : "en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",

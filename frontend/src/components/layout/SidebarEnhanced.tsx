@@ -13,8 +13,8 @@ import {
   ChevronLeft,
   GripVertical,
 } from "lucide-react";
-
 import { User } from "@/types/auth.types";
+import { useTranslation } from "react-i18next";
 
 interface SidebarProps {
   navItems: Array<{
@@ -153,6 +153,7 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
 }) => {
   // Local State for Expansion
   const [isExpanded, setIsExpanded] = useState(false);
+  const { t, i18n } = useTranslation();
 
   return (
     <>
@@ -248,9 +249,9 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                             setIsMobileMenuOpen(false);
                           }}
                           icon={item.icon}
-                          title={item.title}
+                          title={t(`navigation.${item.id}`, item.title)}
                           disabled={item.disabled}
-                          badge={item.badge}
+                          badge={item.badge ? t(`common.coming_soon`, item.badge) : undefined}
                           isExpanded={isExpanded || isMobileMenuOpen}
                           dragHandleProps={provided.dragHandleProps}
                         />
@@ -273,7 +274,7 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                                         hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400
                                         ${isExpanded || isMobileMenuOpen ? "w-full justify-start" : "w-14 justify-center"}
                                     `}
-                  title={darkMode ? "Modo Claro" : "Modo Oscuro"}
+                  title={darkMode ? t("sidebar.light_mode", "Modo Claro") : t("sidebar.dark_mode", "Modo Oscuro")}
                 >
                   {darkMode ? (
                     <Moon size={20} className="flex-shrink-0" />
@@ -283,7 +284,30 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                   <span
                     className={`whitespace-nowrap font-medium text-sm transition-all duration-300 ${isExpanded || isMobileMenuOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"}`}
                   >
-                    {darkMode ? "Modo Claro" : "Modo Oscuro"}
+                    {darkMode ? t("sidebar.light_mode", "Modo Claro") : t("sidebar.dark_mode", "Modo Oscuro")}
+                  </span>
+                </button>
+
+                {/* Language Toggle (i18n POC) */}
+                <button
+                  onClick={() => {
+                    const nextLang = i18n.language === "es" ? "en" : "es";
+                    i18n.changeLanguage(nextLang);
+                  }}
+                  className={`
+                                        flex items-center gap-3 p-3 text-gray-400 rounded-xl transition-all duration-300
+                                        hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400
+                                        ${isExpanded || isMobileMenuOpen ? "w-full justify-start" : "w-14 justify-center"}
+                                    `}
+                  title={t("sidebar.change_language", "Cambiar Idioma")}
+                >
+                  <div className="flex items-center justify-center font-black text-xs uppercase w-5 h-5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex-shrink-0">
+                    {i18n.language || "es"}
+                  </div>
+                  <span
+                    className={`whitespace-nowrap font-medium text-sm transition-all duration-300 ${isExpanded || isMobileMenuOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"}`}
+                  >
+                    {i18n.language === "es" ? "English" : "Español"}
                   </span>
                 </button>
 
@@ -336,12 +360,12 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                     <span
                       className={`text-sm font-semibold truncate ${currentPath === "/profile" ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-200"}`}
                     >
-                      {user?.name || "Usuario"}
+                      {user?.name || t("sidebar.user", "Usuario")}
                     </span>
                     <span
                       className={`text-xs truncate font-medium ${currentPath === "/profile" ? "text-blue-500 dark:text-blue-400" : "text-gray-400 dark:text-gray-500 group-hover:text-blue-500 dark:group-hover:text-blue-400"}`}
                     >
-                      Ver Perfil
+                      {t("sidebar.view_profile", "Ver Perfil")}
                     </span>
                   </div>
                 </button>
@@ -354,13 +378,13 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                                         hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20
                                         ${isExpanded || isMobileMenuOpen ? "w-full justify-start" : "w-14 justify-center"}
                                     `}
-                  title="Cerrar Sesión"
+                  title={t("sidebar.logout", "Cerrar Sesión")}
                 >
                   <LogOut size={20} className="flex-shrink-0" />
                   <span
                     className={`whitespace-nowrap font-medium text-sm transition-all duration-300 ${isExpanded || isMobileMenuOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"}`}
                   >
-                    Cerrar Sesión
+                    {t("sidebar.logout", "Cerrar Sesión")}
                   </span>
                 </button>
               </div>

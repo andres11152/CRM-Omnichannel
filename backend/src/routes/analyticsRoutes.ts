@@ -12,7 +12,7 @@ import { AnalyticsQuerySchema } from "../schemas/commonSchemas";
 
 const router = Router();
 
-// Todas las rutas de analítica requieren autenticación
+// All analytics routes require authentication
 router.use(protect);
 
 router.get("/heatmap", validate(AnalyticsQuerySchema), getHeatmap);

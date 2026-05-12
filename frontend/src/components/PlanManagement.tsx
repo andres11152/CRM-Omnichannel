@@ -55,8 +55,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   max_whatsapp_sessions: {
-    label: "Sesiones de WhatsApp",
-    description: "Límite de números de teléfono conectados.",
+    label: "Canales de WhatsApp",
+    description: "Límite de números de teléfono activos para la empresa.",
     icon: (
       <svg
         className="w-6 h-6"
@@ -75,8 +75,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   enable_ai: {
-    label: "Motor de IA (Bots)",
-    description: "Acceso a asistentes inteligentes y respuestas automticas.",
+    label: "AI Agent Automation",
+    description: "Acceso a asistentes inteligentes y respuestas autónomas.",
     icon: (
       <svg
         className="w-6 h-6"
@@ -214,29 +214,9 @@ const FEATURE_META: Record<
     ),
     type: "number",
   },
-  max_whatsapp_connections: {
-    label: "Conexiones WhatsApp (Legacy)",
-    description: "Límite de números de teléfono conectados.",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-        />
-      </svg>
-    ),
-    type: "number",
-  },
   can_remove_branding: {
-    label: "Marca Blanca",
-    description: "Opción para ocultar el logo de la plataforma.",
+    label: "White-Label Experience",
+    description: "Elimina el branding de Reply para una experiencia de marca propia.",
     icon: (
       <svg
         className="w-6 h-6"
@@ -249,46 +229,6 @@ const FEATURE_META: Record<
           strokeLinejoin="round"
           strokeWidth={2}
           d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-        />
-      </svg>
-    ),
-    type: "boolean",
-  },
-  can_use_ai: {
-    label: "Habilitar Motor IA (Legacy)",
-    description: "Acceso a bots inteligentes.",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M13 10V3L4 14h7v7l9-11h-7z"
-        />
-      </svg>
-    ),
-    type: "boolean",
-  },
-  can_use_api: {
-    label: "API & Webhooks (Legacy)",
-    description: "Acceso para desarrolladores.",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
         />
       </svg>
     ),
@@ -494,11 +434,11 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
             />
           </svg>
         }
-        gradient="from-emerald-600 to-teal-600 dark:from-emerald-800 dark:to-teal-800"
+        gradient="from-slate-800 via-slate-900 to-emerald-900 dark:from-black dark:via-slate-900 dark:to-emerald-950"
         action={
           <button
             onClick={onNavigateToDashboard}
-            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm font-bold backdrop-blur-sm border border-white/20 transition-all flex items-center gap-2"
+            className="bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-xl text-sm font-bold backdrop-blur-md border border-white/20 transition-all active:scale-95 flex items-center gap-2 shadow-lg"
           >
             <svg
               className="w-4 h-4"
@@ -518,7 +458,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
         }
       />
 
-      <div className="flex-1 p-6 overflow-hidden">
+      <div className="flex-1 p-6 md:p-8 overflow-hidden bg-slate-50/30 dark:bg-transparent">
         {isLoading ? (
           <div className="h-full flex items-center justify-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
@@ -705,15 +645,14 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                   "max_workflows",
                                 ].includes(k),
                             )
+                            .filter((k) => FEATURE_META[k]) // Only show modern features
                             .map((key) => {
                               const value = (
                                 formData.config as Record<string, unknown>
                               )[key];
                               const meta = FEATURE_META[key];
-                              const label = meta?.label || key;
-                              const description =
-                                meta?.description ||
-                                "Configuración personalizada";
+                              const label = meta.label;
+                              const description = meta.description;
                               const icon = meta?.icon || (
                                 <span className="text-2xl">️</span>
                               );
@@ -733,7 +672,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                   </div>
 
                                   <div className="flex-1 min-w-0">
-                                    <h4 className="font-bold text-gray-800 dark:text-gray-200 text-base mb-0.5">
+                                    <h4 className="font-bold text-gray-800 dark:text-gray-200 text-base mb-0.5 flex items-center gap-2">
                                       {label}
                                     </h4>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">

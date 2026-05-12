@@ -11,6 +11,7 @@ import {
   updatePassword,
   forgotPassword,
   resetPassword,
+  exitImpersonation,
 } from "@/controllers/authController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
@@ -72,6 +73,7 @@ router.patch(
 );
 //  ENTERPRISE: Server-side logout (destroy session + blacklist token)
 router.post("/logout", protect, logout);
+router.post("/exit-impersonation", protect, exitImpersonation);
 
 // [SYNC] TOKEN REFRESH: Exchange refresh cookie for new access token
 // No protect needed — uses refresh_token cookie instead

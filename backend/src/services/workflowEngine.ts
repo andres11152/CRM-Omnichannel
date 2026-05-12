@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { Prisma } from "@prisma/client";
 import { Logger } from "@/utils/logger";
 import { emailService } from "./email/emailService";
+import { companySettingsService } from "./CompanySettingsService";
 import { workflowRepository } from "@/repositories/WorkflowRepository";
 import { workflowExecutionRepository } from "@/repositories/WorkflowExecutionRepository";
 import { userRepository } from "@/repositories/UserRepository";
@@ -72,6 +73,13 @@ class EmailActionHandler implements WorkflowActionHandler {
 
     if (targetEmail) {
       Logger.info(`[WorkflowAction:Email] Sending to ${targetEmail}`);
+
+      // [SEC] Resolve dynamic, tenant-specific sender to comply with strict SPF/DKIM SMTP policies
+      const senderConfig = await companySettingsService.getSenderConfig(companyId).catch(() => null);
+      const fromEmail = senderConfig?.fromEmail || process.env.DEFAULT_SENDER_EMAIL || `no-reply@reply.software`;
+      const fromName = senderConfig?.fromName || "Automation Software";
+      const formattedFrom = `"${fromName}" <${fromEmail}>`;
+
       await emailService.sendEmail({
         companyId,
         to: [targetEmail],
@@ -79,7 +87,7 @@ class EmailActionHandler implements WorkflowActionHandler {
         bodyHtml: bodyText.replace(/\n/g, "<br>"),
         bodyText,
         contactId: targetContactId,
-        from: process.env.DEFAULT_SENDER_EMAIL || "automation@reply.com",
+        from: formattedFrom,
       });
 
       await activityRepository.create({
@@ -149,7 +157,7 @@ class AIActionHandler implements WorkflowActionHandler {
       if (!key) throw new Error("Gemini API Key missing for tenant");
       
       const genAI = new GoogleGenerativeAI(key);
-      const model = genAI.getGenerativeModel({ model: agent.modelName || "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: agent.modelName || "gemini-2.5-flash" });
       const result = await model.generateContent([systemPrompt, userPrompt]);
       aiResponse = result.response.text();
     } else {

@@ -60,7 +60,7 @@ export class WhatsAppMessaging {
 
       if (!activeSession) {
         throw new AppError(
-          "No hay una sesión de WhatsApp activa. Por favor, ve a Configuración y escanea el código QR para reconectar.",
+          "No active WhatsApp session found. Please go to Settings and scan the QR code to reconnect.",
           503,
         );
       }

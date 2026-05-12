@@ -67,9 +67,9 @@ export class EmailService {
           host: company.smtpHost,
           port: company.smtpPort || 587,
           user: company.smtpUser,
-          pass: company.smtpPassword, // In production, decrypt this!
+          pass: company.smtpPassword, // [SEC] Decrypted inside NodemailerProvider via companyId
           secure: company.smtpSecure || true,
-        });
+        }, companyId);
       }
 
       // Fallback to System Global Provider
@@ -262,6 +262,26 @@ export class EmailService {
       Logger.error("[EmailService] Failed to update status:", error as Error);
       throw error;
     }
+  }
+
+  /**
+   * Get all emails for a company (Inbox)
+   */
+  async getEmails(companyId: string, params: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    type?: string;
+    search?: string;
+  }) {
+    return emailRepository.findAll({
+      companyId,
+      limit: params.limit || 50,
+      offset: params.offset || 0,
+      status: params.status,
+      type: params.type,
+      search: params.search,
+    });
   }
 
   /**

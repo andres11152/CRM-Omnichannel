@@ -77,7 +77,7 @@ export function createSessionLogger(
             if (stats.count >= CORRUPTION_THRESHOLD) {
               errorCounts.delete(sessionId);
               baseLogger.error(
-                `[SessionGuard] [ALERT] CRITICAL: Persistent corruption in Session ${sessionId} (${stats.count} errors). Triggering Self-Healing Nuke...`,
+                `[SessionGuard] CRITICAL: Persistent corruption in Session ${sessionId} (${stats.count} errors). Triggering Self-Healing Nuke...`,
               );
               onCorruptionDetected?.(sessionId);
               return;
@@ -87,7 +87,7 @@ export function createSessionLogger(
             if (now - lastLog > THROTTLE_MS) {
               lastLogTimes.set(sessionId, now);
               baseLogger.warn(
-                `[SessionGuard] [SEC] Intercepted decryption error in Session ${sessionId} (Count: ${stats.count}). IGNORING.`,
+                `[SessionGuard] Intercepted decryption error in Session ${sessionId} (Count: ${stats.count}). IGNORING.`,
               );
             }
             return; // Suppress the loud error

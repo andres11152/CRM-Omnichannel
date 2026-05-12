@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   DragDropContext,
   Droppable,
@@ -12,6 +13,8 @@ import {
   updateTicket,
 } from "@/services/ticketService";
 import { getAgents } from "@/services/queueService";
+import { api } from "@/lib/axios";
+import { Tag as TagType } from "@/types";
 import {
   X,
   Eye,
@@ -137,15 +140,51 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
   const [loading, setLoading] = useState(true);
   const [filterPriority, setFilterPriority] = useState<string>("ALL");
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [allTags, setAllTags] = useState<TagType[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const { t, i18n } = useTranslation();
   const [assigning, setAssigning] = useState<string | null>(null);
+ 
+  const localizedColumns = useMemo(() => [
+    { ...STATUS_COLUMNS[0], title: t("tickets_kanban.columns.open", "Abierto") },
+    { ...STATUS_COLUMNS[1], title: t("tickets_kanban.columns.in_progress", "En Progreso") },
+    { ...STATUS_COLUMNS[2], title: t("tickets_kanban.columns.resolved", "Resuelto") },
+    { ...STATUS_COLUMNS[3], title: t("tickets_kanban.columns.closed", "Cerrado") },
+  ], [t]);
+ 
+  const getLocalizedPriority = (p: string) => {
+    const config = PRIORITY_CONFIG[p?.toUpperCase()] || PRIORITY_CONFIG.MEDIUM;
+    const labels: Record<string, string> = {
+      CRITICAL: t("tickets_kanban.priorities.critical", "Crítico"),
+      HIGH: t("tickets_kanban.priorities.high", "Alta"),
+      MEDIUM: t("tickets_kanban.priorities.medium", "Media"),
+      LOW: t("tickets_kanban.priorities.low", "Baja"),
+    };
+    return { ...config, label: labels[p?.toUpperCase()] || config.label };
+  };
 
   useEffect(() => {
-    fetchTickets();
-    fetchAgents();
+    fetchInitialData();
+    fetchAllTags();
   }, []);
+
+  const fetchAllTags = async () => {
+    try {
+      const res = await api.get("/tags");
+      const data = res.data.data?.tags || res.data.data || res.data;
+      if (Array.isArray(data)) {
+        setAllTags(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch tags", e);
+    }
+  };
+
+  const fetchInitialData = async () => {
+    await Promise.all([fetchTickets(), fetchAgents()]);
+  };
 
   const fetchAgents = async () => {
     try {
@@ -201,10 +240,10 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
         payload.resolutionType = "SUPPORT"; // Default for Kanban quick-resolve
       }
       await updateTicket(draggableId, payload);
-      toast.success("Estado actualizado");
+      toast.success(t("tickets_kanban.toasts.status_updated", "Estado actualizado"));
     } catch {
       setTickets(originalTickets);
-      toast.error("Error al actualizar el estado");
+      toast.error(t("tickets_kanban.toasts.err_status", "Error al actualizar el estado"));
     }
   };
 
@@ -241,11 +280,11 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
     setAssigning(agentId);
     try {
       await updateTicket(selectedTicket.id, { assignedToId: agentId });
-      toast.success(`Ticket asignado a ${agentName}`);
+      toast.success(t("tickets_kanban.toasts.assign_success", { name: agentName, defaultValue: `Ticket asignado a ${agentName}` }));
       fetchTickets();
       handleCloseModals();
     } catch {
-      toast.error("Error al asignar el ticket");
+      toast.error(t("tickets_kanban.toasts.err_assign", "Error al asignar el ticket"));
     } finally {
       setAssigning(null);
     }
@@ -262,7 +301,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-          <span className="text-sm text-gray-500 dark:text-gray-400">Cargando tickets...</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{t("tickets_kanban.labels.loading", "Cargando tickets...")}</span>
         </div>
       </div>
     );
@@ -279,7 +318,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
           <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/15 rounded-lg border border-indigo-100/80 dark:border-indigo-800/50">
             <Hash className="w-3.5 h-3.5 text-indigo-500" />
             <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
-              Total
+              {t("tickets_kanban.labels.total", "Total")}
             </span>
             <span className="text-base font-extrabold text-indigo-700 dark:text-indigo-300">
               {stats.total}
@@ -292,7 +331,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
               <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/15 rounded-lg border border-red-100/80 dark:border-red-800/50">
                 <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
                 <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">
-                  Urgentes
+                  {t("tickets_kanban.labels.urgent", "Urgentes")}
                 </span>
                 <span className="text-base font-extrabold text-red-700 dark:text-red-300">
                   {stats.urgent}
@@ -303,7 +342,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
               <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/15 rounded-lg border border-amber-100/80 dark:border-amber-800/50">
                 <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
                 <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                  En Progreso
+                  {t("tickets_kanban.labels.in_progress", "En Progreso")}
                 </span>
                 <span className="text-base font-extrabold text-amber-700 dark:text-amber-300">
                   {stats.inProgress}
@@ -319,11 +358,11 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
           value={filterPriority}
           onChange={(e) => setFilterPriority(e.target.value)}
         >
-          <option value="ALL">Todas las prioridades</option>
-          <option value="CRITICAL">[OFFLINE] Crítico</option>
-          <option value="HIGH">[PENDING] Alta</option>
-          <option value="MEDIUM">[INFO] Media</option>
-          <option value="LOW"> Baja</option>
+          <option value="ALL">{t("tickets_kanban.labels.all_priorities", "Todas las prioridades")}</option>
+          <option value="CRITICAL">{t("tickets_kanban.priorities.critical", "Crítico")}</option>
+          <option value="HIGH">{t("tickets_kanban.priorities.high", "Alta")}</option>
+          <option value="MEDIUM">{t("tickets_kanban.priorities.medium", "Media")}</option>
+          <option value="LOW">{t("tickets_kanban.priorities.low", "Baja")}</option>
         </select>
       </div>
 
@@ -331,7 +370,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
       <div className={`flex-1 overflow-x-auto ${isWidget ? "p-2" : "p-4 lg:p-6"}`}>
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-4 h-full min-w-max">
-            {STATUS_COLUMNS.map((column) => {
+            {localizedColumns.map((column) => {
               const columnTickets = filteredTickets.filter(
                 (t) => t.status === column.id,
               );
@@ -384,9 +423,9 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                         }`}
                       >
                         {columnTickets.map((ticket, index) => {
-                          const priority = getPriority(ticket.priority);
+                          const priority = getLocalizedPriority(ticket.priority);
                           const contactName =
-                            ticket.contact?.name || "Sin Nombre";
+                            ticket.contact?.name || t("tickets_kanban.labels.no_name", "Sin Nombre");
                           const contactPhone = ticket.contact?.phone || "";
                           // Don't show @whatsapp.user emails
                           const contactEmail =
@@ -472,27 +511,41 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                                     </div>
                                   )}
 
-                                  {/* Tags */}
-                                  {ticket.tags && ticket.tags.length > 0 && (
-                                    <div className="px-3 pb-2 flex flex-wrap gap-1">
-                                      {ticket.tags
-                                        .slice(0, 3)
-                                        .map((tag, idx) => (
-                                          <span
-                                            key={idx}
-                                            className="text-[9px] px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300 font-medium border border-indigo-100/60 dark:border-indigo-800/30 flex items-center gap-0.5"
-                                          >
-                                            <Tag className="w-2 h-2" />
-                                            {tag}
+                                  {/* Predefined Assigned Tags */}
+                                  {(() => {
+                                    const visibleTags = (ticket.tags || [])
+                                      .map((tagId) =>
+                                        allTags.find((t) => t.id === tagId || t.name === tagId)
+                                      )
+                                      .filter((tagInfo): tagInfo is TagType => !!tagInfo);
+
+                                    if (visibleTags.length === 0) return null;
+
+                                    return (
+                                      <div className="px-3 pb-2 flex flex-wrap gap-1">
+                                        {visibleTags.slice(0, 4).map((tagInfo, idx) => {
+                                          const tagColorClass =
+                                            tagInfo.color ||
+                                            "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300 border-indigo-100/60 dark:border-indigo-800/30";
+
+                                          return (
+                                            <span
+                                              key={idx}
+                                              className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium border flex items-center gap-0.5 transition-all hover:scale-105 ${tagColorClass}`}
+                                            >
+                                              <Tag className="w-2 h-2" />
+                                              {tagInfo.name}
+                                            </span>
+                                          );
+                                        })}
+                                        {visibleTags.length > 4 && (
+                                          <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 font-medium">
+                                            +{visibleTags.length - 4}
                                           </span>
-                                        ))}
-                                      {ticket.tags.length > 3 && (
-                                        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 font-medium">
-                                          +{ticket.tags.length - 3}
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
 
                                   {/* Footer: Ticket Number + Assigned Agent + Actions */}
                                   <div className="px-3 py-2 border-t border-gray-100 dark:border-gray-700/40 flex items-center justify-between">
@@ -510,7 +563,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                                     <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                       <button
                                         className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                                        title="Ver detalles"
+                                        title={t("tickets_kanban.labels.view_details", "Ver detalles")}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setSelectedTicket(ticket);
@@ -521,7 +574,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                                       </button>
                                       <button
                                         className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                                        title="Asignar agente"
+                                        title={t("tickets_kanban.labels.assign_agent", "Asignar agente")}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setSelectedTicket(ticket);
@@ -550,7 +603,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                               />
                             </div>
                             <p className="text-xs font-medium text-gray-400 dark:text-gray-500">
-                              Sin tickets
+                              {t("tickets_kanban.labels.no_tickets", "Sin tickets")}
                             </p>
                           </div>
                         )}
@@ -582,7 +635,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                    Detalles del Ticket
+                    {t("tickets_kanban.labels.ticket_details", "Detalles del Ticket")}
                   </h3>
                   <p className="text-[10px] text-gray-400 font-mono">
                     #{selectedTicket.ticketNumber || selectedTicket.id.slice(-8)}
@@ -612,7 +665,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 />
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-gray-800 dark:text-white text-sm truncate">
-                    {selectedTicket.contact?.name || "Sin Nombre"}
+                    {selectedTicket.contact?.name || t("tickets_kanban.labels.no_name", "Sin Nombre")}
                   </h4>
                   {selectedTicket.contact?.phone && (
                     <p className="text-xs text-gray-500 font-mono flex items-center gap-1 mt-0.5">
@@ -623,9 +676,9 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 </div>
                 <div className="flex flex-col gap-1">
                   <span
-                    className={`text-[9px] px-2 py-0.5 rounded-md border font-bold ${getPriority(selectedTicket.priority).bg} ${getPriority(selectedTicket.priority).color}`}
+                    className={`text-[9px] px-2 py-0.5 rounded-md border font-bold ${getLocalizedPriority(selectedTicket.priority).bg} ${getLocalizedPriority(selectedTicket.priority).color}`}
                   >
-                    {getPriority(selectedTicket.priority).label}
+                    {getLocalizedPriority(selectedTicket.priority).label}
                   </span>
                 </div>
               </div>
@@ -634,16 +687,16 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/40">
                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                    Estado
+                    {t("tickets_kanban.labels.status", "Estado")}
                   </p>
                   <p className="text-sm font-semibold text-gray-800 dark:text-white mt-0.5">
-                    {STATUS_COLUMNS.find((c) => c.id === selectedTicket.status)
+                    {localizedColumns.find((c) => c.id === selectedTicket.status)
                       ?.title || selectedTicket.status}
                   </p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/40">
                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                    Espera
+                    {t("tickets_kanban.labels.wait", "Espera")}
                   </p>
                   <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 mt-0.5">
                     {formatWaitTime(selectedTicket.createdAt)}
@@ -651,7 +704,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/40">
                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                    Canal
+                    {t("tickets_kanban.labels.channel", "Canal")}
                   </p>
                   <p className="text-sm font-medium text-gray-800 dark:text-white mt-0.5 flex items-center gap-1.5">
                     <ChannelIcon channel={selectedTicket.channel} className="w-3.5 h-3.5" />
@@ -660,11 +713,11 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/40">
                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                    Creado
+                    {t("tickets_kanban.labels.created", "Creado")}
                   </p>
                   <p className="text-sm font-medium text-gray-800 dark:text-white mt-0.5">
                     {new Date(selectedTicket.createdAt).toLocaleDateString(
-                      "es-CO",
+                      i18n.language,
                       { day: "numeric", month: "short" },
                     )}
                   </p>
@@ -676,7 +729,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                     <MessageSquare className="w-3 h-3" />
-                    Último Mensaje
+                    {t("tickets_kanban.labels.last_message", "Último Mensaje")}
                   </p>
                   <div className="bg-gray-50 dark:bg-gray-800/40 rounded-xl p-3 border border-gray-100 dark:border-gray-700/40">
                     <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -693,14 +746,14 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 onClick={handleCloseModals}
                 className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors font-medium"
               >
-                Cerrar
+                {t("tickets_kanban.labels.close", "Cerrar")}
               </button>
               <button
                 onClick={() => handleGoToChat(selectedTicket)}
                 className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors text-xs flex items-center gap-1.5"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                Ir al Chat
+                {t("tickets_kanban.labels.go_to_chat", "Ir al Chat")}
               </button>
             </div>
           </div>
@@ -725,7 +778,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                    Asignar Agente
+                    {t("tickets_kanban.labels.assign_title", "Asignar Agente")}
                   </h3>
                   <p className="text-[10px] text-gray-400">
                     {selectedTicket.contact?.name} · #{selectedTicket.ticketNumber || selectedTicket.id.slice(-6)}
@@ -746,7 +799,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 <div className="text-center py-6">
                   <UserPlus className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                   <p className="text-sm text-gray-500">
-                    No hay agentes disponibles
+                    {t("tickets_kanban.labels.no_agents", "No hay agentes disponibles")}
                   </p>
                 </div>
               ) : (
@@ -790,7 +843,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 onClick={handleCloseModals}
                 className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors font-medium"
               >
-                Cancelar
+                {t("tickets_kanban.labels.cancel", "Cancelar")}
               </button>
             </div>
           </div>

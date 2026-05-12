@@ -102,7 +102,7 @@ export const securityMiddleware = (app: Express) => {
     ]),
   ];
 
-  Logger.info(`[CORS] [SEC] Allowed origins: ${JSON.stringify(allowedOrigins)}`);
+  Logger.info(`[CORS] Allowed origins: ${JSON.stringify(allowedOrigins)}`);
   Logger.info(
     `[CORS]  Environment: ${process.env.NODE_ENV || "development"}`,
   );
@@ -133,7 +133,7 @@ export const securityMiddleware = (app: Express) => {
 
       // Log rejected origins in production for monitoring
       if (!isDevelopment) {
-        Logger.warn(`[CORS] [WARNING] Rejected origin: ${origin}`);
+        Logger.warn(`[CORS] Rejected origin: ${origin}`);
       }
 
       // In production: strict enforcement

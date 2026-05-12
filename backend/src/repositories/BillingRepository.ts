@@ -1,6 +1,10 @@
 import { prisma } from "@/config/database";
+import { Prisma } from "@prisma/client";
 
 export const billingRepository = {
+  findMany(args: Prisma.BillingTransactionFindManyArgs) {
+    return prisma.billingTransaction.findMany(args);
+  },
   findRecentTransactionsWithCompany(take: number = 50) {
     return prisma.billingTransaction.findMany({
       take,

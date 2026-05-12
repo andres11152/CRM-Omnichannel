@@ -9,11 +9,11 @@ import { Logger } from "@/utils/logger";
  * - {{name}}, {{email}}, {{order_id}} - Named placeholders
  *
  * @example
- * renderTemplate("Hola {{name}}, tu pedido {{order_id}} está listo", {
- *   name: "Juan",
+ * renderTemplate("Hello {{name}}, your order {{order_id}} is ready", {
+ *   name: "John",
  *   order_id: "12345"
  * })
- * // Returns: "Hola Juan, tu pedido 12345 está listo"
+ * // Returns: "Hello John, your order 12345 is ready"
  */
 
 export interface TemplateParameters {
@@ -29,20 +29,20 @@ export interface TemplateParameters {
  *
  * @example
  * // Named variables
- * renderTemplate("Hola {{name}}", { name: "Juan" })
- * // Returns: "Hola Juan"
+ * renderTemplate("Hello {{name}}", { name: "John" })
+ * // Returns: "Hello John"
  *
  * // Numbered variables
- * renderTemplate("Tu código es {{1}}", { "1": "ABC123" })
- * // Returns: "Tu código es ABC123"
+ * renderTemplate("Your code is {{1}}", { "1": "ABC123" })
+ * // Returns: "Your code is ABC123"
  *
  * // Multiple variables
- * renderTemplate("Hola {{name}}, tu pedido {{order_id}} llega el {{date}}", {
- *   name: "María",
+ * renderTemplate("Hello {{name}}, your order {{order_id}} arrives on {{date}}", {
+ *   name: "Mary",
  *   order_id: "12345",
- *   date: "15 de enero"
+ *   date: "January 15th"
  * })
- * // Returns: "Hola María, tu pedido 12345 llega el 15 de enero"
+ * // Returns: "Hello Mary, your order 12345 arrives on January 15th"
  */
 export function renderTemplate(
   content: string,
@@ -190,8 +190,8 @@ export function renderTemplateComponents(
  * @returns Preview text
  *
  * @example
- * getTemplatePreview("Hola {{name}}, bienvenido!")
- * // Returns: "Hola [name], bienvenido!"
+ * getTemplatePreview("Hello {{name}}, welcome!")
+ * // Returns: "Hello [name], welcome!"
  */
 export function getTemplatePreview(
   content: string,

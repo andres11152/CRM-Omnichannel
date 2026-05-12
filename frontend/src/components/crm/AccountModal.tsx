@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Account } from "@/types/crm";
 import { createAccount, updateAccount } from "@/services/crmService";
+import { 
+  Building2, 
+  Globe, 
+  Mail, 
+  Users, 
+  MapPin, 
+  Activity, 
+  X, 
+  Briefcase,
+  CheckCircle2,
+  AlertCircle,
+  TrendingDown,
+  Zap
+} from "lucide-react";
 
 interface Props {
   isOpen: boolean;
@@ -15,6 +30,7 @@ export const AccountModal: React.FC<Props> = ({
   onSave,
   account,
 }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState<Partial<Account>>({
     name: "",
     industry: "",
@@ -50,8 +66,8 @@ export const AccountModal: React.FC<Props> = ({
     }
   }, [account]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault();
     setLoading(true);
 
     // Normalize URL if needed
@@ -81,213 +97,266 @@ export const AccountModal: React.FC<Props> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-xl shadow-xl w-full max-w-2xl overflow-hidden border border-reply-border dark:border-reply-border-dark">
-        <div className="px-6 py-4 border-b border-reply-border dark:border-reply-border-dark flex justify-between items-center bg-reply-bg/50 dark:bg-white/5">
-          <h2 className="text-lg font-bold text-reply-text dark:text-reply-text-dark">
-            {account ? "Editar Empresa" : "Nueva Empresa"}
-          </h2>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-reply-bg-dark/80 backdrop-blur-md p-4 md:p-6 animate-in fade-in duration-300">
+      <div className="bg-white dark:bg-reply-panel-dark rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden border border-white/10 relative">
+        {/* Header - Fixed */}
+        <div className="px-8 py-6 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg/30 dark:bg-reply-surface-dark/30 backdrop-blur-sm shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-inner">
+              <Building2 size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+                {account ? t("crm.accounts.edit_title") : t("crm.accounts.new_title")}
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                {account ? t("crm.accounts.edit_desc") : t("crm.accounts.new_desc")}
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all duration-200 active:scale-95"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Nombre de la Empresa *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent transition-all"
-                placeholder="Ej. Acme Corp"
-              />
+        {/* Form Content - Scrollable */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8">
+          {/* Section 1: Basic Information */}
+          <section className="space-y-6">
+            <div className="flex items-center gap-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
+              <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-600">
+                <Briefcase size={16} />
+              </div>
+              <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">{t("crm.accounts.basic_info")}</h3>
             </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                  {t("crm.accounts.name")} <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500">
+                    <Building2 size={18} />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-100 dark:border-reply-border-dark bg-gray-50/50 dark:bg-reply-surface-dark/50 text-gray-900 dark:text-white font-bold text-sm focus:bg-white dark:focus:bg-reply-surface-dark focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all outline-none"
+                    placeholder="Ej. Acme Global Systems"
+                  />
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Industria / Sector
-              </label>
-              <input
-                type="text"
-                value={formData.industry}
-                onChange={(e) =>
-                  setFormData({ ...formData, industry: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent transition-all"
-                placeholder="Ej. Tecnología"
-              />
-            </div>
+              <div>
+                <label className="block text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                  {t("crm.accounts.industry")}
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500">
+                    <Activity size={18} />
+                  </div>
+                  <input
+                    type="text"
+                    value={formData.industry}
+                    onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-100 dark:border-reply-border-dark bg-gray-50/50 dark:bg-reply-surface-dark/50 text-gray-900 dark:text-white font-bold text-sm focus:bg-white dark:focus:bg-reply-surface-dark focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all outline-none"
+                    placeholder="Ej. FinTech, Retail..."
+                  />
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Tamaño de Empresa
-              </label>
-              <select
-                value={formData.size}
-                onChange={(e) =>
-                  setFormData({ ...formData, size: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent transition-all"
-              >
-                <option value="">Seleccionar...</option>
-                <option value="1-10">1-10 empleados</option>
-                <option value="11-50">11-50 empleados</option>
-                <option value="51-200">51-200 empleados</option>
-                <option value="201-500">201-500 empleados</option>
-                <option value="500+">500+ empleados</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Sitio Web
-              </label>
-              <input
-                type="text"
-                value={formData.website}
-                onChange={(e) =>
-                  setFormData({ ...formData, website: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent transition-all"
-                placeholder="ejemplo.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Email Corporativo
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent transition-all"
-                placeholder="contacto@empresa.com"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Dirección Física
-              </label>
-              <textarea
-                value={formData.address}
-                onChange={(e) =>
-                  setFormData({ ...formData, address: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent transition-all resize-none"
-                rows={2}
-                placeholder="Ej. Calle 123, Ciudad, País"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Estado de la Relación
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, status: "LEAD" })}
-                  className={`px-3 py-2 rounded-lg border text-sm transition-all ${
-                    formData.status === "LEAD"
-                      ? "bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:border-blue-400 dark:text-blue-300 ring-2 ring-blue-500/20"
-                      : "border-gray-200 dark:border-reply-border-dark hover:bg-reply-bg dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-                  }`}
-                >
-                  Lead (Potencial)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, status: "ACTIVE" })}
-                  className={`px-3 py-2 rounded-lg border text-sm transition-all ${
-                    formData.status === "ACTIVE"
-                      ? "bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300 ring-2 ring-green-500/20"
-                      : "border-gray-200 dark:border-reply-border-dark hover:bg-reply-bg dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-                  }`}
-                >
-                  Cliente Activo
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData({ ...formData, status: "CHURNED" })
-                  }
-                  className={`px-3 py-2 rounded-lg border text-sm transition-all ${
-                    formData.status === "CHURNED"
-                      ? "bg-red-50 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-400 dark:text-red-300 ring-2 ring-red-500/20"
-                      : "border-gray-200 dark:border-reply-border-dark hover:bg-reply-bg dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-                  }`}
-                >
-                  Perdido (Churn)
-                </button>
+              <div>
+                <label className="block text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                  {t("crm.accounts.size")}
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500 pointer-events-none">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                  <select
+                    value={formData.size}
+                    onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                    className="w-full pl-12 pr-10 py-3.5 rounded-2xl border border-gray-100 dark:border-reply-border-dark bg-gray-50/50 dark:bg-reply-surface-dark/50 text-gray-900 dark:text-white font-bold text-sm focus:bg-white dark:focus:bg-reply-surface-dark focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all outline-none appearance-none"
+                  >
+                    <option value="">{t("crm.accounts.size_placeholder")}</option>
+                    <option value="1-10">1-10 {t("team.table.agent").toLowerCase()}s (Startup)</option>
+                    <option value="11-50">11-50 {t("team.table.agent").toLowerCase()}s (SMB)</option>
+                    <option value="51-200">51-200 {t("team.table.agent").toLowerCase()}s (Mid-Market)</option>
+                    <option value="201-500">201-500 {t("team.table.agent").toLowerCase()}s (Large)</option>
+                    <option value="500+">500+ {t("team.table.agent").toLowerCase()}s (Enterprise)</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="flex justify-end gap-3 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-reply-blue hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading && (
-                <svg
-                  className="animate-spin h-4 w-4 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              )}
-              {account ? "Guardar Cambios" : "Crear Empresa"}
-            </button>
-          </div>
+          {/* Section 2: Contact & Location */}
+          <section className="space-y-6 pt-4">
+            <div className="flex items-center gap-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
+              <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-600">
+                <Globe size={16} />
+              </div>
+              <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">{t("crm.accounts.contact_location")}</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                  {t("crm.accounts.website")}
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500">
+                    <Globe size={18} />
+                  </div>
+                  <input
+                    type="text"
+                    value={formData.website}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-100 dark:border-reply-border-dark bg-gray-50/50 dark:bg-reply-surface-dark/50 text-gray-900 dark:text-white font-bold text-sm focus:bg-white dark:focus:bg-reply-surface-dark focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all outline-none"
+                    placeholder="empresa.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                  {t("crm.accounts.email")}
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500">
+                    <Mail size={18} />
+                  </div>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-100 dark:border-reply-border-dark bg-gray-50/50 dark:bg-reply-surface-dark/50 text-gray-900 dark:text-white font-bold text-sm focus:bg-white dark:focus:bg-reply-surface-dark focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all outline-none"
+                    placeholder="contacto@empresa.com"
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                  {t("crm.accounts.address")}
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-4 text-gray-400 transition-colors group-focus-within:text-indigo-500">
+                    <MapPin size={18} />
+                  </div>
+                  <textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-100 dark:border-reply-border-dark bg-gray-50/50 dark:bg-reply-surface-dark/50 text-gray-900 dark:text-white font-bold text-sm focus:bg-white dark:focus:bg-reply-surface-dark focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all outline-none resize-none"
+                    rows={2}
+                    placeholder="Ciudad, País, Dirección completa..."
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 3: Status Selection */}
+          <section className="space-y-6 pt-4 pb-4">
+            <div className="flex items-center gap-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
+              <div className="p-1.5 bg-amber-500/10 rounded-lg text-amber-600">
+                <Activity size={16} />
+              </div>
+              <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">{t("tenants.metrics.status")}</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: "LEAD" })}
+                className={`group flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden ${
+                  formData.status === "LEAD"
+                    ? "bg-indigo-600/5 border-indigo-500 text-indigo-700 dark:text-indigo-400 ring-4 ring-indigo-500/10"
+                    : "border-gray-100 dark:border-reply-border-dark hover:border-indigo-500/30 text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                <div className={`p-2 rounded-xl ${formData.status === "LEAD" ? "bg-indigo-500 text-white" : "bg-gray-100 dark:bg-reply-surface-dark text-gray-400 group-hover:text-indigo-500"} transition-colors shadow-sm`}>
+                  <TrendingDown size={20} className="rotate-180" />
+                </div>
+                <div className="text-center">
+                  <div className="text-xs font-black uppercase tracking-widest">{t("crm.accounts.status.lead")}</div>
+                  <div className="text-[10px] opacity-60 font-medium">{t("crm.accounts.status_desc.lead")}</div>
+                </div>
+                {formData.status === "LEAD" && <div className="absolute top-2 right-2 text-indigo-500 animate-in zoom-in"><CheckCircle2 size={14} /></div>}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: "ACTIVE" })}
+                className={`group flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden ${
+                  formData.status === "ACTIVE"
+                    ? "bg-emerald-600/5 border-emerald-500 text-emerald-700 dark:text-emerald-400 ring-4 ring-emerald-500/10"
+                    : "border-gray-100 dark:border-reply-border-dark hover:border-emerald-500/30 text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                <div className={`p-2 rounded-xl ${formData.status === "ACTIVE" ? "bg-emerald-500 text-white" : "bg-gray-100 dark:bg-reply-surface-dark text-gray-400 group-hover:text-emerald-500"} transition-colors shadow-sm`}>
+                  <CheckCircle2 size={20} />
+                </div>
+                <div className="text-center">
+                  <div className="text-xs font-black uppercase tracking-widest">{t("crm.accounts.status.active")}</div>
+                  <div className="text-[10px] opacity-60 font-medium">{t("crm.accounts.status_desc.active")}</div>
+                </div>
+                {formData.status === "ACTIVE" && <div className="absolute top-2 right-2 text-emerald-500 animate-in zoom-in"><CheckCircle2 size={14} /></div>}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: "CHURNED" })}
+                className={`group flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden ${
+                  formData.status === "CHURNED"
+                    ? "bg-rose-600/5 border-rose-500 text-rose-700 dark:text-rose-400 ring-4 ring-rose-500/10"
+                    : "border-gray-100 dark:border-reply-border-dark hover:border-rose-500/30 text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                <div className={`p-2 rounded-xl ${formData.status === "CHURNED" ? "bg-rose-500 text-white" : "bg-gray-100 dark:bg-reply-surface-dark text-gray-400 group-hover:text-rose-500"} transition-colors shadow-sm`}>
+                  <AlertCircle size={20} />
+                </div>
+                <div className="text-center">
+                  <div className="text-xs font-black uppercase tracking-widest">{t("crm.accounts.status.churned")}</div>
+                  <div className="text-[10px] opacity-60 font-medium">{t("crm.accounts.status_desc.churned")}</div>
+                </div>
+                {formData.status === "CHURNED" && <div className="absolute top-2 right-2 text-rose-500 animate-in zoom-in"><CheckCircle2 size={14} /></div>}
+              </button>
+            </div>
+          </section>
         </form>
+
+        {/* Footer - Fixed */}
+        <div className="px-8 py-6 border-t border-gray-100 dark:border-reply-border-dark flex justify-end gap-4 shrink-0 bg-gray-50/50 dark:bg-reply-surface-dark/30">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-2.5 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-all active:scale-95"
+          >
+            {t("common.cancel")}
+          </button>
+          <button
+            onClick={() => handleSubmit()}
+            disabled={loading || !formData.name}
+            className="group relative px-8 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center gap-3 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Building2 size={16} className="transition-transform group-hover:scale-110" />
+            )}
+            <span>{account ? t("common.save") : t("common.new")}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

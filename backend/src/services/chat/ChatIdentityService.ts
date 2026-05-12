@@ -142,7 +142,7 @@ export class ChatIdentityService {
             whatsappId: params.email.split("@")[0],
             userId: user.id,
           },
-          tags: ["Importado de Chat"],
+          tags: ["Imported from Chat"],
         });
         Logger.info(
           `[ChatIdentityService] [OK] CRM Contact synced for real phone: ${params.phone}`,

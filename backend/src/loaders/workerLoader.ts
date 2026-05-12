@@ -1,68 +1,114 @@
 import { whatsappService } from "@/whatsapp";
-import { prisma } from "@/config/database";
 import { Logger } from "@/utils/logger";
+import TenantContextManager from "@/config/tenantContext";
+import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 
 /**
- *  Worker Loader
- * Initializes background workers for message queues and flows.
+ * ⚡ Worker Loader (Scale-Optimized)
+ *
+ * CHANGE LOG (Scale Audit Fix):
+ * - BEFORE: Loaded ALL active companies at boot → 1000 companies = 3000 Redis connections = crash
+ * - AFTER:  Only loads workers for companies with CONNECTED WhatsApp sessions (typically <5% of tenants)
+ * - Workers for remaining companies are initialized ON-DEMAND when they connect a WA session
+ *
+ * This reduces startup Redis connections from O(n_companies) to O(n_active_sessions).
+ */
+
+/** Track which companies have had their message worker started */
+const initializedWorkers = new Set<string>();
+
+/**
+ * Initialize a message queue worker for a single company (idempotent).
+ * Can be called from anywhere: session connect, webhook, or manual trigger.
+ */
+export const ensureWorkerForCompany = async (companyId: string): Promise<void> => {
+  if (initializedWorkers.has(companyId)) return;
+
+  try {
+    const { getMessageQueueWorker } = await import("@/services/queue/messageQueueWorker");
+    const messageWorker = getMessageQueueWorker(whatsappService);
+    await messageWorker.startWorker(companyId);
+    initializedWorkers.add(companyId);
+    Logger.info(`[Loader] [ON-DEMAND] Started message worker for company: ${companyId}`);
+  } catch (err) {
+    Logger.error(`[Loader] Failed to start on-demand worker for ${companyId}`, err);
+  }
+};
+
+/**
+ * Check if a company already has a running worker.
+ */
+export const hasWorkerForCompany = (companyId: string): boolean => {
+  return initializedWorkers.has(companyId);
+};
+
+/**
+ * Main worker initialization.
+ * Only bootstraps workers for companies that have an active (CONNECTED) WhatsApp session.
  */
 export const initWorkers = async () => {
-  Logger.info("[Loader]  Initializing Message Queue Workers...");
+  Logger.info("[Loader] ⚡ Initializing Background Workers (Scale-Optimized)...");
   try {
-    // Initialize Flow Queue Worker
-    Logger.info("[Loader]  Initializing Flow Queue Workers...");
-    const { flowQueueWorker } =
-      await import("@/services/queue/flowQueueWorker");
+    // ── SHARED WORKERS (Always initialize, independent of tenants) ──
+
+    // 1. Flow Queue Worker
+    Logger.info("[Loader] 🔄 Initializing Flow Queue Workers...");
+    const { flowQueueWorker } = await import("@/services/queue/flowQueueWorker");
     flowQueueWorker.startWorker();
 
-    // Initialize Cron Queue Worker
+    // 2. Cron Queue Worker
     Logger.info("[Loader] ⏰ Initializing Cron Queue Workers...");
-    const { initCronWorker } =
-      await import("@/services/queue/cronQueueService");
+    const { initCronWorker } = await import("@/services/queue/cronQueueService");
     const cronWorker = await initCronWorker();
 
-    const { getMessageQueueWorker } =
-      await import("@/services/queue/messageQueueWorker");
-    // Get singleton instance with whatsappService
-    const messageWorker = getMessageQueueWorker(whatsappService);
-
-    //  ENTERPRISE: Group Contact Indexer Worker
+    // 3. Group Contact Indexer
     Logger.info("[Loader] [CONTACTS] Initializing Group Contact Indexer...");
-    const { groupContactIndexer } =
-      await import("@/services/queue/groupContactIndexer");
+    const { groupContactIndexer } = await import("@/services/queue/groupContactIndexer");
     groupContactIndexer.startWorker();
 
-    // Start workers for all active companies
-    const companies = await prisma.company.findMany({
-      where: { isActive: true },
-    });
-    Logger.info(`[Loader] Found ${companies.length} active companies`);
+    // ── TENANT MESSAGE WORKERS (Lazy — Only for active sessions) ──
 
-    for (const company of companies) {
-      Logger.info(
-        `[Loader] Starting worker for: ${company.name} (${company.id})`,
-      );
-      await messageWorker.startWorker(company.id);
-    }
+    // [SEC] SCALE FIX: Instead of loading ALL companies, only load companies
+    // that have a CONNECTED WhatsApp session. This reduces Redis connections
+    // from potentially 3,000+ to typically 10-50.
+    const activeSessions = await TenantContextManager.runAsSystem(async () =>
+      whatsappSessionRepository.findByStatus("CONNECTED"),
+    );
+
+    // Deduplicate by companyId (a company may have multiple sessions)
+    const activeCompanyIds = [...new Set(activeSessions.map((s) => s.companyId))];
+
     Logger.info(
-      `[Loader] [OK] ${companies.length} message queue workers initialized`,
+      `[Loader] Found ${activeCompanyIds.length} companies with active WA sessions (vs loading ALL companies)`,
+    );
+
+    const { getMessageQueueWorker } = await import("@/services/queue/messageQueueWorker");
+    const messageWorker = getMessageQueueWorker(whatsappService);
+
+    for (const companyId of activeCompanyIds) {
+      Logger.info(`[Loader] Starting worker for active company: ${companyId}`);
+      await messageWorker.startWorker(companyId);
+      initializedWorkers.add(companyId);
+    }
+
+    Logger.info(
+      `[Loader] ✅ ${activeCompanyIds.length} message queue workers initialized (lazy mode)`,
     );
 
     // Graceful shutdown handler
     process.on("SIGTERM", async () => {
-      Logger.info("[Loader]  SIGTERM received, shutting down gracefully...");
+      Logger.info("[Loader] 🛑 SIGTERM received, shutting down gracefully...");
       await messageWorker.shutdown();
-      const { messageQueueService } =
-        await import("@/services/queue/messageQueueService");
+      const { messageQueueService } = await import("@/services/queue/messageQueueService");
       await messageQueueService.shutdown();
       await flowQueueWorker.shutdown();
       await cronWorker.close();
       await groupContactIndexer.shutdown();
+      initializedWorkers.clear();
       process.exit(0);
     });
   } catch (workerError: unknown) {
-    const msg =
-      workerError instanceof Error ? workerError.message : String(workerError);
+    const msg = workerError instanceof Error ? workerError.message : String(workerError);
 
     if (
       msg.includes("Connection timeout") ||

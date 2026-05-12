@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Account } from "@/types/crm";
 import { Search, Building2, Trash2, Users, Settings } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { getAccounts, deleteAccount } from "@/services/crmService";
 import { AccountModal } from "./AccountModal";
 import { ModuleHeader } from "../common/ModuleHeader";
-
 export const AccountList: React.FC = () => {
+  const { t } = useTranslation();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,7 +32,7 @@ export const AccountList: React.FC = () => {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("¿Ests seguro de eliminar esta empresa?")) {
+    if (window.confirm(t("queues_config.toasts.confirm_delete"))) {
       try {
         await deleteAccount(id);
         fetchAccounts();
@@ -60,8 +61,8 @@ export const AccountList: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden">
       <ModuleHeader
-        title="Empresas"
-        description="Gestiona tus clientes B2B"
+        title={t("navigation.accounts")}
+        description={t("crm.accounts.new_desc")}
         icon={
           <svg
             className="w-8 h-8 text-white"
@@ -79,7 +80,7 @@ export const AccountList: React.FC = () => {
         }
         gradient="from-emerald-600 to-teal-600 dark:from-emerald-800 dark:to-teal-800"
         stats={{
-          label: "Total Empresas",
+          label: t("dashboard.total_companies"),
           value: accounts.length,
         }}
         action={
@@ -100,7 +101,7 @@ export const AccountList: React.FC = () => {
                 d="M12 4v16m8-8H4"
               />
             </svg>
-            Nueva Empresa
+            {t("crm.accounts.new_title")}
           </button>
         }
       />
@@ -113,7 +114,7 @@ export const AccountList: React.FC = () => {
               <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-500 transition-colors" />
               <input
                 type="text"
-                placeholder="Buscar por nombre, industria o sitio web..."
+                placeholder={t("tenants.search")}
                 className="w-full pl-12 pr-6 py-4 bg-white dark:bg-reply-panel-dark border border-gray-100 dark:border-reply-border-dark rounded-2xl shadow-sm focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium text-gray-900 dark:text-white"
               />
             </div>
@@ -121,7 +122,7 @@ export const AccountList: React.FC = () => {
             <div className="flex items-center gap-3">
               <div className="px-4 py-2 bg-white dark:bg-reply-panel-dark rounded-2xl border border-gray-100 dark:border-reply-border-dark shadow-sm text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                {accounts.length} Empresas
+                {accounts.length} {t("navigation.accounts")}
               </div>
             </div>
           </div>
@@ -142,11 +143,10 @@ export const AccountList: React.FC = () => {
                 <Building2 className="w-10 h-10 text-gray-300" />
               </div>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                No hay empresas registradas
+                {t("crm.accounts.new_title")}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
-                Comienza a construir tu portafolio B2B agregando la primera
-                compañía.
+                {t("crm.accounts.new_desc")}
               </p>
             </div>
           ) : (
@@ -156,7 +156,7 @@ export const AccountList: React.FC = () => {
                 {accounts.map((account) => (
                   <div
                     key={account.id}
-                    className="bg-white dark:bg-reply-surface-dark p-6 rounded-[2.5rem] border border-gray-100 dark:border-reply-border-dark shadow-sm transition-all relative overflow-hidden"
+                    className="bg-white dark:bg-reply-surface-dark p-4 rounded-2xl border border-gray-100 dark:border-reply-border-dark shadow-sm transition-all relative overflow-hidden"
                   >
                     <div className="flex items-center gap-4 mb-5">
                       <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xl font-black shadow-lg shadow-emerald-500/20">
@@ -180,7 +180,7 @@ export const AccountList: React.FC = () => {
                     <div className="space-y-4 mb-6">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-400 font-bold uppercase tracking-tighter">
-                          Industria
+                          {t("crm.accounts.industry")}
                         </span>
                         <span className="text-gray-900 dark:text-white font-black">
                           {account.industry || "-"}
@@ -188,7 +188,7 @@ export const AccountList: React.FC = () => {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-400 font-bold uppercase tracking-tighter">
-                          Equipo
+                          {t("crm.accounts.size")}
                         </span>
                         <span className="text-gray-900 dark:text-white font-black">
                           {account.size || "-"}
@@ -201,7 +201,7 @@ export const AccountList: React.FC = () => {
                               {account._count?.contacts || 0}
                             </div>
                             <div className="text-[9px] font-bold text-gray-400 uppercase">
-                              Contactos
+                              {t("navigation.contacts")}
                             </div>
                           </div>
                           <div className="text-center">
@@ -221,7 +221,7 @@ export const AccountList: React.FC = () => {
                         onClick={() => handleEdit(account)}
                         className="flex-1 py-4 bg-reply-bg dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-2xl font-bold text-sm transition-all"
                       >
-                        Editar
+                        {t("common.edit")}
                       </button>
                       <button
                         onClick={() => handleDelete(account.id)}
@@ -239,11 +239,11 @@ export const AccountList: React.FC = () => {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-reply-bg/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
-                      <th className="px-10 py-8">Compañía</th>
-                      <th className="px-6 py-8">Industria & Tamaño</th>
-                      <th className="px-6 py-8">Estado</th>
-                      <th className="px-6 py-8 text-center">Métricas CRM</th>
-                      <th className="px-10 py-8 text-right">Acciónes</th>
+                      <th className="px-10 py-5">{t("crm.activities.company")}</th>
+                      <th className="px-6 py-5">{t("crm.accounts.industry")} & {t("crm.accounts.size")}</th>
+                      <th className="px-6 py-5">{t("tenants.metrics.status")}</th>
+                      <th className="px-6 py-5 text-center">{t("tenants.metrics.business_metrics")}</th>
+                      <th className="px-10 py-5 text-right">{t("queues_config.table.actions")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
@@ -252,7 +252,7 @@ export const AccountList: React.FC = () => {
                         key={account.id}
                         className="hover:bg-reply-bg/50 dark:hover:bg-emerald-500/[0.02] transition-all group"
                       >
-                        <td className="px-10 py-6 whitespace-nowrap">
+                        <td className="px-10 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-5">
                             <div className="h-14 w-14 rounded-[1.25rem] bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-black shadow-lg shadow-emerald-500/10 border-2 border-white dark:border-reply-border-dark transform group-hover:scale-110 group-hover:rotate-2 transition-all duration-500">
                               {account.name.charAt(0).toUpperCase()}
@@ -286,18 +286,18 @@ export const AccountList: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-6 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="space-y-1">
                             <div className="text-sm font-black text-gray-900 dark:text-white">
                               {account.industry || "No especificado"}
                             </div>
                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                               <Users className="w-3 h-3" />
-                              {account.size || "Tamaño desconocido"}
+                              {account.size || t("common.unknown")}
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-6">
+                        <td className="px-6 py-4">
                           <span
                             className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
                               account.status === "ACTIVE"
@@ -307,17 +307,17 @@ export const AccountList: React.FC = () => {
                                   : "bg-amber-50 dark:bg-amber-500/10 text-amber-600 border-amber-100 dark:border-amber-500/20"
                             }`}
                           >
-                            {account.status}
+                            {t(`crm.accounts.status.${account.status.toLowerCase()}`)}
                           </span>
                         </td>
-                        <td className="px-6 py-6">
+                        <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-8">
                             <div className="text-center">
                               <div className="text-lg font-black text-gray-900 dark:text-white">
                                 {account._count?.contacts || 0}
                               </div>
                               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                Contactos
+                                {t("navigation.contacts")}
                               </div>
                             </div>
                             <div className="text-center">
@@ -325,7 +325,7 @@ export const AccountList: React.FC = () => {
                                 {account._count?.deals || 0}
                               </div>
                               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                Deals
+                                {t("crm.activities.deal")}
                               </div>
                             </div>
                           </div>

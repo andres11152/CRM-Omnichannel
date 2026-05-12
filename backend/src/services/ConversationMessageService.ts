@@ -1,4 +1,4 @@
-import { whatsappService, SendMessageOptions } from "@/whatsapp";
+import { whatsappMessagingService, SendMessageOptions } from "@/whatsapp";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { gateway } from "@/gateways/socketGateway";
 import { AppError } from "@/utils/AppError";
@@ -136,7 +136,7 @@ export class ConversationMessageService {
       quotedMessageId,
     };
 
-    const sent = await whatsappService.sendMessage(targetPhone, messageContent, options);
+    const sent = await whatsappMessagingService.sendMessage(targetPhone, messageContent, options);
 
     return {
       id: sent.dbId || sent.messageId,
@@ -182,7 +182,7 @@ export class ConversationMessageService {
     };
 
     try {
-      await whatsappService.sendMessage(phone, content, options);
+      await whatsappMessagingService.sendMessage(phone, content, options);
     } catch (e: unknown) {
       Logger.error("[MessageService] Failed to send notification", e);
       const failedMsg = await messageRepository.create({
@@ -239,7 +239,7 @@ export class ConversationMessageService {
 
     // 1. Send to WhatsApp (with proper origin tracking for reactions)
     const fromMe = msg.direction === MessageDirection.OUTBOUND;
-    await whatsappService.sendReaction(targetPhone, msg.whatsappMessageId, reaction, companyId, fromMe);
+    await whatsappMessagingService.sendReaction(targetPhone, msg.whatsappMessageId, reaction, companyId, fromMe);
 
     // 2. Local DB
     if (!reaction) {

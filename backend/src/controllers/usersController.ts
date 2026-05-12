@@ -9,28 +9,28 @@ import { userService } from "@/services/UserService";
  * USER CONTROLLER
  * ==========================================
  *
- * Responsabilidades:
- * - Extraer datos de la Request (body, params, query, user)
- * - Validar input básico (validación de negocio está en Service)
- * - Llamar al Service correspondiente
- * - Formatear y enviar Response
- * - Delegar errores al middleware de error handling
+ * Responsibilities:
+ * - Extract Request data (body, params, query, user)
+ * - Basic input validation (business validation in Service)
+ * - Call the corresponding Service
+ * - Format and send Response
+ * - Delegate errors to error handling middleware
  *
- * NO debe contener:
- * - Queries Prisma directas
- * - Lógica de negocio
- * - Transformaciones de datos complejas
+ * SHOULD NOT contain:
+ * - Direct Prisma queries
+ * - Business logic
+ * - Complex data transformations
  */
 
 // ==================== GET USERS ====================
 
 /**
  * GET /api/users
- * Lista todos los usuarios con filtros opcionales
+ * List all users with optional filters
  */
 export const getUsers = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    // 1. Extraer parámetros de la request
+    // 1. Extract request parameters
     const { role, roles } = req.query;
     const companyId = req.companyId || req.user?.companyId;
 
@@ -42,7 +42,7 @@ export const getUsers = catchAsync(
         : (roles as string).split(",");
     }
 
-    // 2. Llamar al servicio
+    // 2. Call the service
     const users = await userService.findUsers({
       companyId,
       role: role as string,
@@ -120,7 +120,7 @@ export const getUsers = catchAsync(
       };
     });
 
-    // 3. Enviar response
+    // 3. Send response
     res.status(200).json({
       status: "success",
       results: mappedUsers.length,
@@ -133,29 +133,29 @@ export const getUsers = catchAsync(
 
 /**
  * POST /api/users
- * Crea un nuevo usuario (Solo ADMIN/MASTER)
+ * Create a new user (ADMIN/MASTER only)
  */
 export const createUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    // 1. Extraer datos de la request
+    // 1. Extract request data
     const { name, email, password, role, maxConcurrency, skills } = req.body;
     const companyId = req.companyId || req.user?.companyId;
     const currentUserRole = req.user?.role;
 
-    // 2. Validación básica de input
+    // 2. Basic input validation
     if (!companyId) {
       return next(
-        new AppError("No se pudo determinar la compañía del usuario.", 400),
+        new AppError("Could not determine user's company.", 400),
       );
     }
 
     if (!name || !email || !password) {
       return next(
-        new AppError("Nombre, email y contraseña son requeridos.", 400),
+        new AppError("Name, email and password are required.", 400),
       );
     }
 
-    // 3. Llamar al servicio (delegamos validación de roles y creación)
+    // 3. Call the service (delegate role validation and creation)
     const newUser = await userService.createUser(
       {
         name,
@@ -169,7 +169,7 @@ export const createUser = catchAsync(
       currentUserRole || "USER",
     );
 
-    // 4. Enviar response
+    // 4. Send response
     res.status(201).json({
       status: "success",
       data: { user: newUser },
@@ -181,19 +181,19 @@ export const createUser = catchAsync(
 
 /**
  * GET /api/users/:id
- * Obtiene un usuario específico por ID
+ * Get a specific user by ID
  */
 export const getUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
-    // 1. Extraer ID de params
+    // 1. Extract ID from params
     const { id } = req.params;
     const companyId = req.companyId!;
 
-    // 2. Llamar al servicio (maneja error 404 internamente)
+    // 2. Call the service (handles 404 error internally)
     // [SEC] SECURITY: Mandatory companyId scoping to prevent BOLA
     const user = await userService.findUserById(id, companyId);
 
-    // 3. Enviar response
+    // 3. Send response
     res.status(200).json({
       status: "success",
       data: { user },
@@ -205,11 +205,11 @@ export const getUser = catchAsync(
 
 /**
  * PATCH /api/users/:id
- * Actualiza un usuario existente
+ * Update an existing user
  */
 export const updateUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
-    // 1. Extraer datos de la request
+    // 1. Extract request data
     const { id } = req.params;
     const {
       email,
@@ -228,7 +228,7 @@ export const updateUser = catchAsync(
     const currentUserRole = req.user?.role || "USER";
     const companyId = req.companyId || req.user?.companyId || "";
 
-    // 2. Llamar al servicio (maneja validaciones de permisos)
+    // 2. Call the service (handles permission validations)
     const updatedUser = await userService.updateUser(
       {
         id,
@@ -248,7 +248,7 @@ export const updateUser = catchAsync(
       companyId,
     );
 
-    // 3. Enviar response
+    // 3. Send response
     res.status(200).json({
       status: "success",
       data: { user: updatedUser },
@@ -260,30 +260,30 @@ export const updateUser = catchAsync(
 
 /**
  * DELETE /api/users/:id
- * Elimina un usuario (con validaciones de seguridad)
+ * Delete a user (with security validations)
  */
 export const deleteUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    // 1. Extraer datos de la request
+    // 1. Extract request data
     const { id } = req.params;
     const currentUserRole = req.user?.role || "USER";
     const companyId = req.companyId || req.user?.companyId;
 
-    // 2. Validación básica
+    // 2. Basic validation
     if (!companyId && currentUserRole === "ADMIN") {
       return next(
-        new AppError("No se pudo determinar la compañía del usuario.", 400),
+        new AppError("Could not determine user's company.", 400),
       );
     }
 
-    // 3. Llamar al servicio (maneja todas las validaciones de seguridad)
+    // 3. Call the service (handles all security validations)
     await userService.deleteUser({
       userId: id,
       currentUserRole,
       companyId: companyId || "",
     });
 
-    // 4. Enviar response (204 No Content)
+    // 4. Send response (204 No Content)
     res.status(204).send();
   },
 );

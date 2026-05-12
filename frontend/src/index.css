@@ -100,3 +100,85 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* 🖼️ CHAT WALLPAPER SYSTEM (Optimized for Enterprise) */
+.chat-window-container {
+  position: relative;
+  background-color: #efeae2;
+  z-index: 0;
+}
+
+.chat-window-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("./assets/wallpapers/chat-bg-light.webp");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  opacity: 0.85; /* Balanced transparency */
+  filter: blur(1px); /* More pronounced blur */
+  z-index: -1;
+}
+
+/* Light mode overlay to darken slightly */
+.chat-window-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.02);
+  z-index: -1;
+}
+
+.dark .chat-window-container {
+  background-color: #0b141a;
+}
+
+.dark .chat-window-container::before {
+  background-image: url("./assets/wallpapers/chat-bg-dark.webp");
+  opacity: 0.7; /* Balanced visibility in dark mode */
+  filter: blur(1.5px); /* More depth in dark mode */
+}
+
+.dark .chat-window-container::after {
+  background: rgba(0, 0, 0, 0.35); /* Middle ground darkening */
+}
+
+/* 🔄 CUSTOM ANIMATIONS */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.animate-scale-in {
+  animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes swing {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(15deg);
+  }
+  40% {
+    transform: rotate(-10deg);
+  }
+  60% {
+    transform: rotate(5deg);
+  }
+  80% {
+    transform: rotate(-5deg);
+  }
+}
+.animate-swing {
+  animation: swing 1s ease-in-out infinite;
+  transform-origin: top center;
+}

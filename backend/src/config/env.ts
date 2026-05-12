@@ -51,6 +51,12 @@ const EnvSchema = z.object({
     .min(32, "SESSION_SECRET must be at least 32 characters for encryption")
     .describe("Master secret for multi-tenant data encryption"),
 
+  PREVIOUS_SESSION_SECRET: z
+    .string()
+    .min(32, "PREVIOUS_SESSION_SECRET must be at least 32 characters")
+    .optional()
+    .describe("Previous master secret for zero-downtime key rotation"),
+
   JWT_EXPIRES_IN: z
     .string()
     .default("7d")

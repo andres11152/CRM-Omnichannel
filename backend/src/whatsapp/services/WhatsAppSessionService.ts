@@ -88,7 +88,7 @@ export class WhatsAppSessionService {
         );
         if (!canCreate) {
           throw new AppError(
-            "Has alcanzado el límite de conexiones WhatsApp de tu plan.",
+            "You have reached the WhatsApp connection limit for your plan.",
             403,
           );
         }
@@ -201,7 +201,7 @@ export class WhatsAppSessionService {
     } catch (dbErr) {
       Logger.error(`[WA] ERROR: Failed to delete session record ${sessionId} from DB:`, dbErr);
       throw new AppError(
-        "No se pudo eliminar el registro de la sesión. Intente nuevamente.",
+        "Could not delete session record. Please try again.",
         500,
       );
     }

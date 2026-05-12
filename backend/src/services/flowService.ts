@@ -4,6 +4,7 @@ import { cacheService } from "@/services/CacheService";
 import { planLimitsService } from "@/services/PlanLimitsService";
 import { Prisma } from "@prisma/client";
 import { workflowRepository } from "@/repositories/WorkflowRepository";
+import { flowSessionRepository } from "@/repositories/FlowSessionRepository";
 
 /**
  *  FLOW (WORKFLOW) CRUD SERVICE
@@ -44,6 +45,39 @@ export const flowService = {
     });
   },
 
+  async getStats(id: string, companyId: string) {
+    const flow = await workflowRepository.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!flow) {
+      throw new AppError("Flow not found", 404);
+    }
+
+    const sessions = await flowSessionRepository.findManySessions({
+      where: { flowId: id, companyId },
+      select: { visitedNodes: true, isActive: true, completedAt: true },
+    });
+
+    const totalSessions = sessions.length;
+    const activeSessions = sessions.filter(s => s.isActive).length;
+    const completedSessions = sessions.filter(s => s.completedAt !== null).length;
+
+    const nodeStats: Record<string, number> = {};
+    for (const session of sessions) {
+      for (const nodeId of session.visitedNodes) {
+        nodeStats[nodeId] = (nodeStats[nodeId] || 0) + 1;
+      }
+    }
+
+    return {
+      totalSessions,
+      activeSessions,
+      completedSessions,
+      nodeStats,
+    };
+  },
+
   async create(companyId: string, data: CreateFlowDTO) {
     const initActive = data.isActive !== undefined ? data.isActive : true;
 
@@ -54,7 +88,7 @@ export const flowService = {
       );
       if (!canCreate) {
         throw new AppError(
-          "Has alcanzado el límite de workflows activos de tu plan",
+          "You have reached the active workflows limit for your plan",
           403,
         );
       }
@@ -133,7 +167,7 @@ export const flowService = {
       );
       if (!canActivate) {
         throw new AppError(
-          "Has alcanzado el límite de workflows activos de tu plan",
+          "You have reached the active workflows limit for your plan",
           403,
         );
       }
@@ -160,7 +194,7 @@ export const flowService = {
     const duplicate = await workflowRepository.create({
       data: {
         companyId,
-        name: `${original.name} (Copia)`,
+        name: `${original.name} (Copy)`,
         triggerType: original.triggerType,
         triggerConfig: original.triggerConfig,
         nodes: original.nodes,

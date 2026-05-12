@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { QueueConfig, Agent } from "@/types";
 import {
@@ -21,6 +22,7 @@ const QueuesConfig: React.FC = () => {
   const [assistants, setAssistants] = useState<
     Array<{ id: string; name: string }>
   >([]);
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal State
@@ -59,7 +61,7 @@ const QueuesConfig: React.FC = () => {
       setAssistants(assistantsData);
     } catch (error) {
       console.error("Error loading data:", error);
-      toast.error("Error al cargar la configuración.");
+      toast.error(t("queues_config.toasts.err_load", "Error al cargar la configuración."));
     } finally {
       setIsLoading(false);
     }
@@ -100,25 +102,25 @@ const QueuesConfig: React.FC = () => {
 
   const handleSave = async () => {
     if (!formData.name)
-      return toast.error("El nombre de la cola es obligatorio");
+      return toast.error(t("queues_config.toasts.err_name_req", "El nombre de la cola es obligatorio"));
     if (!formData.departmentId)
-      return toast.error("Debes seleccionar un departamento");
+      return toast.error(t("queues_config.toasts.err_dept_req", "Debes seleccionar un departamento"));
 
     setIsSaving(true);
     try {
       if (editingQueue) {
         await updateQueue(editingQueue.id, formData);
-        toast.success("Cola actualizada correctamente");
+        toast.success(t("queues_config.toasts.update_success", "Cola actualizada correctamente"));
       } else {
         await createQueue(formData);
-        toast.success("Cola creada correctamente");
+        toast.success(t("queues_config.toasts.create_success", "Cola creada correctamente"));
       }
       loadData(); // Refresh list to ensure consistency
       handleCloseModal();
     } catch (error: unknown) {
       console.error("Error saving queue:", error);
       toast.error(
-        error instanceof Error ? error.message : "Error al guardar la cola",
+        error instanceof Error ? error.message : t("queues_config.toasts.err_save", "Error al guardar la cola"),
       );
     } finally {
       setIsSaving(false);
@@ -128,18 +130,18 @@ const QueuesConfig: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (
       !confirm(
-        "¿Ests seguro de eliminar esta cola? Esta acción no se puede deshacer.",
+        t("queues_config.toasts.confirm_delete", "¿Estás seguro de eliminar esta cola? Esta acción no se puede deshacer."),
       )
     )
       return;
     try {
       await deleteQueue(id);
       setQueues(queues.filter((q) => q.id !== id));
-      toast.success("Cola eliminada correctamente");
+      toast.success(t("queues_config.toasts.delete_success", "Cola eliminada correctamente"));
     } catch (error: unknown) {
       console.error("Error deleting queue:", error);
       toast.error(
-        error instanceof Error ? error.message : "Error al eliminar la cola",
+        error instanceof Error ? error.message : t("queues_config.toasts.err_delete", "Error al eliminar la cola"),
       );
     }
   };
@@ -152,9 +154,9 @@ const QueuesConfig: React.FC = () => {
       setFormData({ ...formData, departmentId: newDept.id });
       setNewDeptName("");
       setIsCreatingDept(false);
-      toast.success("Departamento creado");
+      toast.success(t("queues_config.toasts.dept_success", "Departamento creado"));
     } catch (error) {
-      toast.error("Error al crear departamento");
+      toast.error(t("queues_config.toasts.err_dept", "Error al crear departamento"));
     }
   };
 
@@ -164,10 +166,10 @@ const QueuesConfig: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-            Configuración de Colas
+            {t("queues_config.title", "Configuración de Colas")}
           </h2>
           <p className="text-gray-500 dark:text-gray-400 text-sm">
-            Administra cómo se distribuyen y atienden los tickets.
+            {t("queues_config.description", "Administra cómo se distribuyen y atienden los tickets.")}
           </p>
         </div>
         <button
@@ -187,7 +189,7 @@ const QueuesConfig: React.FC = () => {
               d="M12 4v16m8-8H4"
             />
           </svg>
-          Nueva Cola
+          {t("queues_config.new_queue", "Nueva Cola")}
         </button>
       </div>
 
@@ -212,9 +214,9 @@ const QueuesConfig: React.FC = () => {
                 d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
               />
             </svg>
-            <p className="text-lg font-medium">No hay colas configuradas</p>
+            <p className="text-lg font-medium">{t("queues_config.no_queues", "No hay colas configuradas")}</p>
             <p className="text-sm">
-              Crea la primera para empezar a recibir tickets.
+              {t("queues_config.create_first", "Crea la primera para empezar a recibir tickets.")}
             </p>
           </div>
         ) : (
@@ -223,19 +225,19 @@ const QueuesConfig: React.FC = () => {
               <thead>
                 <tr className="bg-reply-bg dark:bg-reply-surface-dark border-b border-gray-200 dark:border-reply-border-dark">
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">
-                    Nombre
+                    {t("queues_config.table.name", "Nombre")}
                   </th>
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">
-                    Departamento
+                    {t("queues_config.table.department", "Departamento")}
                   </th>
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">
-                    Tipo Asignación
+                    {t("queues_config.table.assignment", "Tipo Asignación")}
                   </th>
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">
-                    Asistente IA
+                    {t("queues_config.table.ai_assistant", "Asistente IA")}
                   </th>
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase text-right">
-                    Acciónes
+                    {t("queues_config.table.actions", "Acciones")}
                   </th>
                 </tr>
               </thead>
@@ -261,15 +263,15 @@ const QueuesConfig: React.FC = () => {
                     <td className="px-6 py-4 text-sm">
                       {queue.type === "AI" ? (
                         <span className="text-purple-600 dark:text-purple-400 font-bold text-xs flex items-center gap-1">
-                           IA Automation
+                           {t("queues_config.types.ai", "IA Automation")}
                         </span>
                       ) : queue.type === "ROUND_ROBIN" ? (
                         <span className="text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center gap-1">
-                          [SYNC] Round Robin
+                          [SYNC] {t("queues_config.types.round_robin", "Round Robin")}
                         </span>
                       ) : (
                         <span className="text-gray-500 dark:text-gray-400 text-xs">
-                          Manual
+                          {t("queues_config.types.manual", "Manual")}
                         </span>
                       )}
                     </td>
@@ -280,12 +282,12 @@ const QueuesConfig: React.FC = () => {
                           <span>
                             {assistants.find(
                               (a) => a.id === queue.aiAssistantId,
-                            )?.name || "Asistente Desconocido"}
+                            )?.name || t("common.unknown", "Asistente Desconocido")}
                           </span>
                         </div>
                       ) : (
                         <span className="text-gray-400 text-xs italic">
-                          Ninguno
+                          {t("queues_config.none", "Ninguno")}
                         </span>
                       )}
                     </td>
@@ -294,7 +296,7 @@ const QueuesConfig: React.FC = () => {
                         <button
                           onClick={() => handleOpenModal(queue)}
                           className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 p-2 rounded transition-colors"
-                          title="Editar"
+                          title={t("queues_config.edit", "Editar")}
                         >
                           <svg
                             className="w-4 h-4"
@@ -313,7 +315,7 @@ const QueuesConfig: React.FC = () => {
                         <button
                           onClick={() => handleDelete(queue.id)}
                           className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded transition-colors"
-                          title="Eliminar"
+                          title={t("queues_config.delete", "Eliminar")}
                         >
                           <svg
                             className="w-4 h-4"
@@ -345,7 +347,7 @@ const QueuesConfig: React.FC = () => {
           <div className="bg-white dark:bg-reply-panel-dark w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-reply-border-dark animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-reply-border-dark bg-reply-bg/50 dark:bg-reply-surface-dark/50 flex justify-between items-center">
               <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-                {editingQueue ? "Editar Cola" : "Crear Nueva Cola"}
+                {editingQueue ? t("queues_config.modal.edit_title", "Editar Cola") : t("queues_config.modal.create_title", "Crear Nueva Cola")}
               </h3>
               <button
                 onClick={handleCloseModal}
@@ -371,7 +373,7 @@ const QueuesConfig: React.FC = () => {
               {/* Name */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Nombre de la Cola
+                  {t("queues_config.modal.queue_name", "Nombre de la Cola")}
                 </label>
                 <input
                   type="text"
@@ -379,7 +381,7 @@ const QueuesConfig: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  placeholder="Ej: Ventas VIP"
+                  placeholder={t("queues_config.modal.name_placeholder", "Ej: Ventas VIP")}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </div>
@@ -387,7 +389,7 @@ const QueuesConfig: React.FC = () => {
               {/* Department */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Departamento
+                  {t("queues_config.modal.department", "Departamento")}
                 </label>
                 {!isCreatingDept ? (
                   <div className="flex gap-2">
@@ -407,7 +409,7 @@ const QueuesConfig: React.FC = () => {
                         </option>
                       ))}
                       {departments.length === 0 && (
-                        <option value="">Sin departamentos</option>
+                        <option value="">{t("queues_config.modal.no_depts", "Sin departamentos")}</option>
                       )}
                     </select>
                     <button
@@ -448,7 +450,7 @@ const QueuesConfig: React.FC = () => {
                 {/* Assignment Type */}
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    Asignación
+                    {t("queues_config.modal.assignment", "Asignación")}
                   </label>
                   <select
                     value={formData.type}
@@ -460,15 +462,15 @@ const QueuesConfig: React.FC = () => {
                     }
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   >
-                    <option value="MANUAL">Manual</option>
-                    <option value="ROUND_ROBIN">Automtica (Round Robin)</option>
+                    <option value="MANUAL">{t("queues_config.types.manual", "Manual")}</option>
+                    <option value="ROUND_ROBIN">{t("queues_config.modal.assignment_auto", "Automática (Round Robin)")}</option>
                   </select>
                 </div>
 
                 {/* AI Assistant */}
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    Asistente IA
+                    {t("queues_config.table.ai_assistant", "Asistente IA")}
                   </label>
                   <select
                     value={formData.aiAssistantId || ""}
@@ -480,7 +482,7 @@ const QueuesConfig: React.FC = () => {
                     }
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   >
-                    <option value="">Ninguno</option>
+                    <option value="">{t("queues_config.none", "Ninguno")}</option>
                     {assistants.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.name}
@@ -493,7 +495,7 @@ const QueuesConfig: React.FC = () => {
               {/* SKILLS - 100 Year Feature */}
               <div className="col-span-2">
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Skills Requeridos (Opcional)
+                  {t("queues_config.modal.required_skills", "Skills Requeridos (Opcional)")}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -539,13 +541,12 @@ const QueuesConfig: React.FC = () => {
                         config: { ...formData.config, requiredSkills: clean },
                       });
                     }}
-                    placeholder="Ej: Ventas, Inglés, VIP (Separados por coma)"
+                    placeholder={t("queues_config.modal.skills_placeholder", "Ej: Ventas, Inglés, VIP (Separados por coma)")}
                     className="w-full pl-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   />
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-1">
-                  El sistema solo asignar chats a agentes que tengan{" "}
-                  <b>TODOS</b> estos skills.
+                  {t("queues_config.modal.skills_hint", "El sistema solo asignará chats a agentes que tengan TODOS estos skills.")}
                 </p>
               </div>
             </div>
@@ -555,7 +556,7 @@ const QueuesConfig: React.FC = () => {
                 onClick={handleCloseModal}
                 className="px-4 py-2 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >
-                Cancelar
+                {t("common.cancel", "Cancelar")}
               </button>
               <button
                 onClick={handleSave}
@@ -565,12 +566,12 @@ const QueuesConfig: React.FC = () => {
                 {isSaving ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Guardando...
+                    {t("queues_config.modal.saving", "Guardando...")}
                   </>
                 ) : editingQueue ? (
-                  "Actualizar"
+                  t("queues_config.modal.update", "Actualizar")
                 ) : (
-                  "Crear Cola"
+                  t("queues_config.modal.create", "Crear Cola")
                 )}
               </button>
             </div>

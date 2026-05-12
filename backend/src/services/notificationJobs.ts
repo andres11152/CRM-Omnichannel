@@ -9,7 +9,7 @@ import TenantContextManager from "@/config/tenantContext";
 import { Company, Plan } from "@prisma/client";
 
 /**
- * ⏰ SCHEDULED NOTIFICATION JOBS
+ * SCHEDULED NOTIFICATION JOBS
  * Automatic checks for quotas, expiration, and alerts
  */
 
@@ -143,7 +143,7 @@ export class NotificationJobs {
   }
 
   /**
-   * ⏰ Private Helper Methods
+   * Private Helper Methods
    */
 
   private async checkTrialExpiration(company: CompanyWithPlan) {

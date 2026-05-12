@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { ModuleHeader } from "./common/ModuleHeader";
 import SoundSettings from "./SoundSettings";
 import PermissionsPanel from "./PermissionsPanel";
@@ -11,6 +12,7 @@ import { NavButton } from "./settings/SettingsShared";
 import { GeneralTab } from "./settings/GeneralTab";
 import { BusinessHoursTab } from "./settings/BusinessHoursTab";
 import { SecurityTab } from "./settings/SecurityTab";
+import { EmailTab } from "./settings/EmailTab";
 
 // ────────────────────────────────────────────────
 // LAZY INLINE TABS (Automation, Email, Billing)
@@ -27,6 +29,7 @@ import { SecurityTab } from "./settings/SecurityTab";
  * - Automation, Email, Billing: Inline (pending extraction)
  */
 export const CompanySettings: React.FC = () => {
+  const { t } = useTranslation();
   const ctx = useCompanySettings();
 
   const {
@@ -77,13 +80,13 @@ export const CompanySettings: React.FC = () => {
         <div className="bg-white dark:bg-reply-panel-dark rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
           <div className="p-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center">
             <h3 className="font-bold text-lg text-gray-800 dark:text-white">
-              Seleccionar {pickerTarget === "user" ? "Foto de Perfil" : "Logo de Empresa"}
+              {pickerTarget === "user" ? t("company_settings.avatar_modal.select_profile", "Seleccionar Foto de Perfil") : t("company_settings.avatar_modal.select_logo", "Seleccionar Logo de Empresa")}
             </h3>
             <button onClick={() => setPickerOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
           </div>
 
           <div className="p-6">
-            <h4 className="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">Subir Imagen</h4>
+            <h4 className="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">{t("company_settings.avatar_modal.upload_title", "Subir Imagen")}</h4>
             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors">
               <div className="flex flex-col items-center justify-center pt-5 pb-6">
                 {uploadingImage ? (
@@ -94,9 +97,9 @@ export const CompanySettings: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                     </svg>
                     <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-                      <span className="font-semibold">Haz clic para subir</span>
+                      <span className="font-semibold">{t("company_settings.avatar_modal.click_upload", "Haz clic para subir")}</span>
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG or GIF (MAX. 5MB)</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t("company_settings.avatar_modal.constraints", "PNG, JPG or GIF (MAX. 5MB)")}</p>
                   </>
                 )}
               </div>
@@ -105,7 +108,7 @@ export const CompanySettings: React.FC = () => {
 
             <div className="relative flex py-5 items-center">
               <div className="flex-grow border-t border-gray-200 dark:border-reply-border-dark"></div>
-              <span className="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase">O elige uno predeterminado</span>
+              <span className="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase">{t("company_settings.avatar_modal.choose_predetermined", "O elige uno predeterminado")}</span>
               <div className="flex-grow border-t border-gray-200 dark:border-reply-border-dark"></div>
             </div>
 
@@ -166,16 +169,16 @@ export const CompanySettings: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white">Respuesta de Bienvenida</h3>
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white">{t("company_settings.automation.welcome_title", "Respuesta de Bienvenida")}</h3>
               </div>
               <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-                Este mensaje se enviará automáticamente a nuevos contactos o tras 24h de inactividad.
+                {t("company_settings.automation.welcome_desc", "Este mensaje se enviará automáticamente a nuevos contactos o tras 24h de inactividad.")}
               </p>
               <textarea
                 className="w-full h-32 border border-gray-200 dark:border-reply-border-dark rounded-2xl p-4 text-sm bg-reply-bg dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none resize-none no-scrollbar font-medium"
                 value={settings.automation.welcomeMessage}
                 onChange={(e) => updateSetting("automation", "welcomeMessage", e.target.value)}
-                placeholder="¡Hola! Gracias por contactarnos..."
+                placeholder={t("company_settings.automation.welcome_placeholder", "¡Hola! Gracias por contactarnos...")}
               ></textarea>
             </div>
 
@@ -193,36 +196,36 @@ export const CompanySettings: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-white">Horario de Ausencia (OOO)</h3>
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-white">{t("company_settings.automation.ooo_title", "Horario de Ausencia (OOO)")}</h3>
                 </div>
                 <span className="text-[10px] items-center gap-1 font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase hidden sm:flex">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Sistema Auto
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> {t("company_settings.automation.auto_system", "Sistema Auto")}
                 </span>
               </div>
               <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-                Se envía automáticamente cuando un cliente escribe fuera de tu horario laboral configurado.
+                {t("company_settings.automation.ooo_desc", "Se envía automáticamente cuando un cliente escribe fuera de tu horario laboral configurado.")}
               </p>
               <textarea
                 className="w-full h-32 border border-gray-200 dark:border-reply-border-dark rounded-2xl p-4 text-sm bg-reply-bg dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none resize-none no-scrollbar font-medium"
                 value={settings.automation.oooMessage}
                 onChange={(e) => updateSetting("automation", "oooMessage", e.target.value)}
-                placeholder="Lo sentimos, en este momento no estamos disponibles..."
+                placeholder={t("company_settings.automation.ooo_placeholder", "Lo sentimos, en este momento no estamos disponibles...")}
               ></textarea>
             </div>
 
             {/* Google Calendar Integration */}
             <div className="bg-white dark:bg-reply-panel-dark p-6 rounded-xl border border-gray-200 dark:border-reply-border-dark shadow-sm">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white">Google Calendar</h3>
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white">{t("company_settings.google_calendar.title", "Google Calendar")}</h3>
                 {googleCalendarConnected ? (
-                  <span className="text-xs font-bold bg-green-100 text-green-800 px-3 py-1 rounded-full flex items-center gap-1">✓ Conectado</span>
+                  <span className="text-xs font-bold bg-green-100 text-green-800 px-3 py-1 rounded-full flex items-center gap-1">✓ {t("company_settings.google_calendar.connected", "Conectado")}</span>
                 ) : (
-                  <span className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded-full">No Conectado</span>
+                  <span className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded-full">{t("company_settings.google_calendar.not_connected", "No Conectado")}</span>
                 )}
               </div>
-              <p className="text-sm text-gray-500 mb-4">Sincroniza automáticamente tus reuniones del CRM con Google Calendar.</p>
+              <p className="text-sm text-gray-500 mb-4">{t("company_settings.google_calendar.desc", "Sincroniza automáticamente tus reuniones del CRM con Google Calendar.")}</p>
               {googleCalendarConnected ? (
-                <button onClick={handleGoogleDisconnect} className="text-sm text-red-600 hover:text-red-700 font-bold">Desconectar</button>
+                <button onClick={handleGoogleDisconnect} className="text-sm text-red-600 hover:text-red-700 font-bold">{t("company_settings.google_calendar.disconnect", "Desconectar")}</button>
               ) : (
                 <button
                   onClick={handleGoogleConnect}
@@ -234,7 +237,7 @@ export const CompanySettings: React.FC = () => {
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                   </svg>
-                  Conectar con Google
+                  {t("company_settings.google_calendar.connect", "Conectar con Google")}
                 </button>
               )}
             </div>
@@ -248,6 +251,19 @@ export const CompanySettings: React.FC = () => {
             setPasswords={setPasswords}
             loading={loading}
             handleSave={handleSave}
+          />
+        );
+
+      case "email":
+        return (
+          <EmailTab
+            settings={settings}
+            updateSetting={updateSetting}
+            loading={loading}
+            testingConnection={testingConnection}
+            helpTab={helpTab}
+            setHelpTab={setHelpTab}
+            handleTestEmail={handleTestEmail}
           />
         );
 
@@ -265,8 +281,8 @@ export const CompanySettings: React.FC = () => {
   return (
     <div className="h-full bg-reply-bg dark:bg-reply-bg-dark flex flex-col transition-colors duration-200">
       <ModuleHeader
-        title="Configuración de Empresa"
-        description="Gestiona tu perfil, horarios y automatizaciones."
+        title={t("company_settings.title", "Configuración de Empresa")}
+        description={t("company_settings.description", "Gestiona tu perfil, horarios y automatizaciones.")}
         icon={
           <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -278,14 +294,14 @@ export const CompanySettings: React.FC = () => {
       <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
         {/* Sidebar Tabs */}
         <div className="w-full md:w-64 bg-white dark:bg-reply-surface-dark border-b md:border-b-0 md:border-r border-gray-200 dark:border-reply-border-dark flex flex-row md:flex-col overflow-x-auto md:overflow-visible no-scrollbar shrink-0">
-          <NavButton active={activeTab === "general"} onClick={() => setActiveTab("general")} icon={<path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />} label="General" />
-          <NavButton active={activeTab === "hours"} onClick={() => setActiveTab("hours")} icon={<path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />} label="Horarios" />
-          <NavButton active={activeTab === "automation"} onClick={() => setActiveTab("automation")} icon={<path d="M13 10V3L4 14h7v7l9-11h-7z" />} label="Automatización" />
-          <NavButton active={activeTab === "email"} onClick={() => setActiveTab("email")} icon={<path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />} label="Email" fullLabel="Email / SMTP" />
-          <NavButton active={activeTab === "security"} onClick={() => setActiveTab("security")} icon={<path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />} label="Seguridad" />
-          <NavButton active={activeTab === "billing"} onClick={() => setActiveTab("billing")} icon={<path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />} label="Facturación" />
-          <NavButton active={activeTab === "sound"} onClick={() => setActiveTab("sound")} icon={<path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />} label="Sonido" />
-          <NavButton active={activeTab === "permissions"} onClick={() => setActiveTab("permissions")} icon={<path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />} label="Roles" fullLabel="Roles y Permisos" />
+          <NavButton active={activeTab === "general"} onClick={() => setActiveTab("general")} icon={<path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />} label={t("company_settings.nav.general", "General")} />
+          <NavButton active={activeTab === "hours"} onClick={() => setActiveTab("hours")} icon={<path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />} label={t("company_settings.nav.hours", "Horarios")} />
+          <NavButton active={activeTab === "automation"} onClick={() => setActiveTab("automation")} icon={<path d="M13 10V3L4 14h7v7l9-11h-7z" />} label={t("company_settings.nav.automation", "Automatización")} />
+          <NavButton active={activeTab === "email"} onClick={() => setActiveTab("email")} icon={<path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />} label={t("company_settings.nav.email", "Email")} fullLabel={t("company_settings.nav.email_full", "Email / SMTP")} />
+          <NavButton active={activeTab === "security"} onClick={() => setActiveTab("security")} icon={<path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />} label={t("company_settings.nav.security", "Seguridad")} />
+          <NavButton active={activeTab === "billing"} onClick={() => setActiveTab("billing")} icon={<path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />} label={t("company_settings.nav.billing", "Facturación")} />
+          <NavButton active={activeTab === "sound"} onClick={() => setActiveTab("sound")} icon={<path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />} label={t("company_settings.nav.sound", "Sonido")} />
+          <NavButton active={activeTab === "permissions"} onClick={() => setActiveTab("permissions")} icon={<path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />} label={t("company_settings.nav.roles", "Roles")} fullLabel={t("company_settings.nav.roles_full", "Roles y Permisos")} />
         </div>
 
         {/* Content Area */}
@@ -304,29 +320,29 @@ export const CompanySettings: React.FC = () => {
                           <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-2xl">[VIP]</div>
                           <div>
                             <h3 className="text-2xl font-bold text-gray-800 dark:text-white leading-tight">
-                              {settings.billing.plan?.name || "Plan Gratuito"}
+                              {settings.billing.plan?.name || t("company_settings.billing.free_plan", "Plan Gratuito")}
                             </h3>
                             <div className="flex items-baseline gap-1">
                               <span className="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">${settings.billing.plan?.price || 0}</span>
-                              <span className="text-gray-500 font-medium">/mes</span>
+                              <span className="text-gray-500 font-medium">{t("company_settings.billing.per_month", "/mes")}</span>
                             </div>
                           </div>
                         </div>
                         <p className="text-gray-500 text-sm flex items-center gap-2">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                          Renovación:{" "}
+                          {t("company_settings.billing.renewal", "Renovación:")}{" "}
                           <span className="font-bold text-gray-800 dark:text-gray-200">
                             {settings.billing.subscriptionEndsAt
-                              ? new Date(settings.billing.subscriptionEndsAt).toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" })
-                              : "Mensual"}
+                              ? new Date(settings.billing.subscriptionEndsAt).toLocaleDateString(t("common.locale_code", "es-CO"), { year: "numeric", month: "long", day: "numeric" })
+                              : t("company_settings.billing.monthly", "Mensual")}
                           </span>
                         </p>
                       </div>
                       {/* Stripe Promo */}
                       <div className="bg-gradient-to-r from-[#635BFF] to-[#635BFF]/80 p-5 rounded-xl text-white shadow-lg max-w-sm w-full">
-                        <span className="font-bold text-lg flex items-center gap-2">Stripe <span className="text-[10px] bg-white text-[#635BFF] px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold">PRONTO</span></span>
-                        <p className="text-white/90 text-sm leading-relaxed my-3">Pronto podrás vincular tu tarjeta para pagos automáticos.</p>
-                        <button className="w-full py-2 bg-white text-[#635BFF] rounded-lg font-bold text-sm cursor-not-allowed opacity-80" disabled>Notificarme cuando esté listo</button>
+                        <span className="font-bold text-lg flex items-center gap-2">Stripe <span className="text-[10px] bg-white text-[#635BFF] px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold">{t("common.soon", "PRONTO")}</span></span>
+                        <p className="text-white/90 text-sm leading-relaxed my-3">{t("company_settings.billing.stripe_promo.desc", "Pronto podrás vincular tu tarjeta para pagos automáticos.")}</p>
+                        <button className="w-full py-2 bg-white text-[#635BFF] rounded-lg font-bold text-sm cursor-not-allowed opacity-80" disabled>{t("company_settings.billing.stripe_promo.notify", "Notificarme cuando esté listo")}</button>
                       </div>
                     </div>
                   </div>
@@ -335,13 +351,13 @@ export const CompanySettings: React.FC = () => {
                   {planData && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <div className="bg-white dark:bg-reply-panel-dark p-6 rounded-xl border border-gray-200 dark:border-reply-border-dark shadow-sm">
-                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-6">Consumo de Recursos</h4>
+                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-6">{t("company_settings.billing.usage_title", "Consumo de Recursos")}</h4>
                         <div className="space-y-6">
                           {[
-                            { label: "Usuarios / Agentes", current: planData.usage.users, max: planData.plan.limits.max_users, percent: planData.percentages.users },
-                            { label: "Conexiones WhatsApp", current: planData.usage.whatsapp_sessions, max: planData.plan.limits.max_whatsapp_sessions, percent: planData.percentages.whatsapp_sessions },
-                            { label: "Contactos (CRM)", current: planData.usage.contacts, max: planData.plan.limits.max_contacts, percent: planData.percentages.contacts },
-                            { label: "Workflows Activos", current: planData.usage.workflows, max: planData.plan.limits.max_workflows, percent: planData.percentages.workflows },
+                            { label: t("company_settings.billing.resources.users", "Usuarios / Agentes"), current: planData.usage.users, max: planData.plan.limits.max_users, percent: planData.percentages.users },
+                            { label: t("company_settings.billing.resources.whatsapp", "Conexiones WhatsApp"), current: planData.usage.whatsapp_sessions, max: planData.plan.limits.max_whatsapp_sessions, percent: planData.percentages.whatsapp_sessions },
+                            { label: t("company_settings.billing.resources.contacts", "Contactos (CRM)"), current: planData.usage.contacts, max: planData.plan.limits.max_contacts, percent: planData.percentages.contacts },
+                            { label: t("company_settings.billing.resources.workflows", "Workflows Activos"), current: planData.usage.workflows, max: planData.plan.limits.max_workflows, percent: planData.percentages.workflows },
                           ].map((item, i) => (
                             <div key={i}>
                               <div className="flex justify-between text-sm mb-1">
@@ -357,27 +373,27 @@ export const CompanySettings: React.FC = () => {
                       </div>
 
                       <div className="bg-white dark:bg-reply-panel-dark p-6 rounded-xl border border-gray-200 dark:border-reply-border-dark shadow-sm h-full">
-                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-6">Alcance del Plan</h4>
+                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-6">{t("company_settings.billing.scope_title", "Alcance del Plan")}</h4>
                         <div className="space-y-3">
                           {[
-                            { name: "Motor de Inteligencia Artificial", enabled: (planData.plan.limits.max_ai_assistants || 0) > 0 },
-                            { name: "API Access & Webhooks", enabled: true },
-                            { name: "Marca Blanca (White Label)", enabled: true },
-                            { name: "Soporte Prioritario", enabled: true },
-                            { name: "Reportes Avanzados", enabled: true },
+                            { name: t("company_settings.billing.features.ai", "Motor de Inteligencia Artificial"), enabled: (planData.plan.limits.max_ai_assistants || 0) > 0 },
+                            { name: t("company_settings.billing.features.api", "API Access & Webhooks"), enabled: true },
+                            { name: t("company_settings.billing.features.white_label", "Marca Blanca (White Label)"), enabled: true },
+                            { name: t("company_settings.billing.features.support", "Soporte Prioritario"), enabled: true },
+                            { name: t("company_settings.billing.features.reports", "Reportes Avanzados"), enabled: true },
                           ].map((feature, i) => (
                             <div key={i} className={`flex items-center justify-between p-3 rounded-lg border ${feature.enabled ? "bg-reply-bg dark:bg-gray-800/30 border-gray-100 dark:border-reply-border-dark" : "bg-reply-bg opacity-50 border-transparent"}`}>
                               <span className="font-medium text-gray-700 dark:text-gray-300">{feature.name}</span>
                               {feature.enabled ? (
-                                <span className="text-xs font-bold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full">✓ Incluido</span>
+                                <span className="text-xs font-bold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full">✓ {t("company_settings.billing.included", "Incluido")}</span>
                               ) : (
-                                <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1 rounded-full">No incluido</span>
+                                <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1 rounded-full">{t("company_settings.billing.not_included", "No incluido")}</span>
                               )}
                             </div>
                           ))}
                           <div className="mt-6 pt-4 border-t border-gray-100 dark:border-reply-border-dark text-center">
-                            <p className="text-xs text-gray-500 mb-2">¿Necesitas más capacidad?</p>
-                            <button className="text-indigo-600 dark:text-indigo-400 font-bold text-sm hover:underline">Contactar Ventas</button>
+                            <p className="text-xs text-gray-500 mb-2">{t("company_settings.billing.need_more", "¿Necesitas más capacidad?")}</p>
+                            <button className="text-indigo-600 dark:text-indigo-400 font-bold text-sm hover:underline">{t("company_settings.billing.contact_sales", "Contactar Ventas")}</button>
                           </div>
                         </div>
                       </div>
@@ -387,8 +403,8 @@ export const CompanySettings: React.FC = () => {
                   {/* Payment Methods */}
                   <div id="payment-methods" className="bg-reply-bg dark:bg-reply-surface-dark p-6 rounded-xl border border-gray-200 dark:border-reply-border-dark text-left">
                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center justify-between">
-                      Métodos de Pago Manuales
-                      <span className="text-[10px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-bold">TEMPORAL</span>
+                      {t("company_settings.billing.manual_payments", "Métodos de Pago Manuales")}
+                      <span className="text-[10px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-bold">{t("company_settings.billing.temporal", "TEMPORAL")}</span>
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="bg-white dark:bg-reply-panel-dark p-4 rounded-lg border border-gray-100 dark:border-reply-border-dark shadow-sm">
@@ -405,7 +421,7 @@ export const CompanySettings: React.FC = () => {
                       </div>
                     </div>
                     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 text-xs text-center text-gray-500">
-                      Envía tu comprobante a soporte para activar tu renovación inmediatamente.
+                      {t("company_settings.billing.manual_desc", "Envía tu comprobante a soporte para activar tu renovación inmediatamente.")}
                     </div>
                   </div>
                 </div>
@@ -427,7 +443,7 @@ export const CompanySettings: React.FC = () => {
                   <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>Guardar Cambios</span>
+                  <span>{t("company_settings.save_button", "Guardar Cambios")}</span>
                 </>
               )}
             </button>

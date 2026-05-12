@@ -50,7 +50,7 @@ export class InboundWorker {
         const message = proto.WebMessageInfo.decode(binaryData) as WAMessage;
 
         try {
-          console.log(`[DEBUG-QUEUE] 📦 Job ${job.id} extracted for message ${message.key?.id}. Entering Handler...`);
+          Logger.debug(`[InboundWorker] Job ${job.id} extracted for message ${message.key?.id}. Entering Handler...`);
           Logger.debug(`[InboundWorker]  [${companyId}] Processing message ${message.key?.id} for session ${sessionId}`);
 
           // [SEC] SECURITY: Inject company context for the RLS interceptor
@@ -59,7 +59,7 @@ export class InboundWorker {
             //  Delegate to established InboundMessageHandler
             await this.inboundHandler.handleIncoming(message, sessionId);
           });
-          console.log(`[DEBUG-QUEUE] ✅ Handler finished for message ${message.key?.id}`);
+          Logger.debug(`[InboundWorker] Handler finished for message ${message.key?.id}`);
           Logger.info(`[InboundWorker] [OK] Message ${message.key?.id} processed successfully`);
         } catch (error) {
           Logger.error(`[InboundWorker] [ERROR] Failed to process message ${message.key?.id}: ${error instanceof Error ? error.message : error}`);

@@ -30,7 +30,7 @@ export const getConversations = async (params?: {
   page?: number;
   limit?: number;
 }): Promise<{ conversations: Conversation[]; total: number }> => {
-  const res = await apiClient.get<any>("/conversations", { params });
+  const res = await apiClient.get("/conversations", { params });
   return res.data || res;
 };
 
@@ -38,7 +38,7 @@ export const getConversations = async (params?: {
  * GET MESSAGES
  */
 export const getMessages = async (ticketId: string): Promise<Message[]> => {
-  const res = await apiClient.get<any>(`/conversations/${ticketId}`);
+  const res = await apiClient.get(`/conversations/${ticketId}`);
   const payload = res.data || res;
   return payload?.conversation?.messages || [];
 };
@@ -50,7 +50,7 @@ export const sendMessage = async (
   ticketId: string,
   input: SendMessageInput,
 ): Promise<Message> => {
-  const res = await apiClient.post<any>(
+  const res = await apiClient.post(
     `/conversations/${ticketId}/reply`,
     input,
   );
@@ -72,7 +72,7 @@ export const resolveTicket = async (
  * PICK NEXT TICKET
  */
 export const pickNextTicket = async (): Promise<Conversation | null> => {
-  const res = await apiClient.post<any>("/conversations/pick-next");
+  const res = await apiClient.post("/conversations/pick-next");
   const payload = res.data || res;
   return payload.conversation || null;
 };
@@ -100,7 +100,7 @@ export const createNewChat = async (input: {
   initialMessage?: string;
   addToContacts?: boolean;
 }): Promise<Conversation> => {
-  const res = await apiClient.post<any>("/conversations/create", input);
+  const res = await apiClient.post("/conversations/create", input);
   const payload = res.data || res;
   return payload.conversation || payload;
 };
@@ -112,7 +112,7 @@ export const toggleGroupSync = async (
   ticketId: string,
   enabled: boolean,
 ): Promise<{ syncEnabled: boolean }> => {
-  const res = await apiClient.patch<any>(
+  const res = await apiClient.patch(
     `/conversations/${ticketId}/toggle-sync`,
     { enabled },
   );

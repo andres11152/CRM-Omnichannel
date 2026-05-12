@@ -31,6 +31,7 @@ import {
 import { companyService, SuggestedField, CompanySettings } from "../services/companyService";
 import { Product } from "../types";
 import { API_BASE_URL } from "@/services/apiConfig";
+import { useTranslation } from "react-i18next";
 
 // --- Shared Components ---
 const ModalBackdrop: React.FC<{
@@ -86,36 +87,37 @@ export const ScheduleModal: React.FC<{
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [message, setMessage] = useState("");
+  const { t } = useTranslation();
 
   const handleConfirm = () => {
-    if (!date || !time) return toast.error("Selecciona fecha y hora");
-    if (!message.trim()) return toast.error("Escribe el mensaje a programar");
+    if (!date || !time) return toast.error(t("actions.err_date_time", "Selecciona fecha y hora"));
+    if (!message.trim()) return toast.error(t("actions.err_msg", "Escribe el mensaje a programar"));
 
     const scheduledDate = new Date(`${date}T${time}`);
     if (scheduledDate < new Date())
-      return toast.error("La fecha debe ser futura");
+      return toast.error(t("actions.err_future", "La fecha debe ser futura"));
 
     onConfirm(scheduledDate, message);
   };
 
   return (
-    <ModalBackdrop onClose={onClose} title="Programación Enterprise">
+    <ModalBackdrop onClose={onClose} title={t("actions.schedule_title", "Programación Enterprise")}>
       <div className="space-y-5">
         <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-start gap-3 border border-indigo-100 dark:border-indigo-500/20">
           <Info className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5" />
           <p className="text-[12px] text-indigo-800 dark:text-indigo-200 font-medium">
-            El sistema procesará y enviará este mensaje automáticamente a través de la API oficial de WhatsApp en el momento exacto programado.
+            {t("actions.schedule_desc", "El sistema procesará y enviará este mensaje automáticamente a través de la API oficial de WhatsApp en el momento exacto programado.")}
           </p>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase ml-1">
             <Send className="w-3.5 h-3.5" />
-            Contenido del Mensaje
+            {t("actions.message_content", "Contenido del Mensaje")}
           </div>
           <textarea
             className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-white/5 focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-32 text-sm transition-all shadow-inner"
-            placeholder="Escribe aquí el mensaje que deseas programar..."
+            placeholder={t("actions.message_placeholder", "Escribe aquí el mensaje que deseas programar...")}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             autoFocus
@@ -126,7 +128,7 @@ export const ScheduleModal: React.FC<{
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase ml-1">
               <Calendar className="w-3.5 h-3.5" />
-              Fecha de Envío
+              {t("actions.send_date", "Fecha de Envío")}
             </div>
             <input
               type="date"
@@ -137,7 +139,7 @@ export const ScheduleModal: React.FC<{
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase ml-1">
               <Clock className="w-3.5 h-3.5" />
-              Hora Local
+              {t("actions.local_time", "Hora Local")}
             </div>
             <input
               type="time"
@@ -152,7 +154,7 @@ export const ScheduleModal: React.FC<{
           className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all shadow-lg shadow-indigo-500/30 mt-2 flex items-center justify-center gap-2 group active:scale-[0.98]"
         >
           <Calendar className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-          PROGRAMAR ENVÍO OFICIAL
+          {t("actions.schedule_btn", "PROGRAMAR ENVÍO OFICIAL")}
         </button>
       </div>
     </ModalBackdrop>
@@ -167,6 +169,7 @@ export const ProductPicker: React.FC<{
 }> = ({ onClose, onSelect }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   React.useEffect(() => {
     const fetchProducts = async () => {
@@ -188,7 +191,7 @@ export const ProductPicker: React.FC<{
         }
       } catch (error) {
         console.error("Error fetching products:", error);
-        toast.error("Error cargando productos");
+        toast.error(t("actions.err_products", "Error cargando productos"));
       } finally {
         setLoading(false);
       }
@@ -211,13 +214,13 @@ export const ProductPicker: React.FC<{
   };
 
   return (
-    <ModalBackdrop onClose={onClose} title="Catálogo de Productos">
+    <ModalBackdrop onClose={onClose} title={t("actions.product_title", "Catálogo de Productos")}>
       <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
         <div className="sticky top-0 z-10 bg-white dark:bg-[#1f2c34] pb-2">
            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center gap-3 border border-gray-100 dark:border-white/5">
               <Package className="w-5 h-5 text-purple-500" />
               <p className="text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                Selecciona un producto para enviar
+                {t("actions.product_desc", "Selecciona un producto para enviar")}
               </p>
            </div>
         </div>
@@ -228,15 +231,15 @@ export const ProductPicker: React.FC<{
               <div className="absolute inset-0 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
               <Package className="absolute inset-0 m-auto w-5 h-5 text-purple-500 animate-pulse" />
             </div>
-            <p className="text-sm font-bold text-gray-400 animate-pulse">Cargando catálogo...</p>
+            <p className="text-sm font-bold text-gray-400 animate-pulse">{t("actions.loading_catalog", "Cargando catálogo...")}</p>
           </div>
         ) : products.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4 text-gray-400">
                <Package size={32} />
             </div>
-            <p className="font-black text-gray-800 dark:text-gray-100">No hay productos</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px]">Crea productos en el catálogo para verlos aquí.</p>
+            <p className="font-black text-gray-800 dark:text-gray-100">{t("actions.no_products", "No hay productos")}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px]">{t("actions.no_products_desc", "Crea productos en el catálogo para verlos aquí.")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 pb-4">
@@ -266,7 +269,7 @@ export const ProductPicker: React.FC<{
                     {p.name}
                   </h4>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1 mb-2 font-medium">
-                    {p.description || "Sin descripción detallada"}
+                    {p.description || t("actions.no_desc", "Sin descripción detallada")}
                   </p>
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20">
@@ -293,24 +296,25 @@ export const PaymentCreator: React.FC<{
   const [concept, setConcept] = useState("");
   const [currency, setCurrency] = useState("COP");
   const [isFocused, setIsFocused] = useState(false);
+  const { t } = useTranslation();
 
   const quickAmounts = currency === "COP" 
     ? ["50000", "100000", "200000", "500000"]
     : ["10", "20", "50", "100"];
 
   const handleGenerate = () => {
-    if (!amount || parseFloat(amount) <= 0) return toast.error("Ingresa un monto válido");
+    if (!amount || parseFloat(amount) <= 0) return toast.error(t("actions.err_amount", "Ingresa un monto válido"));
     const formattedAmount = new Intl.NumberFormat(currency === "COP" ? "es-CO" : "en-US", {
       style: "currency",
       currency: currency,
       minimumFractionDigits: 0
     }).format(parseFloat(amount));
 
-    onCreate(amount, concept || "Servicios Profesionales", currency);
+    onCreate(amount, concept || t("actions.pro_services", "Servicios Profesionales"), currency);
   };
 
   return (
-    <ModalBackdrop onClose={onClose} title="Generar Cobro Enterprise">
+    <ModalBackdrop onClose={onClose} title={t("actions.payment_title", "Generar Cobro Enterprise")}>
       <div className="space-y-6">
         {/* Market Selector / Currency Tabs */}
         <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
@@ -323,7 +327,7 @@ export const PaymentCreator: React.FC<{
             }`}
           >
             <Wallet className="w-4 h-4" />
-            Mercado Colombia (COP)
+            {t("actions.market_colombia", "Mercado Colombia (COP)")}
           </button>
           <button
             onClick={() => setCurrency("USD")}
@@ -334,7 +338,7 @@ export const PaymentCreator: React.FC<{
             }`}
           >
             <DollarSign className="w-4 h-4" />
-            Dólares (USD)
+            {t("actions.dollars", "Dólares (USD)")}
           </button>
         </div>
 
@@ -344,7 +348,7 @@ export const PaymentCreator: React.FC<{
         }`}>
           <div className="flex flex-col items-center justify-center gap-2">
              <span className={`text-sm font-bold uppercase tracking-widest ${currency === "COP" ? "text-indigo-500" : "text-green-500"}`}>
-               Monto Total
+               {t("actions.total_amount", "Monto Total")}
              </span>
              <div className="flex items-center gap-1">
                 <span className="text-2xl font-light text-gray-400">
@@ -386,12 +390,12 @@ export const PaymentCreator: React.FC<{
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase ml-1">
             <Tag className="w-3 h-3" />
-            Referencia de Pago
+            {t("actions.payment_ref", "Referencia de Pago")}
           </div>
           <div className="relative group">
             <input
               type="text"
-              placeholder="Ej: Mensualidad SaaS, Servicios Cloud..."
+              placeholder={t("actions.payment_placeholder", "Ej: Mensualidad SaaS, Servicios Cloud...")}
               className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-reply-border-dark focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
               value={concept}
               onChange={(e) => setConcept(e.target.value)}
@@ -406,8 +410,8 @@ export const PaymentCreator: React.FC<{
             <CheckCircle2 className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 leading-none">Link de Pago Seguro</p>
-            <p className="text-[10px] text-emerald-600/70 dark:text-emerald-500/70 mt-1">Soporta Tarjetas, PSE y Nequi/Daviplata</p>
+            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 leading-none">{t("actions.secure_link", "Link de Pago Seguro")}</p>
+            <p className="text-[10px] text-emerald-600/70 dark:text-emerald-500/70 mt-1">{t("actions.secure_desc", "Soporta Tarjetas, PSE y Nequi/Daviplata")}</p>
           </div>
           <BadgeDollarSign className="ml-auto w-5 h-5 text-emerald-500 opacity-30" />
         </div>
@@ -421,7 +425,7 @@ export const PaymentCreator: React.FC<{
           }`}
         >
           <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-          GENERAR LINK DE PAGO {currency}
+          {t("actions.generate_payment_btn", "GENERAR LINK DE PAGO")} {currency}
         </button>
       </div>
     </ModalBackdrop>
@@ -453,6 +457,7 @@ export const DataRequestPicker: React.FC<{
   const [newCustomField, setNewCustomField] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     loadSettings();
@@ -512,18 +517,18 @@ export const DataRequestPicker: React.FC<{
         dataRequest: { suggestedFields: updatedFields }
       });
       
-      toast.success(`Campo "${label}" guardado en la configuración`);
+      toast.success(t("actions.field_saved", "Campo guardado en la configuración"));
       setCustomFields(prev => prev.filter(f => f !== label));
       setSuggestedFields([...suggestedFields, { ...newField, icon: Tag }]);
     } catch (error) {
-      toast.error("Error al guardar configuración");
+      toast.error(t("actions.err_save_config", "Error al guardar configuración"));
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleConfirm = () => {
-    if (selectedIds.length === 0) return toast.error("Selecciona al menos un dato");
+    if (selectedIds.length === 0) return toast.error(t("actions.err_select_data", "Selecciona al menos un dato"));
     onConfirm(selectedIds);
   };
 
@@ -533,21 +538,21 @@ export const DataRequestPicker: React.FC<{
   };
 
   return (
-    <ModalBackdrop onClose={onClose} title="Solicitud Dinámica Configurable">
+    <ModalBackdrop onClose={onClose} title={t("actions.data_title", "Solicitud Dinámica Configurable")}>
       <div className="space-y-6">
         {/* Info & Select All */}
         <div className="flex items-center justify-between gap-4">
           <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl flex flex-1 items-center gap-3 border border-indigo-100 dark:border-indigo-500/20">
             <UserSquare2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             <p className="text-[11px] text-indigo-800 dark:text-indigo-200 font-medium leading-tight">
-              Configura y guarda los datos requeridos para tus procesos oficiales.
+              {t("actions.data_desc", "Configura y guarda los datos requeridos para tus procesos oficiales.")}
             </p>
           </div>
           <button 
             onClick={handleSelectAll}
             className="px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest transition-all shadow-sm"
           >
-            Seleccionar Todo
+            {t("actions.select_all", "Seleccionar Todo")}
           </button>
         </div>
 
@@ -593,7 +598,7 @@ export const DataRequestPicker: React.FC<{
         {/* Custom Fields List */}
         {customFields.length > 0 && (
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Campos Temporales (Sin Guardar)</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{t("actions.temp_fields", "Campos Temporales (Sin Guardar)")}</label>
             <div className="flex flex-wrap gap-2">
               {customFields.map(field => (
                 <div key={field} className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-500/20 px-3 py-1.5 rounded-full animate-in slide-in-from-left-2 duration-200">
@@ -624,7 +629,7 @@ export const DataRequestPicker: React.FC<{
         <div className="flex gap-2 p-1 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-white/10">
           <input
             type="text"
-            placeholder="¿Qué más necesitas? (Ej: Dirección, NIT...)"
+            placeholder={t("actions.data_placeholder", "¿Qué más necesitas? (Ej: Dirección, NIT...)")}
             className="flex-1 bg-transparent px-3 py-2 text-xs outline-none text-gray-700 dark:text-gray-300"
             value={newCustomField}
             onChange={(e) => setNewCustomField(e.target.value)}
@@ -644,14 +649,14 @@ export const DataRequestPicker: React.FC<{
              onClick={onClose}
              className="flex-1 py-3 px-4 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-bold rounded-xl hover:bg-gray-200 transition-all"
            >
-             Cancelar
+             {t("actions.cancel", "Cancelar")}
            </button>
            <button
              onClick={handleConfirm}
              className="flex-[2] py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-lg shadow-indigo-500/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
            >
              <Send size={18} />
-             SOLICITAR {selectedIds.length > 0 ? `(${selectedIds.length})` : ""} DATOS
+             {t("actions.request_btn", "SOLICITAR")} {selectedIds.length > 0 ? `(${selectedIds.length})` : ""} {t("actions.data_btn", "DATOS")}
            </button>
         </div>
       </div>

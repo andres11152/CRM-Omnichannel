@@ -55,7 +55,7 @@ export class InboundMessageHandler {
         ? (payload as { message: WAMessage }).message
         : (payload as WAMessage);
 
-    console.log(`[DEBUG-RAW] Incoming msg: ${rawMessage?.key?.id}`, JSON.stringify(rawMessage?.message, null, 2));
+    Logger.debug(`[InboundHandler] Incoming raw msg: ${rawMessage?.key?.id}`);
 
     Logger.info(
       `[InboundHandler] Entered handleIncoming for message: ${rawMessage?.key?.id}`,
@@ -85,9 +85,8 @@ export class InboundMessageHandler {
         await this.processIncomingMessage(rawMessage, sessionId, messageId);
       });
     } catch (error: unknown) {
-      console.error(`[DEBUG-FLOW] 🚨 CAUGHT EXCEPTION IN handleIncoming for ${messageId}:`, error);
       Logger.error(
-        `[InboundHandler] Error processing incoming message ${messageId}:`,
+        `[InboundHandler] CAUGHT EXCEPTION IN handleIncoming for ${messageId}:`,
         error instanceof Error ? error : new Error(String(error)),
       );
     }
@@ -102,18 +101,18 @@ export class InboundMessageHandler {
     sessionId: string,
     messageId: string,
   ): Promise<void> {
-    console.log(`[DEBUG-FLOW] processIncomingMessage START for ${messageId}`);
+    Logger.debug(`[InboundHandler] processIncomingMessage START for ${messageId}`);
     const sessionData = await this.ensureSessionData(sessionId);
     if (!sessionData) {
-      console.log(`[DEBUG-FLOW] ❌ DROPPED: No session data for ${messageId}`);
+      Logger.debug(`[InboundHandler] DROPPED: No session data for ${messageId}`);
       return;
     }
     const { companyId, userId: sessionPhone } = sessionData;
-    console.log(`[DEBUG-FLOW] Session loaded for ${messageId}: Company ${companyId}`);
+    Logger.debug(`[InboundHandler] Session loaded for ${messageId}: Company ${companyId}`);
 
     // ─── PIN EVENT HANDLING (messages.upsert) ───
     const messageContentObj = message.message;
-    console.log(`[DEBUG-FLOW] Message keys: ${Object.keys(messageContentObj || {}).join(", ")}`);
+    Logger.debug(`[InboundHandler] Message keys: ${Object.keys(messageContentObj || {}).join(", ")}`);
     
     interface PinMessage {
       key?: { id?: string };
@@ -121,7 +120,7 @@ export class InboundMessageHandler {
     }
 
     if (messageContentObj && messageContentObj.pinInChatMessage) {
-      console.log(`[DEBUG-FLOW] 📌 Identified as PIN event for ${messageId}`);
+      Logger.debug(`[InboundHandler] Identified as PIN event for ${messageId}`);
       const pinMsg = messageContentObj.pinInChatMessage as PinMessage;
       const pinnedMessageId = pinMsg?.key?.id;
       
@@ -167,7 +166,7 @@ export class InboundMessageHandler {
               conversationId,
               companyId,
               isPinned,
-              msg?.content || (isPinned ? "Mensaje de WhatsApp" : ""), // Placeholder for unknown messages
+              msg?.content || (isPinned ? "WhatsApp message" : ""), // Placeholder for unknown messages
               msg?.senderId || "",
             );
             Logger.info(`[InboundHandler] [PIN] Message ${pinnedMessageId} ${isPinned ? "PINNED" : "UNPINNED"}. UI sync emitted.`);
@@ -180,36 +179,36 @@ export class InboundMessageHandler {
     }
 
     // [SEC] CRITICAL DEDUPLICATION: Skip own echoes (Sent from Reply)
-    console.log(`[DEBUG-FLOW] Checking echo status: fromMe=${message.key.fromMe}`);
+    Logger.debug(`[InboundHandler] Checking echo status: fromMe=${message.key.fromMe}`);
     if (message.key.fromMe) {
       const isEcho = await deduplicationService.isOwnEcho(messageId);
       if (isEcho) {
-        console.log(`[DEBUG-FLOW] ⏭️ Skipping own echo: ${messageId}`);
+        Logger.debug(`[InboundHandler] Skipping own echo: ${messageId}`);
         return;
       }
-      console.log(`[DEBUG-FLOW] Message is fromMe but NOT an echo: ${messageId}`);
+      Logger.debug(`[InboundHandler] Message is fromMe but NOT an echo: ${messageId}`);
     }
 
     // Guard: Check if message exists in DB BEFORE heavy orchestration
-    console.log(`[DEBUG-FLOW] Checking if message exists in DB: ${messageId}`);
+    Logger.debug(`[InboundHandler] Checking if message exists in DB: ${messageId}`);
     const exists = await chatService.doesMessageExist(messageId);
     if (exists) {
-      console.log(`[DEBUG-FLOW] ⏭️ Skipping existing message: ${messageId}`);
+      Logger.debug(`[InboundHandler] Skipping existing message: ${messageId}`);
       return;
     }
-    console.log(`[DEBUG-FLOW] Message is NEW: ${messageId}`);
+    Logger.debug(`[InboundHandler] Message is NEW: ${messageId}`);
 
 
 
-    console.log(`[DEBUG-FLOW] 🚀 Entering TenantContextManager for ${messageId}`);
+    Logger.debug(`[InboundHandler] Entering TenantContextManager for ${messageId}`);
     await TenantContextManager.run(
       { companyId, userId: sessionPhone || "system", requestId: `msg:${messageId}` },
       async () => {
-        console.log(`[DEBUG-FLOW] Resolving entities for ${messageId}`);
+        Logger.debug(`[InboundHandler] Resolving entities for ${messageId}`);
         // 2. Resolve Entities (User, Conversation, JIDs)
         const entities = await this.orchestrator.resolveEntities(message, sessionId, companyId, sessionPhone);
         if (!entities) {
-          console.log(`[DEBUG-FLOW] ❌ DROPPED: Failed to resolve entities for message ${messageId}`);
+          Logger.debug(`[InboundHandler] DROPPED: Failed to resolve entities for message ${messageId}`);
           return;
         }
 
@@ -222,7 +221,7 @@ export class InboundMessageHandler {
           (sid) => this.sessionManager.getSession(sid),
         );
         if (!contentData) {
-          console.log(`[DEBUG-FLOW] ❌ DROPPED: Failed to extract content for message ${messageId}`);
+          Logger.debug(`[InboundHandler] DROPPED: Failed to extract content for message ${messageId}`);
           return;
         }
 
@@ -235,10 +234,10 @@ export class InboundMessageHandler {
 
           const isContentDup = await deduplicationService.isContentDuplicate(entities.conversation.id, contentData.textContent);
           if (isContentDup) {
-            console.log(`[DEBUG-FLOW] ⏭️ Skipping own echo by CONTENT match: ${messageId}`);
+            Logger.debug(`[InboundHandler] Skipping own echo by CONTENT match: ${messageId}`);
             return;
           }
-          console.log(`[DEBUG-FLOW] Content is NOT a duplicate for ${messageId}`);
+          Logger.debug(`[InboundHandler] Content is NOT a duplicate for ${messageId}`);
         }
 
         // 4. Persist & Ticket (Database Level)
@@ -254,27 +253,27 @@ export class InboundMessageHandler {
         });
 
         if (!result) {
-          console.log(`[DEBUG-FLOW] ❌ DROPPED: Failed to save message and ticket for ${messageId}`);
+          Logger.debug(`[InboundHandler] DROPPED: Failed to save message and ticket for ${messageId}`);
           return;
         }
-        console.log(`[DEBUG-FLOW] ✅ Message saved successfully: ${messageId}`);
+        Logger.debug(`[InboundHandler] Message saved successfully: ${messageId}`);
         const { savedMessage, ticketId } = result;
 
         // 5. Real-time Delivery & AI Trigger
-        console.log(`[DEBUG-FLOW] Fetching full conversation for ${entities.conversation.id}`);
+        Logger.debug(`[InboundHandler] Fetching full conversation for ${entities.conversation.id}`);
         const fullConversation = await chatService.getFullConversation(companyId, entities.conversation.id);
         if (fullConversation) {
-          console.log(`[DEBUG-FLOW] Full conversation found for ${messageId}`);
+          Logger.debug(`[InboundHandler] Full conversation found for ${messageId}`);
           if (entities.isFromMe) {
-            console.log(`[DEBUG-FLOW] 📤 Emitting message.sent for ${messageId}`);
+            Logger.debug(`[InboundHandler] Emitting message.sent for ${messageId}`);
             this.socketEmitter.emitMessageSent(savedMessage, fullConversation, ticketId);
           } else {
-            console.log(`[DEBUG-FLOW] 📥 Emitting message.received for ${messageId}`);
+            Logger.debug(`[InboundHandler] Emitting message.received for ${messageId}`);
             this.socketEmitter.emitMessageReceived(savedMessage, fullConversation, ticketId);
             
             // AI Trigger Execution (SLA Aware)
             if (contentData.textContent && !entities.isGroup) {
-              console.log(`[DEBUG-FLOW] 🤖 Triggering AI for ${messageId}`);
+              Logger.debug(`[InboundHandler] Triggering AI for ${messageId}`);
               await this.aiTrigger.processInboundTriggers(
                 fullConversation as ConversationWithQueue,
                 contentData.textContent,
@@ -287,10 +286,10 @@ export class InboundMessageHandler {
             }
           }
         } else {
-          console.log(`[DEBUG-FLOW] ❌ DROPPED: Full conversation NOT FOUND for ${entities.conversation.id}`);
+          Logger.debug(`[InboundHandler] DROPPED: Full conversation NOT FOUND for ${entities.conversation.id}`);
         }
         
-        console.log(`[DEBUG-FLOW] 🏁 Finished TenantContextManager callback for ${messageId}`);
+        Logger.debug(`[InboundHandler] Finished TenantContextManager callback for ${messageId}`);
       }
     );
     

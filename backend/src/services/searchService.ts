@@ -2,8 +2,8 @@ import { searchRepository } from "@/repositories/SearchRepository";
 
 /**
  * [SEARCH] GLOBAL SEARCH SERVICE
- * Búsqueda unificada cross-entity para Command Palette (Cmd+K)
- * Optimizado para respuestas <100ms en bases de datos con ~10k registros
+ * Unified cross-entity search for Command Palette (Cmd+K)
+ * Optimized for <100ms responses on databases with ~10k records
  */
 
 interface SearchResult {
@@ -32,10 +32,10 @@ interface SearchResult {
 
 export const searchService = {
   /**
-   * Búsqueda global en múltiples entidades
-   * @param query - Término de búsqueda (mínimo 2 caracteres)
-   * @param companyId - ID de la compañía (tenant isolation)
-   * @returns Resultados agrupados por categoría
+   * Global search across multiple entities
+   * @param query - Search term (min 2 characters)
+   * @param companyId - Company ID (tenant isolation)
+   * @returns Results grouped by category
    */
   async globalSearch(query: string, companyId: string): Promise<SearchResult> {
     // Sanitize input

@@ -266,9 +266,9 @@ export const webhookDispatcher = {
    */
   async replayLog(companyId: string, logId: string) {
     const log = await webhookRepository.findDeliveryLogById(companyId, logId);
-    if (!log) throw new Error("Log no encontrado");
-    if (!log.webhook) throw new Error("Webhook original eliminado");
-    if (!log.payload) throw new Error("Sin payload grabado para este log");
+    if (!log) throw new Error("Log not found");
+    if (!log.webhook) throw new Error("Original webhook deleted");
+    if (!log.payload) throw new Error("No payload recorded for this log");
 
     const eventData = log.payload as {
       id: string;
@@ -288,7 +288,7 @@ export const webhookDispatcher = {
       eventData
     );
 
-    return { status: "Reagendado para reintento manual", logId };
+    return { status: "Rescheduled for manual retry", logId };
   },
 
   // ===== QUERY METHODS (for WebhookService) =====

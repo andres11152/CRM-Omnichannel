@@ -7,7 +7,7 @@ import { WAMessage } from "@whiskeysockets/baileys";
 
 export class WhatsAppIngestService {
   async handleIngestion(msg: WAMessage, companyId: string) {
-    // ️ LOG VERBOSO PARA DEPURACIÓN
+    // DEBUG: Verbose logging for ingestion diagnostics
     const remoteJid = msg.key?.remoteJid;
     const participant = msg.key?.participant;
     Logger.info("\n [INGEST] INCOMING MSG:");
@@ -16,23 +16,23 @@ export class WhatsAppIngestService {
     Logger.info(`   - PushName: ${msg.pushName}`);
 
     try {
-      // 1. EXTRACCIÓN DE IDENTIDAD (Lógica Fusionada)
+      // STEP 1: Identity Extraction (Fused logic)
       const identity = await this.resolveIdentity(msg, companyId);
 
       if (identity.isZombie && !identity.e164Phone) {
         Logger.warn(
-          `[WARNING] [INGEST] ZOMBIE REJECTED: ID Técnico ${identity.originalId} sin resolución.`,
+          `[WARNING] [INGEST] ZOMBIE REJECTED: Technical ID ${identity.originalId} unresolvable.`,
         );
         return;
       }
 
       const finalPhone = identity.e164Phone!;
       Logger.info(
-        `[SEARCH] [INGEST] IDENTIDAD RESUELTA: ${finalPhone} (Origen: ${identity.source})`,
+        `[SEARCH] [INGEST] IDENTITY RESOLVED: ${finalPhone} (Source: ${identity.source})`,
       );
 
-      // 2. PERSISTENCIA DE MAPPING (Auto-Learn Legacy)
-      // Si el mensaje viene de un LID pero resolvimos el teléfono, guardamos la relación
+      // STEP 2: Mapping Persistence (Auto-Learn)
+      // Save LID-to-Phone relationship for future message resolution
       if (
         identity.originalId &&
         identity.originalId !== finalPhone &&
@@ -74,7 +74,7 @@ export class WhatsAppIngestService {
         });
       }
 
-      Logger.info(`[OK] [INGEST] CONTACTO: ${contact.name} (${contact.phone})`);
+      Logger.info(`[OK] [INGEST] CONTACT: ${contact.name} (${contact.phone})`);
 
       let chat = await conversationRepository.findUnique({
         where: { id: remoteJid },
@@ -103,8 +103,8 @@ export class WhatsAppIngestService {
   }
 
   /**
-   * Lógica "Smart Extract" portada del código Legacy.
-   * Busca el teléfono real en todas las propiedades posibles del mensaje.
+   * "Smart Extract" logic ported from legacy systems.
+   * Attempts to resolve the real phone number across multiple message properties.
    */
   private async resolveIdentity(
     msg: WAMessage & { key: { remoteJidAlt?: string } },
@@ -121,12 +121,12 @@ export class WhatsAppIngestService {
     let candidate = "";
     let source = "";
 
-    // ESTRATEGIA 1: Participant (Prioridad Humana)
+    // STRATEGY 1: Participant (Human priority)
     if (participant && participant.includes("@s.whatsapp.net")) {
       candidate = participant;
       source = "participant";
     }
-    // ESTRATEGIA 2: RemoteJidAlt (Lógica Baileys Legacy)
+    // STRATEGY 2: RemoteJidAlt (Baileys legacy logic)
     else if (
       msg.key.remoteJidAlt &&
       msg.key.remoteJidAlt.includes("@s.whatsapp.net")
@@ -134,7 +134,7 @@ export class WhatsAppIngestService {
       candidate = msg.key.remoteJidAlt;
       source = "remoteJidAlt";
     }
-    // ESTRATEGIA 3: RemoteJid (Si es chat privado normal)
+    // STRATEGY 3: RemoteJid (Private chat)
     else if (
       remoteJid &&
       remoteJid.includes("@s.whatsapp.net") &&
@@ -144,12 +144,12 @@ export class WhatsAppIngestService {
       source = "remoteJid";
     }
 
-    // LIMPIEZA INICIAL
+    // INITIAL CLEANUP
     if (candidate) {
       candidate = candidate.split("@")[0].split(":")[0];
     }
 
-    // ESTRATEGIA 4: Búsqueda en DB por LID (Si todo lo anterior falló y es un LID)
+    // STRATEGY 4: Database LID lookup (Fallback for unresolved LID)
     if (
       !candidate &&
       (remoteJid.includes("@lid") ||
@@ -178,7 +178,7 @@ export class WhatsAppIngestService {
       }
     }
 
-    // ESTRATEGIA 5: Message Stub Parameters (Lógica Legacy Profunda)
+    // STRATEGY 5: Message Stub Parameters (Deep legacy logic)
     if (
       !candidate &&
       msg.messageStubParameters &&
@@ -193,9 +193,9 @@ export class WhatsAppIngestService {
       }
     }
 
-    // PROCESADO FINAL DEL CANDIDATO
+    // CANDIDATE POST-PROCESSING
     if (candidate) {
-      // Normalización Colombia (Legacy logic: starts with 3 and length 10 -> +57)
+      // Colombia normalization (Legacy logic: starts with 3 and length 10 -> +57)
       if (candidate.length === 10 && candidate.startsWith("3")) {
         candidate = `57${candidate}`;
       }
@@ -207,14 +207,14 @@ export class WhatsAppIngestService {
         );
         if (parsed && parsed.isValid()) {
           return {
-            e164Phone: parsed.number.replace("+", ""), // Guardar sin +
+            e164Phone: parsed.number.replace("+", ""), // Save without + prefix
             isZombie: false,
             originalId: remoteJid,
             source,
           };
         }
       } catch {
-        // Si falla el parser pero parece válido (lógica legacy manual)
+        // Manual regex fallback for valid-looking candidates if parser fails
         if (/^\d{10,15}$/.test(candidate)) {
           return {
             e164Phone: candidate,
@@ -226,7 +226,7 @@ export class WhatsAppIngestService {
       }
     }
 
-    // Si llegamos aquí, es un Zombie irrecuperable
+    // Unresolvable "Zombie" contact identity
     return {
       e164Phone: null,
       isZombie: true,
@@ -236,7 +236,7 @@ export class WhatsAppIngestService {
   }
 
   /**
-   * Guarda la relación LID <-> Teléfono para el futuro (Auto-Learn).
+   * Persists LID-to-Phone mapping for future identity resolution (Auto-Learn).
    */
   private async persistLidMapping(
     companyId: string,
@@ -245,7 +245,7 @@ export class WhatsAppIngestService {
   ) {
     try {
       const cleanLid = lid.replace(/@.*$/, "");
-      // No guardar basura
+      // Prevent redundant mappings
       if (phone === cleanLid) return;
 
       const contact = await contactRepository.findFirst({
@@ -262,11 +262,11 @@ export class WhatsAppIngestService {
               lid: cleanLid,
             } as unknown as Prisma.JsonValue,
           });
-          Logger.info(`[SAVE] [INGEST] MAPPING GUARDADO: ${phone} <-> ${cleanLid}`);
+          Logger.info(`[SAVE] [INGEST] MAPPING SAVED: ${phone} <-> ${cleanLid}`);
         }
       }
     } catch (e) {
-      Logger.warn(`[WARNING] [INGEST] Fallo al guardar mapping LID: ${e}`);
+      Logger.warn(`[WARNING] [INGEST] Failed to save LID mapping: ${e}`);
     }
   }
 }

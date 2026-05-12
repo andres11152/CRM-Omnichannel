@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import {
   Inbox,
   Layers,
@@ -35,10 +36,12 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   onTabChange,
   onToggleSidebar,
 }) => {
+  const { t } = useTranslation();
+
   const tabs: { id: WorkspaceTab; label: string; count: number }[] = [
-    { id: "my_chats", label: "Mi Bandeja", count: myTicketsCount },
-    { id: "queue", label: "Cola de Espera", count: queueTicketsCount },
-    { id: "resolved", label: "Historial", count: resolvedTotalCount },
+    { id: "my_chats", label: t("workspace.my_chats", "Mi Bandeja"), count: myTicketsCount },
+    { id: "queue", label: t("workspace.queue", "Cola de Espera"), count: queueTicketsCount },
+    { id: "resolved", label: t("workspace.resolved", "Historial"), count: resolvedTotalCount },
   ];
 
   return (
@@ -52,7 +55,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
           <div className="flex flex-col justify-center">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-gray-900 dark:text-white leading-none">
-                Panel de Agente
+                {t("workspace.agent_panel", "Panel de Agente")}
               </h2>
               <span className="relative flex h-2 w-2">
                 <span
@@ -64,7 +67,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
               </span>
             </div>
             <span className="text-[10px] uppercase font-medium text-gray-500 dark:text-gray-400 mt-1 leading-none tracking-wider">
-              {socketConnected ? "Online" : "Desconectado"}
+              {socketConnected ? t("workspace.online", "Online") : t("workspace.offline", "Desconectado")}
             </span>
           </div>
         </div>
@@ -110,7 +113,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             {myTicketsCount}
           </span>
           <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">
-            Activos
+            {t("workspace.active", "Activos")}
           </span>
         </div>
         <div className="h-6 w-px bg-gray-200 dark:bg-gray-800" />
@@ -119,7 +122,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             {queueTicketsCount}
           </span>
           <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">
-            En Cola
+            {t("workspace.in_queue", "En Cola")}
           </span>
         </div>
         <div className="h-6 w-px bg-gray-200 dark:bg-gray-800" />
@@ -128,7 +131,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             {resolvedTodayCount}
           </span>
           <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">
-            Hoy
+            {t("workspace.today", "Hoy")}
           </span>
         </div>
       </div>
@@ -173,10 +176,10 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             </div>
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate max-w-[100px]">
-                {user.name || "Agente"}
+                {user.name || t("workspace.agent", "Agente")}
               </span>
               <span className="text-[9px] text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                {user.role === "ADMIN" ? "Admin" : "Agente"}
+                {user.role === "ADMIN" ? "Admin" : t("workspace.agent", "Agente")}
               </span>
             </div>
           </div>
@@ -185,7 +188,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         <button
           onClick={onToggleSidebar}
           className="hidden md:flex group p-2.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
-          title={isSidebarOpen ? "Ocultar panel" : "Mostrar panel"}
+          title={isSidebarOpen ? t("workspace.hide_panel", "Ocultar panel") : t("workspace.show_panel", "Mostrar panel")}
         >
           {isSidebarOpen ? (
             <PanelLeftClose className="w-5 h-5 group-hover:scale-90 transition-transform" />

@@ -24,6 +24,10 @@ export class FlowSessionRepository {
     });
   }
 
+  async findManySessions(args: Prisma.ContactFlowSessionFindManyArgs) {
+    return this.db.contactFlowSession.findMany(args);
+  }
+
   async findActiveSession(contactId: string) {
     return this.db.contactFlowSession.findFirst({
       where: { contactId, isActive: true },

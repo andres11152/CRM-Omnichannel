@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useSound } from "./SoundContext";
 import "../styles/SoundSettings.css";
 
@@ -51,28 +52,17 @@ const DEFAULT_PREFERENCES: SoundPreferences = {
   },
 };
 
-// Available sound themes
+// Available sound themes (Static definition, but names/descs will be translated in render)
 const SOUND_THEMES = [
-  {
-    id: "default",
-    name: "Default",
-    description: "Professional notification sounds",
-  },
-  {
-    id: "minimal",
-    name: "Minimal",
-    description: "Subtle, non-intrusive tones",
-  },
-  {
-    id: "classic",
-    name: "Classic",
-    description: "Traditional notification sounds",
-  },
-  { id: "modern", name: "Modern", description: "Contemporary UI sounds" },
-  { id: "nature", name: "Nature", description: "Calm, natural sounds" },
+  { id: "default", nameKey: "sounds.themes.default", descKey: "sounds.themes.default_desc" },
+  { id: "minimal", nameKey: "sounds.themes.minimal", descKey: "sounds.themes.minimal_desc" },
+  { id: "classic", nameKey: "sounds.themes.classic", descKey: "sounds.themes.classic_desc" },
+  { id: "modern", nameKey: "sounds.themes.modern", descKey: "sounds.themes.modern_desc" },
+  { id: "nature", nameKey: "sounds.themes.nature", descKey: "sounds.themes.nature_desc" },
 ];
 
 export const SoundSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { playSound, isMuted, toggleMute, setVolume, volume } = useSound();
   const [preferences, setPreferences] =
     useState<SoundPreferences>(DEFAULT_PREFERENCES);
@@ -131,7 +121,7 @@ export const SoundSettings: React.FC = () => {
   const resetToDefaults = () => {
     if (
       confirm(
-        "¿Resetear todas las configuraciones de sonido a los valores predeterminados?",
+        t("sounds.reset_confirm", "¿Resetear todas las configuraciones de sonido a los valores predeterminados?"),
       )
     ) {
       savePreferences(DEFAULT_PREFERENCES);
@@ -159,9 +149,9 @@ export const SoundSettings: React.FC = () => {
             </svg>
           </div>
           <div>
-            <h2>Configuración de Sonido</h2>
+            <h2>{t("sounds.title", "Configuración de Sonido")}</h2>
             <p className="subtitle">
-              Personaliza las notificaciónes de audio del CRM
+              {t("sounds.subtitle", "Personaliza las notificaciónes de audio del CRM")}
             </p>
           </div>
         </div>
@@ -170,7 +160,7 @@ export const SoundSettings: React.FC = () => {
             className={`status-indicator ${!isMuted ? "active" : "inactive"}`}
           >
             <span className="status-dot"></span>
-            {isMuted ? "Silenciado" : "Activo"}
+            {isMuted ? t("sounds.muted", "Silenciado") : t("sounds.active", "Activo")}
           </div>
         </div>
       </div>
@@ -194,7 +184,7 @@ export const SoundSettings: React.FC = () => {
               d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
             />
           </svg>
-          General
+          {t("sounds.tabs.general", "General")}
         </button>
         <button
           className={`tab ${activeTab === "sounds" ? "active" : ""}`}
@@ -213,7 +203,7 @@ export const SoundSettings: React.FC = () => {
               d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
             />
           </svg>
-          Sonidos
+          {t("sounds.tabs.sounds", "Sonidos")}
         </button>
         <button
           className={`tab ${activeTab === "notifications" ? "active" : ""}`}
@@ -232,7 +222,7 @@ export const SoundSettings: React.FC = () => {
               d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
             />
           </svg>
-          Notificaciones
+          {t("sounds.tabs.notifications", "Notificaciones")}
         </button>
       </div>
 
@@ -245,8 +235,8 @@ export const SoundSettings: React.FC = () => {
             <div className="setting-card">
               <div className="setting-row">
                 <div className="setting-info">
-                  <h3>Habilitar Sonidos</h3>
-                  <p>Activar o desactivar todos los sonidos de notificación</p>
+                  <h3>{t("sounds.enable", "Habilitar Sonidos")}</h3>
+                  <p>{t("sounds.enable_desc", "Activar o desactivar todos los sonidos de notificación")}</p>
                 </div>
                 <label className="toggle-switch">
                   <input
@@ -262,8 +252,8 @@ export const SoundSettings: React.FC = () => {
             {/* Volume Control */}
             <div className="setting-card">
               <div className="setting-info">
-                <h3>Volumen</h3>
-                <p>Ajusta el volumen de las notificaciónes de audio</p>
+                <h3>{t("sounds.volume", "Volumen")}</h3>
+                <p>{t("sounds.volume_desc", "Ajusta el volumen de las notificaciónes de audio")}</p>
               </div>
               <div className="volume-control">
                 <div className="volume-icons">
@@ -316,8 +306,8 @@ export const SoundSettings: React.FC = () => {
             {/* Sound Test */}
             <div className="setting-card">
               <div className="setting-info">
-                <h3>Probar Sonidos</h3>
-                <p>Reproduce sonidos de ejemplo para verificar el volumen</p>
+                <h3>{t("sounds.test_sounds", "Probar Sonidos")}</h3>
+                <p>{t("sounds.test_sounds_desc", "Reproduce sonidos de ejemplo para verificar el volumen")}</p>
               </div>
               <div className="sound-test-buttons">
                 <button
@@ -340,7 +330,7 @@ export const SoundSettings: React.FC = () => {
                       d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                     />
                   </svg>
-                  Mensaje
+                  {t("sounds.message", "Mensaje")}
                 </button>
                 <button
                   className={`test-button ${
@@ -362,7 +352,7 @@ export const SoundSettings: React.FC = () => {
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  Éxito
+                  {t("sounds.success", "Éxito")}
                 </button>
                 <button
                   className={`test-button ${
@@ -384,7 +374,7 @@ export const SoundSettings: React.FC = () => {
                       d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  Error
+                  {t("sounds.error", "Error")}
                 </button>
                 <button
                   className={`test-button ${
@@ -406,7 +396,7 @@ export const SoundSettings: React.FC = () => {
                       d="M13 10V3L4 14h7v7l9-11h-7z"
                     />
                   </svg>
-                  Alerta
+                  {t("sounds.alert", "Alerta")}
                 </button>
               </div>
             </div>
@@ -418,8 +408,8 @@ export const SoundSettings: React.FC = () => {
           <div className="settings-section">
             <div className="setting-card">
               <div className="setting-info">
-                <h3>Tema de Sonido</h3>
-                <p>Selecciona un conjunto de sonidos predefinidos</p>
+                <h3>{t("sounds.theme", "Tema de Sonido")}</h3>
+                <p>{t("sounds.theme_desc", "Selecciona un conjunto de sonidos predefinidos")}</p>
               </div>
               <div className="sound-themes">
                 {SOUND_THEMES.map((theme) => (
@@ -459,8 +449,8 @@ export const SoundSettings: React.FC = () => {
                       </svg>
                     </div>
                     <div className="theme-info">
-                      <h4>{theme.name}</h4>
-                      <p>{theme.description}</p>
+                      <h4>{t(theme.nameKey)}</h4>
+                      <p>{t(theme.descKey)}</p>
                     </div>
                     {preferences.sounds.message === theme.id && (
                       <div className="theme-check">
@@ -497,8 +487,7 @@ export const SoundSettings: React.FC = () => {
                 />
               </svg>
               <p>
-                Los sonidos personalizados se aplicarn a todos los tipos de
-                notificaciónes
+                {t("sounds.custom_sounds_apply", "Los sonidos personalizados se aplicarán a todos los tipos de notificaciónes")}
               </p>
             </div>
           </div>
@@ -509,8 +498,8 @@ export const SoundSettings: React.FC = () => {
           <div className="settings-section">
             <div className="setting-card">
               <div className="setting-info">
-                <h3>Tipos de Notificación</h3>
-                <p>Selecciona qué eventos deben reproducir sonido</p>
+                <h3>{t("sounds.notification_types", "Tipos de Notificación")}</h3>
+                <p>{t("sounds.notification_types_desc", "Selecciona qué eventos deben reproducir sonido")}</p>
               </div>
 
               <div className="notification-types">
@@ -531,8 +520,8 @@ export const SoundSettings: React.FC = () => {
                     </svg>
                   </div>
                   <div className="notification-info">
-                    <h4>Nuevo Mensaje</h4>
-                    <p>Cuando recibes un mensaje de un cliente</p>
+                    <h4>{t("sounds.new_message", "Nuevo Mensaje")}</h4>
+                    <p>{t("sounds.new_message_desc", "Cuando recibes un mensaje de un cliente")}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -561,8 +550,8 @@ export const SoundSettings: React.FC = () => {
                     </svg>
                   </div>
                   <div className="notification-info">
-                    <h4>Nuevo Ticket</h4>
-                    <p>Cuando se crea un nuevo ticket</p>
+                    <h4>{t("sounds.new_ticket", "Nuevo Ticket")}</h4>
+                    <p>{t("sounds.new_ticket_desc", "Cuando se crea un nuevo ticket")}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -591,8 +580,8 @@ export const SoundSettings: React.FC = () => {
                     </svg>
                   </div>
                   <div className="notification-info">
-                    <h4>Ticket Asignado</h4>
-                    <p>Cuando te asignan un ticket</p>
+                    <h4>{t("sounds.ticket_assigned", "Ticket Asignado")}</h4>
+                    <p>{t("sounds.ticket_assigned_desc", "Cuando te asignan un ticket")}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -621,8 +610,8 @@ export const SoundSettings: React.FC = () => {
                     </svg>
                   </div>
                   <div className="notification-info">
-                    <h4>Deal Ganado</h4>
-                    <p>Cuando cierras una venta exitosamente</p>
+                    <h4>{t("sounds.deal_won", "Deal Ganado")}</h4>
+                    <p>{t("sounds.deal_won_desc", "Cuando cierras una venta exitosamente")}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -651,8 +640,8 @@ export const SoundSettings: React.FC = () => {
                     </svg>
                   </div>
                   <div className="notification-info">
-                    <h4>Deal Perdido</h4>
-                    <p>Cuando se pierde una oportunidad</p>
+                    <h4>{t("sounds.deal_lost", "Deal Perdido")}</h4>
+                    <p>{t("sounds.deal_lost_desc", "Cuando se pierde una oportunidad")}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -681,8 +670,8 @@ export const SoundSettings: React.FC = () => {
                     </svg>
                   </div>
                   <div className="notification-info">
-                    <h4>Llamada Entrante</h4>
-                    <p>Cuando recibes una llamada</p>
+                    <h4>{t("sounds.call_incoming", "Llamada Entrante")}</h4>
+                    <p>{t("sounds.call_incoming_desc", "Cuando recibes una llamada")}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -711,8 +700,8 @@ export const SoundSettings: React.FC = () => {
                     </svg>
                   </div>
                   <div className="notification-info">
-                    <h4>Alertas del Sistema</h4>
-                    <p>Notificaciones importantes del sistema</p>
+                    <h4>{t("sounds.system_alerts", "Alertas del Sistema")}</h4>
+                    <p>{t("sounds.system_alerts_desc", "Notificaciones importantes del sistema")}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -745,7 +734,7 @@ export const SoundSettings: React.FC = () => {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Restaurar Valores Predeterminados
+          {t("sounds.reset_defaults", "Restaurar Valores Predeterminados")}
         </button>
         <div className="footer-info">
           <svg
@@ -761,7 +750,7 @@ export const SoundSettings: React.FC = () => {
               d="M5 13l4 4L19 7"
             />
           </svg>
-          <span>Cambios guardados automticamente</span>
+          <span>{t("sounds.auto_saved", "Cambios guardados automáticamente")}</span>
         </div>
       </div>
     </div>

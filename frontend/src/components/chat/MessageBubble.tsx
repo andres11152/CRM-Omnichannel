@@ -250,41 +250,71 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
 
           {/* Media Content */}
-          {groupedMessages && groupedMessages.length > 1 ? (
-            <div className={`grid gap-1 mb-2 ${
-              groupedMessages.length === 2 ? 'grid-cols-2' : 
-              groupedMessages.length === 3 ? 'grid-cols-2' : 
-              'grid-cols-2'
-            }`}>
-              {groupedMessages.slice(0, 4).map((msg, idx) => {
-                const groupMediaUrl = (msg.mediaUrl as string) || (msg.metadata?.media as any)?.url;
-                const isFourth = idx === 3;
-                const remaining = groupedMessages.length - 4;
-                
-                return (
-                  <div key={msg.id} className="relative aspect-square overflow-hidden rounded-md group/media hover:opacity-90 transition-opacity cursor-pointer shadow-sm border border-black/5 dark:border-white/5"
-                       onClick={() => onImageClick ? onImageClick(resolveMediaUrl(groupMediaUrl)) : window.open(resolveMediaUrl(groupMediaUrl), "_blank")}>
-                    <img
-                      src={resolveMediaUrl(groupMediaUrl)}
-                      className="w-full h-full object-cover"
-                      alt="Media"
-                    />
-                    {isFourth && remaining > 0 && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-[2px]">
-                        <span className="text-white text-2xl font-bold">+{remaining}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ) : ((msgType === "image" || msgType === "image_unavailable") && (
+          {groupedMessages && groupedMessages.length > 1 ? (() => {
+            const total = groupedMessages.length;
+            const showCount = Math.min(total, 4);
+            const remaining = total - showCount;
+            // Layout: 2 = 1 row of 2, 3 = row of 2 + row of 1 (span-2), 4+ = 2x2 grid
+            const gridClass = showCount <= 2
+              ? 'grid-cols-2'
+              : 'grid-cols-2';
+
+            return (
+              <div className={`grid ${gridClass} gap-0.5 mb-1 rounded-lg overflow-hidden max-w-[320px]`}>
+                {groupedMessages.slice(0, showCount).map((msg, idx) => {
+                  const groupMediaUrl = (msg.mediaUrl as string) || (msg.metadata?.media as { url?: string })?.url;
+                  const isLast = idx === showCount - 1;
+                  const showOverlay = isLast && remaining > 0;
+                  // For 3 images: make the third image span full width
+                  const spanFull = total === 3 && idx === 2;
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`relative overflow-hidden cursor-pointer group/media hover:brightness-90 transition-all ${
+                        spanFull ? 'col-span-2 aspect-[2/1]' : 'aspect-square'
+                      }`}
+                      onClick={() =>
+                        onImageClick
+                          ? onImageClick(resolveMediaUrl(groupMediaUrl))
+                          : window.open(resolveMediaUrl(groupMediaUrl), '_blank')
+                      }
+                    >
+                      <img
+                        src={resolveMediaUrl(groupMediaUrl)}
+                        className="w-full h-full object-cover"
+                        alt="Media"
+                        loading="lazy"
+                      />
+                      {/* +N remaining overlay */}
+                      {showOverlay && (
+                        <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
+                          <span className="text-white text-3xl font-bold drop-shadow-lg">
+                            +{remaining}
+                          </span>
+                        </div>
+                      )}
+                      {/* Timestamp on last visible image */}
+                      {isLast && !showOverlay && msg.timestamp && (
+                        <div className="absolute bottom-1 right-1.5 bg-black/50 backdrop-blur-sm rounded px-1.5 py-0.5">
+                          <span className="text-[10px] text-white/90 font-medium">
+                            {formatTime(msg.timestamp)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })() : ((msgType === "image" || msgType === "image_unavailable") && (
             mediaUrl ? (
               <img
                 src={resolveMediaUrl(mediaUrl)}
                 alt="Imagen"
                 className="rounded-lg mb-1 max-w-[300px] max-h-[350px] object-cover cursor-pointer hover:opacity-90 transition-opacity shadow-sm border border-black/5 dark:border-white/5"
                 onClick={() => onImageClick ? onImageClick(resolveMediaUrl(mediaUrl)) : window.open(resolveMediaUrl(mediaUrl), "_blank")}
+                loading="lazy"
               />
             ) : (
               <UnavailableMediaFallback message={message} type="image" />
@@ -602,8 +632,9 @@ const UnavailableMediaFallback: React.FC<{ message: Message; type: string }> = (
       if (response.data.status === "success") {
         toast.success("Archivo recuperado correctamente. Refresca para verlo.");
       }
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || error.message || "Error al recuperar el archivo.";
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }, message?: string };
+      const errorMsg = err.response?.data?.message || err.message || "Error al recuperar el archivo.";
       toast.error(errorMsg);
     } finally {
       setIsRetrying(false);

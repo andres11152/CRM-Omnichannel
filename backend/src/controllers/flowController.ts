@@ -56,6 +56,20 @@ export const getFlowById = catchAsync(
   },
 );
 
+export const getFlowStats = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const companyId = req.companyId || req.user?.companyId;
+
+    if (!companyId) {
+      return next(new AppError("Company ID missing", 400));
+    }
+
+    const stats = await flowService.getStats(id, companyId);
+    res.status(200).json(stats);
+  },
+);
+
 export const updateFlow = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;

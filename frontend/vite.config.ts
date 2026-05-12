@@ -84,12 +84,12 @@ export default defineConfig({
     },
   },
   server: {
-    // Fix: Configuración explícita del servidor para WebSocket HMR
+    // WebSocket server configuration for HMR support
     host: "localhost",
     port: 5173,
     strictPort: true,
     hmr: {
-      // Fix: Configuración de Hot Module Replacement
+      // HMR strategy configuration
       protocol: "ws",
       host: "localhost",
       port: 5173,

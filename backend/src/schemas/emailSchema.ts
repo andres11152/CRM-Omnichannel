@@ -111,6 +111,27 @@ export const GetTimelineStatsSchema = z.object({
   }),
 });
 
+/** GET /api/emails — Inbox listing */
+export const GetEmailsInboxSchema = z.object({
+  query: z.object({
+    limit: z
+      .string()
+      .transform((val) => parseInt(val, 10))
+      .pipe(z.number().min(1).max(100))
+      .optional()
+      .default("50"),
+    offset: z
+      .string()
+      .transform((val) => parseInt(val, 10))
+      .pipe(z.number().min(0))
+      .optional()
+      .default("0"),
+    status: z.enum(["SENT", "DELIVERED", "OPENED", "CLICKED", "BOUNCED", "SPAM", "FAILED"]).optional(),
+    type: z.enum(["INBOUND", "OUTBOUND"]).optional(),
+    search: z.string().max(200).optional(),
+  }),
+});
+
 // ────────────────────────────────────────────────
 // TYPE EXPORTS
 // ────────────────────────────────────────────────

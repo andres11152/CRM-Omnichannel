@@ -3,8 +3,9 @@
 
 // 1. Define la fuente de datos.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -428,6 +429,7 @@ model Workflow {
   name        String
   description String?
   isActive    Boolean @default(true)
+  isGlobal    Boolean @default(false)
 
   triggerType   String @default("KEYWORD") // KEYWORD, EVENT
   triggerConfig Json? // { keyword: "hola" } or { event: "DEAL_UPDATE" }
@@ -857,6 +859,7 @@ model MessageTemplate {
   category   String   @default("MARKETING")
   status     String   @default("approved")
   components Json
+  isGlobal   Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

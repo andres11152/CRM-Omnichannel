@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Media,
@@ -12,6 +13,7 @@ export const KnowledgeBase: React.FC = () => {
   const [dragActive, setDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [documents, setDocuments] = useState<Media[]>([]);
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export const KnowledgeBase: React.FC = () => {
       setDocuments(docs);
     } catch (error) {
       console.error("Error fetching documents:", error);
-      toast.error("Error al cargar la base de conocimiento.");
+      toast.error(t("knowledge_base.err_load", "Error al cargar la base de conocimiento."));
     } finally {
       setIsLoading(false);
     }
@@ -61,28 +63,28 @@ export const KnowledgeBase: React.FC = () => {
     ];
 
     if (file.size > maxSize) {
-      toast.error("El archivo excede el límite de 50MB.");
+      toast.error(t("knowledge_base.err_size", "El archivo excede el límite de 50MB."));
       return;
     }
 
     if (!validTypes.includes(file.type)) {
-      toast.error("Formato no soportado. Usa PDF, TXT, DOCX o CSV.");
+      toast.error(t("knowledge_base.err_format", "Formato no soportado. Usa PDF, TXT, DOCX o CSV."));
       return;
     }
 
     setIsUploading(true);
-    const toastId = toast.loading("Subiendo e indexando...");
+    const toastId = toast.loading(t("knowledge_base.uploading", "Subiendo e indexando..."));
 
     try {
       const newDoc = await uploadKnowledgeDoc(file);
       setDocuments((prev) => [newDoc, ...prev]);
-      toast.success("Documento subido e indexado correctamente.", {
+      toast.success(t("knowledge_base.upload_success", "Documento subido e indexado correctamente."), {
         id: toastId,
       });
     } catch (error: unknown) {
       console.error("Upload error:", error);
       toast.error(
-        error instanceof Error ? error.message : "Error al subir documento",
+        error instanceof Error ? error.message : t("knowledge_base.err_upload", "Error al subir documento"),
         {
           id: toastId,
         },
@@ -95,20 +97,20 @@ export const KnowledgeBase: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (
       !confirm(
-        "¿Ests seguro de eliminar este documento de la base de conocimiento?",
+        t("knowledge_base.confirm_delete", "¿Estás seguro de eliminar este documento de la base de conocimiento?"),
       )
     )
       return;
 
-    const toastId = toast.loading("Eliminando...");
+    const toastId = toast.loading(t("knowledge_base.deleting", "Eliminando..."));
     try {
       await deleteMedia(id);
       setDocuments(documents.filter((d) => d.id !== id));
-      toast.success("Documento eliminado.", { id: toastId });
+      toast.success(t("knowledge_base.delete_success", "Documento eliminado."), { id: toastId });
     } catch (error: unknown) {
       console.error(error);
       toast.error(
-        error instanceof Error ? error.message : "Error al eliminar documento.",
+        error instanceof Error ? error.message : t("knowledge_base.err_delete", "Error al eliminar documento."),
         { id: toastId },
       );
     }
@@ -126,11 +128,10 @@ export const KnowledgeBase: React.FC = () => {
     <div className="h-full flex flex-col bg-white dark:bg-reply-panel-dark rounded-lg shadow-sm border border-gray-200 dark:border-reply-border-dark transition-colors duration-200">
       <div className="px-6 py-4 border-b border-gray-200 dark:border-reply-border-dark bg-reply-bg dark:bg-reply-border-dark">
         <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <span className="text-2xl"></span> Base de Conocimiento (RAG)
+          <span className="text-2xl"></span> {t("knowledge_base.title", "Base de Conocimiento (RAG)")}
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Sube documentos (PDF, TXT, DOCX) para entrenar a tu Agente IA
-          específicamente con los datos de tu negocio.
+          {t("knowledge_base.description", "Sube documentos (PDF, TXT, DOCX) para entrenar a tu Agente IA específicamente con los datos de tu negocio.")}
         </p>
       </div>
 
@@ -147,7 +148,7 @@ export const KnowledgeBase: React.FC = () => {
             <div className="flex flex-col items-center animate-pulse">
               <div className="w-10 h-10 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 rounded-full animate-spin mb-3"></div>
               <p className="text-indigo-600 dark:text-indigo-400 font-semibold">
-                Subiendo e Indexando a S3...
+                {t("knowledge_base.uploading_s3", "Subiendo e Indexando a S3...")}
               </p>
             </div>
           ) : (
@@ -168,10 +169,10 @@ export const KnowledgeBase: React.FC = () => {
                 </svg>
               </div>
               <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
-                Arrastra y suelta archivos aquíí, o haz clic para seleccionar
+                {t("knowledge_base.drag_drop", "Arrastra y suelta archivos aquí, o haz clic para seleccionar")}
               </p>
               <p className="text-xs text-gray-400">
-                Soportado: PDF, TXT, DOCX (Max 50MB)
+                {t("knowledge_base.supported_formats", "Soportado: PDF, TXT, DOCX (Max 50MB)")}
               </p>
               <input
                 type="file"
@@ -186,7 +187,7 @@ export const KnowledgeBase: React.FC = () => {
                 htmlFor="rag-upload"
                 className="mt-4 inline-block text-xs bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 cursor-pointer font-bold transition-colors"
               >
-                Seleccionar Archivos
+                {t("knowledge_base.select_files", "Seleccionar Archivos")}
               </label>
             </>
           )}
@@ -194,7 +195,7 @@ export const KnowledgeBase: React.FC = () => {
 
         {/* Document List */}
         <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
-          Documentos Indexados
+          {t("knowledge_base.indexed_docs", "Documentos Indexados")}
           <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-1 rounded-full">
             {documents.length}
           </span>
@@ -208,8 +209,7 @@ export const KnowledgeBase: React.FC = () => {
           <div className="space-y-3">
             {documents.length === 0 && (
               <div className="text-center py-10 text-gray-400 italic bg-reply-bg dark:bg-reply-surface-dark rounded-lg border border-dashed border-gray-300 dark:border-reply-border-dark">
-                No hay documentos subidos. El bot usar solo conocimiento
-                general.
+                {t("knowledge_base.empty_desc", "No hay documentos subidos. El bot usará solo conocimiento general.")}
               </div>
             )}
             {documents.map((doc) => (
@@ -242,7 +242,7 @@ export const KnowledgeBase: React.FC = () => {
                       </span>
                       <span>•</span>
                       <span className="text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-1.5 rounded border border-green-100 dark:border-green-800 font-medium text-[10px] uppercase">
-                        S3 Secure
+                        {t("knowledge_base.s3_secure", "S3 Secure")}
                       </span>
                     </div>
                   </div>
@@ -253,7 +253,7 @@ export const KnowledgeBase: React.FC = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-400 hover:text-indigo-500 p-2 transition-colors"
-                    title="Descargar"
+                    title={t("knowledge_base.download", "Descargar")}
                   >
                     <svg
                       className="w-5 h-5"
@@ -272,7 +272,7 @@ export const KnowledgeBase: React.FC = () => {
                   <button
                     onClick={() => handleDelete(doc.id)}
                     className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-2 transition-colors"
-                    title="Eliminar Documento"
+                    title={t("knowledge_base.delete", "Eliminar Documento")}
                   >
                     <svg
                       className="w-5 h-5"

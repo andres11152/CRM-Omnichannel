@@ -24,20 +24,20 @@ export const stripeService = {
     userEmail: string,
   ): Promise<string> {
     const company = await companyRepository.findById(companyId);
-    if (!company) throw new AppError("Compañía no encontrada.", 404);
+    if (!company) throw new AppError("Company not found.", 404);
 
     if (company.stripeCustomerId) {
       return company.stripeCustomerId;
     }
 
-    // Si no existe, creamos un nuevo cliente en Stripe
+    // If it doesn't exist, create a new customer in Stripe
     const customer = await stripe.customers.create({
       email: userEmail,
       name: company.name,
       metadata: { companyId: company.id },
     });
 
-    // Guardamos el nuevo ID en nuestra base de datos
+    // Save new ID in our database
     await companyRepository.update(companyId, {
       stripeCustomerId: customer.id,
     });
@@ -58,7 +58,7 @@ export const stripeService = {
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
-      customer: customerId, // Usamos el ID de cliente correcto
+      customer: customerId, // Use correct customer ID
       metadata: { companyId },
       success_url: `${process.env.FRONTEND_URL}/?success=true`,
       cancel_url: `${process.env.FRONTEND_URL}/?canceled=true`,
@@ -70,19 +70,19 @@ export const stripeService = {
     const company = await companyRepository.findById(companyId);
     if (!company || !company.stripeCustomerId) {
       throw new AppError(
-        "ID de cliente de Stripe no encontrado para esta compañía.",
+        "Stripe Customer ID not found for this company.",
         404,
       );
     }
     const session = await stripe.billingPortal.sessions.create({
-      customer: company.stripeCustomerId, // Usamos el ID de cliente correcto
+      customer: company.stripeCustomerId, // Use correct customer ID
       return_url: process.env.FRONTEND_URL || "http://localhost:5173",
     });
     return session.url!;
   },
 
   async handleWebhook(signature: string, rawBody: Buffer | string) {
-    // ... (la lógica del webhook permanece igual)
+    // ... (webhook logic remains the same)
     stripe.webhooks.constructEvent(
       rawBody,
       signature,

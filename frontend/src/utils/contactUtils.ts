@@ -11,14 +11,13 @@ interface ResolveContactInput {
 }
 
 /**
- *  Sanitiza y resuelve el nombre a mostrar para un contacto.
+ * Sanitizes and resolves the display name for a contact.
  *
- * Principio: Single Responsibility (SRP) - Esta función solo sabe cómo formatear nombres.
- * No depende de React ni del estado de la UI.
+ * Pattern: Single Responsibility (SRP) - Logic decoupled from React/UI state.
  *
- * @param contact El objeto de contacto a resolver
- * @param fallbackSubject Asunto opcional para usar como respaldo si el nombre falla
- * @returns Nombre limpio y legible para humanos
+ * @param contact Contact object to resolve
+ * @param fallbackSubject Optional subject as backup if name is invalid
+ * @returns Formatted human-readable name
  */
 export const resolveContactName = (
   contact: ResolveContactInput,
@@ -90,7 +89,7 @@ export const resolveContactName = (
 };
 
 /**
- * Obtiene las iniciales de un nombre para avatares.
+ * Extracts initials for avatar generation.
  */
 export const getInitials = (name: string): string => {
   const clean = name.replace(/^\+/, "").trim(); // Remove leading +

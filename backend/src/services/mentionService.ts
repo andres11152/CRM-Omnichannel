@@ -4,8 +4,8 @@ import { Logger } from "@/utils/logger";
 
 /**
  * [CHAT] MENTION SERVICE
- * Detección y procesamiento de @menciones en notas internas
- * Diseñado para ser robusto y tolerante a fallos
+ * Detection and processing of @mentions in internal notes
+ * Designed to be robust and fault-tolerant
  */
 
 interface MentionDetectionResult {
@@ -16,9 +16,9 @@ interface MentionDetectionResult {
 
 export const mentionService = {
   /**
-   * Detecta menciones @username en un texto
-   * Regex Pattern: @username (alphanumeric + underscores, no espacios)
-   * Ejemplo: "@juan_perez @maria @admin123"
+   * Detects @username mentions in text
+   * Regex Pattern: @username (alphanumeric + underscores, no spaces)
+   * Example: "@john_doe @mary @admin123"
    */
   detectMentions(text: string): string[] {
     if (!text || typeof text !== "string") return [];
@@ -32,10 +32,10 @@ export const mentionService = {
     for (const match of matches) {
       const username = match[1].toLowerCase().trim();
 
-      // Validaciones de seguridad:
-      // 1. No vacío
-      // 2. Longitud razonable (3-50 chars)
-      // 3. No es un dominio de email
+      // Safety validations:
+      // 1. Not empty
+      // 2. Reasonable length (3-50 chars)
+      // 3. Not an email domain
       if (
         username &&
         username.length >= 3 &&
@@ -52,9 +52,9 @@ export const mentionService = {
   },
 
   /**
-   * Resuelve usernames a User IDs
-   * Busca por: name (case-insensitive) o email prefix
-   * TOLERANTE A FALLOS: Si un username no existe, lo ignora (no falla toda la operación)
+   * Resolves usernames to User IDs
+   * Search by: name (case-insensitive) or email prefix
+   * FAULT TOLERANT: If a username doesn't exist, it ignores it.
    */
   async resolveUsernames(
     usernames: string[],
@@ -69,20 +69,20 @@ export const mentionService = {
     }
 
     try {
-      // Buscar usuarios en la base de datos
-      // Estrategia: Buscar por nombre O por email (antes del @)
+      // Search users in DB
+      // Strategy: Search by name OR email (before @)
       const users = await userRepository.findMany({
         where: {
           companyId,
           OR: usernames.flatMap((username) => [
-            // Match por nombre (case-insensitive)
+            // Match by name (case-insensitive)
             {
               name: {
                 contains: username,
                 mode: "insensitive",
               },
             },
-            // Match por email prefix (juan.perez@company.com -> juan.perez)
+            // Match by email prefix (john.doe@company.com -> john.doe)
             {
               email: {
                 startsWith: username.toLowerCase(),
@@ -110,12 +110,12 @@ export const mentionService = {
       return {
         mentionedUserIds: resolvedUserIds,
         mentionedUsernames: resolvedUsernames,
-        processedText: "", // Puede usarse para highlight en el futuro
+        processedText: "", // Can be used for highlighting in the future
       };
     } catch (error) {
       Logger.error("[MentionService] Error resolving usernames:", error);
 
-      // FAULT TOLERANCE: Retornar vacío en vez de fallar
+      // FAULT TOLERANCE: Return empty instead of failing
       return {
         mentionedUserIds: [],
         mentionedUsernames: [],
@@ -125,8 +125,8 @@ export const mentionService = {
   },
 
   /**
-   * Procesa un texto completo: detecta + resuelve menciones
-   * ONE-STOP FUNCTION para el controller
+   * Processes full text: detect + resolve mentions
+   * ONE-STOP FUNCTION for the controller
    */
   async processText(
     text: string,
@@ -145,8 +145,8 @@ export const mentionService = {
   },
 
   /**
-   * Crea notificaciones para usuarios mencionados
-   * Usa Socket.IO + (opcional) Push/Email
+   * Creates notifications for mentioned users
+   * Uses Socket.IO + (optional) Push/Email
    */
   async notifyMentionedUsers(
     mentionedUserIds: string[],
@@ -162,25 +162,25 @@ export const mentionService = {
     if (!mentionedUserIds || mentionedUserIds.length === 0) return;
 
     try {
-      // 1. Obtener info del creador (quien mencionó)
+      // 1. Get creator info (who mentioned)
       const creator = await userRepository.findFirst({
         where: { id: createdByUserId },
         select: { name: true, email: true },
       });
 
-      const creatorName = creator?.name || creator?.email || "Un usuario";
+      const creatorName = creator?.name || creator?.email || "A user";
 
-      // 2. Crear notificaciones persistentes en DB
+      // 2. Create persistent notifications in DB
       const notificationPromises = mentionedUserIds.map(async (userId) => {
-        // Evitar notificarse a sí mismo
+        // Avoid self-notification
         if (userId === createdByUserId) return;
 
-        const title = `${creatorName} te mencionó`;
-        const message = `${creatorName} te mencionó en ${
-          context.type === "note" ? "una nota" : "un comentario"
-        }${context.contactName ? ` sobre ${context.contactName}` : ""}`;
+        const title = `${creatorName} mentioned you`;
+        const message = `${creatorName} mentioned you in ${
+          context.type === "note" ? "a note" : "a comment"
+        }${context.contactName ? ` regarding ${context.contactName}` : ""}`;
 
-        // Crear notificación en DB ([SEC] 100-YEAR FIX: Include companyId and strict metadata typing)
+        // Create DB notification
         await notificationRepository.create({
           data: {
             userId,
@@ -202,26 +202,26 @@ export const mentionService = {
 
       await Promise.all(notificationPromises);
 
-      // 3. Emitir evento Socket.IO (real-time)
+      // 3. Emit Socket.IO event (real-time)
       const { emitMentionNotification } =
         await import("@/services/SocketEmitter");
 
       for (const userId of mentionedUserIds) {
-        // Evitar notificarse a sí mismo
+        // Avoid self-notification
         if (userId === createdByUserId) continue;
 
         const notificationData = {
           type: "mention",
-          title: `${creatorName} te mencionó`,
-          message: `${creatorName} te mencionó en ${
-            context.type === "note" ? "una nota" : "un comentario"
-          }${context.contactName ? ` sobre ${context.contactName}` : ""}`,
+          title: `${creatorName} mentioned you`,
+          message: `${creatorName} mentioned you in ${
+            context.type === "note" ? "a note" : "a comment"
+          }${context.contactName ? ` regarding ${context.contactName}` : ""}`,
           activityId,
           createdBy: creatorName,
           timestamp: new Date().toISOString(),
         };
 
-        // Emitir a la sala del usuario específico
+        // Emit to specific user room
         emitMentionNotification(userId, notificationData);
       }
 
@@ -229,7 +229,7 @@ export const mentionService = {
         `[MentionService] Notified ${mentionedUserIds.length} users about mention in activity ${activityId}`,
       );
     } catch (error) {
-      // FAULT TOLERANCE: Log error pero no fallar la operación principal
+      // FAULT TOLERANCE: Log error but don't fail main operation
       Logger.error("[MentionService] Error sending notifications:", error);
     }
   },

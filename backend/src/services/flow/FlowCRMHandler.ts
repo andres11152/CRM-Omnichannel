@@ -36,7 +36,7 @@ export class FlowCRMHandler {
   ): Promise<string | null> {
     try {
       const dealTitle = this.replaceVariables(
-        node.data.title || "Nuevo Deal",
+        node.data.title || "New Deal",
         session.variables,
       );
       const dealValue = parseFloat(node.data.value || "0");
@@ -69,7 +69,7 @@ export class FlowCRMHandler {
       const errorMsg = getErrorMessage(error);
       Logger.error("[FlowExecutor] Error creating deal:", errorMsg);
       await moveToNextNode(session.id, node.id, flowStructure);
-      return "Hubo un problema al crear el deal. Continuaremos con el proceso.";
+      return "There was a problem creating the deal. The flow will continue.";
     }
   }
 

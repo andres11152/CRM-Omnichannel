@@ -13,7 +13,7 @@ import { IdParamSchema } from "@/schemas/commonSchemas";
 
 const router = express.Router();
 
-// Todas las rutas a partir de aquí están protegidas
+// All routes from here are protected
 router.use(protect);
 
 router.route("/").get(getPosts).post(validate(CreatePostSchema), createPost);

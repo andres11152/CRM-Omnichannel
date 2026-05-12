@@ -281,22 +281,19 @@ export class ChatSyncIngest {
 
       let mediaMeta: Record<string, unknown> = {};
       if (parsed.mediaType) {
-        // [SEC] RESTORE: Actually download the historical media instead of just saving text placeholders
-        const { url, mimetype } = await syncMediaService.downloadAndUpload({
-          companyId,
-          whatsappMessageId: msg.key.id!,
-          msg,
-          mediaType: parsed.mediaType,
-          msgContent: parsed.msgContent as Record<string, unknown>
-        });
-
+        // [ENTERPRISE UX] Extreme Optimization: Skip synchronous media downloads during initial bulk history sync.
+        // Downloading hundreds of expired or slow media files sequentially completely blocks the Node event loop,
+        // causing timeouts and preventing real-time inbound messages from being processed.
+        // Instead, we mark it as '_unavailable' and empty URL, allowing the agent to lazily recover it on-demand
+        // via the retryMedia/retry download mechanism if they click on it in the UI.
+        const mimetype = "application/octet-stream";
         mediaMeta = {
           mediaType: parsed.mediaType,
           mediaCaption: parsed.mediaCaption,
           mediaFilename: parsed.mediaFilename,
           media: {
-            type: url ? parsed.mediaType : `${parsed.mediaType}_unavailable`,
-            url: url || "",
+            type: `${parsed.mediaType}_unavailable`,
+            url: "",
             mimetype,
             name: parsed.mediaFilename || (parsed.mediaType === "audio" ? "Nota de voz" : "Adjunto"),
             size: 0

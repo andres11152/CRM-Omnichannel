@@ -15,14 +15,14 @@ import { UpdateUserSchema, CreateUserSchema } from "@/schemas/userSchema";
 
 const router = Router();
 
-// Todas las rutas de aquí para abajo están protegidas
+// All routes below are protected
 router.use(protect);
 
 // Get current authenticated user
 router.get("/me", (req: AuthenticatedRequest, res) => {
-  // El middleware protect ya agregó el usuario a req.user
+  // The protect middleware has already added the user to req.user
   if (!req.user) {
-    return res.status(401).json({ error: "No autorizado" });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   res.json({

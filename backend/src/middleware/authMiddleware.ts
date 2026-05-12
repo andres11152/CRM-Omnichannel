@@ -89,7 +89,7 @@ export const protect = catchAsync(
     if (!token) {
       return next(
         new AppError(
-          "No has iniciado sesión. Por favor, inicia sesión para obtener acceso.",
+          "You are not logged in. Please log in to get access.",
           401,
         ),
       );
@@ -102,7 +102,7 @@ export const protect = catchAsync(
       decoded = jwt.verify(token, getEnv().JWT_SECRET) as JwtPayload;
     } catch (error) {
       Logger.error("[Auth] Token verification failed:", error as Error);
-      return next(new AppError("Token inválido o expirado", 401));
+      return next(new AppError("Invalid or expired token", 401));
     }
 
     // 2b) [SEC] ENTERPRISE: Check if token is blacklisted (instant revocation)
@@ -113,18 +113,18 @@ export const protect = catchAsync(
       if (isBlacklisted) {
         return next(
           new AppError(
-            "Sesión revocada. Por favor inicia sesión nuevamente.",
+            "Session revoked. Please log in again.",
             401,
           ),
         );
       }
     }
 
-    // 3) Verificar si el usuario aún existe (Optimizado con Redis Cache)
+    // 3) Check if user still exists (Optimized with Redis Cache)
     let currentUser;
     const cacheKey = `auth:user:${decoded.id}`;
 
-    // A. Intentar leer de Redis (Cache-Aside)
+    // A. Try reading from Redis (Cache-Aside)
     if (redisClient?.isOpen) {
       try {
         const cachedUser = await redisClient.get(cacheKey);
@@ -132,12 +132,12 @@ export const protect = catchAsync(
           currentUser = JSON.parse(cachedUser);
         }
       } catch {
-        // Fallback silencioso a DB si Redis falla
+        // Silent fallback to DB if Redis fails
         Logger.warn("[Auth] Redis lookup failed, falling back to DB");
       }
     }
 
-    // B. Si no está en caché, consultar DB (Cache Miss)
+    // B. If not in cache, query DB (Cache Miss)
     if (!currentUser) {
       try {
         // [SEC] SECURITY BYPASS: Use system context for Initial Authentication
@@ -148,7 +148,7 @@ export const protect = catchAsync(
           })
         );
 
-        // C. Guardar en Redis (TTL: 5 minutos / 300s)
+        // C. Save in Redis (TTL: 5 minutes / 300s)
         if (currentUser && redisClient?.isOpen) {
           try {
             await redisClient.set(cacheKey, JSON.stringify(currentUser), {
@@ -162,7 +162,7 @@ export const protect = catchAsync(
         Logger.error("[Auth] DB Connection Failed:", dbError as Error);
         return next(
           new AppError(
-            "Error de conexión con base de datos. Intente más tarde.",
+            "Database connection error. Please try again later.",
             503,
           ),
         );
@@ -173,7 +173,7 @@ export const protect = catchAsync(
       // Emergency check for debug
       return next(
         new AppError(
-          "El usuario perteneciente a este token ya no existe.",
+          "The user belonging to this token no longer exists.",
           401,
         ),
       );

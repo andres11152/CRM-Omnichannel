@@ -25,6 +25,7 @@ import { InternalNotes } from "./InternalNotes";
 import { toast } from "sonner";
 import { ImageLightbox } from "./ImageLightbox";
 import { Avatar } from "@/components/common/Avatar";
+import { useTranslation } from "react-i18next";
 
 interface Customer360PanelProps {
   contact: Contact;
@@ -46,6 +47,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
     url: string;
     alt: string;
   } | null>(null);
+  const { t } = useTranslation();
 
   // Enterprise Tags State (Deprecated in favor of TagsNavbar)
   const [allTags, setAllTags] = useState<Tag[]>([]);
@@ -76,22 +78,22 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
-    toast.success(`${field} copiado`);
+    toast.success(`${field} ${t("customer360.copied", "copiado")}`);
     setTimeout(() => setCopiedField(null), 2000);
   };
 
   return (
-    <div className="w-full md:w-96 bg-white dark:bg-reply-surface-dark border-l border-gray-100 dark:border-reply-border-dark flex flex-col h-full relative">
+    <div className="w-full bg-white dark:bg-reply-surface-dark border-l border-gray-100 dark:border-reply-border-dark flex flex-col h-full relative">
       {/* Dynamic Header with Status Indicator */}
       <div className="p-4 border-b border-gray-100 dark:border-reply-border-dark bg-white dark:bg-reply-surface-dark flex items-center justify-between flex-shrink-0">
         <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.1em] flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-blue-500" />
-          {isGroup ? "Grupo 360°" : "Customer 360°"}
+          {isGroup ? t("customer360.group", "Grupo 360°") : t("customer360.customer", "Customer 360°")}
         </h3>
         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">
-            Live
+            {t("customer360.live", "Live")}
           </span>
         </div>
       </div>
@@ -128,7 +130,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
           {isGroup ? (
             <p className="text-xs text-green-600 dark:text-green-400 flex items-center justify-center gap-1 font-semibold">
               <Users className="w-3.5 h-3.5" />
-              <span>Grupo de WhatsApp</span>
+              <span>{t("customer360.whatsapp_group", "Grupo de WhatsApp")}</span>
             </p>
           ) : (
             <p className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1.5 font-medium tracking-wide">
@@ -159,7 +161,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
             <div className="flex items-center gap-2 mb-1 text-gray-400">
               <Info className="w-3.5 h-3.5" />
               <span className="text-[10px] font-bold uppercase tracking-wider">
-                {isGroup ? "Información del Grupo" : "Detalles de Contacto"}
+                {isGroup ? t("customer360.group_info", "Información del Grupo") : t("customer360.contact_details", "Detalles de Contacto")}
               </span>
             </div>
 
@@ -176,7 +178,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">
-                        Email
+                        {t("customer360.email", "Email")}
                       </p>
                       <p className="text-sm text-gray-700 dark:text-gray-200 truncate">
                         {contact.email}
@@ -184,10 +186,10 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
                     </div>
                   </div>
                   <button
-                    onClick={() => copyToClipboard(contact.email!, "Email")}
+                    onClick={() => copyToClipboard(contact.email!, t("customer360.email", "Email"))}
                     className="p-1.5 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-all"
                   >
-                    {copiedField === "Email" ? (
+                    {copiedField === t("customer360.email", "Email") ? (
                       <Check className="w-4 h-4 text-emerald-500" />
                     ) : (
                       <Copy className="w-4 h-4" />
@@ -208,7 +210,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">
-                        WhatsApp
+                        {t("customer360.whatsapp", "WhatsApp")}
                       </p>
                       <p className="text-sm text-gray-700 dark:text-gray-200 font-mono">
                         {contact.phone}
@@ -216,10 +218,10 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
                     </div>
                   </div>
                   <button
-                    onClick={() => copyToClipboard(contact.phone!, "Teléfono")}
+                    onClick={() => copyToClipboard(contact.phone!, t("customer360.phone", "Teléfono"))}
                     className="p-1.5 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all"
                   >
-                    {copiedField === "Teléfono" ? (
+                    {copiedField === t("customer360.phone", "Teléfono") ? (
                       <Check className="w-4 h-4 text-emerald-500" />
                     ) : (
                       <Copy className="w-4 h-4" />
@@ -235,7 +237,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
                 className="w-full mt-2 py-2 flex items-center justify-center gap-2 text-xs font-bold text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 bg-reply-bg/50 dark:bg-gray-800/30 hover:bg-white dark:hover:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-all"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                Editar Información
+                {t("customer360.edit_info", "Editar Información")}
               </button>
             )}
           </div>
@@ -245,7 +247,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
             <div className="flex items-center gap-2 mb-1 text-gray-400">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
               <span className="text-[10px] font-bold uppercase tracking-wider">
-                Acciones Rápidas
+                {t("customer360.quick_actions", "Acciones Rápidas")}
               </span>
             </div>
 
@@ -260,10 +262,10 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
                   </div>
                   <div className="text-left">
                     <p className="text-xs font-bold text-gray-900 dark:text-gray-100">
-                      Nueva Tarea
+                      {t("customer360.new_task", "Nueva Tarea")}
                     </p>
                     <p className="text-[10px] text-gray-400">
-                      Asignar seguimiento
+                      {t("customer360.assign_followup", "Asignar seguimiento")}
                     </p>
                   </div>
                 </div>
@@ -280,10 +282,10 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
                   </div>
                   <div className="text-left">
                     <p className="text-xs font-bold text-gray-900 dark:text-gray-100">
-                      Agendar Reunión
+                      {t("customer360.schedule_meeting", "Agendar Reunión")}
                     </p>
                     <p className="text-[10px] text-gray-400">
-                      Programar llamada
+                      {t("customer360.schedule_call", "Programar llamada")}
                     </p>
                   </div>
                 </div>
@@ -297,7 +299,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
             <div className="flex items-center gap-2 mb-3 text-gray-400">
               <Building2 className="w-3.5 h-3.5" />
               <span className="text-[10px] font-bold uppercase tracking-wider">
-                Bitácora Interna
+                {t("customer360.internal_notes", "Bitácora Interna")}
               </span>
             </div>
             <InternalNotes

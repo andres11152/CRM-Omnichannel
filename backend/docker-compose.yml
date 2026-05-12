@@ -1,4 +1,4 @@
-clearversion: '3.8'
+version: '3.8'
 
 services:
   # PostgreSQL Database
@@ -74,12 +74,50 @@ services:
       start_period: 40s
     networks:
       - reply-network
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     deploy:
       resources:
         limits:
           memory: 3.5G
         reservations:
           memory: 1.5G
+
+  # Background Worker Process (Separated from API for scale)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reply-crm-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      WORKER_MODE: "true"
+      DATABASE_URL: postgresql://${DB_USER:-replycrm}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/${DB_NAME:-replycrm}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+    command: ["node", "--max-old-space-size=2048", "--expose-gc", "dist/worker.js"]
+    volumes:
+      - ./logs:/app/logs
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    networks:
+      - reply-network
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G
+        reservations:
+          memory: 512M
 
   # Prometheus Monitoring
   prometheus:

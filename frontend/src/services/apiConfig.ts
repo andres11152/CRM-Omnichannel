@@ -3,7 +3,7 @@ const rawUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
 export const BASE_URL = rawUrl.replace(/\/api\/?$/, "").replace(/\/$/, "");
 export const API_BASE_URL = `${BASE_URL}/api`;
 
-export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
+export async function fetchAPI<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem("token");
 
   const headers: Record<string, string> = {
@@ -21,17 +21,17 @@ export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
-    const error = await response
+    const error = (await response
       .json()
-      .catch(() => ({ message: "Request failed" }));
+      .catch(() => ({ message: "Request failed" }))) as { message?: string };
     throw new Error(error.message || `HTTP ${response.status}`);
   }
 
   // Handle empty responses (e.g., 204 No Content)
   const contentLength = response.headers.get("content-length");
   if (response.status === 204 || contentLength === "0") {
-    return null;
+    return null as T;
   }
 
-  return response.json();
+  return response.json() as Promise<T>;
 }

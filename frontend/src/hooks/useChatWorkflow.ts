@@ -14,6 +14,19 @@ export interface ChatWorkflowProps {
   aiConfig: AIConfig;
 }
 
+// [SEC] Define internal interface for socket events to avoid dot-access errors on 'unknown'
+interface ChatSocketPayload {
+  ticketId?: string;
+  conversationId?: string;
+  message?: Record<string, unknown>;
+  conversation?: {
+    contact?: {
+      phone?: string;
+    };
+  };
+  [key: string]: unknown;
+}
+
 export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) => {
   const queryClient = useQueryClient();
   const ticketId = activeContact.ticketId || ""; // [SEC] Fallback for type safety
@@ -99,7 +112,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     if (!ticketId) return;
 
     // Listen for inbound messages via Socket.IO
-    const handleIncomingMessage = (payload: Record<string, unknown>) => {
+    const handleIncomingMessage = (payload: ChatSocketPayload) => {
       // Backend emits two event shapes:
       // 1. 'message.received': { ticketId, message: {...}, conversation: {...} }
       // 2. 'conversation.new_message': { id, conversationId, content, direction, ... }
@@ -108,8 +121,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       const rawMsg = (payload.message || payload) as Record<string, unknown>;
       const msgConversationId = (rawMsg.conversationId as string) || (payload.conversationId as string) || '';
       const payloadTicketId = (payload.ticketId as string) || '';
-      // Attempt to extract contact phone from payload structure
-      const incomingPhone = (payload.conversation as Record<string, any>)?.contact?.phone || (rawMsg.from as string);
+      const incomingPhone = payload.conversation?.contact?.phone || (rawMsg.from as string);
       
       // Extract phone numbers for comparison (normalized)
       const normalizePhone = (p?: string) => p?.replace(/\D/g, '') || '';

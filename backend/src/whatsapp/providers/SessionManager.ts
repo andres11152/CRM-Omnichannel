@@ -113,7 +113,7 @@ export class SessionManager implements ISessionManager {
     const cachedPhone = store.getPhoneFromLid(lidBase);
     if (cachedPhone && !cachedPhone.includes(lidBase)) {
       logger.info(
-        `[SessionManager]  Cache hit: LID ${lidBase} → ${cachedPhone}`,
+        `[SessionManager] Cache hit: LID ${lidBase} → ${cachedPhone}`,
       );
       return { id: cachedPhone };
     }
@@ -124,12 +124,12 @@ export class SessionManager implements ISessionManager {
       if (!contact.lid) continue;
       const storedLidBase = contact.lid.split("@")[0].split(":")[0];
       if (lidBase === storedLidBase) {
-        logger.info(`[SessionManager] [OK] LID ${lidBase} → Phone ${jid}`);
+        logger.info(`[SessionManager] LID ${lidBase} → Phone ${jid}`);
         return contact;
       }
     }
 
-    logger.debug(`[SessionManager] [WARNING] LID Resolution Failed: ${lidBase}`);
+    logger.debug(`[SessionManager] LID Resolution Failed: ${lidBase}`);
     return undefined;
   }
 
@@ -232,7 +232,7 @@ export class SessionManager implements ISessionManager {
       isLatest = versionResult.isLatest;
     } catch (vErr) {
       logger.warn(
-        `[SessionManager] [WARNING] Could not fetch latest WA version (${(vErr as Error).message}). Using fallback: ${FALLBACK_WA_VERSION.join(".")}`,
+        `[SessionManager] Could not fetch latest WA version (${(vErr as Error).message}). Using fallback: ${FALLBACK_WA_VERSION.join(".")}`,
       );
     }
     logger.info(
@@ -514,6 +514,6 @@ export class SessionManager implements ISessionManager {
       store.flush();
       count++;
     }
-    logger.warn(`[SessionManager] [MEM_MONITOR] Flushed memory stores for ${count} sessions to free RAM.`);
+    logger.warn(`[SessionManager] Flushed memory stores for ${count} sessions to free RAM.`);
   }
 }

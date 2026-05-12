@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getEmails,
   sendEmail,
   receiveWebhook,
   getEmailsByContact,
@@ -17,6 +18,7 @@ import {
   GetEmailsByTicketSchema,
   GetTimelineSchema,
   GetTimelineStatsSchema,
+  GetEmailsInboxSchema,
 } from "../schemas/emailSchema";
 
 const router = express.Router();
@@ -24,6 +26,9 @@ const router = express.Router();
 // ===================================
 // EMAIL ROUTES
 // ===================================
+
+// Inbox listing (authenticated + validated)
+router.get("/", protect, validate(GetEmailsInboxSchema), getEmails);
 
 // Test SMTP Connection (Authenticated + Validated)
 router.post(

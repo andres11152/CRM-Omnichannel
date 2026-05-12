@@ -111,7 +111,7 @@ export class DealService {
           data: {
             companyId,
             type: "NOTE",
-            subject: `Nota inicial: ${title}`,
+            subject: `Initial note: ${title}`,
             description: notes,
             status: "COMPLETED",
             dealId: deal.id,

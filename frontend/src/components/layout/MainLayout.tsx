@@ -28,18 +28,18 @@ export const MainLayout = () => {
   // Real-time notifications
   useSocketInit();
 
-  // Initialize sidebar order
   useEffect(() => {
-    if (user?.preferences?.sidebarOrder) {
-      const allIds = NAV_ITEMS.map((i) => i.id);
-      const saved = user.preferences.sidebarOrder;
+    const allIds = NAV_ITEMS.map((i) => i.id);
+    const saved = user?.preferences?.sidebarOrder;
+    
+    if (Array.isArray(saved)) {
       const combined = [
-        ...saved,
-        ...allIds.filter((id) => !saved.includes(id)),
+        ...saved.filter(id => allIds.includes(id)), // Only keep valid ones
+        ...allIds.filter((id) => !saved.includes(id)), // Add new ones
       ];
       setSidebarOrder(combined);
     } else {
-      setSidebarOrder(NAV_ITEMS.map((i) => i.id));
+      setSidebarOrder(allIds);
     }
   }, [user]);
 
@@ -86,11 +86,18 @@ export const MainLayout = () => {
       .map((id) => itemMap.get(id))
       .filter((item): item is (typeof NAV_ITEMS)[0] => {
         if (!item) return false;
-        const userRole = user.role?.toLowerCase(); // Normalize to lowercase
-        if (item.masterOnly && userRole !== "master") return false;
-        if (item.agentOnly && userRole !== "agent") return false;
-        if (!item.allowedRoles.some((role) => role.toLowerCase() === userRole))
-          return false;
+        
+        const userRole = (user.role || "").toUpperCase();
+        const isMaster = userRole === "MASTER";
+
+        // Master bypasses most restrictions but respects masterOnly
+        if (item.masterOnly && !isMaster) return false;
+        if (item.agentOnly && userRole !== "AGENT") return false;
+
+        // Check explicit roles
+        const allowed = item.allowedRoles.map(r => r.toUpperCase());
+        if (!allowed.includes(userRole)) return false;
+
         return true;
       });
   }, [sidebarOrder, user]);

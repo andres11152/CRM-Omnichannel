@@ -22,17 +22,29 @@ export class WhatsAppEventWiring {
       async (event: WhatsAppEvent<WhatsAppEventType.SESSION_CONNECTED>) => {
         Logger.info(`[WA] Session connected: ${event.sessionId}`);
         try {
-          await this.sessionRepository.update(
-            event.companyId,
-            event.sessionId,
-            {
-              status: "CONNECTED",
-            },
-          );
+          // [SEC] CRITICAL: Baileys socket callbacks run OUTSIDE any HTTP/tenant context.
+          // Without runAsSystem, the sessionRepository.update call hits the RLS interceptor
+          // and throws "SECURITY VIOLATION", which silently prevents ensureWorkerForCompany
+          // from ever executing — causing ALL agent outbound messages to get stuck in queue.
+          await TenantContextManager.runAsSystem(async () => {
+            await this.sessionRepository.update(
+              event.companyId,
+              event.sessionId,
+              {
+                status: "CONNECTED",
+              },
+            );
+          });
+
           const { gateway } = await import("@/gateways/socketGateway");
           gateway.emitToCompany(event.companyId, "whatsapp:connected", {
             sessionId: event.sessionId,
           });
+
+          // [SEC] SCALE FIX: Start message queue worker on-demand for this company.
+          // Workers are no longer pre-loaded for ALL companies at boot.
+          const { ensureWorkerForCompany } = await import("@/loaders/workerLoader");
+          await ensureWorkerForCompany(event.companyId);
         } catch (err) {
           Logger.error("[WA] Error handling session_connected:", err);
         }
@@ -44,19 +56,23 @@ export class WhatsAppEventWiring {
       async (event: WhatsAppEvent<WhatsAppEventType.SESSION_DISCONNECTED>) => {
         Logger.warn(`[WA] Session disconnected: ${event.sessionId}`);
         try {
-          await this.sessionRepository
-            .update(event.companyId, event.sessionId, {
-              status: "DISCONNECTED",
-            })
-            .catch((dbErr: { code?: string }) => {
-              if (dbErr?.code === "P2025") {
-                Logger.warn(
-                  `[WA] Session ${event.sessionId} already removed from DB, skipping update.`,
-                );
-                return;
-              }
-              throw dbErr;
-            });
+          // [SEC] Same RLS fix as SESSION_CONNECTED — Baileys callbacks have no tenant context.
+          await TenantContextManager.runAsSystem(async () => {
+            await this.sessionRepository
+              .update(event.companyId, event.sessionId, {
+                status: "DISCONNECTED",
+              })
+              .catch((dbErr: { code?: string }) => {
+                if (dbErr?.code === "P2025") {
+                  Logger.warn(
+                    `[WA] Session ${event.sessionId} already removed from DB, skipping update.`,
+                  );
+                  return;
+                }
+                throw dbErr;
+              });
+          });
+
           const { gateway } = await import("@/gateways/socketGateway");
           gateway.emitToCompany(event.companyId, "whatsapp:disconnected", {
             sessionId: event.sessionId,
@@ -72,12 +88,14 @@ export class WhatsAppEventWiring {
           }).catch(() => null);
 
           // Find Company Admins to alert via internal UI and Email
-          const admins = await prisma.user.findMany({
-            where: { companyId: event.companyId, role: "ADMIN" },
-            select: { id: true, email: true, name: true }
-          }).catch(() => []);
+          const admins = await TenantContextManager.runAsSystem(async () => {
+            return prisma.user.findMany({
+              where: { companyId: event.companyId, role: "ADMIN" },
+              select: { id: true, email: true, name: true }
+            }).catch(() => []);
+          });
 
-          const errorReason = String(event.data.reason || "Desconexión inesperada");
+          const errorReason = String(event.data.reason || "Unexpected disconnection");
 
           // 2. Alert Internal Dashboard (In-App DB Notification)
           // 3. Fallback Email to Admin
@@ -86,27 +104,27 @@ export class WhatsAppEventWiring {
               data: {
                 companyId: event.companyId,
                 userId: admin.id,
-                title: "🚨 ¡WhatsApp Desconectado!",
-                message: `El número asociado a esta cuenta se ha desconectado. Motivo: ${errorReason}. Por favor, vuelve a escanear el código QR.`,
+                title: "🚨 WhatsApp Disconnected!",
+                message: `The number associated with this account has been disconnected. Reason: ${errorReason}. Please rescan the QR code.`,
                 type: "SYSTEM_ALERT",
               }
             }).then(() => {
-                gateway.emitToUser(admin.id, "notification:new", { title: "WhatsApp Desconectado", type: "SYSTEM_ALERT" });
+                gateway.emitToUser(admin.id, "notification:new", { title: "WhatsApp Disconnected", type: "SYSTEM_ALERT" });
             }).catch(() => null);
 
             if (admin.email) {
               emailService.sendEmail({
                 to: admin.email,
-                subject: "🚨 Urgente: WhatsApp se ha desconectado en Reply CRM",
+                subject: "🚨 Urgent: WhatsApp has disconnected in Reply CRM",
                 html: `
                   <div style="font-family: sans-serif; padding: 20px;">
-                    <h2 style="color: #d9534f;">Alerta del Sistema CRM</h2>
-                    <p>Hola ${admin.name},</p>
-                    <p>Hemos detectado que la conexión con WhatsApp se ha cerrado de forma inesperada.</p>
-                    <p><strong>Motivo Reportado:</strong> ${errorReason}</p>
-                    <p>Esto significa que <b>entran ni salen mensajes nuevos</b> hasta que reacciones. Por favor, ingresa a la plataforma y vuelve a enlazar tu dispositivo en la sección de Configuración.</p>
+                    <h2 style="color: #d9534f;">CRM System Alert</h2>
+                    <p>Hello ${admin.name},</p>
+                    <p>We have detected that the WhatsApp connection has been unexpectedly closed.</p>
+                    <p><strong>Reported Reason:</strong> ${errorReason}</p>
+                    <p>This means that <b>no new messages will come in or go out</b> until you take action. Please log in and re-link your device in the Settings section.</p>
                     <br/>
-                    <p>Saludos,<br/>El Equipo de Reply CRM</p>
+                    <p>Regards,<br/>The Reply CRM Team</p>
                   </div>
                 `
               }).catch(() => null);

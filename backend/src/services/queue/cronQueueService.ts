@@ -15,7 +15,7 @@ import { cleanupTempDirectory } from "@/utils/tempFileCleanup";
 import type { MediaPayload } from "@/whatsapp/core/types/whatsapp.types";
 
 /**
- * ⏰ CRON QUEUE SERVICE (BullMQ)
+ * CRON QUEUE SERVICE (BullMQ)
  * Handles all scheduled and recurring background tasks natively across multiple servers.
  * Replaces node-cron and setInterval.
  */
@@ -92,7 +92,7 @@ export const initCronWorker = async () => {
                 const scheduledTime = new Date(meta.scheduledAt as string);
                 if (scheduledTime <= now) {
                   Logger.info(
-                    `[CronQueue] ⏰ Executing Scheduled Message ${msg.id}`,
+                    `[CronQueue] Executing Scheduled Message ${msg.id}`,
                   );
                   let targetPhone = msg.conversation.channelId;
                   if (!targetPhone) {
@@ -226,7 +226,7 @@ export const initCronWorker = async () => {
     { repeat: { every: 60 * 60 * 1000 }, jobId: "rep-temp-cleanup" },
   );
 
-  Logger.info(`[CronQueue] [OK] Scheduled 8 repeating jobs in Redis.`);
+  Logger.info(`[CronQueue] Scheduled 8 repeating jobs in Redis.`);
 
   return worker;
 };

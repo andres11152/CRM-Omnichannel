@@ -23,54 +23,77 @@ export abstract class BaseEmailProvider implements IEmailProvider {
 
 import nodemailer, { Transporter } from "nodemailer";
 import { Logger } from "../../utils/logger";
+import { SystemEmailService } from "../EmailService";
 
 export class NodemailerProvider extends BaseEmailProvider {
   private transporter: Transporter;
 
-  constructor(config?: NodemailerConfig) {
+  constructor(config?: NodemailerConfig, companyId?: string) {
     super();
 
     if (config) {
       // Multi-Tenant Mode
       const isSecure = config.secure || config.port === 465;
+
+      // [SEC] Decrypt SMTP password if it's encrypted (tenant-scoped)
+      let smtpPass = config.pass;
+      if (companyId && smtpPass) {
+        const decrypted = SystemEmailService.decryptSmtpPassword(smtpPass, companyId);
+        if (decrypted) {
+          smtpPass = decrypted;
+        }
+        // If decryption fails, assume plaintext (backward compatible for pre-encryption tenants)
+      }
+
       this.transporter = nodemailer.createTransport({
         host: config.host,
         port: config.port,
         secure: isSecure,
         auth: {
           user: config.user,
-          pass: config.pass,
+          pass: smtpPass,
         },
         tls: {
-          rejectUnauthorized: false, // Helps with self-signed certs in dev, but use with || caution
+          rejectUnauthorized: process.env.NODE_ENV === "production",
         },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 30000,
       });
       Logger.info("[NodemailerProvider] Initialized with Tenant SMTP:", {
         host: config.host,
         port: config.port,
         secure: isSecure,
+        companyId: companyId || "N/A",
       });
     } else {
       // Global / System Mode (Fallback)
-      const host = process.env.SMTP_HOST || "smtp.gmail.com";
+      const host = process.env.SMTP_HOST;
       const port = parseInt(process.env.SMTP_PORT || "587");
-      // Robust Boolean Check: "true" string or port || 465
       const isSecure = process.env.SMTP_SECURE === "true" || port === 465;
+      const user = process.env.SMTP_USER;
+      const pass = process.env.SMTP_PASSWORD;
+
+      if (!host || !user || !pass) {
+        Logger.warn(
+          "[NodemailerProvider] SMTP variables are missing in .env. Falling back to unconfigured transporter state."
+        );
+      }
 
       this.transporter = nodemailer.createTransport({
-        host,
+        host: host || "localhost",
         port,
         secure: isSecure,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASSWORD,
-        },
+        auth: user && pass ? { user, pass } : undefined,
         tls: {
           rejectUnauthorized: process.env.NODE_ENV === "production",
         },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 30000,
       });
       Logger.info(
-        `[NodemailerProvider] Initialized Global SMTP (${host}:${port}, secure:${isSecure})`,
+        `[NodemailerProvider] Initialized Global SMTP (${host || "localhost"}:${port}, secure:${isSecure})`,
       );
     }
   }
@@ -194,13 +217,14 @@ export class EmailProviderFactory {
   static createProvider(
     type?: EmailProviderType,
     config?: ProviderConfig,
+    companyId?: string,
   ): IEmailProvider {
     const providerType =
       type || (process.env.EMAIL_PROVIDER as EmailProviderType) || "nodemailer";
 
     switch (providerType) {
       case "nodemailer":
-        return new NodemailerProvider(config as NodemailerConfig); // Type assertion safe here
+        return new NodemailerProvider(config as NodemailerConfig, companyId);
       case "sendgrid":
         return new SendGridProvider();
       case "ses":
@@ -209,7 +233,8 @@ export class EmailProviderFactory {
         Logger.warn(
           `[EmailProviderFactory] Unknown provider: ${providerType}, falling back to Nodemailer`,
         );
-        return new NodemailerProvider(config as NodemailerConfig);
+        return new NodemailerProvider(config as NodemailerConfig, companyId);
     }
   }
 }
+

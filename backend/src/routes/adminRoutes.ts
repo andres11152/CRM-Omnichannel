@@ -9,10 +9,24 @@ import {
   updateCompanyStatus,
   updateCompany,
   impersonateCompany,
+  getCompanyUsers,
   getCompanyMetrics,
   getDashboardStats,
   getSystemStatus,
 } from "@/controllers/adminController";
+import { getGlobalAuditLogs } from "@/controllers/auditController";
+import { getInfrastructureHealth } from "@/controllers/infrastructureController";
+import { 
+  getCompanyFeatureFlags, 
+  updateCompanyFeatureFlags 
+} from "@/controllers/featureFlagController";
+import {
+  getGlobalInventory,
+  toggleTemplateGlobal,
+  toggleWorkflowGlobal,
+  manualDistribute
+} from "@/controllers/marketplaceController";
+import { exitImpersonation } from "@/controllers/authController";
 import { validate } from "@/middleware/validationMiddleware";
 import {
   CreateCompanyValidator,
@@ -20,6 +34,11 @@ import {
   UpdateCompanyStatusValidator,
   SavePlanValidator,
   DeletePlanValidator,
+  GetCompanyFeatureFlagsValidator,
+  UpdateCompanyFeatureFlagsValidator,
+  ToggleTemplateGlobalValidator,
+  ToggleWorkflowGlobalValidator,
+  ManualDistributeValidator,
 } from "@/schemas/adminSchemas";
 
 const router = Router();
@@ -41,6 +60,38 @@ router.get("/dashboard-stats", getDashboardStats);
 router.get("/analytics/financials", getFinancialAnalytics);
 router.get("/analytics/activity", getGlobalActivity);
 router.get("/analytics/tenant-health", getTenantHealth);
+router.get("/analytics/infrastructure", getInfrastructureHealth);
+router.get("/audit/logs", getGlobalAuditLogs);
+
+// Feature Flags
+router.get(
+  "/companies/:companyId/feature-flags",
+  validate(GetCompanyFeatureFlagsValidator),
+  getCompanyFeatureFlags,
+);
+router.patch(
+  "/companies/:companyId/feature-flags",
+  validate(UpdateCompanyFeatureFlagsValidator),
+  updateCompanyFeatureFlags,
+);
+
+// Global Marketplace
+router.get("/marketplace/inventory", getGlobalInventory);
+router.patch(
+  "/marketplace/templates/:templateId",
+  validate(ToggleTemplateGlobalValidator),
+  toggleTemplateGlobal,
+);
+router.patch(
+  "/marketplace/workflows/:workflowId",
+  validate(ToggleWorkflowGlobalValidator),
+  toggleWorkflowGlobal,
+);
+router.post(
+  "/marketplace/distribute/:companyId",
+  validate(ManualDistributeValidator),
+  manualDistribute,
+);
 
 // Billing Ops
 router.get("/billing/transactions", getTransactions);
@@ -79,6 +130,11 @@ router.get(
   "/companies/:companyId/metrics",
   validate(companyIdSchema),
   getCompanyMetrics,
+);
+router.get(
+  "/companies/:companyId/users",
+  validate(companyIdSchema),
+  getCompanyUsers,
 );
 
 router.get("/plans", listPlans);

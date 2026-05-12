@@ -4,22 +4,22 @@ import { Logger } from './logger';
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL es requerida'),
-  JWT_SECRET: z.string().min(1, 'JWT_SECRET es requerido'),
-  REDIS_URL: z.string().min(1, 'REDIS_URL es requerido'),
-  META_VERIFY_TOKEN: z.string().min(1, 'META_VERIFY_TOKEN es requerido'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
+  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+  META_VERIFY_TOKEN: z.string().min(1, 'META_VERIFY_TOKEN is required'),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  FRONTEND_URL: z.string().min(1, 'FRONTEND_URL es requerido'),
+  FRONTEND_URL: z.string().min(1, 'FRONTEND_URL is required'),
 });
 
 export const validateEnv = () => {
   try {
     envSchema.parse(process.env);
-    Logger.info('[OK] Variables de entorno validadas correctamente.');
+    Logger.info('[OK] Environment variables validated successfully.');
   } catch (error) {
     if (error instanceof z.ZodError) {
-      Logger.error('[ERROR] Error de validación en las variables de entorno:');
+      Logger.error('[ERROR] Environment variables validation error:');
       error.errors.forEach((err) => {
         Logger.error(`- ${err.path.join('.')}: ${err.message}`);
       });

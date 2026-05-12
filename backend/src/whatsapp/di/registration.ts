@@ -25,6 +25,9 @@ import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 import { MediaPayload } from "../core/types/whatsapp.types";
 import { IMessageHandler } from "../core/interfaces/IMessageHandler";
+import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionRepository";
+import { WhatsAppMessaging } from "../services/WhatsAppMessaging";
+import { WhatsAppSessionService } from "../services/WhatsAppSessionService";
 
 export function registerWhatsAppServices(): void {
   // ── EventBus (Singleton — shared pub/sub backbone) ──
@@ -89,5 +92,20 @@ export function registerWhatsAppServices(): void {
       sendPresenceUpdate: (to, type, companyId) =>
         messageHandler.sendPresenceUpdate(to, type, companyId),
     });
+  });
+
+  // ── Segregated Services (Fixing God Class) ──
+  container.registerSingleton(WA_TOKENS.MessagingService, () => {
+    const sessionManager = container.resolve(WA_TOKENS.SessionManager);
+    const messageHandler = container.resolve(WA_TOKENS.MessageHandler);
+    const rateLimitService = container.resolve(WA_TOKENS.RateLimitService);
+    return new WhatsAppMessaging(sessionManager, messageHandler as IMessageHandler, rateLimitService);
+  });
+
+  container.registerSingleton(WA_TOKENS.SessionService, () => {
+    const sessionManager = container.resolve(WA_TOKENS.SessionManager);
+    const eventBus = container.resolve(WA_TOKENS.EventBus);
+    const sessionRepository = new WhatsAppSessionRepository();
+    return new WhatsAppSessionService(sessionManager, eventBus, sessionRepository);
   });
 }

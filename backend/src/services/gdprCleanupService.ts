@@ -37,7 +37,7 @@ async function safelyDeleteRecords(
 
     if (count > 0) {
       Logger.info(
-        `[GDPR Cleanup] ️ Hard deleted ${count} ${modelName}s for Company ${companyId}`,
+        `[GDPR Cleanup] Hard deleted ${count} ${modelName}s for Company ${companyId}`,
       );
     }
     return count;
@@ -137,7 +137,7 @@ export async function runGDPRCleanup(): Promise<{
 
     const duration = Date.now() - startTime;
     Logger.info(
-      `[GDPR Cleanup] [OK] Completed in ${duration}ms. Total deleted: ${totalDeleted}`,
+      `[GDPR Cleanup] Completed in ${duration}ms. Total deleted: ${totalDeleted}`,
     );
 
     return { totalDeleted, details };

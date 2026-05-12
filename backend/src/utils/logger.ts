@@ -41,14 +41,14 @@ const sensitiveKeys = [
 ];
 
 const maskSensitiveData = (obj: unknown): unknown => {
-  if (!obj || typeof obj !== "object") return obj;
+  if (!obj || typeof obj !== "object" || obj === null) return obj;
   if (Array.isArray(obj)) return obj.map(maskSensitiveData);
 
-  const masked = { ...obj };
+  const masked = { ...(obj as Record<string, unknown>) };
   for (const key in masked) {
     if (sensitiveKeys.some((regex) => regex.test(key))) {
       masked[key] = "***REDACTED***";
-    } else if (typeof masked[key] === "object") {
+    } else if (typeof masked[key] === "object" && masked[key] !== null) {
       masked[key] = maskSensitiveData(masked[key]);
     }
   }

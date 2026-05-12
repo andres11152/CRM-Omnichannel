@@ -16,7 +16,7 @@ const getAI = () => {
 export const generateBotResponse = async (
   history: Message[],
   systemPrompt: string,
-  modelName: string = "gemini-1.5-flash",
+  modelName: string = "gemini-2.5-flash",
   knowledgeBase: Document[] = [],
 ): Promise<string> => {
   try {
@@ -81,7 +81,7 @@ export const analyzeSentiment = async (text: string): Promise<string> => {
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       contents: [
         {
           role: "user",

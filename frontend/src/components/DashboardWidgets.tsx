@@ -36,6 +36,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { ExportButton } from "./analytics/ExportButton";
+import { useTranslation } from "react-i18next";
 
 // --- STYLED COMPONENTS (Professional / Fuse Finance Style) ---
 
@@ -145,18 +146,19 @@ export const ActiveLoadChart: React.FC<{
   data?: { name: string; pending: number; inProgress: number }[];
 }> = ({ data }) => {
   const chartData = data || [];
+  const { t } = useTranslation();
 
   return (
     <CardContainer className="h-full">
       <WidgetHeader
-        title="Carga de Trabajo"
+        title={t("widgets.workload", "Carga de Trabajo")}
         icon={<BarChart3 className="w-4 h-4" />}
       />
       <div className="p-6 flex-1 min-h-[250px]">
         {chartData.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
             <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
-            <p className="text-sm font-medium">Sin datos de carga</p>
+            <p className="text-sm font-medium">{t("widgets.no_workload_data", "Sin datos de carga")}</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -197,7 +199,7 @@ export const ActiveLoadChart: React.FC<{
               />
               <Bar
                 dataKey="pending"
-                name="Pendiente"
+                name={t("widgets.pending", "Pendiente")}
                 stackId="a"
                 fill="#ef4444"
                 radius={[0, 0, 4, 4]}
@@ -205,7 +207,7 @@ export const ActiveLoadChart: React.FC<{
               />
               <Bar
                 dataKey="inProgress"
-                name="En Progreso"
+                name={t("widgets.in_progress", "En Progreso")}
                 stackId="a"
                 fill="#f59e0b"
                 radius={[4, 4, 0, 0]}
@@ -223,18 +225,19 @@ export const SalesFunnelWidget: React.FC<{
   data?: { name: string; value: number; fill?: string }[];
 }> = ({ data }) => {
   const funnelData = data || [];
+  const { t } = useTranslation();
 
   return (
     <CardContainer className="h-full">
       <WidgetHeader
-        title="Pipeline de Ventas"
+        title={t("widgets.sales_pipeline", "Pipeline de Ventas")}
         icon={<DollarSign className="w-4 h-4" />}
       />
       <div className="p-6 flex-1 min-h-[250px]">
         {funnelData.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
             <DollarSign className="w-8 h-8 mb-2 opacity-50" />
-            <p className="text-sm font-medium">Pipeline vacío</p>
+            <p className="text-sm font-medium">{t("widgets.empty_pipeline", "Pipeline vacío")}</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -276,29 +279,31 @@ export const SalesFunnelWidget: React.FC<{
 export const AgentLeaderboardWidget: React.FC<{
   agents?: { name: string; score: number; sales: number; avatar?: string }[];
 }> = ({ agents = [] }) => {
+  const { t } = useTranslation();
   return (
     <CardContainer className="h-full">
       <WidgetHeader
-        title="Top Agentes"
+        title={t("widgets.top_agents", "Top Agentes")}
         icon={<Trophy className="w-4 h-4" />}
-        action={<ExportButton type="agents" label="Exportar" />}
+        action={<ExportButton type="agents" label={t("dashboard.export", "Exportar")} />}
       />
       <div className="p-0 flex-1 overflow-y-auto custom-scrollbar">
         {agents.length === 0 ? (
           <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
-            No hay datos.
+            {t("widgets.no_data", "No hay datos.")}
           </div>
         ) : (
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 uppercase font-semibold">
               <tr>
-                <th className="px-6 py-3">Agente</th>
-                <th className="px-6 py-3 text-right">Score</th>
-                <th className="px-6 py-3 text-right">Ventas</th>
+                <th className="px-6 py-3">{t("widgets.agent", "Agente")}</th>
+                <th className="px-6 py-3 text-right">{t("dashboard.score", "Score")}</th>
+                <th className="px-6 py-3 text-right">{t("widgets.sales", "Ventas")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {agents.map((agent, i) => (
+              {Array.isArray(agents) &&
+                agents.map((agent, i) => (
                 <tr
                   key={i}
                   className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
@@ -349,15 +354,17 @@ export const ChannelDistributionWidget: React.FC<{
     iconClass?: string;
   }[];
 }> = ({ channels = [] }) => {
+  const { t } = useTranslation();
   return (
     <CardContainer className="h-full">
-      <WidgetHeader title="Canales" icon={<Share2 className="w-4 h-4" />} />
+      <WidgetHeader title={t("widgets.channels", "Canales")} icon={<Share2 className="w-4 h-4" />} />
       <div className="p-6 flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
-        {channels.length === 0 ? (
+        {Array.isArray(channels) && channels.length === 0 ? (
           <div className="flex items-center justify-center h-full text-slate-400 text-sm">
-            Sin datos.
+            {t("widgets.no_data", "Sin datos.")}
           </div>
         ) : (
+          Array.isArray(channels) &&
           channels.map((stat, i) => (
             <div key={i} className="group">
               <div className="flex justify-between items-center mb-1">
@@ -425,22 +432,27 @@ interface ServiceStatus {
   latency: number;
 }
 
+export interface SystemStatus {
+  api: { status: string; latency: number };
+  database: { status: string; latency: number };
+  queues: { status: string; latency: number };
+  storage: { status: string; latency: number };
+  availability?: number;
+  lastCheck?: string;
+}
+
 interface SystemStatusProps {
-  data?: {
-    api: ServiceStatus;
-    database: ServiceStatus;
-    queues: ServiceStatus;
-    storage: ServiceStatus;
-  };
+  data?: SystemStatus;
 }
 
 const StatusIndicator: React.FC<{ status: string; latency: number }> = ({
   status,
   latency,
 }) => {
+  const { t } = useTranslation();
   // Treat 'Inactivo (Memoria)' as operational for dev environments.
   // Match 'Operacional', 'Activo', 'Conectado', etc.
-  const isUp = /Operacional|Activo|Conectado|Memoria/i.test(status);
+  const isUp = /Operacional|Activo|Conectado|Memoria|healthy/i.test(status);
   const isSlow = latency > 200 && isUp;
 
   let colorClass = "text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20";
@@ -459,13 +471,15 @@ const StatusIndicator: React.FC<{ status: string; latency: number }> = ({
     icon = <AlertCircle className="w-4 h-4" />;
   }
 
+  const displayStatus = status.toLowerCase() === 'healthy' ? t("dashboard.status.active", "Activo") : status;
+
   return (
     <div className="flex items-center gap-3">
       <div
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${colorClass}`}
       >
         {icon}
-        <span>{status}</span>
+        <span>{displayStatus}</span>
       </div>
       {isUp && (
         <span
@@ -479,6 +493,7 @@ const StatusIndicator: React.FC<{ status: string; latency: number }> = ({
 };
 
 export const SystemStatusModule: React.FC<SystemStatusProps> = ({ data }) => {
+  const { t, i18n } = useTranslation();
   const services = [
     {
       key: "api",
@@ -489,23 +504,23 @@ export const SystemStatusModule: React.FC<SystemStatusProps> = ({ data }) => {
     },
     {
       key: "db",
-      name: "Base de Datos",
+      name: t("dashboard.database", "Base de Datos"),
       icon: <Database className="w-4 h-4" />,
-      status: data?.database?.status || "Cargando...",
+      status: data?.database?.status || t("common.loading", "Cargando..."),
       latency: data?.database?.latency,
     },
     {
       key: "queue",
-      name: "Sistema de Colas",
+      name: t("dashboard.queue_system", "Sistema de Colas"),
       icon: <Activity className="w-4 h-4" />,
-      status: data?.queues?.status || "Cargando...",
+      status: data?.queues?.status || t("common.loading", "Cargando..."),
       latency: data?.queues?.latency,
     },
     {
       key: "storage",
-      name: "Almacenamiento",
+      name: t("dashboard.storage", "Almacenamiento"),
       icon: <HardDrive className="w-4 h-4" />,
-      status: data?.storage?.status || "Cargando...",
+      status: data?.storage?.status || t("common.loading", "Cargando..."),
       latency: data?.storage?.latency,
     },
   ];
@@ -513,13 +528,13 @@ export const SystemStatusModule: React.FC<SystemStatusProps> = ({ data }) => {
   return (
     <CardContainer className="h-full">
       <WidgetHeader
-        title="Estado del Sistema"
+        title={t("widgets.system_status", "Estado del Sistema")}
         icon={<Activity className="w-4 h-4" />}
         action={
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs text-emerald-500 font-medium uppercase">
-              En Vivo
+              {t("widgets.live", "En Vivo")}
             </span>
           </div>
         }
@@ -540,7 +555,7 @@ export const SystemStatusModule: React.FC<SystemStatusProps> = ({ data }) => {
                     {service.name}
                   </p>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
-                    Servicio
+                    {t("widgets.service", "Servicio")}
                   </p>
                 </div>
               </div>
@@ -555,13 +570,17 @@ export const SystemStatusModule: React.FC<SystemStatusProps> = ({ data }) => {
       {/* Footer metrics */}
       <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 border-t border-slate-100 dark:border-reply-border-dark text-xs text-slate-500 flex justify-between">
         <span>
-          Disponibilidad (30d):{" "}
-          <strong className="text-slate-700 dark:text-slate-300">99.99%</strong>
+          {t("widgets.availability", "Disponibilidad (30d):")}{" "}
+          <strong className="text-slate-700 dark:text-slate-300">
+            {data?.availability || "99.9"}%
+          </strong>
         </span>
         <span>
-          Últ. Chequeo:{" "}
+          {t("widgets.last_check", "Últ. Chequeo:")}{" "}
           <strong className="text-slate-700 dark:text-slate-300">
-            Ahora mismo
+          {data?.lastCheck
+              ? new Date(data.lastCheck).toLocaleTimeString(i18n.language)
+              : t("widgets.now", "Ahora")}
           </strong>
         </span>
       </div>
@@ -571,119 +590,126 @@ export const SystemStatusModule: React.FC<SystemStatusProps> = ({ data }) => {
 
 export const RecentActivityModule: React.FC<{
   activities?: { text: string; time: string }[];
-}> = ({ activities = [] }) => (
+}> = ({ activities = [] }) => {
+  const { t } = useTranslation();
+  return (
   <CardContainer className="h-full">
     <WidgetHeader
-      title="Actividad Reciente"
+      title={t("widgets.recent_activity", "Actividad Reciente")}
       icon={<Activity className="w-4 h-4" />}
     />
     <div className="p-0 flex-1 overflow-y-auto custom-scrollbar">
       <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-        {activities.length === 0 ? (
+        {!Array.isArray(activities) || activities.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-6">
-            No hay actividad reciente.
+            {t("widgets.no_recent_activity", "No hay actividad reciente.")}
           </p>
         ) : (
           activities.map((act, i) => (
             <ActivityItem
               key={i}
               icon={<Activity className="w-3.5 h-3.5" />}
-              text={act.text || "Actividad"}
-              time={act.time || "Reciente"}
+              text={act.text || t("widgets.activity", "Actividad")}
+              time={act.time || t("widgets.recent", "Reciente")}
             />
           ))
         )}
       </ul>
     </div>
   </CardContainer>
-);
+  );
+};
 
 export const MrrTrendModule: React.FC<{
   data: { name: string; revenue: number }[];
-}> = ({ data = [] }) => (
-  <CardContainer className="h-full">
-    <WidgetHeader
-      title="Tendencia MRR"
-      icon={<TrendingUp className="w-4 h-4" />}
-    />
-    <div className="p-6 flex-1 min-h-[250px]">
-      {data.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full text-slate-400">
-          <TrendingUp className="w-8 h-8 mb-2 opacity-50" />
-          <p className="text-sm font-medium">Sin datos históricos</p>
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={data}
-            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-          >
-            <defs>
-              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              stroke="#e2e8f0"
-            />
-            <XAxis
-              dataKey="name"
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: "#64748b", fontSize: 11 }}
-              dy={10}
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: "#64748b", fontSize: 11 }}
-              tickFormatter={(value) => `$${value}`}
-            />
-            <RechartsTooltip
-              contentStyle={{
-                backgroundColor: "#fff",
-                borderColor: "#e2e8f0",
-                borderRadius: "8px",
-                boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                color: "#1e293b",
-              }}
-              formatter={(value) => [`$${value}`, "Ingresos"]}
-            />
-            <Area
-              type="monotone"
-              dataKey="revenue"
-              stroke="#10b981"
-              fillOpacity={1}
-              fill="url(#colorRevenue)"
-              strokeWidth={2}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      )}
-    </div>
-  </CardContainer>
-);
+}> = ({ data = [] }) => {
+  const { t } = useTranslation();
+  return (
+    <CardContainer className="h-full">
+      <WidgetHeader
+        title={t("dashboard.mrr_trend", "Tendencia MRR")}
+        icon={<TrendingUp className="w-4 h-4" />}
+      />
+      <div className="p-6 flex-1 min-h-[250px]">
+        {data.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-slate-400">
+            <TrendingUp className="w-8 h-8 mb-2 opacity-50" />
+            <p className="text-sm font-medium">{t("dashboard.no_history", "Sin datos históricos")}</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={data}
+              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke="#e2e8f0"
+              />
+              <XAxis
+                dataKey="name"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#64748b", fontSize: 11 }}
+                dy={10}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#64748b", fontSize: 11 }}
+                tickFormatter={(value) => `$${value}`}
+              />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: "#fff",
+                    borderColor: "#e2e8f0",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                    color: "#1e293b",
+                  }}
+                  formatter={(value) => [`$${value}`, t("dashboard.revenue", "Ingresos")]}
+                />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke="#10b981"
+                fillOpacity={1}
+                fill="url(#colorRevenue)"
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </CardContainer>
+  );
+};
 
 export const PlanDistributionModule: React.FC<{
   data: { name: string; value: number }[];
 }> = ({ data = [] }) => {
+  const { t } = useTranslation();
   // Colors for the pie chart
   const COLORS = ["#6366f1", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
 
   return (
     <CardContainer className="h-full">
       <WidgetHeader
-        title="Distribución de Planes"
+        title={t("dashboard.plan_distribution", "Distribución de Planes")}
         icon={<BarChart3 className="w-4 h-4" />}
       />
       <div className="p-6 flex-1 min-h-[250px] flex items-center justify-center">
         {data.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
             <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
-            <p className="text-sm font-medium">Sin datos de planes</p>
+            <p className="text-sm font-medium">{t("dashboard.no_plan_data", "Sin datos de planes")}</p>
           </div>
         ) : (
           <div className="w-full h-full relative">
@@ -698,7 +724,8 @@ export const PlanDistributionModule: React.FC<{
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {data.map((entry, index) => (
+                  {Array.isArray(data) &&
+                    data.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={COLORS[index % COLORS.length]}
@@ -738,13 +765,16 @@ export const PlanDistributionModule: React.FC<{
 
 // PieChart import removed to avoid conflict with Recharts
 
-export const TopTenantsModule: React.FC<Record<string, never>> = () => (
-  <CardContainer>
-    <WidgetHeader title="Top Clientes" icon={<Globe className="w-4 h-4" />} />
-    <div className="p-6 text-center text-slate-400 text-sm">
-      Disponibilidad próximamente
-    </div>
-  </CardContainer>
-);
+export const TopTenantsModule: React.FC<Record<string, never>> = () => {
+  const { t } = useTranslation();
+  return (
+    <CardContainer>
+      <WidgetHeader title={t("dashboard.top_tenants", "Top Clientes")} icon={<Globe className="w-4 h-4" />} />
+      <div className="p-6 text-center text-slate-400 text-sm">
+        {t("dashboard.available_soon", "Disponibilidad próximamente")}
+      </div>
+    </CardContainer>
+  );
+};
 
 export { CardContainer, WidgetHeader };

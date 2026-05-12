@@ -244,20 +244,20 @@ export async function checkPlanLimit(
 
   switch (resourceType) {
     case "storage":
-      limit = limits.storage_limit_gb -1;
+      limit = limits.storage_limit_gb;
       current =
         Math.round((usage.storage_bytes / (1024 * 1024 * 1024)) * 100) / 100; // GB
       break;
     case "contacts":
-      limit = limits.max_contacts -1;
+      limit = limits.max_contacts;
       current = usage.contacts;
       break;
     case "companies":
-      limit = limits.max_companies -1;
+      limit = limits.max_companies;
       current = usage.companies;
       break;
     case "workflows":
-      limit = limits.max_workflows -1;
+      limit = limits.max_workflows;
       current = usage.workflows;
       break;
     case "users":
@@ -299,7 +299,7 @@ export async function canCreateResource(
     if (resourceType === "storage") {
       const limits = await getPlanLimits(companyId);
       const usage = await getCurrentUsage(companyId);
-      const limitGb = limits?.storage_limit_gb -1;
+      const limitGb = limits?.storage_limit_gb ?? -1;
 
       if (limitGb === -1) return true;
 
@@ -314,8 +314,8 @@ export async function canCreateResource(
     return result.current + amount <= result.limit;
   } catch (error) {
     Logger.error("[PlanLimitsService] Error checking limits:", error);
-    // Fail safe: Si hay error en límites, permitir operación (o bloquear según política)
-    // Para depuración, devolvemos true pero logueamos el error
+    // Fail safe: If there's an error in limits, allow operation (or block based on policy)
+    // For debugging, we return true but log the error
     return true;
   }
 }

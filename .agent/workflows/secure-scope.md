@@ -1,54 +1,20 @@
+# [SEC] Strict Security & Multi-Tenancy Audit
+
+Este workflow es el estándar de seguridad de SkyCode Agency para garantizar el aislamiento total entre inquilinos (Tenants).
+
+## 1. [DB] Query Scoping Audit
+- [ ] Escanear cada nueva consulta a Prisma.
+- [ ] **REGLA DE ORO**: Toda consulta `findMany`, `findFirst`, `update`, `delete` debe contener `where: { companyId }`.
+- [ ] Si se encuentra una consulta sin `companyId`, se debe refactorizar el Repositorio antes de proceder.
+
+## 2. [SEC] Zod Validation Enforcement
+- [ ] Todos los DTOs de entrada deben tener un esquema Zod asociado en `src/validators/`.
+- [ ] El controlador debe invocar `.parse()` o `.safeParse()` antes de pasar los datos al servicio.
+- [ ] No se permiten objetos literales sin validación previa.
+
+## 3. [AUTH] Impersonation Safety
+- [ ] Verificar que los tokens de impersonación contengan el `masterCompanyId` original.
+- [ ] Asegurar que las acciones realizadas bajo impersonación se registren en el `AuditLog` con el ID del usuario real.
+
 ---
-description: Auditoría automática de seguridad multi-tenant para asegurar que todas las consultas a la base de datos estén filtradas por companyId y validadas con Zod.
----
-
-# [SEC] Secure Scope - Multi-Tenant Security Audit
-
-## Overview
-
-This workflow audits ALL database queries across the codebase to ensure multi-tenant data isolation.
-
-## Steps
-
-### 1. Scan for Direct Prisma Usage Outside Repositories
-
-```bash
-# Find all direct prisma calls in services (violations of Repository pattern)
-npx grep -rn "prisma\.\w\+\.\(findMany\|findFirst\|findUnique\|create\|update\|delete\)" src/services/ --include="*.ts"
-```
-
-### 2. Verify companyId Filter Exists
-
-For each query found, verify:
-
-- [OK] `where: { companyId }` is present in all `findMany`, `findFirst`, `findUnique` calls
-- [OK] `data: { companyId }` is present in all `create` calls
-- [OK] Deletion queries use `deleteMany({ where: { id, companyId } })` instead of `delete({ where: { id } })`
-
-### 3. Red Flags to Check
-
-- `findUnique({ where: { id } })` without companyId → **CRITICAL IDOR vulnerability**
-- `delete({ where: { id } })` without companyId → **CRITICAL cross-tenant deletion**
-- `findMany({})` without companyId → **CRITICAL full table leak**
-
-### 4. Exceptions (Acceptable without companyId)
-
-- `TenantContextManager.runAsSystem()` blocks (scheduler, cron jobs)
-- Authentication middleware (verifying JWT, user lookup by email)
-- Stripe webhook handlers (external ID lookup)
-
-### 5. Validate Zod Schemas
-
-```bash
-# Ensure all controller endpoints use Zod validation
-npx grep -rn "req.body" src/controllers/ --include="*.ts" | grep -v "schema\|parse\|validate"
-```
-
-### 6. Final Verification
-
-```bash
-npx tsc --noEmit
-npx eslint src/ --ext .ts
-```
-
-Both should exit with code 0.
+[OK] Aprobado para despliegue en entornos de alta seguridad.

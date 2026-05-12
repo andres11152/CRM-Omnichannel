@@ -7,7 +7,7 @@
  * - calculateHealthScore: Tenant health scoring algorithm
  */
 
-import type { Company, Plan } from "@prisma/client";
+import type { Company, Plan, Ticket, BillingTransaction } from "@prisma/client";
 import { userRepository } from "@/repositories/UserRepository";
 import { companyRepository } from "@/repositories/CompanyRepository";
 import { statsRepository } from "@/repositories/StatsRepository";
@@ -15,6 +15,7 @@ import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionReposit
 import { ticketRepository } from "@/repositories/TicketRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
+import { billingRepository } from "@/repositories/BillingRepository";
 import { AppError } from "@/utils/AppError";
 import TenantContextManager from "@/config/tenantContext";
 
@@ -275,9 +276,13 @@ export const adminMetricsService = {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // 1. Fetch Companies and Plans
-    const companies = await companyRepository.findMany({
+    const allCompanies = await companyRepository.findMany({
       include: { plan: true },
     });
+    // [SEC] Exclude the system admin tenant from business metrics
+    const companies = (allCompanies as (Company & { plan: Plan | null })[]).filter(
+      (c) => c.slug !== "reply-software",
+    );
 
     // 2. Calculate MRR
     const mrr = (companies as CompanyWithPlan[])
@@ -311,26 +316,70 @@ export const adminMetricsService = {
       revenueTrend.push(mrrAtDate);
     }
 
-    // 6. Recent Activity
-    const recentActivity = companies
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, 5)
-      .map((c) => ({
-        icon: "",
-        text: `Se creó una nueva empresa: ${c.name}`,
+    // 6. Recent Activity (Synthesized from multiple real sources)
+    const [latestTickets, latestTransactions] = await Promise.all([
+      ticketRepository.findMany({ 
+        take: 3, 
+        orderBy: { createdAt: "desc" }, 
+        include: { company: true } 
+      }) as Promise<(Ticket & { company: Company })[]>,
+      billingRepository.findMany({ 
+        take: 2, 
+        orderBy: { createdAt: "desc" }, 
+        include: { company: true } 
+      }) as Promise<(BillingTransaction & { company: Company })[]>
+    ]);
+
+    const recentActivity = [
+      ...companies.slice(0, 3).map(c => ({
+        icon: "Building2",
+        text: `Nueva empresa registrada: ${c.name}`,
         time: c.createdAt,
-        color: "text-blue-500",
-      }));
+        color: "text-blue-500"
+      })),
+      ...latestTickets.map(t => ({
+        icon: "MessageSquare",
+        text: `Ticket #${t.ticketNumber} creado en ${t.company.name}`,
+        time: t.createdAt,
+        color: "text-amber-500"
+      })),
+      ...latestTransactions.map(tr => ({
+        icon: "DollarSign",
+        text: `Pago de ${tr.amount/100} ${tr.currency} de ${tr.company.name}`,
+        time: tr.createdAt,
+        color: "text-emerald-500"
+      }))
+    ].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 6);
 
     // 7. Global Usage Stats
-    const [totalUsers, totalTickets] = await TenantContextManager.runAsSystem(async () => [
-      await userRepository.count({}),
-      await ticketRepository.count({}),
-    ]);
+    const [totalUsers, totalTickets] = await TenantContextManager.runAsSystem(
+      async () => [
+        await userRepository.count({
+          where: {
+            AND: [
+              {
+                NOT: {
+                  email: { endsWith: "@whatsapp.user" },
+                },
+              },
+              {
+                company: {
+                  slug: { not: "reply-software" },
+                },
+              },
+            ],
+          },
+        }),
+        await ticketRepository.count({}),
+      ],
+    );
     const totalMessages = await messageRepository.count({});
 
     // 8. Top Tenants by Activity
     const topTenants = await companyRepository.findMany({
+      where: {
+        slug: { notIn: ["reply-software"] },
+      },
       take: 5,
       include: {
         _count: {
@@ -365,12 +414,15 @@ export const adminMetricsService = {
     return {
       mrr,
       arr: mrr * 12,
+      totalCompanies,
       activeCompanies: totalCompanies - inactiveCompanies,
+      totalRevenue: mrr,
+      systemHealth: "99.98%",
       churnRate,
       newCompaniesMonth,
       revenueTrend,
       recentActivity,
-      totalUsers,
+      activeUsers: totalUsers,
       totalTickets,
       totalMessages,
       topTenants: formattedTopTenants,

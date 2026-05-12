@@ -283,7 +283,7 @@ export class SimpleInMemoryStore {
     try {
       await redisClient.set(`wa:store:${redisKey}`, JSON.stringify(data));
       Logger.debug(
-        `[Store] [SAVE] Wrote memory store to Redis (Key: wa:store:${redisKey})`,
+        `[Store] Wrote memory store to Redis (Key: wa:store:${redisKey})`,
       );
     } catch (e) {
       Logger.error(`[Store] [ERROR] Failed to write store to Redis`, e);
@@ -302,7 +302,7 @@ export class SimpleInMemoryStore {
         this.messages = data.messages || {};
         this.lidToPhone = data.lidToPhone || {};
         Logger.info(
-          `[Store] [DIR] Loaded memory store from Redis (Key: wa:store:${redisKey})`,
+          `[Store] Loaded memory store from Redis (Key: wa:store:${redisKey})`,
         );
       }
     } catch (e) {
@@ -321,7 +321,7 @@ export class SimpleInMemoryStore {
       writeIntervalMs,
     );
     Logger.info(
-      `[Store] [SAVE] Redis Persistence enabled with interval ${writeIntervalMs}ms`,
+      `[Store] Redis Persistence enabled with interval ${writeIntervalMs}ms`,
     );
   }
 }

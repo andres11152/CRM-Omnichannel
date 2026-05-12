@@ -1,6 +1,6 @@
 {
-  "name": "Reply CRM",
-  "short_name": "Reply",
+  "name": "Sentry CRM",
+  "short_name": "Sentry CRM",
   "description": "Professional CRM & WhatsApp Business Platform",
   "start_url": "/",
   "display": "standalone",

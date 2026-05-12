@@ -20,6 +20,8 @@ import {
 export interface TokenPayload {
   id: string;
   role: string;
+  email?: string;
+  name?: string;
   companyId?: string | null;
   companyStatus?: string;
   planId?: string | null;
@@ -60,7 +62,7 @@ const COOKIE_OPTIONS = {
   path: "/",
 };
 
-const setAuthCookies = (
+export const setAuthCookies = (
   res: Response,
   accessToken: string,
   refreshToken: string,
@@ -79,7 +81,7 @@ const setAuthCookies = (
   });
 };
 
-const clearAuthCookies = (res: Response) => {
+export const clearAuthCookies = (res: Response) => {
   res.clearCookie("access_token", { path: "/" });
   res.clearCookie("refresh_token", { path: "/api/auth" });
 };
@@ -178,6 +180,8 @@ export const login = catchAsync(
     const tokenPayload: TokenPayload = {
       id: user.id,
       role: user.role || "user",
+      email: user.email,
+      name: user.name,
       companyId: user.companyId,
       companyStatus: userWithCompany.company?.status,
       planId: userWithCompany.company?.planId,
@@ -227,6 +231,16 @@ export const login = catchAsync(
 // ============================================================================
 //  ENTERPRISE LOGOUT (Server-side session destruction)
 // ============================================================================
+
+export const exitImpersonation = catchAsync(
+  async (req: Request, res: Response) => {
+    clearAuthCookies(res);
+    res.status(200).json({
+      status: "success",
+      message: "Cookies de impersonación eliminadas correctamente.",
+    });
+  },
+);
 
 export const logout = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
@@ -295,6 +309,8 @@ export const refreshToken = catchAsync(
     const newAccessToken = signAccessToken({
       id: user.id,
       role: user.role || "user",
+      email: user.email,
+      name: user.name,
       companyId: user.companyId,
       companyStatus: userWithCompany.company?.status,
       planId: userWithCompany.company?.planId,

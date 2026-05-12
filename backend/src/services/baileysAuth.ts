@@ -9,6 +9,26 @@ import {
 } from "@whiskeysockets/baileys";
 import { whatsappCredentialRepository } from "@/repositories/WhatsAppCredentialRepository";
 import { sessionModuleLogger } from "@/whatsapp/providers/SessionLogger";
+import { encrypt, decrypt } from "@/utils/cryptoUtils";
+
+/**
+ * [SEC] LEGACY BAILEYS AUTH STATE ADAPTER
+ *
+ * @deprecated Use DatabaseAuthProvider (AuthProvider.ts) for new sessions.
+ * This module is kept ONLY for backward compatibility with sessions
+ * that were created before the enterprise auth migration.
+ *
+ * SECURITY NOTE: Now uses AES-256-GCM encryption via cryptoUtils.
+ * Old unencrypted values are detected and re-encrypted on first read (transparent migration).
+ */
+
+/**
+ * Checks if a stored value is already encrypted (contains IV:AuthTag:Ciphertext or v1:IV:AuthTag:Ciphertext format).
+ */
+const isEncryptedValue = (value: string): boolean => {
+  const parts = value.split(":");
+  return parts.length === 3 || (parts.length === 4 && parts[0] === "v1");
+};
 
 export const usePrismaAuthState = async (
   sessionId: string,
@@ -24,8 +44,29 @@ export const usePrismaAuthState = async (
       sessionModuleLogger.debug(
         `[DB Auth] Reading ${key}: ${credential ? "FOUND" : "NOT FOUND"}`,
       );
-      if (!credential) return null;
-      return JSON.parse(credential.value, BufferJSON.reviver);
+      if (!credential || !credential.value) return null;
+
+      // [SEC] Transparent decryption with legacy plaintext fallback
+      let rawJson: string;
+
+      if (isEncryptedValue(credential.value)) {
+        const decrypted = decrypt(credential.value, sessionId);
+        if (!decrypted) {
+          sessionModuleLogger.error(
+            `[DB Auth] Decryption failed for ${key}. Session may be corrupted.`,
+          );
+          return null;
+        }
+        rawJson = decrypted;
+      } else {
+        // Legacy plaintext value — parse it and re-encrypt on next write
+        rawJson = credential.value;
+        sessionModuleLogger.warn(
+          `[DB Auth] [SEC] Plaintext credential detected for ${key}. Will be encrypted on next write.`,
+        );
+      }
+
+      return JSON.parse(rawJson, BufferJSON.reviver);
     } catch (error) {
       sessionModuleLogger.error(
         error as Error,
@@ -35,13 +76,14 @@ export const usePrismaAuthState = async (
     }
   };
 
-  // Helper to write data to DB
+  // Helper to write data to DB — NOW ALWAYS ENCRYPTS
   const writeData = async (type: string, id: string, data: unknown) => {
     const key = `${type}-${id}`;
-    const value = JSON.stringify(data, BufferJSON.replacer);
+    const json = JSON.stringify(data, BufferJSON.replacer);
+    const encrypted = encrypt(json, sessionId);
 
     try {
-      await whatsappCredentialRepository.upsert(sessionId, key, value);
+      await whatsappCredentialRepository.upsert(sessionId, key, encrypted);
     } catch (error) {
       sessionModuleLogger.error(
         error as Error,

@@ -33,10 +33,10 @@ const DateDivider: React.FC<{ timestamp: string | Date }> = ({ timestamp }) => {
     const yesterdayDate = new Date(nowDate);
     yesterdayDate.setDate(nowDate.getDate() - 1);
     
-    // User requested: "que no salgan las fechas si son del día" 
+    // User requested: "don't show dates if they are from today" 
     if (dDate.getTime() === nowDate.getTime()) return null;
     
-    if (dDate.getTime() === yesterdayDate.getTime()) return "Ayer";
+    if (dDate.getTime() === yesterdayDate.getTime()) return "Yesterday";
     const diffTime = nowDate.getTime() - dDate.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     if (diffDays < 7 && diffDays > 0) {
@@ -107,56 +107,75 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   }, [messages]);
 
   // Secondary grouping: Media batches (consecutive images from same sender)
+  // Uses a sliding-window approach: each new candidate is compared against the
+  // LAST message already in the group (not the first), so a stream of images
+  // sent 1-2 minutes apart chains correctly over a longer period.
   const processedMessages = React.useMemo(() => {
+    const isImageMsg = (m: Message): boolean => {
+      const mediaType = (m.metadata?.media as { type?: string })?.type?.toLowerCase();
+      if (mediaType === 'image') return true;
+      if (m.type === 'image') return true;
+      if (m.content === '[IMAGE]') return true;
+      // Fallback: if mediaUrl looks like an image but type wasn't set
+      const url = (m.mediaUrl as string) || (m.metadata?.media as { url?: string })?.url || '';
+      if (url && /\.(jpe?g|png|webp|gif|bmp)/i.test(url)) return true;
+      return false;
+    };
+
+    const hasNoText = (m: Message): boolean =>
+      !m.content || m.content === '[IMAGE]';
+
+    // 5 minutes sliding window — WhatsApp groups can bulk-send over several minutes
+    const MAX_GAP_MS = 5 * 60 * 1000;
+
     return groupedMessages.map(([day, dayMessages]) => {
       const items: RenderableItem[] = [];
       let i = 0;
+
       while (i < dayMessages.length) {
         const msg = dayMessages[i];
-        
-        // Grouping criteria: 
-        // 1. It's an image
-        // 2. No text content (or just "[IMAGE]")
-        // 3. Sender is same as previous/next
-        const isImage = (msg.metadata?.media as any)?.type === 'image' || 
-                        msg.content === '[IMAGE]' || 
-                        msg.type === 'image';
-        const hasNoText = !msg.content || msg.content === '[IMAGE]';
 
-        if (isImage && hasNoText) {
+        if (isImageMsg(msg) && hasNoText(msg)) {
           const group: Message[] = [msg];
           let j = i + 1;
+
           while (j < dayMessages.length) {
             const nextMsg = dayMessages[j];
-            const nextIsImage = (nextMsg.metadata?.media as any)?.type === 'image' || 
-                                nextMsg.content === '[IMAGE]' || 
-                                nextMsg.type === 'image';
-            const nextHasNoText = !nextMsg.content || nextMsg.content === '[IMAGE]';
-            const sameSender = nextMsg.sender === msg.sender && nextMsg.direction === msg.direction;
-            
-            // Check if timestamps are close (within 1 minute)
-            const closeTime = msg.timestamp && nextMsg.timestamp
-              ? Math.abs(new Date(nextMsg.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 60000
-              : true;
+            const prevInGroup = group[group.length - 1]; // sliding window anchor
 
-            if (nextIsImage && nextHasNoText && sameSender && closeTime) {
-              group.push(nextMsg);
-              j++;
-            } else {
-              break;
-            }
+            if (!isImageMsg(nextMsg) || !hasNoText(nextMsg)) break;
+
+            // Same sender + same direction
+            const sameSender =
+              nextMsg.sender === msg.sender &&
+              nextMsg.direction === msg.direction;
+            if (!sameSender) break;
+
+            // Sliding time check against LAST grouped message
+            const gap =
+              prevInGroup.timestamp && nextMsg.timestamp
+                ? Math.abs(
+                    new Date(nextMsg.timestamp).getTime() -
+                    new Date(prevInGroup.timestamp).getTime(),
+                  )
+                : 0;
+            if (gap > MAX_GAP_MS) break;
+
+            group.push(nextMsg);
+            j++;
           }
-          
+
           if (group.length > 1) {
             items.push({ type: 'media-group', messages: group });
             i = j;
             continue;
           }
         }
-        
+
         items.push({ type: 'single', message: msg });
         i++;
       }
+
       return [day, items] as [string, RenderableItem[]];
     });
   }, [groupedMessages]);
@@ -181,11 +200,11 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   }, [chatEndRef]);
 
   return (
-    <div className="flex-1 relative overflow-hidden flex flex-col">
+    <div className="flex-1 relative overflow-hidden flex flex-col chat-window-container">
       <div 
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-2 relative bg-[#efeae2] dark:bg-[#0b141a] custom-scrollbar"
+        className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-2 relative custom-scrollbar bg-transparent"
       >
         {/* [SEC] SYNC INDICATOR */}
         {isSyncing && (
@@ -216,14 +235,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-0.5">
-                  Mensaje Anclado
+                  Pinned Message
                 </p>
                 <p className="text-[12px] text-gray-700 dark:text-gray-300 font-medium truncate leading-tight">
                   {pinnedMessage.content || 'Multimedia'}
                 </p>
               </div>
               <div className="text-[10px] text-gray-400 dark:text-gray-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                Toca para ver ↓
+                Tap to view ↓
               </div>
             </div>
           </div>
@@ -291,7 +310,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
         <button
           onClick={scrollToBottom}
           className="absolute bottom-8 right-8 p-3 bg-indigo-600 dark:bg-indigo-500 text-white rounded-full shadow-[0_8px_25px_rgba(79,70,229,0.4)] hover:shadow-[0_12px_30px_rgba(79,70,229,0.5)] hover:scale-110 active:scale-95 transition-all duration-300 animate-in fade-in zoom-in slide-in-from-bottom-6 cursor-pointer z-[40] group overflow-visible"
-          title="Bajar al final"
+          title="Scroll to bottom"
         >
           <ChevronDown size={24} className="group-hover:translate-y-0.5 transition-transform" />
           

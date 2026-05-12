@@ -65,14 +65,12 @@ export const getTagAnalytics = catchAsync(
 );
 
 export const getGlobalActivity = catchAsync(async (req, res) => {
-  // Mock Data
-  const data = analyticsService.getGlobalActivity();
+  const data = await analyticsService.getGlobalActivity();
   res.json(data);
 });
 
 export const getTenantHealth = catchAsync(async (req, res) => {
-  // Mock Data
-  const data = analyticsService.getTenantHealth();
+  const data = await analyticsService.getTenantHealth();
   res.json(data);
 });
 

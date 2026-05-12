@@ -12,18 +12,21 @@
       ],
       "env": {
         "NODE_ENV": "production",
-        "PORT": 4000
+        "PORT": 4000,
+        "WORKER_MODE": "false"
       },
       "env_production": {
         "NODE_ENV": "production",
-        "PORT": 4000
+        "PORT": 4000,
+        "WORKER_MODE": "false"
       },
       "env_development": {
         "NODE_ENV": "development",
-        "PORT": 4000
+        "PORT": 4000,
+        "WORKER_MODE": "false"
       },
-      "error_file": "./logs/pm2-error.log",
-      "out_file": "./logs/pm2-out.log",
+      "error_file": "./logs/pm2-api-error.log",
+      "out_file": "./logs/pm2-api-out.log",
       "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
       "merge_logs": true,
       "autorestart": true,
@@ -31,16 +34,58 @@
       "min_uptime": "10s",
       "max_memory_restart": "3200M",
       "restart_delay": 4000,
-      "kill_timeout": 5000,
-      "listen_timeout": 3000,
+      "kill_timeout": 8000,
+      "listen_timeout": 5000,
       "shutdown_with_message": true,
       "wait_ready": true,
       "exp_backoff_restart_delay": 100,
       "watch": false,
-      "ignore_watch": ["node_modules", "logs", "public"],
+      "ignore_watch": ["node_modules", "logs", "public", "uploads"],
       "combine_logs": true,
       "time": true,
       "cron_restart": "0 3 * * *",
+      "log_type": "json"
+    },
+    {
+      "name": "reply-crm-workers",
+      "script": "dist/worker.js",
+      "instances": 1,
+      "exec_mode": "fork",
+      "node_args": [
+        "--max-old-space-size=2048",
+        "--max-semi-space-size=32",
+        "--expose-gc"
+      ],
+      "env": {
+        "NODE_ENV": "production",
+        "WORKER_MODE": "true"
+      },
+      "env_production": {
+        "NODE_ENV": "production",
+        "WORKER_MODE": "true"
+      },
+      "env_development": {
+        "NODE_ENV": "development",
+        "WORKER_MODE": "true"
+      },
+      "error_file": "./logs/pm2-worker-error.log",
+      "out_file": "./logs/pm2-worker-out.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
+      "merge_logs": true,
+      "autorestart": true,
+      "max_restarts": 15,
+      "min_uptime": "10s",
+      "max_memory_restart": "2200M",
+      "restart_delay": 3000,
+      "kill_timeout": 10000,
+      "listen_timeout": 5000,
+      "shutdown_with_message": true,
+      "wait_ready": true,
+      "exp_backoff_restart_delay": 200,
+      "watch": false,
+      "ignore_watch": ["node_modules", "logs", "public", "uploads"],
+      "combine_logs": true,
+      "time": true,
       "log_type": "json"
     }
   ]

@@ -1,6 +1,7 @@
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { companyRepository } from "@/repositories/CompanyRepository";
+import { SystemEmailService } from "@/services/EmailService";
 
 /**
  *  COMPANY SETTINGS SERVICE
@@ -46,7 +47,11 @@ export const companySettingsService = {
       throw new AppError("Compañía no encontrada", 404);
     }
 
-    return company;
+    // [SEC] Never expose raw SMTP password to frontend — mask it
+    return {
+      ...company,
+      smtpPassword: company.smtpPassword ? "********" : null,
+    };
   },
 
   async updateSettings(
@@ -79,7 +84,12 @@ export const companySettingsService = {
       if (s.port !== undefined) updateData.smtpPort = parseInt(String(s.port));
       if (s.user !== undefined) updateData.smtpUser = s.user;
       if (s.password && s.password !== "********") {
-        updateData.smtpPassword = s.password;
+        // [SEC] ENCRYPT SMTP password before persisting (AES-256-GCM, tenant-scoped)
+        updateData.smtpPassword = SystemEmailService.encryptSmtpPassword(
+          String(s.password),
+          companyId,
+        );
+        Logger.info(`[CompanySettings] SMTP password encrypted for company ${companyId}`);
       }
       if (s.secure !== undefined) updateData.smtpSecure = s.secure;
       if (s.senderEmail !== undefined)
@@ -134,12 +144,13 @@ export const companySettingsService = {
       company.defaultSenderEmail ||
       company.smtpUser ||
       process.env.DEFAULT_SENDER_EMAIL ||
-      "noreply@replycrm.com";
+      `no-reply@${company.slug || "system"}.reply.software`;
 
     const fromName =
       company.defaultSenderName ||
       company.smtpUser?.split("@")[0] ||
-      "Reply CRM";
+      company.name ||
+      "Reply Software";
 
     return { fromEmail, fromName };
   },

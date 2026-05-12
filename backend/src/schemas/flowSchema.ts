@@ -14,7 +14,7 @@ const JsonValue = z.union([z.string(), z.number(), z.boolean(), z.null(), z.arra
 
 export const CreateFlowSchema = z.object({
   body: z.object({
-    name: z.string().min(1, "El nombre del workflow es requerido.").max(100),
+    name: z.string().min(1, "Workflow name is required.").max(100),
     triggerType: z.string().optional().default("KEYWORD"),
     triggerConfig: JsonValue.optional(),
     nodes: z.array(z.record(z.unknown())).optional(),
@@ -25,7 +25,7 @@ export const CreateFlowSchema = z.object({
 
 export const UpdateFlowSchema = z.object({
   params: z.object({
-    id: z.string().min(1, "Flow ID es requerido."),
+    id: z.string().min(1, "Flow ID is required."),
   }),
   body: z.object({
     name: z.string().min(1).max(100).optional(),
@@ -39,7 +39,7 @@ export const UpdateFlowSchema = z.object({
 
 export const FlowIdParamSchema = z.object({
   params: z.object({
-    id: z.string().min(1, "Flow ID es requerido."),
+    id: z.string().min(1, "Flow ID is required."),
   }),
 });
 

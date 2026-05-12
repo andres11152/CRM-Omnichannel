@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Contact, Channel, Tag } from "@/types";
 import {
   History,
@@ -285,7 +286,7 @@ const ContactListComponent: React.FC<Props> = ({
         }}
       >
         <div className="text-[9px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider mb-0.5 px-0.5 border-b border-gray-100 dark:border-gray-600 pb-1">
-          Etiquetas Ocultas
+          {t("contact_list.hidden_tags", "Etiquetas Ocultas")}
         </div>
         <div className="flex flex-wrap gap-1 max-w-[180px]">
           {tags.map((id) => {
@@ -316,6 +317,8 @@ const ContactListComponent: React.FC<Props> = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const { t } = useTranslation();
 
   const handleDelete = async (e: React.MouseEvent, contactId: string) => {
     e.stopPropagation();
@@ -359,7 +362,7 @@ const ContactListComponent: React.FC<Props> = ({
               MB
             </div>
             <span className="font-bold text-gray-800 dark:text-gray-100 text-sm">
-              Mi Bandeja
+              {t("contact_list.my_inbox", "Mi Bandeja")}
             </span>
           </div>
           <div className="flex gap-1 text-gray-500 dark:text-gray-400">
@@ -370,7 +373,7 @@ const ContactListComponent: React.FC<Props> = ({
                     activeContact?.realContactId || activeContactId,
                   )
                 }
-                title="Ver Historial"
+                title={t("contact_list.view_history", "Ver Historial")}
                 className="hover:bg-gray-200 dark:hover:bg-gray-700 p-2 rounded-lg transition-colors text-blue-500"
               >
                 <History className="w-5 h-5" />
@@ -379,7 +382,7 @@ const ContactListComponent: React.FC<Props> = ({
             {onNewChat && (
               <button
                 onClick={onNewChat}
-                title="Nuevo Chat"
+                title={t("contact_list.new_chat", "Nuevo Chat")}
                 className="hover:bg-gray-200 dark:hover:bg-gray-700 p-2 rounded-lg transition-colors text-gray-600 dark:text-gray-300"
               >
                 <PlusCircle className="w-5 h-5" />
@@ -388,7 +391,7 @@ const ContactListComponent: React.FC<Props> = ({
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                title="Filtros"
+                title={t("contact_list.filters", "Filtros")}
                 className={`hover:bg-gray-200 dark:hover:bg-gray-700 p-2 rounded-lg transition-colors ${isMenuOpen ? "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white" : ""}`}
               >
                 <ListFilter className="w-5 h-5" />
@@ -399,7 +402,7 @@ const ContactListComponent: React.FC<Props> = ({
                 <div className="absolute right-0 top-full mt-1 w-60 bg-white dark:bg-reply-panel-dark rounded-xl shadow-2xl border border-gray-100 dark:border-reply-border-dark z-[60] flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200 origin-top-right overflow-hidden">
                   <div className="overflow-y-auto scrollbar-thin">
                     {/* 1. FILTER TYPE */}
-                    <FilterSection title="Estado" defaultOpen={true}>
+                    <FilterSection title={t("contact_list.status", "Estado")} defaultOpen={true}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -408,7 +411,7 @@ const ContactListComponent: React.FC<Props> = ({
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-reply-bg dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
                       >
-                        <span>Solo No Leídos</span>
+                        <span>{t("contact_list.unread_only", "Solo No Leídos")}</span>
                         {filterUnread && (
                           <Check className="w-4 h-4 text-green-500" />
                         )}
@@ -416,7 +419,7 @@ const ContactListComponent: React.FC<Props> = ({
                     </FilterSection>
 
                     {/* 2. SORT ORDER */}
-                    <FilterSection title="Orden" defaultOpen={false}>
+                    <FilterSection title={t("contact_list.order", "Orden")} defaultOpen={false}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -424,7 +427,7 @@ const ContactListComponent: React.FC<Props> = ({
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-reply-bg dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
                       >
-                        <span>Ms Recientes</span>
+                        <span>{t("contact_list.most_recent", "Ms Recientes")}</span>
                         {sortOrder === "date_desc" && (
                           <Check className="w-4 h-4 text-green-500" />
                         )}
@@ -436,7 +439,7 @@ const ContactListComponent: React.FC<Props> = ({
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-reply-bg dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
                       >
-                        <span>Ms Antiguos</span>
+                        <span>{t("contact_list.oldest", "Ms Antiguos")}</span>
                         {sortOrder === "date_asc" && (
                           <Check className="w-4 h-4 text-green-500" />
                         )}
@@ -444,7 +447,7 @@ const ContactListComponent: React.FC<Props> = ({
                     </FilterSection>
 
                     {/* 3. VIEW MODE */}
-                    <FilterSection title="Vista" defaultOpen={false}>
+                    <FilterSection title={t("contact_list.view", "Vista")} defaultOpen={false}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -452,7 +455,7 @@ const ContactListComponent: React.FC<Props> = ({
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-reply-bg dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
                       >
-                        <span>Cómoda</span>
+                        <span>{t("contact_list.comfortable", "Cómoda")}</span>
                         {viewMode === "comfortable" && (
                           <Check className="w-4 h-4 text-green-500" />
                         )}
@@ -464,7 +467,7 @@ const ContactListComponent: React.FC<Props> = ({
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-reply-bg dark:hover:bg-gray-700 flex items-center justify-between transition-colors border-l-2 border-transparent hover:border-indigo-500 pl-3"
                       >
-                        <span>Compacta</span>
+                        <span>{t("contact_list.compact", "Compacta")}</span>
                         {viewMode === "compact" && (
                           <Check className="w-4 h-4 text-green-500" />
                         )}
@@ -474,7 +477,7 @@ const ContactListComponent: React.FC<Props> = ({
                     {/* 4. TAGS (Scrollable) */}
                     {allTags.length > 0 && onToggleTag && (
                       <FilterSection
-                        title="Etiquetas"
+                        title={t("contact_list.tags", "Etiquetas")}
                         count={selectedTags.length}
                         defaultOpen={selectedTags.length > 0}
                         className="max-h-64 overflow-y-auto scrollbar-thin pb-2"
@@ -520,7 +523,7 @@ const ContactListComponent: React.FC<Props> = ({
             <Search className="w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar o iniciar chat..."
+              placeholder={t("contact_list.search_placeholder", "Buscar o iniciar chat...")}
               className="bg-transparent text-sm w-full focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white font-medium"
             />
           </div>
@@ -534,7 +537,7 @@ const ContactListComponent: React.FC<Props> = ({
               <div className="w-4 h-4 rounded bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center">
                 <MessageSquare className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <span>Mensajes Directos</span>
+              <span>{t("contact_list.direct_messages", "Mensajes Directos")}</span>
               <span className="ml-auto bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
                 {contacts.length}
               </span>
@@ -587,18 +590,17 @@ const ContactListComponent: React.FC<Props> = ({
                   {contact.assignedMode === "bot" && (
                     <div
                       className={`absolute -bottom-1 -right-1 bg-blue-500 dark:bg-blue-600 rounded-full border-2 border-white dark:border-reply-border-dark ${viewMode === "compact" ? "p-0.5" : "p-0.5"}`}
-                      title="Atendido por Bot"
+                      title={t("contact_list.handled_by_bot", "Atendido por Bot")}
                     >
                       <Bot
                         className={`${viewMode === "compact" ? "w-2 h-2" : "w-3 h-3"} text-white`}
                       />
                     </div>
                   )}
-                  {/* Group Indicator (New) */}
                   {contact.isGroup && (
                     <div
                       className="absolute -top-1 -right-1 bg-orange-500 rounded-full border-2 border-white dark:border-reply-border-dark p-0.5"
-                      title="Grupo"
+                      title={t("contact_list.group", "Grupo")}
                     >
                       <User className="w-2.5 h-2.5 text-white" />
                     </div>
@@ -725,7 +727,7 @@ const ContactListComponent: React.FC<Props> = ({
                         {contact.assignedAgentName && (
                           <span
                             className="text-[9px] text-blue-500 dark:text-blue-400 flex items-center gap-0.5"
-                            title="Agente"
+                            title={t("contact_list.agent", "Agente")}
                           >
                             <User className="w-2.5 h-2.5" />
                             {contact.assignedAgentName}
@@ -734,7 +736,7 @@ const ContactListComponent: React.FC<Props> = ({
                         {contact.queueName && (
                           <span
                             className="text-[9px] text-gray-400 dark:text-gray-500 flex items-center gap-0.5"
-                            title="Cola"
+                            title={t("contact_list.queue", "Cola")}
                           >
                             <Layers className="w-2.5 h-2.5" />
                             {contact.queueName}
@@ -754,7 +756,7 @@ const ContactListComponent: React.FC<Props> = ({
                 <div className="w-4 h-4 rounded bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center">
                   <User className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <span>Grupos de Trabajo</span>
+                <span>{t("contact_list.work_groups", "Grupos de Trabajo")}</span>
                 <span className="ml-auto bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
                   {groups.length}
                 </span>
@@ -779,7 +781,7 @@ const ContactListComponent: React.FC<Props> = ({
                           onClick={(e) => handleDelete(e, contact.id)}
                           disabled={!!deletingId}
                           className="absolute bottom-0 left-0 p-1.5 opacity-0 group-hover:opacity-100 transition-all text-gray-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-transparent dark:hover:bg-transparent z-20"
-                          title="Eliminar ticket"
+                          title={t("contact_list.delete_ticket", "Eliminar ticket")}
                         >
                           {isDeleting ? (
                             <Loader2 className="animate-spin h-3 w-3 text-red-500" />
@@ -796,7 +798,7 @@ const ContactListComponent: React.FC<Props> = ({
                     name={(contact.name || "").replace(/^\[GROUP\]\s*/i, "")}
                         className={`${viewMode === "compact" ? "w-8 h-8 text-xs" : "w-10 h-10 text-xs"} shadow-sm ring-1 ring-emerald-200/50 dark:ring-emerald-700/30`}
                       />
-                      <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full border-2 border-white dark:border-reply-border-dark p-0.5" title="Grupo">
+                      <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full border-2 border-white dark:border-reply-border-dark p-0.5" title={t("contact_list.group", "Grupo")}>
                         <User className="w-2.5 h-2.5 text-white" />
                       </div>
                     </div>
@@ -856,7 +858,7 @@ const ContactListComponent: React.FC<Props> = ({
                       {/* Row 2: Last Message */}
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className={`truncate flex-1 text-gray-500 dark:text-gray-400 ${viewMode === "compact" ? "text-[11px]" : "text-xs"}`}>
-                          {contact.lastMessage || "Sin mensajes"}
+                          {contact.lastMessage || t("contact_list.no_messages", "Sin mensajes")}
                         </span>
                       </div>
 
@@ -867,7 +869,7 @@ const ContactListComponent: React.FC<Props> = ({
                             {contact.assignedAgentName && (
                               <span
                                 className="text-[9px] text-blue-500 dark:text-blue-400 flex items-center gap-0.5"
-                                title="Agente"
+                                title={t("contact_list.agent", "Agente")}
                               >
                                 <User className="w-2.5 h-2.5" />
                                 {contact.assignedAgentName}
@@ -876,7 +878,7 @@ const ContactListComponent: React.FC<Props> = ({
                             {contact.queueName && (
                               <span
                                 className="text-[9px] text-gray-400 dark:text-gray-500 flex items-center gap-0.5"
-                                title="Cola"
+                                title={t("contact_list.queue", "Cola")}
                               >
                                 <Layers className="w-2.5 h-2.5" />
                                 {contact.queueName}

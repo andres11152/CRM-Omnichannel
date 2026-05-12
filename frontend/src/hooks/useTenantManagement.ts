@@ -23,6 +23,12 @@ export function useTenantManagement() {
   const [metrics, setMetrics] = useState<CompanyMetrics | null>(null);
   const [loadingMetrics, setLoadingMetrics] = useState(false);
 
+  // Impersonation state
+  const [isImpersonateModalOpen, setIsImpersonateModalOpen] = useState(false);
+  const [companyToImpersonate, setCompanyToImpersonate] = useState<Company | null>(null);
+  const [companyUsers, setCompanyUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
   // New Company Form State
   const [isCreating, setIsCreating] = useState(false);
 
@@ -95,24 +101,29 @@ export function useTenantManagement() {
   };
 
   const handleImpersonate = async (id: string) => {
-    const confirmed = window.confirm(
-      "[WARNING] SEGURIDAD: Estás a punto de entrar en la cuenta del cliente. Todas tus acciones quedarán registradas. ¿Continuar?",
-    );
-    if (!confirmed) return;
+    const company = companies.find((c) => c.id === id);
+    if (company) {
+      setCompanyToImpersonate(company);
+      setIsImpersonateModalOpen(true);
+      setLoadingUsers(true);
+      try {
+        const users = await adminService.getCompanyUsers(id);
+        setCompanyUsers(users);
+      } catch (error) {
+        Logger.error("[useTenantManagement] Error fetching users", error);
+        toast.error("Error al cargar usuarios de la empresa");
+      } finally {
+        setLoadingUsers(false);
+      }
+    }
+  };
+
+  const confirmImpersonate = async (userId?: string) => {
+    if (!companyToImpersonate) return;
+    const id = companyToImpersonate.id;
 
     try {
-      const result = await adminService.generateImpersonationToken(id);
-
-      // Construct minimal user object for immediate context switch
-      const userToLogin = {
-        id: result.user.id,
-        email: result.user.email,
-        role: result.user.role,
-        companyId: id,
-        name: "Modo Impersonación",
-        avatar: "",
-        companyStatus: "ACTIVE",
-      };
+      const result = await adminService.generateImpersonationToken(id, userId);
 
       // Security: Save original Master Token to allow "Exit Impersonation"
       const currentToken = useAuthStore.getState().token;
@@ -120,14 +131,13 @@ export function useTenantManagement() {
         localStorage.setItem("reply_master_token", currentToken);
       }
 
-      // Login and force redirect
-      login(userToLogin as User, result.token);
-
-      // Use href to force full reload and clear any Master Admin state/sockets
-      window.location.href = "/dashboard";
+      // [ROBUST] Redirect with token in URL to let ImpersonationHandler manage the transition
+      window.location.href = `/dashboard?impersonate=${result.token}`;
     } catch (error) {
       Logger.error("[useTenantManagement] Impersonation failed", error);
       toast.error("Error al iniciar impersonación");
+    } finally {
+      setIsImpersonateModalOpen(false);
     }
   };
 
@@ -171,6 +181,12 @@ export function useTenantManagement() {
     handleUpdateCompany,
     handleImpersonate,
     handleViewMetrics,
+    isImpersonateModalOpen,
+    setIsImpersonateModalOpen,
+    companyToImpersonate,
+    companyUsers,
+    loadingUsers,
+    confirmImpersonate,
     refresh: fetchData,
   };
 }

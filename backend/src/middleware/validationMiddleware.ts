@@ -27,6 +27,36 @@ export const validate =
         params: req.params,
       });
 
+      // [SEC] MULTI-TENANT FAIL-SAFE: Enforce companyId isolation.
+      // If the validated payload contains a companyId, it MUST match the authenticated req.companyId.
+      const authReq = req as unknown as { companyId?: string };
+      const expectedCompanyId = authReq.companyId;
+
+      if (expectedCompanyId) {
+        const checkTenantMismatch = (obj: unknown, sourceName: string) => {
+          if (obj && typeof obj === "object") {
+            const record = obj as Record<string, unknown>;
+            const keys = ["companyId", "companyid", "CompanyId"];
+            for (const key of keys) {
+              if (
+                key in record &&
+                record[key] &&
+                String(record[key]).toLowerCase() !== expectedCompanyId.toLowerCase()
+              ) {
+                throw new AppError(
+                  `Tenant mismatch in ${sourceName}: Access to resource of company ${record[key]} is forbidden.`,
+                  403,
+                );
+              }
+            }
+          }
+        };
+
+        checkTenantMismatch(validated.body, "body");
+        checkTenantMismatch(validated.query, "query");
+        checkTenantMismatch(validated.params, "params");
+      }
+
       // Replace request data with validated/sanitized data
       req.body = validated.body || req.body;
       req.query = validated.query || req.query;

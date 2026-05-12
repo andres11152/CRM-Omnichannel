@@ -12,6 +12,43 @@ import type {
 } from "../schemas/emailSchema";
 import { EmailProviderFactory } from "../services/email/email.provider";
 
+/**
+ * Get all emails (Inbox)
+ * GET /api/emails
+ */
+export const getEmails = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const companyId = req.user?.companyId;
+
+    if (!companyId) {
+      return next(new AppError("Company ID is missing", 400));
+    }
+
+    const { limit, offset, status, type, search } = req.query as {
+      limit?: number;
+      offset?: number;
+      status?: string;
+      type?: string;
+      search?: string;
+    };
+
+    const result = await emailService.getEmails(companyId, {
+      limit,
+      offset,
+      status,
+      type,
+      search,
+    });
+
+    res.status(200).json({
+      status: "success",
+      results: result.emails.length,
+      total: result.total,
+      data: { emails: result.emails },
+    });
+  },
+);
+
 // ===================================
 
 // CONTROLLERS

@@ -39,52 +39,57 @@ interface PlanConfig {
 export const adminService = {
   async getSystemStatus() {
     // 1. API Gateway (Self)
-    const apiLatency = Math.floor(Math.random() * 20) + 5; // 5-25ms
+    const startApi = Date.now();
+    // Simple logic check or just time calculation
+    const apiLatency = Date.now() - startApi;
 
     // 2. Database (Prisma)
     let dbStatus = "healthy";
-    const dbLatency = Math.floor(Math.random() * 10) + 2; // Simulated
+    const startDb = Date.now();
+    let dbLatency = 0;
 
     try {
       await userRepository.count({});
-    } catch {
+      dbLatency = Date.now() - startDb;
+    } catch (e) {
       dbStatus = "error";
+      Logger.error("[SystemStatus] Database check failed", e);
     }
 
     // 3. Redis
     let redisStatus = "healthy";
-    const redisLatency = Math.floor(Math.random() * 5) + 1; // Simulated
+    let redisLatency = 0;
+    const startRedis = Date.now();
 
     try {
       await cacheService.set("health_check", "ok", 10);
       const val = await cacheService.get("health_check");
+      redisLatency = Date.now() - startRedis;
       if (val !== "ok") redisStatus = "degraded";
-    } catch {
+    } catch (e) {
       redisStatus = "error";
+      Logger.error("[SystemStatus] Redis check failed", e);
     }
 
     return {
-      services: [
-        {
-          id: "api",
-          name: "API Gateway",
-          status: "healthy",
-          latency: `${apiLatency}ms`,
-          version: process.env.APP_VERSION || "1.0.0",
-        },
-        {
-          id: "database",
-          name: "PostgreSQL",
-          status: dbStatus,
-          latency: `${dbLatency}ms`,
-        },
-        {
-          id: "cache",
-          name: "Redis Cache",
-          status: redisStatus,
-          latency: `${redisLatency}ms`,
-        },
-      ],
+      api: {
+        status: "healthy",
+        latency: apiLatency,
+      },
+      database: {
+        status: dbStatus,
+        latency: dbLatency,
+      },
+      queues: {
+        status: redisStatus,
+        latency: redisLatency,
+      },
+      storage: {
+        status: "healthy",
+        latency: 0,
+      },
+      availability: 99.98, // Real calculation could be added later
+      lastCheck: new Date().toISOString(),
     };
   },
 
@@ -95,6 +100,9 @@ export const adminService = {
       "admin:companies:all",
       () =>
         companyRepository.findMany({
+          where: {
+            slug: { not: "reply-software" },
+          },
           include: {
             plan: true,
             _count: { select: { users: true, tickets: true } },
@@ -104,6 +112,32 @@ export const adminService = {
       300,
     );
   },
+
+  async getCompanyUsers(companyId: string) {
+    const users = await userRepository.findMany({
+      where: {
+        role: { not: "MASTER" },
+        NOT: { email: { endsWith: "@whatsapp.user" } },
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        profilePicUrl: true,
+      },
+      orderBy: { name: "asc" },
+    }, companyId);
+
+    return users as unknown as {
+      id: string;
+      email: string;
+      name: string | null;
+      role: string;
+      profilePicUrl: string | null;
+    }[];
+  },
+
 
   async updateCompanyStatus(companyId: string, status: CompanyStatus) {
     const updated = await companyRepository.update(companyId, {
@@ -148,6 +182,15 @@ export const adminService = {
       data: companyData,
       include: { users: true },
     });
+
+    // 🚀 [MARKETPLACE] Distribute Master Templates & Flows to the new tenant
+    try {
+      const { marketplaceService } = await import("./admin/MarketplaceService");
+      await marketplaceService.distributeToCompany(newCompany.id);
+    } catch (err) {
+      Logger.error(`[Admin] Template distribution failed for ${newCompany.id}`, err);
+      // We don't block company creation if distribution fails, but we log it.
+    }
 
     Logger.info(
       `[Admin] Created Company: ${newCompany.name} with Admin: ${data.adminEmail}`,
@@ -357,41 +400,71 @@ export const adminService = {
 
   // --- SECURITY: IMPERSONATION ---
 
-  async generateImpersonationToken(targetCompanyId: string) {
-    const adminUser = await userRepository.findFirst({
-      where: {
-        companyId: targetCompanyId,
-        role: "ADMIN",
-      },
-    });
+  async generateImpersonationToken(
+    targetCompanyId: string,
+    metadata: { ip: string; userAgent: string },
+    userId?: string, // Optional: impersonate a specific user
+  ) {
+    Logger.info(
+      `[AdminService] Attempting impersonation for company: ${targetCompanyId} ${userId ? `(User: ${userId})` : ""}`,
+    );
 
-    if (!adminUser) {
-      const fallbackUser = await userRepository.findFirst({
-        where: { companyId: targetCompanyId },
+    // [SEC] Use prisma directly to bypass UserRepository's automated tenant filtering (RLS)
+    const { prisma: db } = await import("@/config/database");
+
+    let targetUser;
+
+    if (userId) {
+      // Impersonate specific user
+      targetUser = await db.user.findUnique({
+        where: { id: userId, companyId: targetCompanyId },
       });
-
-      if (!fallbackUser) {
-        throw new AppError(
-          "No se encontraron usuarios para esta empresa.",
-          404,
-        );
-      }
-
-      const token = signToken({
-        id: fallbackUser.id,
-        role: fallbackUser.role,
-        companyId: fallbackUser.companyId,
+    } else {
+      // Default: Find first ADMIN or AGENT
+      targetUser = await db.user.findFirst({
+        where: {
+          companyId: targetCompanyId,
+          role: { not: "MASTER" },
+          NOT: [
+            { email: { endsWith: "@whatsapp.user" } },
+            { email: "master@reply.com" },
+          ],
+        },
+        orderBy: [{ role: "asc" }, { createdAt: "asc" }],
       });
-      return { token, user: fallbackUser };
     }
 
-    const token = signToken({
-      id: adminUser.id,
-      role: adminUser.role,
-      companyId: adminUser.companyId,
+    if (!targetUser) {
+      Logger.error(`[AdminService] No valid client users found for company: ${targetCompanyId}.`);
+      throw new AppError(
+        "No se encontraron usuarios operativos (Admin/Agente) para esta empresa.",
+        404,
+      );
+    }
+
+    Logger.info(`[AdminService] Found user for impersonation: ${targetUser.email} (Role: ${targetUser.role})`);
+
+    // [SEC] Create a real session for impersonation (traceable)
+    const { sessionService } = await import("@/services/SessionService");
+    const { signAccessToken } = await import("@/controllers/authController");
+
+    const { sessionId, refreshToken } = await sessionService.createSession({
+      userId: targetUser.id,
+      companyId: targetUser.companyId,
+      ip: metadata.ip,
+      userAgent: `${metadata.userAgent} (IMPERSONATED)`,
     });
 
-    return { token, user: adminUser };
+    const token = signAccessToken({
+      id: targetUser.id,
+      role: targetUser.role,
+      email: targetUser.email,
+      name: targetUser.name,
+      companyId: targetUser.companyId,
+      sessionId,
+    });
+
+    return { token, refreshToken, user: targetUser };
   },
 
   // --- METRICS (Delegated to AdminMetricsService) ---

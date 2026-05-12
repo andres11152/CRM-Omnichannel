@@ -309,7 +309,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
       (acc, t) => acc + (t.unreadCount || 0),
       0,
     );
-    document.title = totalUnread > 0 ? `(${totalUnread}) Reply CRM` : "Reply CRM";
+    document.title = totalUnread > 0 ? `(${totalUnread}) Sentry CRM` : "Sentry CRM";
   }, [tickets]);
 
   // ────────────────────────────────────────────────

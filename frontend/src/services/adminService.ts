@@ -1,4 +1,4 @@
-import { Company, Plan, CompanyStatus } from "@/types";
+import { Company, Plan, CompanyStatus, User } from "@/types";
 import { api } from "@/lib/axios";
 
 // Prefix for admin routes
@@ -11,6 +11,8 @@ export interface SystemStatus {
   database: { status: string; latency: number };
   queues: { status: string; latency: number };
   storage: { status: string; latency: number };
+  availability?: number;
+  lastCheck?: string;
 }
 
 export interface DashboardStats {
@@ -119,14 +121,27 @@ export const adminService = {
     return res.data;
   },
 
-  async generateImpersonationToken(targetCompanyId: string): Promise<{
+  async generateImpersonationToken(
+    targetCompanyId: string,
+    userId?: string,
+  ): Promise<{
     token: string;
     user: { id: string; email: string; role: string };
   }> {
     const res = await api.post(
       `${ADMIN_PREFIX}/companies/${targetCompanyId}/impersonate`,
+      { userId },
     );
     return res.data;
+  },
+
+  async getCompanyUsers(companyId: string): Promise<User[]> {
+    const res = await api.get(`${ADMIN_PREFIX}/companies/${companyId}/users`);
+    return res.data;
+  },
+
+  async exitImpersonation(): Promise<void> {
+    await api.post(`/auth/exit-impersonation`);
   },
 
   async getCompanyMetrics(companyId: string): Promise<CompanyMetrics> {

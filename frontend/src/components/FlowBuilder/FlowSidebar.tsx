@@ -1,165 +1,76 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { NodeType } from '@/types';
+import { NODE_REGISTRY } from './nodes/FlowNodeRegistry';
+import { useTranslation } from "react-i18next";
 
 interface FlowSidebarProps {
   onAddNode: (type: NodeType) => void;
 }
 
-interface TooltipData {
-  label: string;
-  description: string;
+interface SidebarCategory {
+  title: string;
+  types: NodeType[];
 }
 
+const SIDEBAR_CATEGORIES: SidebarCategory[] = [
+  {
+    title: "flow_builder.categories.messaging",
+    types: ["send_message", "send_image", "send_video", "send_audio", "send_document", "send_template"],
+  },
+  {
+    title: "flow_builder.categories.interaction",
+    types: ["ask_data", "condition", "ai_agent"],
+  },
+  {
+    title: "flow_builder.categories.crm",
+    types: ["create_deal", "update_contact", "tag_contact"],
+  },
+  {
+    title: "flow_builder.categories.assignment",
+    types: ["assign_agent", "ai_handoff"],
+  },
+  {
+    title: "flow_builder.categories.integration",
+    types: ["http_request"],
+  },
+  {
+    title: "flow_builder.categories.control",
+    types: ["delay", "end"],
+  },
+];
+
 export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
+  const { t } = useTranslation();
   const [activeTooltip, setActiveTooltip] = useState<{ id: string; position: { x: number; y: number } } | null>(null);
 
   return (
-    <div className="w-16 bg-white dark:bg-reply-panel-dark border-r border-gray-200 dark:border-reply-border-dark flex flex-col items-center py-4 gap-3 z-10 shadow-sm overflow-y-auto">
-      {/* Mensajes */}
-      <TooltipTool 
-        id="send_message"
-        onClick={() => onAddNode('send_message')} 
-        icon="[CHAT]" 
-        label="Enviar Mensaje" 
-        description="Envía un mensaje de texto al usuario y continúa automticamente"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="send_image"
-        onClick={() => onAddNode('send_image')} 
-        icon="️" 
-        label="Enviar Imagen" 
-        description="Envía una imagen por WhatsApp y avanza al siguiente paso"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="send_video"
-        onClick={() => onAddNode('send_video')} 
-        icon="" 
-        label="Enviar Video" 
-        description="Envía un video al usuario automticamente"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="send_audio"
-        onClick={() => onAddNode('send_audio')} 
-        icon="" 
-        label="Enviar Audio" 
-        description="Envía un archivo de audio o nota de voz"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="send_document"
-        onClick={() => onAddNode('send_document')} 
-        icon="" 
-        label="Enviar Documento" 
-        description="Envía un archivo PDF, Word u otro documento"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      
-      <div className="w-8 h-[1px] bg-gray-300 dark:bg-gray-600 my-1"></div>
-      
-      {/* Interacción */}
-      <TooltipTool 
-        id="ask_data"
-        onClick={() => onAddNode('ask_data')} 
-        icon="️" 
-        label="Solicitar Datos" 
-        description="PAUSA el flujo, hace una pregunta y espera la respuesta del usuario"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="condition"
-        onClick={() => onAddNode('condition')} 
-        icon="" 
-        label="Condición" 
-        description="Evalúa una condición y ramifica el flujo según la respuesta"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="ai_agent"
-        onClick={() => onAddNode('ai_agent')} 
-        icon="[AI]" 
-        label="Agente IA" 
-        description="Responde usando inteligencia artificial (OpenAI/Gemini)"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      
-      <div className="w-8 h-[1px] bg-gray-300 dark:bg-gray-600 my-1"></div>
-      
-      {/* Acciónes CRM */}
-      <TooltipTool 
-        id="create_deal"
-        onClick={() => onAddNode('create_deal')} 
-        icon="[BILLING]" 
-        label="Crear Deal" 
-        description="Crea un nuevo deal automticamente en el CRM"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="update_contact"
-        onClick={() => onAddNode('update_contact')} 
-        icon="" 
-        label="Actualizar Contacto" 
-        description="Actualiza los campos del contacto con datos capturados"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      
-      <div className="w-8 h-[1px] bg-gray-300 dark:bg-gray-600 my-1"></div>
-      
-      {/* Asignación */}
-      <TooltipTool 
-        id="assign_agent"
-        onClick={() => onAddNode('assign_agent')} 
-        icon="" 
-        label="Asignar Agente" 
-        description="Asigna la conversación a un agente humano específico"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="ai_handoff"
-        onClick={() => onAddNode('ai_handoff')} 
-        icon="[SYNC]" 
-        label="Transferir a Humano" 
-        description="Finaliza el bot y transfiere el caso a un agente humano"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      
-      <div className="w-8 h-[1px] bg-gray-300 dark:bg-gray-600 my-1"></div>
-      
-      {/* Control de Flujo */}
-      <TooltipTool 
-        id="delay"
-        onClick={() => onAddNode('delay')} 
-        icon="⏱️" 
-        label="Delay / Espera" 
-        description="Espera X minutos/horas antes de continuar el flujo"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
-      <TooltipTool 
-        id="end"
-        onClick={() => onAddNode('end')} 
-        icon="[COMPLETE]" 
-        label="Fin del Flujo" 
-        description="Termina el flujo de automatización"
-        activeTooltip={activeTooltip}
-        setActiveTooltip={setActiveTooltip}
-      />
+    <div className="w-16 bg-white dark:bg-reply-panel-dark border-r border-gray-200 dark:border-reply-border-dark flex flex-col items-center py-4 gap-1 z-10 shadow-sm overflow-y-auto custom-scrollbar">
+      {SIDEBAR_CATEGORIES.map((category, catIdx) => (
+        <React.Fragment key={category.title}>
+          {catIdx > 0 && (
+            <div className="w-8 h-[1px] bg-gray-200 dark:bg-gray-700 my-1.5" />
+          )}
+          {category.types.map((type) => {
+            const config = NODE_REGISTRY[type];
+            if (!config) return null;
+            return (
+              <TooltipTool
+                key={type}
+                id={type}
+                onClick={() => onAddNode(type)}
+                icon={config.icon}
+                label={t(config.label)}
+                description={t(config.description)}
+                color={config.color}
+                activeTooltip={activeTooltip}
+                setActiveTooltip={setActiveTooltip}
+              />
+            );
+          })}
+        </React.Fragment>
+      ))}
     </div>
   );
 };
@@ -167,12 +78,13 @@ export const FlowSidebar: React.FC<FlowSidebarProps> = ({ onAddNode }) => {
 const TooltipTool: React.FC<{
   id: string;
   onClick: () => void;
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   description: string;
+  color: string;
   activeTooltip: { id: string; position: { x: number; y: number } } | null;
   setActiveTooltip: (tooltip: { id: string; position: { x: number; y: number } } | null) => void;
-}> = ({id, onClick, icon, label, description, activeTooltip, setActiveTooltip}) => {
+}> = ({ id, onClick, icon, label, description, color, activeTooltip, setActiveTooltip }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const handleMouseEnter = () => {
@@ -181,8 +93,8 @@ const TooltipTool: React.FC<{
       setActiveTooltip({
         id,
         position: {
-          x: rect.right + 8, // 8px a la derecha del botón
-          y: rect.top + rect.height / 2 // Centro vertical del botón
+          x: rect.right + 12,
+          y: rect.top + rect.height / 2
         }
       });
     }
@@ -196,47 +108,42 @@ const TooltipTool: React.FC<{
 
   return (
     <>
-      <button 
+      <button
         ref={buttonRef}
         onClick={onClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        title={`${label}: ${description}`}
-        className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center text-xl hover:bg-gray-200 dark:hover:bg-gray-600 hover:scale-110 transition-all shadow-sm"
+        className={`w-10 h-10 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-xl flex items-center justify-center hover:text-white transition-all shadow-sm group relative hover:scale-110 active:scale-95 hover:shadow-lg hover:${color}`}
       >
         {icon}
       </button>
-      
-      {/* Tooltip usando Portal - renderizado en body */}
+
       {isActive && activeTooltip && createPortal(
-        <div 
-          className="fixed bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-2xl min-w-[200px] max-w-[250px] whitespace-normal pointer-events-none"
+        <div
+          className="fixed bg-slate-900 dark:bg-slate-800 text-white p-3 rounded-xl shadow-2xl min-w-[200px] max-w-[260px] pointer-events-none border border-slate-700/50 backdrop-blur-md"
           style={{
             left: `${activeTooltip.position.x}px`,
             top: `${activeTooltip.position.y}px`,
             transform: 'translateY(-50%)',
-            zIndex: 2147483647 // Z-INDEX MÁXIMO ABSOLUTO (max int32)
+            zIndex: 999999
           }}
         >
-          <div className="font-bold mb-1 text-white">{label}</div>
-          <div className="text-gray-300 text-[11px] leading-tight">{description}</div>
-          {/* Flecha */}
-          <div 
-            className="absolute w-0 h-0" 
+          <div className="font-bold mb-0.5 text-indigo-300 text-[10px] uppercase tracking-wider">{label}</div>
+          <div className="text-gray-300 text-[11px] leading-relaxed">{description}</div>
+          <div
+            className="absolute w-0 h-0"
             style={{
               left: '-6px',
               top: '50%',
               transform: 'translateY(-50%)',
               borderTop: '6px solid transparent',
-              borderRight: '6px solid #111827',
+              borderRight: '6px solid #0f172a',
               borderBottom: '6px solid transparent'
             }}
-          ></div>
+          />
         </div>,
-        document.body // ¡Renderizado directamente en el body!
+        document.body
       )}
     </>
   );
 };
-
-

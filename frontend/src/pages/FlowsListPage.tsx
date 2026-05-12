@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { API_BASE_URL } from "@/services/apiConfig";
 import { ModuleHeader } from "../components/common/ModuleHeader";
 import {
@@ -18,39 +19,10 @@ import {
   Zap,
 } from "lucide-react";
 
-interface FlowTriggerConfig {
-  keyword?: string;
-  pattern?: string;
-  event?: string;
-}
-
-interface FlowNode {
-  id: string;
-  type: string;
-  position: { x: number; y: number };
-  data: Record<string, unknown>;
-}
-
-interface FlowEdge {
-  id: string;
-  source: string;
-  target: string;
-  label?: string;
-}
-
-interface Flow {
-  id: string;
-  name: string;
-  triggerType: string;
-  triggerConfig: FlowTriggerConfig | null;
-  isActive: boolean;
-  nodes: FlowNode[];
-  edges: FlowEdge[];
-  createdAt: string;
-  updatedAt: string;
-}
+import { Flow, FlowTriggerConfig } from "@/types";
 
 export const FlowsListPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [flows, setFlows] = useState<Flow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +78,7 @@ export const FlowsListPage: React.FC = () => {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Ests seguro de eliminar este flujo?")) return;
+    if (!confirm(t("queues_config.toasts.confirm_delete"))) return;
 
     try {
       const token = localStorage.getItem("token");
@@ -120,19 +92,24 @@ export const FlowsListPage: React.FC = () => {
     }
   }
 
-  function getTriggerDisplay(trigger: FlowTriggerConfig | string | null) {
-    if (!trigger) return "Sin trigger";
+  function getTriggerDisplay(trigger: FlowTriggerConfig | string | null | undefined) {
+    if (!trigger) return t("common.unknown");
     if (typeof trigger === "string") return trigger;
-    return trigger.keyword || trigger.pattern || "Configurar trigger";
+    
+    if (trigger.keyword) return `${t("chatbot.trigger_keyword")}: ${trigger.keyword}`;
+    if (trigger.pattern) return `${t("chatbot.trigger_pattern")}: ${trigger.pattern}`;
+    if (trigger.event) return `${t("chatbot.trigger_event")}: ${trigger.event}`;
+    
+    return t("ai_config.nav.config");
   }
 
   function formatDate(date: string) {
     const diff = Date.now() - new Date(date).getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (days === 0) return "Hoy";
-    if (days === 1) return "Ayer";
-    if (days < 7) return `Hace ${days} días`;
-    return new Date(date).toLocaleDateString("es-ES");
+    if (days === 0) return t("message_list.today");
+    if (days === 1) return t("message_list.yesterday");
+    if (days < 7) return `${days} ${t("tenants.metrics.days_remaining").toLowerCase()}`;
+    return new Date(date).toLocaleDateString();
   }
 
   const filteredFlows = flows.filter((flow) =>
@@ -150,12 +127,12 @@ export const FlowsListPage: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark transition-colors duration-200">
       <ModuleHeader
-        title="Chatbots & Automatización"
-        description="Diseña flujos conversacionales inteligentes."
+        title={t("navigation.flows")}
+        description={t("ai_config.description")}
         icon={<Bot className="w-8 h-8 text-white" />}
         gradient="from-blue-600 to-indigo-600 dark:from-blue-800 dark:to-indigo-800"
         stats={{
-          label: "Total Flujos",
+          label: t("ai_config.total_agents"),
           value: flows.length,
         }}
         action={
@@ -164,7 +141,7 @@ export const FlowsListPage: React.FC = () => {
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-xl font-bold text-sm backdrop-blur-sm transition-all shadow-lg border border-white/20 active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            <span className="inline">Nuevo Flujo</span>
+            <span className="inline">{t("chatbot.new_flow")}</span>
           </button>
         }
       />
@@ -176,14 +153,14 @@ export const FlowsListPage: React.FC = () => {
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-blue-500 transition-colors" />
             <input
               type="text"
-              placeholder="Buscar flujos..."
+              placeholder={t("common.search")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-gray-100 dark:bg-reply-bg-dark border-none rounded-xl py-3 pl-11 pr-4 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition-all placeholder-gray-400 dark:text-white"
             />
           </div>
           <div className="w-full sm:w-auto text-center sm:text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest sm:block">
-            {filteredFlows.length} Resultados
+            {filteredFlows.length} {t("common.results")}
           </div>
         </div>
       </div>
@@ -197,18 +174,17 @@ export const FlowsListPage: React.FC = () => {
                 <Workflow className="w-12 h-12 text-blue-500" />
               </div>
               <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
-                Sin flujos creados aún
+                {t("chatbot.empty_title")}
               </h2>
               <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
-                Crea tu primer flujo conversacional para automatizar respuestas
-                y mejorar la atención al cliente 24/7.
+                {t("chatbot.empty_desc")}
               </p>
               <button
                 onClick={() => navigate("/chatbot/flujos/nuevo")}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-blue-600/20 inline-flex items-center gap-3 transition-all hover:scale-105 active:scale-95"
               >
                 <Plus className="w-5 h-5" />
-                Crear Primer Flujo
+                {t("chatbot.create_now")}
               </button>
             </div>
           ) : (
@@ -259,7 +235,7 @@ export const FlowsListPage: React.FC = () => {
                           : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
                       }`}
                     >
-                      {flow.isActive ? "Activo" : "Inactivo"}
+                      {flow.isActive ? "Active" : "Inactive"}
                     </span>
                     <span className="text-xs text-gray-400 flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
@@ -279,7 +255,7 @@ export const FlowsListPage: React.FC = () => {
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-reply-border-dark">
                     <div className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <Workflow className="w-3 h-3" />
-                      {flow.nodes?.length || 0} nodos
+                      {flow.nodes?.length || 0} nodes
                     </div>
 
                     <div className="flex gap-2">
@@ -304,7 +280,7 @@ export const FlowsListPage: React.FC = () => {
                         }
                         className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-black rounded-lg text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg"
                       >
-                        Editar
+                        {t("common.edit")}
                       </button>
                     </div>
                   </div>

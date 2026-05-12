@@ -130,19 +130,13 @@ apiClient.interceptors.response.use(
 // ==================== TYPED API CLIENT ====================
 
 /**
- * Type-safe API client with common HTTP methods
+ * Type-safe API client interface
  */
 export const api = {
-  /**
-   * GET request
-   */
   get: <T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> => {
     return apiClient.get(url, config);
   },
 
-  /**
-   * POST request
-   */
   post: <T = unknown>(
     url: string,
     data?: unknown,
@@ -151,9 +145,6 @@ export const api = {
     return apiClient.post(url, data, config);
   },
 
-  /**
-   * PUT request
-   */
   put: <T = unknown>(
     url: string,
     data?: unknown,
@@ -162,9 +153,6 @@ export const api = {
     return apiClient.put(url, data, config);
   },
 
-  /**
-   * PATCH request
-   */
   patch: <T = unknown>(
     url: string,
     data?: unknown,
@@ -173,9 +161,6 @@ export const api = {
     return apiClient.patch(url, data, config);
   },
 
-  /**
-   * DELETE request
-   */
   delete: <T = unknown>(
     url: string,
     config?: AxiosRequestConfig,

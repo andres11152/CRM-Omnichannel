@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export interface ActivityItem {
   id: string;
@@ -32,6 +33,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
   activities,
   loading,
 }) => {
+  const { t, i18n } = useTranslation();
   const getIcon = (action: string) => {
     switch (action) {
       case "CREATE":
@@ -75,12 +77,12 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (diffInSeconds < 60) return "hace unos segundos";
+    if (diffInSeconds < 60) return t("dashboard.activity_feed.few_seconds", "hace unos segundos");
     if (diffInSeconds < 3600)
-      return `hace ${Math.floor(diffInSeconds / 60)} min`;
+      return t("dashboard.activity_feed.minutes_ago", { count: Math.floor(diffInSeconds / 60), defaultValue: `hace ${Math.floor(diffInSeconds / 60)} min` });
     if (diffInSeconds < 86400)
-      return `hace ${Math.floor(diffInSeconds / 3600)} h`;
-    return date.toLocaleDateString("es-CO", {
+      return t("dashboard.activity_feed.hours_ago", { count: Math.floor(diffInSeconds / 3600), defaultValue: `hace ${Math.floor(diffInSeconds / 3600)} h` });
+    return date.toLocaleDateString(i18n.language, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -108,7 +110,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center text-gray-400">
         <Clock className="w-12 h-12 mb-3 opacity-50" />
-        <p>No hay actividad reciente registrada.</p>
+        <p>{t("dashboard.activity_feed.no_activity", "No hay actividad reciente registrada.")}</p>
       </div>
     );
   }
@@ -117,7 +119,8 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
     <div className="space-y-1 relative pr-2">
       {/* Live indicator line handled via CSS in item mapping if needed, or simple list */}
       <div className="space-y-4">
-        {activities.map((item) => (
+        {Array.isArray(activities) &&
+          activities.map((item) => (
           <div
             key={item.id}
             className="group flex items-start gap-4 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-white/5 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
@@ -141,11 +144,11 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                 <span className="font-medium text-gray-600 dark:text-gray-300">
-                  {item.user?.name || "Sistema"}
+                  {item.user?.name || t("dashboard.activity_feed.system", "Sistema")}
                 </span>
                 {" • "}
                 <span className="text-indigo-600 dark:text-indigo-400">
-                  {item.company?.name || "Global"}
+                  {item.company?.name || t("dashboard.activity_feed.global", "Global")}
                 </span>
               </p>
             </div>

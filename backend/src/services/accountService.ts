@@ -1,8 +1,9 @@
 import { AppError } from "@/utils/AppError";
 import { planLimitsService } from "@/services/PlanLimitsService";
 import { accountRepository } from "@/repositories/AccountRepository";
-export { CreateAccountDTO, UpdateAccountDTO, AccountSearchFilterDTO } from "@/domain/dtos/AccountDTOs";
-import { CreateAccountDTO, UpdateAccountDTO, AccountSearchFilterDTO } from "@/domain/dtos/AccountDTOs";
+import TenantContextManager from "@/config/tenantContext";
+export { CreateAccountDTO, UpdateAccountDTO, AccountSearchFilterDTO } from "@/types/account.types";
+import { CreateAccountDTO, UpdateAccountDTO, AccountSearchFilterDTO } from "@/types/account.types";
 
 /**
  *  ACCOUNT CRUD SERVICE (CLEAN ARCHITECTURE)
@@ -11,23 +12,23 @@ import { CreateAccountDTO, UpdateAccountDTO, AccountSearchFilterDTO } from "@/do
  */
 
 export const accountService = {
-  async findAll(companyId: string) {
+  async findAll() {
     const filters: AccountSearchFilterDTO = {
-      companyId,
       includeCounts: true,
     };
     return await accountRepository.findMany(filters);
   },
 
-  async findOne(id: string, companyId: string) {
-    const account = await accountRepository.findById(id, companyId, true);
+  async findOne(id: string) {
+    const account = await accountRepository.findById(id, true);
     if (!account) {
        throw new AppError("Account not found", 404);
     }
     return account;
   },
 
-  async create(companyId: string, data: CreateAccountDTO) {
+  async create(data: CreateAccountDTO) {
+    const companyId = TenantContextManager.getCompanyId();
     const canCreate = await planLimitsService.canCreateResource(
       companyId,
       "companies",
@@ -39,21 +40,21 @@ export const accountService = {
       );
     }
 
-    return await accountRepository.create(companyId, data);
+    return await accountRepository.create(data);
   },
 
-  async update(id: string, companyId: string, data: UpdateAccountDTO) {
-    const account = await accountRepository.findById(id, companyId);
+  async update(id: string, data: UpdateAccountDTO) {
+    const account = await accountRepository.findById(id);
 
     if (!account) {
       throw new AppError("Account not found", 404);
     }
 
-    return await accountRepository.update(id, companyId, data);
+    return await accountRepository.update(id, data);
   },
 
-  async delete(id: string, companyId: string) {
-    const account = await accountRepository.findById(id, companyId);
+  async delete(id: string) {
+    const account = await accountRepository.findById(id);
 
     if (!account) {
       throw new AppError("Account not found", 404);

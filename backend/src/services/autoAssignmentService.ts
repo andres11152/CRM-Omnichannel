@@ -15,7 +15,7 @@ export const assignTicketToAgent = async (
   queueId: string,
 ) => {
   try {
-    // 1. Obtener configuración de la cola y sus agentes ONLINE
+    // 1. Get queue configuration and its ONLINE agents
     const queue = (await queueRepository.findUnique({
       where: { id: queueId },
       include: {

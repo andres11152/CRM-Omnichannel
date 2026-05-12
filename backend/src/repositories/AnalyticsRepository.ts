@@ -35,7 +35,10 @@ export class AnalyticsRepository {
     return this.db.company.groupBy({
       by: ["planId"],
       _count: { planId: true },
-      where: { slug: { notIn: ["reply-saas-admin", "crm-saas"] } },
+      where: {
+        slug: { notIn: ["reply-software", "crm-saas"] },
+        planId: { not: null },
+      },
     });
   }
 
@@ -49,7 +52,7 @@ export class AnalyticsRepository {
     return this.db.company.findMany({
       where: {
         createdAt: { gte: since },
-        slug: { notIn: ["reply-saas-admin"] },
+        slug: { notIn: ["reply-software"] },
       },
       select: { createdAt: true },
     });
@@ -121,6 +124,52 @@ export class AnalyticsRepository {
     return this.db.tag.findMany({
       where: { companyId },
       select: { name: true, color: true },
+    });
+  }
+
+  async getGlobalActivityData() {
+    const [companies, tickets, transactions, users] = await Promise.all([
+      this.db.company.findMany({
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        select: { id: true, name: true, createdAt: true },
+      }),
+      this.db.ticket.findMany({
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        include: {
+          company: { select: { name: true } },
+          createdBy: { select: { name: true } },
+        },
+      }),
+      this.db.billingTransaction.findMany({
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        include: { company: { select: { name: true } } },
+      }),
+      this.db.user.findMany({
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        include: { company: { select: { name: true } } },
+      }),
+    ]);
+
+    return { companies, tickets, transactions, users };
+  }
+
+  async getTenantsHealthData() {
+    return this.db.company.findMany({
+      where: { slug: { notIn: ["reply-software"] } },
+      include: {
+        plan: true,
+        _count: {
+          select: {
+            tickets: { where: { status: { in: ["OPEN", "IN_PROGRESS"] } } },
+            users: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
     });
   }
 }

@@ -76,17 +76,42 @@ export const updateCompany = catchAsync(
   },
 );
 
+export const getCompanyUsers = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { companyId } = req.params;
+    if (!companyId) throw new AppError("Company ID required", 400);
+
+    const users = await adminService.getCompanyUsers(companyId);
+    res.json(users);
+  },
+);
+
 export const impersonateCompany = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { companyId } = req.params;
+    const { userId } = req.body;
 
     if (!companyId) throw new AppError("Company ID required", 400);
 
-    const result = await adminService.generateImpersonationToken(companyId);
+    const ip = req.ip || req.socket.remoteAddress || "0.0.0.0";
+    const userAgent = req.get("user-agent") || "Admin/Impersonation";
+
+    const result = await adminService.generateImpersonationToken(
+      companyId,
+      {
+        ip,
+        userAgent,
+      },
+      userId,
+    );
 
     Logger.warn(
-      `[Security] IMPERSONATION: ${req.user?.email} (${req.user?.id}) impersonating company ${companyId} as user ${result.user.email}`,
+      `[Security] IMPERSONATION START: ${req.user?.email} impersonating company ${companyId} as user ${result.user.email}`,
     );
+
+    // [SEC] Set Cookies to force identity switch in browser (Critical)
+    const { setAuthCookies } = await import("./authController");
+    setAuthCookies(res, result.token, result.refreshToken);
 
     res.json({
       success: true,
@@ -96,8 +121,6 @@ export const impersonateCompany = catchAsync(
         email: result.user.email,
         role: result.user.role,
       },
-      _security:
-        "Send this token via X-Impersonation-Token header, never in URL",
     });
   },
 );

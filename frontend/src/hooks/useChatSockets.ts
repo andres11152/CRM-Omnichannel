@@ -32,8 +32,10 @@ interface SocketMessagePayload {
 }
 
 interface SocketConversationPayload {
-  ticketId: string;
-  updates: Partial<Conversation>;
+  ticketId?: string;
+  id?: string;
+  conversation?: Partial<Conversation>;
+  updates?: Partial<Conversation>;
 }
 
 /**
@@ -88,12 +90,12 @@ export const useChatSockets = (currentTicketId: string | null) => {
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
     };
 
-    const handleConversationUpdated = (payload: Record<string, any>) => {
+    const handleConversationUpdated = (payload: SocketConversationPayload) => {
       const convId = payload.id || payload.ticketId || payload.conversation?.id;
       if (!convId) return;
       
       // Handle both { updates } wrappers and flat payloads
-      const updates = payload.updates || payload.conversation || payload;
+      const updates = payload.updates || payload.conversation || payload as Partial<Conversation>;
       
       updateConversationInCache(queryClient, convId, updates);
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
@@ -150,7 +152,7 @@ export const useChatSockets = (currentTicketId: string | null) => {
       updateConversationTypingStatus(
         queryClient,
         payload.conversationId,
-        activeStatus as any,
+        activeStatus as "composing" | "recording" | "paused",
       );
 
       if (activeStatus !== "paused") {

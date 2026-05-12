@@ -141,6 +141,9 @@ export class WhatsAppService {
   // MESSAGING (Delegated to WhatsAppMessaging)
   // ────────────────────────────────────────────────
 
+  /**
+   * @deprecated Usa `whatsappMessagingService.sendMessage` en su lugar (ISP - SOLID).
+   */
   async sendMessage(
     to: string,
     content: string,
@@ -149,6 +152,9 @@ export class WhatsAppService {
     return this.messaging.sendMessage(to, content, options);
   }
 
+  /**
+   * @deprecated Usa `whatsappMessagingService.executeQueuedMessage` en su lugar.
+   */
   async executeQueuedMessage(
     sessionId: string,
     to: string,
@@ -158,10 +164,16 @@ export class WhatsAppService {
     return this.messaging.executeQueuedMessage(sessionId, to, content, options);
   }
 
+  /**
+   * @deprecated Usa `whatsappMessagingService.simulateTyping` en su lugar.
+   */
   async simulateTyping(sessionId: string, to: string) {
     return this.messaging.simulateTyping(sessionId, to);
   }
 
+  /**
+   * @deprecated Usa `whatsappMessagingService.sendPresenceUpdate` en su lugar.
+   */
   async sendPresenceUpdate(
     to: string,
     type: "composing" | "recording" | "paused",
@@ -170,6 +182,9 @@ export class WhatsAppService {
     return this.messaging.sendPresenceUpdate(to, type, companyId);
   }
 
+  /**
+   * @deprecated Usa `whatsappMessagingService.sendReaction` en su lugar.
+   */
   async sendReaction(
     to: string,
     messageId: string,
@@ -180,6 +195,9 @@ export class WhatsAppService {
     return this.messaging.sendReaction(to, messageId, reaction, companyId, fromMe);
   }
 
+  /**
+   * @deprecated Usa `whatsappMessagingService.sendTemplate` en su lugar.
+   */
   async sendTemplate(
     to: string,
     templateId: string,

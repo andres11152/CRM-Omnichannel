@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { type TeamAgent } from "./types";
 import { Users, Activity, Star, Clock, Zap } from "lucide-react";
 
@@ -15,6 +16,7 @@ interface MetricCardProps {
  * Displays summary statistics cards for the team
  */
 export const TeamMetrics: React.FC<{ agents: TeamAgent[] }> = ({ agents }) => {
+  const { t } = useTranslation();
   // Calculate metrics
   const totalAgents = agents.filter((a) => !a.isAI).length;
   const onlineAgents = agents.filter(
@@ -38,28 +40,28 @@ export const TeamMetrics: React.FC<{ agents: TeamAgent[] }> = ({ agents }) => {
       : 0;
 
   return (
-    <div className="px-4 md:px-8 py-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+    <div className="px-4 md:px-8 py-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
       <MetricCard
-        title="Total Agentes"
+        title={t("team.metrics.total_agents", "Total Agentes")}
         value={totalAgents}
         icon={<Users size={20} />}
         color="blue"
       />
       <MetricCard
-        title="Online Ahora"
+        title={t("team.metrics.online_now", "Online Ahora")}
         value={onlineAgents}
         icon={<Activity size={20} />}
         color="green"
       />
       <MetricCard
-        title="CSAT Promedio"
+        title={t("team.metrics.avg_csat", "CSAT Promedio")}
         value={avgCsat}
         icon={<Star size={20} />}
         color="yellow"
         trend="+2.4%"
       />
       <MetricCard
-        title="Tiempo Resp. (FRT)"
+        title={t("team.metrics.avg_frt", "Tiempo Resp. (FRT)")}
         value={`${avgFrt} min`}
         icon={<Clock size={20} />}
         color="purple"

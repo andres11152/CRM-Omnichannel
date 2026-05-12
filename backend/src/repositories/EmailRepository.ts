@@ -79,6 +79,53 @@ export class EmailRepository {
   }
 
   // ────────────────────────────────────────────────
+  // INBOX LISTING (Paginated, Filterable)
+  // ────────────────────────────────────────────────
+
+  async findAll(params: {
+    companyId: string;
+    limit: number;
+    offset: number;
+    status?: string;
+    type?: string;
+    search?: string;
+  }) {
+    const where: Prisma.EmailWhereInput = {
+      companyId: params.companyId,
+    };
+
+    if (params.status) {
+      where.status = params.status as Prisma.EnumEmailStatusFilter;
+    }
+    if (params.type) {
+      where.type = params.type as Prisma.EnumEmailTypeFilter;
+    }
+    if (params.search) {
+      where.OR = [
+        { subject: { contains: params.search, mode: "insensitive" } },
+        { from: { contains: params.search, mode: "insensitive" } },
+        { to: { hasSome: [params.search] } },
+      ];
+    }
+
+    const [emails, total] = await Promise.all([
+      prisma.email.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: params.limit,
+        skip: params.offset,
+        include: {
+          contact: { select: { id: true, name: true, email: true } },
+          ticket: { select: { id: true, ticketNumber: true } },
+        },
+      }),
+      prisma.email.count({ where }),
+    ]);
+
+    return { emails, total };
+  }
+
+  // ────────────────────────────────────────────────
   // TIMELINE QUERIES (used by TimelineService)
   // ────────────────────────────────────────────────
 

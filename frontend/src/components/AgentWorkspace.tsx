@@ -1,6 +1,8 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { AIConfig, User } from "@/types";
 import { useAgentWorkspace } from "@/hooks/useAgentWorkspace";
+import { useResizable } from "@/hooks/useResizable";
 
 // ── Sub-Components (SRP) ──
 import { WorkspaceHeader, QueuePreviewCard, WelcomeDashboard } from "./agent";
@@ -30,6 +32,14 @@ interface Props {
  */
 export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
   const workspace = useAgentWorkspace({ user });
+  const { t } = useTranslation();
+
+  const { size: sidebarWidth, startResizing: startResizingSidebar } = useResizable({
+    initialSize: 288,
+    minSize: 240,
+    maxSize: 480,
+    storageKey: "reply_sidebar_width",
+  });
 
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark">
@@ -58,20 +68,20 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
 
       {/* ═══════════════ BODY ═══════════════ */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* ── SIDEBAR ── */}
         <div
           className={`
             border-r border-gray-200 dark:border-reply-border-dark bg-white dark:bg-reply-surface-dark flex flex-col flex-shrink-0 z-20
             ${
               workspace.isSidebarOpen
-                ? `w-full md:w-72 ${workspace.activeTicketId ? "hidden md:flex" : "flex"}`
+                ? `w-full md:flex ${workspace.activeTicketId ? "hidden md:flex" : "flex"}`
                 : "hidden"
             }
           `}
+          style={workspace.isSidebarOpen && window.innerWidth >= 768 ? { width: `${sidebarWidth}px` } : {}}
         >
           {workspace.loading ? (
             <div className="p-8 text-center text-gray-500 text-sm">
-              Cargando tickets...
+              {t("contact_list.loading", "Cargando tickets...")}
             </div>
           ) : workspace.activeTab === "queue" ? (
             <QueueView
@@ -115,6 +125,17 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
             />
           )}
         </div>
+
+        {/* ── SIDEBAR RESIZER ── */}
+        {workspace.isSidebarOpen && window.innerWidth >= 768 && (
+          <div
+            onMouseDown={startResizingSidebar}
+            className="hidden md:block w-1.5 h-full cursor-col-resize absolute z-30 hover:bg-indigo-500/30 transition-colors group"
+            style={{ left: `${sidebarWidth - 3}px` }}
+          >
+            <div className="w-[1px] h-full bg-transparent group-hover:bg-indigo-500 mx-auto" />
+          </div>
+        )}
 
         {/* ── MAIN PANEL ── */}
         <div

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ModuleHeader } from "./common/ModuleHeader";
 import {
@@ -37,6 +38,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
   const [activeTab, setActiveTab] = useState<
     "credentials" | "assistants" | "knowledge"
   >("assistants");
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
 
   // Credentials State
@@ -90,15 +92,15 @@ export const AIAgentConfig: React.FC<Props> = () => {
   const handleSaveCreds = async () => {
     try {
       await updateAIConfig(creds);
-      toast.success("Credenciales actualizadas correctamente.");
+      toast.success(t("ai_config.credentials.success", "Credenciales actualizadas correctamente."));
     } catch (error) {
-      toast.error("Error al guardar credenciales.");
+      toast.error(t("ai_config.credentials.error", "Error al guardar credenciales."));
     }
   };
 
   const handleSaveAssistant = async () => {
     if (!currentAssistant.name || !currentAssistant.systemPrompt)
-      return toast.error("Nombre y Prompt son obligatorios");
+      return toast.error(t("ai_config.assistants.err_required", "Nombre y Prompt son obligatorios"));
 
     try {
       if (currentAssistant.id) {
@@ -118,7 +120,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
     } catch (error: unknown) {
       console.error(error);
       const msg =
-        error instanceof Error ? error.message : "Error al guardar asistente";
+        error instanceof Error ? error.message : t("ai_config.assistants.err_save", "Error al guardar asistente");
       toast.error(msg);
     }
   };
@@ -147,13 +149,13 @@ export const AIAgentConfig: React.FC<Props> = () => {
   };
 
   const handleDeleteAssistant = async (id: string) => {
-    if (!confirm("¿Ests seguro de eliminar este asistente?")) return;
+    if (!confirm(t("ai_config.assistants.confirm_delete", "¿Estás seguro de eliminar este asistente?"))) return;
     try {
       await deleteAssistant(id);
       loadData();
     } catch (error: unknown) {
       console.error(error);
-      const msg = error instanceof Error ? error.message : "Error al eliminar";
+      const msg = error instanceof Error ? error.message : t("ai_config.assistants.err_delete", "Error al eliminar");
       toast.error(msg);
     }
   };
@@ -161,12 +163,12 @@ export const AIAgentConfig: React.FC<Props> = () => {
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark transition-colors duration-200">
       <ModuleHeader
-        title="Gestión de Agentes IA"
-        description="Configura tus cerebros artificiales, credenciales y bases de conocimiento."
+        title={t("ai_config.title", "Gestión de Agentes IA")}
+        description={t("ai_config.description", "Configura tus cerebros artificiales, credenciales y bases de conocimiento.")}
         icon={<BrainCircuit className="w-8 h-8 text-white relative z-10" />}
         gradient="from-violet-600 to-indigo-600 dark:from-violet-800 dark:to-indigo-900"
         stats={{
-          label: "Total Agentes",
+          label: t("ai_config.total_agents", "Total Agentes"),
           value: assistants.length,
         }}
       />
@@ -176,29 +178,29 @@ export const AIAgentConfig: React.FC<Props> = () => {
         <div className="w-full md:w-72 bg-white dark:bg-reply-panel-dark border-b md:border-b-0 md:border-r border-gray-100 dark:border-reply-border-dark flex flex-col shrink-0 z-20 shadow-sm md:shadow-none sticky top-0 md:static">
           <div className="p-3 md:p-6">
             <h3 className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest mb-2 md:mb-4 px-2 hidden md:block">
-              Configuración
+              {t("ai_config.nav.config", "Configuración")}
             </h3>
             <nav className="flex md:flex-col overflow-x-auto md:overflow-x-visible no-scrollbar gap-2 md:gap-2 pb-2 md:pb-0 scroll-smooth px-1">
               <NavButton
                 active={activeTab === "assistants"}
                 onClick={() => setActiveTab("assistants")}
                 icon={<Bot className="w-5 h-5 flex-shrink-0" />}
-                label="Asistentes"
-                description="Personalidad y Modelos"
+                label={t("ai_config.nav.assistants", "Asistentes")}
+                description={t("ai_config.nav.assistants_desc", "Personalidad y Modelos")}
               />
               <NavButton
                 active={activeTab === "credentials"}
                 onClick={() => setActiveTab("credentials")}
                 icon={<Key className="w-5 h-5 flex-shrink-0" />}
-                label="Credenciales"
-                description="OpenAI & Gemini Keys"
+                label={t("ai_config.nav.credentials", "Credenciales")}
+                description={t("ai_config.nav.credentials_desc", "OpenAI & Gemini Keys")}
               />
               <NavButton
                 active={activeTab === "knowledge"}
                 onClick={() => setActiveTab("knowledge")}
                 icon={<Library className="w-5 h-5 flex-shrink-0" />}
-                label="Conocimiento"
-                description="Documentos y FAQs"
+                label={t("ai_config.nav.knowledge", "Conocimiento")}
+                description={t("ai_config.nav.knowledge_desc", "Documentos y FAQs")}
               />
             </nav>
           </div>
@@ -210,12 +212,11 @@ export const AIAgentConfig: React.FC<Props> = () => {
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div className="text-xs font-bold text-violet-700 dark:text-violet-300">
-                  AI Pro Tips
+                  {t("ai_config.tips.title", "AI Pro Tips")}
                 </div>
               </div>
               <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                Usa temperaturas bajas (0.2) para soporte técnico preciso, y
-                altas (0.8) para marketing creativo.
+                {t("ai_config.tips.content", "Usa temperaturas bajas (0.2) para soporte técnico preciso, y altas (0.8) para marketing creativo.")}
               </p>
             </div>
           </div>
@@ -231,11 +232,10 @@ export const AIAgentConfig: React.FC<Props> = () => {
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
                       <ShieldCheck className="w-8 h-8 text-emerald-500" />
-                      Proveedores de IA (BYOK)
+                      {t("ai_config.credentials.title", "Proveedores de IA (BYOK)")}
                     </h2>
                     <p className="text-gray-500 mt-1 max-w-2xl">
-                      Configura tus propias claves API para tener control total
-                      sobre límites y facturación directa con los proveedores.
+                      {t("ai_config.credentials.desc", "Configura tus propias claves API para tener control total sobre límites y facturación directa con los proveedores.")}
                     </p>
                   </div>
                 </div>
@@ -290,11 +290,11 @@ export const AIAgentConfig: React.FC<Props> = () => {
                     >
                       {showKeys ? (
                         <>
-                          <EyeOff className="w-4 h-4" /> Ocultar Claves
+                          <EyeOff className="w-4 h-4" /> {t("ai_config.credentials.hide", "Ocultar Claves")}
                         </>
                       ) : (
                         <>
-                          <Eye className="w-4 h-4" /> Mostrar Claves
+                          <Eye className="w-4 h-4" /> {t("ai_config.credentials.show", "Mostrar Claves")}
                         </>
                       )}
                     </button>
@@ -304,7 +304,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
                       className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-violet-600/20 active:scale-95 transition-all flex items-center gap-2"
                     >
                       <Save className="w-4 h-4" />
-                      Guardar Configuración
+                      {t("ai_config.credentials.save", "Guardar Configuración")}
                     </button>
                   </div>
                 </div>
@@ -320,17 +320,17 @@ export const AIAgentConfig: React.FC<Props> = () => {
                       <div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                           <Bot className="w-7 h-7 text-violet-500" />
-                          Mis Asistentes
+                          {t("ai_config.assistants.title", "Mis Asistentes")}
                         </h2>
                         <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                          Gestiona los roles y personalidades de tus agentes.
+                          {t("ai_config.assistants.desc", "Gestiona los roles y personalidades de tus agentes.")}
                         </p>
                       </div>
                       <button
                         onClick={handleCreateNew}
                         className="px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-black rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl flex items-center gap-2"
                       >
-                        <Plus className="w-4 h-4" /> Nuevo Asistente
+                        <Plus className="w-4 h-4" /> {t("ai_config.assistants.new_button", "Nuevo Asistente")}
                       </button>
                     </div>
 
@@ -394,7 +394,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
                               Temp: {assistant.temperature}
                             </div>
                             <div>
-                              {assistant._count?.queues || 0} Colas Asignadas
+                              {assistant._count?.queues || 0} {t("ai_config.assistants.queues_assigned", "Colas Asignadas")}
                             </div>
                           </div>
                         </div>
@@ -406,17 +406,16 @@ export const AIAgentConfig: React.FC<Props> = () => {
                             <Bot className="w-10 h-10 text-gray-400" />
                           </div>
                           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
-                            Sin asistentes activos
+                            {t("ai_config.assistants.empty_title", "Sin asistentes activos")}
                           </h3>
                           <p className="text-gray-500 text-sm mb-6 max-w-sm">
-                            Crea tu primer agente de IA para comenzar a
-                            automatizar conversaciones.
+                            {t("ai_config.assistants.empty_desc", "Crea tu primer agente de IA para comenzar a automatizar conversaciones.")}
                           </p>
                           <button
                             onClick={handleCreateNew}
                             className="text-violet-600 font-bold hover:underline"
                           >
-                            Crear Asistente Ahora
+                            {t("ai_config.assistants.create_now", "Crear Asistente Ahora")}
                           </button>
                         </div>
                       )}
@@ -426,13 +425,13 @@ export const AIAgentConfig: React.FC<Props> = () => {
                   <div className="bg-white dark:bg-reply-panel-dark p-8 rounded-[2rem] border border-gray-100 dark:border-reply-border-dark shadow-2xl shadow-gray-200/50 dark:shadow-none max-w-4xl mx-auto">
                     <div className="flex justify-between items-center mb-8 pb-6 border-b border-gray-100 dark:border-reply-border-dark">
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {currentAssistant.id ? "Editar Agente" : "Nuevo Agente"}
+                        {currentAssistant.id ? t("ai_config.assistants.edit_title", "Editar Agente") : t("ai_config.assistants.create_title", "Nuevo Agente")}
                       </h2>
                       <button
                         onClick={() => setIsEditingAssistant(false)}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"
                       >
-                        Cancelar
+                        {t("common.cancel", "Cancelar")}
                       </button>
                     </div>
 
@@ -440,7 +439,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
                       <div className="space-y-6">
                         <div className="group">
                           <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                            Identidad del Agente
+                            {t("ai_config.assistants.identity", "Identidad del Agente")}
                           </label>
                           <input
                             type="text"
@@ -451,14 +450,14 @@ export const AIAgentConfig: React.FC<Props> = () => {
                                 name: e.target.value,
                               })
                             }
-                            placeholder="Ej: Experto en Soporte L1"
+                            placeholder={t("ai_config.assistants.identity_placeholder", "Ej: Experto en Soporte L1")}
                             className="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3.5 text-sm font-medium focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all outline-none"
                           />
                         </div>
 
                         <div className="group">
                           <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                            Modelo de IA
+                            {t("ai_config.assistants.model", "Modelo de IA")}
                           </label>
                           <div className="relative">
                             <select
@@ -478,22 +477,16 @@ export const AIAgentConfig: React.FC<Props> = () => {
                               }}
                               className="w-full appearance-none bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3.5 text-sm font-medium focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all outline-none cursor-pointer"
                             >
-                              <optgroup label="[ONLINE] OpenAI">
-                                <option value="OPENAI|gpt-4o">GPT-4o</option>
-                                <option value="OPENAI|gpt-4-turbo">
-                                  GPT-4 Turbo
-                                </option>
-                                <option value="OPENAI|gpt-3.5-turbo">
-                                  GPT-3.5 Turbo
-                                </option>
+                              <optgroup label="🤖 OpenAI">
+                                <option value="OPENAI|gpt-4o">GPT-4o (Alta capacidad - Recomendado)</option>
+                                <option value="OPENAI|gpt-4o-mini">GPT-4o Mini (Veloz y económico)</option>
+                                <option value="OPENAI|gpt-4-turbo">GPT-4 Turbo (Anterior)</option>
                               </optgroup>
-                              <optgroup label=" Google Gemini">
-                                <option value="GEMINI|gemini-2.5-flash">
-                                  Gemini 2.5 Flash (Recomendado)
-                                </option>
-                                <option value="GEMINI|gemini-1.5-pro">
-                                  Gemini 1.5 Pro
-                                </option>
+                              <optgroup label="✨ Google Gemini">
+                                <option value="GEMINI|gemini-2.5-flash">Gemini 2.5 Flash (Recomendado - Veloz y económico)</option>
+                                <option value="GEMINI|gemini-2.5-pro">Gemini 2.5 Pro (Razonamiento complejo y análisis avanzado)</option>
+                                <option value="GEMINI|gemini-1.5-flash">Gemini 1.5 Flash (Estable - Versión anterior)</option>
+                                <option value="GEMINI|gemini-1.5-pro">Gemini 1.5 Pro (Estable - Ventana de contexto gigante)</option>
                               </optgroup>
                             </select>
                             <ChevronRight className="w-5 h-5 absolute right-4 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 pointer-events-none" />
@@ -503,7 +496,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
                         <div>
                           <div className="flex justify-between mb-3">
                             <label className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                              Creatividad
+                              {t("ai_config.assistants.creativity", "Creatividad")}
                             </label>
                             <span className="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">
                               {currentAssistant.temperature}
@@ -524,15 +517,15 @@ export const AIAgentConfig: React.FC<Props> = () => {
                             className="w-full accent-violet-600 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                           />
                           <div className="flex justify-between text-[10px] text-gray-400 font-bold uppercase mt-2">
-                            <span>Preciso</span>
-                            <span>Creativo</span>
+                            <span>{t("ai_config.assistants.precise", "Preciso")}</span>
+                            <span>{t("ai_config.assistants.creative", "Creativo")}</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex flex-col h-full">
                         <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                          System Prompt (Instrucciones)
+                          {t("ai_config.assistants.system_prompt", "System Prompt (Instrucciones)")}
                         </label>
                         <textarea
                           value={currentAssistant.systemPrompt}
@@ -542,7 +535,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
                               systemPrompt: e.target.value,
                             })
                           }
-                          placeholder="Define la personalidad, tono y reglas del asistente..."
+                          placeholder={t("ai_config.assistants.prompt_placeholder", "Define la personalidad, tono y reglas del asistente...")}
                           className="flex-1 w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-4 text-sm font-medium focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all outline-none resize-none font-mono leading-relaxed"
                         />
                       </div>
@@ -553,14 +546,14 @@ export const AIAgentConfig: React.FC<Props> = () => {
                         onClick={() => setIsEditingAssistant(false)}
                         className="px-6 py-3 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl font-bold text-sm transition-colors"
                       >
-                        Cancelar
+                        {t("common.cancel", "Cancelar")}
                       </button>
                       <button
                         onClick={handleSaveAssistant}
                         className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-violet-600/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
                       >
                         <Save className="w-4 h-4" />
-                        Guardar Agente
+                        {t("ai_config.assistants.save_button", "Guardar Agente")}
                       </button>
                     </div>
                   </div>

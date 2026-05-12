@@ -16,7 +16,9 @@ import {
   Users,
   Briefcase,
   CheckCircle2,
+  Zap
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Activity, Account, Deal } from "@/types/crm";
 import {
   createActivity,
@@ -56,6 +58,7 @@ export const ActivityModal: React.FC<Props> = ({
   initialType = "NOTE",
   preselectedContact,
 }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState<Partial<Activity>>({
     type: initialType,
     subject: "",
@@ -86,7 +89,7 @@ export const ActivityModal: React.FC<Props> = ({
             getAccounts(),
             getDeals(),
             getContacts(),
-            fetchAPI("/users"),
+            fetchAPI<{ data: { users: User[] } }>("/users"),
           ]);
         setAccounts(accountsData.accounts || []);
         setDeals(dealsData.deals || []);
@@ -213,28 +216,26 @@ export const ActivityModal: React.FC<Props> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
       <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-gray-200 dark:border-reply-border-dark transform transition-all scale-100">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-200 dark:border-reply-border-dark bg-gradient-to-r from-orange-600 to-red-600 dark:from-orange-800 dark:to-red-800">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                <ClipboardList className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white">
-                  {activity ? "Editar Actividad" : "Nueva Actividad"}
-                </h2>
-                <p className="text-white/80 text-sm">
-                  {isMeeting && "[DATE] Se sincronizar con Google Calendar"}
-                </p>
-              </div>
+        <div className="px-8 py-6 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg/30 dark:bg-reply-surface-dark/30 backdrop-blur-sm shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-orange-600/10 flex items-center justify-center text-orange-600 dark:text-orange-400 border border-orange-500/20 shadow-inner">
+              <ClipboardList size={24} />
             </div>
-            <button
-              onClick={onClose}
-              className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-all"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div>
+              <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+                {activity ? t("crm.activities.edit_title") : t("crm.activities.new_title")}
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                {isMeeting ? t("crm.activities.meeting_sync") : t("crm.activities.new_desc")}
+              </p>
+            </div>
           </div>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all duration-200 active:scale-95"
+          >
+            <X size={20} />
+          </button>
         </div>
 
         {/* Form */}
@@ -251,8 +252,8 @@ export const ActivityModal: React.FC<Props> = ({
                 ) : (
                   <User className="w-3.5 h-3.5" />
                 )}
-                Vinculado a{" "}
-                {preselectedContact.isCompany ? "Empresa" : "Cliente"}
+                {t("crm.accounts.fields.related_to")}{" "}
+                {preselectedContact.isCompany ? t("navigation.accounts") : t("navigation.contacts")}
               </p>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-orange-600 dark:text-orange-400 font-bold">
@@ -299,7 +300,7 @@ export const ActivityModal: React.FC<Props> = ({
                 }`}
               >
                 <User className="w-4 h-4" />
-                Interna / Personal
+                {t("crm.activities.organizer")} / {t("tenants.metrics.support_queues")}
               </button>
               <button
                 type="button"
@@ -311,38 +312,52 @@ export const ActivityModal: React.FC<Props> = ({
                 }`}
               >
                 <Building2 className="w-4 h-4" />
-                Cliente / Negocio
+                {t("crm.activities.company")} / {t("crm.activities.deal")}
               </button>
             </div>
           )}
 
-          {/* Type of Activity */}
+          {/* Type of Activity - Enterprise Selector */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
-              Tipo de Actividad
+            <label className="block text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3 ml-1">
+              {t("crm.activities.type_label")}
             </label>
-            <select
-              value={formData.type}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  type: e.target.value as Activity["type"],
-                })
-              }
-              className="w-full px-4 py-3 min-h-[44px] rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent font-medium transition-all leading-normal"
-            >
-              <option value="NOTE"> Nota</option>
-              <option value="CALL">[PHONE] Llamada</option>
-              <option value="EMAIL"> Email</option>
-              <option value="MEETING">[DATE] Reunión (Google Calendar)</option>
-              <option value="TASK">[OK] Tarea</option>
-            </select>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {(["NOTE", "CALL", "EMAIL", "MEETING", "TASK"] as const).map((type) => {
+                const isSelected = formData.type === type;
+                const config = {
+                  NOTE: { label: t("crm.activities.types.note"), icon: <FileText size={18} />, color: "blue" },
+                  CALL: { label: t("crm.activities.types.call"), icon: <Phone size={18} />, color: "emerald" },
+                  EMAIL: { label: t("crm.activities.types.email"), icon: <Mail size={18} />, color: "purple" },
+                  MEETING: { label: t("crm.activities.types.meeting"), icon: <Calendar size={18} />, color: "indigo" },
+                  TASK: { label: t("crm.activities.types.task"), icon: <CheckSquare size={18} />, color: "amber" },
+                }[type];
+
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, type })}
+                    className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all duration-300 ${
+                      isSelected
+                        ? `bg-${config.color}-500/10 border-${config.color}-500 text-${config.color}-600 dark:text-${config.color}-400 ring-4 ring-${config.color}-500/10`
+                        : "border-gray-100 dark:border-reply-border-dark hover:border-gray-300 dark:hover:border-gray-500 text-gray-500 dark:text-gray-400"
+                    }`}
+                  >
+                    <div className={`p-2 rounded-xl ${isSelected ? `bg-${config.color}-500 text-white shadow-lg` : "bg-gray-100 dark:bg-reply-surface-dark text-gray-400"} transition-all`}>
+                      {config.icon}
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-wider">{config.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Subject */}
           <div>
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
-              Asunto <span className="text-red-500">*</span>
+              {t("crm.activities.subject")} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -354,8 +369,8 @@ export const ActivityModal: React.FC<Props> = ({
               className="w-full px-4 py-3 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-400 transition-all"
               placeholder={
                 isMeeting
-                  ? "Ej. Reunión con cliente - Demo del producto"
-                  : "Ej. Llamar al cliente sobre propuesta"
+                  ? t("crm.activities.meeting_date")
+                  : t("crm.activities.subject_placeholder")
               }
             />
           </div>
@@ -363,7 +378,7 @@ export const ActivityModal: React.FC<Props> = ({
           {/* Description */}
           <div>
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
-              Descripción
+              {t("crm.activities.description")}
             </label>
             <textarea
               value={formData.description}
@@ -372,7 +387,7 @@ export const ActivityModal: React.FC<Props> = ({
               }
               className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-400 transition-all resize-none"
               rows={3}
-              placeholder="Detalles adicionales, agenda, notas..."
+              placeholder={t("crm.activities.description_placeholder")}
             />
           </div>
 
@@ -381,8 +396,8 @@ export const ActivityModal: React.FC<Props> = ({
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
               <CalendarClock className="w-4 h-4" />
               {isMeeting
-                ? "Fecha y Hora de la Reunión"
-                : "Fecha y Hora de Vencimiento"}
+                ? t("crm.activities.meeting_date")
+                : t("crm.activities.due_date")}
             </label>
             <input
               type="datetime-local"
@@ -405,7 +420,7 @@ export const ActivityModal: React.FC<Props> = ({
             <div>
               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
                 <User className="w-4 h-4" />
-                {isMeeting ? "Organizador" : "Responsable"}
+                {isMeeting ? t("crm.activities.organizer") : t("crm.activities.responsible")}
               </label>
               <select
                 value={formData.assignedToId}
@@ -428,7 +443,7 @@ export const ActivityModal: React.FC<Props> = ({
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  Invitados
+                  {t("crm.activities.guests")}
                 </label>
                 <div className="border-2 border-gray-300 dark:border-gray-600 rounded-xl p-2 max-h-32 overflow-y-auto bg-white dark:bg-gray-800">
                   {users
@@ -487,7 +502,7 @@ export const ActivityModal: React.FC<Props> = ({
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
                   <User className="w-4 h-4" />
-                  Contacto
+                  {t("crm.activities.contact")}
                 </label>
                 <select
                   value={formData.contactId || ""}
@@ -513,7 +528,7 @@ export const ActivityModal: React.FC<Props> = ({
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
-                    Empresa
+                    {t("crm.activities.company")}
                   </label>
                   <select
                     value={formData.accountId}
@@ -533,7 +548,7 @@ export const ActivityModal: React.FC<Props> = ({
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
                     <Briefcase className="w-4 h-4" />
-                    Oportunidad
+                    {t("crm.activities.deal")}
                   </label>
                   <select
                     value={formData.dealId}
@@ -566,8 +581,7 @@ export const ActivityModal: React.FC<Props> = ({
                 />
                 <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200 transition-colors flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
-                  Marcar como ya completada (útil para registrar llamadas
-                  pasadas)
+                  {t("crm.activities.mark_completed")}
                 </span>
               </label>
             </div>
@@ -581,7 +595,7 @@ export const ActivityModal: React.FC<Props> = ({
             onClick={onClose}
             className="px-6 py-2.5 h-11 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl font-semibold transition-all"
           >
-            Cancelar
+            {t("common.cancel")}
           </button>
           <button
             type="submit"
@@ -611,7 +625,7 @@ export const ActivityModal: React.FC<Props> = ({
                 ></path>
               </svg>
             )}
-            {activity ? "Guardar Cambios" : "Crear Actividad"}
+            {activity ? t("common.save") : t("crm.activities.new_title")}
           </button>
         </div>
       </div>

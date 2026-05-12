@@ -96,7 +96,7 @@ export class OutboundMessageHandler {
               conversation:
                 (metadata?.quotedContent as string) ||
                 dbQuoted.content ||
-                "Mensaje original",
+                "Original message",
             },
           };
         }
@@ -275,7 +275,7 @@ export class OutboundMessageHandler {
               conversation:
                 (options.metadata?.quotedContent as string) ||
                 dbQuoted.content ||
-                "Mensaje original",
+                "Original message",
             },
           };
         }
@@ -379,8 +379,8 @@ export class OutboundMessageHandler {
       if (err instanceof MediaFileNotFoundError) {
         Logger.error(`[MessageHandler] [ERROR] ${err.message}`);
         const warningContent = err.caption
-          ? `${err.caption}\n\n([WARNING] Audio no disponible: Archivo no encontrado en el servidor)`
-          : `([WARNING] Audio no disponible: Archivo no encontrado en el servidor)`;
+          ? `${err.caption}\n\n([WARNING] Audio unavailable: File not found on server)`
+          : `([WARNING] Audio unavailable: File not found on server)`;
         return this.sendMessage(to, warningContent, options);
       }
 
@@ -414,7 +414,7 @@ export class OutboundMessageHandler {
         `[MessageHandler] [ERROR] sendMedia failed unexpectedly:`,
         err,
       );
-      const warningContent = `([WARNING] Error enviando archivo multimedia: ${media.type})`;
+      const warningContent = `([WARNING] Error sending media file: ${media.type})`;
       return this.sendMessage(to, warningContent, options);
     } finally {
       if (tempFilePath) {

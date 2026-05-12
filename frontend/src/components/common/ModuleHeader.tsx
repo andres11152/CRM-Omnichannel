@@ -22,7 +22,7 @@ export const ModuleHeader: React.FC<ModuleHeaderProps> = ({
 }) => {
   return (
     <div
-      className={`px-4 md:px-8 pt-8 md:pt-12 pb-6 md:pb-8 bg-gradient-to-r ${gradient} relative overflow-hidden`}
+      className={`px-4 md:px-8 pt-3 md:pt-4 pb-2 md:pb-3 bg-gradient-to-r ${gradient} relative overflow-hidden`}
     >
       {/* Decorative background element */}
       <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none" />

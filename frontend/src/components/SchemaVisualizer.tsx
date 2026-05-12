@@ -1,55 +1,91 @@
 import React from 'react';
-import { DB_SCHEMA } from '../constants';
+import { useTranslation } from "react-i18next";
+import { DB_SCHEMA } from './admin/data/dbSchema';
+import { StaggerContainer, fadeUpVariant, AnimatedCard } from "./ui/Motion";
+import { motion } from "framer-motion";
+import { ModuleHeader } from "./common/ModuleHeader";
+import { Database, Table as TableIcon, Key, Link, Cpu } from "lucide-react";
 
 export const SchemaVisualizer: React.FC = () => {
+  const { t } = useTranslation();
   return (
-    <div className="p-6 bg-white dark:bg-reply-panel-dark rounded-lg shadow-sm border border-gray-200 dark:border-reply-border-dark transition-colors duration-200">
-      <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-        <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-        </svg>
-        Arquitectura de Base de Datos
-      </h2>
-      <p className="text-gray-600 dark:text-gray-300 mb-8">
-        Esquema Entidad-Relación optimizado para mensajería de alto rendimiento y contexto de IA híbrida.
-        <span className="block text-sm text-indigo-500 dark:text-indigo-400 mt-1">Esta arquitectura soporta PostgreSQL 15+ y utiliza JSONB para metadatos flexibles.</span>
-      </p>
+    <div className="flex flex-col h-full bg-reply-bg dark:bg-reply-bg-dark animate-in fade-in duration-500 overflow-hidden">
+      <ModuleHeader
+        title={t("schema.title", "Database Architecture")}
+        description={t("schema.subtitle", "Esquema Entidad-Relación optimizado para mensajería de alto rendimiento y contextos de IA")}
+        icon={<Database className="w-8 h-8 text-white" />}
+        gradient="from-slate-800 via-slate-900 to-indigo-900 dark:from-black dark:via-slate-900 dark:to-indigo-950"
+        stats={{
+          label: t("schema.core_entities", "Core Entities"),
+          value: DB_SCHEMA.length
+        }}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {DB_SCHEMA.map((table) => (
-          <div key={table.tableName} className="border border-gray-200 dark:border-reply-border-dark rounded-lg overflow-hidden bg-reply-bg dark:bg-reply-surface-dark flex flex-col transition-colors duration-200">
-            <div className="bg-gray-100 dark:bg-reply-border-dark px-4 py-3 border-b border-gray-200 dark:border-reply-border-dark flex justify-between items-center">
-              <h3 className="font-bold text-gray-800 dark:text-white font-mono">{table.tableName}</h3>
-              <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-full">Tabla</span>
-            </div>
-            <div className="p-4 flex-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 italic">{table.description}</p>
-              <ul className="space-y-2">
-                {table.columns.map((col) => (
-                  <li key={col.name} className="flex justify-between items-start text-sm border-b border-gray-200 dark:border-reply-border-dark last:border-0 pb-2 last:pb-0">
-                    <div className="flex items-center gap-2">
-                      {col.isPK && <span className="text-xxs font-bold text-yellow-600 bg-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-500 px-1 rounded">PK</span>}
-                      {col.isFK && <span className="text-xxs font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 px-1 rounded">FK</span>}
-                      <span className="font-medium text-gray-700 dark:text-gray-200">{col.name}</span>
-                    </div>
-                    <span className="text-gray-400 font-mono text-xs">{col.type}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ))}
-      </div>
-      
-      <div className="mt-8 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-md border border-indigo-100 dark:border-indigo-800/50">
-        <h4 className="font-bold text-indigo-900 dark:text-indigo-300 mb-2">Notas de Arquitectura:</h4>
-        <ul className="list-disc list-inside text-sm text-indigo-800 dark:text-indigo-400 space-y-1">
-          <li><strong>Implementación Redis:</strong> Usado para gestión de `Colas` (BullMQ) y caché de `Prompts` para reducir consultas a BD.</li>
-          <li><strong>Tabla Integrations:</strong> Almacena de forma segura claves API encriptadas. El backend las desencripta en tiempo de ejecución.</li>
-          <li><strong>IA Híbrida:</strong> El sistema consulta `integrations` para decidir si instanciar `GoogleGenAI` o `OpenAI`.</li>
-        </ul>
+      <div className="flex-1 p-4 md:p-6 overflow-y-auto custom-scrollbar space-y-6">
+        <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {DB_SCHEMA.map((table) => (
+            <motion.div key={table.tableName} variants={fadeUpVariant}>
+              <AnimatedCard className="bg-white dark:bg-reply-panel-dark rounded-2xl border border-slate-200 dark:border-reply-border-dark shadow-sm overflow-hidden flex flex-col hover:border-indigo-500/30 transition-all group h-full">
+                <div className="bg-slate-50 dark:bg-white/5 px-5 py-4 border-b border-slate-100 dark:border-reply-border-dark flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                     <TableIcon className="w-4 h-4 text-indigo-500" />
+                     <h3 className="font-bold text-slate-800 dark:text-white font-mono">{table.tableName}</h3>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-white dark:bg-reply-surface-dark px-2 py-0.5 rounded-full border border-slate-100 dark:border-white/5">{t("schema.relational", "Relational")}</span>
+                </div>
+                <div className="p-4 flex-1 space-y-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed italic">{table.description}</p>
+                  <div className="space-y-2">
+                    {table.columns.map((col) => (
+                      <div key={col.name} className="flex justify-between items-center py-2 border-b border-slate-50 dark:border-white/5 last:border-0 group/row">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {col.isPK && <Key className="w-3 h-3 text-amber-500 flex-shrink-0" />}
+                          {col.isFK && <Link className="w-3 h-3 text-blue-500 flex-shrink-0" />}
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{col.name}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-50 dark:bg-white/5 px-1.5 py-0.5 rounded">{col.type}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </AnimatedCard>
+            </motion.div>
+          ))}
+        </StaggerContainer>
+        
+        <div className="bg-white dark:bg-reply-panel-dark p-5 rounded-2xl border border-indigo-500/20 shadow-lg shadow-indigo-500/5 relative overflow-hidden">
+           <div className="absolute right-0 top-0 opacity-5 p-4">
+              <Cpu className="w-24 h-24" />
+           </div>
+           <div className="relative z-10">
+              <h4 className="font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                <Database className="w-4 h-4" />
+                {t("schema.technical_notes", "Notas Técnicas de Implementación")}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <NoteBox 
+                    title={t("schema.redis_title", "Implementación Redis")} 
+                    text={t("schema.redis_text", "Usado para gestión de colas (BullMQ) y caché de prompts para reducir latencia en la IA.")} 
+                 />
+                 <NoteBox 
+                    title={t("schema.integrations_title", "Integrations Layer")} 
+                    text={t("schema.integrations_text", "Cifrado AES-256 para API Keys en BD. Desencriptación on-the-fly en servicios de infraestructura.")} 
+                 />
+                 <NoteBox 
+                    title={t("schema.ai_hybrid_title", "Híbrido de IA")} 
+                    text={t("schema.ai_hybrid_text", "Enrutamiento dinámico entre Google Gemini y OpenAI basado en costos y tokens disponibles.")} 
+                 />
+              </div>
+           </div>
+        </div>
       </div>
     </div>
   );
 };
 
+const NoteBox = ({ title, text }: { title: string; text: string }) => (
+  <div className="space-y-1">
+     <p className="text-sm font-bold text-slate-800 dark:text-white">{title}</p>
+     <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{text}</p>
+  </div>
+);

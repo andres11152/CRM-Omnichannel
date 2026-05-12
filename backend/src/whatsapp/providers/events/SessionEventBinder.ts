@@ -37,7 +37,7 @@ import TenantContextManager from "@/config/tenantContext";
 import { chatSyncService } from "@/services/ChatSyncService";
 import type { SessionStatus } from "../../core/types/whatsapp.types";
 import type { SimpleInMemoryStore } from "../SimpleStore";
-import { AuditService } from "@/services/AuditService";
+import { auditService } from "@/services/AuditService";
 
 /** Dependencies injected from SessionManager */
 export interface SessionEventBinderDeps {
@@ -148,7 +148,7 @@ export function bindSessionEvents(
       });
 
       // [SEC] Audit: QR Emitted
-      await AuditService.logWhatsAppEvent(companyId, sessionId, "SCANNING", { qrLength: qr.length });
+      await auditService.logWhatsAppEvent(companyId, sessionId, "SCANNING", { qrLength: qr.length });
 
       await TenantContextManager.runAsSystem(async () =>
         whatsappSessionRepository.updateSystemSession(sessionId, {
@@ -178,7 +178,7 @@ export function bindSessionEvents(
       logger.info(`[SessionManager] Session ${sessionId} CONNECTED [OK] Phone: ${phoneNumber || "Unknown"}`);
       
       // [SEC] Audit: Connected
-      await AuditService.logWhatsAppEvent(companyId, sessionId, "CONNECTED", { phone: phoneNumber });
+      await auditService.logWhatsAppEvent(companyId, sessionId, "CONNECTED", { phone: phoneNumber });
 
       sessionMetadata.set(sessionId, { companyId, status: "CONNECTED" });
 
@@ -225,7 +225,7 @@ export function bindSessionEvents(
       logger.warn(`[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg}. Reconnect: ${resetConnection}`);
 
       // [SEC] Audit: Disconnected
-      await AuditService.logWhatsAppEvent(companyId, sessionId, "DISCONNECTED", { 
+      await auditService.logWhatsAppEvent(companyId, sessionId, "DISCONNECTED", { 
         reason: errorMsg, 
         isReconnecting: resetConnection,
         statusCode: boomError?.output?.statusCode
@@ -256,18 +256,18 @@ export function bindSessionEvents(
 
   // Message listener (notify only)
   sock.ev.on("messages.upsert", async (rawData: unknown) => {
-    console.log(`[DEBUG-BAILEYS] 🔔 messages.upsert FIRED for session ${sessionId}`);
+    logger.debug(`[SessionEventBinder] messages.upsert FIRED for session ${sessionId}`);
     const validated = validateBaileysEvent(MessagesUpsertSchema, rawData, "messages.upsert", { sessionId, companyId });
     if (!validated) {
-      console.log(`[DEBUG-BAILEYS] ❌ Zod validation FAILED for messages.upsert`);
+      logger.debug(`[SessionEventBinder] Zod validation FAILED for messages.upsert`);
       return;
     }
-    console.log(`[DEBUG-BAILEYS] ✅ Validated. Type: ${validated.type}, Count: ${validated.messages?.length}`);
+    logger.debug(`[SessionEventBinder] Validated. Type: ${validated.type}, Count: ${validated.messages?.length}`);
     if (validated && validated.type === "notify") {
-      console.log(`[DEBUG-BAILEYS] 📨 Processing ${validated.messages.length} notify messages`);
+      logger.debug(`[SessionEventBinder] Processing ${validated.messages.length} notify messages`);
       for (const msg of validated.messages) {
         if (!msg.message) {
-          console.log(`[DEBUG-BAILEYS] ⏭️ Skipping msg with no .message: ${msg.key?.id}`);
+          logger.debug(`[SessionEventBinder] Skipping msg with no .message: ${msg.key?.id}`);
           continue;
         }
         let msgContent = msg.message as Record<string, unknown>;
@@ -295,7 +295,7 @@ export function bindSessionEvents(
               data: { revokedMessageId: String(protoKey["id"]), revokedBy: msg.key.remoteJid || "unknown", fromMe: msg.key.fromMe || false },
             });
           } else {
-            console.log(`[DEBUG-BAILEYS] ⏭️ Skipping internal protocolMessage type: ${protoType} for ${msg.key?.id}`);
+            logger.debug(`[SessionEventBinder] Skipping internal protocolMessage type: ${protoType} for ${msg.key?.id}`);
           }
           continue; // ALL protocolMessages are internal — never process as chat messages
         }
@@ -314,7 +314,7 @@ export function bindSessionEvents(
           }
         }
 
-        console.log(`[DEBUG-BAILEYS] 📤 Publishing MESSAGE_RECEIVED to EventBus: ${msg.key?.id}`);
+        logger.debug(`[SessionEventBinder] Publishing MESSAGE_RECEIVED to EventBus: ${msg.key?.id}`);
         eventBus.publish({
           type: WhatsAppEventType.MESSAGE_RECEIVED,
           sessionId, companyId, timestamp: new Date(),
@@ -324,7 +324,7 @@ export function bindSessionEvents(
         });
       }
     } else {
-      console.log(`[DEBUG-BAILEYS] ⏭️ Skipping non-notify upsert type: ${validated?.type}`);
+      logger.debug(`[SessionEventBinder] Skipping non-notify upsert type: ${validated?.type}`);
     }
   });
 

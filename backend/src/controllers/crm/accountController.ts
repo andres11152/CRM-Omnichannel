@@ -17,13 +17,7 @@ import {
 // Get all accounts for a company
 export const getAccounts = catchAsync(
   async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
-    const companyId = req.user?.companyId;
-
-    if (!companyId) {
-      return _next(new AppError("Company ID is missing", 400));
-    }
-
-    const accounts = await accountService.findAll(companyId);
+    const accounts = await accountService.findAll();
 
     res.status(200).json({
       status: "success",
@@ -37,13 +31,8 @@ export const getAccounts = catchAsync(
 export const getAccount = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const companyId = req.user?.companyId;
 
-    if (!companyId) {
-      return next(new AppError("Company ID is missing", 400));
-    }
-
-    const account = await accountService.findOne(id, companyId);
+    const account = await accountService.findOne(id);
 
     if (!account) {
       return next(new AppError("Account not found", 404));
@@ -59,14 +48,7 @@ export const getAccount = catchAsync(
 // Create account
 export const createAccount = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const companyId = req.user?.companyId;
-
-    if (!companyId) {
-      return next(new AppError("Company ID is missing", 400));
-    }
-
     const account = await accountService.create(
-      companyId,
       req.body as unknown as CreateAccountDTO,
     );
 
@@ -81,13 +63,8 @@ export const createAccount = catchAsync(
 export const updateAccount = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const companyId = req.user?.companyId;
 
-    if (!companyId) {
-      return next(new AppError("Company ID is missing", 400));
-    }
-
-    const updatedAccount = await accountService.update(id, companyId, req.body);
+    const updatedAccount = await accountService.update(id, req.body);
 
     res.status(200).json({
       status: "success",
@@ -100,13 +77,8 @@ export const updateAccount = catchAsync(
 export const deleteAccount = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const companyId = req.user?.companyId;
 
-    if (!companyId) {
-      return next(new AppError("Company ID is missing", 400));
-    }
-
-    await accountService.delete(id, companyId);
+    await accountService.delete(id);
 
     res.status(204).json({
       status: "success",

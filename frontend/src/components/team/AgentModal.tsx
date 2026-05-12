@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { 
   X, 
   User, 
@@ -66,6 +67,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
   onAddSkill,
   onRemoveSkill,
 }) => {
+  const { t } = useTranslation();
   if (!show) return null;
 
   return (
@@ -79,10 +81,10 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             </div>
             <div>
               <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
-                {isEditing ? "Editar Agente" : "Nuevo Agente"}
+                {isEditing ? t("agent_modal.edit_title", "Editar Agente") : t("agent_modal.create_title", "Nuevo Agente")}
               </h3>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">
-                {isEditing ? "Configuración de perfil" : "Registro de nuevo miembro"}
+                {isEditing ? t("agent_modal.edit_desc", "Configuración de perfil") : t("agent_modal.create_desc", "Registro de nuevo miembro")}
               </p>
             </div>
           </div>
@@ -100,35 +102,35 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             {/* LEFT COLUMN: Identity & Access */}
             <div className="space-y-8">
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.2em]">Paso 1</span>
-                <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Perfil & Acceso</h4>
+                <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.2em]">{t("agent_modal.step_1", "Paso 1")}</span>
+                <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">{t("agent_modal.profile_access", "Perfil & Acceso")}</h4>
               </div>
 
               {/* Name */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                  <User size={12} /> Nombre Completo
+                  <User size={12} /> {t("agent_modal.full_name", "Nombre Completo")}
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => onFormChange("name", e.target.value)}
                   className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none"
-                  placeholder="Ej: Juan Pérez"
+                  placeholder={t("agent_modal.name_placeholder", "Ej: Juan Pérez")}
                 />
               </div>
 
               {/* Email */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                  <Mail size={12} /> Email Corporativo
+                  <Mail size={12} /> {t("agent_modal.corp_email", "Email Corporativo")}
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => onFormChange("email", e.target.value)}
                   className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none"
-                  placeholder="juan@reply.com"
+                  placeholder={t("agent_modal.email_placeholder", "juan@reply.com")}
                 />
               </div>
 
@@ -136,7 +138,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               {!isEditing && (
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                    <Lock size={12} /> Contraseña de Acceso
+                    <Lock size={12} /> {t("agent_modal.access_password", "Contraseña de Acceso")}
                   </label>
                   <input
                     type="password"
@@ -145,14 +147,14 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none"
                     placeholder="••••••••"
                   />
-                  <p className="text-[9px] font-bold text-gray-400 mt-2 px-1">Mínimo 8 caracteres, números y símbolos.</p>
+                  <p className="text-[9px] font-bold text-gray-400 mt-2 px-1">{t("agent_modal.password_hint", "Mínimo 8 caracteres, números y símbolos.")}</p>
                 </div>
               )}
 
               {/* Role */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                  <Shield size={12} /> Rol de Sistema
+                  <Shield size={12} /> {t("agent_modal.system_role", "Rol de Sistema")}
                 </label>
                 <select
                   value={formData.role}
@@ -160,11 +162,11 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                   disabled={currentUser?.role === "SUPERVISOR"}
                   className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none appearance-none"
                 >
-                  <option value="AGENT">Agente (Operador)</option>
+                  <option value="AGENT">{t("agent_modal.roles.agent", "Agente (Operador)")}</option>
                   {currentUser?.role !== "SUPERVISOR" && (
                     <>
-                      <option value="SUPERVISOR">Supervisor</option>
-                      <option value="ADMIN">Administrador</option>
+                      <option value="SUPERVISOR">{t("agent_modal.roles.supervisor", "Supervisor")}</option>
+                      <option value="ADMIN">{t("agent_modal.roles.admin", "Administrador")}</option>
                     </>
                   )}
                 </select>
@@ -174,14 +176,14 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             {/* RIGHT COLUMN: Operation & Config */}
             <div className="space-y-8">
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.2em]">Paso 2</span>
-                <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Operación & Skills</h4>
+                <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.2em]">{t("agent_modal.step_2", "Paso 2")}</span>
+                <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">{t("agent_modal.operation_skills", "Operación & Skills")}</h4>
               </div>
 
               {/* Department */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                  <Building size={12} /> Departamento / Fila
+                  <Building size={12} /> {t("agent_modal.dept_queue", "Departamento / Fila")}
                 </label>
                 <select
                   value={formData.department}
@@ -189,7 +191,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                   className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none appearance-none"
                 >
                   {departments.length === 0 ? (
-                    <option value="">Sin departamentos disponibles</option>
+                    <option value="">{t("agent_modal.no_depts", "Sin departamentos disponibles")}</option>
                   ) : (
                     departments.map((dept) => (
                       <option key={dept.id} value={dept.id}>{dept.name}</option>
@@ -203,9 +205,9 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                 <div className="flex justify-between items-end mb-6">
                   <div>
                     <label className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2 mb-1">
-                      <Zap size={12} /> Chats Simultáneos
+                      <Zap size={12} /> {t("agent_modal.concurrent_chats", "Chats Simultáneos")}
                     </label>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase">Capacidad de respuesta</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase">{t("agent_modal.response_capacity", "Capacidad de respuesta")}</p>
                   </div>
                   <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums bg-white dark:bg-gray-800 px-4 py-2 rounded-2xl shadow-sm border border-indigo-100 dark:border-indigo-900/50">
                     {formData.maxConcurrency}
@@ -218,15 +220,15 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                   className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer accent-indigo-600"
                 />
                 <div className="flex justify-between text-[8px] font-black text-gray-400 mt-4 uppercase tracking-[0.2em]">
-                  <span>Carga Baja</span>
-                  <span>Carga Crítica</span>
+                  <span>{t("agent_modal.low_load", "Carga Baja")}</span>
+                  <span>{t("agent_modal.critical_load", "Carga Crítica")}</span>
                 </div>
               </div>
 
               {/* Skills Tags */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                  <Plus size={12} /> Habilidades (Skills)
+                  <Plus size={12} /> {t("agent_modal.skills", "Habilidades (Skills)")}
                 </label>
                 <div className="flex flex-wrap gap-2 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl min-h-[80px] focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
                   {formData.skills.map((skill) => (
@@ -240,7 +242,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                     onChange={(e) => onSkillInputChange(e.target.value)}
                     onKeyDown={onAddSkill}
                     className="bg-transparent outline-none text-sm font-bold flex-1 min-w-[120px] text-gray-900 dark:text-white placeholder-gray-400"
-                    placeholder="Nueva habilidad..."
+                    placeholder={t("agent_modal.new_skill", "Nueva habilidad...")}
                   />
                 </div>
               </div>
@@ -254,7 +256,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             onClick={onClose}
             className="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-900 dark:hover:text-white transition-all"
           >
-            Cancelar
+            {t("common.cancel", "Cancelar")}
           </button>
           <button
             onClick={onSave}
@@ -266,7 +268,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             ) : (
               <Save size={16} className="group-hover:scale-110 transition-transform" />
             )}
-            {saving ? "Procesando..." : isEditing ? "Guardar Cambios" : "Finalizar Registro"}
+            {saving ? t("agent_modal.processing", "Procesando...") : isEditing ? t("company_settings.save_button", "Guardar Cambios") : t("agent_modal.finish_registration", "Finalizar Registro")}
           </button>
         </div>
       </div>

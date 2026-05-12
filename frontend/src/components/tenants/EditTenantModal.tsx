@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Company, Plan, CompanyStatus } from "@/types";
 
 interface Props {
@@ -14,6 +15,7 @@ export const EditTenantModal: React.FC<Props> = ({
   onClose,
   onUpdate,
 }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: company.name,
     slug: company.slug || "",
@@ -50,10 +52,10 @@ export const EditTenantModal: React.FC<Props> = ({
         <div className="px-8 py-5 border-b border-gray-100 dark:border-reply-border-dark bg-reply-bg dark:bg-reply-surface-dark flex justify-between items-center">
           <div>
             <h3 className="font-bold text-xl text-gray-800 dark:text-white flex items-center gap-2">
-              <span className="text-2xl"></span> Editar Empresa
+              <span className="text-2xl"></span> {t("tenants.modal.edit_title", "Editar Empresa")}
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Modificando configuración para <span className="font-bold text-indigo-600 dark:text-indigo-400">{company.name}</span>
+              {t("tenants.modal.edit_desc", "Modificando configuración para")} <span className="font-bold text-indigo-600 dark:text-indigo-400">{company.name}</span>
             </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
@@ -67,7 +69,7 @@ export const EditTenantModal: React.FC<Props> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-5">
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">Nombre de la Empresa</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">{t("tenants.modal.company_name", "Nombre de la Empresa")}</label>
                 <input
                   type="text"
                   required
@@ -77,20 +79,20 @@ export const EditTenantModal: React.FC<Props> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">Plan de Suscripción</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">{t("tenants.modal.assign_plan", "Plan de Suscripción")}</label>
                 <select
                   value={formData.planId}
                   onChange={(e) => setFormData({ ...formData, planId: e.target.value })}
                   className="w-full px-4 py-3 bg-reply-bg dark:bg-reply-surface-dark border border-gray-200 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white"
                 >
-                  <option value="">-- Sin Plan (Gratuito) --</option>
+                  <option value="">{t("tenants.modal.no_plan_label", "-- Sin Plan (Gratuito) --")}</option>
                   {plans.map((p) => (
                     <option key={p.id} value={p.id}>{p.name} — ${p.price}/mes</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">Fin de Suscripción</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">{t("tenants.modal.subscription_end", "Fin de Suscripción")}</label>
                 <input
                   type="date"
                   value={formData.subscriptionEndsAt}
@@ -102,7 +104,7 @@ export const EditTenantModal: React.FC<Props> = ({
 
             <div className="space-y-5">
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">Slug (URL)</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">{t("tenants.modal.slug", "Slug (URL)")}</label>
                 <input
                   type="text"
                   required
@@ -112,7 +114,7 @@ export const EditTenantModal: React.FC<Props> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">Estado de la Cuenta</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">{t("tenants.modal.account_status", "Estado de la Cuenta")}</label>
                 <div className="grid grid-cols-1 gap-2">
                   {["ACTIVE", "TRIAL", "OVERDUE", "BANNED"].map((status) => (
                     <label key={status} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${formData.status === status ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500" : "bg-white dark:bg-reply-panel-dark border-gray-200 dark:border-gray-600"}`}>
@@ -133,9 +135,9 @@ export const EditTenantModal: React.FC<Props> = ({
           </div>
 
           <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100 dark:border-reply-border-dark">
-            <button type="button" onClick={onClose} className="px-6 py-2.5 text-gray-600 dark:text-gray-300 font-bold">Cancelar</button>
+            <button type="button" onClick={onClose} className="px-6 py-2.5 text-gray-600 dark:text-gray-300 font-bold">{t("common.cancel", "Cancelar")}</button>
             <button type="submit" disabled={isSaving} className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/30 disabled:opacity-70">
-              {isSaving ? "Guardando..." : "Guardar Cambios"}
+              {isSaving ? t("tenants.modal.saving", "Guardando...") : t("tenants.modal.save_changes", "Guardar Cambios")}
             </button>
           </div>
         </form>

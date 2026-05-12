@@ -61,6 +61,9 @@ export type FlowNodeType =
   | "UPDATE_CONTACT"
   | "ASSIGN_AGENT"
   | "AI_HANDOFF"
+  | "HTTP_REQUEST"
+  | "TAG_CONTACT"
+  | "SEND_TEMPLATE"
   | "DELAY";
 
 /**
@@ -92,6 +95,9 @@ export interface FlowNodeData {
 
   // CONDITION
   conditions?: FlowCondition[];
+  conditionOperator?: string; // Visual mode: equals, contains, greater_than, less_than, exists
+  conditionValue?: string;    // Visual mode: value to compare against
+  conditionVariable?: string; // Visual mode: which variable to check
 
   // AI_AGENT
   aiAssistantId?: string;
@@ -113,6 +119,25 @@ export interface FlowNodeData {
   assignmentType?: "agent" | "queue";
   agentId?: string;
   queueId?: string;
+
+  // HTTP_REQUEST
+  webhookUrl?: string;
+  url?: string;
+  httpMethod?: string;
+  authHeader?: string;
+  bodyTemplate?: string;
+
+  // TAG_CONTACT
+  tags?: string;
+  tag?: string;
+
+  // SEND_TEMPLATE
+  templateName?: string;
+  templateParams?: string[];
+
+  // DELAY
+  delayValue?: string;
+  delayUnit?: string;
 }
 
 /**

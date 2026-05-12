@@ -16,6 +16,10 @@ export class TemplateRepository {
     return this.db.messageTemplate.create(args);
   }
 
+  async createMany(args: Prisma.MessageTemplateCreateManyArgs) {
+    return this.db.messageTemplate.createMany(args);
+  }
+
   async update(args: Prisma.MessageTemplateUpdateArgs) {
     return this.db.messageTemplate.update(args);
   }

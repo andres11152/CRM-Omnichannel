@@ -20,7 +20,7 @@ export const TagInsights: React.FC<Props> = ({ data }) => {
   // Generate a smooth gradient of colors for the bars
   const colors = ["#8b5cf6", "#7c3aed", "#6d28d9", "#5b21b6", "#4c1d95"];
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: { tag: string }; value: number }> }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white dark:bg-[#111b21] p-3 border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl">

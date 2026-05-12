@@ -7,6 +7,7 @@ import {
   deleteFlow,
   toggleFlow,
   duplicateFlow,
+  getFlowStats,
 } from "@/controllers/flowController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
@@ -33,6 +34,8 @@ router
   .delete(validate(FlowIdParamSchema), deleteFlow);
 
 router.route("/:id/toggle").patch(validate(FlowIdParamSchema), toggleFlow);
+
+router.route("/:id/stats").get(validate(FlowIdParamSchema), getFlowStats);
 
 router.route("/:id/duplicate").post(validate(FlowIdParamSchema), duplicateFlow);
 

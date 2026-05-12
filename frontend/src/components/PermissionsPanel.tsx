@@ -467,7 +467,7 @@ export const PermissionsPanel: React.FC = () => {
 
   const fetchCurrentUser = async () => {
     try {
-      const data = await fetchAPI("/users/me");
+      const data = await fetchAPI<{ user: { role: "MASTER" | "ADMIN" | "AGENT" } }>("/users/me");
       if (data?.user?.role) {
         setCurrentUserRole(data.user.role);
       }
@@ -479,7 +479,7 @@ export const PermissionsPanel: React.FC = () => {
   const fetchRoles = async () => {
     try {
       setLoading(true);
-      const data = await fetchAPI("/roles");
+      const data = await fetchAPI<{ roles: Role[] }>("/roles");
       setRoles(data.roles || []);
     } catch (error) {
       console.error("Error fetching roles:", error);

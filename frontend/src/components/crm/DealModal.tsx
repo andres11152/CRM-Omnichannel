@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Deal, Account } from "@/types/crm";
 import { getAccounts, updateDeal, createDeal } from "@/services/crmService";
@@ -56,6 +57,7 @@ export const DealModal: React.FC<Props> = ({
   onSave,
   deal,
 }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState<DealFormData>({
     title: "",
     value: 0,
@@ -236,7 +238,7 @@ export const DealModal: React.FC<Props> = ({
       }
 
       if (deal) {
-        // Cast to any to bypass strict Partial<Deal> check for conflicting 'stage' property
+        // Cast to Partial<Deal> to safely exclude conflicting 'stage' property
         // The service handles logic based on stageId anyway
         const { stage, ...cleanData } = dataToSave;
         await updateDeal(deal.id, cleanData as Partial<Deal>);
@@ -263,7 +265,7 @@ export const DealModal: React.FC<Props> = ({
             <div className="flex items-center gap-2">
               <Target className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                {deal ? "Detalles del Deal" : "Nuevo Deal"}
+                {deal ? t("crm.activities.deal") : t("crm.activities.new_deal")}
               </h2>
             </div>
             {deal && (
@@ -272,13 +274,13 @@ export const DealModal: React.FC<Props> = ({
                   onClick={() => setActiveTab("details")}
                   className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "details" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
                 >
-                  Información
+                  {t("crm.accounts.form.general_info")}
                 </button>
                 <button
                   onClick={() => setActiveTab("history")}
                   className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "history" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
                 >
-                  Historial
+                  {t("crm.activities.history")}
                 </button>
               </div>
             )}
@@ -297,7 +299,7 @@ export const DealModal: React.FC<Props> = ({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Título *
+                  {t("common.name")} *
                 </label>
                 <input
                   type="text"
@@ -314,7 +316,7 @@ export const DealModal: React.FC<Props> = ({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Valor
+                    {t("tenants.metrics.status")}
                   </label>
                   <input
                     type="number"
@@ -331,7 +333,7 @@ export const DealModal: React.FC<Props> = ({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Moneda
+                    {t("common.soon")}
                   </label>
                   <select
                     value={formData.currency}
@@ -355,7 +357,7 @@ export const DealModal: React.FC<Props> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Asociado a
+                    {t("crm.accounts.fields.related_to")}
                   </label>
                   <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
                     <button
@@ -364,7 +366,7 @@ export const DealModal: React.FC<Props> = ({
                       className={`px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${associationType === "account" ? "bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300" : "text-gray-500 dark:text-gray-400"}`}
                     >
                       <Building2 className="w-3 h-3" />
-                      Empresa
+                      {t("navigation.accounts")}
                     </button>
                     <button
                       type="button"
@@ -372,7 +374,7 @@ export const DealModal: React.FC<Props> = ({
                       className={`px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${associationType === "contact" ? "bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300" : "text-gray-500 dark:text-gray-400"}`}
                     >
                       <User className="w-3 h-3" />
-                      Contacto
+                      {t("navigation.contacts")}
                     </button>
                   </div>
                 </div>
@@ -389,7 +391,7 @@ export const DealModal: React.FC<Props> = ({
                     }
                     className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
                   >
-                    <option value="">Seleccionar empresa...</option>
+                    <option value="">{t("crm.accounts.form.select_placeholder")}</option>
                     {accounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
                         {acc.name}
@@ -408,7 +410,7 @@ export const DealModal: React.FC<Props> = ({
                     }
                     className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
                   >
-                    <option value="">Seleccionar contacto...</option>
+                    <option value="">{t("crm.accounts.form.select_placeholder")}</option>
                     {contacts.map((contact) => (
                       <option key={contact.id} value={contact.id}>
                         {contact.name}{" "}
@@ -441,7 +443,7 @@ export const DealModal: React.FC<Props> = ({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Etapa
+                    {t("crm.accounts.fields.status")}
                   </label>
                   <select
                     value={formData.stageId}
@@ -481,7 +483,7 @@ export const DealModal: React.FC<Props> = ({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Fecha Cierre Esperada
+                    {t("crm.activities.expected_close")}
                   </label>
                   <input
                     type="date"
@@ -531,7 +533,7 @@ export const DealModal: React.FC<Props> = ({
               {!deal && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                     Notas Iniciales
+                     {t("crm.accounts.form.description")}
                   </label>
                   <textarea
                     value={formData.notes || ""}
@@ -576,7 +578,7 @@ export const DealModal: React.FC<Props> = ({
                     className="text-red-500 hover:text-red-700 text-sm font-medium transition-colors flex items-center gap-1"
                   >
                     <Trash2 className="w-4 h-4" />
-                    Eliminar Deal
+                    {t("crm.activities.delete_activity")}
                   </button>
                 )}
                 <div className="flex gap-3 ml-auto">
@@ -585,7 +587,7 @@ export const DealModal: React.FC<Props> = ({
                     onClick={onClose}
                     className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   >
-                    Cancelar
+                    {t("common.cancel")}
                   </button>
                   <button
                     type="submit"
@@ -595,7 +597,7 @@ export const DealModal: React.FC<Props> = ({
                     {loading && (
                       <Loader2 className="animate-spin h-4 w-4 text-white" />
                     )}
-                    {deal ? "Guardar Cambios" : "Crear Deal"}
+                    {deal ? t("common.save") : t("common.new")}
                   </button>
                 </div>
               </div>
@@ -610,14 +612,14 @@ export const DealModal: React.FC<Props> = ({
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm"
                   >
                     <Mail className="w-4 h-4" />
-                    Enviar Email
+                    {t("crm.activities.send_email")}
                   </button>
                 )}
               </div>
 
               {loadingActivities ? (
                 <div className="text-center py-8 text-gray-500">
-                  Cargando historial...
+                  {t("common.loading")}...
                 </div>
               ) : activities.length === 0 ? (
                 <div className="text-center py-12 text-gray-400 flex flex-col items-center">

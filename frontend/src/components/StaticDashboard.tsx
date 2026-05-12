@@ -22,6 +22,7 @@ import {
   Activity,
   Workflow,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 // --- TYPES ---
 
@@ -95,6 +96,7 @@ const OperationalLayout: React.FC<StaticDashboardProps> = ({
   agentWorkloadData,
   onNavigate,
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-12 gap-6 p-1 pb-10">
       {/* Top Row: Active Load & Key Status */}
@@ -104,7 +106,7 @@ const OperationalLayout: React.FC<StaticDashboardProps> = ({
       <div className="col-span-12 lg:col-span-4 h-[400px] flex flex-col gap-6">
         <div className="flex-1">
           <StatCard
-            title="Resolución por IA"
+            title={t("dashboard.ai_resolution_full", "Resolución por IA")}
             value={stats.aiResolution}
             icon={<Bot className="w-6 h-6" />}
             color="text-purple-600 dark:text-purple-400"
@@ -113,7 +115,7 @@ const OperationalLayout: React.FC<StaticDashboardProps> = ({
         </div>
         <div className="flex-1">
           <StatCard
-            title="Tiempo Respuesta"
+            title={t("dashboard.response_time", "Tiempo Respuesta")}
             value={stats.avgResponseTime}
             icon={<Zap className="w-6 h-6" />}
             color="text-amber-600 dark:text-amber-400"
@@ -140,22 +142,22 @@ const OperationalLayout: React.FC<StaticDashboardProps> = ({
           <ActionButton
             onClick={() => onNavigate && onNavigate("queue")}
             icon={<Mail className="w-5 h-5" />}
-            text="Bandeja de Entrada"
+            text={t("dashboard.inbox", "Bandeja de Entrada")}
           />
           <ActionButton
             onClick={() => onNavigate && onNavigate("contacts")}
             icon={<Users className="w-5 h-5" />}
-            text="Gestionar Contactos"
+            text={t("dashboard.manage_contacts", "Gestionar Contactos")}
           />
           <ActionButton
             onClick={() => onNavigate && onNavigate("flows")}
             icon={<Workflow className="w-5 h-5" />}
-            text="Automatizaciones"
+            text={t("dashboard.automations", "Automatizaciones")}
           />
           <ActionButton
             onClick={() => onNavigate && onNavigate("settings")}
             icon={<Settings className="w-5 h-5" />}
-            text="Configuración"
+            text={t("dashboard.settings", "Configuración")}
           />
         </div>
       </div>
@@ -171,6 +173,7 @@ const StrategicLayout: React.FC<StaticDashboardProps> = ({
   channelStatsData,
   plan,
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-12 gap-6 p-1 pb-10">
       {/* Top Row: Sales Pipeline DESTACADO */}
@@ -186,7 +189,7 @@ const StrategicLayout: React.FC<StaticDashboardProps> = ({
       {/* Middle Row: Key Metrics */}
       <div className="col-span-12 lg:col-span-3 h-[200px]">
         <StatCard
-          title="Tickets Activos"
+          title={t("dashboard.active_tickets", "Tickets Activos")}
           value={stats.activeTickets}
           icon={<Ticket className="w-6 h-6" />}
           color="text-indigo-600 dark:text-indigo-400"
@@ -195,7 +198,7 @@ const StrategicLayout: React.FC<StaticDashboardProps> = ({
       </div>
       <div className="col-span-12 lg:col-span-3 h-[200px]">
         <StatCard
-          title="Total Mensajes"
+          title={t("dashboard.total_messages", "Total Mensajes")}
           value={stats.totalMessages.toLocaleString()}
           icon={<MessageSquare className="w-6 h-6" />}
           color="text-blue-600 dark:text-blue-400"
@@ -204,7 +207,7 @@ const StrategicLayout: React.FC<StaticDashboardProps> = ({
       </div>
       <div className="col-span-12 lg:col-span-3 h-[200px]">
         <StatCard
-          title="Resolución IA"
+          title={t("dashboard.ai_resolution", "Resolución IA")}
           value={stats.aiResolution}
           icon={<Bot className="w-6 h-6" />}
           color="text-purple-600 dark:text-purple-400"
@@ -213,7 +216,7 @@ const StrategicLayout: React.FC<StaticDashboardProps> = ({
       </div>
       <div className="col-span-12 lg:col-span-3 h-[200px]">
         <StatCard
-          title="Tiempo Respuesta"
+          title={t("dashboard.response_time", "Tiempo Respuesta")}
           value={stats.avgResponseTime}
           icon={<Zap className="w-6 h-6" />}
           color="text-amber-600 dark:text-amber-400"
@@ -227,7 +230,7 @@ const StrategicLayout: React.FC<StaticDashboardProps> = ({
       </div>
       <div className="col-span-12 lg:col-span-4 h-[400px]">
         <PlanUsageWidget
-          planName={plan?.name || "Sin Plan"}
+          planName={plan?.name || t("dashboard.no_plan", "Sin Plan")}
           usage={(plan?.usage || []).map((u) => ({
             label: u.label,
             used: u.current,
@@ -250,12 +253,13 @@ const AnalyticalLayout: React.FC<StaticDashboardProps> = ({
   channelStatsData,
   agentWorkloadData,
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-12 gap-6 p-1 pb-10">
       {/* Top Cards Row */}
       <div className="col-span-6 lg:col-span-3 h-[180px]">
         <StatCard
-          title="Tickets Activos"
+          title={t("dashboard.active_tickets", "Tickets Activos")}
           value={stats.activeTickets}
           icon={<Ticket className="w-6 h-6" />}
           color="text-indigo-600 dark:text-indigo-400"
@@ -264,7 +268,7 @@ const AnalyticalLayout: React.FC<StaticDashboardProps> = ({
       </div>
       <div className="col-span-6 lg:col-span-3 h-[180px]">
         <StatCard
-          title="Resolución IA"
+          title={t("dashboard.ai_resolution", "Resolución IA")}
           value={stats.aiResolution}
           icon={<Bot className="w-6 h-6" />}
           color="text-purple-600 dark:text-purple-400"
@@ -273,7 +277,7 @@ const AnalyticalLayout: React.FC<StaticDashboardProps> = ({
       </div>
       <div className="col-span-6 lg:col-span-3 h-[180px]">
         <StatCard
-          title="Tiempo Respuesta"
+          title={t("dashboard.response_time", "Tiempo Respuesta")}
           value={stats.avgResponseTime}
           icon={<Zap className="w-6 h-6" />}
           color="text-amber-600 dark:text-amber-400"
@@ -282,7 +286,7 @@ const AnalyticalLayout: React.FC<StaticDashboardProps> = ({
       </div>
       <div className="col-span-6 lg:col-span-3 h-[180px]">
         <StatCard
-          title="Total Mensajes"
+          title={t("dashboard.total_messages", "Total Mensajes")}
           value={stats.totalMessages}
           icon={<MessageSquare className="w-6 h-6" />}
           color="text-blue-600 dark:text-blue-400"

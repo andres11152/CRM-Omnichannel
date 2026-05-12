@@ -1,6 +1,6 @@
 import { Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "@/types/types";
-import { AuditService } from "@/services/AuditService";
+import { auditService } from "@/services/AuditService";
 
 /**
  * ️ AUDIT MIDDLEWARE
@@ -43,7 +43,7 @@ export const auditLog = (
         }
 
         if (companyId) {
-          void AuditService.log({
+          void auditService.logAction({
             companyId,
             userId,
             action,

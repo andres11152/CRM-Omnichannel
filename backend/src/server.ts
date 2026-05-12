@@ -45,7 +45,7 @@ const bootstrap = async () => {
     await connectRedis();
     Logger.info("[Server]  Connecting to Database...");
     await connectDB();
-    Logger.info("[Server] [OK] Database connected successfully");
+    Logger.info("[Server] Database connected successfully");
 
     // 2. Initialize App & Server
     const app = createApp();
@@ -60,11 +60,25 @@ const bootstrap = async () => {
 
     // 4. Background Services
     memoryMonitor.start(60000);
-    await initWorkers();
+
+    // [SEC] SCALE FIX: Only load workers if NOT running in dedicated worker mode.
+    // When using separate PM2 processes (reply-crm-api + reply-crm-workers),
+    // the API process should NOT run background jobs to prevent event loop starvation.
+    const isWorkerMode = process.env.WORKER_MODE === "true";
+    if (!isWorkerMode) {
+      await initWorkers();
+      Logger.info("[Server] Workers loaded in monolithic mode");
+    } else {
+      Logger.info("[Server] ⏭️ Skipping workers (running in dedicated worker process)");
+    }
 
     // 5. Start Server
     httpServer.listen(Number(PORT), () => {
-      Logger.info(`[OK] ¡ÉXITO! CRM SaaS Backend corriendo en el puerto ${PORT}`);
+      Logger.info(`[Server] ✅ CRM SaaS Backend running on port ${PORT}`);
+      // Signal PM2 that we're ready (required for wait_ready: true)
+      if (process.send) {
+        process.send("ready");
+      }
     });
 
     // 6. Graceful Shutdown
@@ -73,7 +87,7 @@ const bootstrap = async () => {
       httpServer.close(async () => {
         Logger.info(" HTTP server closed");
         await prisma.$disconnect();
-        Logger.info("[SAVE] Database disconnected");
+        Logger.info("[Server] Database disconnected");
         process.exit(0);
       });
     };

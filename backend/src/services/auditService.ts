@@ -1,86 +1,79 @@
-import { auditLogRepository } from "@/repositories/AuditLogRepository";
+import { auditRepository, AuditFilter } from "@/repositories/AuditRepository";
+import { userRepository } from "@/repositories/UserRepository";
+import { companyRepository } from "@/repositories/CompanyRepository";
 import { Logger } from "@/utils/logger";
 import { Prisma } from "@prisma/client";
 
-/**
- * [SEC] GLOBAL AUDIT SERVICE
- * 
- * Captures all critical administrative and system actions for compliance and security.
- * Every action is scoped by companyId to preserve multi-tenant integrity.
- * 
- * [ARCH] Uses AuditLogRepository — zero direct Prisma access.
- */
 export class AuditService {
   /**
-   * Logs an action to the AuditLog table
+   * Retrieves audit logs enriched with User and Company names for the Master Dashboard
    */
-  static async log(params: {
+  async getGlobalForensics(filter: AuditFilter) {
+    Logger.info(`[AuditService] Fetching global forensics with filters: ${JSON.stringify(filter)}`);
+    
+    const { logs, total } = await auditRepository.findGlobalLogs(filter);
+
+    // Enrich logs with names (In a high-load system, we'd use a cache or a complex JOIN)
+    // For the Master Dashboard, we can do a batch fetch of unique IDs.
+    const userIds = Array.from(new Set(logs.map(l => l.userId).filter(Boolean))) as string[];
+    const companyIds = Array.from(new Set(logs.map(l => l.companyId)));
+
+    const [users, companies] = await Promise.all([
+      userRepository.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true, email: true }
+      }, "__SYSTEM__"),
+      companyRepository.findMany({
+        where: { id: { in: companyIds } },
+        select: { id: true, name: true }
+      })
+    ]);
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+    const companyMap = new Map(companies.map(c => [c.id, c]));
+
+    const enrichedLogs = logs.map(log => ({
+      ...log,
+      userName: log.userId ? userMap.get(log.userId)?.name || userMap.get(log.userId)?.email || "Sistema" : "Sistema",
+      companyName: companyMap.get(log.companyId)?.name || "Desconocido",
+    }));
+
+    return {
+      logs: enrichedLogs,
+      total,
+      limit: filter.limit || 50,
+      offset: filter.offset || 0
+    };
+  }
+
+  /**
+   * Standard helper to log actions from any service
+   */
+  async logAction(context: {
     companyId: string;
     userId?: string;
-    action: "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "LOGOUT" | "EXPORT" | "SYSTEM_ACTION" | "INTEGRATION_SYNC";
+    action: string;
     entity: string;
     entityId: string;
-    details?: Record<string, unknown>;
+    details?: Prisma.InputJsonValue;
     ipAddress?: string;
     userAgent?: string;
-  }): Promise<void> {
-    try {
-      await auditLogRepository.create({
-        data: {
-          companyId: params.companyId,
-          userId: params.userId || null,
-          action: params.action,
-          entity: params.entity,
-          entityId: params.entityId,
-          details: params.details ? (params.details as Prisma.InputJsonValue) : undefined,
-          ipAddress: params.ipAddress,
-          userAgent: params.userAgent,
-        },
-      });
-      
-      Logger.debug(`[AuditLog] ${params.action} on ${params.entity}:${params.entityId} (Company: ${params.companyId})`);
-    } catch (error) {
-      // [SEC] Fail-safe: A failure in logging should NEVER crash the main business logic
-      Logger.error(`[AuditService] [ERROR] Failed to write audit log:`, error as Error);
-    }
+  }) {
+    return await auditRepository.createLog(context);
   }
 
   /**
-   * Shortcut for logging WhatsApp connection events
+   * Specialized helper for WhatsApp Lifecycle events
    */
-  static async logWhatsAppEvent(
-    companyId: string, 
-    sessionId: string, 
-    event: "CONNECTED" | "DISCONNECTED" | "AUTH_FAILURE" | "VERSION_MISMATCH" | "SCANNING" | "SYNC_COMPLETED",
-    details?: Record<string, unknown>
-  ): Promise<void> {
-    await this.log({
+  async logWhatsAppEvent(companyId: string, sessionId: string, status: string, meta?: Prisma.InputJsonValue) {
+    return await this.logAction({
       companyId,
-      action: "SYSTEM_ACTION",
+      action: status,
       entity: "WhatsAppSession",
       entityId: sessionId,
-      details: { event, ...details },
-    });
-  }
-
-  /**
-   * Shortcut for security-sensitive actions
-   */
-  static async logSecurityAction(
-    companyId: string,
-    userId: string,
-    action: "LOGIN" | "LOGOUT" | "EXPORT",
-    details?: Record<string, unknown>,
-    ipAddress?: string
-  ): Promise<void> {
-    await this.log({
-      companyId,
-      userId,
-      action,
-      entity: "User",
-      entityId: userId,
-      details,
-      ipAddress,
+      details: meta
     });
   }
 }
+
+export const auditService = new AuditService();

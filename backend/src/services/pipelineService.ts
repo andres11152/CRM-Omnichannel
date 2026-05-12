@@ -53,13 +53,13 @@ export class PipelineService {
       );
     } else {
       const defaultStages = [
-        { name: "Nuevo Lead", order: 1, color: "#3B82F6" },
-        { name: "Contactado", order: 2, color: "#6366F1" },
-        { name: "Calificado", order: 3, color: "#8B5CF6" },
-        { name: "Propuesta", order: 4, color: "#F59E0B" },
-        { name: "Negociación", order: 5, color: "#EC4899" },
-        { name: "Cerrado Ganado", order: 6, color: "#10B981" },
-        { name: "Cerrado Perdido", order: 7, color: "#EF4444" },
+        { name: "New Lead", order: 1, color: "#3B82F6" },
+        { name: "Contacted", order: 2, color: "#6366F1" },
+        { name: "Qualified", order: 3, color: "#8B5CF6" },
+        { name: "Proposal", order: 4, color: "#F59E0B" },
+        { name: "Negotiation", order: 5, color: "#EC4899" },
+        { name: "Closed Won", order: 6, color: "#10B981" },
+        { name: "Closed Lost", order: 7, color: "#EF4444" },
       ];
       await Promise.all(
         defaultStages.map((stage) =>

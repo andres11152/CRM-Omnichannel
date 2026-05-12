@@ -2,10 +2,11 @@ import { Worker, Job } from "bullmq";
 import { connection } from "@/config/bullmq";
 import { Logger } from "@/utils/logger";
 import { flowExecutor } from "@/services/FlowExecutor";
-import { whatsappService } from "@/whatsapp";
 import { chatService } from "@/services/ChatService";
 import { TenantContextManager } from "@/config/tenantContext";
 import mime from "mime-types";
+import { container } from "@/config/container";
+import { WA_TOKENS } from "@/whatsapp/di/tokens";
 
 const QUEUE_NAME = "flow-execution-queue";
 
@@ -23,6 +24,8 @@ class FlowQueueWorker {
 
     Logger.info(`[FlowWorker] Starting worker for queue: ${QUEUE_NAME}`);
 
+    const messageHandler = container.resolve(WA_TOKENS.MessageHandler);
+
     this.worker = new Worker(
       QUEUE_NAME,
       async (job: Job) => {
@@ -31,50 +34,65 @@ class FlowQueueWorker {
           Logger.info(`[FlowWorker] Resuming session ${sessionId}`);
 
           try {
-            // 1. Get Session Context
-            const sessionState = await flowExecutor.getSessionById(sessionId);
+            // 1. Get Session Context (Bypass to retrieve the target company metadata safely)
+            const sessionState = await TenantContextManager.runAsSystem(async () => {
+              return await flowExecutor.getSessionById(sessionId);
+            });
+
             if (!sessionState) {
               Logger.warn(`[FlowWorker] Session ${sessionId} not found`);
               return;
             }
 
-            // 2. Call the executor to resume the flow
-            const results = await flowExecutor.resumeSession(sessionId);
+            const { companyId, conversationId } = sessionState;
 
-            // 3. Process Results (Send Messages)
-            if (results && results.length > 0) {
-              const { companyId, conversationId } = sessionState;
-              const conversation =
-                await chatService.getFullConversation(companyId, conversationId);
-
-              if (!conversation) {
-                Logger.warn(
-                  `[FlowWorker] Conversation ${conversationId} not found`,
-                );
-                return;
-              }
-
-              // Create Bot User Context
-              const botUser = await chatService.upsertWhatsAppUser({
-                email: `bot_${companyId}@reply.bot`,
-                name: "Flow Bot",
+            // Wrap all operations in the explicit Company Tenant Context to guarantee 100% RLS compliance
+            await TenantContextManager.run(
+              {
                 companyId,
-                role: "AGENT",
-              });
+                userId: "system",
+                role: "SYSTEM",
+                requestId: `flow-resume-${job.id}`,
+              },
+              async () => {
+                const conversation =
+                  await chatService.getFullConversation(companyId, conversationId);
 
-              // Execute Sending in System/Tenant Context
-              await TenantContextManager.run(
-                {
+                if (!conversation) {
+                  Logger.warn(
+                    `[FlowWorker] Conversation ${conversationId} not found`,
+                  );
+                  return;
+                }
+
+                // Create/fetch Bot User Context
+                const botUser = await chatService.upsertWhatsAppUser({
+                  email: `bot_${companyId}@reply.bot`,
+                  name: "Flow Bot",
                   companyId,
-                  userId: botUser.id,
-                  requestId: `flow-resume-${job.id}`,
-                },
-                async () => {
+                  role: "AGENT",
+                });
+
+                // 2. Call the executor to resume the flow under the correct company and bot user context
+                const results = await TenantContextManager.run(
+                  {
+                    companyId,
+                    userId: botUser.id,
+                    role: "AGENT",
+                    requestId: `flow-resume-${job.id}`,
+                  },
+                  async () => {
+                    return await flowExecutor.resumeSession(sessionId);
+                  }
+                );
+
+                // 3. Process Results (Send Messages)
+                if (results && results.length > 0) {
                   for (const result of results) {
                     try {
                       if (typeof result === "string") {
-                        // Text Message
-                        await whatsappService.sendMessage(
+                        // Text Message - Add to global outbound queue
+                        await messageHandler.sendMessage(
                           conversation.channelId,
                           result,
                           {
@@ -89,23 +107,22 @@ class FlowQueueWorker {
                         typeof result === "object" &&
                         "type" in result
                       ) {
-                        // Media Message
-                        await whatsappService.sendMessage(
+                        // Media Message - Add to global outbound queue
+                        await messageHandler.sendMedia(
                           conversation.channelId,
-                          result.message || "",
+                          {
+                            type: result.type,
+                            url: result.url,
+                            caption: result.message,
+                            mimetype:
+                              mime.lookup(result.url) ||
+                              "application/octet-stream",
+                          },
                           {
                             companyId,
                             conversationId,
                             senderId: botUser.id,
                             metadata: { flowGenerated: true },
-                            media: {
-                              type: result.type,
-                              url: result.url,
-                              caption: result.message,
-                              mimetype:
-                                mime.lookup(result.url) ||
-                                "application/octet-stream",
-                            },
                           },
                         );
                       }
@@ -116,9 +133,9 @@ class FlowQueueWorker {
                       );
                     }
                   }
-                },
-              );
-            }
+                }
+              }
+            );
           } catch (error) {
             Logger.error(
               `[FlowWorker] Error resuming session ${sessionId}:`,

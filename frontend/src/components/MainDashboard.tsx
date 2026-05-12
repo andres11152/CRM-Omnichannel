@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Plan, Company, User, UserRole } from "@/types";
 import { adminService } from "@/services/adminService";
 import { API_BASE_URL } from "@/services/apiConfig";
@@ -111,6 +112,7 @@ const MasterAdminDashboard: React.FC<{
   });
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const { t } = useTranslation();
 
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [tenantHealth, setTenantHealth] = useState<TenantHealth[]>([]);
@@ -200,21 +202,21 @@ const MasterAdminDashboard: React.FC<{
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden">
       <ModuleHeader
-        title="Panel de Control Master"
-        description="Administración y monitoreo del sistema CRM SaaS"
+        title={t("dashboard.master_title", "Admin Central")}
+        description={t("dashboard.master_desc", "Panel maestro de orquestación y monitoreo del ecosistema Reply")}
         icon={<BarChart3 className="w-8 h-8 text-white" />}
-        gradient="from-purple-600 via-indigo-600 to-blue-600 dark:from-purple-900 dark:via-indigo-900 dark:to-blue-900"
+        gradient="from-slate-900 via-indigo-900 to-indigo-800 dark:from-black dark:via-indigo-950 dark:to-slate-900"
         stats={{
-          label: "Empresas Activas",
-          value: stats.activeCompanies,
+          label: t("dashboard.active_ecosystem", "Active Ecosystem"),
+          value: `${stats.activeCompanies} ${t("dashboard.tenants", "Tenants")}`,
         }}
       />
 
-      <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-transparent">
         {/* KPIs Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <StatCard
-            title="Total Empresas"
+            title={t("dashboard.total_companies", "Total Empresas")}
             value={stats.totalCompanies}
             icon={<Building2 className="w-6 h-6" />}
             color="text-blue-600 dark:text-blue-400"
@@ -222,7 +224,7 @@ const MasterAdminDashboard: React.FC<{
             isLoading={loading}
           />
           <StatCard
-            title="Empresas Activas"
+            title={t("dashboard.active_companies", "Empresas Activas")}
             value={stats.activeCompanies}
             icon={<Zap className="w-6 h-6" />}
             color="text-green-600 dark:text-green-400"
@@ -230,7 +232,7 @@ const MasterAdminDashboard: React.FC<{
             isLoading={loading}
           />
           <StatCard
-            title="MRR Total"
+            title={t("dashboard.total_mrr", "MRR Total")}
             value={`$${(stats.financials?.mrr || 0).toLocaleString()}`}
             icon={<TrendingUp className="w-6 h-6" />}
             color="text-purple-600 dark:text-purple-400"
@@ -238,7 +240,7 @@ const MasterAdminDashboard: React.FC<{
             isLoading={loading}
           />
           <StatCard
-            title="Usuarios Activos"
+            title={t("dashboard.active_users", "Usuarios Activos")}
             value={stats.activeUsers}
             icon={<Users className="w-6 h-6" />}
             color="text-cyan-600 dark:text-cyan-400"
@@ -267,7 +269,7 @@ const MasterAdminDashboard: React.FC<{
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Activity className="w-5 h-5 text-emerald-500" />
-                    Salud de Cartera (Churn Risk)
+                    {t("dashboard.churn_risk", "Salud de Cartera (Churn Risk)")}
                   </h3>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -287,7 +289,7 @@ const MasterAdminDashboard: React.FC<{
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Activity className="w-5 h-5 text-indigo-500" />
-                  Actividad Global
+                  {t("dashboard.global_activity", "Actividad Global")}
                 </h3>
                 <span className="flex h-2 w-2 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -305,7 +307,7 @@ const MasterAdminDashboard: React.FC<{
         <div className="mt-6 bg-white dark:bg-reply-panel-dark rounded-xl shadow-sm border border-slate-200 dark:border-reply-border-dark p-6">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
             <Activity className="w-5 h-5" />
-            Acciones Rápidas
+            {t("dashboard.quick_actions", "Acciones Rápidas")}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
@@ -318,10 +320,10 @@ const MasterAdminDashboard: React.FC<{
                 </div>
                 <div>
                   <p className="font-semibold text-slate-900 dark:text-white text-sm">
-                    Gestión de Empresas
+                    {t("dashboard.manage_companies", "Gestión de Empresas")}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Administrar clientes
+                    {t("dashboard.manage_companies_desc", "Administrar clientes")}
                   </p>
                 </div>
               </div>
@@ -350,15 +352,47 @@ const MasterAdminDashboard: React.FC<{
                 </div>
                 <div>
                   <p className="font-semibold text-slate-900 dark:text-white text-sm">
-                    Gestión de Planes
+                    {t("dashboard.manage_plans", "Gestión de Planes")}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Configurar suscripciones
+                    {t("dashboard.manage_plans_desc", "Configurar suscripciones")}
                   </p>
                 </div>
               </div>
               <svg
                 className="w-5 h-5 text-slate-400 group-hover:text-purple-500 group-hover:translate-x-1 transition-all"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+
+            <button
+              onClick={() => onNavigate?.("audit")}
+              className="group flex items-center justify-between p-4 rounded-lg border-2 border-slate-200 dark:border-reply-border-dark hover:border-emerald-500 dark:hover:border-emerald-500 hover:shadow-md transition-all text-left bg-white dark:bg-slate-800"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Shield className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900 dark:text-white text-sm">
+                    {t("dashboard.audit_logs", "Forensics & Audit")}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t("dashboard.audit_logs_desc", "Registros de seguridad")}
+                  </p>
+                </div>
+              </div>
+              <svg
+                className="w-5 h-5 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -382,10 +416,10 @@ const MasterAdminDashboard: React.FC<{
                 </div>
                 <div>
                   <p className="font-semibold text-slate-900 dark:text-white text-sm">
-                    Base de Datos
+                    {t("dashboard.database", "Base de Datos")}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Visualizar esquema
+                    {t("dashboard.database_desc", "Visualizar esquema")}
                   </p>
                 </div>
               </div>
@@ -457,11 +491,12 @@ const StatusBadge: React.FC<{ status?: string; isActive?: boolean }> = ({
   status,
   isActive,
 }) => {
+  const { t } = useTranslation();
   const statusMap: Record<string, { label: string; color: string }> = {
-    ACTIVE: { label: "Activo", color: "bg-emerald-500" },
-    TRIAL: { label: "Prueba", color: "bg-amber-500" },
-    SUSPENDED: { label: "Suspendido", color: "bg-rose-500" },
-    INACTIVE: { label: "Inactivo", color: "bg-slate-500" },
+    ACTIVE: { label: t("dashboard.status.active", "Activo"), color: "bg-emerald-500" },
+    TRIAL: { label: t("dashboard.status.trial", "Prueba"), color: "bg-amber-500" },
+    SUSPENDED: { label: t("dashboard.status.suspended", "Suspendido"), color: "bg-rose-500" },
+    INACTIVE: { label: t("dashboard.status.inactive", "Inactivo"), color: "bg-slate-500" },
   };
   const info = statusMap[status || "INACTIVE"] || statusMap.INACTIVE;
   return (
@@ -495,6 +530,7 @@ const AgentDashboard: React.FC<{
 }> = ({ onNavigate, user }) => {
   const [stats, setStats] = useState<AgentStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const { t, i18n } = useTranslation();
 
   useEffect(() => {
     const fetchAgentStats = async () => {
@@ -512,7 +548,7 @@ const AgentDashboard: React.FC<{
     fetchAgentStats();
   }, []);
 
-  const todayDate = new Date().toLocaleDateString("es-ES", {
+  const todayDate = new Date().toLocaleDateString(i18n.language, {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -526,11 +562,11 @@ const AgentDashboard: React.FC<{
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-1 flex items-center gap-2">
-              Hola, {user?.name?.split(" ")[0]}{" "}
+              {t("dashboard.agent_greeting", "Hola")}, {user?.name?.split(" ")[0]}{" "}
               <span className="text-2xl"></span>
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
-              ¡Vamos con todo hoy! Aquí tienes tu resumen personal.
+              {t("dashboard.agent_subtitle", "¡Vamos con todo hoy! Aquí tienes tu resumen personal.")}
             </p>
           </div>
           <div className="text-right">
@@ -556,21 +592,21 @@ const AgentDashboard: React.FC<{
               <div className="flex items-center gap-2 mb-2 opacity-90">
                 <Layers className="w-5 h-5" />
                 <span className="text-sm font-medium uppercase tracking-wide">
-                  En tu bandeja
+                  {t("dashboard.inbox_title", "En tu bandeja")}
                 </span>
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-5xl font-bold">
                   {loading ? "-" : stats?.activeTickets || 0}
                 </span>
-                <span className="text-sm opacity-80">tickets activos</span>
+                <span className="text-sm opacity-80">{t("dashboard.active_tickets", "tickets activos")}</span>
               </div>
               <div className="mt-4 pt-4 border-t border-white/20">
                 <button
                   onClick={() => onNavigate?.("tickets")}
                   className="text-xs font-bold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded transition-colors flex items-center gap-2 w-fit"
                 >
-                  Ir a mis tickets <ArrowRight className="w-3 h-3" />
+                  {t("dashboard.go_to_tickets", "Ir a mis tickets")} <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
             </div>
@@ -584,14 +620,14 @@ const AgentDashboard: React.FC<{
               </div>
               {(stats?.resolvedToday && stats.resolvedToday > 0 && (
                 <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full animate-pulse">
-                  ¡Bien hecho!
+                  {t("dashboard.well_done", "¡Bien hecho!")}
                 </span>
               )) ||
                 null}
             </div>
             <div>
               <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-                Resueltos Hoy
+                {t("dashboard.resolved_today", "Resueltos Hoy")}
               </span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-4xl font-bold text-slate-900 dark:text-white">
@@ -610,7 +646,7 @@ const AgentDashboard: React.FC<{
             </div>
             <div>
               <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-                Mensajes Enviados
+                {t("dashboard.messages_sent", "Mensajes Enviados")}
               </span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-4xl font-bold text-slate-900 dark:text-white">
@@ -618,7 +654,7 @@ const AgentDashboard: React.FC<{
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                Alto nivel de actividad 
+                {t("dashboard.high_activity", "Alto nivel de actividad")} 
               </p>
             </div>
           </div>
@@ -628,19 +664,19 @@ const AgentDashboard: React.FC<{
         <div className="bg-white dark:bg-reply-panel-dark rounded-xl shadow-sm border border-slate-200 dark:border-reply-border-dark p-6">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
             <Clock className="w-5 h-5 text-slate-400" />
-            Vistos recientemente
+            {t("dashboard.recent_activity", "Vistos recientemente")}
           </h3>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-800/50">
                 <tr>
-                  <th className="px-4 py-3 rounded-l-lg">Ticket</th>
-                  <th className="px-4 py-3">Estado</th>
-                  <th className="px-4 py-3">Prioridad</th>
-                  <th className="px-4 py-3">Cola</th>
+                  <th className="px-4 py-3 rounded-l-lg">{t("dashboard.table_ticket", "Ticket")}</th>
+                  <th className="px-4 py-3">{t("dashboard.table_status", "Estado")}</th>
+                  <th className="px-4 py-3">{t("dashboard.table_priority", "Prioridad")}</th>
+                  <th className="px-4 py-3">{t("dashboard.table_queue", "Cola")}</th>
                   <th className="px-4 py-3 rounded-r-lg text-right">
-                    Actualizado
+                    {t("dashboard.table_updated", "Actualizado")}
                   </th>
                 </tr>
               </thead>
@@ -648,13 +684,13 @@ const AgentDashboard: React.FC<{
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="py-4 text-center text-slate-400">
-                      Cargando...
+                      {t("common.loading", "Cargando...")}
                     </td>
                   </tr>
                 ) : stats?.recentTickets.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-4 text-center text-slate-400">
-                      No hay actividad reciente
+                      {t("dashboard.no_recent_activity", "No hay actividad reciente")}
                     </td>
                   </tr>
                 ) : (
@@ -723,6 +759,7 @@ const CompanyAdminDashboard: React.FC<{
 }> = ({ onNavigate, user, onUserUpdate }) => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { t, i18n } = useTranslation();
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -743,27 +780,23 @@ const CompanyAdminDashboard: React.FC<{
     fetchStats();
   }, []);
 
-  // Helper to calculate usage percentage
   const getUsagePercent = (used: number, limit: number) => {
-    if (limit === -1) return 0; // Infinite
+    if (limit === -1) return 0;
     if (limit === 0) return 0;
     return Math.min((used / limit) * 100, 100);
   };
 
-  // Helper to determine active status safely
   const isPlanActive =
     data?.plan?.isActive ??
     (data?.plan?.status === "ACTIVE" || data?.plan?.status === "TRIAL");
 
-  // Dynamic Date
-  const todayDate = new Date().toLocaleDateString("es-ES", {
+  const todayDate = new Date().toLocaleDateString(i18n.language, {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 
-  // Usage color helper
   const getUsageColor = (pct: number) => {
     if (pct > 90) return "bg-rose-500";
     if (pct > 75) return "bg-amber-400";
@@ -778,19 +811,17 @@ const CompanyAdminDashboard: React.FC<{
 
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden font-sans">
-      {/* 1. PROFESSIONAL HEADER */}
       <div className="bg-white dark:bg-reply-surface-dark border-b border-slate-200 dark:border-reply-border-dark px-8 py-6 shadow-sm z-10">
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
-              Panel de Control
+              {t("dashboard.navigation.dashboard", "Panel de Control")}
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
-              Bienvenido,{" "}
-              <span className="font-semibold text-slate-700 dark:text-slate-200">
-                {user?.name}
-              </span>
-              . Aquí tienes la visión general de tu negocio.
+              {user?.name 
+                ? t("dashboard.welcome_admin", { name: user.name, defaultValue: `Bienvenido, ${user.name}. Aquí tienes la visión general de tu negocio.` })
+                : t("dashboard.welcome_admin_generic", "Bienvenido. Aquí tienes la visión general de tu negocio.")
+              }
             </p>
           </div>
           <div className="text-right">
@@ -805,9 +836,7 @@ const CompanyAdminDashboard: React.FC<{
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-        {/* 2. TOP METRICS GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Active Tickets & Operational Volume */}
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-900/20 relative overflow-hidden group hover:shadow-xl transition-all flex flex-col h-full">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
             <div className="absolute top-1/2 right-0 transform -translate-y-1/2 p-4 opacity-10 group-hover:opacity-20 transition-all duration-500 group-hover:scale-110">
@@ -818,7 +847,7 @@ const CompanyAdminDashboard: React.FC<{
               <div className="flex items-center gap-2 opacity-90 mb-2">
                 <MessageSquare className="w-5 h-5" />
                 <span className="text-sm font-medium uppercase tracking-wide">
-                  Tickets Activos
+                  {t("dashboard.tickets_active", "Tickets Activos")}
                 </span>
               </div>
               
@@ -826,19 +855,19 @@ const CompanyAdminDashboard: React.FC<{
                 <span className="text-4xl font-bold">
                   {loading ? "-" : data?.metrics?.activeTickets || 0}
                 </span>
-                <span className="text-sm opacity-80">pendientes</span>
+                <span className="text-sm opacity-80">{t("dashboard.pending", "pendientes")}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t border-white/20">
                 <div>
-                  <p className="text-[10px] uppercase font-bold opacity-70 mb-0.5 tracking-wider">Conversaciones</p>
+                  <p className="text-[10px] uppercase font-bold opacity-70 mb-0.5 tracking-wider">{t("dashboard.conversations", "Conversaciones")}</p>
                   <p className="font-mono text-lg font-semibold flex items-center gap-1">
                     {data?.metrics?.activeConversations || 0}
                     <Activity className="w-3 h-3 opacity-50" />
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase font-bold opacity-70 mb-0.5 tracking-wider">Msjs Hoy</p>
+                  <p className="text-[10px] uppercase font-bold opacity-70 mb-0.5 tracking-wider">{t("dashboard.msgs_today", "Msjs Hoy")}</p>
                   <p className="font-mono text-lg font-semibold flex items-center gap-1">
                     {data?.metrics?.totalMessages || 0}
                     <Zap className="w-3 h-3 opacity-50" />
@@ -848,7 +877,6 @@ const CompanyAdminDashboard: React.FC<{
             </div>
           </div>
 
-          {/* Response Time — REAL DATA, no hardcoded trend */}
           <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-amber-400/50 transition-colors group flex flex-col h-full">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-amber-600 dark:text-amber-400">
@@ -861,7 +889,7 @@ const CompanyAdminDashboard: React.FC<{
             
             <div className="flex-1 flex flex-col">
               <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-                Tiempo Respuesta
+                {t("dashboard.response_time", "Tiempo Respuesta")}
               </span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -871,13 +899,12 @@ const CompanyAdminDashboard: React.FC<{
               <div className="mt-auto pt-4">
                 <p className="text-xs text-slate-400 flex items-center gap-1">
                   <Activity className="w-3 h-3" />
-                  Promedio últimos 7 días
+                  {t("dashboard.avg_7_days", "Promedio últimos 7 días")}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* AI Efficiency — REAL DATA, no BETA badge */}
           <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-purple-400/50 transition-colors group flex flex-col h-full">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-600 dark:text-purple-400">
@@ -890,7 +917,7 @@ const CompanyAdminDashboard: React.FC<{
             
             <div className="flex-1 flex flex-col">
               <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-                Resolución IA
+                {t("dashboard.ai_resolution", "Resolución IA")}
               </span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -900,23 +927,22 @@ const CompanyAdminDashboard: React.FC<{
               <div className="mt-auto pt-4">
                 <p className="text-xs text-slate-400 flex items-center gap-1">
                   <Bot className="w-3 h-3" />
-                  Cerrados automáticamente
+                  {t("dashboard.closed_auto", "Cerrados automáticamente")}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* PLAN & USAGE CARD (ENTERPRISE - FULLY REAL DATA) */}
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 dark:from-[#162028] dark:to-[#0f161b] rounded-2xl p-5 text-white shadow-lg border border-slate-700 relative overflow-hidden flex flex-col h-full">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
 
             <div className="flex justify-between items-start mb-3 relative z-10 shrink-0">
               <div>
                 <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">
-                  Tu Plan Actual
+                  {t("dashboard.current_plan", "Tu Plan Actual")}
                 </p>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  {data?.plan?.name || "Starter"}
+                  {data?.plan?.name || t("dashboard.starter", "Starter")}
                   <StatusBadge
                     status={data?.plan?.status}
                     isActive={isPlanActive}
@@ -931,7 +957,6 @@ const CompanyAdminDashboard: React.FC<{
               <Shield className="w-5 h-5 text-emerald-400" />
             </div>
 
-            {/* FEATURES BADGES */}
             {data?.plan?.features && data.plan.features.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-3 shrink-0 relative z-10">
                 {data.plan.features.map((feat, idx) => (
@@ -950,7 +975,6 @@ const CompanyAdminDashboard: React.FC<{
               </div>
             )}
 
-            {/* Usage Bars - SCROLLABLE LIST */}
             <div className="space-y-2 relative z-10 overflow-y-auto custom-scrollbar flex-1 pr-1 max-h-[200px]">
               {data?.plan?.usage?.map((metric, idx) => {
                 const pct = getUsagePercent(metric.used, metric.limit);
@@ -983,84 +1007,76 @@ const CompanyAdminDashboard: React.FC<{
                 );
               }) || (
                 <div className="text-sm text-slate-500 italic">
-                  Cargando métricas...
+                  {t("dashboard.loading_metrics", "Cargando métricas...")}
                 </div>
               )}
             </div>
 
-            {/* Renewal / Trial / Expiry Date (Real Data) */}
             <div className="mt-3 pt-2 border-t border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400 shrink-0">
               <span>
                 {data?.plan?.trialEndsAt ? (
                   <>
-                    Prueba hasta:{" "}
+                    {t("dashboard.trial_until", "Prueba hasta:")}{" "}
                     <strong className="text-amber-400 ml-1">
                       {new Date(data.plan.trialEndsAt).toLocaleDateString(
-                        "es-ES",
+                        i18n.language,
                         { month: "short", day: "numeric", year: "numeric" },
                       )}
                     </strong>
                   </>
                 ) : data?.plan?.expiresAt ? (
                   <>
-                    Renueva:{" "}
+                    {t("dashboard.renews", "Renueva:")}{" "}
                     <strong className="text-white ml-1">
                       {new Date(data.plan.expiresAt).toLocaleDateString(
-                        "es-ES",
+                        i18n.language,
                         { month: "short", day: "numeric", year: "numeric" },
                       )}
                     </strong>
                   </>
                 ) : (
-                  <>Sin caducidad</>
+                  <>{t("dashboard.no_expiry", "Sin caducidad")}</>
                 )}
               </span>
-              {/* Redirect to Settings instead of Billing (Master Only) */}
               <button
                 onClick={() => onNavigate?.("settings")}
                 className="text-emerald-400 hover:text-emerald-300 transition-colors font-medium cursor-pointer text-[10px] uppercase tracking-wide flex items-center gap-1"
               >
-                Gestionar <ArrowRight className="w-3 h-3" />
+                {t("dashboard.manage", "Gestionar")} <ArrowRight className="w-3 h-3" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* 3. ENTERPRISE ANALYTICS GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div className="lg:col-span-2 flex flex-col gap-6">
-            {/* Sales Pipeline & Lead Conversion */}
             <div className="h-[360px]">
               <SalesFunnelWidget data={data?.salesFunnel} />
             </div>
             
-            {/* Team Workload & Efficiency (SLA / Workload) */}
             <div className="h-[360px]">
               <ActiveLoadChart data={data?.agentWorkload} />
             </div>
           </div>
           <div className="flex flex-col gap-6">
-            {/* Omni-Channel Distribution */}
             <div className="h-[360px]">
               <ChannelDistributionWidget channels={data?.channelDistribution} />
             </div>
 
-            {/* Agent Leaderboard & Performance */}
             <div className="h-[360px]">
               <AgentLeaderboardWidget agents={data?.topAgents} />
             </div>
           </div>
         </div>
 
-        {/* 4. MAIN WORKSPACE (KANBAN) */}
         <div className="flex flex-col h-[550px]">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-indigo-500" />
-              Gestión de Tickets en Curso
+              {t("dashboard.tickets_in_progress", "Gestión de Tickets en Curso")}
             </h2>
             <div className="flex gap-2 text-sm text-slate-500 dark:text-slate-400">
-               Vista rápida de la carga actual del equipo
+               {t("dashboard.quick_view_load", "Vista rápida de la carga actual del equipo")}
             </div>
           </div>
 

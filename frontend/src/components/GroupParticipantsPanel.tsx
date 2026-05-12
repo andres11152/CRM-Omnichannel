@@ -64,7 +64,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
   const fetchParticipants = async () => {
     try {
       setLoading(true);
-      const res = await fetchAPI(
+      const res = await fetchAPI<{ data: GroupData }>(
         `/conversations/${conversationId}/participants`,
       );
       setData(res.data);
@@ -200,7 +200,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
 
     try {
       setProcessing(true);
-      const res = await fetchAPI(
+      const res = await fetchAPI<{ data: { successful: number } }>(
         `/conversations/${conversationId}/participants/add-bulk`,
         {
           method: "POST",
@@ -240,7 +240,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
     
     try {
       setProcessing(true);
-      const res = await fetchAPI(
+      const res = await fetchAPI<{ message?: string; data?: { successful: number } }>(
         `/conversations/${conversationId}/participants/add-all`,
         {
           method: "POST",

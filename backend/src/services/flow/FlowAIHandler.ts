@@ -50,7 +50,7 @@ export class FlowAIHandler {
     if (!aiAssistantId) {
       Logger.error("[FlowExecutor] AI_AGENT node without aiAssistantId");
       await moveToNextNode(session.id, node.id, flowStructure);
-      return "Lo siento, el agente IA no está configurado. Por favor contacta a soporte.";
+      return "Sorry, the AI agent is not configured. Please contact support.";
     }
 
     const agent = await flowSessionRepository.findAIAssistant(aiAssistantId);
@@ -60,12 +60,12 @@ export class FlowAIHandler {
         `[FlowExecutor] AI Assistant ${aiAssistantId} not found or inactive`,
       );
       await moveToNextNode(session.id, node.id, flowStructure);
-      return "El agente IA no está disponible en este momento. Estamos trabajando para solucionarlo.";
+      return "The AI agent is currently unavailable. We are working to resolve this.";
     }
 
     try {
       let systemPrompt =
-        agent.systemPrompt || "Eres un asistente virtual útil y amigable.";
+        agent.systemPrompt || "You are a helpful and friendly virtual assistant.";
       systemPrompt = this.replaceVariables(systemPrompt, session.variables);
 
       // Conversational Memory
@@ -171,7 +171,7 @@ export class FlowAIHandler {
 
       await flowSessionRepository.updateSession(session.id, {
         variables: updatedVariables,
-        isPaused: shouldTerminate ? false : session.isPaused,
+        isPaused: shouldTerminate ? false : true,
       });
 
       if (shouldTerminate) {
@@ -192,19 +192,27 @@ export class FlowAIHandler {
       const errorObj = error instanceof Error ? error : new Error(errorMsg);
 
       Logger.error(
-        `[FlowExecutor] OpenAI error with agent ${agent.name}:`,
+        `[FlowExecutor] OpenAI/Gemini error with agent ${agent.name}:`,
         errorMsg,
       );
 
+      // [SEC] Anti-trap mechanism: delete active flow session so user isn't stuck receiving errors
+      try {
+        await flowSessionRepository.deleteSession(session.id);
+        Logger.info(`[FlowExecutor] Active session ${session.id} deleted successfully to untrap contact.`);
+      } catch (dbErr) {
+        Logger.error(`[FlowExecutor] Failed to auto-delete session ${session.id}:`, dbErr);
+      }
+
       if ("code" in errorObj && errorObj.code === "insufficient_quota") {
-        return "El servicio de IA ha alcanzado su límite. Por favor intenta más tarde.";
+        return "Lo siento, el servicio de IA ha alcanzado su límite de cuota. Un agente se comunicará pronto.";
       } else if (
         "code" in errorObj &&
         errorObj.code === "rate_limit_exceeded"
       ) {
-        return "Demasiadas solicitudes. Por favor espera un momento e intenta de nuevo.";
+        return "Demasiadas solicitudes. Por favor, espera un momento o espera a que un agente te atienda.";
       } else {
-        return "Lo siento, hubo un error al procesar tu solicitud. Nuestro equipo ha sido notificado.";
+        return "Lo siento, estamos experimentando dificultades técnicas. Un agente se comunicará contigo pronto.";
       }
     }
   }
@@ -229,7 +237,7 @@ export class FlowAIHandler {
       const genAI = new GoogleGenerativeAI(geminiKey);
       const modelName = agent.modelName?.includes("gemini")
         ? agent.modelName
-        : "gemini-1.5-flash";
+        : "gemini-2.5-flash";
 
       const model = genAI.getGenerativeModel({
         model: modelName,
@@ -295,7 +303,7 @@ export class FlowAIHandler {
       return result.response.text();
     } catch (geminiError) {
       Logger.error("[FlowExecutor] Gemini API Error:", geminiError);
-      return "Lo siento, tuve un problema analizando tu solicitud visual.";
+      throw geminiError;
     }
   }
 
@@ -324,18 +332,15 @@ export class FlowAIHandler {
         });
         return (
           completion.choices[0]?.message?.content ||
-          "Lo siento, no pude generar una respuesta."
+          "Sorry, I could not generate a response."
         );
       } catch (openaiErr) {
         Logger.error("[FlowExecutor] OpenAI Error:", openaiErr);
-        return "Lo siento, hubo un error con el servicio de IA.";
+        throw openaiErr;
       }
     }
 
-    Logger.error(
-      "[FlowExecutor] No AI Provider configured (Gemini or OpenAI missing).",
-    );
-    return "Error de configuración: No hay servicios de IA disponibles. Por favor configura tus credenciales.";
+    throw new Error("No OpenAI credentials configured.");
   }
 
   // ────────────────────────────────────────────────

@@ -1,8 +1,13 @@
 import { Prisma, Account } from "@prisma/client";
 import { prisma, ExtendedPrismaClient } from "@/config/database";
-import { IAccountRepository } from "@/domain/repositories/IAccountRepository";
-import { AccountEntity } from "@/domain/entities/Account";
-import { CreateAccountDTO, UpdateAccountDTO, AccountSearchFilterDTO } from "@/domain/dtos/AccountDTOs";
+import { 
+  IAccountRepository, 
+  AccountEntity, 
+  CreateAccountDTO, 
+  UpdateAccountDTO, 
+  AccountSearchFilterDTO 
+} from "@/types/account.types";
+import TenantContextManager from "@/config/tenantContext";
 
 export class AccountRepository implements IAccountRepository {
   constructor(private db: ExtendedPrismaClient = prisma) {}
@@ -11,9 +16,7 @@ export class AccountRepository implements IAccountRepository {
    * MAPPER PRIVADO: Transforma Filtros de Dominio en Queries de Prisma
    */
   private mapToPrismaQuery(filters: AccountSearchFilterDTO): Prisma.AccountWhereInput {
-    const where: Prisma.AccountWhereInput = {
-      companyId: filters.companyId,
-    };
+    const where: Prisma.AccountWhereInput = {};
 
     if (filters.name) {
       where.name = { contains: filters.name, mode: "insensitive" };
@@ -72,7 +75,6 @@ export class AccountRepository implements IAccountRepository {
 
   async findById(
     id: string,
-    companyId: string,
     includeDetails: boolean = false,
   ): Promise<AccountEntity | (Prisma.AccountGetPayload<{
     include: {
@@ -94,7 +96,7 @@ export class AccountRepository implements IAccountRepository {
     } : undefined;
 
     const record = await this.db.account.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: include as Prisma.AccountInclude
     });
 
@@ -104,10 +106,10 @@ export class AccountRepository implements IAccountRepository {
     return includeDetails ? record : this.mapToDomain(record);
   }
 
-  async create(companyId: string, data: CreateAccountDTO): Promise<AccountEntity> {
+  async create(data: CreateAccountDTO): Promise<AccountEntity> {
     const record = await this.db.account.create({
       data: {
-        companyId,
+        companyId: TenantContextManager.getCompanyId(),
         name: data.name,
         industry: data.industry,
         website: data.website,
@@ -119,7 +121,7 @@ export class AccountRepository implements IAccountRepository {
     return this.mapToDomain(record);
   }
 
-  async update(id: string, companyId: string, data: UpdateAccountDTO): Promise<AccountEntity> {
+  async update(id: string, data: UpdateAccountDTO): Promise<AccountEntity> {
     const record = await this.db.account.update({
       where: { id },
       data,

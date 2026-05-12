@@ -12,7 +12,7 @@ import { Logger } from "@/utils/logger";
 export const initSocketGateway = async (httpServer: Server) => {
   Logger.info("[Loader]  Initializing Gateway...");
   await gateway.initialize(httpServer);
-  Logger.info("[Loader] [OK] Gateway initialized successfully");
+  Logger.info("[Loader] Gateway initialized successfully");
 
   // BRIDGE: WhatsApp Events -> Socket Gateway
   Logger.info("[Loader]  Bridging WhatsApp events to Socket Gateway...");
@@ -74,7 +74,7 @@ export const initSocketGateway = async (httpServer: Server) => {
     }
   });
 
-  Logger.info("[Loader] [OK] Event Bridge established");
+  Logger.info("[Loader] Event Bridge established");
 
   // Status Sync on Connection
   const io = gateway.getIO();

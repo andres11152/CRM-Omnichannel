@@ -43,6 +43,17 @@ export interface ExportResultDTO {
   recordCount: number;
 }
 
+export interface ActivityLogDTO {
+  id: string;
+  action: string;
+  entity: string;
+  description: string;
+  timestamp: string;
+  user?: { name: string };
+  company?: { name: string };
+  metadata?: { severity: "info" | "success" | "warning" | "error" | "default" };
+}
+
 // --- SERVICE ---
 
 export class AnalyticsService {
@@ -168,155 +179,130 @@ export class AnalyticsService {
   /**
    * Mock Global Activity
    */
-  getGlobalActivity() {
-    const actions = ["CREATE", "UPDATE", "DELETE", "LOGIN", "PAYMENT", "ALERT"];
-    const entities = [
-      "Contact",
-      "Ticket",
-      "Deal",
-      "Subscription",
-      "User",
-      "System",
-    ];
-    const names = [
-      "Andrés B.",
-      "Carlos R.",
-      "Ana M.",
-      "Bot System",
-      "Webservice",
-      "Soporte N1",
-    ];
-    const companies = [
-      "Reply Corp",
-      "TechSolutions",
-      "Demo Inc.",
-      "Acme Ltda",
-      "Global Services",
-    ];
+  /**
+   * Real Global Activity Feed
+   * Aggregates events from multiple tables to show system-wide activity.
+   */
+  async getGlobalActivity(): Promise<ActivityLogDTO[]> {
+    const data = await analyticsRepository.getGlobalActivityData();
+    const activities: ActivityLogDTO[] = [];
 
-    const getSeverity = (action: string) => {
-      if (action === "DELETE" || action === "ALERT") return "error";
-      if (action === "UPDATE" || action === "LOGIN") return "info";
-      if (action === "CREATE" || action === "PAYMENT") return "success";
-      return "default";
-    };
-    const getDescription = (action: string, entity: string) => {
-      if (action === "LOGIN")
-        return "Inició sesión en el portal administrativo";
-      if (action === "CREATE") return `Creó un nuevo ${entity} en el sistema`;
-      if (action === "UPDATE") return `Modificó la configuración de ${entity}`;
-      if (action === "DELETE") return `Eliminó permanentemente un ${entity}`;
-      if (action === "PAYMENT")
-        return "Procesó un pago de renovación de Plan Pro";
-      if (action === "ALERT") return `Detectó una anomalía en ${entity}`;
-      return "Ejecutó una acción del sistema";
-    };
-
-    return Array.from({ length: 20 }).map((_, i) => {
-      const action = actions[Math.floor(Math.random() * actions.length)];
-      const entity = entities[Math.floor(Math.random() * entities.length)];
-      return {
-        id: `log_${Date.now()}_${i}`,
-        action,
-        entity,
-        description: getDescription(action, entity),
-        timestamp: new Date(
-          Date.now() - i * 1000 * 60 * (2 + Math.random() * 10),
-        ).toISOString(),
-        user: { name: names[Math.floor(Math.random() * names.length)] },
-        company: {
-          name: companies[Math.floor(Math.random() * companies.length)],
-        },
-        metadata: { severity: getSeverity(action) },
-      };
+    // Transform Companies
+    data.companies.forEach((c) => {
+      activities.push({
+        id: `comp_${c.id}`,
+        action: "CREATE",
+        entity: "Company",
+        description: `Nueva empresa registrada: ${c.name}`,
+        timestamp: c.createdAt.toISOString(),
+        user: { name: "System" },
+        company: { name: c.name },
+        metadata: { severity: "success" },
+      });
     });
+
+    // Transform Tickets
+    data.tickets.forEach((t) => {
+      activities.push({
+        id: `tick_${t.id}`,
+        action: "CREATE",
+        entity: "Ticket",
+        description: `Nuevo ticket de soporte: ${t.subject}`,
+        timestamp: t.createdAt.toISOString(),
+        user: { name: t.createdBy?.name || "Cliente" },
+        company: { name: t.company?.name || "N/A" },
+        metadata: { severity: "info" },
+      });
+    });
+
+    // Transform Transactions
+    data.transactions.forEach((tr) => {
+      activities.push({
+        id: `trans_${tr.id}`,
+        action: "PAYMENT",
+        entity: "Billing",
+        description: `Pago procesado: ${tr.description} (${tr.amount / 100} ${tr.currency})`,
+        timestamp: tr.createdAt.toISOString(),
+        user: { name: "Stripe Gateway" },
+        company: { name: tr.company?.name || "N/A" },
+        metadata: { severity: tr.status === "succeeded" ? "success" : "error" },
+      });
+    });
+
+    // Transform Users
+    data.users.forEach((u) => {
+      activities.push({
+        id: `user_${u.id}`,
+        action: "CREATE",
+        entity: "User",
+        description: `Nuevo usuario en el sistema: ${u.name}`,
+        timestamp: u.createdAt.toISOString(),
+        user: { name: "Admin" },
+        company: { name: u.company?.name || "N/A" },
+        metadata: { severity: "info" },
+      });
+    });
+
+    return activities
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      )
+      .slice(0, 20);
   }
 
-  getTenantHealth() {
-    const mockTenants = [
-      {
-        id: "c1",
-        name: "Apex Innovations",
-        logo: "",
-        plan: "Enterprise",
-        mrr: 3500,
-        lastLoginDays: 0,
-        openTickets: 1,
-        status: "ACTIVE",
-      },
-      {
-        id: "c2",
-        name: "Solaris start-up",
-        logo: "",
-        plan: "Pro",
-        mrr: 450,
-        lastLoginDays: 3,
-        openTickets: 0,
-        status: "ACTIVE",
-      },
-      {
-        id: "c3",
-        name: "Omega Retail",
-        logo: "",
-        plan: "Basic",
-        mrr: 99,
-        lastLoginDays: 25,
-        openTickets: 8,
-        status: "ACTIVE",
-      },
-      {
-        id: "c4",
-        name: "BlueOcean Consulting",
-        logo: "",
-        plan: "Pro",
-        mrr: 850,
-        lastLoginDays: 1,
-        openTickets: 2,
-        status: "ACTIVE",
-      },
-      {
-        id: "c5",
-        name: "Rapid Logistics",
-        logo: "",
-        plan: "Enterprise",
-        mrr: 2100,
-        lastLoginDays: 5,
-        openTickets: 12,
-        status: "ACTIVE",
-      },
-    ];
+  async getTenantHealth() {
+    const tenants = await analyticsRepository.getTenantsHealthData();
 
-    return mockTenants
+    return tenants
       .map((t) => {
-        let score = 60;
+        let score = 70; // Baseline
         const factors: string[] = [];
-        if (t.lastLoginDays <= 1) {
-          score += 25;
-          factors.push("Alta actividad reciente (+25)");
-        } else if (t.lastLoginDays > 14) {
-          score -= 30;
-          factors.push('Usuario "fantasma" > 14d (-30)');
-        }
 
-        if (t.openTickets === 0) {
+        // 1. Plan Weight
+        const isEnterprise = t.plan?.name.toLowerCase().includes("enterprise");
+        if (isEnterprise) {
           score += 10;
-          factors.push("Sin incidentes técnicos (+10)");
-        } else if (t.openTickets > 5) {
-          score -= 40;
-          factors.push("Múltiples problemas reportados (-40)");
+          factors.push("Plan Enterprise (+10)");
         }
 
-        if (t.plan === "Enterprise") {
-          score += 5;
-          factors.push("Contrato Enterprise estable (+5)");
+        // 2. Ticket Load
+        const openTickets = t._count.tickets;
+        if (openTickets > 10) {
+          score -= 30;
+          factors.push(`Alta carga de soporte: ${openTickets} tickets (-30)`);
+        } else if (openTickets > 0) {
+          score -= 5;
+          factors.push(`Incidentes activos: ${openTickets} (-5)`);
+        } else {
+          score += 10;
+          factors.push("Sin tickets pendientes (+10)");
+        }
+
+        // 3. User Adoption
+        const userCount = t._count.users;
+        if (userCount > 5) {
+          score += 10;
+          factors.push(`Buena adopción: ${userCount} usuarios (+10)`);
         }
 
         score = Math.max(0, Math.min(100, score));
         let healthStatus: "healthy" | "neutral" | "critical" = "neutral";
-        if (score >= 80) healthStatus = "healthy";
+        if (score >= 85) healthStatus = "healthy";
         if (score < 50) healthStatus = "critical";
 
-        return { ...t, healthScore: score, healthStatus, factors };
+        return {
+          id: t.id,
+          name: t.name,
+          logo: t.logoUrl || "",
+          plan: t.plan?.name || "N/A",
+          mrr: t.plan?.price || 0,
+          healthScore: score,
+          healthStatus,
+          factors,
+          openTickets,
+          status: t.status,
+        };
       })
       .sort((a, b) => b.mrr - a.mrr);
   }
@@ -453,14 +439,18 @@ export class AnalyticsService {
     const months: Record<string, number> = {};
     for (let i = 5; i >= 0; i--)
       months[dayjs().subtract(i, "month").format("MMM")] = 0;
+
     companies.forEach((c) => {
       const m = dayjs(c.createdAt).format("MMM");
       if (months[m] !== undefined) months[m]++;
     });
+
+    // Estimate revenue based on average ticket ($150 per enterprise client estimate)
+    // In a real enterprise scenario, we'd pull from billing_transactions
     return Object.entries(months).map(([name, value]) => ({
       name,
       value,
-      revenue: value * 49,
+      revenue: value * 150, // More realistic enterprise MRR weight
     }));
   }
 }

@@ -4,6 +4,7 @@ import {
   Company as AuthCompany,
   CompanyStatus as AuthCompanyStatus,
 } from "./types/auth.types";
+import { BaseEntity } from "./types/common.types";
 // Define channel types
 // FIXED: Synced with Prisma Schema (UPPERCASE values) to prevent logic errors in backend controllers
 export enum Channel {
@@ -155,7 +156,7 @@ export interface Message {
 // SIMPLIFIED: Represents the person, not the conversation
 export interface Contact {
   id: string;
-  ticketId?: string; // ID del ticket asociado (si existe) para operaciones de resolución
+  ticketId?: string; // Associated ticket ID for resolution operations
   realContactId?: string; // ID real en la tabla contacts
   companyId: string;
   name: string;
@@ -420,19 +421,23 @@ export type NodeType =
   | "send_video"
   | "send_audio"
   | "send_document"
-  // Interacción
-  | "ask_data" // Solicitar datos del usuario (INPUT)
-  | "condition" // Condición / Branching
-  | "ai_agent" // Agente IA (OpenAI/Gemini)
-  // Acciónes CRM
-  | "create_deal" // Crear deal automticamente
-  | "update_contact" // Actualizar campos del contacto
-  // Asignación
-  | "assign_agent" // Asignar a agente humano
-  | "ai_handoff" // Transferir a humano
-  // Control de flujo
-  | "delay" // Esperar X tiempo
-  | "end" // Fin del flujo
+  // Interaction
+  | "ask_data" // Request user input
+  | "condition" // Conditional branching
+  | "ai_agent" // AI Agent (Gemini/OpenAI)
+  // CRM Actions
+  | "create_deal" // Automated deal creation
+  | "update_contact" // Contact field updates
+  // Assignment
+  | "assign_agent" // Human agent assignment
+  | "ai_handoff" // Transfer to human
+  // Integrations
+  | "http_request" // External API / Webhook call
+  | "tag_contact" // Auto-tag contacts
+  | "send_template" // WhatsApp approved templates
+  // Flow Control
+  | "delay" // Wait duration
+  | "end" // Exit flow
   // Legacy & Extras
   | "message"
   | "input"
@@ -463,8 +468,19 @@ export interface FlowNode {
     // Logic
     operator?: string;
     value?: string;
+    conditionOperator?: string;
+    conditionValue?: string;
+    conditionVariable?: string;
+    conditions?: Array<{
+      operator: string;
+      value: string;
+      targetHandle: string;
+    }>;
     // AI
     aiAssistantId?: string;
+    additionalPrompt?: string;
+    handoffPrompt?: string;
+    waitForUser?: boolean;
     // Assign
     assignmentType?: "agent" | "queue";
     agentId?: string;
@@ -482,6 +498,23 @@ export interface FlowNode {
     name?: string;
     email?: string;
     phone?: string;
+    // HTTP Request
+    webhookUrl?: string;
+    url?: string;
+    httpMethod?: string;
+    method?: string; // standard method
+    authHeader?: string;
+    headers?: string; // JSON string
+    bodyTemplate?: string;
+    body?: string; // JSON string
+    // Tag Contact
+    tags?: string;
+    tag?: string;
+    action?: string; // 'add' | 'remove'
+    // Send Template
+    templateName?: string;
+    templateParams?: string[];
+    templateVariables?: string; // JSON string array
   };
 }
 export interface FlowConnection {
@@ -490,17 +523,19 @@ export interface FlowConnection {
   target: string;
   label?: string;
 }
-export interface Flow {
-  id: string;
+export interface FlowTriggerConfig {
+  keyword?: string;
+  pattern?: string;
+  event?: string;
+  condition?: Record<string, unknown>;
+}
+
+export interface Flow extends BaseEntity {
   companyId: string;
   name: string;
   triggerKeyword?: string; // Deprecated, use triggerConfig
   triggerType: "KEYWORD" | "EVENT";
-  triggerConfig?: {
-    keyword?: string;
-    event?: string; // e.g. "DEAL_UPDATED"
-    condition?: Record<string, unknown>;
-  };
+  triggerConfig?: FlowTriggerConfig;
   nodes: FlowNode[];
   edges: FlowConnection[];
   isActive: boolean;

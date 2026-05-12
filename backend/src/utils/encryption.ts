@@ -28,7 +28,7 @@ export const encrypt = (text: string): string => {
 
 export const decrypt = (text: string): string => {
   if (!text) return text;
-  // Si el texto no tiene el formato iv:content, asumimos que no está encriptado (legacy data support)
+  // If text does not have iv:content format, assume it is not encrypted (legacy data support)
   if (!text.includes(":")) return text;
 
   try {
@@ -41,7 +41,7 @@ export const decrypt = (text: string): string => {
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString();
   } catch (error) {
-    // Si falla la desencriptación, devolver texto original o string vacío para no romper la app
+    // If decryption fails, return original text or empty string to avoid breaking the app
     Logger.error("[Encryption] Failed to decrypt value", error);
     return text;
   }

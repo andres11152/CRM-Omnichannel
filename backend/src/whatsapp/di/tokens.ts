@@ -21,6 +21,8 @@ import type { ProfilePictureService } from "../services/ProfilePictureService";
 import type { DeduplicationService } from "../services/DeduplicationService";
 import type { EventBus } from "../core/events/EventBus";
 import type { SocketEventEmitter } from "@/services/SocketEventEmitter";
+import type { WhatsAppMessaging } from "../services/WhatsAppMessaging";
+import type { WhatsAppSessionService } from "../services/WhatsAppSessionService";
 
 export const WA_TOKENS = {
   // ── Core Infrastructure ──────────────────────
@@ -35,6 +37,10 @@ export const WA_TOKENS = {
   AITrigger: createToken<AITriggerService>("WA.AITrigger"),
   ProfilePicture: createToken<ProfilePictureService>("WA.ProfilePicture"),
   Deduplication: createToken<DeduplicationService>("WA.Deduplication"),
+  
+  // ── Segregated Facades ────────────────────────
+  MessagingService: createToken<WhatsAppMessaging>("WA.MessagingService"),
+  SessionService: createToken<WhatsAppSessionService>("WA.SessionService"),
 
   // ── I/O ──────────────────────────────────────
   SocketEmitter: createToken<SocketEventEmitter>("WA.SocketEmitter"),

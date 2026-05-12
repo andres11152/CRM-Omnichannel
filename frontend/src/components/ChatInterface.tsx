@@ -14,6 +14,7 @@ import {
   QuickReply,
 } from "@/types";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 // Separate Components
 import { ChatHeader } from "./chat/ChatHeader";
@@ -28,6 +29,7 @@ import { ActionModals } from "./ActionModals";
 import { ResolveTicketModal } from "./ResolveTicketModal";
 import { ImageLightbox, LightboxImage } from "./chat/ImageLightbox";
 import { ActivityModal } from "./crm/ActivityModal";
+import { useResizable } from "@/hooks/useResizable";
 
 // Modular Hooks
 import { useChatWorkflow } from "@/hooks/useChatWorkflow";
@@ -72,6 +74,7 @@ export const ChatInterface: React.FC<Props> = ({
     scrollToBottom,
     emitTyping,
   } = useChatWorkflow({ activeContact, aiConfig });
+  const { t } = useTranslation();
 
   // 2. UI STATE (Local Modals)
   const [inputValue, setInputValue] = useState("");
@@ -94,6 +97,14 @@ export const ChatInterface: React.FC<Props> = ({
 
   // Panels & Modals visibility
   const [is360Visible, setIs360Visible] = useState(false);
+
+  const { size: panel360Width, startResizing: startResizing360 } = useResizable({
+    initialSize: 380,
+    minSize: 320,
+    maxSize: 600,
+    anchor: "end",
+    storageKey: "reply_360_panel_width",
+  });
   
   useEffect(() => {
     // Initial check
@@ -146,12 +157,12 @@ export const ChatInterface: React.FC<Props> = ({
 
         // Get readable sender
         const senderObj = msg.sender;
-        let senderName = "Imagen";
-        if (msg.direction === "OUTBOUND" || msg.sender === "agent") senderName = "Agente";
+        let senderName = t("chat.image", "Imagen");
+        if (msg.direction === "OUTBOUND" || msg.sender === "agent") senderName = t("chat.agent", "Agente");
         else if (msg.senderName) senderName = msg.senderName;
         else if (senderObj && typeof senderObj === "object") {
           const s = senderObj as { name?: string; phone?: string };
-          senderName = s.name || s.phone || "Cliente";
+          senderName = s.name || s.phone || t("chat.client", "Cliente");
         }
 
         return {
@@ -206,9 +217,9 @@ export const ChatInterface: React.FC<Props> = ({
       const { updatePriority } = await import("@/services/ticketService");
       await updatePriority(activeContact.ticketId, newPriority);
       onTicketUpdate?.(activeContact.ticketId, { priority: newPriority });
-      toast.success(`Prioridad actualizada a ${newPriority}`);
+      toast.success(`${t("chat.priority_updated", "Prioridad actualizada a ")}${newPriority}`);
     } catch (error) {
-      toast.error("Error al actualizar la prioridad");
+      toast.error(t("chat.priority_update_error", "Error al actualizar la prioridad"));
       console.error(error);
     }
   }, [activeContact.ticketId, onTicketUpdate]);
@@ -218,7 +229,7 @@ export const ChatInterface: React.FC<Props> = ({
 
   return (
     <div className="flex h-full w-full bg-gray-50/50 dark:bg-[#0b141a] overflow-hidden relative border-l border-gray-200 dark:border-white/5">
-      <div className="flex-1 flex flex-col h-full relative overflow-hidden">
+      <div className="flex-1 flex flex-col h-full relative overflow-hidden min-w-0">
         
         {/* TOP: Header */}
         <ChatHeader
@@ -296,21 +307,35 @@ export const ChatInterface: React.FC<Props> = ({
 
       {/* RIGHT: Customer 360 Panel */}
       {is360Visible && (
-        <div className="hidden lg:block w-[380px] h-full border-l border-gray-200 dark:border-white/5 bg-white dark:bg-[#0b141a] animate-in slide-in-from-right duration-300">
-            <Customer360Panel 
-              contact={activeContact} 
-              onEditContact={() => setShowEditModal(true)}
+        <>
+          {/* RESIZER HANDLE */}
+          <div
+            onMouseDown={startResizing360}
+            className="hidden lg:block w-1.5 h-full cursor-col-resize absolute z-30 hover:bg-indigo-500/30 transition-colors group"
+            style={{ right: `${panel360Width - 3}px` }}
+          >
+            <div className="w-[1px] h-full bg-transparent group-hover:bg-indigo-500 mx-auto" />
+          </div>
+
+          <div 
+            className="hidden lg:block h-full bg-white dark:bg-[#0b141a] flex-shrink-0 overflow-hidden min-w-0"
+            style={{ width: `${panel360Width}px` }}
+          >
+              <Customer360Panel 
+                contact={activeContact} 
+                onEditContact={() => setShowEditModal(true)}
               onContactUpdate={onContactUpdate}
               onCreateTask={() => {
                 setActivityType("TASK");
                 setShowActivityModal(true);
               }}
-              onScheduleMeeting={() => {
-                setActivityType("MEETING");
-                setShowActivityModal(true);
-              }}
-            />
-        </div>
+                onScheduleMeeting={() => {
+                  setActivityType("MEETING");
+                  setShowActivityModal(true);
+                }}
+              />
+          </div>
+        </>
       )}
 
       {/* MODALS OVERLAY */}
@@ -362,7 +387,7 @@ export const ChatInterface: React.FC<Props> = ({
           setActiveActionModal(null);
         }}
         onProduct={(p) => {
-          handleSendMessage(`Interesado en: ${p.name}\n${p.imageUrl || ""}`, null, replyingTo);
+          handleSendMessage(`${t("chat.interested_in", "Interesado en:")} ${p.name}\n${p.imageUrl || ""}`, null, replyingTo);
           setActiveActionModal(null);
         }}
         onPayment={(amt, concept, currency) => {
@@ -372,12 +397,12 @@ export const ChatInterface: React.FC<Props> = ({
             minimumFractionDigits: 0
           }).format(parseFloat(amt));
           
-          handleSendMessage(`*SOLICITUD DE PAGO*\n${concept}\n\nMonto: ${formatted}`, null, replyingTo);
+          handleSendMessage(`${t("chat.payment_request", "*SOLICITUD DE PAGO*")}\n${concept}\n\n${t("chat.amount", "Monto:")} ${formatted}`, null, replyingTo);
           setActiveActionModal(null);
         }}
         onRequestData={(fields) => {
           const list = fields.map(f => `• ${f}`).join("\n");
-          handleSendMessage(`*SOLICITUD DE DATOS*\n\nPara continuar con el proceso, requerimos la siguiente información:\n\n${list}\n\nQuedamos atentos a tu respuesta.`, null, replyingTo);
+          handleSendMessage(`${t("chat.data_request", "*SOLICITUD DE DATOS*")}\n\n${t("chat.data_request_msg_start", "Para continuar con el proceso, requerimos la siguiente información:")}\n\n${list}\n\n${t("chat.data_request_msg_end", "Quedamos atentos a tu respuesta.")}`, null, replyingTo);
           setActiveActionModal(null);
         }}
       />
@@ -391,8 +416,8 @@ export const ChatInterface: React.FC<Props> = ({
             setShowActivityModal(false);
             toast.success(
               activityType === "TASK"
-                ? "Tarea asignada correctamente."
-                : "Reunión agendada correctamente."
+                ? t("chat.task_assigned", "Tarea asignada correctamente.")
+                : t("chat.meeting_scheduled", "Reunión agendada correctamente.")
             );
           }}
           initialType={activityType}

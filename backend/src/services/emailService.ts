@@ -1,89 +1,121 @@
 import nodemailer from "nodemailer";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
-import { decrypt } from "@/utils/encryption";
+import { encrypt, decrypt } from "@/utils/cryptoUtils";
 
-interface EmailOptions {
+/**
+ * [SEC] SYSTEM EMAIL SERVICE (Enterprise)
+ *
+ * Handles SYSTEM-LEVEL email sending (password resets, login notifications, etc.)
+ * For multi-tenant business emails (contact/ticket), use services/email/emailService.ts
+ *
+ * Features:
+ * - SMTP password decryption at runtime
+ * - Connection verification on first use
+ * - Structured logging (no console.log)
+ */
+
+interface SystemEmailOptions {
   to: string;
   subject: string;
   html: string;
   from?: string;
 }
 
-export class EmailService {
-  private transporter: nodemailer.Transporter;
+export class SystemEmailService {
+  private transporter: nodemailer.Transporter | null = null;
 
-  constructor() {
-    // Check if SMTP credentials are provided
-    if (
-      !process.env.SMTP_HOST ||
-      !process.env.SMTP_PORT ||
-      !process.env.SMTP_USER ||
-      !(process.env.SMTP_PASS || process.env.SMTP_PASSWORD)
-    ) {
-      Logger.warn(
-        "SMTP credentials missing. Email service will not send real emails.",
+  /**
+   * Lazily initializes the SMTP transporter on first use.
+   * This prevents startup crashes when SMTP is not configured.
+   */
+  private getTransporter(): nodemailer.Transporter {
+    if (this.transporter) return this.transporter;
+
+    const host = process.env.SMTP_HOST;
+    const port = Number(process.env.SMTP_PORT) || 587;
+    const user = process.env.SMTP_USER;
+    const rawPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
+
+    if (!host || !user || !rawPass) {
+      throw new AppError(
+        "SMTP no configurado. Configure las variables SMTP_HOST, SMTP_USER, SMTP_PASS en el archivo .env",
+        500,
       );
     }
 
-    // [SEC] SECURITY: Decrypt password if encrypted
-    let smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
-    if (smtpPass) {
-      // Lazy load decryption to avoid circular deps or init issues
-      // Note: real implementation might import at top if safe
-      try {
-        smtpPass = decrypt(smtpPass);
-      } catch {
-        // Ignore if util not found/fails, assume plaintext
-      }
+    // [SEC] Attempt to decrypt the password (supports both encrypted and plaintext)
+    let smtpPass = rawPass;
+    const decrypted = decrypt(rawPass, "system-smtp");
+    if (decrypted) {
+      smtpPass = decrypted;
     }
+    // If decryption fails, assume plaintext (backward compatible)
+
+    const isSecure = process.env.SMTP_SECURE === "true" || port === 465;
 
     this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: smtpPass,
+      host,
+      port,
+      secure: isSecure,
+      auth: { user, pass: smtpPass },
+      tls: {
+        rejectUnauthorized: process.env.NODE_ENV === "production",
       },
+      connectionTimeout: 10000, // 10s connection timeout
+      greetingTimeout: 10000,   // 10s greeting timeout
+      socketTimeout: 30000,     // 30s socket timeout
     });
+
+    Logger.info(`[SystemEmail] SMTP transporter initialized (${host}:${port}, secure:${isSecure})`);
+    return this.transporter;
   }
 
-  async sendEmail(options: EmailOptions): Promise<void> {
-    //  VALIDATION: Check if SMTP is configured before attempting to send
-    if (
-      !process.env.SMTP_HOST ||
-      !process.env.SMTP_USER ||
-      !(process.env.SMTP_PASS || process.env.SMTP_PASSWORD)
-    ) {
-      const errorMsg =
-        "SMTP no configurado. Configure las variables SMTP_HOST, SMTP_USER, SMTP_PASS (o SMTP_PASSWORD) en el archivo .env";
-      Logger.error(`[EmailService] [ERROR] ${errorMsg}`);
-      throw new AppError(errorMsg, 500);
-    }
+  async sendEmail(options: SystemEmailOptions): Promise<void> {
+    const transporter = this.getTransporter();
+
+    const mailOptions = {
+      from:
+        options.from ||
+        process.env.SMTP_FROM ||
+        process.env.SMTP_USER ||
+        '"Reply Software" <no-reply@reply.software>',
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+    };
 
     try {
-      const mailOptions = {
-        from:
-          options.from ||
-          process.env.SMTP_FROM ||
-          process.env.SMTP_USER || // Use SMTP_USER as fallback
-          '"Reply CRM" <no-reply@replycrm.com>',
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      Logger.info(`Message sent: ${info.messageId}`);
+      const info = await transporter.sendMail(mailOptions);
+      Logger.info(`[SystemEmail] Email sent: ${info.messageId} -> ${options.to}`);
     } catch (error: unknown) {
-      Logger.error("[EmailService] Error sending email:", error);
-      // Preserve the original error message from nodemailer
       const errorMsg =
         error instanceof Error ? error.message : "Failed to send email";
+      Logger.error("[SystemEmail] Send failed:", error);
+
+      // Reset transporter on auth/connection errors to force re-init
+      if (errorMsg.includes("ECONNREFUSED") || errorMsg.includes("EAUTH")) {
+        this.transporter = null;
+      }
+
       throw new AppError(`Error SMTP: ${errorMsg}`, 500);
     }
   }
+
+  /**
+   * Encrypts an SMTP password for secure storage in the database.
+   * The namespace "smtp" + companyId ensures tenant-isolated encryption.
+   */
+  static encryptSmtpPassword(password: string, companyId: string): string {
+    return encrypt(password, `smtp:${companyId}`);
+  }
+
+  /**
+   * Decrypts an SMTP password retrieved from the database.
+   */
+  static decryptSmtpPassword(encryptedPassword: string, companyId: string): string | null {
+    return decrypt(encryptedPassword, `smtp:${companyId}`);
+  }
 }
 
-export const emailService = new EmailService();
+export const emailService = new SystemEmailService();

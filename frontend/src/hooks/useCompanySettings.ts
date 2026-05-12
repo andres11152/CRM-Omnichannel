@@ -308,11 +308,16 @@ export const useCompanySettings = () => {
       return;
     }
 
+    const targetEmail = user?.email || settings.smtp.senderEmail;
+    if (!targetEmail) {
+      toast.error("No se pudo determinar el correo destinatario de prueba (configure el email de remitente o verifique su perfil)");
+      return;
+    }
+
     setTestingConnection(true);
     const toastId = toast.loading("Probando conexión SMTP...");
 
     try {
-      const targetEmail = user?.email || settings.smtp.senderEmail || "test@example.com";
       await api.post("/emails/test-connection", {
         host: settings.smtp.host,
         port: settings.smtp.port,

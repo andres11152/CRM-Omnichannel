@@ -266,7 +266,7 @@ export const LoginPage = () => {
           </div>
 
           <h1 className="text-5xl font-bold mb-6 tracking-tight drop-shadow-sm">
-            Reply Software
+            Sentry CRM
           </h1>
           <p className="text-xl text-green-50 font-medium leading-relaxed opacity-90">
             La plataforma definitiva de <br />

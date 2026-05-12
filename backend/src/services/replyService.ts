@@ -16,19 +16,19 @@ export const replyService = {
   async update(id: string, userId: string, companyId: string, content: string) {
     const reply = await replyRepository.findFirst(id, companyId);
     if (!reply)
-      throw new AppError("No se encontró ninguna respuesta con ese ID", 404);
+      throw new AppError("Reply not found", 404);
     if (reply.authorId !== userId)
-      throw new AppError("No tienes permiso para editar esta respuesta.", 403);
+      throw new AppError("Permission denied to edit this reply", 403);
     return await replyRepository.update(id, content);
   },
 
   async delete(id: string, userId: string, companyId: string) {
     const reply = await replyRepository.findFirst(id, companyId);
     if (!reply)
-      throw new AppError("No se encontró ninguna respuesta con ese ID", 404);
+      throw new AppError("Reply not found", 404);
     if (reply.authorId !== userId)
       throw new AppError(
-        "No tienes permiso para eliminar esta respuesta.",
+        "Permission denied to delete this reply",
         403,
       );
     await replyRepository.delete(id);

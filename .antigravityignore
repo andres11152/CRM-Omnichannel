@@ -1,0 +1,144 @@
+# .antigravityignore
+# -----------------------------------------------------------------------------
+# Configuration file for Antigravity AI Agent workspace indexing.
+# This file prevents large, auto-generated, binary, or sensitive files from
+# being indexed by the AI, significantly reducing token consumption and
+# preventing search clutter.
+# -----------------------------------------------------------------------------
+
+# --- 1. Dependencies ---
+node_modules/
+**/node_modules/
+
+# --- 2. Build & Compilations Outputs ---
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/
+.next/
+**/ .next/
+.nuxt/
+**/ .nuxt/
+dist-ssr/
+**/dist-ssr/
+
+# --- 3. Package Manager Lockfiles (Massive Token Wasters) ---
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+
+# --- 4. Secrets, Configuration & Environment ---
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.cert
+*.pfx
+
+# --- 5. CRM & WhatsApp Integrations (Local Auth Storage & Sessions) ---
+baileys_auth_info/
+**/baileys_auth_info/
+
+# --- 6. Media Uploads & Assets ---
+uploads/
+**/uploads/
+temp/
+**/temp/
+
+# --- 7. Heavy Media & Binary Assets (Global Extensions) ---
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.webp
+*.tiff
+*.bmp
+# Fonts
+*.woff
+*.woff2
+*.eot
+*.ttf
+*.otf
+# Documents
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+# Audio & Video
+*.mp3
+*.mp4
+*.wav
+*.webm
+*.avi
+*.mov
+*.mkv
+# Archives / Compressed files
+*.zip
+*.tar.gz
+*.tar
+*.gz
+*.rar
+*.7z
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# --- 8. System & Editor Cache Files ---
+.DS_Store
+Thumbs.db
+.vscode/
+**/ .vscode/
+!.vscode/extensions.json
+.idea/
+**/ .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.husky/
+**/ .husky/
+
+# --- 9. Logs & Diagnostic Output ---
+*.log
+logs/
+**/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+build_log.txt
+build_output.txt
+tsc_errors.log
+tsc_errors.txt
+tsc_output.txt
+prisma_output.txt
+eslint-*.txt
+lint_results.txt
+
+# --- 10. Temporary / Local Debug & Test Files ---
+temp-prisma-client/
+cleanKeys*.ts
+check-*.ts
+measure-*.ts
+debug_*.ts
+debug-*.ts
+debug-*.js
+test-*.ts
+test-*.js
+manual_migrations_reference.sql
+k6-tests/results*.txt
+k6-tests/*.js
+!k6-tests/stress-test.js

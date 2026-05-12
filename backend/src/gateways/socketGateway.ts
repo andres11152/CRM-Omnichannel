@@ -112,7 +112,7 @@ class WebSocketGateway {
     this.setupMiddleware();
     this.handleConnections();
 
-    Logger.info("[Gateway] [OK] WebSocket fully initialized");
+    Logger.info("[Gateway] WebSocket fully initialized");
   }
 
   private async setupRedis() {
@@ -165,7 +165,7 @@ class WebSocketGateway {
       if (this.io) {
         this.io.adapter(createAdapter(pubClient, subClient));
         this.redisConnected = true;
-        Logger.info("[Gateway] [OK] Redis Adapter Configured Successfully");
+        Logger.info("[Gateway] Redis Adapter Configured Successfully");
       }
     } catch (err) {
       Logger.error(
@@ -289,7 +289,7 @@ class WebSocketGateway {
 
           if (room !== expectedRoom) {
             Logger.warn(
-              `[Gateway] [ALERT] SECURITY ALERT: User ${user.id} (Company: ${user.companyId}) tried to join unauthorized room: ${room}`,
+              `[Gateway] SECURITY ALERT: User ${user.id} (Company: ${user.companyId}) tried to join unauthorized room: ${room}`,
             );
 
             // PENALTY: Disconnect suspicious client
@@ -358,7 +358,7 @@ class WebSocketGateway {
       });
 
       // [SEC] DEPRECATED/REMOVED: Generic insecure join_room event
-      // Redirigimos a la lógica segura de 'join' si se intenta usar
+      // Redirect to the secure 'join' handler if this legacy event is used
       socket.on("join_room", (data) => {
         if (data?.conversationId) {
           socket.emit("join", `conversation:${data.conversationId}`);

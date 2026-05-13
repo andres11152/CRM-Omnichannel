@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon",
-    "build": "npx rimraf dist && ./node_modules/.bin/tsc --project tsconfig.json --listEmittedFiles --traceResolution > debug_build.txt 2>&1 || (cat debug_build.txt && exit 1)",
+    "build": "npx rimraf dist && tsc",
     "start": "node --max-old-space-size=3072 -r module-alias/register dist/server.js",
     "start:worker": "node --max-old-space-size=2048 -r module-alias/register dist/worker.js",
     "start:all": "npx pm2 start ecosystem.config.json",

@@ -16,10 +16,10 @@ import {
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
 import {
-  authLimiter,
-  passwordResetLimiter,
-  signupLimiter,
-} from "@/middleware/rateLimiters";
+  authRateLimiter as authLimiter,
+  authRateLimiter as passwordResetLimiter,
+  authRateLimiter as signupLimiter,
+} from "@/middleware/advancedRateLimiter";
 import {
   SignupSchema,
   LoginSchema,

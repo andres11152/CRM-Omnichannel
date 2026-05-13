@@ -19,7 +19,7 @@ import { WA_TOKENS } from "./di/tokens";
 
 // Ensure the Facade instantiates the DI container first
 import { whatsappService } from "./WhatsAppService";
-whatsappService; // Force initialization
+void whatsappService; // Force initialization
 
 export const whatsappMessagingService = container.resolve(WA_TOKENS.MessagingService);
 export const whatsappSessionService = container.resolve(WA_TOKENS.SessionService);

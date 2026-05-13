@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { encrypt, decrypt } from "@/utils/cryptoUtils";
+import { getEnv } from "@/config/env";
 
 /**
  * [SEC] SYSTEM EMAIL SERVICE (Enterprise)
@@ -32,14 +33,15 @@ export class SystemEmailService {
   private getTransporter(): nodemailer.Transporter {
     if (this.transporter) return this.transporter;
 
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT) || 587;
-    const user = process.env.SMTP_USER;
-    const rawPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
+    const env = getEnv();
+    const host = env.SMTP_HOST;
+    const port = env.SMTP_PORT || 587;
+    const user = env.SMTP_USER;
+    const rawPass = env.SMTP_PASSWORD;
 
     if (!host || !user || !rawPass) {
       throw new AppError(
-        "SMTP no configurado. Configure las variables SMTP_HOST, SMTP_USER, SMTP_PASS en el archivo .env",
+        "SMTP no configurado. Configure las variables SMTP_HOST, SMTP_USER, SMTP_PASSWORD en el archivo .env",
         500,
       );
     }
@@ -52,7 +54,7 @@ export class SystemEmailService {
     }
     // If decryption fails, assume plaintext (backward compatible)
 
-    const isSecure = process.env.SMTP_SECURE === "true" || port === 465;
+    const isSecure = port === 465;
 
     this.transporter = nodemailer.createTransport({
       host,
@@ -60,7 +62,7 @@ export class SystemEmailService {
       secure: isSecure,
       auth: { user, pass: smtpPass },
       tls: {
-        rejectUnauthorized: process.env.NODE_ENV === "production",
+        rejectUnauthorized: env.NODE_ENV === "production",
       },
       connectionTimeout: 10000, // 10s connection timeout
       greetingTimeout: 10000,   // 10s greeting timeout
@@ -73,12 +75,12 @@ export class SystemEmailService {
 
   async sendEmail(options: SystemEmailOptions): Promise<void> {
     const transporter = this.getTransporter();
+    const env = getEnv();
 
     const mailOptions = {
       from:
         options.from ||
-        process.env.SMTP_FROM ||
-        process.env.SMTP_USER ||
+        env.SMTP_USER ||
         '"Reply Software" <no-reply@reply.software>',
       to: options.to,
       subject: options.subject,
@@ -119,3 +121,4 @@ export class SystemEmailService {
 }
 
 export const emailService = new SystemEmailService();
+

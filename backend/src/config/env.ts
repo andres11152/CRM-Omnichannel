@@ -94,6 +94,13 @@ const EnvSchema = z.object({
     .default(3600)
     .describe("Rate limit window in seconds"),
 
+  WA_SYNC_FULL_HISTORY: z.coerce
+    .boolean()
+    .default(false)
+    .describe("Full history sync on new pairing"),
+
+  META_VERIFY_TOKEN: z.string().optional().describe("WhatsApp Meta Webhook verify token"),
+
   // ==================== CORS ====================
   FRONTEND_URL: z
     .string()
@@ -124,14 +131,14 @@ const EnvSchema = z.object({
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_REGION: z.string().optional(),
-  AWS_S3_BUCKET: z.string().optional(),
+  S3_BUCKET_NAME: z.string().optional().describe("AWS S3 Bucket name"),
 
   GOOGLE_AI_API_KEY: z.string().optional(),
 
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().positive().optional(),
   SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
 
   // ==================== MONITORING ====================
   SENTRY_DSN: z.string().url().optional(),

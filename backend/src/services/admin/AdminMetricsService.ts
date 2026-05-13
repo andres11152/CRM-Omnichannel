@@ -83,16 +83,17 @@ export const adminMetricsService = {
       ticketsLastMonth,
       aiAssistants,
     ] = await Promise.all([
-      userRepository.count({}),
+      userRepository.count({ where: { companyId } }),
       whatsappSessionRepository.count(companyId, {
-        where: { status: "CONNECTED" },
+        where: { status: "CONNECTED", companyId },
       }),
       statsRepository.countQueues({ where: { companyId } }),
       ticketRepository.count({
-        where: { createdAt: { gte: startOfMonth } },
+        where: { companyId, createdAt: { gte: startOfMonth } },
       }),
       ticketRepository.count({
         where: {
+          companyId,
           createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         },
       }),
@@ -120,7 +121,7 @@ export const adminMetricsService = {
 
     // === ENGAGEMENT METRICS ===
     const lastAdminLogin = await userRepository.findFirst({
-      where: { role: "ADMIN" },
+      where: { companyId, role: "ADMIN" },
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     });
@@ -139,12 +140,14 @@ export const adminMetricsService = {
     // === AI METRICS ===
     const resolvedTickets = await ticketRepository.findMany({
       where: {
+        companyId,
         status: "RESOLVED",
         resolvedAt: { not: null },
         createdAt: { gte: startOfMonth },
       },
       include: { queue: true },
     });
+
 
     const totalResolved = resolvedTickets.length;
     let aiResolvedCount = 0;

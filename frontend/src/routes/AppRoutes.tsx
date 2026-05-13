@@ -42,6 +42,7 @@ const SystemDeepMonitor = React.lazy(() => import("@/components/admin/SystemDeep
 const FeatureFlagManager = React.lazy(() => import("@/components/admin/FeatureFlagManager").then(m => ({ default: m.FeatureFlagManager })));
 const GlobalTemplateMarketplace = React.lazy(() => import("@/components/admin/GlobalTemplateMarketplace").then(m => ({ default: m.GlobalTemplateMarketplace })));
 const EmailInbox = React.lazy(() => import("@/components/EmailInbox").then(m => ({ default: m.EmailInbox })));
+const NotFoundPage = React.lazy(() => import("@/pages/NotFoundPage").then(m => ({ default: m.NotFoundPage })));
 
 // --- LOADING FALLBACK ---
 const PageLoader = () => <PageSkeleton />;
@@ -165,8 +166,8 @@ export const AppRoutes: React.FC = () => {
           </Route>
         </Route>
 
-        {/* CATCH ALL */}
-        <Route path="*" element={<Navigate to="/dashboard" />} />
+        {/* CATCH ALL - PREMIUM 404 EXPERIENCE */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
   );

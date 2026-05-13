@@ -2,12 +2,12 @@ import { z } from "zod";
 import { Logger } from "@/utils/logger";
 
 /**
- * [SEC] ENVIRONMENT VARIABLES VALIDATION
- *
- * Validates all required environment variables at startup.
- * FAIL FAST: If any critical variable is missing, the app will not start.
- *
- * This prohibits direct process.env usage in favor of strict typed access.
+
+/**
+ * [SEC] ENVIRONMENT VALIDATOR (Zod-Powered)
+ * 
+ * Ensures all required environment variables are present and typed correctly.
+ * FAIL FAST: The application will not start if validation fails.
  */
 
 const EnvSchema = z.object({
@@ -161,27 +161,22 @@ export function validateEnv(): Env {
   const result = EnvSchema.safeParse(process.env);
 
   if (!result.success) {
-    Logger.error("[ERROR] ENVIRONMENT VALIDATION FAILED");
-    Logger.error("Missing or invalid environment variables:");
+    console.error("\x1b[31m[CRITICAL] ENVIRONMENT VALIDATION FAILED\x1b[0m");
+    console.error("Missing or invalid environment variables:");
 
     result.error.errors.forEach((err) => {
       const path = err.path.join(".");
-      Logger.error(`  [ERROR] ${path}: ${err.message}`);
+      console.error(`  - \x1b[33m${path}\x1b[0m: ${err.message}`);
     });
 
-    Logger.error("Check your .env file.");
+    console.error("\nPlease check your Render Environment Variables or .env file.");
     process.exit(1);
-    // TypeScript doesn't know process.exit() throws/ends, so we throw dummy error
     throw new Error("Env validation failed");
   }
 
   const parsed = result.data;
-  Logger.info(` Running in ${parsed.NODE_ENV} mode`);
-
-  if (parsed.NODE_ENV === "development") {
-    Logger.info("[OK] strict environment validation passed");
-  }
-
+  cachedEnv = parsed; // Cache it immediately
+  
   return parsed;
 }
 
@@ -192,7 +187,6 @@ export function validateEnv(): Env {
 export function getEnv(): Env {
   if (!cachedEnv) {
     if (process.env.NODE_ENV === "test") {
-      // Auto-init in test environment for convenience
       cachedEnv = validateEnv();
       return cachedEnv;
     }
@@ -207,11 +201,10 @@ export function getEnv(): Env {
  * Initialize environment. Call this in your entry point (e.g. server.ts).
  */
 export function initEnv(): Env {
-  cachedEnv = validateEnv();
-  return cachedEnv;
+  return validateEnv();
 }
 
 // Helpers
-export const isDevelopment = () => getEnv().NODE_ENV === "development";
-export const isProduction = () => getEnv().NODE_ENV === "production";
-export const isTest = () => getEnv().NODE_ENV === "test";
+export const isDevelopment = () => (cachedEnv?.NODE_ENV || process.env.NODE_ENV) === "development";
+export const isProduction = () => (cachedEnv?.NODE_ENV || process.env.NODE_ENV) === "production";
+export const isTest = () => (cachedEnv?.NODE_ENV || process.env.NODE_ENV) === "test";

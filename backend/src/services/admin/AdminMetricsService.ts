@@ -284,7 +284,7 @@ export const adminMetricsService = {
     });
     // [SEC] Exclude the system admin tenant from business metrics
     const companies = (allCompanies as (Company & { plan: Plan | null })[]).filter(
-      (c) => c.slug !== "reply-software",
+      (c) => c.slug !== "reply-software" && c.slug !== "sentry-software",
     );
 
     // 2. Calculate MRR
@@ -367,7 +367,7 @@ export const adminMetricsService = {
               },
               {
                 company: {
-                  slug: { not: "reply-software" },
+                  slug: { notIn: ["reply-software", "sentry-software"] },
                 },
               },
             ],
@@ -381,7 +381,7 @@ export const adminMetricsService = {
     // 8. Top Tenants by Activity
     const topTenants = await companyRepository.findMany({
       where: {
-        slug: { notIn: ["reply-software"] },
+        slug: { notIn: ["reply-software", "sentry-software"] },
       },
       take: 5,
       include: {

@@ -27,6 +27,8 @@ import { getWhatsAppQueue } from "../queue/WhatsAppQueue";
 import { InboundWorker } from "../queue/workers/InboundWorker";
 import { OutboundWorker } from "../queue/workers/OutboundWorker";
 import { InboundCircuitBreaker } from "../services/InboundCircuitBreaker";
+import redisClient from "@/config/redis";
+import { Logger } from "@/utils/logger";
 
 /**
  * [BUILD] MESSAGE HANDLER (Thin Orchestrator)
@@ -188,15 +190,84 @@ export class MessageHandler implements IMessageHandler {
     });
   }
 
+  /**
+   * Calculates a progressive, human-like delay for outbound messages per company
+   * to mimic human behavior and avoid WhatsApp spam detection.
+   * If the message is manual (from an agent), it returns a tiny jitter and bypasses the progressive queue.
+   */
+  private async getOutboundDelayAndPriority(
+    companyId: string,
+    options: SendMessageOptions
+  ): Promise<{ delay: number; priority: number }> {
+    const isAiGenerated = options.metadata?.aiGenerated === true;
+    const isFlowGenerated = options.metadata?.flowGenerated === true;
+    const isAutomated = isAiGenerated || isFlowGenerated;
+
+    if (!isAutomated) {
+      // Manual message gets high priority and minimal human delay to send immediately
+      const manualJitter = Math.floor(Math.random() * 400) + 100; // 100ms - 500ms
+      return { delay: manualJitter, priority: 1 };
+    }
+
+    if (!redisClient?.isOpen) {
+      return { delay: 0, priority: 10 };
+    }
+
+    const key = `scheduler:outbound:${companyId}`;
+    const now = Date.now();
+
+    // Human-like delay config: average 3 seconds (2-5s range)
+    const minDelay = parseInt(process.env.WA_OUTBOUND_MIN_DELAY_MS || "2000", 10);
+    const maxDelay = parseInt(process.env.WA_OUTBOUND_MAX_DELAY_MS || "5000", 10);
+    const jitter = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+
+    try {
+      // Lua script to atomically calculate and set the next execution timestamp
+      const luaScript = `
+        local key = KEYS[1]
+        local now = tonumber(ARGV[1])
+        local jitter = tonumber(ARGV[2])
+        local next_send = redis.call('get', key)
+        local scheduled = now
+        if next_send then
+          scheduled = math.max(now, tonumber(next_send))
+        end
+        local next_next = scheduled + jitter
+        redis.call('setex', key, 86400, tostring(next_next))
+        return tostring(scheduled - now)
+      `;
+
+      const delayStr = await redisClient.eval(luaScript, {
+        keys: [key],
+        arguments: [String(now), String(jitter)]
+      });
+
+      const delay = parseInt(delayStr as string, 10);
+      return { delay: delay > 0 ? delay : 0, priority: 10 };
+    } catch (err) {
+      Logger.error(`[OutboundScheduler] Error calculating delay for ${companyId}:`, err);
+      return { delay: 0, priority: 10 };
+    }
+  }
+
   async sendMessage(
     to: string,
     content: string,
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
-    const job = await getWhatsAppQueue().outboundQueue.add("send-text", {
-      type: "text",
-      payload: { to, content, options },
-    });
+    const { delay, priority } = await this.getOutboundDelayAndPriority(options.companyId, options);
+
+    const job = await getWhatsAppQueue().outboundQueue.add(
+      "send-text",
+      {
+        type: "text",
+        payload: { to, content, options },
+      },
+      {
+        delay,
+        priority,
+      }
+    );
     
     return {
       sessionId: "queued",
@@ -214,10 +285,19 @@ export class MessageHandler implements IMessageHandler {
     media: MediaPayload,
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
-    const job = await getWhatsAppQueue().outboundQueue.add("send-media", {
-      type: "media",
-      payload: { to, media, options },
-    });
+    const { delay, priority } = await this.getOutboundDelayAndPriority(options.companyId, options);
+
+    const job = await getWhatsAppQueue().outboundQueue.add(
+      "send-media",
+      {
+        type: "media",
+        payload: { to, media, options },
+      },
+      {
+        delay,
+        priority,
+      }
+    );
 
     return {
       sessionId: "queued",

@@ -7,13 +7,16 @@ import { TenantContextManager } from "@/config/tenantContext";
 import { webhookDispatcher } from "@/services/WebhookDispatcher";
 import { notificationRepository } from "@/repositories/NotificationRepository";
 import { emailService } from "@/services/EmailService";
+import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { prisma } from "@/config/database";
+import { Prisma } from "@prisma/client";
 
 export class WhatsAppEventWiring {
   constructor(
     private eventBus: EventBus,
     private sessionRepository: WhatsAppSessionRepository,
     private messageHandler: IMessageHandler,
+    private sessionManager: ISessionManager,
   ) {}
 
   setupEventHandlers(): void {
@@ -34,6 +37,58 @@ export class WhatsAppEventWiring {
                 status: "CONNECTED",
               },
             );
+
+            // Clean up any other zombie/unlinked sessions for this company
+            const allSessions = await this.sessionRepository.findByCompany(event.companyId);
+            const zombies = allSessions.filter(
+              (s) =>
+                s.sessionId !== event.sessionId &&
+                (s.phone === null || ["SCANNING", "CONNECTING"].includes(s.status))
+            );
+
+            for (const zombie of zombies) {
+              Logger.info(
+                `[WA] Terminating and deleting zombie session ${zombie.sessionId} (status: ${zombie.status}) for company ${event.companyId} after successful connection of ${event.sessionId}`,
+              );
+
+              // 1. Terminate in-memory session (close socket & clear credentials)
+              try {
+                await Promise.race([
+                  this.sessionManager.terminateSession(zombie.sessionId, true),
+                  new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("Termination timeout")), 10000),
+                  ),
+                ]);
+              } catch (termErr) {
+                Logger.warn(
+                  `[WA] Failed to terminate zombie socket for ${zombie.sessionId}, proceeding with DB delete:`,
+                  termErr,
+                );
+              }
+
+              // 2. Delete database record
+              try {
+                await this.sessionRepository.delete(event.companyId, zombie.sessionId);
+                Logger.info(`[WA] Zombie session ${zombie.sessionId} removed from DB.`);
+              } catch (dbErr) {
+                Logger.error(
+                  `[WA] Failed to delete zombie session ${zombie.sessionId} from DB:`,
+                  dbErr,
+                );
+              }
+
+              // 3. Emit socket event to notify frontend to remove this session card
+              try {
+                const { gateway } = await import("@/gateways/socketGateway");
+                gateway.emitToCompany(event.companyId, "session.status", {
+                  sessionId: zombie.sessionId,
+                  status: "DELETED",
+                  timestamp: new Date(),
+                });
+              } catch (emitErr) {
+                Logger.error(`[WA] Failed to emit DELETED event for zombie session ${zombie.sessionId}:`, emitErr);
+              }
+            }
           });
 
           const { gateway } = await import("@/gateways/socketGateway");
@@ -45,6 +100,44 @@ export class WhatsAppEventWiring {
           // Workers are no longer pre-loaded for ALL companies at boot.
           const { ensureWorkerForCompany } = await import("@/loaders/workerLoader");
           await ensureWorkerForCompany(event.companyId);
+
+          // [FIX] AUTO-RETRY: Retry failed outbound jobs on reconnect.
+          // Messages that failed with "No active WhatsApp session" sit permanently
+          // in BullMQ's failed state. On reconnection, we retry them so they get delivered.
+          try {
+            const { Queue } = await import("bullmq");
+            const IORedis = (await import("ioredis")).default;
+            const { getEnv } = await import("@/config/env");
+            const env = getEnv();
+            const isTls = env.REDIS_URL?.startsWith("rediss://");
+            const redis = new IORedis(env.REDIS_URL, {
+              maxRetriesPerRequest: null,
+              password: env.REDIS_PASSWORD || undefined,
+              tls: isTls ? { rejectUnauthorized: false } : undefined,
+            });
+            const outboundQueue = new Queue("whatsapp-outbound", { connection: redis });
+            const failedJobs = await outboundQueue.getFailed(0, 100);
+
+            // Filter jobs that belong to THIS company
+            const companyJobs = failedJobs.filter((job) => {
+              const payload = job.data?.payload;
+              return payload?.options?.companyId === event.companyId;
+            });
+
+            if (companyJobs.length > 0) {
+              Logger.info(`[WA] Retrying ${companyJobs.length} failed outbound jobs for company ${event.companyId}`);
+              for (const job of companyJobs) {
+                await job.retry().catch((retryErr: Error) => {
+                  Logger.warn(`[WA] Failed to retry outbound job ${job.id}: ${retryErr.message}`);
+                });
+              }
+            }
+
+            await outboundQueue.close();
+            redis.disconnect();
+          } catch (retryErr) {
+            Logger.warn("[WA] Non-critical: Failed to retry outbound jobs on reconnect:", retryErr);
+          }
         } catch (err) {
           Logger.error("[WA] Error handling session_connected:", err);
         }
@@ -58,10 +151,16 @@ export class WhatsAppEventWiring {
         try {
           // [SEC] Same RLS fix as SESSION_CONNECTED — Baileys callbacks have no tenant context.
           await TenantContextManager.runAsSystem(async () => {
+            const dataToUpdate: Prisma.WhatsAppSessionUpdateInput = {
+              status: "DISCONNECTED",
+            };
+            if (event.data && event.data.isReconnecting === false) {
+              dataToUpdate.phone = null;
+              dataToUpdate.qrCode = null;
+            }
+
             await this.sessionRepository
-              .update(event.companyId, event.sessionId, {
-                status: "DISCONNECTED",
-              })
+              .update(event.companyId, event.sessionId, dataToUpdate)
               .catch((dbErr: { code?: string }) => {
                 if (dbErr?.code === "P2025") {
                   Logger.warn(

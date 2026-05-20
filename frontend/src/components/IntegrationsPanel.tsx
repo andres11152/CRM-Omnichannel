@@ -148,8 +148,11 @@ export const IntegrationsPanel: React.FC = () => {
       phone?: string;
     }) => {
       console.log("Status Update Received:", data);
-      setSessions((prev) =>
-        prev.map((s) => {
+      setSessions((prev) => {
+        if (data.status === "DELETED") {
+          return prev.filter((s) => s.sessionId !== data.sessionId);
+        }
+        return prev.map((s) => {
           if (s.sessionId !== data.sessionId) return s;
           return {
             ...s,
@@ -157,8 +160,8 @@ export const IntegrationsPanel: React.FC = () => {
             phone: data.phone || s.phone,
             qrCode: data.status === "CONNECTED" ? null : s.qrCode,
           };
-        }),
-      );
+        });
+      });
 
       if (data.status === "CONNECTED") {
         const currentScanningId = scanningSessionIdRef.current;

@@ -29,10 +29,11 @@ export const validate =
 
       // [SEC] MULTI-TENANT FAIL-SAFE: Enforce companyId isolation.
       // If the validated payload contains a companyId, it MUST match the authenticated req.companyId.
-      const authReq = req as unknown as { companyId?: string };
+      const authReq = req as unknown as { companyId?: string; user?: { role?: string } };
       const expectedCompanyId = authReq.companyId;
+      const isMaster = authReq.user?.role === "MASTER";
 
-      if (expectedCompanyId) {
+      if (expectedCompanyId && !isMaster) {
         const checkTenantMismatch = (obj: unknown, sourceName: string) => {
           if (obj && typeof obj === "object") {
             const record = obj as Record<string, unknown>;
@@ -78,6 +79,10 @@ export const validate =
           .map((err, i) => `  ${i + 1}. ${err}`)
           .join("\n")}`;
         return next(new AppError(errorMessage, 400));
+      }
+
+      if (error instanceof AppError) {
+        return next(error);
       }
 
       // Unexpected validation error

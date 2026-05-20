@@ -155,14 +155,30 @@ class ChatSyncService {
 
       Logger.info(`[ChatSync] [SEARCH] STORE DIAG: targetJid=${targetJid || "ALL"}`);
 
-      const allMessages = this.ingest.extractMessagesFromStore(
+      let allMessages = this.ingest.extractMessagesFromStore(
         store,
         sinceDate,
         targetJid,
       );
 
-      // WhatsApp Multi-Device does not support on-demand server history fetching.
-      // We can only sync messages that are already present in the Baileys memory store.
+      // If we are syncing a specific conversation and the memory store has no messages,
+      // request them on-demand from WhatsApp
+      if (conversationId && allMessages.length === 0) {
+        Logger.info(`[ChatSync] No messages in memory for ${conversationId}, requesting on-demand from WhatsApp...`);
+        const fetchSuccess = await this.ingest.fetchHistoryFromWhatsApp(
+          companyId,
+          sessionId,
+          conversationId,
+          limit
+        );
+        if (fetchSuccess) {
+          allMessages = this.ingest.extractMessagesFromStore(
+            store,
+            sinceDate,
+            targetJid
+          );
+        }
+      }
 
       // Get the MOST RECENT `limit` messages (slice from the end)
       const limitedMessages = allMessages.slice(-limit);

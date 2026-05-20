@@ -36,7 +36,7 @@ export class AnalyticsRepository {
       by: ["planId"],
       _count: { planId: true },
       where: {
-        slug: { notIn: ["reply-software", "crm-saas"] },
+        slug: { notIn: ["reply-software", "crm-saas", "sentry-software"] },
         planId: { not: null },
       },
     });
@@ -52,7 +52,7 @@ export class AnalyticsRepository {
     return this.db.company.findMany({
       where: {
         createdAt: { gte: since },
-        slug: { notIn: ["reply-software"] },
+        slug: { notIn: ["reply-software", "sentry-software"] },
       },
       select: { createdAt: true },
     });
@@ -159,7 +159,7 @@ export class AnalyticsRepository {
 
   async getTenantsHealthData() {
     return this.db.company.findMany({
-      where: { slug: { notIn: ["reply-software"] } },
+      where: { slug: { notIn: ["reply-software", "sentry-software"] } },
       include: {
         plan: true,
         _count: {

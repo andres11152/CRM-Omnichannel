@@ -89,14 +89,15 @@ export const initSocketGateway = async (httpServer: Server) => {
           `[Loader] [SYNC] Syncing session status for ${user.id} (Company: ${user.companyId})`,
         );
 
-        // Fetch status from Service (Memory First)
+        // [FIX] Use listSessions which combines database records with current in-memory status
         const sessions = await whatsappService.listSessions(user.companyId);
 
-        // Emit status for each session
+        // Emit status for each session with phone included
         sessions.forEach((session) => {
           socket.emit("session.status", {
             sessionId: session.sessionId,
             status: session.status,
+            phone: session.phone || null,
             timestamp: new Date(),
           });
         });
@@ -113,12 +114,14 @@ export const initSocketGateway = async (httpServer: Server) => {
             `[Loader] [SYNC] Manual status check requested by ${user.id}`,
           );
           const { whatsappService } = await import("@/whatsapp");
+          // Use listSessions for accurate current status
           const sessions = await whatsappService.listSessions(user.companyId);
 
           sessions.forEach((session) => {
             socket.emit("session.status", {
               sessionId: session.sessionId,
               status: session.status,
+              phone: session.phone || null,
               timestamp: new Date(),
             });
           });

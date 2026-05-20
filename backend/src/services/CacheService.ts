@@ -20,11 +20,18 @@ class CacheService {
     try {
       this.client = createClient({
         url: process.env.REDIS_URL,
+        pingInterval: 20000, // 20s Ping
         socket: {
-          family: 4,
           tls: process.env.REDIS_URL?.startsWith("rediss://"),
           rejectUnauthorized: false,
+          connectTimeout: 10000, // 10s connection timeout
+          keepAlive: 30000,
+          reconnectStrategy: (retries) => {
+            const delay = Math.min(retries * 100, 5000);
+            return delay;
+          },
         },
+        disableOfflineQueue: true, // [SEC] Don't queue commands if Redis is offline (prevents hanging)
       });
 
       this.client.on("error", (err) => {

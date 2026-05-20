@@ -124,7 +124,29 @@ export function bindSessionEvents(
       });
   });
 
-  sock.ev.on("creds.update", saveCreds);
+  const syncSessionPhone = async () => {
+    if (sock.user?.id) {
+      const phoneNumber = sock.user.id.split(":")[0].split("@")[0];
+      try {
+        await TenantContextManager.runAsSystem(async () => {
+          const record = await whatsappSessionRepository.findOne(companyId, sessionId);
+          if (record && record.phone !== phoneNumber) {
+            await whatsappSessionRepository.updateSystemSession(sessionId, {
+              phone: phoneNumber,
+            });
+            logger.info(`[SessionEventBinder] Updated phone number in DB for ${sessionId}: ${phoneNumber}`);
+          }
+        });
+      } catch (err) {
+        logger.error(`[SessionEventBinder] Failed to sync session phone: ${err}`);
+      }
+    }
+  };
+
+  sock.ev.on("creds.update", async () => {
+    await saveCreds();
+    await syncSessionPhone();
+  });
 
   // Connection state
   sock.ev.on("connection.update", async (rawUpdate: unknown) => {
@@ -154,17 +176,14 @@ export function bindSessionEvents(
         whatsappSessionRepository.updateSystemSession(sessionId, {
           qrCode: qr,
           status: "SCANNING",
+          phone: null,
         }),
       ).catch(async (err: { code?: string; message?: string }) => {
         if (err?.code === "P2025") {
-          await TenantContextManager.runAsSystem(async () =>
-            whatsappSessionRepository.createSessionRecord({
-              sessionId,
-              companyId,
-              status: "SCANNING",
-              phone: null,
-            }),
-          );
+          logger.warn(`[SessionEventBinder] QR update failed: session ${sessionId} not found in DB. Terminating session.`);
+          await terminateSession(sessionId, true).catch((termErr) => {
+            logger.error({ err: termErr }, `[SessionEventBinder] Failed to terminate session ${sessionId} on P2025`);
+          });
         }
       });
     }
@@ -190,16 +209,15 @@ export function bindSessionEvents(
         }),
       ).catch(async (err: { code?: string }) => {
         if (err?.code === "P2025") {
-          await TenantContextManager.runAsSystem(async () =>
-            whatsappSessionRepository.createSessionRecord({
-              sessionId,
-              companyId,
-              status: "CONNECTED",
-              phone: phoneNumber,
-            }),
-          );
+          logger.warn(`[SessionEventBinder] Connection open update failed: session ${sessionId} not found in DB. Terminating session.`);
+          await terminateSession(sessionId, true).catch((termErr) => {
+            logger.error({ err: termErr }, `[SessionEventBinder] Failed to terminate session ${sessionId} on P2025`);
+          });
         }
       });
+
+      // Sync phone immediately if it's available
+      await syncSessionPhone();
 
       eventBus.publish({
         type: WhatsAppEventType.SESSION_CONNECTED,
@@ -235,6 +253,9 @@ export function bindSessionEvents(
       sock.ev.removeAllListeners("connection.update");
       sock.ev.removeAllListeners("creds.update");
       sock.ev.removeAllListeners("messages.upsert");
+      sock.ev.removeAllListeners("messaging-history.set");
+      sock.ev.removeAllListeners("messages.update");
+      sock.ev.removeAllListeners("presence.update");
       healer.stopHeartbeat(sessionId);
 
       if (resetConnection) {

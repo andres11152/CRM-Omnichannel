@@ -56,7 +56,7 @@ export const PWAInstallPrompt = () => {
               <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-3">
                 <Download className="w-8 h-8 text-white" />
               </div>
-              <h2 className="text-white font-bold text-xl">Instalar OmniCRM</h2>
+              <h2 className="text-white font-bold text-xl">Instalar Sentry</h2>
               <p className="text-white/90 text-sm mt-1">
                 Acceso rpido desde tu iPhone
               </p>

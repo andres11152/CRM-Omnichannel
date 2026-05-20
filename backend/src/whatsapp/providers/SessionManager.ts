@@ -28,6 +28,7 @@ import { SimpleInMemoryStore } from "./SimpleStore";
 import { ConnectionHealer } from "./ConnectionHealer";
 import {
   createSessionLogger,
+  cleanupSessionLogger,
   sessionModuleLogger as logger,
 } from "./SessionLogger";
 import NodeCache from "node-cache";
@@ -36,6 +37,7 @@ import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionReposit
 import { messageRepository } from "@/repositories/MessageRepository";
 import TenantContextManager from "@/config/tenantContext";
 import { bindSessionEvents } from "./events/SessionEventBinder";
+import { getProxyAgent } from "@/utils/proxy";
 
 export class SessionManager implements ISessionManager {
   private sessions: Map<string, WASocket> = new Map();
@@ -242,10 +244,40 @@ export class SessionManager implements ISessionManager {
     // [SEC] MEMORY OPTIMIZATION: Default to false unless explicitly enabled
     const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
 
+    // Fetch session details from DB to read the proxyUrl if configured
+    const dbSession = await TenantContextManager.runAsSystem(async () =>
+      whatsappSessionRepository.findSystemSession(sessionId),
+    );
+
+    if (!dbSession) {
+      logger.warn(
+        `[SessionManager] Session ${sessionId} was deleted from DB during initialization. Aborting socket creation.`
+      );
+      this.sessionStores.delete(sessionId);
+      this.sessionMetadata.delete(sessionId);
+      throw new Error(`Session ${sessionId} does not exist in database.`);
+    }
+    
+    // [SEC] PROXY LIFE-CYCLE: Generate Sticky Session Proxy and apply strict Kill Switch
+    const { getEnv } = await import("@/config/env");
+    const env = getEnv();
+    const resolvedProxyUrl = dbSession?.proxyUrl || env.GLOBAL_PROXY_URL;
+
+    let proxyAgent: import("https").Agent | undefined;
+    if (resolvedProxyUrl) {
+      const agent = getProxyAgent(resolvedProxyUrl, sessionId);
+      if (!agent) {
+        throw new Error(`[Proxy] CRITICAL: Proxy URL was configured (${resolvedProxyUrl}) but agent could not be created. Aborting socket connection to prevent real IP exposure.`);
+      }
+      proxyAgent = agent as unknown as import("https").Agent;
+    }
+
     const sock = makeWASocket({
       version,
       auth: state,
       printQRInTerminal: false,
+      agent: proxyAgent,
+      fetchAgent: proxyAgent,
       // Intercept Baileys internal logs to detect corruption
       logger: createSessionLogger(sessionId, (sid) => {
         this.reconnectSession(sid).catch((e) => {
@@ -254,7 +286,17 @@ export class SessionManager implements ISessionManager {
       }) as ReturnType<
         typeof import("pino")
       >,
-      browser: Browsers.ubuntu("Reply CRM"),
+      // [SEC] FINGERPRINTING: Emulate a clean Windows/Chrome environment instead of leaking custom agent names
+      browser: ["Windows", "Chrome", "122.0.0.0"],
+      // [SEC] NETWORK FOOTPRINT: Inject browser headers for handshake and media transfers
+      options: {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+        },
+      },
       generateHighQualityLinkPreview: true,
       syncFullHistory,
       msgRetryCounterCache: new NodeCache(),
@@ -335,21 +377,27 @@ export class SessionManager implements ISessionManager {
 
     // Delegate timer cleanup to healer
     this.healer.cleanupSession(sessionId);
+    // [FIX] Clean corruption tracker state to prevent memory leaks
+    cleanupSessionLogger(sessionId);
 
-    // [SEC] STORE LIFECYCLE: Only destroy on hard logout, preserve on reconnect
+    // [SEC] STORE LIFECYCLE: Clear intervals and clean up references to prevent timer/memory leaks
     const store = this.sessionStores.get(sessionId);
     if (store) {
+      // ALWAYS disable persistence (clear the setInterval timer) before dereferencing
+      store.disablePersistence();
+
       if (clearAuth) {
         // Hard termination (logout): wipe everything
         store.flush();
         this.sessionStores.delete(sessionId);
       } else {
         // Soft reconnect: persist current store to Redis before socket teardown
-        // so history is preserved across reconnections
+        // so history is preserved across reconnections, then clear reference
         const meta = this.sessionMetadata.get(sessionId);
         if (meta?.companyId) {
           await store.writeToRedis(`${meta.companyId}_${sessionId}`).catch(() => {});
         }
+        this.sessionStores.delete(sessionId);
       }
     }
 
@@ -390,6 +438,7 @@ export class SessionManager implements ISessionManager {
           .updateSystemSession(sessionId, {
             status: "DISCONNECTED",
             qrCode: null,
+            phone: null,
           })
           .catch(() => {}),
       );
@@ -515,5 +564,13 @@ export class SessionManager implements ISessionManager {
       count++;
     }
     logger.warn(`[SessionManager] Flushed memory stores for ${count} sessions to free RAM.`);
+  }
+
+  public getAllMemorySessions(): Record<string, string> {
+    const res: Record<string, string> = {};
+    this.sessionMetadata.forEach((meta, sessionId) => {
+      res[sessionId] = meta.status;
+    });
+    return res;
   }
 }

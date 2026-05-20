@@ -52,11 +52,71 @@ export class OutboundMessageHandler {
       dbId: msg.id,
     };
   }
+  private async resolveDestinationJid(
+    to: string,
+    companyId: string,
+    sessionId: string,
+  ): Promise<string> {
+    if (to.includes("@g.us")) return to;
+    if (to.includes("@s.whatsapp.net")) return to;
+
+    const cleanId = to.split("@")[0].split(":")[0];
+    const isLid = WhatsAppIdUtils.isLid(to) || 
+                  (cleanId.startsWith("45") && cleanId.length === 14) ||
+                  (cleanId.length >= 15 && !cleanId.startsWith("120"));
+
+    if (isLid) {
+      const fullLidJid = to.includes("@lid") ? to : `${cleanId}@lid`;
+
+      // Strategy A: Memory Store lookup
+      const resolvedContact = this.sessionManager.findContactByLid(sessionId, fullLidJid);
+      if (resolvedContact?.id && !WhatsAppIdUtils.isLid(resolvedContact.id)) {
+        const realJid = WhatsAppIdUtils.getCleanJid(resolvedContact.id);
+        if (realJid) {
+          Logger.info(`[OutboundHandler] Resolved outbound LID ${to} via memory store -> ${realJid}`);
+          return realJid;
+        }
+      }
+
+      // Strategy B: Database Contact mapping
+      try {
+        const contact = await chatService.findContactByLid(companyId, cleanId);
+        if (contact && contact.phone) {
+          const phoneJid = `${contact.phone.replace(/\D/g, "")}@s.whatsapp.net`;
+          Logger.info(`[OutboundHandler] Resolved outbound LID ${to} via DB mapping -> ${phoneJid}`);
+          return phoneJid;
+        }
+      } catch (err) {
+        Logger.warn(`[OutboundHandler] Failed to query contact by LID for ${cleanId}`, err);
+      }
+
+      // Strategy C: Active WhatsApp resolve
+      try {
+        const resolvedPhone = await this.sessionManager.resolveLidToPhone(sessionId, fullLidJid);
+        if (resolvedPhone) {
+          const phoneJid = `${resolvedPhone.replace(/\D/g, "")}@s.whatsapp.net`;
+          Logger.info(`[OutboundHandler] Resolved outbound LID ${to} via active query -> ${phoneJid}`);
+          
+          const cleanPhone = WhatsAppIdUtils.getPhoneNumber(resolvedPhone);
+          if (cleanPhone) {
+            await chatService.saveLidPhoneMapping(companyId, cleanId, cleanPhone);
+          }
+          return phoneJid;
+        }
+      } catch (err) {
+        Logger.warn(`[OutboundHandler] Active LID resolution failed for ${fullLidJid}`, err);
+      }
+
+      return fullLidJid;
+    }
+
+    return WhatsAppIdUtils.getTargetJid(to);
+  }
+
   async sendMessage(
     to: string,
     content: string,
     options: SendMessageOptions,
-    retries = 3,
   ): Promise<MessagePayload> {
     const { companyId, conversationId, senderId, metadata } = options;
 
@@ -68,8 +128,8 @@ export class OutboundMessageHandler {
       }
       const sock = activeSession.socket;
 
-      // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to properly detect groups vs DMs
-      const jid = WhatsAppIdUtils.getTargetJid(to);
+      // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to properly detect groups vs DMs, with LID resolution fallback
+      const jid = await this.resolveDestinationJid(to, companyId, activeSession.sessionId);
       const generatedId =
         (metadata?.generatedMessageId as string) || generateMessageID();
       await deduplicationService.markMessageSent(generatedId);
@@ -199,22 +259,7 @@ export class OutboundMessageHandler {
 
       return this.mapToMessagePayload(savedMessage as Message & { whatsappMessageId: string | null }, activeSession.sessionId, to);
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
-      const isConnectionError =
-        errorMsg.includes("Connection Closed") ||
-        errorMsg.includes("Precondition Required") ||
-        errorMsg.includes("Bad MAC") ||
-        errorMsg.includes("Timed Out");
-
-      if (isConnectionError && retries > 0) {
-        Logger.warn(
-          `[MessageHandler] [WARNING] Send failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        return this.sendMessage(to, content, options, retries - 1);
-      }
-
-      Logger.error("[MessageHandler] [ERROR] sendMessage failed final:", err);
+      Logger.error("[MessageHandler] [ERROR] sendMessage failed:", err);
       throw err;
     }
   }
@@ -227,7 +272,6 @@ export class OutboundMessageHandler {
     to: string,
     media: MediaPayload,
     options: SendMessageOptions,
-    retries = 3,
   ): Promise<MessagePayload> {
     const { companyId, conversationId, senderId } = options;
 
@@ -239,8 +283,8 @@ export class OutboundMessageHandler {
         throw new Error(`No active WhatsApp session for company: ${companyId}`);
       }
       const sock = activeSession.socket;
-      // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to properly detect groups vs DMs
-      const jid = WhatsAppIdUtils.getTargetJid(to);
+      // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to properly detect groups vs DMs, with LID resolution fallback
+      const jid = await this.resolveDestinationJid(to, companyId, activeSession.sessionId);
 
       // [BUILD] SRP: All media preparation delegated to MediaProcessorService
       Logger.debug(`[OutboundHandler] Preparing media for ${jid}: type=${media.type}, url=${media.url?.substring(0, 50)}...`);
@@ -384,38 +428,8 @@ export class OutboundMessageHandler {
         return this.sendMessage(to, warningContent, options);
       }
 
-      const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
-      const isConnectionError =
-        errorMsg.includes("Connection Closed") ||
-        errorMsg.includes("Precondition Required") ||
-        errorMsg.includes("Bad MAC") ||
-        errorMsg.includes("Timed Out");
-
-      if (isConnectionError && retries > 0) {
-        Logger.warn(
-          `[MessageHandler] [WARNING] SendMedia failed (${errorMsg}). Retrying in 2s... (${retries} left)`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        if (tempFilePath) {
-          try {
-            await cleanupTempFile(tempFilePath);
-            tempFilePath = null;
-          } catch (cleanupErr) {
-            Logger.warn(
-              "[MessageHandler] [WARNING] Temp file cleanup failed during retry:",
-              cleanupErr,
-            );
-          }
-        }
-        return this.sendMedia(to, media, options, retries - 1);
-      }
-
-      Logger.error(
-        `[MessageHandler] [ERROR] sendMedia failed unexpectedly:`,
-        err,
-      );
-      const warningContent = `([WARNING] Error sending media file: ${media.type})`;
-      return this.sendMessage(to, warningContent, options);
+      Logger.error(`[MessageHandler] [ERROR] sendMedia failed unexpectedly:`, err);
+      throw err;
     } finally {
       if (tempFilePath) {
         cleanupTempFile(tempFilePath).catch((err) =>
@@ -485,7 +499,7 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
       if (!sock) return;
 
-      const jid = WhatsAppIdUtils.getTargetJid(to);
+      const jid = await this.resolveDestinationJid(to, companyId, activeSession.sessionId);
 
       await sock.sendPresenceUpdate(type, jid).catch((err) => {
         Logger.warn(`[Presence] Failed to send ${type} to ${jid}`, err);
@@ -510,7 +524,7 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
       if (!sock) return;
 
-      const jid = WhatsAppIdUtils.getTargetJid(to);
+      const jid = await this.resolveDestinationJid(to, companyId, activeSession.sessionId);
 
       await sock.sendMessage(jid, {
         react: {

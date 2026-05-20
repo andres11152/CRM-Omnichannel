@@ -131,10 +131,17 @@ export class ChatSyncIngest {
       if (!admin) return;
 
       const targetJid = WhatsAppIdUtils.getTargetJid(channelId);
-      const messages = this.extractMessagesFromStore(store, undefined, targetJid);
+      let messages = this.extractMessagesFromStore(store, undefined, targetJid);
 
-      // WhatsApp Multi-Device (Companion) does not support on-demand server history fetching.
-      // History is only synced during the initial QR pairing or read from the memory store.
+      // If memory store has no messages, fetch on-demand from WhatsApp
+      if (messages.length === 0) {
+        Logger.info(`[ContextSync] No messages in memory for ${channelId}, fetching on-demand from WhatsApp...`);
+        const fetchSuccess = await this.fetchHistoryFromWhatsApp(companyId, session.sessionId, channelId, 50);
+        if (fetchSuccess) {
+          // Re-extract from store now that history sync event has updated it
+          messages = this.extractMessagesFromStore(store, undefined, targetJid);
+        }
+      }
 
       const recent = messages.slice(-500);
       for (const msg of recent) {
@@ -258,6 +265,70 @@ export class ChatSyncIngest {
     });
 
     return "new";
+  }
+
+  public async fetchHistoryFromWhatsApp(
+    companyId: string,
+    sessionId: string,
+    channelId: string,
+    limit: number = 100
+  ): Promise<boolean> {
+    try {
+      const { whatsappService } = await import("@/whatsapp");
+      const activeSession = await whatsappService.getSessionManager().findActiveSessionForCompany(companyId);
+      if (!activeSession) return false;
+
+      const sock = activeSession.socket;
+      const targetJid = WhatsAppIdUtils.getTargetJid(channelId);
+
+      // Find oldest message in database for this conversation
+      const cleanPhone = WhatsAppIdUtils.cleanChannelId(targetJid);
+      const oldestDbMsg = await messageRepository.findFirst({
+        where: {
+          companyId,
+          conversation: {
+            channelId: cleanPhone
+          }
+        },
+        orderBy: { createdAt: "asc" }
+      });
+
+      let oldestMsgKey: import("@whiskeysockets/baileys").WAMessageKey | null = null;
+      let oldestMsgTimestamp: number = Math.floor(Date.now() / 1000);
+
+      if (oldestDbMsg) {
+        oldestMsgKey = {
+          remoteJid: targetJid,
+          fromMe: oldestDbMsg.direction === "OUTBOUND",
+          id: oldestDbMsg.whatsappMessageId,
+        };
+        oldestMsgTimestamp = Math.floor(new Date(oldestDbMsg.createdAt).getTime() / 1000);
+      } else {
+        // If no messages exist in DB, construct a dummy message key with current timestamp
+        // to fetch recent messages.
+        oldestMsgKey = {
+          remoteJid: targetJid,
+          fromMe: false,
+          id: "DUMMY" + Math.random().toString(36).substring(2, 12).toUpperCase(),
+        };
+        oldestMsgTimestamp = Math.floor(Date.now() / 1000);
+      }
+
+      Logger.info(
+        `[ChatSync] Requesting ${limit} historical messages on-demand from WhatsApp for ${targetJid}. Reference Message ID: ${oldestMsgKey.id}`
+      );
+
+      // Trigger the on-demand query to the phone
+      await sock.fetchMessageHistory(limit, oldestMsgKey, oldestMsgTimestamp);
+      
+      // Wait for the messages to arrive and be processed via socket events
+      // Since it's async, we'll wait for a small delay (e.g. 2.5 seconds)
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      return true;
+    } catch (err) {
+      Logger.warn(`[ChatSync] Failed to fetchMessageHistory from WhatsApp for ${channelId}:`, err);
+      return false;
+    }
   }
 
   // ────────────────────────────────────────────────

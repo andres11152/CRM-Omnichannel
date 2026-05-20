@@ -38,11 +38,13 @@ export interface MediaPayload {
 export interface SessionStatus {
   sessionId: string;
   companyId?: string;
-  status: "CONNECTED" | "DISCONNECTED" | "CONNECTING" | "FAILED";
+  status: "CONNECTED" | "DISCONNECTED" | "CONNECTING" | "FAILED" | "SCANNING";
   phone?: string;
   qrCode?: string;
   error?: string;
   updatedAt?: Date;
+  defaultQueueId?: string | null;
+  proxyUrl?: string | null;
 }
 
 export interface SendMessageOptions {

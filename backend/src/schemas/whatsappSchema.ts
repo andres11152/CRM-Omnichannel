@@ -39,6 +39,10 @@ export const UpdateSessionSchema = z.object({
       .cuid("Invalid queue ID format")
       .nullable()
       .optional(),
+    proxyUrl: z
+      .string()
+      .nullable()
+      .optional(),
   }),
 });
 

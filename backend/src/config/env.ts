@@ -140,6 +140,8 @@ const EnvSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
 
+  GLOBAL_PROXY_URL: z.string().optional().describe("Fallback global proxy URL with sticky sessions support"),
+
   // ==================== MONITORING ====================
   SENTRY_DSN: z.string().url().optional(),
 

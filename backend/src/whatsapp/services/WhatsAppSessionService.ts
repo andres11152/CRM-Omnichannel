@@ -6,6 +6,7 @@ import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionReposit
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { TenantContextManager } from "@/config/tenantContext";
+import { Prisma } from "@prisma/client";
 
 export class WhatsAppSessionService {
   constructor(
@@ -19,6 +20,29 @@ export class WhatsAppSessionService {
 
     try {
       await TenantContextManager.runAsSystem(async () => {
+        // 1. Delete all sessions with no phone (never paired) on startup to prevent zombie cards
+        const allSessions = await this.sessionRepository.findManySystem({});
+        const unlinkedSessions = allSessions.filter((s) => s.phone === null);
+        for (const session of unlinkedSessions) {
+          Logger.info(`[WA] Deleting unlinked/empty session ${session.sessionId} on startup`);
+          await this.sessionRepository.delete(session.companyId, session.sessionId).catch((err) => {
+            Logger.error(`[WA] Failed to delete unlinked session ${session.sessionId}:`, err);
+          });
+        }
+
+        // 2. Cleanup any residual active sessions that HAVE a phone on startup -> DISCONNECTED
+        const residualActiveSessions = await this.sessionRepository.findByStatus(["CONNECTING", "SCANNING", "QR"]);
+        const pairedZombies = residualActiveSessions.filter((s) => s.phone !== null);
+        for (const session of pairedZombies) {
+          Logger.info(`[WA] Cleaning up residual active session ${session.sessionId} on startup -> DISCONNECTED`);
+          await this.sessionRepository.update(session.companyId, session.sessionId, {
+            status: "DISCONNECTED",
+            qrCode: null,
+          }).catch((err) => {
+            Logger.error(`[WA] Failed to clean up residual active session ${session.sessionId}:`, err);
+          });
+        }
+
         const sessions = await this.sessionRepository.findByStatus(["CONNECTED", "DISCONNECTED"]);
 
         if (sessions.length === 0) {
@@ -26,28 +50,60 @@ export class WhatsAppSessionService {
           return;
         }
 
-        Logger.info(`[WA] Restoring ${sessions.length} sessions...`);
+        // [SEC] RESTORE LIFECYCLE: Only restore sessions that have been paired/authenticated (non-null phone).
+        // This avoids launching Baileys sockets for unlinked/empty sessions on boot, which would force them into SCANNING.
+        const sessionsToRestore = sessions.filter((s) => s.phone !== null);
 
-        for (const session of sessions) {
-          try {
-            Logger.info(
-              `[WA] Restoring session ${session.sessionId} (Company: ${session.companyId})`,
-            );
-            await this.sessionManager.initializeSession({
-              sessionId: session.sessionId,
-              companyId: session.companyId,
-            });
-            Logger.info(`[WA] Restored: ${session.sessionId}`);
-          } catch (err) {
-            Logger.error(`[WA] ERROR: Failed to restore ${session.sessionId}:`, err);
-            await this.sessionRepository
-              .update(session.companyId, session.sessionId, { status: "ERROR" })
-              .catch(() => {});
-          }
+        if (sessionsToRestore.length === 0) {
+          Logger.info("[WA] No active/paired sessions to restore.");
+          return;
         }
+
+        Logger.info(`[WA] Deferring restoration of ${sessionsToRestore.length} sessions to background.`);
+
+        // Fire restoration in background (non-blocking) so server startup/boot healthchecks finish instantly
+        setImmediate(() => {
+          TenantContextManager.runAsSystem(async () => {
+            Logger.info(`[WA] Starting background session restoration of ${sessionsToRestore.length} sessions...`);
+
+            // Concurrency limit of N sessions at a time to prevent RAM/CPU spikes on boot
+            const CONCURRENCY_LIMIT = 3;
+            for (let i = 0; i < sessionsToRestore.length; i += CONCURRENCY_LIMIT) {
+              const chunk = sessionsToRestore.slice(i, i + CONCURRENCY_LIMIT);
+
+              await Promise.all(
+                chunk.map(async (session) => {
+                  try {
+                    Logger.info(
+                      `[WA] [BG-Restore] Restoring session ${session.sessionId} (Company: ${session.companyId})`,
+                    );
+                    await this.sessionManager.initializeSession({
+                      sessionId: session.sessionId,
+                      companyId: session.companyId,
+                    });
+                    Logger.info(`[WA] [BG-Restore] Restored: ${session.sessionId}`);
+                  } catch (err) {
+                    Logger.error(`[WA] [BG-Restore] ERROR: Failed to restore ${session.sessionId}:`, err);
+                    await this.sessionRepository
+                      .update(session.companyId, session.sessionId, { status: "ERROR" })
+                      .catch(() => {});
+                  }
+                })
+              );
+
+              // Add a small 1-second pause between chunks to let the CPU and connection pool settle
+              if (i + CONCURRENCY_LIMIT < sessionsToRestore.length) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+              }
+            }
+            Logger.info("[WA] Background session restoration process complete.");
+          }).catch((err) => {
+            Logger.error("[WA] Background session restoration fatal error:", err);
+          });
+        });
       });
 
-      Logger.info("[WA] Session restoration complete.");
+      Logger.info("[WA] Startup initialization complete (Restoration deferred to background).");
     } catch (err) {
       Logger.error("[WA] ERROR: Initialization error:", err);
     }
@@ -61,13 +117,22 @@ export class WhatsAppSessionService {
 
     if (!finalSessionId) {
       const existingSessions = await this.sessionRepository.findByCompany(companyId);
-      const ghostSession = existingSessions.find((s) =>
-        ["CONNECTING", "QR", "ERROR", "DISCONNECTED"].includes(s.status),
-      );
+      if (existingSessions.length > 0) {
+        // [SEC] RECYCLE LOGIC: Reuse existing session record to prevent duplicate integration lines.
+        // If there's an active/connected session, return it directly to avoid spinning up another socket connection.
+        const connectedSession = existingSessions.find((s) => s.status === "CONNECTED");
+        if (connectedSession) {
+          Logger.info(`[WA] Session already connected: ${connectedSession.sessionId} for company ${companyId}`);
+          return {
+            sessionId: connectedSession.sessionId,
+            qrCode: null,
+          };
+        }
 
-      if (ghostSession) {
-        Logger.info(`[WA] Recycling ghost session: ${ghostSession.sessionId} for company ${companyId}`);
-        finalSessionId = ghostSession.sessionId;
+        // Recycle the first session we find for this company
+        const sessionToRecycle = existingSessions[0];
+        Logger.info(`[WA] Recycling existing session: ${sessionToRecycle.sessionId} (status: ${sessionToRecycle.status}) for company ${companyId}`);
+        finalSessionId = sessionToRecycle.sessionId;
       } else {
         finalSessionId = `wa_${companyId}_${Date.now().toString(36)}`;
       }
@@ -113,6 +178,7 @@ export class WhatsAppSessionService {
         await this.sessionRepository.update(companyId, finalSessionId, {
           status: "CONNECTING",
           qrCode: null,
+          phone: null,
         });
       } else {
         await this.sessionRepository.create({
@@ -215,21 +281,27 @@ export class WhatsAppSessionService {
     await this.sessionManager.reconnectSession(sessionId);
   }
 
-  async updateSessionQueue(
+  async updateSession(
     companyId: string,
     sessionId: string,
-    queueId: string | null,
+    data: { defaultQueueId?: string | null; proxyUrl?: string | null },
   ) {
     const session = await this.sessionRepository.findOne(companyId, sessionId);
     if (!session) {
       throw new AppError("Session not found or unauthorized", 404);
     }
 
-    return this.sessionRepository.update(companyId, sessionId, {
-      defaultQueue: queueId
-        ? { connect: { id: queueId } }
-        : { disconnect: true },
-    });
+    const updateData: Prisma.WhatsAppSessionUpdateInput = {};
+    if (data.defaultQueueId !== undefined) {
+      updateData.defaultQueue = data.defaultQueueId
+        ? { connect: { id: data.defaultQueueId } }
+        : { disconnect: true };
+    }
+    if (data.proxyUrl !== undefined) {
+      updateData.proxyUrl = data.proxyUrl;
+    }
+
+    return this.sessionRepository.update(companyId, sessionId, updateData);
   }
 
   async getSession(companyId: string, sessionId: string): Promise<SessionStatus> {
@@ -237,7 +309,20 @@ export class WhatsAppSessionService {
     if (!record) {
       throw new AppError("No session found or unauthorized", 404);
     }
-    return this.sessionManager.getSessionStatus(sessionId);
+    const inMemoryStatus = this.sessionManager.getSessionStatus(sessionId);
+    return {
+      sessionId: record.sessionId,
+      companyId: record.companyId,
+      status:
+        inMemoryStatus.status !== "DISCONNECTED"
+          ? inMemoryStatus.status
+          : (record.status as SessionStatus["status"]),
+      phone: record.phone || undefined,
+      qrCode: record.qrCode || undefined,
+      updatedAt: record.updatedAt,
+      defaultQueueId: record.defaultQueueId,
+      proxyUrl: record.proxyUrl,
+    };
   }
 
   async getSessions(companyId: string) {
@@ -245,7 +330,25 @@ export class WhatsAppSessionService {
   }
 
   async listSessions(companyId: string): Promise<SessionStatus[]> {
-    return this.sessionManager.listSessions(companyId);
+    const records = await this.sessionRepository.findByCompany(companyId);
+    return records.map((record) => {
+      const inMemoryStatus = this.sessionManager.getSessionStatus(
+        record.sessionId,
+      );
+      return {
+        sessionId: record.sessionId,
+        companyId: record.companyId,
+        status:
+          inMemoryStatus.status !== "DISCONNECTED"
+            ? inMemoryStatus.status
+            : (record.status as SessionStatus["status"]),
+        phone: record.phone || undefined,
+        qrCode: record.qrCode || undefined,
+        updatedAt: record.updatedAt,
+        defaultQueueId: record.defaultQueueId,
+        proxyUrl: record.proxyUrl,
+      };
+    });
   }
 
   async isCompanyConnected(companyId: string): Promise<boolean> {

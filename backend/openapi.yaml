@@ -141,7 +141,7 @@ paths:
                 email:
                   type: string
                   format: email
-                  example: "master@reply.com"
+                  example: "master@sentrycrm.cloud"
                 password:
                   type: string
                   format: password

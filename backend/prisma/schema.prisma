@@ -477,6 +477,7 @@ model WhatsAppSession {
   phone     String?
   status    String  @default("DISCONNECTED") // CONNECTED, DISCONNECTED, SCANNING
   qrCode    String? // Base64 QR for frontend display
+  proxyUrl  String? // Proxy URL to route session traffic (avoid shared IP bans)
 
   // Notification tracking
   notifiedAt DateTime? // Last time we notified about disconnection

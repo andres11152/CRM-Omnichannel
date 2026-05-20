@@ -15,8 +15,8 @@ export default defineConfig({
       },
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
       manifest: {
-        name: "OmniCRM SaaS",
-        short_name: "OmniCRM",
+        name: "Sentry",
+        short_name: "Sentry",
         description: "Plataforma Integral de CRM y WhatsApp Marketing",
         theme_color: "#ffffff",
         background_color: "#ffffff",
@@ -82,6 +82,9 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  esbuild: {
+    drop: ["console", "debugger"],
   },
   server: {
     // WebSocket server configuration for HMR support

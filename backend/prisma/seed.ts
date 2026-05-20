@@ -81,14 +81,16 @@ async function main() {
   // =========================================================================
 
   const masterCompany = await prisma.company.upsert({
-    where: { slug: "reply-software" },
+    where: { id: "99999999-9999-9999-9999-999999999999" },
     update: {
       planId: null, // MASTER NO TIENE PLAN
+      name: "Sentry Software (Master)",
+      slug: "sentry-software",
     },
     create: {
       id: "99999999-9999-9999-9999-999999999999", // Fixed ID para identificarlo siempre
-      name: "Reply Software (Master)",
-      slug: "reply-software",
+      name: "Sentry Software (Master)",
+      slug: "sentry-software",
       phone: "+573000000000",
       timezone: "America/Bogota",
       planId: null, // MASTER NO TIENE PLAN
@@ -100,13 +102,15 @@ async function main() {
     },
   });
 
-  const masterPassword = await bcrypt.hash("Master2025!", 10);
+  const masterPassword = await bcrypt.hash("$mOo*8vR3", 10);
 
   const masterUser = await prisma.user.upsert({
-    where: { email: "master@reply.com" },
-    update: {},
+    where: { email: "master@sentrycrm.cloud" },
+    update: {
+      password: masterPassword,
+    },
     create: {
-      email: "master@reply.com",
+      email: "master@sentrycrm.cloud",
       name: "Andres Betancourt",
       password: masterPassword,
       role: "MASTER",
@@ -123,14 +127,16 @@ async function main() {
   // =========================================================================
 
   const tenantCompany = await prisma.company.upsert({
-    where: { slug: "reply-tenant-demo" },
+    where: { id: "88888888-8888-8888-8888-888888888888" },
     update: {
       planId: proPlan.id,
+      name: "Sentry Tenant Demo",
+      slug: "sentry-tenant-demo",
     },
     create: {
       id: "88888888-8888-8888-8888-888888888888",
-      name: "Reply Tenant Demo",
-      slug: "reply-tenant-demo",
+      name: "Sentry Tenant Demo",
+      slug: "sentry-tenant-demo",
       phone: "+1234567890",
       timezone: "America/New_York",
       planId: proPlan.id, // ESTE SÍ PAGA / TIENE PLAN
@@ -142,13 +148,15 @@ async function main() {
     },
   });
 
-  const tenantPassword = await bcrypt.hash("admin123", 10);
+  const tenantPassword = await bcrypt.hash("g+qrN6Zh", 10);
 
   const tenantUser = await prisma.user.upsert({
-    where: { email: "admin@reply.com" },
-    update: {},
+    where: { email: "admin@sentrycrm.cloud" },
+    update: {
+      password: tenantPassword,
+    },
     create: {
-      email: "admin@reply.com",
+      email: "admin@sentrycrm.cloud",
       name: "Admin Tenant",
       password: tenantPassword,
       role: "ADMIN", // Es ADMIN de su empresa, NO MASTER del sistema

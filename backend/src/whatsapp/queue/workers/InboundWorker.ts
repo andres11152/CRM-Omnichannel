@@ -33,9 +33,15 @@ export class InboundWorker {
     private inboundHandler: InboundMessageHandler,
   ) {
     const env = getEnv();
+    const isTls = env.REDIS_URL?.startsWith("rediss://");
     const redis = new IORedis(env.REDIS_URL, {
       maxRetriesPerRequest: null,
       password: env.REDIS_PASSWORD || undefined,
+      tls: isTls ? { rejectUnauthorized: false } : undefined,
+    });
+
+    redis.on("error", (err) => {
+      Logger.error("[InboundWorker] Redis Connection Error:", err);
     });
 
     this.worker = new Worker(

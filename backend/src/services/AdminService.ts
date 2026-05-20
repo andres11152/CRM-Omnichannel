@@ -101,7 +101,7 @@ export const adminService = {
       () =>
         companyRepository.findMany({
           where: {
-            slug: { not: "reply-software" },
+            slug: { notIn: ["reply-software", "sentry-software"] },
           },
           include: {
             plan: true,
@@ -427,7 +427,7 @@ export const adminService = {
           role: { not: "MASTER" },
           NOT: [
             { email: { endsWith: "@whatsapp.user" } },
-            { email: "master@reply.com" },
+            { email: "master@sentrycrm.cloud" },
           ],
         },
         orderBy: [{ role: "asc" }, { createdAt: "asc" }],

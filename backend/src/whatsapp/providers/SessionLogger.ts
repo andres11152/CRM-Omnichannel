@@ -19,8 +19,14 @@ const lastLogTimes = new Map<string, number>();
 
 // [SEC] CORRUPTION TRACKER
 const errorCounts = new Map<string, { count: number; firstErrorTime: number }>();
-const CORRUPTION_THRESHOLD = 20; // Errors in 1 min
-const TRACKING_WINDOW_MS = 60000; // 1 minute
+const CORRUPTION_THRESHOLD = 50; // Errors required to trigger a nuke (previously 20 — too aggressive)
+const TRACKING_WINDOW_MS = 180000; // 3 minutes (previously 1 minute)
+
+// [FIX] SESSION AGE TRACKER: Prevent healer from nuking sessions that just connected.
+// The first ~5 minutes after QR pairing generate many benign libsignal "Bad MAC" errors
+// as the Signal protocol renegotiates sessions for each contact.
+const sessionCreationTimes = new Map<string, number>();
+const MIN_SESSION_AGE_MS = 300000; // 5 minutes — don't heal during initial noise window
 
 /**
  * Creates a healer-enabled logger for a specific WhatsApp session.
@@ -62,6 +68,20 @@ export function createSessionLogger(
 
           if (corruptionPatterns.some((p) => msg.includes(p))) {
             const now = Date.now();
+
+            // [FIX] REGISTER session creation time on first error (proxy for connection start)
+            if (!sessionCreationTimes.has(sessionId)) {
+              sessionCreationTimes.set(sessionId, now);
+            }
+
+            // [FIX] SKIP HEALING during initial noise window (first 5 minutes).
+            // libsignal generates many "Bad MAC" errors during session renegotiation
+            // right after QR pairing. These are benign and self-resolve.
+            const sessionAge = now - (sessionCreationTimes.get(sessionId) || now);
+            if (sessionAge < MIN_SESSION_AGE_MS) {
+              // Silently ignore during warm-up — don't even count towards threshold
+              return;
+            }
             
             // [SEC] TRACK CORRUPTION FREQUENCY
             const stats = errorCounts.get(sessionId) || { count: 0, firstErrorTime: now };
@@ -100,6 +120,13 @@ export function createSessionLogger(
       return original;
     },
   }) as pino.Logger;
+}
+
+/** Clean up tracking state for a terminated session to prevent memory leaks */
+export function cleanupSessionLogger(sessionId: string): void {
+  errorCounts.delete(sessionId);
+  lastLogTimes.delete(sessionId);
+  sessionCreationTimes.delete(sessionId);
 }
 
 /** Shared module-level logger for SessionManager / ConnectionHealer */

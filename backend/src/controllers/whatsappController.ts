@@ -48,7 +48,7 @@ export const getSessions = catchAsync(
     }
 
     // [SEARCH] FETCH FROM SERVICE (Repository abstraction)
-    const sessions = await whatsappService.getSessions(req.companyId);
+    const sessions = await whatsappService.listSessions(req.companyId);
 
     res.status(200).json({
       status: "success",
@@ -75,16 +75,16 @@ export const deleteSession = catchAsync(
 export const updateSession = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { sessionId } = req.params;
-    const { defaultQueueId } = req.body;
+    const { defaultQueueId, proxyUrl } = req.body;
 
     if (!req.companyId) {
       throw new AppError("No company ID", 401);
     }
 
-    const updated = await whatsappService.updateSessionQueue(
+    const updated = await whatsappService.updateSession(
       req.companyId,
       sessionId,
-      defaultQueueId,
+      { defaultQueueId, proxyUrl },
     );
 
     res.status(200).json({

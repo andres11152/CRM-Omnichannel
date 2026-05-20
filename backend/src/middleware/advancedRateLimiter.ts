@@ -57,9 +57,12 @@ const createRateLimiter = (
     prefix: `rl:${config.prefix}:`,
   });
 
+  const isDev = process.env.NODE_ENV === "development";
+  const finalLimit = isDev ? config.limit * 100 : config.limit;
+
   return rateLimit({
     windowMs: config.windowMs,
-    limit: config.limit,
+    limit: finalLimit,
     message: config.message,
     standardHeaders: true,
     legacyHeaders: false,

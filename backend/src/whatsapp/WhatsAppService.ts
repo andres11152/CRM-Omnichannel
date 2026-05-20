@@ -67,6 +67,7 @@ export class WhatsAppService {
       this.eventBus,
       this.sessionRepository,
       this.messageHandler,
+      this.sessionManager,
     );
     eventWiring.setupEventHandlers();
   }
@@ -113,12 +114,12 @@ export class WhatsAppService {
     return this.sessionService.getSessions(companyId);
   }
 
-  async updateSessionQueue(
+  async updateSession(
     companyId: string,
     sessionId: string,
-    queueId: string | null,
+    data: { defaultQueueId?: string | null; proxyUrl?: string | null },
   ) {
-    return this.sessionService.updateSessionQueue(companyId, sessionId, queueId);
+    return this.sessionService.updateSession(companyId, sessionId, data);
   }
 
   async listSessions(companyId: string): Promise<SessionStatus[]> {

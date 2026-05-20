@@ -40,4 +40,5 @@ export interface ISessionManager {
 
   // [SEC] MEMORY MANAGEMENT
   flushAllMemoryStores(): void;
+  getAllMemorySessions(): Record<string, string>;
 }

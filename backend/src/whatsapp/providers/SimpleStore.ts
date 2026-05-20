@@ -324,4 +324,12 @@ export class SimpleInMemoryStore {
       `[Store] Redis Persistence enabled with interval ${writeIntervalMs}ms`,
     );
   }
+
+  public disablePersistence(): void {
+    if (this.backupInterval) {
+      clearInterval(this.backupInterval);
+      this.backupInterval = undefined;
+      Logger.info("[Store] Redis Persistence disabled.");
+    }
+  }
 }

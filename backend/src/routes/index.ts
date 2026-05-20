@@ -84,6 +84,17 @@ router.get("/health/liveness", livenessProbe);
 router.get("/health/readiness", readinessProbe);
 router.get("/metrics", metricsHandler);
 
+router.get("/api/whatsapp-debug-memory", async (req, res, next) => {
+  try {
+    const { whatsappService } = await import("@/whatsapp");
+    const sessionManager = whatsappService.getSessionManager();
+    const memorySessions = sessionManager.getAllMemorySessions();
+    res.status(200).json({ status: "success", memorySessions });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ==================== RAW MEDIA PROXY (SYNC) ====================
 // Legacy/Synced media URLs are stored directly as S3 keys without DB records.
 // This route converts the requested key directly to a secure S3 Signed URL.

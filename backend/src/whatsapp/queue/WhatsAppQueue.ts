@@ -22,10 +22,16 @@ class WhatsAppQueueManager {
 
   private constructor() {
     const env = getEnv();
+    const isTls = env.REDIS_URL?.startsWith("rediss://");
     
     this.redisConnection = new IORedis(env.REDIS_URL, {
       maxRetriesPerRequest: null, // REQUIRED for BullMQ
       password: env.REDIS_PASSWORD || undefined,
+      tls: isTls ? { rejectUnauthorized: false } : undefined,
+    });
+
+    this.redisConnection.on("error", (err) => {
+      Logger.error("[WhatsAppQueue] Redis Connection Error:", err);
     });
 
     //  INBOUND: (Baileys Event) -> Redis -> Worker (AI/DB)

@@ -54,6 +54,11 @@ export class WhatsAppIdUtils {
     if (!channelId) return "";
     if (channelId.includes("@g.us")) return channelId;
     if (channelId.includes("@s.whatsapp.net")) return channelId;
+    if (channelId.includes("@lid")) return channelId;
+    
+    if (this.isLid(channelId)) {
+      return `${channelId.split("@")[0]}@lid`;
+    }
     
     // [SEC] Heuristics for missing domain
     if (channelId.includes("-") || channelId.length > 15) {
@@ -204,6 +209,10 @@ export class WhatsAppIdUtils {
      * WhatsApp LIDs are typically 15-18 digits and start with specific prefixes.
      * Common LID prefixes: 102..., 245..., 274..., 103...
      */
+    if (userPart.length === 14 && userPart.startsWith("45")) {
+      return true;
+    }
+
     if (userPart.length >= 15) {
       if (userPart.startsWith("102") || 
           userPart.startsWith("103") || 

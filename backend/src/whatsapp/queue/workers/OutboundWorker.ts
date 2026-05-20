@@ -23,9 +23,15 @@ export class OutboundWorker {
 
   constructor(private outboundHandler: OutboundMessageHandler) {
     const env = getEnv();
+    const isTls = env.REDIS_URL?.startsWith("rediss://");
     const redis = new IORedis(env.REDIS_URL, {
       maxRetriesPerRequest: null,
       password: env.REDIS_PASSWORD || undefined,
+      tls: isTls ? { rejectUnauthorized: false } : undefined,
+    });
+
+    redis.on("error", (err) => {
+      Logger.error("[OutboundWorker] Redis Connection Error:", err);
     });
 
     this.worker = new Worker(
@@ -80,8 +86,25 @@ export class OutboundWorker {
   }
 
   private setupListeners() {
-    this.worker.on("failed", (job, err) => {
+    this.worker.on("failed", async (job, err) => {
       Logger.error(`[OutboundWorker] Job ${job?.id} failed permanent: ${err.message}`);
+
+      // [FIX] Update message status to FAILED in DB so UI reflects reality.
+      // Without this, messages stay as "QUEUED" forever, misleading agents.
+      if (job?.data?.payload?.options?.dbId) {
+        try {
+          const { prisma } = await import("@/config/database");
+          const dbId = job.data.payload.options.dbId as string;
+          await prisma.message.update({
+            where: { id: dbId },
+            data: { status: "FAILED" },
+          }).catch(() => {
+            // Message may have been deleted — ignore P2025
+          });
+        } catch {
+          // Non-critical — best effort status update
+        }
+      }
     });
   }
 

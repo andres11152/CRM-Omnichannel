@@ -344,6 +344,13 @@ export function bindSessionEvents(
           data: { message: msg as unknown as WAMessage },
         });
       }
+    } else if (validated && validated.type === "append") {
+      logger.info(`[SessionEventBinder] Processing ${validated.messages.length} APPEND messages via History Sync`);
+      chatSyncService
+        .handleHistorySync(companyId, validated.messages as unknown as WAMessage[], [], [])
+        .catch((err) => {
+          logger.error(`[SessionManager] Append ingest failed: ${err}`);
+        });
     } else {
       logger.debug(`[SessionEventBinder] Skipping non-notify upsert type: ${validated?.type}`);
     }

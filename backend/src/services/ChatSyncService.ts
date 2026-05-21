@@ -161,10 +161,10 @@ class ChatSyncService {
         targetJid,
       );
 
-      // If we are syncing a specific conversation and the memory store has no messages,
-      // request them on-demand from WhatsApp
-      if (conversationId && allMessages.length === 0) {
-        Logger.info(`[ChatSync] No messages in memory for ${conversationId}, requesting on-demand from WhatsApp...`);
+      // If we are syncing a specific conversation, always request more history on-demand from WhatsApp
+      // to backfill older messages, not just when memory is empty.
+      if (conversationId) {
+        Logger.info(`[ChatSync] Manual sync requested for ${conversationId}, fetching on-demand from WhatsApp...`);
         const fetchSuccess = await this.ingest.fetchHistoryFromWhatsApp(
           companyId,
           sessionId,

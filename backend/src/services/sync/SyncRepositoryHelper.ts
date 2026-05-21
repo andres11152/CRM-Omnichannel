@@ -77,6 +77,30 @@ export class SyncRepositoryHelper {
       }
     } else {
       customerUserId = conversation.participants[0]?.id;
+      
+      // [SEC] ENTERPRISE FIX: Heal corrupted contact names during sync
+      // If a valid name (not a phone number) is provided and it differs from the current name, update it.
+      // This fixes the bug where contacts were stuck with the bot's pushName.
+      if (name && customerUserId && !isGroup) {
+        const currentName = conversation.participants[0]?.name;
+        const isNewNamePhone = /^\+?\d[\d\s-]*$/.test(name);
+        if (!isNewNamePhone && name !== currentName) {
+          Logger.info(`[SyncRepo] Healing corrupted contact name for ${phone}: ${currentName} -> ${name}`);
+          try {
+            await chatService.upsertWhatsAppUser({
+              email: `${phone}@whatsapp.user`,
+              name: name,
+              companyId,
+              phone: phone,
+              role: "USER",
+            });
+            // Update local memory so we don't spam the DB in the same loop
+            conversation.participants[0].name = name;
+          } catch (err) {
+            Logger.warn(`[SyncRepo] Failed to heal contact name for ${phone}`, err);
+          }
+        }
+      }
     }
 
     return { conversation: conversation!, customerUserId };

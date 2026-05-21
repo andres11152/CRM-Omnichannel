@@ -202,6 +202,7 @@ export class ChatSyncIngest {
       companyId,
       phone,
       isGroup,
+      name: (!msg.key.fromMe && msg.pushName) ? msg.pushName : undefined,
     });
 
     if (!conversation) return "skipped"; // Invalid phone (LID guard)
@@ -337,10 +338,12 @@ export class ChatSyncIngest {
 
   private async ingestConversationBatch(companyId: string, phone: string, msgs: WAMessage[], adminId: string) {
     const isGroup = phone.includes("@g.us");
+    const bestNameMsg = msgs.find(m => !m.key.fromMe && m.pushName);
     const { conversation, customerUserId } = await syncRepositoryHelper.ensureConversation({
       companyId,
       phone,
       isGroup,
+      name: bestNameMsg?.pushName || undefined
     });
 
     if (!conversation) return; // Skipped invalid phone (LID guard)

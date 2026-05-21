@@ -57,7 +57,8 @@ export class ConversationMessageService {
     // B. Determine Destination Phone / JID
     // For groups: channelId is the group ID (e.g. 120363408109782390) which needs @g.us
     // For DMs: channelId is the phone number (e.g. 573138081081) which needs @s.whatsapp.net
-    const isGroup = resolvedConv.isGroup || false;
+    const initialTargetJid = WhatsAppIdUtils.getTargetJid(resolvedConv.channelId);
+    const isGroup = resolvedConv.isGroup || initialTargetJid.endsWith("@g.us");
     let targetPhone = resolvedConv.channelId;
 
     if (!isGroup) {

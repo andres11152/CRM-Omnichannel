@@ -171,6 +171,18 @@ export class OutboundMessageHandler {
         }
       }
 
+      // [SEC] ENTERPRISE FIX: Ensure Baileys has the group metadata cached before sending.
+      // If the backend was restarted, Baileys' in-memory store forgets the participants.
+      // Without participants, Baileys cannot distribute the Sender Key, causing WhatsApp to silently drop the message!
+      if (jid.endsWith("@g.us")) {
+        try {
+          await sock.groupMetadata(jid);
+          Logger.info(`[OutboundHandler] Fetched group metadata for ${jid} before sending.`);
+        } catch (err) {
+          Logger.warn(`[OutboundHandler] Failed to fetch group metadata for ${jid} before sending:`, err);
+        }
+      }
+
       const sentMsg = await sock.sendMessage(
         jid,
         { text: content },
@@ -340,6 +352,18 @@ export class OutboundMessageHandler {
               },
             };
           }
+        }
+      }
+
+      // [SEC] ENTERPRISE FIX: Ensure Baileys has the group metadata cached before sending.
+      // If the backend was restarted, Baileys' in-memory store forgets the participants.
+      // Without participants, Baileys cannot distribute the Sender Key, causing WhatsApp to silently drop the message!
+      if (jid.endsWith("@g.us")) {
+        try {
+          await sock.groupMetadata(jid);
+          Logger.info(`[OutboundHandler] Fetched group metadata for ${jid} before sending media.`);
+        } catch (err) {
+          Logger.warn(`[OutboundHandler] Failed to fetch group metadata for ${jid} before sending media:`, err);
         }
       }
 

@@ -288,6 +288,18 @@ export class InboundOrchestratorService {
       await chatService.updateConversation(companyId, conversation.id, { status: "OPEN" });
     }
 
+    // [UX] ENTERPRISE FIX: Heal Corrupted Group Metadata 
+    // If a group was created by history sync, it might be missing its real name or picture.
+    // We queue it for background indexing to fetch the real metadata from WhatsApp.
+    if (isGroup && conversation) {
+      const gMeta = conversation.groupMetadata as { groupName?: string; groupPicUrl?: string } | null;
+      if (!gMeta || !gMeta.groupPicUrl || !gMeta.groupName || gMeta.groupName === "Grupo Histórico") {
+        groupContactIndexer.queueGroupForIndexing(companyId, cleanRemoteJid, sessionId, "Reparando grupo...").catch((err) => {
+          Logger.warn(`[Orchestrator] Failed to queue group for healing: ${cleanRemoteJid}`, err);
+        });
+      }
+    }
+
     return { customerUser, conversation: conversation!, isGroup, isFromMe, cleanRemoteJid, remoteJid };
   }
 

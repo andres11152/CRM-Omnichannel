@@ -202,7 +202,7 @@ export class ChatSyncIngest {
       companyId,
       phone,
       isGroup,
-      name: (!msg.key.fromMe && msg.pushName) ? msg.pushName : undefined,
+      name: isGroup ? undefined : ((!msg.key.fromMe && msg.pushName) ? msg.pushName : undefined),
     });
 
     if (!conversation) return "skipped"; // Invalid phone (LID guard)

@@ -143,22 +143,31 @@ export class OutboundMessageHandler {
           where: { id: options.quotedMessageId, companyId },
         });
         if (dbQuoted && dbQuoted.whatsappMessageId) {
-          quotedMsg = {
-            key: {
-              remoteJid: jid,
-              fromMe: dbQuoted.direction === "OUTBOUND",
-              id: dbQuoted.whatsappMessageId,
-              participant: dbQuoted.direction === "INBOUND" && jid.endsWith("@g.us")
-                ? ((dbQuoted.metadata as Prisma.JsonObject)?.senderJid as string | undefined) 
-                : undefined,
-            },
-            message: {
-              conversation:
-                (metadata?.quotedContent as string) ||
-                dbQuoted.content ||
-                "Original message",
-            },
-          };
+          const isGroup = jid.endsWith("@g.us");
+          const participant = dbQuoted.direction === "INBOUND" && isGroup
+            ? ((dbQuoted.metadata as Prisma.JsonObject)?.senderJid as string | undefined) 
+            : undefined;
+
+          // [SEC] CRITICAL FIX: WhatsApp silently drops group messages if they quote a message
+          // but lack the 'participant' field. If we don't have the senderJid, we MUST omit the quote!
+          if (isGroup && dbQuoted.direction === "INBOUND" && !participant) {
+            Logger.warn(`[OutboundHandler] Missing senderJid for quoted group message. Dropping quote to ensure delivery.`);
+          } else {
+            quotedMsg = {
+              key: {
+                remoteJid: jid,
+                fromMe: dbQuoted.direction === "OUTBOUND",
+                id: dbQuoted.whatsappMessageId,
+                participant: participant,
+              },
+              message: {
+                conversation:
+                  (metadata?.quotedContent as string) ||
+                  dbQuoted.content ||
+                  "Original message",
+              },
+            };
+          }
         }
       }
 
@@ -306,22 +315,31 @@ export class OutboundMessageHandler {
           where: { id: options.quotedMessageId, companyId },
         });
         if (dbQuoted && dbQuoted.whatsappMessageId) {
-          quotedMsg = {
-            key: {
-              remoteJid: jid,
-              fromMe: dbQuoted.direction === "OUTBOUND",
-              id: dbQuoted.whatsappMessageId,
-              participant: dbQuoted.direction === "INBOUND" && jid.endsWith("@g.us")
-                ? ((dbQuoted.metadata as Prisma.JsonObject)?.senderJid as string | undefined) 
-                : undefined,
-            },
-            message: {
-              conversation:
-                (options.metadata?.quotedContent as string) ||
-                dbQuoted.content ||
-                "Original message",
-            },
-          };
+          const isGroup = jid.endsWith("@g.us");
+          const participant = dbQuoted.direction === "INBOUND" && isGroup
+            ? ((dbQuoted.metadata as Prisma.JsonObject)?.senderJid as string | undefined) 
+            : undefined;
+
+          // [SEC] CRITICAL FIX: WhatsApp silently drops group messages if they quote a message
+          // but lack the 'participant' field. If we don't have the senderJid, we MUST omit the quote!
+          if (isGroup && dbQuoted.direction === "INBOUND" && !participant) {
+            Logger.warn(`[OutboundHandler] Missing senderJid for quoted group message. Dropping quote to ensure delivery.`);
+          } else {
+            quotedMsg = {
+              key: {
+                remoteJid: jid,
+                fromMe: dbQuoted.direction === "OUTBOUND",
+                id: dbQuoted.whatsappMessageId,
+                participant: participant,
+              },
+              message: {
+                conversation:
+                  (options.metadata?.quotedContent as string) ||
+                  dbQuoted.content ||
+                  "Original message",
+              },
+            };
+          }
         }
       }
 

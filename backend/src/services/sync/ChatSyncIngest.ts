@@ -245,6 +245,7 @@ export class ChatSyncIngest {
 
     const metadata: Record<string, unknown> = {
       origin: "sync",
+      senderJid: WhatsAppIdUtils.getSenderJid(msg) || undefined,
       ...mediaMeta,
       ...(parsed.contextInfo || {}),
       revoked: parsed.textContent.includes("eliminado")

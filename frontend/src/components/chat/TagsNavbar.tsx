@@ -78,6 +78,10 @@ export const TagsNavbar: React.FC<TagsNavbarProps> = ({
       !(contact.tags || []).includes(t.id)
   );
 
+  // [UX] Don't render the tags bar at all if there are no tags and user isn't adding
+  const hasTags = contact.tags && contact.tags.length > 0;
+  if (!hasTags && !isAdding) return null;
+
   return (
     <div className="w-full bg-white/80 dark:bg-[#0b141a]/80 backdrop-blur-md border-b border-gray-100 dark:border-white/5 px-2 py-1 flex items-center gap-0 shrink-0 z-20 h-10">
       {/* 1. FIXED LEFT: Label */}

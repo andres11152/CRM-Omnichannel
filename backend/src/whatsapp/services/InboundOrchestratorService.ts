@@ -158,7 +158,8 @@ export class InboundOrchestratorService {
       if (senderJid) {
         const senderPhone = WhatsAppIdUtils.getPhoneNumber(senderJid);
         
-        // [UX] Resolve Name from Store if message.pushName is missing
+        // [UX] ENTERPRISE FIX: Resolve Name with multi-strategy fallback
+        // Priority: pushName > store contact > phone number
         let resolvedName = message.pushName;
         if (!resolvedName) {
            const storeContact = this.sessionManager.getContactInfo(sessionId, senderJid);
@@ -180,12 +181,14 @@ export class InboundOrchestratorService {
     } else if (!isGroup) {
       const destPhone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
       
-      // [UX] Resolve Name from Store for destination if possible
-      // DO NOT use message.pushName here because for isFromMe=true, it is the bot's name.
-      let resolvedName: string | undefined = undefined;
+      // [UX] ENTERPRISE FIX: For outbound messages (isFromMe=true), NEVER use message.pushName.
+      // message.pushName for outbound = the BOT's name (e.g. "Skycode Agency"), NOT the customer's.
+      // Only use store contact info or keep the existing name untouched.
       const storeContact = this.sessionManager.getContactInfo(sessionId, cleanRemoteJid);
-      resolvedName = storeContact?.notify || storeContact?.verifiedName || storeContact?.name;
+      const resolvedName = storeContact?.notify || storeContact?.verifiedName || storeContact?.name;
 
+      // [SEC] If we can't resolve a real name from the store, use ONLY the phone number
+      // so ChatIdentityService's name preservation logic keeps the existing DB name intact.
       customerUser = await chatService.upsertWhatsAppUser({
         email: chatEmail,
         name: resolvedName || (destPhone ? `+${destPhone}` : `ID: ${chatUniqueId}`),

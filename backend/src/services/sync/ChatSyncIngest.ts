@@ -313,14 +313,14 @@ export class ChatSyncIngest {
         fromMe: oldestDbMsg.direction === "OUTBOUND",
         id: oldestDbMsg.whatsappMessageId,
       };
-      const oldestMsgTimestamp = Math.floor(new Date(oldestDbMsg.createdAt).getTime() / 1000);
+      const oldestMsgTimestampMs = new Date(oldestDbMsg.createdAt).getTime();
 
       Logger.info(
-        `[ChatSync] Requesting ${limit} historical messages on-demand from WhatsApp for ${targetJid}. Anchor msg: ${oldestMsgKey.id} at ${new Date(oldestMsgTimestamp * 1000).toISOString()}`
+        `[ChatSync] Requesting ${limit} historical messages on-demand from WhatsApp for ${targetJid}. Anchor msg: ${oldestMsgKey.id} at ${new Date(oldestMsgTimestampMs).toISOString()}`
       );
 
       // Trigger the on-demand query to the phone
-      await sock.fetchMessageHistory(limit, oldestMsgKey, oldestMsgTimestamp);
+      await sock.fetchMessageHistory(limit, oldestMsgKey, oldestMsgTimestampMs);
       
       // Wait for the messages to arrive and be processed via socket events
       // 5 seconds is a conservative estimate for the phone to respond

@@ -181,11 +181,10 @@ export class InboundOrchestratorService {
       const destPhone = WhatsAppIdUtils.getPhoneNumber(cleanRemoteJid);
       
       // [UX] Resolve Name from Store for destination if possible
-      let resolvedName = message.pushName;
-      if (!resolvedName) {
-         const storeContact = this.sessionManager.getContactInfo(sessionId, cleanRemoteJid);
-         resolvedName = storeContact?.notify || storeContact?.verifiedName || storeContact?.name;
-      }
+      // DO NOT use message.pushName here because for isFromMe=true, it is the bot's name.
+      let resolvedName: string | undefined = undefined;
+      const storeContact = this.sessionManager.getContactInfo(sessionId, cleanRemoteJid);
+      resolvedName = storeContact?.notify || storeContact?.verifiedName || storeContact?.name;
 
       customerUser = await chatService.upsertWhatsAppUser({
         email: chatEmail,

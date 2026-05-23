@@ -169,7 +169,7 @@ export class AITriggerService {
 
       // Flow matched — send responses
       const botUser = await chatService.upsertWhatsAppUser({
-        email: `bot_${companyId}@reply.bot`,
+        email: `bot_${companyId}@sentry.bot`,
         name: "Flow Bot",
         companyId,
         role: "AGENT",
@@ -293,7 +293,7 @@ export class AITriggerService {
     );
     const botName = aiAssistant?.name || "AI Assistant";
 
-    const botEmail = `ai_${conversation.queue.aiAssistantId}@reply.bot`;
+    const botEmail = `ai_${conversation.queue.aiAssistantId}@sentry.bot`;
     const botUser = await chatService.upsertWhatsAppUser({
       email: botEmail,
       name: botName,

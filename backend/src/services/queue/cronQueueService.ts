@@ -109,23 +109,64 @@ export const initCronWorker = async () => {
                   if (!targetPhone) continue;
 
                   try {
-                    await whatsappService.sendMessage(
-                      targetPhone,
-                      msg.content,
-                      {
-                        companyId: msg.conversation.companyId,
-                        conversationId: msg.conversation.id,
-                        senderId: msg.senderId,
-                        media: meta.attachment as MediaPayload | undefined,
-                        metadata: { wasScheduled: true },
-                      },
+                    // 1. Generate unique Baileys message ID
+                    const { generateMessageID } = await import("@whiskeysockets/baileys");
+                    const generatedId = generateMessageID();
+
+                    // 2. Prepare metadata
+                    const updatedMeta = JSON.parse(
+                      JSON.stringify({
+                        ...meta,
+                        isQueued: true,
+                        generatedMessageId: generatedId,
+                        wasScheduled: true,
+                      })
                     );
 
-                    await withTimeout(
-                      schedulerRepository.deleteScheduledMessage(msg.id),
-                      5000,
-                      "Delete placeholder",
+                    // 3. [SEC] Layered Isolation: Update existing record to QUEUED in-place via MessageRepository
+                    const { messageRepository } = await import("@/repositories/MessageRepository");
+                    await messageRepository.update(
+                      msg.id,
+                      {
+                        whatsappMessageId: generatedId,
+                        status: "QUEUED",
+                        metadata: updatedMeta,
+                      },
+                      msg.conversation.companyId,
                     );
+
+                    // 4. Emit socket status update to frontend so it transitions visually to queued in-place
+                    try {
+                      const { gateway } = await import("@/gateways/socketGateway");
+                      const { SocketEventEmitter } = await import("@/services/SocketEventEmitter");
+                      const socketEmitter = new SocketEventEmitter(gateway);
+                      socketEmitter.emitMessageStatus(
+                        msg.id,
+                        msg.conversationId,
+                        msg.conversation.companyId,
+                        "queued",
+                      );
+                    } catch (socketErr) {
+                      Logger.warn(
+                        `[CronQueue] Failed to emit message status queued for ${msg.id}`,
+                        socketErr,
+                      );
+                    }
+
+                    // 5. Enqueue directly to the message queue service using existing dbId
+                    const { messageQueueService } = await import("@/services/queue/messageQueueService");
+                    await messageQueueService.enqueue({
+                      companyId: msg.conversation.companyId,
+                      conversationId: msg.conversation.id,
+                      senderId: msg.senderId,
+                      to: targetPhone,
+                      text: msg.content,
+                      media: meta.attachment as MediaPayload | undefined,
+                      metadata: {
+                        ...updatedMeta,
+                        dbId: msg.id,
+                      },
+                    });
                   } catch (e) {
                     Logger.error(
                       `[CronQueue] Failed to execute msg ${msg.id}`,

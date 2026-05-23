@@ -20,7 +20,7 @@ const traceExporter = new OTLPTraceExporter({
 
 // Initialize OpenTelemetry SDK
 const sdk = new NodeSDK({
-  serviceName: "reply-crm-api",
+  serviceName: "sentry-crm-api",
   traceExporter,
   instrumentations: [
     getNodeAutoInstrumentations({
@@ -72,7 +72,7 @@ export const createSpan = (
   name: string,
   fn: (span: Span) => Promise<unknown> | unknown,
 ) => {
-  const tracer = trace.getTracer("reply-crm-api");
+  const tracer = trace.getTracer("sentry-crm-api");
   return tracer.startActiveSpan(name, async (span) => {
     try {
       const result = await fn(span);
@@ -129,7 +129,7 @@ export const getCurrentSpanId = (): string | undefined => {
 };
 
 // Export tracer for advanced usage
-export const getTracer = () => trace.getTracer("reply-crm-api");
+export const getTracer = () => trace.getTracer("sentry-crm-api");
 
 // Auto-initialize if not in test environment
 if (process.env.NODE_ENV !== "test") {

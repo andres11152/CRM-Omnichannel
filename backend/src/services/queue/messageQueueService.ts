@@ -134,7 +134,7 @@ class MessageQueueService {
 
       if (evicted.length > 0) {
         Logger.info(
-          `[MessageQueue] 🧹 Evicted ${evicted.length} idle queues: ${evicted.join(", ")}`,
+          `[MessageQueue] [CLEAN] Evicted ${evicted.length} idle queues: ${evicted.join(", ")}`,
         );
       }
     }, 5 * 60 * 1000); // Check every 5 minutes
@@ -273,7 +273,7 @@ class MessageQueueService {
     });
 
     Logger.info(
-      `[Queue:${jobData.companyId}] 📤 Enqueued job ${job.id} (${
+      `[Queue:${jobData.companyId}] [ENQUEUE] Enqueued job ${job.id} (${
         jobData.media?.type || "text"
       })`,
     );
@@ -323,7 +323,7 @@ class MessageQueueService {
   async resumeQueue(companyId: string): Promise<void> {
     const queue = this.getQueue(companyId);
     await queue.resume();
-    Logger.info(`[Queue:${companyId}] ▶️  Resumed`);
+    Logger.info(`[Queue:${companyId}] [RESUME] Resumed`);
   }
 
   /**
@@ -392,7 +392,7 @@ class MessageQueueService {
       this.sharedSubscriber = null;
     }
 
-    Logger.info("[MessageQueue] ✅ Shutdown complete");
+    Logger.info("[MessageQueue] [OK] Shutdown complete");
   }
 }
 

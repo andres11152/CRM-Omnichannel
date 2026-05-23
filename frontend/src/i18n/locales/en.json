@@ -13,7 +13,9 @@
     "unknown": "Unknown",
     "saas_managed": "SaaS Managed",
     "locale_code": "en-US",
-    "results": "results"
+    "results": "results",
+    "new": "New",
+    "name": "Name"
   },
   "chatbot": {
     "new_flow": "New Flow",
@@ -407,6 +409,7 @@
       "master_desc": "Master orchestration and monitoring panel for the Sentry CRM ecosystem",
       "total_companies": "Total Companies",
       "active_companies": "Active Companies",
+      "total_contacts": "Total Contacts",
       "total_mrr": "Total MRR",
       "active_users": "Active Users",
       "churn_risk": "Churn Risk",
@@ -899,6 +902,15 @@
         "lead": "Potential",
         "active": "Active contract",
         "churned": "Churn / Inactive"
+      },
+      "fields": {
+        "related_to": "Related to",
+        "status": "Stage"
+      },
+      "form": {
+        "general_info": "General Info",
+        "select_placeholder": "Select...",
+        "description": "Notes / Description"
       }
     },
     "activities": {
@@ -920,6 +932,11 @@
       "contact": "Contact",
       "company": "Company",
       "deal": "Deal",
+      "new_deal": "New Deal",
+      "expected_close": "Expected Close",
+      "delete_activity": "Delete",
+      "send_email": "Send Email",
+      "history": "Activity History",
       "mark_completed": "Mark as completed",
       "types": {
         "note": "Note",
@@ -929,13 +946,78 @@
         "task": "Task"
       }
     },
+    "deals": {
+      "value": "Value / Amount",
+      "currency": "Currency",
+      "probability": "Probability",
+      "avg_deal_size": "Average Deal Size",
+      "unassigned": "Unassigned",
+      "moved_success": "Deal moved to",
+      "won_toast": "Congratulations! Deal closed as won.",
+      "lost_toast": "Deal marked as lost.",
+      "lost_reason_label": "Why was this opportunity lost? *",
+      "delete_confirm": "Are you sure you want to delete this deal? This action cannot be undone.",
+      "delete_error": "Error deleting the opportunity",
+      "no_activities": "No activities recorded for this deal.",
+      "notes_hint": "Will be registered as the first activity of the deal.",
+      "conversion": "Conversion",
+      "pipeline": "Pipeline"
+    },
     "pipelines": {
       "title": "Sales Pipeline",
-      "description": "Manage your business opportunities and track progress."
+      "description": "Manage your business opportunities and track progress.",
+      "pipeline_created": "Pipeline created successfully."
     },
     "status": {
       "won": "Won",
       "lost": "Lost"
+    },
+    "contacts": {
+      "description": "Manage your contact list, tags, and communication channels."
+    },
+    "products": {
+      "title": "Product Catalog",
+      "description": "Manage your inventory of products and services.",
+      "active_products": "Active Products",
+      "new_product": "New Product",
+      "edit_product": "Edit Product",
+      "search_placeholder": "Search by name, SKU, or category...",
+      "items_in_inventory": "Items in Inventory",
+      "empty_title": "Catalog Empty",
+      "empty_description": "Start by adding your first product or service to the catalog.",
+      "empty_search": "We couldn't find any products matching \"{{query}}\"",
+      "view_detail": "View Detail",
+      "no_description": "This product does not have a detailed description in the catalog.",
+      "price": "Price",
+      "availability": "Availability",
+      "out_of_stock": "Out of Stock",
+      "unlimited": "Unlimited",
+      "delete_confirm": "Are you sure you want to delete this product?",
+      "delete_success": "Product deleted",
+      "delete_error": "Error deleting product",
+      "save_success": "Product saved successfully",
+      "save_error": "Error saving to database",
+      "form": {
+        "image_label": "Product Image",
+        "select_library": "Select from Library",
+        "upload_local": "Upload Local",
+        "name_label": "Product Name",
+        "name_placeholder": "Ex: Premium T-Shirt",
+        "sku_placeholder": "Auto",
+        "type_label": "Product Type",
+        "type_physical": "Physical Good",
+        "type_service": "Professional Service",
+        "type_digital": "Digital Product",
+        "category_label": "Category",
+        "stock_label": "Available Stock",
+        "unlimited_inventory": "Unlimited Inventory",
+        "unlimited_help": "Services or digital products do not require stock management in the system.",
+        "description_label": "Description",
+        "description_placeholder": "Describe your product or service...",
+        "saving": "Saving...",
+        "save": "Save Product",
+        "cancel": "Cancel"
+      }
     }
   },
   "schema": {

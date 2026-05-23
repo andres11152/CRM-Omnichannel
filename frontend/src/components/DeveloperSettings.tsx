@@ -3,6 +3,10 @@ import { toast } from "sonner";
 import { api } from "@/lib/axios";
 import { WebhookEndpoint, WebhookEventType } from "@/types";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
+import { Card } from "./ui/Card";
+import { Badge } from "./ui/Badge";
 import {
   Clipboard,
   ShieldCheck,
@@ -257,67 +261,56 @@ export const DeveloperSettings: React.FC = () => {
           {/* --- WEBHOOKS TAB --- */}
           {activeTab === "webhooks" && (
             <div className="animate-in fade-in duration-500 space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-reply-panel-dark p-5 rounded-2xl border border-gray-200 dark:border-reply-border-dark shadow-sm">
+              <Card className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
                 <div>
-                  <h3 className="font-bold text-gray-800 dark:text-white text-lg flex items-center gap-2">
+                  <h3 className="font-bold text-reply-text-primary dark:text-white text-lg flex items-center gap-2">
                     Endpoints Configurados
-                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                    <Badge variant="info">
                       {webhooks.length}
-                    </span>
+                    </Badge>
                   </h3>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Configura URLs externas donde Reply enviar eventos en tiempo
-                    real.
+                  <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark mt-1">
+                    Configura URLs externas donde Sentry enviará eventos en tiempo real.
                   </p>
                 </div>
-                <button
+                <Button
                   onClick={() => setIsCreatingWebhook(!isCreatingWebhook)}
-                  className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg flex items-center justify-center gap-2 ${isCreatingWebhook ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300" : "bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700 active:scale-95"}`}
+                  variant={isCreatingWebhook ? "secondary" : "primary"}
+                  className="w-full sm:w-auto"
                 >
                   {isCreatingWebhook ? (
-                    <>
-                      <span>Cerrar</span>
-                    </>
+                    <span>Cerrar</span>
                   ) : (
                     <>
-                      <Activity className="w-4 h-4" />{" "}
+                      <Activity className="w-4 h-4" />
                       <span>Nuevo Webhook</span>
                     </>
                   )}
-                </button>
-              </div>
+                </Button>
+              </Card>
 
               {isCreatingWebhook && (
-                <div className="bg-white dark:bg-reply-panel-dark p-6 rounded-2xl border border-indigo-200 dark:border-indigo-900/50 shadow-xl space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                <Card className="p-6 border border-reply-brand/20 shadow-xl space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        Endpoint URL (POST)
-                      </label>
-                      <input
-                        type="url"
-                        value={newUrl}
-                        onChange={(e) => setNewUrl(e.target.value)}
-                        placeholder="https://api.empresa.com/webhook"
-                        className="w-full bg-reply-bg dark:bg-black/20 border border-gray-200 dark:border-reply-border-dark rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none font-mono"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        Descripción
-                      </label>
-                      <input
-                        type="text"
-                        value={newDesc}
-                        onChange={(e) => setNewDesc(e.target.value)}
-                        placeholder="Ej: Integración con ERP Interno"
-                        className="w-full bg-reply-bg dark:bg-black/20 border border-gray-200 dark:border-reply-border-dark rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                      />
-                    </div>
+                    <Input
+                      type="url"
+                      label="Endpoint URL (POST)"
+                      value={newUrl}
+                      onChange={(e) => setNewUrl(e.target.value)}
+                      placeholder="https://api.empresa.com/webhook"
+                      className="font-mono"
+                    />
+                    <Input
+                      type="text"
+                      label="Descripción"
+                      value={newDesc}
+                      onChange={(e) => setNewDesc(e.target.value)}
+                      placeholder="Ej: Integración con ERP Interno"
+                    />
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                    <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest block">
                       Eventos a Suscribir
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -325,10 +318,10 @@ export const DeveloperSettings: React.FC = () => {
                         <button
                           key={evt}
                           onClick={() => toggleEvent(evt)}
-                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all ${
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
                             selectedEvents.includes(evt)
-                              ? "bg-indigo-600 text-white border-indigo-600"
-                              : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-reply-border-dark hover:border-indigo-400"
+                              ? "bg-reply-brand text-white border-reply-brand shadow-sm"
+                              : "bg-white dark:bg-reply-panel-dark text-reply-text-secondary dark:text-reply-text-secondary-dark border-reply-border dark:border-reply-border-dark hover:border-reply-brand"
                           }`}
                         >
                           {evt.toUpperCase()}
@@ -338,14 +331,15 @@ export const DeveloperSettings: React.FC = () => {
                   </div>
 
                   <div className="flex justify-end pt-2">
-                    <button
+                    <Button
                       onClick={handleCreateWebhook}
-                      className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
+                      variant="primary"
+                      size="lg"
                     >
                       Guardar Configuración
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </Card>
               )}
 
               <div className="grid grid-cols-1 gap-4">
@@ -360,9 +354,10 @@ export const DeveloperSettings: React.FC = () => {
                   </div>
                 )}
                 {webhooks.map((wh) => (
-                  <div
+                  <Card
                     key={wh.id}
-                    className="bg-white dark:bg-reply-panel-dark border border-gray-200 dark:border-reply-border-dark rounded-2xl p-5 md:p-6 hover:shadow-md transition-all group overflow-hidden relative"
+                    hoverable
+                    className="p-5 md:p-6 hover:shadow-md transition-all group overflow-hidden relative"
                   >
                     <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                       <div className="flex-1 space-y-1">
@@ -370,51 +365,56 @@ export const DeveloperSettings: React.FC = () => {
                           <div
                             className={`w-2 h-2 rounded-full ${wh.isActive ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-gray-400"}`}
                           ></div>
-                          <h4 className="font-bold text-gray-800 dark:text-white font-mono text-sm break-all">
+                          <h4 className="font-bold text-reply-text-primary dark:text-white font-mono text-sm break-all">
                             {wh.url}
                           </h4>
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 pl-5">
+                        <p className="text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark pl-5">
                           {wh.description}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-gray-50 dark:border-reply-border-dark">
-                        <button
+                      <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-reply-border dark:border-reply-border-dark">
+                        <Button
                           onClick={() => handleToggleWebhook(wh.id)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${wh.isActive ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                          variant="secondary"
+                          size="sm"
+                          className={wh.isActive ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30 border-none" : ""}
                         >
                           {wh.isActive ? "DESACTIVAR" : "ACTIVAR"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleDeleteWebhook(wh.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          variant="ghost"
+                          size="sm"
+                          className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 dark:hover:bg-rose-500/20"
                         >
                           <XCircle className="w-5 h-5" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
-                    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-reply-bg dark:bg-black/10 p-4 rounded-xl border border-gray-100 dark:border-reply-border-dark">
+                    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-reply-bg dark:bg-black/20 p-4 rounded-xl border border-reply-border dark:border-reply-border-dark">
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase mb-2 block tracking-widest">
+                        <span className="text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase mb-2 block tracking-widest">
                           Eventos Suscritos
                         </span>
                         <div className="flex flex-wrap gap-1.5">
                           {wh.events.map((evt) => (
-                            <span
+                            <Badge
                               key={evt}
-                              className="bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md text-[10px] font-bold border border-gray-200 dark:border-reply-border-dark shadow-sm"
+                              variant="info"
+                              className="bg-white dark:bg-reply-surface-dark border-reply-border dark:border-reply-border-dark text-reply-brand dark:text-reply-brand-light"
                             >
-                              {evt.toUpperCase()}
-                            </span>
+                              {evt}
+                            </Badge>
                           ))}
                         </div>
                       </div>
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase mb-2 block tracking-widest">
+                        <span className="text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase mb-2 block tracking-widest">
                           Signing Secret (HMAC)
                         </span>
-                        <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-reply-border-dark rounded-lg px-3 py-2 font-mono text-xs shadow-sm">
+                        <div className="flex items-center gap-2 bg-white dark:bg-reply-surface-dark border border-reply-border dark:border-reply-border-dark rounded-lg px-3 py-2 font-mono text-xs shadow-sm">
                           <span className="flex-1 truncate dark:text-gray-300">
                             {visibleSecrets.includes(wh.id)
                               ? wh.secret
@@ -422,7 +422,7 @@ export const DeveloperSettings: React.FC = () => {
                           </span>
                           <button
                             onClick={() => toggleSecret(wh.id)}
-                            className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                            className="text-gray-400 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
                           >
                             {visibleSecrets.includes(wh.id) ? (
                               <svg
@@ -465,37 +465,36 @@ export const DeveloperSettings: React.FC = () => {
                               navigator.clipboard.writeText(wh.secret);
                               toast.success("Secret copiado!");
                             }}
-                            className="text-gray-400 hover:text-indigo-600"
+                            className="text-gray-400 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
                           >
                             <Clipboard className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
 
               {/* DELIVERY LOGS SECTION */}
               <div className="mt-12 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gray-800 dark:text-white text-lg flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-indigo-500" />
+                  <h3 className="font-bold text-reply-text-primary dark:text-white text-lg flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-reply-brand" />
                     Logs de Entrega Recientes
                   </h3>
                   <button
                     onClick={() => {
-                      // In theory a refresh would be nice
                       toast.info("Actualizando logs...");
                     }}
-                    className="text-indigo-600 dark:text-indigo-400 text-xs font-bold hover:underline"
+                    className="text-reply-brand dark:text-reply-brand-light text-xs font-black hover:underline cursor-pointer"
                   >
                     ACTUALIZAR
                   </button>
                 </div>
 
                 {/* DESKTOP VIEW */}
-                <div className="hidden lg:block bg-white dark:bg-reply-panel-dark rounded-2xl border border-gray-200 dark:border-reply-border-dark overflow-hidden shadow-sm">
+                <Card className="hidden lg:block overflow-hidden shadow-sm border-reply-border dark:border-reply-border-dark">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-reply-bg dark:bg-gray-800/50 text-[10px] uppercase tracking-widest font-bold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-reply-border-dark">
                       <tr>
@@ -523,30 +522,28 @@ export const DeveloperSettings: React.FC = () => {
                             className="hover:bg-reply-bg dark:hover:bg-white/5 transition-colors group"
                           >
                             <td className="px-6 py-4">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${log.status >= 200 && log.status < 300 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}
-                              >
+                              <Badge variant={log.status >= 200 && log.status < 300 ? "success" : "error"}>
                                 {log.status >= 200 && log.status < 300 ? (
                                   <CheckCircle className="w-3.5 h-3.5" />
                                 ) : (
                                   <XCircle className="w-3.5 h-3.5" />
                                 )}{" "}
                                 {log.status}
-                              </span>
+                              </Badge>
                             </td>
-                            <td className="px-6 py-4 font-mono text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                            <td className="px-6 py-4 font-mono text-[11px] font-bold text-reply-text-secondary dark:text-reply-text-secondary-dark">
                               {log.eventType}
                             </td>
                             <td
-                              className="px-6 py-4 text-gray-500 dark:text-gray-400 truncate max-w-[250px] font-mono text-xs"
+                              className="px-6 py-4 text-reply-text-secondary dark:text-reply-text-secondary-dark truncate max-w-[250px] font-mono text-xs"
                               title={log.url}
                             >
                               {log.url}
                             </td>
-                            <td className="px-6 py-4 text-gray-400 text-xs">
+                            <td className="px-6 py-4 text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 text-xs">
                               {new Date(log.timestamp).toLocaleString()}
                             </td>
-                            <td className="px-6 py-4 text-right font-mono text-[11px] font-bold text-indigo-500">
+                            <td className="px-6 py-4 text-right font-mono text-[11px] font-bold text-reply-brand">
                               {log.duration}ms
                             </td>
                           </tr>
@@ -554,50 +551,48 @@ export const DeveloperSettings: React.FC = () => {
                       )}
                     </tbody>
                   </table>
-                </div>
+                </Card>
 
                 {/* MOBILE VIEW */}
                 <div className="lg:hidden space-y-3">
                   {logs.length === 0 ? (
-                    <div className="text-center py-10 text-gray-400 italic text-sm">
+                    <div className="text-center py-10 text-reply-text-secondary dark:text-reply-text-secondary-dark italic text-sm">
                       No hay actividad reciente.
                     </div>
                   ) : (
                     logs.map((log) => (
-                      <div
+                      <Card
                         key={log.id}
-                        className="bg-white dark:bg-reply-panel-dark p-4 rounded-xl border border-gray-100 dark:border-reply-border-dark shadow-sm space-y-3"
+                        className="p-4 space-y-3"
                       >
                         <div className="flex justify-between items-start">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${log.status >= 200 && log.status < 300 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}
-                          >
+                          <Badge variant={log.status >= 200 && log.status < 300 ? "success" : "error"}>
                             {log.status >= 200 && log.status < 300 ? (
                               <CheckCircle className="w-3.5 h-3.5" />
                             ) : (
                               <XCircle className="w-3.5 h-3.5" />
                             )}{" "}
                             {log.status}
-                          </span>
-                          <span className="text-[11px] font-bold text-indigo-500 font-mono">
+                          </Badge>
+                          <span className="text-[11px] font-bold text-reply-brand font-mono">
                             {log.duration}ms
                           </span>
                         </div>
                         <div className="space-y-1">
-                          <p className="font-mono text-[11px] font-bold text-gray-700 dark:text-gray-200">
+                          <p className="font-mono text-[11px] font-bold text-reply-text-primary dark:text-reply-text-primary-dark">
                             {log.eventType}
                           </p>
-                          <p className="text-[10px] text-gray-400 break-all font-mono">
+                          <p className="text-[10px] text-reply-text-secondary/80 dark:text-reply-text-secondary-dark/80 break-all font-mono">
                             {log.url}
                           </p>
                         </div>
-                        <div className="text-[10px] text-gray-400 pt-2 border-t border-gray-50 dark:border-reply-border-dark flex justify-between">
+                        <div className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 pt-2 border-t border-reply-border dark:border-reply-border-dark flex justify-between">
                           <span>TIMESTAMPS</span>
                           <span>
                             {new Date(log.timestamp).toLocaleString()}
                           </span>
                         </div>
-                      </div>
+                      </Card>
                     ))
                   )}
                 </div>
@@ -608,40 +603,38 @@ export const DeveloperSettings: React.FC = () => {
           {/* --- API KEYS TAB --- */}
           {activeTab === "api-keys" && (
             <div className="animate-in fade-in duration-500 space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-reply-panel-dark p-5 rounded-2xl border border-gray-200 dark:border-reply-border-dark shadow-sm">
+              <Card className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
                 <div>
-                  <h3 className="font-bold text-gray-800 dark:text-white text-lg flex items-center gap-2">
+                  <h3 className="font-bold text-reply-text-primary dark:text-white text-lg flex items-center gap-2">
                     Claves API Activas
-                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                    <Badge variant="info">
                       {apiKeys.length}
-                    </span>
+                    </Badge>
                   </h3>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Usa estas claves para autenticar peticiones directas desde
-                    tus scripts o backends.
+                  <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark mt-1">
+                    Usa estas claves para autenticar peticiones directas desde tus scripts o backends.
                   </p>
                 </div>
-                <button
+                <Button
                   onClick={() => setIsCreatingKey(!isCreatingKey)}
-                  className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg flex items-center justify-center gap-2 ${isCreatingKey ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300" : "bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700 active:scale-95"}`}
+                  variant={isCreatingKey ? "secondary" : "primary"}
+                  className="w-full sm:w-auto"
                 >
                   {isCreatingKey ? (
-                    <>
-                      <span>Cerrar</span>
-                    </>
+                    <span>Cerrar</span>
                   ) : (
                     <>
-                      <ShieldCheck className="w-4 h-4" />{" "}
+                      <ShieldCheck className="w-4 h-4" />
                       <span>Nueva API Key</span>
                     </>
                   )}
-                </button>
-              </div>
+                </Button>
+              </Card>
 
               {generatedKey && (
-                <div className="bg-emerald-50 dark:bg-emerald-900/10 border-2 border-emerald-200 dark:border-emerald-800/50 p-6 rounded-2xl mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+                <Card className="bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-900/50 p-6 mb-8 shadow-md">
                   <div className="flex items-start gap-4">
-                    <div className="bg-emerald-100 dark:bg-emerald-800 p-3 rounded-2xl text-emerald-600 dark:text-emerald-300 shadow-sm">
+                    <div className="bg-emerald-100 dark:bg-emerald-900/50 p-3 rounded-2xl text-emerald-600 dark:text-emerald-400 shadow-sm">
                       <CheckCircle className="w-6 h-6" />
                     </div>
                     <div className="flex-1 space-y-4">
@@ -650,8 +643,7 @@ export const DeveloperSettings: React.FC = () => {
                           ¡API Key Generada!
                         </h4>
                         <p className="text-emerald-700 dark:text-emerald-400/80 text-xs font-medium">
-                          Copia esta clave inmediatamente. Por seguridad, no
-                          volver a mostrarse.
+                          Copia esta clave inmediatamente. Por seguridad, no volverá a mostrarse.
                         </p>
                       </div>
 
@@ -659,53 +651,52 @@ export const DeveloperSettings: React.FC = () => {
                         <div className="flex-1 bg-white dark:bg-black/40 px-4 py-3 rounded-xl border border-emerald-100 dark:border-emerald-900 shadow-inner font-mono text-xs break-all text-gray-800 dark:text-gray-200 select-all">
                           {generatedKey}
                         </div>
-                        <button
+                        <Button
                           onClick={() => {
                             navigator.clipboard.writeText(generatedKey);
                             toast.success("Copiado!", {
                               position: "bottom-center",
                             });
                           }}
-                          className="bg-emerald-600 text-white px-6 py-3 rounded-xl hover:bg-emerald-700 text-sm font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                          variant="primary"
+                          size="lg"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700 border-none shrink-0"
                         >
                           <Clipboard className="w-4 h-4" /> Copiar
-                        </button>
+                        </Button>
                       </div>
 
                       <button
                         onClick={() => setGeneratedKey(null)}
-                        className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline uppercase tracking-widest"
+                        className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline uppercase tracking-widest cursor-pointer"
                       >
                         YA LA HE GUARDADO, CONTINUAR
                       </button>
                     </div>
                   </div>
-                </div>
+                </Card>
               )}
 
               {isCreatingKey && !generatedKey && (
-                <div className="bg-white dark:bg-reply-panel-dark p-6 rounded-xl border border-indigo-100 dark:border-indigo-900 shadow-md mb-8 animate-fade-in">
+                <Card className="p-6 border border-reply-brand/20 shadow-md mb-8 animate-fade-in">
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Nombre de la Clave
-                    </label>
-                    <input
+                    <Input
                       type="text"
+                      label="Nombre de la Clave"
                       value={newKeyName}
                       onChange={(e) => setNewKeyName(e.target.value)}
                       placeholder="Ej: Servidor de Producción"
-                      className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 text-sm"
                     />
                   </div>
                   <div className="flex justify-end">
-                    <button
+                    <Button
                       onClick={handleCreateApiKey}
-                      className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold text-sm hover:bg-indigo-700 shadow-sm"
+                      variant="primary"
                     >
                       Generar Clave
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </Card>
               )}
 
               <div className="grid grid-cols-1 gap-4">
@@ -720,38 +711,40 @@ export const DeveloperSettings: React.FC = () => {
                   </div>
                 )}
                 {apiKeys.map((key) => (
-                  <div
+                  <Card
                     key={key.id}
-                    className="bg-white dark:bg-reply-panel-dark border border-gray-200 dark:border-reply-border-dark rounded-2xl p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:shadow-md transition-all group"
+                    hoverable
+                    className="p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl flex items-center justify-center text-indigo-500">
+                      <div className="w-12 h-12 bg-reply-brand/10 dark:bg-reply-brand/20 rounded-xl flex items-center justify-center text-reply-brand">
                         <ShieldCheck className="w-6 h-6" />
                       </div>
                       <div>
-                        <h4 className="font-bold text-gray-800 dark:text-white mb-0.5">
+                        <h4 className="font-bold text-reply-text-primary dark:text-white mb-0.5">
                           {key.name}
                         </h4>
                         <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-widest">
+                          <Badge variant="info" className="font-mono text-[10px] font-black uppercase tracking-widest">
                             {key.keyPrefix}
-                          </span>
-                          <span className="text-[10px] text-gray-400 uppercase font-bold tracking-tight">
+                          </Badge>
+                          <span className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 uppercase font-bold tracking-tight">
                             Creada el{" "}
                             {new Date(key.createdAt).toLocaleDateString()}
                           </span>
                         </div>
                       </div>
                     </div>
-                    <div className="flex justify-end border-t md:border-t-0 pt-3 md:pt-0 border-gray-50 dark:border-reply-border-dark">
-                      <button
+                    <div className="flex justify-end border-t md:border-t-0 pt-3 md:pt-0 border-reply-border dark:border-reply-border-dark w-full md:w-auto">
+                      <Button
                         onClick={() => handleDeleteApiKey(key.id)}
-                        className="w-full md:w-auto px-4 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors uppercase tracking-widest"
+                        variant="ghost"
+                        className="text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 w-full md:w-auto text-xs uppercase tracking-widest font-black"
                       >
                         Revocar Acceso
-                      </button>
+                      </Button>
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
             </div>
@@ -760,25 +753,25 @@ export const DeveloperSettings: React.FC = () => {
           {/* --- API DOCS TAB --- */}
           {activeTab === "api-docs" && (
             <div className="animate-in fade-in duration-500 space-y-6">
-              <div className="bg-white dark:bg-reply-panel-dark p-6 rounded-2xl border border-gray-200 dark:border-reply-border-dark shadow-sm">
+              <Card className="p-6">
                 <div className="mb-6">
-                  <h3 className="font-bold text-gray-800 dark:text-white text-xl flex items-center gap-2">
-                    <Code className="w-6 h-6 text-indigo-500" />
+                  <h3 className="font-bold text-reply-text-primary dark:text-white text-xl flex items-center gap-2">
+                    <Code className="w-6 h-6 text-reply-brand" />
                     Referencia de API REST
                   </h3>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Integra Reply con tus sistemas internos. Autentícate enviando tu API Key en el header <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-indigo-600 dark:text-indigo-400">X-API-Key</code>.
-                    Todas las peticiones deben usar el Content-Type <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-indigo-600 dark:text-indigo-400">application/json</code>. Base URL: <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-indigo-600 dark:text-indigo-400">https://api.tudominio.com/api/v1/external</code>
+                  <p className="text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark mt-2 leading-relaxed">
+                    Integra Sentry con tus sistemas internos. Autentícate enviando tu API Key en el header <code className="bg-reply-bg dark:bg-reply-bg-dark px-1.5 py-0.5 rounded text-reply-brand dark:text-reply-brand-light font-mono text-xs border border-reply-border dark:border-reply-border-dark">X-API-Key</code>.
+                    Todas las peticiones deben usar el Content-Type <code className="bg-reply-bg dark:bg-reply-bg-dark px-1.5 py-0.5 rounded text-reply-brand dark:text-reply-brand-light font-mono text-xs border border-reply-border dark:border-reply-border-dark">application/json</code>. Base URL: <code className="bg-reply-bg dark:bg-reply-bg-dark px-1.5 py-0.5 rounded text-reply-brand dark:text-reply-brand-light font-mono text-xs border border-reply-border dark:border-reply-border-dark">https://api.tudominio.com/api/v1/external</code>
                   </p>
                 </div>
 
                 <div className="space-y-8">
                   {/* Endpoint 1: Mensajes */}
-                  <div className="border border-gray-100 dark:border-reply-border-dark rounded-xl overflow-hidden">
-                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-100 dark:border-reply-border-dark flex items-center gap-4">
-                      <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-lg text-xs font-bold uppercase">POST</span>
-                      <span className="font-mono text-sm text-gray-700 dark:text-gray-300 font-bold">/messages/send</span>
-                      <span className="text-sm text-gray-500 ml-auto hidden sm:block">Enviar Mensaje WhatsApp</span>
+                  <div className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
+                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">POST</span>
+                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">/messages/send</span>
+                      <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">Enviar Mensaje WhatsApp</span>
                     </div>
                     <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
                       <pre>
@@ -787,18 +780,18 @@ export const DeveloperSettings: React.FC = () => {
   -H "Content-Type: application/json" \\
   -d '{
     "to": "573001234567",
-    "text": "Hola, este es un mensaje automtico desde la API de Reply."
+    "text": "Hola, este es un mensaje automtico desde la API de Sentry."
   }'`}
                       </pre>
                     </div>
                   </div>
 
                   {/* Endpoint 2: Crear Contacto */}
-                  <div className="border border-gray-100 dark:border-reply-border-dark rounded-xl overflow-hidden">
-                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-100 dark:border-reply-border-dark flex items-center gap-4">
-                      <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-lg text-xs font-bold uppercase">POST</span>
-                      <span className="font-mono text-sm text-gray-700 dark:text-gray-300 font-bold">/contacts</span>
-                      <span className="text-sm text-gray-500 ml-auto hidden sm:block">Crear o Actualizar Contacto</span>
+                  <div className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
+                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">POST</span>
+                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">/contacts</span>
+                      <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">Crear o Actualizar Contacto</span>
                     </div>
                     <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
                       <pre>
@@ -816,11 +809,11 @@ export const DeveloperSettings: React.FC = () => {
                   </div>
 
                   {/* Endpoint 3: Crear Deal */}
-                  <div className="border border-gray-100 dark:border-reply-border-dark rounded-xl overflow-hidden">
-                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-100 dark:border-reply-border-dark flex items-center gap-4">
-                      <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-lg text-xs font-bold uppercase">POST</span>
-                      <span className="font-mono text-sm text-gray-700 dark:text-gray-300 font-bold">/deals</span>
-                      <span className="text-sm text-gray-500 ml-auto hidden sm:block">Crear Oportunidad (Deal)</span>
+                  <div className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
+                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">POST</span>
+                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">/deals</span>
+                      <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">Crear Oportunidad (Deal)</span>
                     </div>
                     <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
                       <pre>
@@ -839,11 +832,11 @@ export const DeveloperSettings: React.FC = () => {
                   </div>
                   
                   {/* Endpoint 4: Listar Tickets */}
-                  <div className="border border-gray-100 dark:border-reply-border-dark rounded-xl overflow-hidden">
-                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-100 dark:border-reply-border-dark flex items-center gap-4">
-                      <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-3 py-1 rounded-lg text-xs font-bold uppercase">GET</span>
-                      <span className="font-mono text-sm text-gray-700 dark:text-gray-300 font-bold">/tickets</span>
-                      <span className="text-sm text-gray-500 ml-auto hidden sm:block">Listar Tickets</span>
+                  <div className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
+                      <span className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">GET</span>
+                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">/tickets</span>
+                      <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">Listar Tickets</span>
                     </div>
                     <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
                       <pre>
@@ -854,7 +847,7 @@ export const DeveloperSettings: React.FC = () => {
                   </div>
 
                 </div>
-              </div>
+              </Card>
             </div>
           )}
         </div>

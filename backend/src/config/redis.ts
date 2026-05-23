@@ -100,9 +100,9 @@ const startMemoryMonitor = () => {
         const usagePercentage = (usedMemory / maxMemory) * 100;
 
         if (usagePercentage >= 80) {
-          Logger.error(`[🚨 CRITICAL] REDIS MEMORY LIMIT REACHED! Usando ${usagePercentage.toFixed(2)}% de la capacidad máxima. Por favor purga cachés o escala Redis.`);
+          Logger.error(`[CRITICAL] REDIS MEMORY LIMIT REACHED! Usando ${usagePercentage.toFixed(2)}% de la capacidad máxima. Por favor purga cachés o escala Redis.`);
         } else if (usagePercentage >= 70) {
-          Logger.warn(`[⚠️ WARNING] Redis Memory Warning. Usando ${usagePercentage.toFixed(2)}% de la capacidad.`);
+          Logger.warn(`[WARNING] Redis Memory Warning. Usando ${usagePercentage.toFixed(2)}% de la capacidad.`);
         }
       }
     } catch (error) {

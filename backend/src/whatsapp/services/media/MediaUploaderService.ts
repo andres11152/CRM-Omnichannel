@@ -47,7 +47,7 @@ export class MediaUploaderService {
       category: "chat-attachments",
       uploadedBy: fallbackUser?.id 
         ? { connect: { id: fallbackUser.id } } 
-        : { connect: { email: "system@reply.ai" } },
+        : { connect: { email: "system@sentry.ai" } },
     });
 
     return {

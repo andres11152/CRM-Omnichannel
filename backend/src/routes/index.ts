@@ -135,6 +135,14 @@ router.get("/api/local-media/*", (req, res, next) => {
   }
 });
 
+// ==================== SELF-HEALING FALLBACK REDIRECT ====================
+// Automatically redirects legacy direct formats (e.g. /companies/...) to the local-media route.
+router.get("/companies/*", (req, res) => {
+  const filePath = req.params[0];
+  res.redirect(`/api/local-media/companies/${filePath}`);
+});
+
+
 // ==================== PUBLIC ROUTES ====================
 router.get("/api/csrf-token", protect, getCsrfTokenHandler);
 router.use("/api/onboarding", advancedAuthLimiter, onboardingRouter);

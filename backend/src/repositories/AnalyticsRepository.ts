@@ -70,8 +70,7 @@ export class AnalyticsRepository {
         EXTRACT(HOUR FROM m."createdAt")::int as hour,
         COUNT(*)::bigint as value
       FROM messages m
-      JOIN conversations c ON m."conversationId" = c.id
-      WHERE c."companyId" = $1
+      WHERE m."companyId" = $1
         AND m."createdAt" >= $2
         AND m."createdAt" <= $3
       GROUP BY 1, 2
@@ -94,7 +93,7 @@ export class AnalyticsRepository {
         u.id as "agentId",
         u.name,
         u.email,
-        u.role,
+        u.role::text as role,
         COUNT(t.id)::int as "totalTickets",
         COUNT(CASE WHEN t.status IN ('RESOLVED', 'CLOSED') THEN 1 END)::int as "resolvedTickets",
         AVG(CASE WHEN t."status" IN ('RESOLVED', 'CLOSED') AND t."resolvedAt" IS NOT NULL THEN 
@@ -103,7 +102,7 @@ export class AnalyticsRepository {
       FROM users u
       LEFT JOIN tickets t ON u.id = t."assignedToId" AND t."createdAt" >= $2 AND t."createdAt" <= $3
       WHERE u."companyId" = $1
-        AND u.role IN ('AGENT', 'ADMIN', 'SUPERVISOR')
+        AND u.role::text IN ('AGENT', 'ADMIN', 'SUPERVISOR')
       GROUP BY u.id, u.name, u.email, u.role
       ORDER BY "resolvedTickets" DESC
       `,

@@ -189,7 +189,7 @@ export class ConversationResolver {
     contactId: string | undefined,
     userId: string,
   ): Promise<Conversation> {
-    Logger.info(`[ConvResolver] 🆕 Creating new conversation for: ${phone}`);
+    Logger.info(`[ConvResolver] [NEW] Creating new conversation for: ${phone}`);
 
     // [SEC] REFACTOR: Delegate Unit-of-Work to Repository
     return conversationRepository.findOrCreateWithTicket({

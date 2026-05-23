@@ -38,6 +38,7 @@ import { messageRepository } from "@/repositories/MessageRepository";
 import TenantContextManager from "@/config/tenantContext";
 import { bindSessionEvents } from "./events/SessionEventBinder";
 import { getProxyAgent } from "@/utils/proxy";
+import { SessionContactResolver } from "./SessionContactResolver";
 
 export class SessionManager implements ISessionManager {
   private sessions: Map<string, WASocket> = new Map();
@@ -49,10 +50,12 @@ export class SessionManager implements ISessionManager {
   private sessionStores: Map<string, SimpleInMemoryStore> = new Map();
   private eventBus: EventBus;
   private healer: ConnectionHealer;
+  private contactResolver: SessionContactResolver;
 
   constructor(private authProvider: IAuthProvider) {
     this.eventBus = EventBus.getInstance();
     this.healer = new ConnectionHealer();
+    this.contactResolver = new SessionContactResolver(this.sessions, this.sessionStores);
   }
 
   // ────────────────────────────────────────────────
@@ -99,90 +102,25 @@ export class SessionManager implements ISessionManager {
   // ────────────────────────────────────────────────
 
   public getContactInfo(sessionId: string, jid: string) {
-    const store = this.sessionStores.get(sessionId);
-    if (!store) return undefined;
-    return store.contacts[jidNormalizedUser(jid)];
+    return this.contactResolver.getContactInfo(sessionId, jid);
   }
 
-  public findContactByLid(sessionId: string, lid: string): { id: string } | undefined {
-    const store = this.sessionStores.get(sessionId);
-    if (!store) return undefined;
-
-    const lidBase = lid.split("@")[0].split(":")[0];
-    if (!lidBase || lidBase.length < 10) return undefined;
-
-    // Fast cache lookup first
-    const cachedPhone = store.getPhoneFromLid(lidBase);
-    if (cachedPhone && !cachedPhone.includes(lidBase)) {
-      logger.info(
-        `[SessionManager] Cache hit: LID ${lidBase} → ${cachedPhone}`,
-      );
-      return { id: cachedPhone };
-    }
-
-    const contacts = store.contacts;
-    for (const jid in contacts) {
-      const contact = contacts[jid];
-      if (!contact.lid) continue;
-      const storedLidBase = contact.lid.split("@")[0].split(":")[0];
-      if (lidBase === storedLidBase) {
-        logger.info(`[SessionManager] LID ${lidBase} → Phone ${jid}`);
-        return contact;
-      }
-    }
-
-    logger.debug(`[SessionManager] LID Resolution Failed: ${lidBase}`);
-    return undefined;
+  public findContactByLid(sessionId: string, lid: string) {
+    return this.contactResolver.findContactByLid(sessionId, lid);
   }
 
   public async resolveLidToPhone(
     sessionId: string,
     lid: string,
   ): Promise<string | null> {
-    const sock = this.sessions.get(sessionId) as ExtendedWASocket;
-    if (!sock) return null;
-
-    // [SEC] GUARD: Never attempt to resolve group JIDs or standard user JIDs as LIDs
-    if (lid.includes("@g.us") || lid.includes("@s.whatsapp.net")) return null;
-
-    // 1. Immediate Store Check (Strategy 1)
-    const fromStore = this.findContactByLid(sessionId, lid);
-    if (fromStore?.id && !fromStore.id.includes("@lid")) {
-      return fromStore.id.split("@")[0].split(":")[0];
-    }
-
-    // 2. [SYNC] Single safe query to trigger LID resolution (avoid stream corruption)
-    try {
-      const fullLid = lid.includes("@lid") ? lid : `${lid}@lid`;
-      // Only use onWhatsApp — profilePictureUrl/fetchStatus/MEX cause xml-not-well-formed
-      sock.onWhatsApp(fullLid).catch(() => {});
-    } catch {
-      // Ignore trigger errors
-    }
-
-    // 3. [SYNC] POLL STORE — reduced iterations to avoid session overload
-    for (let i = 0; i < 3; i++) {
-        await new Promise((r) => setTimeout(r, 500));
-        const resolved = this.findContactByLid(sessionId, lid);
-        if (resolved?.id && !resolved.id.includes("@lid")) {
-            return resolved.id.split("@")[0].split(":")[0];
-        }
-    }
-
-    return null;
+    return this.contactResolver.resolveLidToPhone(sessionId, lid);
   }
 
   public async resolveLidsToPhones(
     sessionId: string,
     lids: string[],
   ): Promise<Record<string, string>> {
-     const results: Record<string, string> = {};
-     // Run in parallel for efficiency
-     await Promise.all(lids.map(async (lid) => {
-        const phone = await this.resolveLidToPhone(sessionId, lid);
-        if (phone) results[lid] = phone;
-     }));
-     return results;
+     return this.contactResolver.resolveLidsToPhones(sessionId, lids);
   }
 
   // ────────────────────────────────────────────────

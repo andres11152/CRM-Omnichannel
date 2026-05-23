@@ -111,16 +111,11 @@ export class IdentityResolverService {
       }
     }
 
-    // Strategy 6: Async retry with resolveLidToPhone (reduced from 10 to 3 iterations)
-    let realPhone = null;
-    for (let i = 0; i < 3; i++) {
-      realPhone = await this.sessionManager.resolveLidToPhone(
-        sessionId,
-        cleanRemoteJid,
-      );
-      if (realPhone) break;
-      await new Promise((r) => setTimeout(r, 500));
-    }
+    // Strategy 6: Async resolveLidToPhone (calling once to avoid double-nested retry loop delays)
+    const realPhone = await this.sessionManager.resolveLidToPhone(
+      sessionId,
+      cleanRemoteJid,
+    );
 
     if (realPhone) {
       const originalLidBase = cleanRemoteJid.split("@")[0];
@@ -363,15 +358,12 @@ export class IdentityResolverService {
       `[IdentityResolver] [SEARCH] Resolving Presence LID ${originalJid}...`,
     );
 
-    for (let i = 0; i < 5; i++) {
-      const resolved = this.sessionManager.findContactByLid(_sessionId, originalJid);
-      if (resolved?.id) {
-        const real = WhatsAppIdUtils.getCleanJid(resolved.id);
-        if (real && !WhatsAppIdUtils.isLid(real)) {
-          return real;
-        }
+    const resolved = this.sessionManager.findContactByLid(_sessionId, originalJid);
+    if (resolved?.id) {
+      const real = WhatsAppIdUtils.getCleanJid(resolved.id);
+      if (real && !WhatsAppIdUtils.isLid(real)) {
+        return real;
       }
-      await new Promise((r) => setTimeout(r, 200));
     }
 
     return originalJid;

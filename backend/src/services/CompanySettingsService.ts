@@ -144,13 +144,13 @@ export const companySettingsService = {
       company.defaultSenderEmail ||
       company.smtpUser ||
       process.env.DEFAULT_SENDER_EMAIL ||
-      `no-reply@${company.slug || "system"}.reply.software`;
+      `no-reply@${company.slug || "system"}.sentry.software`;
 
     const fromName =
       company.defaultSenderName ||
       company.smtpUser?.split("@")[0] ||
       company.name ||
-      "Reply Software";
+      "Sentry Software";
 
     return { fromEmail, fromName };
   },

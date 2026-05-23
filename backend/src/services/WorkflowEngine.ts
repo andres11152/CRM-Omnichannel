@@ -76,7 +76,7 @@ class EmailActionHandler implements WorkflowActionHandler {
 
       // [SEC] Resolve dynamic, tenant-specific sender to comply with strict SPF/DKIM SMTP policies
       const senderConfig = await companySettingsService.getSenderConfig(companyId).catch(() => null);
-      const fromEmail = senderConfig?.fromEmail || process.env.DEFAULT_SENDER_EMAIL || `no-reply@reply.software`;
+      const fromEmail = senderConfig?.fromEmail || process.env.DEFAULT_SENDER_EMAIL || `no-reply@sentry.software`;
       const fromName = senderConfig?.fromName || "Automation Software";
       const formattedFrom = `"${fromName}" <${fromEmail}>`;
 

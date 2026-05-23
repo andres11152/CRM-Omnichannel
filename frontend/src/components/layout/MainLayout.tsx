@@ -122,7 +122,7 @@ export const MainLayout = () => {
             <Menu size={24} />
           </button>
           <span className="font-bold text-lg text-gray-800 dark:text-white">
-            Reply
+            Sentry
           </span>
         </div>
 

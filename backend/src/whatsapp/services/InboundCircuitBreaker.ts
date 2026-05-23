@@ -41,7 +41,7 @@ export class InboundCircuitBreaker {
 
       if (count > this.MAX_MESSAGES_PER_WINDOW) {
         Logger.warn(
-          `[CircuitBreaker] ⚠️ Tenant ${companyId} is saturating inbound queue. Tripping breaker (${count} msgs in ${this.WINDOW_SECONDS}s). Delaying message by ${this.PENALTY_DELAY_MS}ms.`,
+          `[CircuitBreaker] [WARNING] Tenant ${companyId} is saturating inbound queue. Tripping breaker (${count} msgs in ${this.WINDOW_SECONDS}s). Delaying message by ${this.PENALTY_DELAY_MS}ms.`,
         );
         // Exponential backoff logic if needed
         const excess = count - this.MAX_MESSAGES_PER_WINDOW;

@@ -25,7 +25,7 @@ try {
 
   if (!isPlaceholder) {
     webpush.setVapidDetails(
-      `mailto:${process.env.SMTP_USER || "noreply@replycrm.com"}`,
+      `mailto:${process.env.SMTP_USER || "noreply@sentrycrm.com"}`,
       vapidKeys.publicKey,
       vapidKeys.privateKey,
     );

@@ -138,7 +138,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
               value={smtp.senderName}
               onChange={(e) => updateSetting("smtp", "senderName", e.target.value)}
               className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-reply-surface-dark rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium"
-              placeholder="Reply CRM"
+              placeholder="Sentry CRM"
             />
           </div>
         </div>
@@ -242,7 +242,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
                 <li>Ve a tu Cuenta de Google (Seguridad).</li>
                 <li>Activa la <strong>Verificación en 2 pasos</strong> si aún no lo has hecho.</li>
                 <li>Busca <strong>Contraseñas de aplicación</strong> al final de la sección.</li>
-                <li>Genera una nueva contraseña asignándole un nombre como "Reply CRM".</li>
+                <li>Genera una nueva contraseña asignándole un nombre como "Sentry CRM".</li>
                 <li>Copia la contraseña de 16 caracteres y pégala aquí.</li>
               </ol>
               <div className="mt-4 p-4 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-reply-border-dark/60 grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs text-gray-500">
@@ -276,7 +276,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
               </p>
               <ol className="list-decimal pl-5 space-y-2">
                 <li>Inicia sesión en Zoho Mail, ve a tu Perfil → Seguridad.</li>
-                <li>En <strong>Contraseñas de Aplicaciones</strong>, genera una clave exclusiva para Reply.</li>
+                <li>En <strong>Contraseñas de Aplicaciones</strong>, genera una clave exclusiva para Sentry.</li>
               </ol>
               <div className="mt-4 p-4 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-reply-border-dark/60 grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs text-gray-500">
                 <div><strong>Host:</strong> smtp.zoho.com</div>

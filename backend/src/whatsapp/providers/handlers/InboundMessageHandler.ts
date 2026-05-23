@@ -178,7 +178,7 @@ export class InboundMessageHandler {
       return; // Stop further processing, it's just an event
     }
 
-    // [SEC] CRITICAL DEDUPLICATION: Skip own echoes (Sent from Reply)
+    // [SEC] CRITICAL DEDUPLICATION: Skip own echoes (Sent from Sentry)
     Logger.debug(`[InboundHandler] Checking echo status: fromMe=${message.key.fromMe}`);
     if (message.key.fromMe) {
       const isEcho = await deduplicationService.isOwnEcho(messageId);
@@ -293,7 +293,7 @@ export class InboundMessageHandler {
       }
     );
     
-    Logger.info(`[InboundHandler] ✅ Successfully reached end of processIncomingMessage for ${messageId}`);
+    Logger.info(`[InboundHandler] [OK] Successfully reached end of processIncomingMessage for ${messageId}`);
   }
 
   async ensureSessionData(sessionId: string): Promise<SessionData | null> {

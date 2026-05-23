@@ -178,19 +178,22 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
   );
 
   // --- NAME RESOLUTION ---
-  let displayName = customer?.name || "";
-  const checkName = displayName.toLowerCase();
-  const isInvalidName =
-    !displayName ||
-    checkName.includes("unknown") ||
-    checkName.includes("sin nombre") ||
-    displayName.trim() === "";
-
-  // For groups, prioritize group name from metadata
-  if (isGroup && groupMetadata?.groupName) {
-    displayName = `[GROUP] ${groupMetadata.groupName}`;
-  } else if (isInvalidName) {
-    displayName = derivedPhone || "Usuario WhatsApp";
+  let displayName = "";
+  if (isGroup) {
+    const rawGroupName = ticket.subject || groupMetadata?.groupName || "Grupo de WhatsApp";
+    const cleanGroupName = rawGroupName.replace(/^\[GROUP\]\s*/i, "");
+    displayName = `[GROUP] ${cleanGroupName}`;
+  } else {
+    displayName = customer?.name || "";
+    const checkName = displayName.toLowerCase();
+    const isInvalidName =
+      !displayName ||
+      checkName.includes("unknown") ||
+      checkName.includes("sin nombre") ||
+      displayName.trim() === "";
+    if (isInvalidName) {
+      displayName = derivedPhone || "Usuario WhatsApp";
+    }
   }
 
   // --- LAST MESSAGE ---
@@ -209,12 +212,12 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     channelId: conversation?.channelId || "",
     companyId: ticket.companyId,
     avatarUrl:
-      (isGroup && groupMetadata?.groupPicUrl) ||
-      customer?.profilePicUrl ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=${isGroup ? "22c55e" : "random"}`,
+      isGroup
+        ? groupMetadata?.groupPicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName.replace(/^\[GROUP\]\s*/i, ""))}&background=22c55e&color=ffffff`
+        : customer?.profilePicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`,
     profilePicUrl: isGroup
-      ? groupMetadata?.groupPicUrl
-      : customer?.profilePicUrl,
+      ? groupMetadata?.groupPicUrl || null
+      : customer?.profilePicUrl || null,
     about: customer?.about,
     unreadCount: 0,
     status: ticket.status,

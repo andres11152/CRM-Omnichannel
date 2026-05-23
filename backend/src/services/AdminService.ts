@@ -183,7 +183,7 @@ export const adminService = {
       include: { users: true },
     });
 
-    // 🚀 [MARKETPLACE] Distribute Master Templates & Flows to the new tenant
+    // [MARKETPLACE] Distribute Master Templates & Flows to the new tenant
     try {
       const { marketplaceService } = await import("./admin/MarketplaceService");
       await marketplaceService.distributeToCompany(newCompany.id);

@@ -204,7 +204,7 @@ export const userService = {
     // [SEC] Exclude system bots from lists
     where.email = {
       ...((where.email as Prisma.StringFilter) || {}),
-      not: { endsWith: "@reply.bot" },
+      not: { endsWith: "@sentry.bot" },
     };
 
     return where;

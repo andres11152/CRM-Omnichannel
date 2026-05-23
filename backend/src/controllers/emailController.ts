@@ -247,12 +247,12 @@ export const testEmailConnection = catchAsync(
       const result = await tempProvider.sendEmail({
         from: senderEmail || user,
         to: [toEmail],
-        subject: "Prueba de Conexión SMTP - Reply CRM",
+        subject: "Prueba de Conexión SMTP - Sentry CRM",
         htmlBody: `
                 <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
                     <h2 style="color: #4F46E5;">¡Conexión Exitosa! </h2>
                     <p>Hola,</p>
-                    <p>Si estás leyendo esto, significa que tu configuración SMTP en <strong>Reply CRM</strong> es correcta.</p>
+                    <p>Si estás leyendo esto, significa que tu configuración SMTP en <strong>Sentry CRM</strong> es correcta.</p>
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
                     <p style="color: #666; font-size: 12px;">
                         <strong>Configuración Probada:</strong><br>
@@ -264,7 +264,7 @@ export const testEmailConnection = catchAsync(
                 </div>
             `,
         textBody:
-          "¡Conexión Exitosa! Si estás leyendo esto, significa que tu configuración SMTP en Reply CRM es correcta.",
+          "¡Conexión Exitosa! Si estás leyendo esto, significa que tu configuración SMTP en Sentry CRM es correcta.",
       });
 
       if (!result.success) {

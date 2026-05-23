@@ -115,8 +115,6 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/products",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={Package} />,
-    disabled: true,
-    badge: "Próximamente",
   },
   {
     id: "marketing",

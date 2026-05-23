@@ -1,5 +1,5 @@
 /**
- * ⏳ TIME UTILITIES
+ * [TIME] TIME UTILITIES
  * Helper functions for delays, timing, and pausing execution.
  */
 

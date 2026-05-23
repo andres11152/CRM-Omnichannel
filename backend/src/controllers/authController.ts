@@ -419,7 +419,7 @@ export const forgotPassword = catchAsync(
     const message = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>Restablecer Contraseña</h2>
-      <p>Has solicitado restablecer tu contraseña en Reply CRM.</p>
+      <p>Has solicitado restablecer tu contraseña en Sentry CRM.</p>
       <p>Haz clic en el siguiente botón para continuar (válido por 10 minutos):</p>
       <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 6px;">Restablecer Contraseña</a>
       <p style="margin-top: 20px; font-size: 12px; color: #666;">Si no solicitaste esto, ignora este correo.</p>
@@ -429,7 +429,7 @@ export const forgotPassword = catchAsync(
     try {
       await emailService.sendEmail({
         to: user.email,
-        subject: "Recuperación de Contraseña - Reply CRM",
+        subject: "Recuperación de Contraseña - Sentry CRM",
         html: message,
       });
 

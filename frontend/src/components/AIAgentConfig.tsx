@@ -11,6 +11,9 @@ import {
   updateAssistant,
 } from "@/services/aiService";
 import { KnowledgeBase } from "./KnowledgeBase";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import {
   Bot,
   Key,
@@ -27,7 +30,6 @@ import {
   Eye,
   EyeOff,
   ChevronRight,
-  Search,
 } from "lucide-react";
 
 interface Props {
@@ -166,7 +168,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
         title={t("ai_config.title", "Gestión de Agentes IA")}
         description={t("ai_config.description", "Configura tus cerebros artificiales, credenciales y bases de conocimiento.")}
         icon={<BrainCircuit className="w-8 h-8 text-white relative z-10" />}
-        gradient="from-violet-600 to-indigo-600 dark:from-violet-800 dark:to-indigo-900"
+        gradient="from-reply-brand to-reply-brand-dark"
         stats={{
           label: t("ai_config.total_agents", "Total Agentes"),
           value: assistants.length,
@@ -175,9 +177,9 @@ export const AIAgentConfig: React.FC<Props> = () => {
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* SIDEBAR NAVIGATION - ENTERPRISE STYLE */}
-        <div className="w-full md:w-72 bg-white dark:bg-reply-panel-dark border-b md:border-b-0 md:border-r border-gray-100 dark:border-reply-border-dark flex flex-col shrink-0 z-20 shadow-sm md:shadow-none sticky top-0 md:static">
+        <div className="w-full md:w-72 bg-white dark:bg-reply-panel-dark border-b md:border-b-0 md:border-r border-reply-border dark:border-reply-border-dark flex flex-col shrink-0 z-20 shadow-sm md:shadow-none sticky top-0 md:static">
           <div className="p-3 md:p-6">
-            <h3 className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest mb-2 md:mb-4 px-2 hidden md:block">
+            <h3 className="text-[10px] md:text-xs font-black text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 uppercase tracking-widest mb-2 md:mb-4 px-2 hidden md:block">
               {t("ai_config.nav.config", "Configuración")}
             </h3>
             <nav className="flex md:flex-col overflow-x-auto md:overflow-x-visible no-scrollbar gap-2 md:gap-2 pb-2 md:pb-0 scroll-smooth px-1">
@@ -206,16 +208,16 @@ export const AIAgentConfig: React.FC<Props> = () => {
           </div>
 
           <div className="mt-auto p-6 hidden md:block">
-            <div className="bg-gradient-to-br from-violet-500/10 to-indigo-500/10 rounded-2xl p-4 border border-violet-500/10">
+            <div className="bg-gradient-to-br from-reply-brand/10 to-reply-brand-dark/10 rounded-2xl p-4 border border-reply-brand/10">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-violet-500 text-white flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-reply-brand text-white flex items-center justify-center">
                   <Sparkles className="w-4 h-4" />
                 </div>
-                <div className="text-xs font-bold text-violet-700 dark:text-violet-300">
+                <div className="text-xs font-bold text-reply-brand dark:text-reply-brand-light">
                   {t("ai_config.tips.title", "AI Pro Tips")}
                 </div>
               </div>
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
+              <p className="text-[10px] text-reply-text-secondary dark:text-reply-text-secondary-dark/80 leading-relaxed font-semibold">
                 {t("ai_config.tips.content", "Usa temperaturas bajas (0.2) para soporte técnico preciso, y altas (0.8) para marketing creativo.")}
               </p>
             </div>
@@ -223,70 +225,54 @@ export const AIAgentConfig: React.FC<Props> = () => {
         </div>
 
         {/* MAIN CONTENT AREA */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/50 dark:bg-transparent custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/20 dark:bg-transparent custom-scrollbar">
           <div className="max-w-5xl mx-auto pb-20 md:pb-0">
             {/* CREDENTIALS TAB */}
             {activeTab === "credentials" && (
               <div className="animate-fade-in space-y-8">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                      <ShieldCheck className="w-8 h-8 text-emerald-500" />
+                    <h2 className="text-2xl font-bold text-reply-text-primary dark:text-reply-text-primary-dark flex items-center gap-3">
+                      <ShieldCheck className="w-8 h-8 text-reply-brand" />
                       {t("ai_config.credentials.title", "Proveedores de IA (BYOK)")}
                     </h2>
-                    <p className="text-gray-500 mt-1 max-w-2xl">
+                    <p className="text-reply-text-secondary dark:text-reply-text-secondary-dark mt-1 max-w-2xl text-sm font-semibold">
                       {t("ai_config.credentials.desc", "Configura tus propias claves API para tener control total sobre límites y facturación directa con los proveedores.")}
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-reply-panel-dark p-8 rounded-[2rem] border border-gray-100 dark:border-reply-border-dark shadow-xl shadow-gray-200/50 dark:shadow-none">
+                <Card className="p-8 shadow-xl shadow-gray-200/20 dark:shadow-none">
                   <div className="grid gap-6">
-                    <div className="group">
-                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3 group-focus-within:text-violet-500 transition-colors">
-                        OpenAI API Key
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <Cpu className="h-5 w-5 text-gray-400 group-focus-within:text-violet-500 transition-colors" />
-                        </div>
-                        <input
-                          type={showKeys ? "text" : "password"}
-                          value={creds.openaiKey || ""}
-                          onChange={(e) =>
-                            setCreds({ ...creds, openaiKey: e.target.value })
-                          }
-                          placeholder="sk-..."
-                          className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl pl-12 pr-4 py-4 text-sm font-medium focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all outline-none"
-                        />
-                      </div>
-                    </div>
+                    <Input
+                      id="openai-key"
+                      label="OpenAI API Key"
+                      type={showKeys ? "text" : "password"}
+                      value={creds.openaiKey || ""}
+                      onChange={(e) =>
+                        setCreds({ ...creds, openaiKey: e.target.value })
+                      }
+                      placeholder="sk-..."
+                      icon={<Cpu className="h-5 w-5 text-reply-text-secondary/60" />}
+                    />
 
-                    <div className="group">
-                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3 group-focus-within:text-blue-500 transition-colors">
-                        Google Gemini API Key
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <Sparkles className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                        </div>
-                        <input
-                          type={showKeys ? "text" : "password"}
-                          value={creds.geminiKey || ""}
-                          onChange={(e) =>
-                            setCreds({ ...creds, geminiKey: e.target.value })
-                          }
-                          placeholder="AIza..."
-                          className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl pl-12 pr-4 py-4 text-sm font-medium focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
-                        />
-                      </div>
-                    </div>
+                    <Input
+                      id="gemini-key"
+                      label="Google Gemini API Key"
+                      type={showKeys ? "text" : "password"}
+                      value={creds.geminiKey || ""}
+                      onChange={(e) =>
+                        setCreds({ ...creds, geminiKey: e.target.value })
+                      }
+                      placeholder="AIza..."
+                      icon={<Sparkles className="h-5 w-5 text-reply-text-secondary/60" />}
+                    />
                   </div>
 
                   <div className="mt-6 flex items-center justify-between">
                     <button
                       onClick={() => setShowKeys(!showKeys)}
-                      className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors font-medium"
+                      className="flex items-center gap-2 text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark hover:text-reply-text-primary dark:hover:text-reply-text-primary-dark transition-colors font-bold cursor-pointer"
                     >
                       {showKeys ? (
                         <>
@@ -299,15 +285,15 @@ export const AIAgentConfig: React.FC<Props> = () => {
                       )}
                     </button>
 
-                    <button
+                    <Button
                       onClick={handleSaveCreds}
-                      className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-violet-600/20 active:scale-95 transition-all flex items-center gap-2"
+                      className="px-8 py-3"
                     >
                       <Save className="w-4 h-4" />
                       {t("ai_config.credentials.save", "Guardar Configuración")}
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </Card>
               </div>
             )}
 
@@ -318,102 +304,109 @@ export const AIAgentConfig: React.FC<Props> = () => {
                   <>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                       <div>
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                          <Bot className="w-7 h-7 text-violet-500" />
+                        <h2 className="text-2xl font-bold text-reply-text-primary dark:text-reply-text-primary-dark flex items-center gap-2">
+                          <Bot className="w-7 h-7 text-reply-brand" />
                           {t("ai_config.assistants.title", "Mis Asistentes")}
                         </h2>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                        <p className="text-reply-text-secondary dark:text-reply-text-secondary-dark text-sm mt-1 font-semibold">
                           {t("ai_config.assistants.desc", "Gestiona los roles y personalidades de tus agentes.")}
                         </p>
                       </div>
-                      <button
+                      <Button
                         onClick={handleCreateNew}
-                        className="px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-black rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl flex items-center gap-2"
+                        className="px-6 py-3 shadow-xl"
                       >
                         <Plus className="w-4 h-4" /> {t("ai_config.assistants.new_button", "Nuevo Asistente")}
-                      </button>
+                      </Button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {assistants.map((assistant) => (
-                        <div
+                        <Card
                           key={assistant.id}
-                          className="group bg-white dark:bg-reply-panel-dark rounded-[1.5rem] p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-gray-100 dark:border-reply-border-dark relative overflow-hidden"
+                          hoverable
+                          className="p-6 relative group overflow-hidden flex flex-col justify-between"
                         >
                           <div className="absolute top-0 right-0 p-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => handleEditAssistant(assistant)}
-                              className="p-2 bg-white dark:bg-gray-800 text-gray-400 hover:text-blue-500 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 transition-colors"
+                              className="p-2 min-w-fit rounded-lg shadow-sm bg-white dark:bg-reply-panel-dark"
                             >
                               <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => {
                                 if (assistant.id)
                                   handleDeleteAssistant(assistant.id);
                               }}
-                              className="p-2 bg-white dark:bg-gray-800 text-gray-400 hover:text-red-500 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 transition-colors"
+                              className="p-2 min-w-fit hover:text-rose-500 hover:border-rose-500/30 rounded-lg shadow-sm bg-white dark:bg-reply-panel-dark"
                             >
                               <Trash2 className="w-4 h-4" />
-                            </button>
+                            </Button>
                           </div>
 
-                          <div className="flex items-center gap-4 mb-4">
-                            <div
-                              className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-inner ${
-                                assistant.modelProvider === "OPENAI"
-                                  ? "bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600"
-                                  : "bg-blue-50 dark:bg-blue-900/10 text-blue-600"
-                              }`}
-                            >
-                              {assistant.modelProvider === "OPENAI" ? (
-                                <Bot className="w-7 h-7" />
-                              ) : (
-                                <Sparkles className="w-7 h-7" />
-                              )}
+                          <div>
+                            <div className="flex items-center gap-4 mb-4">
+                              <div
+                                className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-inner ${
+                                  assistant.modelProvider === "OPENAI"
+                                    ? "bg-emerald-500/10 text-emerald-600"
+                                    : "bg-reply-brand/10 text-reply-brand"
+                                }`}
+                              >
+                                {assistant.modelProvider === "OPENAI" ? (
+                                  <Bot className="w-7 h-7" />
+                                ) : (
+                                  <Sparkles className="w-7 h-7" />
+                                )}
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-reply-text-primary dark:text-reply-text-primary-dark group-hover:text-reply-brand dark:group-hover:text-reply-brand-light transition-colors">
+                                  {assistant.name}
+                                </h3>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest bg-reply-bg dark:bg-white/5 text-reply-text-secondary dark:text-reply-text-secondary-dark mt-1 border border-reply-border/30 dark:border-reply-border-dark/30">
+                                  {assistant.modelName}
+                                </span>
+                              </div>
                             </div>
-                            <div>
-                              <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
-                                {assistant.name}
-                              </h3>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-800 text-gray-500 mt-1">
-                                {assistant.modelName}
-                              </span>
+
+                            <div className="bg-reply-bg/30 dark:bg-white/5 rounded-xl p-4 mb-4 border border-reply-border/20 dark:border-reply-border-dark/20 min-h-[90px] flex items-center">
+                              <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark line-clamp-3 font-semibold leading-relaxed">
+                                {assistant.systemPrompt}
+                              </p>
                             </div>
                           </div>
 
-                          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mb-4 border border-gray-100 dark:border-gray-700/50">
-                            <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3 font-medium leading-relaxed">
-                              {assistant.systemPrompt}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center justify-between text-xs font-medium text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-800">
-                            <div className="flex items-center gap-1">
-                              <Settings className="w-3 h-3" />
+                          <div className="flex items-center justify-between text-xs font-semibold text-reply-text-secondary dark:text-reply-text-secondary-dark pt-2 border-t border-reply-border dark:border-reply-border-dark">
+                            <div className="flex items-center gap-1 font-mono">
+                              <Settings className="w-3.5 h-3.5" />
                               Temp: {assistant.temperature}
                             </div>
                             <div>
                               {assistant._count?.queues || 0} {t("ai_config.assistants.queues_assigned", "Colas Asignadas")}
                             </div>
                           </div>
-                        </div>
+                        </Card>
                       ))}
 
                       {assistants.length === 0 && (
-                        <div className="col-span-full py-20 bg-white/50 dark:bg-white/5 rounded-[2rem] border border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center text-center">
-                          <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                            <Bot className="w-10 h-10 text-gray-400" />
+                        <div className="col-span-full py-20 bg-white/50 dark:bg-white/5 rounded-[2rem] border border-dashed border-reply-border dark:border-reply-border-dark flex flex-col items-center justify-center text-center">
+                          <div className="w-20 h-20 bg-reply-bg dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
+                            <Bot className="w-10 h-10 text-reply-text-secondary" />
                           </div>
-                          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+                          <h3 className="text-lg font-bold text-reply-text-primary dark:text-reply-text-primary-dark mb-1">
                             {t("ai_config.assistants.empty_title", "Sin asistentes activos")}
                           </h3>
-                          <p className="text-gray-500 text-sm mb-6 max-w-sm">
+                          <p className="text-reply-text-secondary dark:text-reply-text-secondary-dark text-sm mb-6 max-w-sm font-semibold">
                             {t("ai_config.assistants.empty_desc", "Crea tu primer agente de IA para comenzar a automatizar conversaciones.")}
                           </p>
                           <button
                             onClick={handleCreateNew}
-                            className="text-violet-600 font-bold hover:underline"
+                            className="text-reply-brand font-black hover:underline cursor-pointer"
                           >
                             {t("ai_config.assistants.create_now", "Crear Asistente Ahora")}
                           </button>
@@ -422,14 +415,14 @@ export const AIAgentConfig: React.FC<Props> = () => {
                     </div>
                   </>
                 ) : (
-                  <div className="bg-white dark:bg-reply-panel-dark p-8 rounded-[2rem] border border-gray-100 dark:border-reply-border-dark shadow-2xl shadow-gray-200/50 dark:shadow-none max-w-4xl mx-auto">
-                    <div className="flex justify-between items-center mb-8 pb-6 border-b border-gray-100 dark:border-reply-border-dark">
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <Card className="p-8 max-w-4xl mx-auto shadow-2xl">
+                    <div className="flex justify-between items-center mb-8 pb-6 border-b border-reply-border dark:border-reply-border-dark">
+                      <h2 className="text-2xl font-bold text-reply-text-primary dark:text-reply-text-primary-dark">
                         {currentAssistant.id ? t("ai_config.assistants.edit_title", "Editar Agente") : t("ai_config.assistants.create_title", "Nuevo Agente")}
                       </h2>
                       <button
                         onClick={() => setIsEditingAssistant(false)}
-                        className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"
+                        className="text-reply-text-secondary hover:text-reply-text-primary dark:hover:text-white transition-colors font-bold cursor-pointer"
                       >
                         {t("common.cancel", "Cancelar")}
                       </button>
@@ -437,26 +430,22 @@ export const AIAgentConfig: React.FC<Props> = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                       <div className="space-y-6">
-                        <div className="group">
-                          <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                            {t("ai_config.assistants.identity", "Identidad del Agente")}
-                          </label>
-                          <input
-                            type="text"
-                            value={currentAssistant.name}
-                            onChange={(e) =>
-                              setCurrentAssistant({
-                                ...currentAssistant,
-                                name: e.target.value,
-                              })
-                            }
-                            placeholder={t("ai_config.assistants.identity_placeholder", "Ej: Experto en Soporte L1")}
-                            className="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3.5 text-sm font-medium focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all outline-none"
-                          />
-                        </div>
+                        <Input
+                          id="assistant-identity"
+                          label={t("ai_config.assistants.identity", "Identidad del Agente")}
+                          type="text"
+                          value={currentAssistant.name}
+                          onChange={(e) =>
+                            setCurrentAssistant({
+                              ...currentAssistant,
+                              name: e.target.value,
+                            })
+                          }
+                          placeholder={t("ai_config.assistants.identity_placeholder", "Ej: Experto en Soporte L1")}
+                        />
 
-                        <div className="group">
-                          <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <div className="group flex flex-col gap-1.5 w-full">
+                          <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
                             {t("ai_config.assistants.model", "Modelo de IA")}
                           </label>
                           <div className="relative">
@@ -475,30 +464,30 @@ export const AIAgentConfig: React.FC<Props> = () => {
                                   modelName: name,
                                 });
                               }}
-                              className="w-full appearance-none bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3.5 text-sm font-medium focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all outline-none cursor-pointer"
+                              className="w-full appearance-none bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl px-4 py-3 text-sm font-medium focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand transition-all outline-none cursor-pointer text-reply-text-primary dark:text-reply-text-primary-dark"
                             >
-                              <optgroup label="🤖 OpenAI">
-                                <option value="OPENAI|gpt-4o">GPT-4o (Alta capacidad - Recomendado)</option>
-                                <option value="OPENAI|gpt-4o-mini">GPT-4o Mini (Veloz y económico)</option>
-                                <option value="OPENAI|gpt-4-turbo">GPT-4 Turbo (Anterior)</option>
+                              <optgroup label="🤖 OpenAI" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">
+                                <option value="OPENAI|gpt-4o" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">GPT-4o (Alta capacidad - Recomendado)</option>
+                                <option value="OPENAI|gpt-4o-mini" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">GPT-4o Mini (Veloz y económico)</option>
+                                <option value="OPENAI|gpt-4-turbo" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">GPT-4 Turbo (Anterior)</option>
                               </optgroup>
-                              <optgroup label="✨ Google Gemini">
-                                <option value="GEMINI|gemini-2.5-flash">Gemini 2.5 Flash (Recomendado - Veloz y económico)</option>
-                                <option value="GEMINI|gemini-2.5-pro">Gemini 2.5 Pro (Razonamiento complejo y análisis avanzado)</option>
-                                <option value="GEMINI|gemini-1.5-flash">Gemini 1.5 Flash (Estable - Versión anterior)</option>
-                                <option value="GEMINI|gemini-1.5-pro">Gemini 1.5 Pro (Estable - Ventana de contexto gigante)</option>
+                              <optgroup label="✨ Google Gemini" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">
+                                <option value="GEMINI|gemini-2.5-flash" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">Gemini 2.5 Flash (Recomendado - Veloz y económico)</option>
+                                <option value="GEMINI|gemini-2.5-pro" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">Gemini 2.5 Pro (Razonamiento complejo y análisis avanzado)</option>
+                                <option value="GEMINI|gemini-1.5-flash" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">Gemini 1.5 Flash (Estable - Versión anterior)</option>
+                                <option value="GEMINI|gemini-1.5-pro" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">Gemini 1.5 Pro (Estable - Ventana de contexto gigante)</option>
                               </optgroup>
                             </select>
-                            <ChevronRight className="w-5 h-5 absolute right-4 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 pointer-events-none" />
+                            <ChevronRight className="w-5 h-5 absolute right-4 top-1/2 transform -translate-y-1/2 rotate-90 text-reply-text-secondary/60 pointer-events-none" />
                           </div>
                         </div>
 
                         <div>
                           <div className="flex justify-between mb-3">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                            <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
                               {t("ai_config.assistants.creativity", "Creatividad")}
                             </label>
-                            <span className="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">
+                            <span className="text-xs font-bold text-reply-brand bg-reply-brand/10 px-2 py-0.5 rounded">
                               {currentAssistant.temperature}
                             </span>
                           </div>
@@ -514,17 +503,17 @@ export const AIAgentConfig: React.FC<Props> = () => {
                                 temperature: parseFloat(e.target.value),
                               })
                             }
-                            className="w-full accent-violet-600 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            className="w-full accent-reply-brand h-2 bg-reply-bg dark:bg-reply-border-dark rounded-lg appearance-none cursor-pointer"
                           />
-                          <div className="flex justify-between text-[10px] text-gray-400 font-bold uppercase mt-2">
+                          <div className="flex justify-between text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 font-black uppercase mt-2">
                             <span>{t("ai_config.assistants.precise", "Preciso")}</span>
                             <span>{t("ai_config.assistants.creative", "Creativo")}</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-col h-full">
-                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                      <div className="flex flex-col h-full gap-1.5">
+                        <label className="block text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
                           {t("ai_config.assistants.system_prompt", "System Prompt (Instrucciones)")}
                         </label>
                         <textarea
@@ -536,27 +525,27 @@ export const AIAgentConfig: React.FC<Props> = () => {
                             })
                           }
                           placeholder={t("ai_config.assistants.prompt_placeholder", "Define la personalidad, tono y reglas del asistente...")}
-                          className="flex-1 w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-4 text-sm font-medium focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all outline-none resize-none font-mono leading-relaxed"
+                          className="flex-1 w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl px-4 py-4 text-sm font-medium focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand transition-all outline-none resize-none font-mono leading-relaxed text-reply-text-primary dark:text-reply-text-primary-dark"
                         />
                       </div>
                     </div>
 
-                    <div className="flex justify-end gap-4 pt-6 border-t border-gray-100 dark:border-gray-800">
-                      <button
+                    <div className="flex justify-end gap-4 pt-6 border-t border-reply-border dark:border-reply-border-dark">
+                      <Button
+                        variant="ghost"
                         onClick={() => setIsEditingAssistant(false)}
-                        className="px-6 py-3 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl font-bold text-sm transition-colors"
                       >
                         {t("common.cancel", "Cancelar")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={handleSaveAssistant}
-                        className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-violet-600/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                        className="px-8 py-3"
                       >
                         <Save className="w-4 h-4" />
                         {t("ai_config.assistants.save_button", "Guardar Agente")}
-                      </button>
+                      </Button>
                     </div>
-                  </div>
+                  </Card>
                 )}
               </div>
             )}
@@ -574,7 +563,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
   );
 };
 
-// Sub-componente NavButton con estilo Enterprise
+// Sub-componente NavButton con estilo Enterprise y marca reply
 const NavButton: React.FC<{
   active: boolean;
   onClick: () => void;
@@ -584,21 +573,21 @@ const NavButton: React.FC<{
 }> = ({ active, onClick, icon, label, description }) => (
   <button
     onClick={onClick}
-    className={`w-auto md:w-full min-w-fit md:min-w-0 text-left px-3 md:px-4 py-2 md:py-3 rounded-xl transition-all duration-200 group relative overflow-hidden flex-shrink-0 ${
+    className={`w-auto md:w-full min-w-fit md:min-w-0 text-left px-3 md:px-4 py-2 md:py-3 rounded-xl transition-all duration-200 group relative overflow-hidden flex-shrink-0 cursor-pointer ${
       active
-        ? "bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-500/20"
-        : "hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent"
+        ? "bg-reply-brand/10 border border-reply-brand/20"
+        : "hover:bg-reply-bg dark:hover:bg-reply-bg-dark border border-transparent"
     }`}
   >
     {active && (
-      <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1 bg-violet-500 rounded-l-xl" />
+      <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1 bg-reply-brand rounded-l-xl" />
     )}
     <div className="flex items-center gap-2 md:gap-3 relative z-10">
       <div
         className={`p-1.5 md:p-2 rounded-lg transition-colors ${
           active
-            ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
-            : "bg-gray-100 dark:bg-gray-800 text-gray-500 group-hover:text-violet-500 group-hover:bg-violet-50 dark:group-hover:bg-violet-900/20"
+            ? "bg-reply-brand text-white shadow-lg shadow-reply-brand/30"
+            : "bg-reply-bg dark:bg-reply-panel-dark text-reply-text-secondary group-hover:text-reply-brand group-hover:bg-reply-brand/10 dark:group-hover:bg-reply-brand/20"
         }`}
       >
         {icon}
@@ -607,14 +596,14 @@ const NavButton: React.FC<{
         <div
           className={`text-xs md:text-sm font-bold whitespace-nowrap ${
             active
-              ? "text-gray-900 dark:text-white"
-              : "text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200"
+              ? "text-reply-text-primary dark:text-reply-text-primary-dark"
+              : "text-reply-text-secondary dark:text-reply-text-secondary-dark group-hover:text-reply-text-primary dark:group-hover:text-reply-text-primary-dark"
           }`}
         >
           {label}
         </div>
         {description && (
-          <div className="hidden md:block text-[10px] text-gray-400 font-medium truncate max-w-[140px]">
+          <div className="hidden md:block text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 font-semibold truncate max-w-[140px]">
             {description}
           </div>
         )}

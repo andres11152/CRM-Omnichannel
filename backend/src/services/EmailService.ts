@@ -81,7 +81,7 @@ export class SystemEmailService {
       from:
         options.from ||
         env.SMTP_USER ||
-        '"Reply Software" <no-reply@reply.software>',
+        '"Sentry Software" <no-reply@sentry.software>',
       to: options.to,
       subject: options.subject,
       html: options.html,

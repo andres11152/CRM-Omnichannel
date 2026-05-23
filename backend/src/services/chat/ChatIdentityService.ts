@@ -155,10 +155,10 @@ export class ChatIdentityService {
       }
     } else {
       if (isGroup) {
-        Logger.info(`[ChatIdentityService] ⏩ Skipped CRM sync: Group chat detected (${params.email})`);
+        Logger.info(`[ChatIdentityService] [SKIP] Skipped CRM sync: Group chat detected (${params.email})`);
       } else if (!hasRealPhone) {
         Logger.info(
-          `[ChatIdentityService] ⏩ Skipped CRM sync: No real phone (LID or invalid format): ${params.phone || "N/A"}`,
+          `[ChatIdentityService] [SKIP] Skipped CRM sync: No real phone (LID or invalid format): ${params.phone || "N/A"}`,
         );
       }
     }

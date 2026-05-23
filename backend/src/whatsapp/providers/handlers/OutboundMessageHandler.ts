@@ -22,6 +22,9 @@ import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionReposit
 import { messageRepository } from "@/repositories/MessageRepository";
 import { TenantContextManager } from "@/config/tenantContext";
 import { Prisma, Message } from "@prisma/client";
+import { OutboundJidResolver } from "./OutboundJidResolver";
+import { conversationRepository } from "@/repositories/ConversationRepository";
+import { ticketSyncService } from "@/services/TicketSyncService";
 
 const prepareMetadataForDB = (meta: MessageMetadata): Prisma.InputJsonValue => {
   return JSON.parse(JSON.stringify(meta));
@@ -29,9 +32,11 @@ const prepareMetadataForDB = (meta: MessageMetadata): Prisma.InputJsonValue => {
 
 export class OutboundMessageHandler {
   private socketEmitter: SocketEventEmitter;
+  private jidResolver: OutboundJidResolver;
 
   constructor(private sessionManager: ISessionManager) {
     this.socketEmitter = new SocketEventEmitter(gateway);
+    this.jidResolver = new OutboundJidResolver(sessionManager);
   }
 
   private mapToMessagePayload(
@@ -52,75 +57,23 @@ export class OutboundMessageHandler {
       dbId: msg.id,
     };
   }
-  private async resolveDestinationJid(
-    to: string,
-    companyId: string,
-    sessionId: string,
-  ): Promise<string> {
-    if (to.includes("@g.us")) return to;
-    if (to.includes("@s.whatsapp.net")) return to;
-
-    const cleanId = to.split("@")[0].split(":")[0];
-    const isLid = WhatsAppIdUtils.isLid(to) || 
-                  (cleanId.startsWith("45") && cleanId.length === 14) ||
-                  (cleanId.length >= 15 && !cleanId.startsWith("120"));
-
-    if (isLid) {
-      const fullLidJid = to.includes("@lid") ? to : `${cleanId}@lid`;
-
-      // Strategy A: Memory Store lookup
-      const resolvedContact = this.sessionManager.findContactByLid(sessionId, fullLidJid);
-      if (resolvedContact?.id && !WhatsAppIdUtils.isLid(resolvedContact.id)) {
-        const realJid = WhatsAppIdUtils.getCleanJid(resolvedContact.id);
-        if (realJid) {
-          Logger.info(`[OutboundHandler] Resolved outbound LID ${to} via memory store -> ${realJid}`);
-          return realJid;
-        }
-      }
-
-      // Strategy B: Database Contact mapping
-      try {
-        const contact = await chatService.findContactByLid(companyId, cleanId);
-        if (contact && contact.phone) {
-          const phoneJid = `${contact.phone.replace(/\D/g, "")}@s.whatsapp.net`;
-          Logger.info(`[OutboundHandler] Resolved outbound LID ${to} via DB mapping -> ${phoneJid}`);
-          return phoneJid;
-        }
-      } catch (err) {
-        Logger.warn(`[OutboundHandler] Failed to query contact by LID for ${cleanId}`, err);
-      }
-
-      // Strategy C: Active WhatsApp resolve
-      try {
-        const resolvedPhone = await this.sessionManager.resolveLidToPhone(sessionId, fullLidJid);
-        if (resolvedPhone) {
-          const phoneJid = `${resolvedPhone.replace(/\D/g, "")}@s.whatsapp.net`;
-          Logger.info(`[OutboundHandler] Resolved outbound LID ${to} via active query -> ${phoneJid}`);
-          
-          const cleanPhone = WhatsAppIdUtils.getPhoneNumber(resolvedPhone);
-          if (cleanPhone) {
-            await chatService.saveLidPhoneMapping(companyId, cleanId, cleanPhone);
-          }
-          return phoneJid;
-        }
-      } catch (err) {
-        Logger.warn(`[OutboundHandler] Active LID resolution failed for ${fullLidJid}`, err);
-      }
-
-      return fullLidJid;
-    }
-
-    return WhatsAppIdUtils.getTargetJid(to);
-  }
-
   async sendMessage(
     to: string,
     content: string,
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
-    const { companyId, conversationId, senderId, metadata } = options;
+    const { companyId, conversationId: originalConversationId, senderId, metadata } = options;
 
     try {
+      let conversationId = originalConversationId;
+      const exists = await conversationRepository.findByIdAndCompanyId(conversationId, companyId);
+      if (!exists) {
+        const ticketConvId = await ticketSyncService.findConversationIdByTicket(conversationId, companyId);
+        if (ticketConvId) {
+          conversationId = ticketConvId;
+        }
+      }
+
       const activeSession =
         await this.sessionManager.findActiveSessionForCompany(companyId);
       if (!activeSession) {
@@ -129,7 +82,7 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
 
       // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to properly detect groups vs DMs, with LID resolution fallback
-      const jid = await this.resolveDestinationJid(to, companyId, activeSession.sessionId);
+      const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
       const generatedId =
         (metadata?.generatedMessageId as string) || generateMessageID();
       await deduplicationService.markMessageSent(generatedId);
@@ -208,11 +161,30 @@ export class OutboundMessageHandler {
       let savedMessage;
 
       if (dbId) {
-        savedMessage = await messageRepository.update(dbId, {
-          whatsappMessageId: sentMsg?.key?.id || generatedId,
-          status: "SENT",
-          metadata: prepareMetadataForDB(mergedMeta) as Prisma.InputJsonValue,
+        // [SEC] Layered Isolation: Check if message exists before updating to prevent Prisma update crash
+        const exists = await messageRepository.findFirst({
+          where: { id: dbId, companyId },
         });
+
+        if (exists) {
+          savedMessage = await messageRepository.update(dbId, {
+            whatsappMessageId: sentMsg?.key?.id || generatedId,
+            status: "SENT",
+            metadata: prepareMetadataForDB(mergedMeta) as Prisma.InputJsonValue,
+          }, companyId);
+        } else {
+          Logger.warn(`[OutboundHandler] Message record ${dbId} not found in company ${companyId}. Falling back to upsert.`);
+          savedMessage = await chatService.upsertMessage({
+            whatsappMessageId: sentMsg?.key?.id || generatedId,
+            companyId,
+            content,
+            direction: "OUTBOUND",
+            conversationId,
+            senderId,
+            status: "SENT",
+            metadata: prepareMetadataForDB(mergedMeta),
+          });
+        }
       } else {
         savedMessage = await chatService.upsertMessage({
           whatsappMessageId: sentMsg?.key?.id || `temp_${Date.now()}`,
@@ -243,7 +215,7 @@ export class OutboundMessageHandler {
         }
       } else {
         Logger.info(
-          `[HITL] ⏩ Skipping AI mute - message is ${
+          `[HITL] [SKIP] Skipping AI mute - message is ${
             isAiGenerated ? "AI-generated" : "Flow-generated"
           }`,
         );
@@ -251,31 +223,40 @@ export class OutboundMessageHandler {
 
       // Restore socket emission so frontend gets final Baileys ID for read receipts.
       // Frontend dedupe has been fixed to prevent duplicates when this arrives.
-      await chatService.updateConversation(companyId, conversationId, {});
-      const fullConv = await chatService.getFullConversation(
-        companyId,
-        conversationId,
-      );
-      if (fullConv) {
-        // Emit socket so UI updates from temp_ ID to real Baileys ID
-        try {
-          const { gateway } = await import("@/gateways/socketGateway");
-          const { SocketEventEmitter } =
-            await import("@/services/SocketEventEmitter");
-          const socketEmitter = new SocketEventEmitter(gateway);
+      try {
+        await chatService.updateConversation(companyId, conversationId, {});
+        const fullConv = await chatService.getFullConversation(
+          companyId,
+          conversationId,
+        );
+        if (fullConv) {
+          // Emit socket so UI updates from temp_ ID to real Baileys ID
+          try {
+            const { gateway } = await import("@/gateways/socketGateway");
+            const { SocketEventEmitter } =
+              await import("@/services/SocketEventEmitter");
+            const socketEmitter = new SocketEventEmitter(gateway);
 
-          type Emits = InstanceType<
-            typeof import("@/services/SocketEventEmitter").SocketEventEmitter
-          >["emitMessageSent"];
-          socketEmitter.emitMessageSent(
-            savedMessage as Parameters<Emits>[0],
-            fullConv as Parameters<Emits>[1],
-          );
-        } catch (err: unknown) {
-          Logger.warn("[OutboundHandler] Failed to emit socket", {
-            error: err instanceof Error ? err.message : String(err),
-          });
+            // [SYNC] EMIT STATUS sent for scheduled/queued messages to transition visually in-place
+            if (dbId) {
+              socketEmitter.emitMessageStatus(dbId, conversationId, companyId, "sent");
+            }
+
+            type Emits = InstanceType<
+              typeof import("@/services/SocketEventEmitter").SocketEventEmitter
+            >["emitMessageSent"];
+            socketEmitter.emitMessageSent(
+              savedMessage as Parameters<Emits>[0],
+              fullConv as Parameters<Emits>[1],
+            );
+          } catch (err: unknown) {
+            Logger.warn("[OutboundHandler] Failed to emit socket", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
         }
+      } catch (postSendErr) {
+        Logger.warn("[OutboundHandler] Post-send updates failed (message already dispatched to WhatsApp):", postSendErr);
       }
 
       return this.mapToMessagePayload(savedMessage as Message & { whatsappMessageId: string | null }, activeSession.sessionId, to);
@@ -294,10 +275,19 @@ export class OutboundMessageHandler {
     media: MediaPayload,
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
-    const { companyId, conversationId, senderId } = options;
+    const { companyId, conversationId: originalConversationId, senderId } = options;
 
     let tempFilePath: string | null = null;
     try {
+      let conversationId = originalConversationId;
+      const exists = await conversationRepository.findByIdAndCompanyId(conversationId, companyId);
+      if (!exists) {
+        const ticketConvId = await ticketSyncService.findConversationIdByTicket(conversationId, companyId);
+        if (ticketConvId) {
+          conversationId = ticketConvId;
+        }
+      }
+
       const activeSession =
         await this.sessionManager.findActiveSessionForCompany(companyId);
       if (!activeSession) {
@@ -305,7 +295,7 @@ export class OutboundMessageHandler {
       }
       const sock = activeSession.socket;
       // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to properly detect groups vs DMs, with LID resolution fallback
-      const jid = await this.resolveDestinationJid(to, companyId, activeSession.sessionId);
+      const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
 
       // [BUILD] SRP: All media preparation delegated to MediaProcessorService
       Logger.debug(`[OutboundHandler] Preparing media for ${jid}: type=${media.type}, url=${media.url?.substring(0, 50)}...`);
@@ -391,11 +381,30 @@ export class OutboundMessageHandler {
       let savedMessage;
 
       if (dbId) {
-        savedMessage = await messageRepository.update(dbId, {
-          whatsappMessageId: sentMsg?.key?.id || generatedId,
-          status: "SENT",
-          metadata: prepareMetadataForDB(meta) as Prisma.InputJsonValue,
+        // [SEC] Layered Isolation: Check if message exists before updating to prevent Prisma update crash
+        const exists = await messageRepository.findFirst({
+          where: { id: dbId, companyId },
         });
+
+        if (exists) {
+          savedMessage = await messageRepository.update(dbId, {
+            whatsappMessageId: sentMsg?.key?.id || generatedId,
+            status: "SENT",
+            metadata: prepareMetadataForDB(meta) as Prisma.InputJsonValue,
+          }, companyId);
+        } else {
+          Logger.warn(`[OutboundHandler] Media message record ${dbId} not found in company ${companyId}. Falling back to upsert.`);
+          savedMessage = await chatService.upsertMessage({
+            whatsappMessageId: sentMsg?.key?.id || generatedId,
+            companyId,
+            content,
+            direction: "OUTBOUND",
+            conversationId,
+            senderId,
+            status: "SENT",
+            metadata: prepareMetadataForDB(meta),
+          });
+        }
       } else {
         savedMessage = await chatService.upsertMessage({
           whatsappMessageId: sentMsg?.key?.id || `temp_${Date.now()}`,
@@ -427,36 +436,46 @@ export class OutboundMessageHandler {
         }
       } else {
         Logger.info(
-          `[HITL] ⏩ Skipping AI mute for media - ${
+          `[HITL] [SKIP] Skipping AI mute for media - ${
             isAiGenerated ? "AI-generated" : "Flow-generated"
           }`,
         );
       }
 
       // Restore socket emission for media messages
-      await chatService.updateConversation(companyId, conversationId, {});
-      const fullConv = await chatService.getFullConversation(
-        companyId,
-        conversationId,
-      );
-      if (fullConv) {
-        try {
-          const { gateway } = await import("@/gateways/socketGateway");
-          const { SocketEventEmitter } =
-            await import("@/services/SocketEventEmitter");
-          const socketEmitter = new SocketEventEmitter(gateway);
-          type Emits = InstanceType<
-            typeof import("@/services/SocketEventEmitter").SocketEventEmitter
-          >["emitMessageSent"];
-          socketEmitter.emitMessageSent(
-            savedMessage as Parameters<Emits>[0],
-            fullConv as Parameters<Emits>[1],
-          );
-        } catch (err: unknown) {
-          Logger.warn("[OutboundHandler] Failed to emit socket", {
-            error: err instanceof Error ? err.message : String(err),
-          });
+      try {
+        await chatService.updateConversation(companyId, conversationId, {});
+        const fullConv = await chatService.getFullConversation(
+          companyId,
+          conversationId,
+        );
+        if (fullConv) {
+          try {
+            const { gateway } = await import("@/gateways/socketGateway");
+            const { SocketEventEmitter } =
+              await import("@/services/SocketEventEmitter");
+            const socketEmitter = new SocketEventEmitter(gateway);
+
+            // [SYNC] EMIT STATUS sent for scheduled/queued media to transition visually in-place
+            if (dbId) {
+              socketEmitter.emitMessageStatus(dbId, conversationId, companyId, "sent");
+            }
+
+            type Emits = InstanceType<
+              typeof import("@/services/SocketEventEmitter").SocketEventEmitter
+            >["emitMessageSent"];
+            socketEmitter.emitMessageSent(
+              savedMessage as Parameters<Emits>[0],
+              fullConv as Parameters<Emits>[1],
+            );
+          } catch (err: unknown) {
+            Logger.warn("[OutboundHandler] Failed to emit socket", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
         }
+      } catch (postSendErr) {
+        Logger.warn("[OutboundHandler] Post-send media updates failed (message already dispatched to WhatsApp):", postSendErr);
       }
 
       return this.mapToMessagePayload(savedMessage as Message & { whatsappMessageId: string | null }, activeSession.sessionId, to);
@@ -541,7 +560,7 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
       if (!sock) return;
 
-      const jid = await this.resolveDestinationJid(to, companyId, activeSession.sessionId);
+      const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
 
       await sock.sendPresenceUpdate(type, jid).catch((err) => {
         Logger.warn(`[Presence] Failed to send ${type} to ${jid}`, err);
@@ -566,7 +585,7 @@ export class OutboundMessageHandler {
       const sock = activeSession.socket;
       if (!sock) return;
 
-      const jid = await this.resolveDestinationJid(to, companyId, activeSession.sessionId);
+      const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
 
       await sock.sendMessage(jid, {
         react: {

@@ -23,7 +23,7 @@ const colors = {
   debug: "white",
 };
 
-winston.addColors(colors);
+winston.config.addColors(colors);
 
 /**
  *  Sensitive Data Masking
@@ -80,7 +80,7 @@ const jsonFormat = winston.format.combine(
   winston.format.json(),
   winston.format((info) => {
     // Add service metadata
-    info.service = "reply-crm-api";
+    info.service = "sentry-crm-api";
     info.environment = process.env.NODE_ENV || "development";
     info.hostname = process.env.HOSTNAME || "localhost";
     info.pid = process.pid;
@@ -244,7 +244,7 @@ export class Logger {
     fn: () => void | Promise<void>,
     meta?: Record<string, unknown>,
   ) {
-    const tracer = trace.getTracer("reply-crm-logger");
+    const tracer = trace.getTracer("sentry-crm-logger");
     return tracer.startActiveSpan(spanName, async (span) => {
       try {
         if (meta) {

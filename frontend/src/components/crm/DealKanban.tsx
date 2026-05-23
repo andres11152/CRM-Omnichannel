@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/Button";
 import {
   DragDropContext,
   Droppable,
@@ -71,6 +72,8 @@ const getColorClasses = (hexColor: string): string => {
   const colorMap: Record<string, string> = {
     "#3B82F6":
       "bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 ring-blue-500/20",
+    "#6366F1":
+      "bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 ring-indigo-500/20",
     "#8B5CF6":
       "bg-violet-500/10 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400 ring-violet-500/20",
     "#F59E0B":
@@ -92,6 +95,7 @@ const getColorClasses = (hexColor: string): string => {
 const getAccentColor = (hexColor: string): string => {
   const map: Record<string, string> = {
     "#3B82F6": "bg-blue-500",
+    "#6366F1": "bg-indigo-500",
     "#8B5CF6": "bg-violet-500",
     "#F59E0B": "bg-amber-500",
     "#EC4899": "bg-pink-500",
@@ -125,7 +129,7 @@ export const DealKanban: React.FC = () => {
         name: t("crm.pipelines.title"),
         isDefault: true,
       });
-      toast.success(t("queues_config.toasts.created_success"));
+      toast.success(t("crm.pipelines.pipeline_created"));
       return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "";
@@ -239,11 +243,11 @@ export const DealKanban: React.FC = () => {
       const newStage = pipeline?.stages.find((s) => s.id === newStageId);
       if (newStage) {
         if (isWonStage(newStage.name)) {
-          toast.success(t("queues_config.toasts.created_success"));
+          toast.success(t("crm.deals.won_toast"));
         } else if (isLostStage(newStage.name)) {
-          toast(t("queues_config.toasts.deleted_success"), { icon: "" });
+          toast(t("crm.deals.lost_toast"), { icon: "😔" });
         } else {
-          toast.success(`${t("common.loading")} "${newStage.name}"`);
+          toast.success(`${t("crm.deals.moved_success")} "${newStage.name}"`);
         }
       }
     } catch (error) {
@@ -280,7 +284,7 @@ export const DealKanban: React.FC = () => {
             <div className="absolute top-0 left-0 w-16 h-16 rounded-full border-4 border-transparent border-t-blue-500 animate-spin"></div>
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400 font-medium animate-pulse">
-            {t("common.loading")}...
+            {t("common.loading")}
           </p>
         </div>
       </div>
@@ -301,13 +305,14 @@ export const DealKanban: React.FC = () => {
           value: deals.length,
         }}
         action={
-          <button
+          <Button
             onClick={handleCreate}
-            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all backdrop-blur-sm border border-white/20 font-medium hover:scale-[1.02] active:scale-[0.98]"
+            variant="outline"
+            className="border-white/20 text-white hover:bg-white/10 hover:border-white/30 backdrop-blur-sm h-10 px-4 gap-2 font-bold bg-white/10"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
             {t("crm.activities.new_deal")}
-          </button>
+          </Button>
         }
       />
 
@@ -321,7 +326,7 @@ export const DealKanban: React.FC = () => {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold">
-                {t("tenants.metrics.status")}
+                {t("sales.pipeline_value")}
               </p>
               <p className="text-sm font-bold text-gray-800 dark:text-white">
                 {formatCurrency(kpis.totalValue, kpis.dominantCurrency)}
@@ -392,7 +397,7 @@ export const DealKanban: React.FC = () => {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold">
-                Conversión
+                {t("crm.deals.conversion")}
               </p>
               <p className="text-sm font-bold text-gray-800 dark:text-white">
                 {kpis.conversionRate}%
@@ -409,7 +414,7 @@ export const DealKanban: React.FC = () => {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold">
-                {t("common.unknown")}
+                {t("crm.deals.avg_deal_size")}
               </p>
               <p className="text-sm font-bold text-gray-800 dark:text-white">
                 {formatCurrency(kpis.avgDealSize, kpis.dominantCurrency)}
@@ -571,7 +576,7 @@ export const DealKanban: React.FC = () => {
                                       <div className="mb-2.5">
                                         <div className="flex items-center justify-between mb-1">
                                           <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
-                                            {t("tenants.metrics.days_remaining")}
+                                            {t("crm.deals.probability")}
                                           </span>
                                           <span
                                             className={`text-[10px] font-bold ${
@@ -621,7 +626,7 @@ export const DealKanban: React.FC = () => {
                                         </div>
                                       ) : (
                                         <span className="text-[10px] text-gray-300 dark:text-gray-600 italic">
-                                          Sin asignar
+                                          {t("crm.deals.unassigned")}
                                         </span>
                                       )}
                                     </div>

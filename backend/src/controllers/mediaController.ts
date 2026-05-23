@@ -133,7 +133,7 @@ export const getMedia = async (req: AuthenticatedRequest, res: Response): Promis
 };
 
 /**
- * 🆔 READ: getMediaById
+ * READ: getMediaById
  */
 export const getMediaById = async (req: AuthenticatedRequest, res: Response): Promise<Response | void> => {
   const { id } = req.params;

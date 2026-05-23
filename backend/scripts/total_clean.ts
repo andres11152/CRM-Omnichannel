@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import Redis from "ioredis";
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
 import { Logger } from "../src/utils/logger";
 
 dotenv.config();

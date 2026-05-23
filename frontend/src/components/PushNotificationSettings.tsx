@@ -45,7 +45,7 @@ export const PushNotificationSettings: React.FC = () => {
         </div>
 
         <p className="setting-description">
-          Get instant notifications for new messages, tickets, and important updates - even when Reply CRM is not open.
+          Get instant notifications for new messages, tickets, and important updates - even when Sentry CRM is not open.
         </p>
 
         <div className="permission-status">

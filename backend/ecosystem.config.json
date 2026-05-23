@@ -1,7 +1,7 @@
 {
   "apps": [
     {
-      "name": "reply-crm-api",
+      "name": "sentry-crm-api",
       "script": "dist/server.js",
       "instances": 1,
       "exec_mode": "fork",
@@ -47,7 +47,7 @@
       "log_type": "json"
     },
     {
-      "name": "reply-crm-workers",
+      "name": "sentry-crm-workers",
       "script": "dist/worker.js",
       "instances": 1,
       "exec_mode": "fork",

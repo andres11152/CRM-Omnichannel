@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 /**
  * 🔔 SERVICE WORKER - PUSH NOTIFICATIONS
- * Handles push notifications for Reply CRM PWA
+ * Handles push notifications for Sentry CRM PWA
  */
 
 // Listen for push events

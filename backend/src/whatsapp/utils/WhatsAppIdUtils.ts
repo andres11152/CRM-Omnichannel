@@ -47,7 +47,7 @@ export class WhatsAppIdUtils {
   }
 
   /**
-   * 🆕 GET TARGET JID (Standardizer)
+   * [NEW] GET TARGET JID (Standardizer)
    * Ensures a string is converted to a full WhatsApp JID (@s.whatsapp.net or @g.us).
    */
   static getTargetJid(channelId: string): string {
@@ -234,7 +234,7 @@ export class WhatsAppIdUtils {
   }
 
   /**
-   * 🆕 SAFE PHONE EXTRACTION
+   * [NEW] SAFE PHONE EXTRACTION
    *
    * Attempts to extract a display-ready phone number from various sources.
    * Returns formatted phone or null if not resolvable.

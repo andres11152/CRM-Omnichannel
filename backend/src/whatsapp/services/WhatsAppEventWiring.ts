@@ -8,7 +8,7 @@ import { webhookDispatcher } from "@/services/WebhookDispatcher";
 import { notificationRepository } from "@/repositories/NotificationRepository";
 import { emailService } from "@/services/EmailService";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
-import { prisma } from "@/config/database";
+import { userRepository } from "@/repositories/UserRepository";
 import { Prisma } from "@prisma/client";
 
 export class WhatsAppEventWiring {
@@ -188,7 +188,7 @@ export class WhatsAppEventWiring {
 
           // Find Company Admins to alert via internal UI and Email
           const admins = await TenantContextManager.runAsSystem(async () => {
-            return prisma.user.findMany({
+            return userRepository.findMany({
               where: { companyId: event.companyId, role: "ADMIN" },
               select: { id: true, email: true, name: true }
             }).catch(() => []);
@@ -203,7 +203,7 @@ export class WhatsAppEventWiring {
               data: {
                 companyId: event.companyId,
                 userId: admin.id,
-                title: "🚨 WhatsApp Disconnected!",
+                title: "[CRITICAL] WhatsApp Disconnected!",
                 message: `The number associated with this account has been disconnected. Reason: ${errorReason}. Please rescan the QR code.`,
                 type: "SYSTEM_ALERT",
               }
@@ -214,7 +214,7 @@ export class WhatsAppEventWiring {
             if (admin.email) {
               emailService.sendEmail({
                 to: admin.email,
-                subject: "🚨 Urgent: WhatsApp has disconnected in Reply CRM",
+                subject: "[CRITICAL] Urgent: WhatsApp has disconnected in Sentry CRM",
                 html: `
                   <div style="font-family: sans-serif; padding: 20px;">
                     <h2 style="color: #d9534f;">CRM System Alert</h2>
@@ -223,7 +223,7 @@ export class WhatsAppEventWiring {
                     <p><strong>Reported Reason:</strong> ${errorReason}</p>
                     <p>This means that <b>no new messages will come in or go out</b> until you take action. Please log in and re-link your device in the Settings section.</p>
                     <br/>
-                    <p>Regards,<br/>The Reply CRM Team</p>
+                    <p>Regards,<br/>The Sentry CRM Team</p>
                   </div>
                 `
               }).catch(() => null);

@@ -41,12 +41,18 @@ export class ConversationMessageService {
       quotedContent,
     } = dto;
 
-    // A. Resolve Conversation (Direct or via Ticket fallback)
-    let resolvedConv = await conversationRepository.findByIdWithRelations(companyId, conversationId);
+    // A. Resolve Conversation (Direct or via Ticket fallback) - Optimized to be lightweight
+    let resolvedConv = await conversationRepository.findFirst({
+      where: { id: conversationId, companyId },
+      include: { contact: true },
+    });
     if (!resolvedConv) {
       const ticketConvId = await ticketSyncService.findConversationIdByTicket(conversationId, companyId);
       if (ticketConvId) {
-        resolvedConv = await conversationRepository.findByIdWithRelations(companyId, ticketConvId);
+        resolvedConv = await conversationRepository.findFirst({
+          where: { id: ticketConvId, companyId },
+          include: { contact: true },
+        });
       }
     }
 

@@ -4,7 +4,7 @@ import TenantContextManager from "@/config/tenantContext";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 
 /**
- * ⚡ Worker Loader (Scale-Optimized)
+ * [PERF] Worker Loader (Scale-Optimized)
  *
  * CHANGE LOG (Scale Audit Fix):
  * - BEFORE: Loaded ALL active companies at boot → 1000 companies = 3000 Redis connections = crash
@@ -47,17 +47,17 @@ export const hasWorkerForCompany = (companyId: string): boolean => {
  * Only bootstraps workers for companies that have an active (CONNECTED) WhatsApp session.
  */
 export const initWorkers = async () => {
-  Logger.info("[Loader] ⚡ Initializing Background Workers (Scale-Optimized)...");
+  Logger.info("[Loader] [PERF] Initializing Background Workers (Scale-Optimized)...");
   try {
     // ── SHARED WORKERS (Always initialize, independent of tenants) ──
 
     // 1. Flow Queue Worker
-    Logger.info("[Loader] 🔄 Initializing Flow Queue Workers...");
+    Logger.info("[Loader] [SYNC] Initializing Flow Queue Workers...");
     const { flowQueueWorker } = await import("@/services/queue/flowQueueWorker");
     flowQueueWorker.startWorker();
 
     // 2. Cron Queue Worker
-    Logger.info("[Loader] ⏰ Initializing Cron Queue Workers...");
+    Logger.info("[Loader] [CRON] Initializing Cron Queue Workers...");
     const { initCronWorker } = await import("@/services/queue/cronQueueService");
     const cronWorker = await initCronWorker();
 
@@ -92,12 +92,12 @@ export const initWorkers = async () => {
     }
 
     Logger.info(
-      `[Loader] ✅ ${activeCompanyIds.length} message queue workers initialized (lazy mode)`,
+      `[Loader] [OK] ${activeCompanyIds.length} message queue workers initialized (lazy mode)`,
     );
 
     // Graceful shutdown handler
     process.on("SIGTERM", async () => {
-      Logger.info("[Loader] 🛑 SIGTERM received, shutting down gracefully...");
+      Logger.info("[Loader] [SHUTDOWN] SIGTERM received, shutting down gracefully...");
       await messageWorker.shutdown();
       const { messageQueueService } = await import("@/services/queue/messageQueueService");
       await messageQueueService.shutdown();

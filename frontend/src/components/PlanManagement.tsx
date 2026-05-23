@@ -216,7 +216,7 @@ const FEATURE_META: Record<
   },
   can_remove_branding: {
     label: "White-Label Experience",
-    description: "Elimina el branding de Reply para una experiencia de marca propia.",
+    description: "Elimina el branding de Sentry para una experiencia de marca propia.",
     icon: (
       <svg
         className="w-6 h-6"

@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
  * Cleans all contacts from the database while preserving Users and Plans.
  */
 async function main() {
-  console.log("🧹 Iniciando limpieza de Contactos en Reply CRM...");
+  console.log("🧹 Iniciando limpieza de Contactos en Sentry CRM...");
 
   try {
     // 1. Clean Contacts

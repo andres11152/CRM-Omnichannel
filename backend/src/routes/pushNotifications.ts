@@ -94,7 +94,7 @@ if (process.env.NODE_ENV === "development") {
 
       await pushNotificationService.sendToUser(user.id, {
         title: " Test Notification",
-        body: "This is a test push notification from Reply CRM",
+        body: "This is a test push notification from Sentry CRM",
         icon: "/icon-192x192.png",
         data: { type: "test" },
       });

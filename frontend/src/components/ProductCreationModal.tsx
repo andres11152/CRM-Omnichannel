@@ -1,12 +1,19 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MediaPicker } from "./MediaPicker";
+import { uploadMedia } from "@/services/mediaService";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { Product } from "@/types";
+import { X, ImageIcon, Upload, Info } from "lucide-react";
 
 interface ProductCreationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (productData: Partial<import("@/types").Product>) => void;
+  onSave: (productData: Partial<Product>) => void;
+  product?: Product | null;
 }
 
 const CATEGORIES_BY_TYPE = {
@@ -38,75 +45,80 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  product,
 }) => {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("USD");
-  const [type, setType] = useState<"Physical" | "Service" | "Digital">(
-    "Physical",
-  );
-  const [category, setCategory] = useState(
-    CATEGORIES_BY_TYPE.Physical[0].label,
-  );
+  const [type, setType] = useState<"Physical" | "Service" | "Digital">("Physical");
+  const [category, setCategory] = useState(CATEGORIES_BY_TYPE.Physical[0].label);
   const [sku, setSku] = useState("");
   const [stock, setStock] = useState("100");
   const [description, setDescription] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null); // [OK] S3 URL from MediaPicker
-  const [showMediaPicker, setShowMediaPicker] = useState(false); // [OK] MediaPicker toggle
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync state with product prop for edit mode
+  useEffect(() => {
+    if (isOpen) {
+      if (product) {
+        setName(product.name || "");
+        setPrice(product.price ? product.price.toString() : "");
+        setCurrency(product.currency || "USD");
+        const prodType = product.type || "Physical";
+        setType(prodType);
+        setCategory(product.category || CATEGORIES_BY_TYPE[prodType][0].label);
+        setSku(product.sku || "");
+        setStock(product.stock !== undefined ? product.stock.toString() : "0");
+        setDescription(product.description || "");
+        setImageUrl(product.imageUrl || null);
+        setImagePreview(product.imageUrl || null);
+      } else {
+        setName("");
+        setPrice("");
+        setCurrency("USD");
+        setType("Physical");
+        setCategory(CATEGORIES_BY_TYPE.Physical[0].label);
+        setSku("");
+        setStock("100");
+        setDescription("");
+        setImageUrl(null);
+        setImagePreview(null);
+      }
+    }
+  }, [product, isOpen]);
 
   // Update category when type changes
   const handleTypeChange = (newType: "Physical" | "Service" | "Digital") => {
     setType(newType);
     if (newType !== "Physical") setStock("");
-    // Reset category to the default for the new type to prevent invalid states
     setCategory(CATEGORIES_BY_TYPE[newType][0].label);
   };
-
-  const [isSaving, setIsSaving] = useState(false);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Show preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
 
-      // Upload to S3 via media endpoint
       try {
-        toast.loading("Subiendo imagen...");
-        const token = localStorage.getItem("token");
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("category", "product");
-
-        const API_BASE_URL =
-          import.meta.env.VITE_API_URL || "http://localhost:4000";
-        const res = await fetch(`${API_BASE_URL}/api/media/upload`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const s3Url = data.data?.media?.url || data.url;
-          setImageUrl(s3Url);
-          toast.dismiss();
-          toast.success("Imagen subida");
-          console.log("[Product] Image uploaded to S3:", s3Url);
-        } else {
-          toast.dismiss();
-          toast.error("Error subiendo imagen");
-        }
+        toast.loading(t("common.loading"));
+        const media = await uploadMedia({ file, category: "product" });
+        setImageUrl(media.url);
+        toast.dismiss();
+        toast.success(t("common.success"));
+        console.log("[Product] Image uploaded to S3 directly via uploadMedia service:", media.url);
       } catch (error) {
         console.error("Upload error:", error);
         toast.dismiss();
-        toast.error("Error de conexión");
+        toast.error(t("common.error"));
       }
     }
   };
@@ -115,22 +127,17 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
 
   const handleSubmit = async () => {
     if (!name || !price) {
-      toast.error("Nombre y precio son obligatorios");
+      toast.error(t("common.error"));
       return;
     }
 
     setIsSaving(true);
 
     try {
-      // CRM Logic: Services and Digital items don't track stock quantity
       const finalStock = type === "Physical" ? parseInt(stock) || 0 : 0;
-
-      // [OK] Use imageUrl from MediaPicker (already an S3 URL)
-      // If user uploaded locally, imagePreview will be base64 but imageUrl will be null
-      // Only use S3 URL from MediaPicker
       const finalImageUrl = imageUrl || null;
 
-      const newProduct = {
+      const productData: Partial<Product> = {
         name,
         price: parseFloat(price),
         currency,
@@ -139,31 +146,14 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
         sku: sku || `SKU-${Date.now()}`,
         stock: finalStock,
         description,
-        imageUrl: finalImageUrl || undefined, // [OK] S3 URL from MediaPicker
+        imageUrl: finalImageUrl || undefined,
         status: "active" as const,
-        createdAt: new Date(),
       };
 
-      onSave(newProduct);
-      onClose();
-      toast.success("Producto creado exitosamente");
-
-      // Reset form
-      setName("");
-      setPrice("");
-      setCurrency("USD");
-      setDescription("");
-      setImagePreview(null);
-      setImageUrl(null);
-      setStock("100");
-
-      // Reset type and dependent category
-      const defaultType = "Physical";
-      setType(defaultType);
-      setCategory(CATEGORIES_BY_TYPE[defaultType][0].label);
+      onSave(productData);
     } catch (error) {
-      console.error("Error creating product:", error);
-      toast.error("Error al crear producto");
+      console.error("Error saving product:", error);
+      toast.error(t("crm.products.save_error"));
     } finally {
       setIsSaving(false);
     }
@@ -180,45 +170,34 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
       {/* Drawer Panel */}
       <div className="relative w-full max-w-2xl h-full bg-white dark:bg-reply-surface-dark shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-right duration-300">
         {/* Header */}
-        <div className="p-6 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-reply-panel-dark">
+        <div className="p-6 border-b border-reply-border dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-reply-panel-dark">
           <div>
-            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
-              Nuevo Producto
+            <h2 className="text-xl font-black text-reply-text-primary dark:text-reply-text-primary-dark">
+              {product ? t("crm.products.edit_product") : t("crm.products.new_product")}
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Agrega un item a tu catlogo
+            <p className="text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark">
+              {product ? t("crm.products.description") : t("crm.products.empty_description")}
             </p>
           </div>
-          <button
+          <Button
             onClick={onClose}
-            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500"
+            variant="ghost"
+            className="p-2 rounded-full text-reply-text-secondary hover:text-reply-text-primary dark:hover:text-reply-text-primary-dark"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+            <X className="w-5 h-5" />
+          </Button>
         </div>
 
         {/* Body - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
           {/* Image Upload */}
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase text-gray-500">
-              Imagen del Producto
+            <label className="text-xs font-black uppercase text-reply-text-secondary dark:text-reply-text-secondary-dark tracking-widest">
+              {t("crm.products.form.image_label")}
             </label>
 
             {/* Preview Area */}
-            <div className="border-2 border-dashed border-gray-300 dark:border-reply-border-dark rounded-xl p-8 flex flex-col items-center justify-center relative overflow-hidden group">
+            <div className="border-2 border-dashed border-reply-border dark:border-reply-border-dark rounded-2xl p-8 flex flex-col items-center justify-center relative overflow-hidden group min-h-48 bg-reply-bg/10 dark:bg-white/5">
               {imagePreview || imageUrl ? (
                 <>
                   <img
@@ -226,95 +205,50 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
                     alt="Preview"
                     className="absolute inset-0 w-full h-full object-cover"
                   />
-                  <button
+                  <Button
                     onClick={() => {
                       setImagePreview(null);
                       setImageUrl(null);
                     }}
-                    className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg z-10"
-                    title="Quitar imagen"
+                    variant="danger"
+                    className="absolute top-3 right-3 p-2 rounded-full shadow-lg z-10 hover:scale-105 active:scale-95"
+                    title={t("common.delete")}
                   >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
+                    <X className="w-4 h-4" />
+                  </Button>
                 </>
               ) : (
                 <>
-                  <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
-                    <svg
-                      className="w-6 h-6 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
+                  <div className="w-16 h-16 bg-reply-bg dark:bg-white/5 rounded-full flex items-center justify-center mb-3">
+                    <ImageIcon className="w-8 h-8 text-reply-text-secondary/40 dark:text-reply-text-secondary-dark/40" />
                   </div>
-                  <span className="text-sm text-gray-500 font-medium">
-                    Selecciona una imagen
+                  <span className="text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark font-medium">
+                    {t("crm.products.form.image_label")}
                   </span>
                 </>
               )}
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2">
-              <button
+            <div className="flex gap-3">
+              <Button
                 type="button"
                 onClick={() => setShowMediaPicker(true)}
-                className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                variant="primary"
+                className="flex-1 rounded-xl text-xs uppercase tracking-widest py-3 gap-2"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-                Seleccionar de Biblioteca
-              </button>
-              <button
+                <ImageIcon className="w-4 h-4" />
+                {t("crm.products.form.select_library")}
+              </Button>
+              <Button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="py-2.5 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                variant="secondary"
+                className="rounded-xl text-xs uppercase tracking-widest py-3 gap-2"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                  />
-                </svg>
-                Subir
-              </button>
+                <Upload className="w-4 h-4" />
+                {t("crm.products.form.upload_local")}
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -325,33 +259,27 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
             </div>
           </div>
 
-          {/* Basic Info */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                Nombre del Producto <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                className="w-full px-4 py-3 bg-reply-bg dark:bg-reply-border-dark border border-gray-200 dark:border-reply-border-dark rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 dark:text-gray-100"
-                placeholder="Ej: Camiseta Premium"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
+          {/* Form Fields */}
+          <div className="space-y-5">
+            <Input
+              id="product-name"
+              label={t("crm.products.form.name_label")}
+              placeholder={t("crm.products.form.name_placeholder")}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                  Precio <span className="text-red-500">*</span>
+                <label className="block text-xs font-black uppercase text-reply-text-secondary dark:text-reply-text-secondary-dark tracking-widest mb-1.5">
+                  {t("crm.products.price")} <span className="text-rose-500">*</span>
                 </label>
-                {/* Unified Amount Input Group */}
-                <div className="flex bg-reply-bg dark:bg-reply-border-dark border border-gray-200 dark:border-reply-border-dark rounded-lg focus-within:ring-2 focus-within:ring-purple-500 overflow-hidden text-gray-800 dark:text-gray-100 transition-shadow">
+                <div className="flex bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl focus-within:ring-4 focus-within:ring-reply-brand/10 focus-within:border-reply-brand overflow-hidden text-reply-text-primary dark:text-reply-text-primary-dark transition-all">
                   <select
-                    className="w-24 px-3 py-3 bg-transparent font-bold cursor-pointer outline-none border-r border-gray-200 dark:border-reply-border-dark hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                    className="w-24 px-3 py-2.5 bg-transparent font-bold cursor-pointer outline-none border-r border-reply-border dark:border-reply-border-dark hover:bg-reply-bg dark:hover:bg-reply-bg-dark transition-colors text-sm text-reply-text-primary dark:text-reply-text-primary-dark"
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
-                    title="Moneda"
                   >
                     <option value="USD">USD</option>
                     <option value="COP">COP</option>
@@ -359,60 +287,55 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
                     <option value="MXN">MXN</option>
                   </select>
                   <div className="relative flex-1 flex items-center">
-                    <div className="absolute left-3 pointer-events-none">
-                      <span className="text-gray-400 dark:text-gray-500 font-bold text-lg">
-                        {currency === "EUR" ? "€" : "$"}
-                      </span>
-                    </div>
+                    <span className="absolute left-3 text-reply-text-secondary dark:text-reply-text-secondary-dark font-black text-sm">
+                      {currency === "EUR" ? "€" : "$"}
+                    </span>
                     <input
                       type="number"
-                      className="w-full pl-8 pr-4 py-3 bg-transparent outline-none font-bold placeholder-gray-400 dark:placeholder-gray-600 h-full"
+                      step="any"
+                      className="w-full pl-8 pr-4 py-2.5 bg-transparent outline-none font-bold placeholder:text-reply-text-secondary/40 text-sm h-full"
                       placeholder="0.00"
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
+                      required
                     />
                   </div>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                  SKU
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-3 bg-reply-bg dark:bg-reply-border-dark border border-gray-200 dark:border-reply-border-dark rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 dark:text-gray-100"
-                  placeholder="Auto"
-                  value={sku}
-                  onChange={(e) => setSku(e.target.value)}
-                />
-              </div>
+
+              <Input
+                id="product-sku"
+                label="SKU"
+                placeholder={t("crm.products.form.sku_placeholder")}
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                  Tipo de Producto
+                <label className="block text-xs font-black uppercase text-reply-text-secondary dark:text-reply-text-secondary-dark tracking-widest mb-1.5">
+                  {t("crm.products.form.type_label")}
                 </label>
                 <select
-                  className="w-full px-4 py-3 bg-reply-bg dark:bg-reply-border-dark border border-gray-200 dark:border-reply-border-dark rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 dark:text-gray-100 appearance-none"
+                  className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand"
                   value={type}
                   onChange={(e) =>
-                    handleTypeChange(
-                      e.target.value as "Physical" | "Service" | "Digital",
-                    )
+                    handleTypeChange(e.target.value as "Physical" | "Service" | "Digital")
                   }
                 >
-                  <option value="Physical">Bien Físico</option>
-                  <option value="Service">Servicio Profesional</option>
-                  <option value="Digital">Producto Digital</option>
+                  <option value="Physical">{t("crm.products.form.type_physical")}</option>
+                  <option value="Service">{t("crm.products.form.type_service")}</option>
+                  <option value="Digital">{t("crm.products.form.type_digital")}</option>
                 </select>
               </div>
+
               <div>
-                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                  Categoría
+                <label className="block text-xs font-black uppercase text-reply-text-secondary dark:text-reply-text-secondary-dark tracking-widest mb-1.5">
+                  {t("crm.products.form.category_label")}
                 </label>
                 <select
-                  className="w-full px-4 py-3 bg-reply-bg dark:bg-reply-border-dark border border-gray-200 dark:border-reply-border-dark rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 dark:text-gray-100 appearance-none transition-all duration-300"
+                  className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 >
@@ -426,53 +349,35 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
             </div>
 
             {type === "Physical" ? (
-              <div>
-                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                  Stock Disponible
-                </label>
-                <input
-                  type="number"
-                  className="w-full px-4 py-3 bg-reply-bg dark:bg-reply-border-dark border border-gray-200 dark:border-reply-border-dark rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 dark:text-gray-100"
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value)}
-                  placeholder="Cantidad disponible..."
-                />
-              </div>
+              <Input
+                id="product-stock"
+                type="number"
+                label={t("crm.products.form.stock_label")}
+                placeholder="100"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+              />
             ) : (
-              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30">
-                <svg
-                  className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+              <div className="flex items-start gap-3 p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                <Info className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300">
-                    Inventario Ilimitado
+                  <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                    {t("crm.products.form.unlimited_inventory")}
                   </h4>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    Los{" "}
-                    {type === "Service" ? "servicios" : "productos digitales"}{" "}
-                    no requieren gestión de stock en el sistema.
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 leading-relaxed">
+                    {t("crm.products.form.unlimited_help")}
                   </p>
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                Descripción
+              <label className="block text-xs font-black uppercase text-reply-text-secondary dark:text-reply-text-secondary-dark tracking-widest mb-1.5">
+                {t("crm.products.form.description_label")}
               </label>
               <textarea
-                className="w-full px-4 py-3 bg-reply-bg dark:bg-reply-border-dark border border-gray-200 dark:border-reply-border-dark rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 dark:text-gray-100 h-24 resize-none"
-                placeholder={`Describe tu ${type === "Physical" ? "producto" : "servicio"}...`}
+                className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand placeholder:text-reply-text-secondary/40 h-28 resize-none"
+                placeholder={t("crm.products.form.description_placeholder")}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -481,20 +386,22 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-100 dark:border-reply-border-dark bg-reply-bg dark:bg-reply-panel-dark flex justify-end gap-3">
-          <button
+        <div className="p-6 border-t border-reply-border dark:border-reply-border-dark bg-reply-bg dark:bg-reply-panel-dark flex justify-end gap-3">
+          <Button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            variant="secondary"
+            className="px-6 py-2.5 rounded-xl text-xs uppercase tracking-widest"
           >
-            Cancelar
-          </button>
-          <button
+            {t("crm.products.form.cancel")}
+          </Button>
+          <Button
             onClick={handleSubmit}
-            disabled={isSaving}
-            className="px-6 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg shadow-green-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            isLoading={isSaving}
+            variant="primary"
+            className="px-6 py-2.5 rounded-xl text-xs uppercase tracking-widest bg-reply-brand hover:bg-reply-brand-dark"
           >
-            {isSaving ? "Guardando..." : "Guardar Producto"}
-          </button>
+            {isSaving ? t("crm.products.form.saving") : t("crm.products.form.save")}
+          </Button>
         </div>
       </div>
 
@@ -505,14 +412,14 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
             setImageUrl(media.url);
             setImagePreview(media.url);
             setShowMediaPicker(false);
-            toast.success("Imagen seleccionada");
+            toast.success(t("common.success"));
           }}
           onClose={() => setShowMediaPicker(false)}
           allowedTypes={["IMAGE"]}
-          title="Seleccionar Imagen del Producto"
+          title={t("crm.products.form.select_library")}
         />
       )}
     </div>,
-    document.body,
+    document.body
   );
 };

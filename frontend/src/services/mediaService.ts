@@ -38,6 +38,11 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 const normalizeMedia = (media: Media): Media => {
   if (!media.url) return media;
 
+  // Resiliency fix: if it's a raw local key (e.g. "companies/..."), normalize to local-media proxy path
+  if (media.url.startsWith("companies/")) {
+    media.url = `/api/local-media/${media.url}`;
+  }
+
   // If it's already an absolute URL (http:// or https://), leave it alone
   // EXCEPT if it points to the WRONG host (e.g. localhost:5173 when it should be localhost:4000)
   const currentOrigin = window.location.origin;

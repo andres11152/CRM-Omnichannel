@@ -452,7 +452,7 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="text-gray-900 dark:text-white font-bold text-sm truncate">
-                  {contact.name}
+                  {contact.isGroup ? contact.name.replace(/^\[GROUP\]\s*/i, "") : contact.name}
                 </h2>
                 {contact.channel && (
                   <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase shrink-0">

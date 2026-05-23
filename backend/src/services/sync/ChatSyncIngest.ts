@@ -192,11 +192,11 @@ export class ChatSyncIngest {
 
     if (dryRun) return "new";
 
-    const isGroup = WhatsAppIdUtils.isGroup(channelId);
+    const isGroup = WhatsAppIdUtils.isGroup(msg.key.remoteJid || channelId);
     // Strip @g.us from group JID to match Orchestrator's DB channelId format.
     const phone = isGroup 
-      ? WhatsAppIdUtils.cleanChannelId(channelId) 
-      : (WhatsAppIdUtils.getPhoneNumber(channelId) || channelId);
+      ? WhatsAppIdUtils.cleanChannelId(msg.key.remoteJid || channelId) 
+      : (WhatsAppIdUtils.getPhoneNumber(msg.key.remoteJid || channelId) || channelId);
 
     const { conversation, customerUserId } = await syncRepositoryHelper.ensureConversation({
       companyId,
@@ -304,20 +304,51 @@ export class ChatSyncIngest {
         orderBy: { createdAt: "asc" }
       });
 
-      if (!oldestDbMsg?.whatsappMessageId) {
-        Logger.info(`[ChatSync] No existing messages in DB for ${cleanPhone}. Cannot anchor history fetch — relying on memory store or initial history sync.`);
-        return false;
+      let oldestMsgKey: import("@whiskeysockets/baileys").WAMessageKey;
+      let oldestMsgTimestampMs: number;
+      let anchorSource: string;
+
+      if (oldestDbMsg?.whatsappMessageId) {
+        oldestMsgKey = {
+          remoteJid: targetJid,
+          fromMe: oldestDbMsg.direction === "OUTBOUND",
+          id: oldestDbMsg.whatsappMessageId,
+        };
+        oldestMsgTimestampMs = new Date(oldestDbMsg.createdAt).getTime();
+        anchorSource = "Database";
+      } else {
+        // Tier 2: Search Baileys Memory Store for anchor message
+        const store = await this.getSessionStore(sessionId);
+        if (!store) {
+          Logger.info(`[ChatSync] No active session store for ${cleanPhone}. Cannot anchor history sync.`);
+          return false;
+        }
+
+        const memMessages = this.extractMessagesFromStore(store, undefined, targetJid);
+        if (memMessages && memMessages.length > 0) {
+          const oldestMemMsg = memMessages[0]; // Already sorted by timestamp asc
+          if (oldestMemMsg.key && oldestMemMsg.key.id) {
+            oldestMsgKey = {
+              remoteJid: targetJid,
+              fromMe: oldestMemMsg.key.fromMe || false,
+              id: oldestMemMsg.key.id,
+            };
+            oldestMsgTimestampMs = syncMessageParser.getTimestamp(oldestMemMsg.messageTimestamp) * 1000;
+            anchorSource = "Memory Store";
+          } else {
+            Logger.info(`[ChatSync] Memory store contains oldest message with invalid key structure for ${cleanPhone}.`);
+            return false;
+          }
+        } else {
+          // Tier 3: Complete Fallback (DB & Memory Store are completely empty)
+          Logger.info(`[ChatSync] No messages found in DB or Memory Store for ${cleanPhone}. Cannot anchor history sync.`);
+          return false;
+        }
       }
 
-      const oldestMsgKey: import("@whiskeysockets/baileys").WAMessageKey = {
-        remoteJid: targetJid,
-        fromMe: oldestDbMsg.direction === "OUTBOUND",
-        id: oldestDbMsg.whatsappMessageId,
-      };
-      const oldestMsgTimestampMs = new Date(oldestDbMsg.createdAt).getTime();
-
       Logger.info(
-        `[ChatSync] Requesting ${limit} historical messages on-demand from WhatsApp for ${targetJid}. Anchor msg: ${oldestMsgKey.id} at ${new Date(oldestMsgTimestampMs).toISOString()}`
+        `[ChatSync] Requesting ${limit} historical messages on-demand from WhatsApp for ${targetJid}. ` +
+        `Resolved anchor from ${anchorSource}: msg ${oldestMsgKey.id} at ${new Date(oldestMsgTimestampMs).toISOString()}`
       );
 
       // Trigger the on-demand query to the phone
@@ -340,10 +371,11 @@ export class ChatSyncIngest {
 
   private async ingestConversationBatch(companyId: string, phone: string, msgs: WAMessage[], adminId: string) {
     const isGroup = phone.includes("@g.us");
+    const cleanPhone = isGroup ? WhatsAppIdUtils.cleanChannelId(phone) : phone;
     const bestNameMsg = msgs.find(m => !m.key.fromMe && m.pushName);
     const { conversation, customerUserId } = await syncRepositoryHelper.ensureConversation({
       companyId,
-      phone,
+      phone: cleanPhone,
       isGroup,
       name: bestNameMsg?.pushName || undefined
     });

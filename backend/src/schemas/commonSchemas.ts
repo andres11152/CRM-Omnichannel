@@ -172,6 +172,8 @@ export const AnalyticsQuerySchema = z.object({
     to: z.string().datetime().optional(),
     period: z.enum(["today", "week", "month", "quarter", "year"]).optional(),
     groupBy: z.enum(["hour", "day", "week", "month"]).optional(),
+    startDate: z.string().datetime().optional(),
+    endDate: z.string().datetime().optional(),
   }),
 });
 

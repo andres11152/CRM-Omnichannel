@@ -147,7 +147,7 @@ export const LoginScreen: React.FC<Props> = ({
             </svg>
           </div>
           <h1 className="text-5xl font-bold mb-6 tracking-tight">
-            Reply Software
+            Sentry Software
           </h1>
           <p className="text-xl text-green-100 max-w-md mx-auto leading-relaxed">
             La plataforma definitiva de Mensajería Inteligente & IA para escalar

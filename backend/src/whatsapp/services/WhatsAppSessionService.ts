@@ -21,8 +21,12 @@ export class WhatsAppSessionService {
     try {
       await TenantContextManager.runAsSystem(async () => {
         // 1. Delete all sessions with no phone (never paired) on startup to prevent zombie cards
+        // Grace period: only delete unlinked sessions if they are older than 1 hour to let active scans/connects survive reboots.
         const allSessions = await this.sessionRepository.findManySystem({});
-        const unlinkedSessions = allSessions.filter((s) => s.phone === null);
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const unlinkedSessions = allSessions.filter(
+          (s) => s.phone === null && s.createdAt < oneHourAgo
+        );
         for (const session of unlinkedSessions) {
           Logger.info(`[WA] Deleting unlinked/empty session ${session.sessionId} on startup`);
           await this.sessionRepository.delete(session.companyId, session.sessionId).catch((err) => {

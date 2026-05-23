@@ -55,7 +55,7 @@ export class NotificationService {
     const company = await this.getCompany(companyId);
     const admins = await this.getCompanyAdmins(companyId);
 
-    const subject = `⏰ Trial Ending in ${daysRemaining} Days`;
+    const subject = `[WARNING] Trial Ending in ${daysRemaining} Days`;
     const html = NotificationTemplates.trialEnding(daysRemaining, company.name);
 
     await this.sendToAdmins(companyId, admins, subject, html);
@@ -127,7 +127,7 @@ export class NotificationService {
     await emailService.sendEmail({
       companyId: ticket.companyId,
       to: [ticket.assignedTo.email],
-      from: process.env.DEFAULT_SENDER_EMAIL || "notifications@replycrm.com",
+      from: process.env.DEFAULT_SENDER_EMAIL || "notifications@sentrycrm.com",
       subject,
       bodyHtml: html,
       ticketId: ticket.id,
@@ -154,7 +154,7 @@ export class NotificationService {
     await emailService.sendEmail({
       companyId: ticket.companyId,
       to: [ticket.assignedTo.email],
-      from: process.env.DEFAULT_SENDER_EMAIL || "notifications@replycrm.com",
+      from: process.env.DEFAULT_SENDER_EMAIL || "notifications@sentrycrm.com",
       subject,
       bodyHtml: html,
       ticketId: ticket.id,
@@ -214,7 +214,7 @@ export class NotificationService {
     await emailService.sendEmail({
       companyId: campaign.companyId,
       to: [campaign.createdBy.email],
-      from: process.env.DEFAULT_SENDER_EMAIL || "notifications@replycrm.com",
+      from: process.env.DEFAULT_SENDER_EMAIL || "notifications@sentrycrm.com",
       subject,
       bodyHtml: html,
     });
@@ -337,7 +337,7 @@ export class NotificationService {
           companyId,
           to: [admin.email],
           from:
-            process.env.DEFAULT_SENDER_EMAIL || "notifications@replycrm.com",
+            process.env.DEFAULT_SENDER_EMAIL || "notifications@sentrycrm.com",
           subject,
           bodyHtml: html,
         };

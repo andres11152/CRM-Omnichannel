@@ -23,13 +23,18 @@ import { Prisma } from "@prisma/client";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 import { messageTemplateRepository } from "@/repositories/MessageTemplateRepository";
 import { AppError } from "@/utils/AppError";
+import { OutboundMessageHandler } from "../providers/handlers/OutboundMessageHandler";
 
 export class WhatsAppMessaging {
+  private outboundHandler: OutboundMessageHandler;
+
   constructor(
     private sessionManager: ISessionManager,
     private messageHandler: IMessageHandler,
     private rateLimitService: RateLimitService,
-  ) {}
+  ) {
+    this.outboundHandler = new OutboundMessageHandler(sessionManager);
+  }
 
   // ────────────────────────────────────────────────
   // SEND MESSAGE (Direct Execution)
@@ -150,10 +155,11 @@ export class WhatsAppMessaging {
     options: SendMessageOptions & { dbId?: string },
   ) {
     try {
-      // This is called by the worker. We bypass the queue logic here.
+      // This is called by the worker. We bypass the secondary queue (whatsapp-outbound) here
+      // to ensure the message is dispatched immediately by the worker holding the socket.
       const result = options.media
-        ? await this.messageHandler.sendMedia(to, options.media, options)
-        : await this.messageHandler.sendMessage(to, content, options);
+        ? await this.outboundHandler.sendMedia(to, options.media, options)
+        : await this.outboundHandler.sendMessage(to, content, options);
 
       // OutboundMessageHandler now handles DB updates automatically using options.metadata.dbId.
       // We no longer need to update the QUEUED message here.

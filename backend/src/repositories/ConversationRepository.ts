@@ -344,8 +344,10 @@ export class ConversationRepository {
   /**
    * Generic findFirst with full Prisma args.
    */
-  async findFirst(args: Prisma.ConversationFindFirstArgs) {
-    return this.db.conversation.findFirst(args);
+  async findFirst<T extends Prisma.ConversationFindFirstArgs>(
+    args: Prisma.SelectSubset<T, Prisma.ConversationFindFirstArgs>
+  ): Promise<Prisma.ConversationGetPayload<T> | null> {
+    return this.db.conversation.findFirst(args as Prisma.ConversationFindFirstArgs) as unknown as Promise<Prisma.ConversationGetPayload<T> | null>;
   }
 
   /**
@@ -379,15 +381,19 @@ export class ConversationRepository {
   /**
    * Generic findUnique with full Prisma args.
    */
-  async findUnique(args: Prisma.ConversationFindUniqueArgs) {
-    return this.db.conversation.findUnique(args);
+  async findUnique<T extends Prisma.ConversationFindUniqueArgs>(
+    args: Prisma.SelectSubset<T, Prisma.ConversationFindUniqueArgs>
+  ): Promise<Prisma.ConversationGetPayload<T> | null> {
+    return this.db.conversation.findUnique(args as Prisma.ConversationFindUniqueArgs) as unknown as Promise<Prisma.ConversationGetPayload<T> | null>;
   }
 
   /**
    * Generic findMany with full Prisma args.
    */
-  async findMany(args: Prisma.ConversationFindManyArgs) {
-    return this.db.conversation.findMany(args);
+  async findMany<T extends Prisma.ConversationFindManyArgs>(
+    args: Prisma.SelectSubset<T, Prisma.ConversationFindManyArgs>
+  ): Promise<Prisma.ConversationGetPayload<T>[]> {
+    return this.db.conversation.findMany(args as Prisma.ConversationFindManyArgs) as unknown as Promise<Prisma.ConversationGetPayload<T>[]>;
   }
 }
 

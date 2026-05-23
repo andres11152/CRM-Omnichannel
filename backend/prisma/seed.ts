@@ -5,7 +5,7 @@ import { Logger } from "../src/utils/logger";
 const prisma = new PrismaClient();
 
 async function main() {
-  Logger.info("🌱 Starting Clean Database Seed for Reply CRM...");
+  Logger.info("🌱 Starting Clean Database Seed for Sentry CRM...");
 
   // 1. CREATE PLANS (Para que los tenants puedan suscribirse)
   // IDs uuid v4 para cumplir con validaciones del backend

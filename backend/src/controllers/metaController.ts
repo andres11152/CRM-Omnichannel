@@ -4,7 +4,7 @@ import type { MetaWebhookBody } from "@/services/MetaWebhookService";
 import type { Request, Response } from "express";
 
 // ─────────────────────────────────────────────────────
-// 🛡️ META CONTROLLER (Audit Hardened — Production Grade)
+// [SEC] META CONTROLLER (Audit Hardened — Production Grade)
 //
 // Pure HTTP orchestrator for Meta Cloud API / WhatsApp Business API.
 // ALL business logic is delegated to MetaWebhookService (SRP).
@@ -32,10 +32,10 @@ export const verifyWebhook = (req: Request, res: Response): void => {
 
   if (mode && token) {
     if (mode === "subscribe" && token === META_VERIFY_TOKEN) {
-      Logger.info("[MetaController] ✅ Webhook Verified! [ONLINE]");
+      Logger.info("[MetaController] [OK] Webhook Verified! [ONLINE]");
       res.status(200).send(challenge);
     } else {
-      Logger.warn("[MetaController] ❌ Verification failed: Token mismatch");
+      Logger.warn("[MetaController] [WARNING] Verification failed: Token mismatch");
       res.sendStatus(403);
     }
   } else {
@@ -63,6 +63,6 @@ export const handleIncomingWebhook = async (
     await metaWebhookService.processIncomingMessage(body);
   } catch (error: unknown) {
     // Log but NEVER crash — the 200 is already sent.
-    Logger.error("[MetaController] 🚨 Webhook processing failed:", error);
+    Logger.error("[MetaController] [ERROR] Webhook processing failed:", error);
   }
 };

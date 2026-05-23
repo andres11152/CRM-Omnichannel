@@ -10,7 +10,9 @@ const ALGORITHM = "aes-256-cbc";
  */
 const getEncryptionKey = (): Buffer => {
   const secret = getEnv().SESSION_SECRET;
-  // Use a fixed salt for internal encryption to keep keys stable
+  // [SEC] CRITICAL SECURITY WARNING: DO NOT rename "reply-internal-salt" to "sentry-internal-salt".
+  // Changing this string will alter the derived key, making it impossible to decrypt existing 
+  // WhatsApp tokens and session credentials in the production database, causing immediate service disconnection for all tenants.
   return crypto.scryptSync(secret, "reply-internal-salt", 32);
 };
 

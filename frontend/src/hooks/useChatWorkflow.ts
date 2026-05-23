@@ -5,7 +5,7 @@ import { chatService } from "@/services/chatService";
 import { messageCacheService } from "@/services/messageCacheService";
 import { analyzeSentiment } from "@/services/geminiService";
 import { toast } from "sonner";
-import { useMessages, useSendMessage, addMessageToCache, useReactToMessage } from "./useChat";
+import { useMessages, useSendMessage, addMessageToCache, useReactToMessage, CHAT_KEYS } from "./useChat";
 import { useQueryClient } from "@tanstack/react-query";
 import { uploadMedia } from "@/services/mediaService";
 
@@ -238,6 +238,21 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     };
     socketService.on('message.pinned', handlePinEvent);
 
+    // Message Deleted event (removes scheduled placeholders in real-time)
+    const handleMessageDeleted = (payload: { messageId: string; conversationId: string }) => {
+      if (
+        payload.conversationId === ticketId ||
+        payload.conversationId === activeContact.id
+      ) {
+        console.log(`[Workflow] [WS] Message deleted: ${payload.messageId}`);
+        queryClient.setQueryData<Message[]>(
+          CHAT_KEYS.messages(ticketId),
+          (old = []) => old.filter((m) => m.id !== payload.messageId),
+        );
+      }
+    };
+    socketService.on('message.deleted', handleMessageDeleted);
+
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       socketService.off('message.received', handleIncomingMessage);
@@ -245,34 +260,59 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       socketService.off('message.sent', handleIncomingMessage);
       socketService.off('conversation:typing', handleTypingStatus);
       socketService.off('message.pinned', handlePinEvent);
+      socketService.off('message.deleted', handleMessageDeleted);
     };
   }, [ticketId, activeContact.id, activeContact.phone, queryClient, aiConfig.isActive]);
 
   // ────────────────────────────────────────────────
   // ACTIONS
   // ────────────────────────────────────────────────
-  const handleSendMessage = async (content: string, mediaFile?: File | null, replyingTo?: Message | null, scheduledAt?: string | Date) => {
-    if (!content.trim() && !mediaFile) return;
+  /**
+   * Sends a message with optional media (File upload or pre-built attachment).
+   * @param directAttachment - Pre-built attachment for already-uploaded media (e.g. product images).
+   *                           Bypasses the upload flow since the URL already exists on the server.
+   */
+  const handleSendMessage = async (
+    content: string,
+    mediaFile?: File | null,
+    replyingTo?: Message | null,
+    scheduledAt?: string | Date,
+    directAttachment?: { url: string; type: "image" | "video" | "audio" | "document"; name: string; mimetype: string },
+  ) => {
+    if (!content.trim() && !mediaFile && !directAttachment) return;
 
     try {
       setIsTyping(true);
       
       let mediaUrl: string | undefined;
       let detectedType: "text" | "image" | "audio" | "video" | "document" = "text";
+      let attachment: { url: string; type: string; name: string; mimetype: string } | undefined;
 
-      if (mediaFile) {
-        // [SEC] Upload before sending message metadata
+      // Priority 1: Direct attachment (product images, already uploaded)
+      if (directAttachment) {
+        mediaUrl = directAttachment.url;
+        detectedType = directAttachment.type;
+        attachment = directAttachment;
+        console.log(`[Workflow] Direct attachment:`, { url: mediaUrl, type: detectedType });
+      }
+      // Priority 2: File upload (user selected a file from disk)
+      else if (mediaFile) {
         try {
           const uploaded = await uploadMedia({ file: mediaFile });
           mediaUrl = uploaded.url;
           
-          // Map backend type to frontend sendMessage expected type
           const mime = mediaFile.type.toLowerCase();
           if (mime.startsWith("image/")) detectedType = "image";
           else if (mime.startsWith("audio/") || mediaFile.name.endsWith(".webm") || mediaFile.name.endsWith(".ogg") || mediaFile.name.endsWith(".mp3")) detectedType = "audio";
           else if (mime.startsWith("video/")) detectedType = "video";
           else detectedType = "document";
 
+          attachment = {
+            url: mediaUrl,
+            type: detectedType,
+            name: mediaFile.name || "Adjunto",
+            mimetype: mediaFile.type || "application/octet-stream"
+          };
           console.log(`[Workflow] Media uploaded:`, { url: mediaUrl, type: detectedType });
         } catch (uploadErr) {
           console.error("[Workflow] Upload failed:", uploadErr);
@@ -286,19 +326,14 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         content,
         type: detectedType,
         mediaUrl,
-        attachment: mediaUrl ? {
-          url: mediaUrl,
-          type: detectedType,
-          name: mediaFile?.name || "Adjunto",
-          mimetype: mediaFile?.type || "application/octet-stream"
-        } : undefined,
+        attachment,
         quotedMessageId: replyingTo?.id,
         quotedContent: replyingTo?.content,
         scheduledAt,
         metadata: {
           quotedMessageId: replyingTo?.id,
           quotedContent: replyingTo?.content,
-          tempId: `temp-${Date.now()}` // [SEC] Pre-generation for atomic sync
+          tempId: `temp-${Date.now()}`
         }
       };
 

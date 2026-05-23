@@ -212,7 +212,7 @@ export class SocketEventEmitter {
     messageId: string,
     conversationId: string,
     companyId: string,
-    status: "sent" | "delivered" | "read" | "failed",
+    status: "sent" | "delivered" | "read" | "failed" | "queued",
   ): void {
     Logger.info(
       `[SocketEvents] [SOUND] Emitting message.status: ${messageId} → ${status}`,
@@ -320,6 +320,34 @@ export class SocketEventEmitter {
     this.socketGateway.emitToCompany(companyId, "message.revoked", payload);
     if (this.socketGateway.emitToRoom) {
       this.socketGateway.emitToRoom(`conversation:${conversationId}`, "message.revoked", payload);
+    }
+  }
+
+  /**
+   * Emit when a message is deleted (e.g. scheduled message is executed and deleted)
+   *
+   * Frontend: Removes the message bubble from the UI in real-time
+   */
+  emitMessageDeleted(
+    messageId: string,
+    conversationId: string,
+    companyId: string,
+  ): void {
+    Logger.info(`[SocketEvents] Emitting message.deleted: ${messageId}`);
+
+    const payload = {
+      messageId,
+      conversationId,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.socketGateway.emitToCompany(companyId, "message.deleted", payload);
+    if (this.socketGateway.emitToRoom) {
+      this.socketGateway.emitToRoom(
+        `conversation:${conversationId}`,
+        "message.deleted",
+        payload,
+      );
     }
   }
 

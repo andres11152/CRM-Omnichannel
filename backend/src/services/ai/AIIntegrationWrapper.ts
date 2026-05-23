@@ -15,7 +15,7 @@ interface AIResponse {
 }
 
 /**
- * 🛡️ [SRE] AI INTEGRATION WRAPPER (CIRCUIT BREAKER)
+ * [SRE] AI INTEGRATION WRAPPER (CIRCUIT BREAKER)
  * Protects against failure cascades when OpenAI or Gemini APIs are down.
  * Prevents Thread Pool saturation and automatically aborts BullMQ retries.
  */
@@ -45,15 +45,15 @@ class AIIntegrationWrapper {
    */
   private setupMonitoring(breaker: CircuitBreaker<[AIRequestInput], AIResponse>) {
     breaker.on("open", () => {
-      Logger.error(`[🚨 CIRCUIT OPEN] ${breaker.name} is unstable. All calls will route to Fallback immediately.`);
+      Logger.error(`[CRITICAL] CIRCUIT OPEN: ${breaker.name} is unstable. All calls will route to Fallback immediately.`);
     });
     
     breaker.on("halfOpen", () => {
-      Logger.warn(`[⚠️ CIRCUIT HALF-OPEN] ${breaker.name} testing availability...`);
+      Logger.warn(`[WARNING] CIRCUIT HALF-OPEN: ${breaker.name} testing availability...`);
     });
  
     breaker.on("close", () => {
-      Logger.info(`[✅ CIRCUIT CLOSED] ${breaker.name} recovered and operating normally.`);
+      Logger.info(`[OK] CIRCUIT CLOSED: ${breaker.name} recovered and operating normally.`);
     });
  
     breaker.on("fallback", (result: unknown) => {
@@ -102,8 +102,8 @@ class AIIntegrationWrapper {
    */
   private safefallback(input: AIRequestInput): AIResponse {
       return {
-          content: "🤖 *(AI Agent is temporarily out of service due to high demand. A human will take over your case shortly).* ",
-          success: true, // ⚠️ CRITICAL: true deceives BullMQ into removing the Job.
+          content: "*(AI Agent is temporarily out of service due to high demand. A human will take over your case shortly).* ",
+          success: true, // [SEC] CRITICAL: true deceives BullMQ into removing the Job.
           isFallback: true
       }
   }
@@ -121,7 +121,7 @@ const aiWrapperRef = new AIIntegrationWrapper();
 aiWrapperRef["openaiBreaker"].fallback((input: AIRequestInput, error: Error) => {
    Logger.warn(`[OpenAI Fallback Triggered] Cause: ${error?.message || "Open Circuit"}`);
    return { 
-       content: "🤖 *(Our AI servers are saturated at this moment. Please wait while we connect a human agent).* ", 
+       content: "*(Our AI servers are saturated at this moment. Please wait while we connect a human agent).* ", 
        success: true, 
        isFallback: true 
    };
@@ -130,7 +130,7 @@ aiWrapperRef["openaiBreaker"].fallback((input: AIRequestInput, error: Error) => 
 aiWrapperRef["geminiBreaker"].fallback((input: AIRequestInput, error: Error) => {
     Logger.warn(`[Gemini Fallback Triggered] Cause: ${error?.message || "Open Circuit"}`);
     return { 
-        content: "🤖 *(Our AI servers are saturated at this moment. Please wait while we connect a human agent).* ", 
+        content: "*(Our AI servers are saturated at this moment. Please wait while we connect a human agent).* ", 
         success: true, 
         isFallback: true 
     };

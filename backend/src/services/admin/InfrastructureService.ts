@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import redisClient from "@/config/redis";
-import { prisma } from "@/config/database";
+import { healthRepository } from "@/repositories/HealthRepository";
 import { Logger } from "@/utils/logger";
 
 export interface QueueHealth {
@@ -90,7 +90,7 @@ export class InfrastructureService {
   private async getDatabaseHealth() {
     const start = Date.now();
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await healthRepository.checkDatabaseLiveness();
       return { status: "healthy", latencyMs: Date.now() - start };
     } catch (error) {
       return { status: "error", latencyMs: -1 };

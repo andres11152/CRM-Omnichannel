@@ -36,12 +36,15 @@ class CacheService {
 
       this.client.on("error", (err) => {
         const msg = err.message || "";
-        if (
-          msg.includes("ECONNRESET") ||
-          msg.includes("Connection timeout") ||
-          msg.includes("ENOTFOUND")
-        )
+        const isNetworkError = [
+          "ECONNRESET", "ETIMEDOUT", "Socket closed", "ENOTFOUND", 
+          "ECONNABORTED", "getaddrinfo", "Connection timeout", "EPIPE"
+        ].some(e => msg.includes(e));
+
+        if (isNetworkError) {
+          // Silence fleeting/self-healing network disconnections
           return;
+        }
         Logger.error("[Cache] Redis Client Error:", err);
       });
 

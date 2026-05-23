@@ -13,7 +13,9 @@
     "unknown": "Desconocido",
     "saas_managed": "Gestionado por SaaS",
     "locale_code": "es-CO",
-    "results": "resultados"
+    "results": "resultados",
+    "new": "Nuevo",
+    "name": "Nombre"
   },
   "chatbot": {
     "new_flow": "Nuevo Flujo",
@@ -407,6 +409,7 @@
       "master_desc": "Panel maestro de orquestación y monitoreo del ecosistema Sentry CRM",
       "total_companies": "Total Empresas",
       "active_companies": "Empresas Activas",
+      "total_contacts": "Contactos Totales",
       "total_mrr": "MRR Total",
       "active_users": "Usuarios Activos",
       "churn_risk": "Salud de Cartera (Churn Risk)",
@@ -899,6 +902,15 @@
         "lead": "Potencial",
         "active": "Contrato vigente",
         "churned": "Churn / Inactivo"
+      },
+      "fields": {
+        "related_to": "Relacionado con",
+        "status": "Etapa"
+      },
+      "form": {
+        "general_info": "Información General",
+        "select_placeholder": "Seleccionar...",
+        "description": "Notas / Descripción"
       }
     },
     "activities": {
@@ -919,7 +931,12 @@
       "guests": "Invitados",
       "contact": "Contacto",
       "company": "Empresa",
-      "deal": "Oportunidad",
+      "deal": "Negocio",
+      "new_deal": "Nuevo Negocio",
+      "expected_close": "Cierre Previsto",
+      "delete_activity": "Eliminar",
+      "send_email": "Enviar Correo",
+      "history": "Historial de Actividades",
       "mark_completed": "Marcar como completada",
       "types": {
         "note": "Nota",
@@ -929,13 +946,78 @@
         "task": "Tarea"
       }
     },
+    "deals": {
+      "value": "Valor / Monto",
+      "currency": "Moneda / Divisa",
+      "probability": "Probabilidad",
+      "avg_deal_size": "Monto Promedio",
+      "unassigned": "Sin asignar",
+      "moved_success": "Negocio movido a",
+      "won_toast": "¡Felicitaciones! Negocio cerrado como ganado.",
+      "lost_toast": "Negocio marcado como perdido.",
+      "lost_reason_label": "¿Por qué se perdió esta oportunidad? *",
+      "delete_confirm": "¿Estás seguro de eliminar este negocio? Esta acción no se puede deshacer.",
+      "delete_error": "Error al eliminar la oportunidad",
+      "no_activities": "No hay actividades registradas para este negocio.",
+      "notes_hint": "Se registrará como la primera actividad del negocio.",
+      "conversion": "Conversión",
+      "pipeline": "Pipeline"
+    },
     "pipelines": {
       "title": "Pipeline de Ventas",
-      "description": "Gestiona tus oportunidades de negocio y sigue el progreso."
+      "description": "Gestiona tus oportunidades de negocio y sigue el progreso.",
+      "pipeline_created": "Pipeline creado correctamente."
     },
     "status": {
       "won": "Ganado",
       "lost": "Perdido"
+    },
+    "contacts": {
+      "description": "Gestiona tu libreta de contactos, etiquetas y canales de comunicación."
+    },
+    "products": {
+      "title": "Catálogo de Productos",
+      "description": "Gestiona tu inventario de productos y servicios.",
+      "active_products": "Productos Activos",
+      "new_product": "Nuevo Producto",
+      "edit_product": "Editar Producto",
+      "search_placeholder": "Buscar por nombre, SKU o categoría...",
+      "items_in_inventory": "Items en Inventario",
+      "empty_title": "Catálogo vacío",
+      "empty_description": "Comienza agregando tu primer producto o servicio al catálogo.",
+      "empty_search": "No encontramos productos que coincidan con \"{{query}}\"",
+      "view_detail": "Ver Detalle",
+      "no_description": "Este producto no tiene una descripción detallada en el catálogo.",
+      "price": "Precio",
+      "availability": "Disponibilidad",
+      "out_of_stock": "Agotado",
+      "unlimited": "Ilimitado",
+      "delete_confirm": "¿Seguro que deseas eliminar este producto?",
+      "delete_success": "Producto eliminado",
+      "delete_error": "Error al eliminar producto",
+      "save_success": "Producto guardado exitosamente",
+      "save_error": "Error al guardar en base de datos",
+      "form": {
+        "image_label": "Imagen del Producto",
+        "select_library": "Seleccionar de Biblioteca",
+        "upload_local": "Subir Local",
+        "name_label": "Nombre del Producto",
+        "name_placeholder": "Ej: Camiseta Premium",
+        "sku_placeholder": "Auto",
+        "type_label": "Tipo de Producto",
+        "type_physical": "Bien Físico",
+        "type_service": "Servicio Profesional",
+        "type_digital": "Producto Digital",
+        "category_label": "Categoría",
+        "stock_label": "Stock Disponible",
+        "unlimited_inventory": "Inventario Ilimitado",
+        "unlimited_help": "Los servicios o productos digitales no requieren gestión de stock en el sistema.",
+        "description_label": "Descripción",
+        "description_placeholder": "Describe tu producto o servicio...",
+        "saving": "Guardando...",
+        "save": "Guardar Producto",
+        "cancel": "Cancelar"
+      }
     }
   },
   "schema": {

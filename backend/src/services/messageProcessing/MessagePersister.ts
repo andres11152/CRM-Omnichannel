@@ -50,7 +50,7 @@ export class MessagePersister {
     const isDuplicate = await this.checkDuplicate(conversationId, text, params.messageId, hasMedia);
     if (isDuplicate) {
       Logger.debug(
-        `[MessagePersister] ⏩ Duplicate message skipped: "${text?.substring(0, 50)}"`,
+        `[MessagePersister] [SKIP] Duplicate message skipped: "${text?.substring(0, 50)}"`,
       );
       return null;
     }

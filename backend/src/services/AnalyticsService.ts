@@ -128,7 +128,7 @@ export class AnalyticsService {
       end,
     );
 
-    return results.map((r: AgentPerformanceQueryResult) => ({
+    const formattedResults: AgentPerformanceDTO[] = results.map((r: AgentPerformanceQueryResult) => ({
       agentId: r.agentId,
       name: r.name,
       email: r.email,
@@ -139,6 +139,39 @@ export class AnalyticsService {
         ? Math.round(r.avgResolutionTime)
         : 0,
     }));
+
+    // Count unassigned tickets in that range
+    const unassignedTickets = await ticketRepository.count({
+      where: {
+        assignedToId: null,
+        createdAt: { gte: start, lte: end },
+        deletedAt: null,
+      },
+    }, companyId);
+
+    const unassignedResolved = await ticketRepository.count({
+      where: {
+        assignedToId: null,
+        status: { in: ["RESOLVED", "CLOSED"] },
+        createdAt: { gte: start, lte: end },
+        deletedAt: null,
+      },
+    }, companyId);
+
+    // If there are unassigned tickets, append a virtual agent "Sin Asignar"
+    if (unassignedTickets > 0) {
+      formattedResults.push({
+        agentId: "unassigned",
+        name: "Sin Asignar",
+        email: "cola-de-espera@sentrycrm.cloud",
+        role: "QUEUE",
+        totalTickets: unassignedTickets,
+        resolvedTickets: unassignedResolved,
+        avgResolutionTime: 0,
+      });
+    }
+
+    return formattedResults;
   }
 
   /**

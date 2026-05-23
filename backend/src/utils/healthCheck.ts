@@ -123,7 +123,11 @@ async function checkDatabase(): Promise<ServiceStatus> {
 
   const start = Date.now();
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    const dbPromise = prisma.$queryRaw`SELECT 1`;
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Database check timeout")), 5000)
+    );
+    await Promise.race([dbPromise, timeoutPromise]);
     const latency = Date.now() - start;
 
     let result: ServiceStatus;
@@ -180,7 +184,11 @@ async function checkRedis(): Promise<ServiceStatus> {
       return result;
     }
 
-    await redisClient.ping();
+    const pingPromise = redisClient.ping();
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Redis ping timeout")), 5000)
+    );
+    await Promise.race([pingPromise, timeoutPromise]);
     const latency = Date.now() - start;
 
     let result: ServiceStatus;

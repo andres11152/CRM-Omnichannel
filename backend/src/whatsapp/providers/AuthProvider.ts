@@ -22,13 +22,17 @@ export class DatabaseAuthProvider implements IAuthProvider {
   }> {
     const creds = await this.loadCreds(sessionId);
 
-    // [SEC] RESILIENCE: If root credentials cannot be decrypted, the whole session is invalid.
-    // We must clear it to prevent mixing old encrypted keys with new session state.
+    // [SEC] RESILIENCE: If root credentials exist in the database but cannot be decrypted,
+    // the SESSION_SECRET is likely mismatched (e.g. running local dev against production DB).
+    // Throwing an error prevents starting Baileys with blank keys, protecting database integrity.
     if (creds === null) {
       const exists = await whatsappCredentialRepository.findUnique(sessionId, "creds");
       if (exists) {
-        Logger.warn(`[AuthProvider] ️ Wiping corrupted session ${sessionId} (Decryption failed). User must re-pair via QR.`);
-        await this.clearCredentials(sessionId);
+        throw new Error(
+          `[AuthProvider] Decryption failed for session ${sessionId}. ` +
+          `This is likely due to a mismatched SESSION_SECRET (e.g., local backend running against a production database with different keys) or data corruption. ` +
+          `Aborting initialization to protect credentials.`
+        );
       }
     }
 

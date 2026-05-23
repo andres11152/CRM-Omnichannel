@@ -85,9 +85,8 @@ export const TagsNavbar: React.FC<TagsNavbarProps> = ({
   return (
     <div className="w-full bg-white/80 dark:bg-[#0b141a]/80 backdrop-blur-md border-b border-gray-100 dark:border-white/5 px-2 py-1 flex items-center gap-0 shrink-0 z-20 h-10">
       {/* 1. FIXED LEFT: Label */}
-      <div className="flex items-center gap-1.5 px-3 text-gray-400 shrink-0 border-r border-gray-200 dark:border-white/10 mr-2 group">
+      <div className="flex items-center px-3 text-gray-400 shrink-0 border-r border-gray-200 dark:border-white/10 mr-2 group">
         <TagIcon className="w-3.5 h-3.5 group-hover:text-indigo-500 transition-colors" />
-        <span className="text-[10px] font-bold uppercase tracking-widest hidden md:inline-block">Etiquetas</span>
       </div>
 
       {/* 2. SCROLLABLE MIDDLE: Active Tags */}
@@ -165,11 +164,10 @@ export const TagsNavbar: React.FC<TagsNavbarProps> = ({
         ) : (
           <button
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-dashed border-gray-300 dark:border-white/10 text-gray-400 hover:text-indigo-600 hover:border-indigo-600 transition-all text-[10px] font-bold bg-white dark:bg-white/5 shadow-sm active:scale-95 whitespace-nowrap"
+            className="flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-gray-300 dark:border-white/10 text-gray-400 hover:text-indigo-600 hover:border-indigo-600 transition-all bg-white dark:bg-white/5 shadow-sm active:scale-95 shrink-0"
+            title="Añadir etiqueta"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Añadir etiqueta</span>
-            <span className="sm:hidden">Añadir</span>
           </button>
         )}
       </div>

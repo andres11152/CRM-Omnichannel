@@ -196,9 +196,9 @@ export const webhookDispatcher = {
       // Create HMAC signature (only if webhook has a secret)
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "User-Agent": "Reply-Webhook/1.0",
-        "X-Reply-Event-Id": eventData.id,
-        "X-Reply-Event-Type": eventData.type,
+        "User-Agent": "Sentry-Webhook/1.0",
+        "X-Sentry-Event-Id": eventData.id,
+        "X-Sentry-Event-Type": eventData.type,
       };
 
       if (secretKey) {
@@ -207,7 +207,7 @@ export const webhookDispatcher = {
           .createHmac("sha256", secretKey)
           .update(`${timestamp}.${jsonPayload}`)
           .digest("hex");
-        headers["X-Reply-Signature"] = `t=${timestamp},v1=${signature}`;
+        headers["X-Sentry-Signature"] = `t=${timestamp},v1=${signature}`;
       }
 
       const response = await axios.post(url, eventData, {

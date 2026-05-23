@@ -70,7 +70,7 @@ export interface MetaWebhookBody {
 
 export class MetaWebhookService {
   /**
-   * 🏗️ MAIN ORCHESTRATOR
+   * [ORCHESTRATOR] MAIN ORCHESTRATOR
    *
    * Processes a validated Meta webhook payload end-to-end:
    * 1. Parse Meta JSON → extract message data
@@ -86,14 +86,14 @@ export class MetaWebhookService {
     if (!parsed) return; // Not a valid message (status update, etc.)
 
     Logger.info(
-      `[MetaWebhook] 📩 Message from ${parsed.phoneNumber} (Type: ${parsed.type})`,
+      `[MetaWebhook] [INBOUND] Message from ${parsed.phoneNumber} (Type: ${parsed.type})`,
     );
 
     // 2. RESOLVE TENANT: Map WABA phone_number_id → companyId
     const companyId = await this.resolveCompanyId(parsed.phoneNumberId);
     if (!companyId) {
       Logger.warn(
-        `[MetaWebhook] ⚠️ No tenant found for phone_number_id: ${parsed.phoneNumberId}. Dropping message.`,
+        `[MetaWebhook] [WARNING] No tenant found for phone_number_id: ${parsed.phoneNumberId}. Dropping message.`,
       );
       return;
     }
@@ -109,7 +109,7 @@ export class MetaWebhookService {
     );
 
     Logger.info(
-      `[MetaWebhook] 👤 Contact resolved: ${contact.name} (${contact.phone})`,
+      `[MetaWebhook] [CONTACT] Contact resolved: ${contact.name} (${contact.phone})`,
     );
 
     // 4. CONVERSATION: Find or create using the production-proven repository pattern
@@ -123,7 +123,7 @@ export class MetaWebhookService {
     });
 
     Logger.info(
-      `[MetaWebhook] 💬 Conversation: ${conversation.id} (Status: ${conversation.status})`,
+      `[MetaWebhook] [CONVERSATION] Conversation: ${conversation.id} (Status: ${conversation.status})`,
     );
 
     // 5. DEDUPLICATION: Check if message already exists (idempotency guard)
@@ -133,7 +133,7 @@ export class MetaWebhookService {
     );
     if (isDuplicate) {
       Logger.warn(
-        `[MetaWebhook] ⏩ Duplicate message skipped: ${parsed.messageId}`,
+        `[MetaWebhook] [SKIP] Duplicate message skipped: ${parsed.messageId}`,
       );
       return;
     }
@@ -142,7 +142,7 @@ export class MetaWebhookService {
     const systemUser = await messageRepository.getDefaultAgent(companyId);
     if (!systemUser) {
       Logger.error(
-        `[MetaWebhook] 🚨 No admin/agent user found for company ${companyId}. Cannot save message.`,
+        `[MetaWebhook] [ERROR] No admin/agent user found for company ${companyId}. Cannot save message.`,
       );
       return;
     }
@@ -175,7 +175,7 @@ export class MetaWebhookService {
     });
 
     Logger.info(
-      `[MetaWebhook] ✅ Message saved: ${savedMessage.id} → Conversation ${conversation.id}`,
+      `[MetaWebhook] [OK] Message saved: ${savedMessage.id} → Conversation ${conversation.id}`,
     );
 
     // 9. INCREMENT UNREAD COUNTER (Badge Support)
@@ -193,7 +193,7 @@ export class MetaWebhookService {
     });
 
     Logger.info(
-      `[MetaWebhook] 🏁 Processing complete for ${parsed.messageId}`,
+      `[MetaWebhook] [DONE] Processing complete for ${parsed.messageId}`,
     );
   }
 
@@ -226,7 +226,7 @@ export class MetaWebhookService {
     if (connectedSessions.length === 1) {
       // Single-tenant shortcut: if only one company has a connected session, use it
       Logger.info(
-        `[MetaWebhook] 🔀 Single-tenant fallback: Using ${connectedSessions[0].companyId}`,
+        `[MetaWebhook] [FALLBACK] Single-tenant fallback: Using ${connectedSessions[0].companyId}`,
       );
       return connectedSessions[0].companyId;
     }
@@ -291,7 +291,7 @@ export class MetaWebhookService {
           }
         } catch (error: unknown) {
           Logger.error(
-            `[MetaWebhook] ❌ Media processing failed for ${mediaObj.id}:`,
+            `[MetaWebhook] [ERROR] Media processing failed for ${mediaObj.id}:`,
             error,
           );
           content = `[ERROR DOWNLOADING ${type.toUpperCase()}]`;

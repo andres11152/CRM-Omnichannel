@@ -5,6 +5,8 @@ import { Deal, Account } from "@/types/crm";
 import { getAccounts, updateDeal, createDeal } from "@/services/crmService";
 import { EmailModal } from "../EmailModal";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import {
   X,
   Loader2,
@@ -298,29 +300,24 @@ export const DealModal: React.FC<Props> = ({
           {activeTab === "details" ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t("common.name")} *
-                </label>
-                <input
+                <Input
                   type="text"
                   required
+                  label={`${t("common.name")} *`}
                   value={formData.title}
                   onChange={(e) =>
                     setFormData({ ...formData, title: e.target.value })
                   }
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
                   placeholder="Ej. Venta de Licencias Q1"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t("tenants.metrics.status")}
-                  </label>
-                  <input
+                  <Input
                     type="number"
                     min="0"
+                    label={t("crm.deals.value")}
                     value={formData.value}
                     onChange={(e) =>
                       setFormData({
@@ -328,19 +325,18 @@ export const DealModal: React.FC<Props> = ({
                         value: e.target.value ? parseFloat(e.target.value) : 0,
                       })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t("common.soon")}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest transition-colors">
+                    {t("crm.deals.currency")}
                   </label>
                   <select
                     value={formData.currency}
                     onChange={(e) =>
                       setFormData({ ...formData, currency: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
+                    className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand cursor-pointer"
                   >
                     <option value="COP"> COP</option>
                     <option value="USD"> USD</option>
@@ -354,16 +350,16 @@ export const DealModal: React.FC<Props> = ({
                 </div>
               </div>
 
-              <div>
+              <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest transition-colors">
                     {t("crm.accounts.fields.related_to")}
                   </label>
-                  <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+                  <div className="flex bg-reply-bg/40 dark:bg-white/5 rounded-lg p-0.5 border border-reply-border/50 dark:border-reply-border-dark/50">
                     <button
                       type="button"
                       onClick={() => setAssociationType("account")}
-                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${associationType === "account" ? "bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300" : "text-gray-500 dark:text-gray-400"}`}
+                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${associationType === "account" ? "bg-white dark:bg-gray-800 shadow text-reply-brand" : "text-reply-text-secondary dark:text-reply-text-secondary-dark"}`}
                     >
                       <Building2 className="w-3 h-3" />
                       {t("navigation.accounts")}
@@ -371,7 +367,7 @@ export const DealModal: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setAssociationType("contact")}
-                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${associationType === "contact" ? "bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300" : "text-gray-500 dark:text-gray-400"}`}
+                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${associationType === "contact" ? "bg-white dark:bg-gray-800 shadow text-reply-brand" : "text-reply-text-secondary dark:text-reply-text-secondary-dark"}`}
                     >
                       <User className="w-3 h-3" />
                       {t("navigation.contacts")}
@@ -389,7 +385,7 @@ export const DealModal: React.FC<Props> = ({
                         contactId: "",
                       })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
+                    className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand cursor-pointer"
                   >
                     <option value="">{t("crm.accounts.form.select_placeholder")}</option>
                     {accounts.map((acc) => (
@@ -408,7 +404,7 @@ export const DealModal: React.FC<Props> = ({
                         accountId: "",
                       })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
+                    className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand cursor-pointer"
                   >
                     <option value="">{t("crm.accounts.form.select_placeholder")}</option>
                     {contacts.map((contact) => (
@@ -423,16 +419,16 @@ export const DealModal: React.FC<Props> = ({
 
               {/* Pipeline and Stage Row */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Pipeline
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest transition-colors">
+                    {t("crm.deals.pipeline")}
                   </label>
                   <select
                     value={formData.pipelineId}
                     onChange={(e) =>
                       setFormData({ ...formData, pipelineId: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
+                    className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand cursor-pointer"
                   >
                     {pipelines.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -441,8 +437,8 @@ export const DealModal: React.FC<Props> = ({
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest transition-colors">
                     {t("crm.accounts.fields.status")}
                   </label>
                   <select
@@ -450,7 +446,7 @@ export const DealModal: React.FC<Props> = ({
                     onChange={(e) =>
                       setFormData({ ...formData, stageId: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
+                    className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand cursor-pointer"
                   >
                     {currentStages.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -464,13 +460,11 @@ export const DealModal: React.FC<Props> = ({
               {/* Probability and Date Row */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Probabilidad (%)
-                  </label>
-                  <input
+                  <Input
                     type="number"
                     min="0"
                     max="100"
+                    label={`${t("crm.deals.probability")} (%)`}
                     value={formData.probability}
                     onChange={(e) =>
                       setFormData({
@@ -478,15 +472,12 @@ export const DealModal: React.FC<Props> = ({
                         probability: e.target.value ? parseInt(e.target.value) : 0,
                       })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t("crm.activities.expected_close")}
-                  </label>
-                  <input
+                  <Input
                     type="date"
+                    label={t("crm.activities.expected_close")}
                     value={formData.expectedCloseDate}
                     onChange={(e) =>
                       setFormData({
@@ -494,7 +485,6 @@ export const DealModal: React.FC<Props> = ({
                         expectedCloseDate: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent"
                   />
                 </div>
               </div>
@@ -504,9 +494,9 @@ export const DealModal: React.FC<Props> = ({
                 (s: { id: string; name: string }) =>
                   s.id === formData.stageId && /perdido|lost/i.test(s.name),
               ) && (
-                <div className="bg-red-50 dark:bg-red-900/10 rounded-lg p-4 border border-red-200 dark:border-red-800/30">
-                  <label className="block text-sm font-medium text-red-700 dark:text-red-400 mb-2">
-                    ¿Por qué se perdió este deal? *
+                <div className="bg-rose-50 dark:bg-rose-950/10 rounded-2xl p-4 border border-rose-100 dark:border-rose-900/30">
+                  <label className="block text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-2">
+                    {t("crm.deals.lost_reason_label")}
                   </label>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {LOST_REASONS.map((reason) => (
@@ -516,10 +506,10 @@ export const DealModal: React.FC<Props> = ({
                         onClick={() =>
                           setFormData({ ...formData, lostReason: reason })
                         }
-                        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
                           formData.lostReason === reason
-                            ? "bg-red-600 text-white border-red-600 shadow-sm"
-                            : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-red-300"
+                              ? "bg-rose-500 text-white border-rose-500 shadow-sm"
+                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-rose-300"
                         }`}
                       >
                         {reason}
@@ -531,8 +521,8 @@ export const DealModal: React.FC<Props> = ({
 
               {/* Initial Notes (only for new deals) */}
               {!deal && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest transition-colors">
                      {t("crm.accounts.form.description")}
                   </label>
                   <textarea
@@ -542,22 +532,25 @@ export const DealModal: React.FC<Props> = ({
                     }
                     rows={3}
                     maxLength={2000}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-reply-text dark:text-reply-text-dark focus:ring-2 focus:ring-reply-blue focus:border-transparent resize-none text-sm"
+                    className="w-full bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl py-2.5 px-4 text-sm font-medium transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark placeholder:text-reply-text-secondary/40 focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand resize-none"
                     placeholder="Ej. Cliente referido por Juan, interesado en plan Enterprise. Presupuesto aprobado para Q1."
                   />
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
-                    Se registrar como primera actividad del deal
+                  <p className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 mt-1">
+                    {t("crm.deals.notes_hint")}
                   </p>
                 </div>
               )}
 
               <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100 dark:border-reply-border-dark">
                 {deal && (
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/10 gap-1.5"
                     onClick={async () => {
                       if (
                         window.confirm(
-                          "¿Ests seguro de eliminar este deal? Esta acción no se puede deshacer.",
+                          t("crm.deals.delete_confirm"),
                         )
                       ) {
                         setLoading(true);
@@ -569,36 +562,31 @@ export const DealModal: React.FC<Props> = ({
                           onClose(); // Close modal
                         } catch (error) {
                           console.error("Error deleting deal:", error);
-                          toast.error("Error al eliminar el deal");
+                          toast.error(t("crm.deals.delete_error"));
                         } finally {
                           setLoading(false);
                         }
                       }
                     }}
-                    className="text-red-500 hover:text-red-700 text-sm font-medium transition-colors flex items-center gap-1"
                   >
                     <Trash2 className="w-4 h-4" />
                     {t("crm.activities.delete_activity")}
-                  </button>
+                  </Button>
                 )}
                 <div className="flex gap-3 ml-auto">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={onClose}
-                    className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   >
                     {t("common.cancel")}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm font-medium"
+                    isLoading={loading}
                   >
-                    {loading && (
-                      <Loader2 className="animate-spin h-4 w-4 text-white" />
-                    )}
                     {deal ? t("common.save") : t("common.new")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </form>
@@ -624,7 +612,7 @@ export const DealModal: React.FC<Props> = ({
               ) : activities.length === 0 ? (
                 <div className="text-center py-12 text-gray-400 flex flex-col items-center">
                   <Inbox className="w-12 h-12 mb-3 opacity-20" />
-                  <p>No hay actividades registradas para este deal.</p>
+                  <p>{t("crm.deals.no_activities")}</p>
                 </div>
               ) : (
                 <div className="relative border-l-2 border-gray-200 dark:border-reply-border-dark ml-3 space-y-8">

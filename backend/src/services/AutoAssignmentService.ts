@@ -71,7 +71,7 @@ export const assignTicketToAgent = async (
             Logger.error(`[AutoAssign] [ERROR] Failed to trigger AI response`, err);
           }
         } else {
-          Logger.info(`[AutoAssign] ⏩ Skipped AI: Last message was OUTBOUND`);
+          Logger.info(`[AutoAssign] [SKIP] Skipped AI: Last message was OUTBOUND`);
         }
       }
       return; // Stop here, no agent assignment needed

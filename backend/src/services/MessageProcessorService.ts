@@ -29,7 +29,7 @@ const normalizeJid = (jid: string): string | null => {
 
   if (!phone) {
     Logger.info(
-      `[normalizeJid] ⏩ Rejected: Not a valid phone (LID, group, or invalid): ${jid}`,
+      `[normalizeJid] [SKIP] Rejected: Not a valid phone (LID, group, or invalid): ${jid}`,
     );
     return null;
   }
@@ -255,7 +255,7 @@ export const messageProcessor = {
 
       if (!aiResponseText) return;
 
-      const botEmail = `ai_${aiAssistant.id}@reply.bot`;
+      const botEmail = `ai_${aiAssistant.id}@sentry.bot`;
       let botUser = await userRepository.findFirst({
         where: { email: botEmail, companyId },
       });

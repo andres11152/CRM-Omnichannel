@@ -249,10 +249,30 @@ export const addMessageToCache = (
       });
 
       // [SEC] CRITICAL: Early deduplication check (prevents flashback)
-      // If message already exists, don't trigger a re-render
-      if (old.some((m) => m.id === message.id)) {
+      // If message already exists, check if status, content, or metadata changed before skipping.
+      const existingIdx = old.findIndex((m) => m.id === message.id);
+      if (existingIdx !== -1) {
+        const existing = old[existingIdx];
+        const statusChanged = existing.status?.toLowerCase() !== message.status?.toLowerCase();
+        const contentChanged = existing.content !== message.content;
+        const metaChanged = JSON.stringify(existing.metadata) !== JSON.stringify(message.metadata);
+
+        if (statusChanged || contentChanged || metaChanged) {
+          console.log(
+            ` [Socket.IO] Updating existing message in-place: ${message.id}`,
+            { oldStatus: existing.status, newStatus: message.status }
+          );
+          const updated = [...old];
+          updated[existingIdx] = {
+            ...existing,
+            ...message,
+            status: message.status,
+          };
+          return updated;
+        }
+
         console.log(
-          `⏭️ [Socket.IO] Already exists, skipping (${(performance.now() - socketStart).toFixed(2)}ms)`,
+          `⏭️ [Socket.IO] Already exists and identical, skipping (${(performance.now() - socketStart).toFixed(2)}ms)`,
         );
         return old; // No change = no re-render
       }

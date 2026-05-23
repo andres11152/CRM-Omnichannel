@@ -41,7 +41,7 @@ export const NotificationTemplates = {
     <h2>Trial Period Ending Soon</h2>
     <p>Dear ${companyName} team,</p>
     <p>Your trial period will end in <strong>${daysRemaining} days</strong>.</p>
-    <p>To continue using Reply CRM without interruption, please upgrade to a paid plan.</p>
+    <p>To continue using Sentry CRM without interruption, please upgrade to a paid plan.</p>
     <a href="${FRONTEND_URL}/settings/billing" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">
       Choose a Plan
     </a>

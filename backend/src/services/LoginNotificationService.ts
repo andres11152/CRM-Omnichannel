@@ -65,7 +65,7 @@ export async function sendLoginNotification(
                   </p>
                   
                   <p style="color: #666666; font-size: 15px; line-height: 1.6; margin: 0 0 30px;">
-                    Alguien acaba de iniciar sesión en tu cuenta de Reply CRM. Si fuiste tú, puedes ignorar este mensaje. Si no reconoces esta actividad, <strong>toma acción inmediata</strong>.
+                    Alguien acaba de iniciar sesión en tu cuenta de Sentry CRM. Si fuiste tú, puedes ignorar este mensaje. Si no reconoces esta actividad, <strong>toma acción inmediata</strong>.
                   </p>
 
                   <!-- Info Box -->
@@ -183,7 +183,7 @@ export async function sendLoginNotification(
                     Este email fue enviado automáticamente por motivos de seguridad.
                   </p>
                   <p style="color: #999999; font-size: 12px; margin: 0;">
-                    © ${new Date().getFullYear()} Reply CRM. Todos los derechos reservados.
+                    © ${new Date().getFullYear()} Sentry CRM. Todos los derechos reservados.
                   </p>
                   <p style="color: #999999; font-size: 12px; margin: 12px 0 0;">
                     <a href="${frontendUrl}/privacy" style="color: #00a884; text-decoration: none;">Política de Privacidad</a> • 
@@ -202,7 +202,7 @@ export async function sendLoginNotification(
   try {
     await emailService.sendEmail({
       to: userEmail,
-      subject: `[AUTH] Nuevo inicio de sesión en Reply CRM - ${
+      subject: `[AUTH] Nuevo inicio de sesión en Sentry CRM - ${
         formattedDate.split(",")[0]
       }`,
       html: htmlContent,

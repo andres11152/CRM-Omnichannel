@@ -1,13 +1,13 @@
 /**
- * ⚡ DEDICATED WORKER ENTRY POINT
+ * [WORKER] DEDICATED WORKER ENTRY POINT
  *
- * This file is the entry point for the `reply-crm-workers` PM2 process.
+ * This file is the entry point for the `sentry-crm-workers` PM2 process.
  * It runs ONLY background workers (message queues, flow engine, cron jobs)
  * WITHOUT starting the HTTP server or WebSocket gateway.
  *
  * Architecture:
- * - reply-crm-api  → HTTP + WebSocket + WhatsApp Sessions (server.ts)
- * - reply-crm-workers → Background Queues + Flows + Cron (worker.ts) ← THIS FILE
+ * - sentry-crm-api  → HTTP + WebSocket + WhatsApp Sessions (server.ts)
+ * - sentry-crm-workers → Background Queues + Flows + Cron (worker.ts) ← THIS FILE
  *
  * This separation prevents CPU-heavy background jobs from starving
  * the API event loop, which is critical for real-time chat responsiveness.
@@ -41,11 +41,11 @@ import { memoryMonitor } from "@/utils/resourceManager";
 
 const bootstrapWorker = async () => {
   try {
-    Logger.info("[Worker] ⚡ Starting Reply CRM Worker Process...");
+    Logger.info("[Worker] [WORKER] Starting Sentry CRM Worker Process...");
 
     // 1. Core Infrastructure
     await connectRedis();
-    Logger.info("[Worker] 🗄️ Connecting to Database...");
+    Logger.info("[Worker] [DB] Connecting to Database...");
     await connectDB();
     Logger.info("[Worker] Database connected successfully");
 
@@ -56,7 +56,7 @@ const bootstrapWorker = async () => {
     const { initWorkers } = await import("@/loaders/workerLoader");
     await initWorkers();
 
-    Logger.info("[Worker] ✅ Worker Process fully initialized");
+    Logger.info("[Worker] [OK] Worker Process fully initialized");
 
     // 4. Signal PM2 that we're ready
     if (process.send) {
@@ -65,7 +65,7 @@ const bootstrapWorker = async () => {
 
     // 5. Graceful Shutdown
     const gracefulShutdown = () => {
-      Logger.info("[Worker] 🛑 SIGTERM/SIGINT received. Shutting down...");
+      Logger.info("[Worker] [SHUTDOWN] SIGTERM/SIGINT received. Shutting down...");
       prisma.$disconnect().then(() => {
         Logger.info("[Worker] Database disconnected");
         process.exit(0);

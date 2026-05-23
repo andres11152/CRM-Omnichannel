@@ -30,6 +30,17 @@ export class ConversationQueryService {
     });
 
     return conversations.map((conv) => {
+      const isGroup = conv.isGroup || false;
+      const groupMetadata = (conv.groupMetadata || null) as {
+        groupName?: string;
+        groupPicUrl?: string | null;
+      } | null;
+
+      // [PERF] Auto-Heal Corrupted Group Metadata on Sidebar Load
+      if (isGroup && (conv.subject?.includes("Grupo Histórico") || !groupMetadata?.groupName || groupMetadata.groupName === "Grupo Histórico")) {
+        this.triggerGroupHeal(companyId, conv.channelId);
+      }
+
       const customer = conv.participants.find(
         (p) => p.role === "USER" || p.phone === conv.channelId,
       );
@@ -52,13 +63,6 @@ export class ConversationQueryService {
         }
       }
 
-      // [SEC] GROUP PHOTO FIX: For groups, use the group's own photo, not the last sender's
-      const isGroup = conv.isGroup || false;
-      const groupMetadata = (conv.groupMetadata || null) as {
-        groupName?: string;
-        groupPicUrl?: string | null;
-      } | null;
-
       // For groups: use groupPicUrl; for DMs: use customer profilePicUrl
       const resolvedAvatarUrl = isGroup
         ? groupMetadata?.groupPicUrl || conv.contact?.avatarUrl || null
@@ -70,7 +74,7 @@ export class ConversationQueryService {
       return {
         id: conv.id,
         ticketId: conv.id,
-        contactName: customer?.name || conv.subject || "Usuario",
+        contactName: isGroup ? conv.subject || groupMetadata?.groupName || "Grupo" : (customer?.name || conv.subject || "Usuario"),
         contactPhone: customer?.phone || conv.channelId || "",
         avatarUrl: resolvedAvatarUrl,
         profilePicUrl: resolvedProfilePicUrl,
@@ -164,6 +168,13 @@ export class ConversationQueryService {
       this.triggerContextSync(companyId, conversation.id, targetJid);
     }
 
+    if (conversation.isGroup) {
+      const gMeta = conversation.groupMetadata as { groupName?: string; groupPicUrl?: string } | null;
+      if (!gMeta || !gMeta.groupPicUrl || !gMeta.groupName || gMeta.groupName === "Grupo Histórico" || conversation.subject.includes("Grupo Histórico")) {
+        this.triggerGroupHeal(companyId, conversation.channelId);
+      }
+    }
+
     return {
       ...conversation,
       tags: resolvedTags,
@@ -177,6 +188,21 @@ export class ConversationQueryService {
         Logger.warn(`[QueryService] Context sync failed:`, { error: err.message }),
       );
     });
+  }
+
+  private triggerGroupHeal(companyId: string, channelId: string) {
+    const groupJid = channelId.includes("@g.us") ? channelId : `${channelId}@g.us`;
+    import("@/whatsapp").then(({ whatsappService }) => {
+      whatsappService.getSessionManager().findActiveSessionForCompany(companyId).then((session) => {
+        if (session) {
+          import("./queue/groupContactIndexer").then(({ groupContactIndexer }) => {
+            groupContactIndexer.queueGroupForIndexing(companyId, groupJid, session.sessionId).catch((err) =>
+              Logger.warn(`[QueryService] Failed to queue group heal:`, err)
+            );
+          });
+        }
+      });
+    }).catch(() => {});
   }
 }
 

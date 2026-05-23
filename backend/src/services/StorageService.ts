@@ -45,6 +45,14 @@ export interface IStorageService {
 class S3StorageService implements IStorageService {
   private client: S3Client;
   private bucket: string;
+  private localFallback?: LocalStorageService;
+
+  private getFallback(): LocalStorageService {
+    if (!this.localFallback) {
+      this.localFallback = new LocalStorageService();
+    }
+    return this.localFallback;
+  }
 
   constructor() {
     const env = getEnv();
@@ -75,7 +83,7 @@ class S3StorageService implements IStorageService {
     buffer: Buffer,
     filename: string,
     mimeType: string,
-    _isPrivate: boolean = false,
+    isPrivate: boolean = false,
   ): Promise<UploadResult> {
     const key = `companies/${companyId}/uploads/${Date.now()}_${filename}`;
 
@@ -86,12 +94,21 @@ class S3StorageService implements IStorageService {
       ContentType: mimeType,
     });
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 seconds timeout
+
     try {
-      await this.client.send(command);
+      await this.client.send(command, { abortSignal: controller.signal });
       return this.generateResult(key, mimeType);
     } catch (error) {
-      Logger.error("S3 Upload Failed", error);
-      throw new AppError("S3 Upload Failed", 500);
+      Logger.warn(
+        `[StorageService] S3 Upload failed (Timeout/Network/Credentials). Falling back to LocalStorage. Error: ${
+          error instanceof Error ? error.message : error
+        }`
+      );
+      return this.getFallback().uploadFile(companyId, buffer, filename, mimeType, isPrivate);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -100,9 +117,10 @@ class S3StorageService implements IStorageService {
     stream: Readable,
     filename: string,
     mimeType: string,
-    _isPrivate: boolean = false,
+    isPrivate: boolean = false,
   ): Promise<UploadResult> {
     const key = `companies/${companyId}/uploads/${Date.now()}_${filename}`;
+    let timeoutId: NodeJS.Timeout | undefined;
 
     try {
       const upload = new Upload({
@@ -115,11 +133,24 @@ class S3StorageService implements IStorageService {
         },
       });
 
-      await upload.done();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          upload.abort();
+          reject(new Error("S3 Stream Upload timed out after 10 seconds"));
+        }, 10000);
+      });
+
+      await Promise.race([upload.done(), timeoutPromise]);
+      if (timeoutId) clearTimeout(timeoutId);
       return this.generateResult(key, mimeType);
-    } catch (error: unknown) {
-      Logger.error("S3 Stream Upload Failed", error);
-      throw new AppError("S3 Stream Upload Failed", 500);
+    } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
+      Logger.warn(
+        `[StorageService] S3 Stream Upload failed. Falling back to LocalStorage. Error: ${
+          error instanceof Error ? error.message : error
+        }`
+      );
+      return this.getFallback().uploadStream(companyId, stream, filename, mimeType, isPrivate);
     }
   }
 
@@ -138,17 +169,44 @@ class S3StorageService implements IStorageService {
     key: string,
     expiresInSeconds: number = 900,
   ): Promise<string> {
-    const command = new GetObjectCommand({
-      Bucket: this.bucket,
-      Key: key,
-    });
-    return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+    // Check if the file exists locally as a fallback
+    const localDir = getEnv().UPLOAD_DIR || path.join(os.tmpdir(), "omnicrm_uploads");
+    const localPath = path.join(localDir, key);
+    try {
+      await fs.access(localPath);
+      // It exists locally! Return local URL
+      return this.getFallback().getSignedUrl(key, expiresInSeconds);
+    } catch {
+      // It doesn't exist locally, proceed with S3
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+      return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+    }
   }
 
   async deleteFile(key: string): Promise<void> {
-    await this.client.send(
-      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
-    );
+    // Attempt local deletion if it exists
+    try {
+      await this.getFallback().deleteFile(key);
+    } catch {
+      // Ignore local delete errors
+    }
+
+    // Attempt S3 deletion with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    try {
+      await this.client.send(
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+        { abortSignal: controller.signal }
+      );
+    } catch (error) {
+      Logger.error(`[StorageService] S3 Delete Failed: ${error instanceof Error ? error.message : error}`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -179,7 +237,7 @@ class LocalStorageService implements IStorageService {
     try {
       await fs.mkdir(path.dirname(destinationPath), { recursive: true });
       await fs.writeFile(destinationPath, buffer);
-      return { url: key, key, provider: "local" };
+      return { url: `/api/local-media/${key}`, key, provider: "local" };
     } catch (error) {
       Logger.error("Local Upload Failed", error);
       throw new AppError("Local Upload Failed", 500);
@@ -206,7 +264,7 @@ class LocalStorageService implements IStorageService {
         stream.on("error", reject);
         writeStream.on("error", reject);
       });
-      return { url: key, key, provider: "local" };
+      return { url: `/api/local-media/${key}`, key, provider: "local" };
     } catch (error) {
       Logger.error("Local Stream Upload Failed", error);
       throw new AppError("Local Stream Upload Failed", 500);

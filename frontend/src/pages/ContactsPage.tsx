@@ -301,7 +301,7 @@ export const ContactsPage: React.FC = () => {
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark">
       <ModuleHeader
         title={t("navigation.contacts")}
-        description={t("marketing.campaigns.form.description")}
+        description={t("crm.contacts.description")}
         icon={
           <svg
             className="w-8 h-8 text-white"

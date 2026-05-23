@@ -203,7 +203,7 @@ const MasterAdminDashboard: React.FC<{
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden">
       <ModuleHeader
         title={t("dashboard.master_title", "Admin Central")}
-        description={t("dashboard.master_desc", "Panel maestro de orquestación y monitoreo del ecosistema Reply")}
+        description={t("dashboard.master_desc", "Panel maestro de orquestación y monitoreo del ecosistema Sentry")}
         icon={<BarChart3 className="w-8 h-8 text-white" />}
         gradient="from-slate-900 via-indigo-900 to-indigo-800 dark:from-black dark:via-indigo-950 dark:to-slate-900"
         stats={{

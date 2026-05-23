@@ -67,7 +67,7 @@ class FlowQueueWorker {
 
                 // Create/fetch Bot User Context
                 const botUser = await chatService.upsertWhatsAppUser({
-                  email: `bot_${companyId}@reply.bot`,
+                  email: `bot_${companyId}@sentry.bot`,
                   name: "Flow Bot",
                   companyId,
                   role: "AGENT",

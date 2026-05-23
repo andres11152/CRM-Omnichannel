@@ -62,7 +62,7 @@ const bootstrap = async () => {
     memoryMonitor.start(60000);
 
     // [SEC] SCALE FIX: Only load workers if NOT running in dedicated worker mode.
-    // When using separate PM2 processes (reply-crm-api + reply-crm-workers),
+    // When using separate PM2 processes (sentry-crm-api + sentry-crm-workers),
     // the API process should NOT run background jobs to prevent event loop starvation.
     const isWorkerMode = process.env.WORKER_MODE === "true";
     if (!isWorkerMode) {
@@ -74,7 +74,7 @@ const bootstrap = async () => {
 
     // 5. Start Server
     httpServer.listen(Number(PORT), () => {
-      Logger.info(`[Server] ✅ CRM SaaS Backend running on port ${PORT}`);
+      Logger.info(`[Server] [OK] CRM SaaS Backend running on port ${PORT}`);
       // Signal PM2 that we're ready (required for wait_ready: true)
       if (process.send) {
         process.send("ready");

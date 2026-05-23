@@ -317,9 +317,15 @@ export const ChatInterface: React.FC<Props> = ({
             <div className="w-[1px] h-full bg-transparent group-hover:bg-indigo-500 mx-auto" />
           </div>
 
+          {/* MOBILE OVERLAY BACKGROUND */}
           <div 
-            className="hidden lg:block h-full bg-white dark:bg-[#0b141a] flex-shrink-0 overflow-hidden min-w-0"
-            style={{ width: `${panel360Width}px` }}
+            className="lg:hidden fixed inset-0 bg-black/50 z-40 transition-opacity" 
+            onClick={() => setIs360Visible(false)} 
+          />
+
+          <div 
+            className="absolute lg:relative right-0 top-0 h-full bg-white dark:bg-[#0b141a] flex-shrink-0 overflow-hidden min-w-0 z-50 w-full sm:w-[400px] lg:w-auto shadow-2xl lg:shadow-none transition-transform"
+            style={window.innerWidth > 1024 ? { width: `${panel360Width}px` } : {}}
           >
               <Customer360Panel 
                 contact={activeContact} 
@@ -387,7 +393,32 @@ export const ChatInterface: React.FC<Props> = ({
           setActiveActionModal(null);
         }}
         onProduct={(p) => {
-          handleSendMessage(`${t("chat.interested_in", "Interesado en:")} ${p.name}\n${p.imageUrl || ""}`, null, replyingTo);
+          const formatProductPrice = (price: number, currency: string): string => {
+            try {
+              return new Intl.NumberFormat(currency === "COP" ? "es-CO" : "en-US", {
+                style: "currency",
+                currency,
+                minimumFractionDigits: 0,
+              }).format(price);
+            } catch {
+              return `${currency} ${price}`;
+            }
+          };
+
+          const caption = `📦 *${p.name}*\n💰 ${formatProductPrice(p.price, p.currency)}${p.description ? `\n\n${p.description}` : ""}${p.sku ? `\n🏷️ SKU: ${p.sku}` : ""}`;
+
+          if (p.imageUrl) {
+            // Send as image message with caption (Enterprise)
+            handleSendMessage(caption, null, replyingTo, undefined, {
+              url: p.imageUrl,
+              type: "image",
+              name: p.name,
+              mimetype: "image/jpeg",
+            });
+          } else {
+            // Fallback: No image, send as formatted text
+            handleSendMessage(caption, null, replyingTo);
+          }
           setActiveActionModal(null);
         }}
         onPayment={(amt, concept, currency) => {

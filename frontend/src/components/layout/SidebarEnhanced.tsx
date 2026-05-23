@@ -207,7 +207,7 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                   {/* App Name with Fade Effect */}
                   {isExpanded && (
                     <span className="font-bold text-xl text-gray-800 dark:text-white whitespace-nowrap transition-all duration-300 animate-in fade-in slide-in-from-left-2">
-                      Reply
+                      Sentry
                     </span>
                   )}
                 </div>

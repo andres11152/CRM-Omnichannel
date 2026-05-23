@@ -1,6 +1,6 @@
 import { Message } from "@/types";
 
-const DB_NAME = "ReplyMessagesDB";
+const DB_NAME = "SentryMessagesDB";
 const DB_VERSION = 1;
 const STORE_NAME = "messages";
 

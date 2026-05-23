@@ -34,6 +34,16 @@ const rateLimitRedis = createClient({
 });
 
 rateLimitRedis.on("error", (err) => {
+  const msg = err.message || "";
+  const isNetworkError = [
+    "ECONNRESET", "ETIMEDOUT", "Socket closed", "ENOTFOUND", 
+    "ECONNABORTED", "getaddrinfo", "Connection timeout", "EPIPE"
+  ].some(e => msg.includes(e));
+
+  if (isNetworkError) {
+    // Silence self-healing network/socket drop noise
+    return;
+  }
   Logger.error("[RateLimit] Redis Client Error:", err);
 });
 

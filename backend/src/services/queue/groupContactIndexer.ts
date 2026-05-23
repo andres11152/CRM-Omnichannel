@@ -7,6 +7,9 @@ import { whatsappService } from "@/whatsapp";
 import { Prisma } from "@prisma/client";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { Logger } from "@/utils/logger";
+import axios from "axios";
+import { storageService } from "@/services/StorageService";
+import { gateway } from "@/gateways/socketGateway";
 
 // ============================================================================
 //  ENTERPRISE GROUP CONTACT INDEXER
@@ -86,7 +89,7 @@ async function indexGroupParticipants(
   // Rate limit check
   if (!canSyncGroup(companyId)) {
     Logger.debug(
-      `[GroupIndexer] ⏳ Rate limited. Requeueing group ${groupJid} for company ${companyId}`,
+      `[GroupIndexer] [WAIT] Rate limited. Requeueing group ${groupJid} for company ${companyId}`,
     );
     // Re-add with delay
     await groupIndexQueue.add(
@@ -109,21 +112,17 @@ async function indexGroupParticipants(
     return;
   }
 
-  // [SEC] ENTERPRISE: Auto-sync is OPT-IN to prevent spam contamination.
-  // Only auto-import participants if the user explicitly enabled sync for this group.
+  // Load conversation to heal metadata
   const conversation = await conversationRepository.findFirst({
     where: { companyId, channelId: groupJid.split("@")[0] },
-    select: { id: true, syncEnabled: true },
   });
 
-  if (!conversation || conversation.syncEnabled !== true) {
-    Logger.info(
-      `[GroupIndexer] ⏩ Skipping group ${groupJid} (Auto-sync is OFF — user must enable or import manually)`,
-    );
+  if (!conversation) {
+    Logger.warn(`[GroupIndexer] Conversation not found for ${groupJid}`);
     return;
   }
 
-  let metadata: { subject: string; participants: Array<{ id: string }> };
+  let metadata: { subject: string; desc?: string; participants: Array<{ id: string }> };
   try {
     metadata = await sock.groupMetadata(groupJid);
   } catch (error) {
@@ -132,6 +131,76 @@ async function indexGroupParticipants(
       {
         error: (error as Error).message,
       },
+    );
+    return;
+  }
+
+  // Fetch group profile picture and persist to avoid expiry (PPS links expire)
+  let resolvedPicUrl: string | null = null;
+  try {
+    const groupPicUrl = await sock.profilePictureUrl(groupJid, "image").catch(() => null);
+    resolvedPicUrl = groupPicUrl;
+    if (groupPicUrl) {
+      try {
+        const response = await axios.get(groupPicUrl, {
+          responseType: "arraybuffer",
+        });
+        const buffer = Buffer.from(response.data);
+        const mimeType = response.headers["content-type"] || "image/jpeg";
+        const filename = `group_profile_${conversation.id}_${Date.now()}.jpg`;
+
+        const uploadResult = await storageService.uploadFile(
+          companyId,
+          buffer,
+          filename,
+          mimeType,
+        );
+        resolvedPicUrl = uploadResult.url;
+        Logger.info(`[GroupIndexer] Persisted group profile picture to storage: ${resolvedPicUrl}`);
+      } catch (uploadErr) {
+        Logger.warn(`[GroupIndexer] Failed to persist group profile picture, using original URL:`, uploadErr);
+      }
+    }
+  } catch {
+    // Ignore profile picture failure
+  }
+
+  // Update group metadata and subject on conversation in database
+  const groupMetadata = {
+    groupName: metadata.subject,
+    description: metadata.desc || "",
+    participantCount: metadata.participants?.length || 0,
+    groupPicUrl: resolvedPicUrl,
+  };
+
+  const updatedSubject = metadata.subject ? `[GROUP] ${metadata.subject}` : conversation.subject;
+
+  await conversationRepository.update(companyId, conversation.id, {
+    subject: updatedSubject,
+    groupMetadata: groupMetadata as Prisma.InputJsonValue,
+  });
+
+  // Keep ticket subjects aligned with conversation name
+  const { prisma } = await import("@/config/database");
+  await prisma.ticket.updateMany({
+    where: { conversationId: conversation.id, companyId },
+    data: { subject: updatedSubject },
+  });
+
+  // Emit event to update frontend instantly via socket
+  gateway.emitToCompany(companyId, "conversation:update", {
+    id: conversation.id,
+    subject: updatedSubject,
+    groupMetadata,
+  });
+
+  Logger.info(`[GroupIndexer] [OK] Healed group "${metadata.subject}" metadata & profile pic: ${resolvedPicUrl}`);
+
+  // [SEC] ENTERPRISE: Auto-sync is OPT-IN to prevent spam contamination.
+  // Only auto-import participants if the user explicitly enabled sync for this group.
+  if (conversation.syncEnabled !== true) {
+    Logger.info(
+      `[GroupIndexer] [SKIP] Skipping participant import for group ${groupJid} (Auto-sync is OFF — user must enable or import manually)`,
     );
     return;
   }

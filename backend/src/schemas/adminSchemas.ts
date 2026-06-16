@@ -110,7 +110,6 @@ export const UpdateCompanyFeatureFlagsValidator = z.object({
     email_module: z.boolean().optional(),
     bulk_marketing: z.boolean().optional(),
     api_access: z.boolean().optional(),
-    custom_branding: z.boolean().optional(),
     group_sync: z.boolean().optional(),
     kanban_deals: z.boolean().optional(),
     voice_messages: z.boolean().optional(),

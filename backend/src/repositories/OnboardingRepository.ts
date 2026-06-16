@@ -31,6 +31,8 @@ export const onboardingRepository = {
           name: data.companyName,
           slug: data.slug,
           planId: data.planId,
+          trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day free trial by default
+          status: "TRIAL",
         },
       });
 

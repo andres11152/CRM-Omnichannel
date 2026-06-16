@@ -3,6 +3,7 @@ import { Logger } from "@/utils/logger";
 import bcrypt from "bcryptjs";
 import type { UserWithCompany } from "@/types/auth.types";
 import { UserRole, Prisma } from "@prisma/client";
+import TenantContextManager from "@/config/tenantContext";
 
 /**
  * [KEY] GOOGLE AUTH CRUD SERVICE
@@ -16,10 +17,12 @@ export const googleAuthCrudService = {
    * Find user by email (with company relation)
    */
   async findUserByEmail(email: string): Promise<UserWithCompany | null> {
-    const user = await userRepository.findFirst({
-      where: { email },
-      include: { company: true },
-    });
+    const user = await TenantContextManager.runAsSystem(async () =>
+      userRepository.findFirst({
+        where: { email },
+        include: { company: true },
+      })
+    );
     return user as UserWithCompany | null;
   },
 
@@ -30,30 +33,36 @@ export const googleAuthCrudService = {
     email: string;
     name: string;
     picture?: string | null;
+    companyName?: string;
+    slug?: string;
   }): Promise<UserWithCompany> {
     const randomPassword =
       Math.random().toString(36).slice(-8) +
       Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(randomPassword, 12);
 
-    const user = await userRepository.create({
-      data: {
-        email: data.email,
-        name: data.name || "Google User",
-        password: hashedPassword,
-        profilePicUrl: data.picture || null,
-        role: UserRole.ADMIN,
-        preferences: { googleAuth: true } as Prisma.InputJsonValue,
-        company: {
-          create: {
-            name: `${data.name || "User"}'s Workspace`,
-            status: "TRIAL",
-            emailProvider: "SMTP",
+    const user = await TenantContextManager.runAsSystem(async () =>
+      userRepository.create({
+        data: {
+          email: data.email,
+          name: data.name || "Google User",
+          password: hashedPassword,
+          profilePicUrl: data.picture || null,
+          role: UserRole.ADMIN,
+          preferences: { googleAuth: true } as Prisma.InputJsonValue,
+          company: {
+            create: {
+              name: data.companyName || `${data.name || "User"}'s Workspace`,
+              slug: data.slug,
+              planId: "free",
+              status: "TRIAL",
+              emailProvider: "SMTP",
+            },
           },
         },
-      },
-      include: { company: true },
-    });
+        include: { company: true },
+      })
+    );
 
     Logger.info(`[GoogleAuth] New user created via Google: ${user.email}`);
     return user as UserWithCompany;
@@ -63,11 +72,15 @@ export const googleAuthCrudService = {
    * Update user profile picture if missing
    */
   async updateProfilePic(userId: string, picture: string) {
-    const user = await userRepository.findFirst({ where: { id: userId } });
+    const user = await TenantContextManager.runAsSystem(async () =>
+      userRepository.findFirst({ where: { id: userId } })
+    );
     if (user?.companyId) {
-      await userRepository.update(userId, user.companyId, {
-        profilePicUrl: picture,
-      });
+      await TenantContextManager.runAsSystem(async () =>
+        userRepository.update(userId, user.companyId, {
+          profilePicUrl: picture,
+        })
+      );
     }
   },
 
@@ -79,9 +92,11 @@ export const googleAuthCrudService = {
     accessToken: string | null,
     refreshToken: string | null,
   ) {
-    const user = await userRepository.findFirst({
-      where: { id: userId },
-    });
+    const user = await TenantContextManager.runAsSystem(async () =>
+      userRepository.findFirst({
+        where: { id: userId },
+      })
+    );
 
     if (!user) {
       return null;
@@ -89,10 +104,12 @@ export const googleAuthCrudService = {
 
     if (!user.companyId) return null;
 
-    await userRepository.update(userId, user.companyId, {
-      googleCalendarToken: accessToken,
-      googleCalendarRefreshToken: refreshToken,
-    });
+    await TenantContextManager.runAsSystem(async () =>
+      userRepository.update(userId, user.companyId, {
+        googleCalendarToken: accessToken,
+        googleCalendarRefreshToken: refreshToken,
+      })
+    );
 
     return user;
   },
@@ -101,12 +118,16 @@ export const googleAuthCrudService = {
    * Disconnect Google Calendar (clear tokens)
    */
   async disconnectCalendar(userId: string) {
-    const user = await userRepository.findFirst({ where: { id: userId } });
+    const user = await TenantContextManager.runAsSystem(async () =>
+      userRepository.findFirst({ where: { id: userId } })
+    );
     if (user?.companyId) {
-      await userRepository.update(userId, user.companyId, {
-        googleCalendarToken: null,
-        googleCalendarRefreshToken: null,
-      });
+      await TenantContextManager.runAsSystem(async () =>
+        userRepository.update(userId, user.companyId, {
+          googleCalendarToken: null,
+          googleCalendarRefreshToken: null,
+        })
+      );
     }
   },
 
@@ -114,13 +135,15 @@ export const googleAuthCrudService = {
    * Get calendar connection status
    */
   async getCalendarStatus(userId: string) {
-    const user = await userRepository.findFirst({
-      where: { id: userId },
-      select: {
-        googleCalendarToken: true,
-        googleCalendarRefreshToken: true,
-      },
-    });
+    const user = await TenantContextManager.runAsSystem(async () =>
+      userRepository.findFirst({
+        where: { id: userId },
+        select: {
+          googleCalendarToken: true,
+          googleCalendarRefreshToken: true,
+        },
+      })
+    );
 
     return !!(user?.googleCalendarToken || user?.googleCalendarRefreshToken);
   },

@@ -1,25 +1,27 @@
 import { Request, Response } from "express";
 import { AuthenticatedRequest } from "@/types/types";
-import { stripeService } from "@/services/StripeService";
+import { mercadoPagoService } from "@/services/MercadoPagoService";
+import { planRepository } from "@/repositories/PlanRepository";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 
+
 /**
- * PAYMENT CONTROLLER
+ * PAYMENT CONTROLLER (MERCADOPAGO)
  */
 
-// POST /api/create-checkout-session
+// POST /api/payments/create-checkout-session (Refactored to MercadoPago)
 export const createCheckoutSession = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { priceId } = req.body;
+    const { priceId } = req.body; // In MercadoPago, this maps to the Plan ID / Plan key
     const companyId = req.companyId;
     const userEmail = req.user?.email;
 
-    // priceId validation is now handled by Zod middleware.
-    if (!companyId || !userEmail)
+    if (!companyId || !userEmail) {
       throw new AppError("Incomplete user data", 400);
+    }
 
-    const url = await stripeService.createCheckoutSession(
+    const url = await mercadoPagoService.createCheckoutPreference(
       companyId,
       priceId,
       userEmail,
@@ -29,28 +31,53 @@ export const createCheckoutSession = catchAsync(
   },
 );
 
-// POST /api/create-portal-session
+// POST /api/payments/create-portal-session (MercadoPago Subscription Redirect Stub)
 export const createPortalSession = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const companyId = req.companyId;
-    if (!companyId) {
-      throw new AppError("Company context not found.", 400);
-    }
-
-    // Logic to find customerId and create session is now encapsulated in the service.
-    // The controller only needs to pass the companyId.
-    const url = await stripeService.createPortalSession(companyId);
-
+    // MercadoPago doesn't have a direct equivalent to Stripe Portal.
+    // We redirect to MercadoPago's general user dashboard.
+    const url = "https://www.mercadopago.com.co/subscriptions";
     res.status(200).json({ url });
   },
 );
 
-// POST /webhook/stripe
-// Note: This route needs 'express.raw({type: "application/json"})' middleware in server.ts
+// POST /api/payments/subscribe-card (Direct Card Tokenized Subscription)
+export const subscribeCard = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { token, planId, paymentMethodId, issuerId } = req.body;
+    const companyId = req.companyId;
+    const userEmail = req.user?.email;
+
+    if (!companyId || !userEmail) {
+      throw new AppError("Incomplete user data", 400);
+    }
+
+    const subscription = await mercadoPagoService.subscribeWithCard(
+      companyId,
+      planId,
+      userEmail,
+      { token, paymentMethodId, issuerId },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Subscription created successfully",
+      subscription,
+    });
+  },
+);
+
+// GET /api/payments/plans (Retrieve list of subscription plans for UI)
+export const getPlans = catchAsync(async (req: Request, res: Response) => {
+  const plans = await planRepository.findMany();
+  res.status(200).json({ success: true, data: plans });
+});
+
+// POST /api/payments/webhook (MercadoPago Webhook/IPN Receiver)
 export const stripeWebhook = catchAsync(async (req: Request, res: Response) => {
-  const sig = req.headers["stripe-signature"] as string | string[] | undefined;
-
-  await stripeService.handleWebhook(sig as string, req.body);
-
+  const payload = req.body;
+  await mercadoPagoService.handleWebhook(payload);
   res.json({ received: true });
 });
+
+

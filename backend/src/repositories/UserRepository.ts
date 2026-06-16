@@ -39,7 +39,13 @@ export class UserRepository extends BaseRepository {
   }
 
   async create(args: Prisma.UserCreateArgs, companyIdOverride?: string): Promise<User> {
-    const companyId = companyIdOverride || TenantContextManager.getCompanyId();
+    const companyId = companyIdOverride || (TenantContextManager.hasContext() ? TenantContextManager.getCompanyId() : undefined);
+
+    // If running as system or no context, but company creation/connection is explicitly provided, respect it
+    if (companyId === "__SYSTEM__" || !companyId || (args.data as any).company) {
+      return this.db.user.create(args);
+    }
+
     // [SEC] Strip scalar companyId to avoid collision with relation connect
     const { companyId: _stripScalar, ...restData } = args.data as Record<string, unknown>;
     const data = {

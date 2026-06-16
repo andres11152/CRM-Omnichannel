@@ -10,6 +10,7 @@ import { Logger } from "@/utils/logger";
 import axios from "axios";
 import { storageService } from "@/services/StorageService";
 import { gateway } from "@/gateways/socketGateway";
+import { TenantContextManager } from "@/config/tenantContext";
 
 // ============================================================================
 //  ENTERPRISE GROUP CONTACT INDEXER
@@ -68,11 +69,16 @@ let workerInstance: Worker<GroupIndexJob> | null = null;
 async function processJob(job: Job<GroupIndexJob>): Promise<void> {
   const { type, companyId, groupJid, sessionId, groupName } = job.data;
 
-  if (type === "INDEX_GROUP_PARTICIPANTS") {
-    await indexGroupParticipants(companyId, groupJid, sessionId, groupName);
-  } else if (type === "ENRICH_CONTACT") {
-    await enrichContact(job.data);
-  }
+  await TenantContextManager.run(
+    { companyId, userId: "system", requestId: `job:${job.id}` },
+    async () => {
+      if (type === "INDEX_GROUP_PARTICIPANTS") {
+        await indexGroupParticipants(companyId, groupJid, sessionId, groupName);
+      } else if (type === "ENRICH_CONTACT") {
+        await enrichContact(job.data);
+      }
+    }
+  );
 }
 
 /**
@@ -181,11 +187,11 @@ async function indexGroupParticipants(
   });
 
   // Keep ticket subjects aligned with conversation name
-  const { prisma } = await import("@/config/database");
-  await prisma.ticket.updateMany({
-    where: { conversationId: conversation.id, companyId },
+  const { ticketRepository } = await import("@/repositories/TicketRepository");
+  await ticketRepository.updateMany({
+    where: { conversationId: conversation.id },
     data: { subject: updatedSubject },
-  });
+  }, companyId);
 
   // Emit event to update frontend instantly via socket
   gateway.emitToCompany(companyId, "conversation:update", {
@@ -422,7 +428,8 @@ export const groupContactIndexer = {
     groupName?: string,
   ): Promise<void> {
     // Deduplicate: don't re-index same group within 5 minutes
-    const dedupKey = `${companyId}:${groupJid}`;
+    const timeWindow = Math.floor(Date.now() / (5 * 60 * 1000)); // 5-minute window
+    const dedupKey = `${companyId}-${groupJid}-${timeWindow}`;
     const jobId = `group-index-${dedupKey}`;
 
     await groupIndexQueue.add(

@@ -93,14 +93,16 @@ export class OutboundWorker {
       // Without this, messages stay as "QUEUED" forever, misleading agents.
       if (job?.data?.payload?.options?.dbId) {
         try {
-          const { prisma } = await import("@/config/database");
           const dbId = job.data.payload.options.dbId as string;
-          await prisma.message.update({
-            where: { id: dbId },
-            data: { status: "FAILED" },
-          }).catch(() => {
-            // Message may have been deleted — ignore P2025
-          });
+          const companyId = job.data.payload.options.companyId as string;
+          if (companyId) {
+            await runWithCompanyId(companyId, async () => {
+              const { messageRepository } = await import("@/repositories/MessageRepository");
+              await messageRepository.update(dbId, { status: "FAILED" }).catch(() => {
+                // Message may have been deleted — ignore P2025
+              });
+            });
+          }
         } catch {
           // Non-critical — best effort status update
         }

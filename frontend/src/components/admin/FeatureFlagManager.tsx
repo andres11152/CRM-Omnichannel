@@ -108,11 +108,6 @@ export const FeatureFlagManager: React.FC = () => {
       description: "Habilita el gateway de API para integraciones de terceros.",
       icon: Zap
     },
-    custom_branding: { 
-      label: "Marca Blanca (Custom Branding)", 
-      description: "Permite ocultar el logo de Sentry CRM y usar identidad corporativa propia.",
-      icon: Lock
-    },
     group_sync: { 
       label: "Sincronización de Grupos", 
       description: "Indexación automática de participantes de grupos de WhatsApp.",

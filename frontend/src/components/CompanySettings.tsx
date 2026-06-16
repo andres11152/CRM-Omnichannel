@@ -44,6 +44,11 @@ export const CompanySettings: React.FC = () => {
     passwords,
     setPasswords,
     googleCalendarConnected,
+    availablePlans,
+    selectedPlanId,
+    setSelectedPlanId,
+    cardForm,
+    setCardForm,
     pickerOpen,
     setPickerOpen,
     pickerTarget,
@@ -57,8 +62,11 @@ export const CompanySettings: React.FC = () => {
     handleFileUpload,
     handleGoogleDisconnect,
     handleGoogleConnect,
+    handlePayMercadoPago,
+    handleSubscribeCard,
     user,
   } = ctx;
+
 
   // ── Avatar Picker Modal ──
   const AvatarPickerModal = () => {
@@ -311,38 +319,228 @@ export const CompanySettings: React.FC = () => {
               {renderTabContent()}
 
               {activeTab === "billing" && (
-                <div className="space-y-6 animate-fadeIn">
-                  {/* Plan Overview */}
-                  <div className="bg-white dark:bg-reply-panel-dark p-8 rounded-xl border border-gray-200 dark:border-reply-border-dark shadow-sm text-center relative overflow-hidden">
-                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between">
-                      <div className="text-left mb-6 md:mb-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-2xl">[VIP]</div>
-                          <div>
-                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white leading-tight">
-                              {settings.billing.plan?.name || t("company_settings.billing.free_plan", "Plan Gratuito")}
-                            </h3>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">${settings.billing.plan?.price || 0}</span>
-                              <span className="text-gray-500 font-medium">{t("company_settings.billing.per_month", "/mes")}</span>
+                <div className="space-y-8 animate-fadeIn">
+                  {/* Plan Overview & Interactive Selector */}
+                  <div className="bg-white dark:bg-reply-panel-dark p-6 md:p-8 rounded-2xl border border-gray-200 dark:border-reply-border-dark shadow-md relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+                          {t("company_settings.billing.title_plans", "Planes de Suscripción")}
+                        </h3>
+                        <p className="text-gray-500 text-sm">
+                          {t("company_settings.billing.desc_plans", "Selecciona un plan y configura tu método de pago directo.")}
+                        </p>
+                      </div>
+                      <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                        {settings.billing.plan?.name || t("company_settings.billing.free_plan", "Plan Gratuito")}
+                      </span>
+                    </div>
+
+                    {/* Horizontal Plans Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                      {availablePlans.length > 0 ? (
+                        availablePlans.map((plan: any) => {
+                          const isActive = settings.billing.plan?.id === plan.id;
+                          const isSelected = selectedPlanId === plan.id;
+                          return (
+                            <div
+                              key={plan.id}
+                              onClick={() => setSelectedPlanId(plan.id)}
+                              className={`p-6 rounded-2xl border transition-all duration-300 cursor-pointer relative group flex flex-col justify-between ${
+                                isSelected
+                                  ? "border-indigo-600 dark:border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-lg scale-[1.02]"
+                                  : "border-gray-200 dark:border-reply-border-dark bg-white dark:bg-reply-panel-dark hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-md"
+                              }`}
+                            >
+                              {isActive && (
+                                <span className="absolute -top-3 left-4 bg-emerald-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                  {t("company_settings.billing.current_plan", "Plan Activo")}
+                                </span>
+                              )}
+                              <div>
+                                <h4 className="font-extrabold text-lg text-gray-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                  {plan.name}
+                                </h4>
+                                <div className="flex items-baseline gap-1 my-3">
+                                  <span className="text-3xl font-extrabold text-gray-900 dark:text-white">
+                                    ${plan.price}
+                                  </span>
+                                  <span className="text-gray-500 text-sm">/mes</span>
+                                </div>
+                                <ul className="text-xs text-gray-500 space-y-2 mb-6">
+                                  <li className="flex items-center gap-2">
+                                    <span className="text-indigo-600 font-bold">✓</span> {plan.config?.max_users || plan.limits?.max_users || 0} {t("company_settings.billing.limit_users", "Usuarios")}
+                                  </li>
+                                  <li className="flex items-center gap-2">
+                                    <span className="text-indigo-600 font-bold">✓</span> {plan.config?.max_whatsapp_sessions || plan.limits?.max_whatsapp_sessions || 0} {t("company_settings.billing.limit_whatsapp", "Conexiones WA")}
+                                  </li>
+                                  <li className="flex items-center gap-2">
+                                    <span className="text-indigo-600 font-bold">✓</span> {plan.maxContacts || plan.limits?.max_contacts || "∞"} {t("company_settings.billing.limit_contacts", "Contactos CRM")}
+                                  </li>
+                                </ul>
+                              </div>
+                              <div className="w-full">
+                                <button
+                                  type="button"
+                                  className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                    isSelected
+                                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                                      : "bg-gray-100 dark:bg-reply-bg-dark text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
+                                  }`}
+                                >
+                                  {isSelected ? t("company_settings.billing.selected", "Seleccionado") : t("company_settings.billing.select", "Seleccionar Plan")}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="col-span-3 text-center py-6 text-gray-500">
+                          {t("company_settings.billing.no_plans", "No se encontraron planes disponibles")}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Payment Details: Direct Card & Virtual Preview */}
+                  <div className="bg-white dark:bg-reply-panel-dark p-6 md:p-8 rounded-2xl border border-gray-200 dark:border-reply-border-dark shadow-md">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                          {t("company_settings.billing.card_details", "Detalles de Tarjeta")}
+                        </h3>
+                        <p className="text-gray-500 text-sm">
+                          {t("company_settings.billing.card_details_desc", "Cobro mensual automático a través de la pasarela segura de Mercado Pago.")}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                      {/* Interactive Simulated Credit Card (Wow Premium Design) */}
+                      <div className="flex justify-center">
+                        <div className="w-full max-w-sm aspect-[1.586] rounded-2xl bg-gradient-to-br from-gray-900 via-indigo-950 to-indigo-900 p-6 text-white shadow-2xl relative overflow-hidden group select-none flex flex-col justify-between transform transition-transform duration-500 hover:scale-105">
+                          {/* Glossmorphism accents */}
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full filter blur-xl transform translate-x-10 -translate-y-10"></div>
+                          <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-500/20 rounded-full filter blur-xl transform -translate-x-10 translate-y-10"></div>
+                          
+                          <div className="flex justify-between items-start z-10">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold">Reply SaaS CRM</p>
+                              <span className="text-xs font-semibold bg-white/10 px-2 py-0.5 rounded backdrop-blur-sm mt-1 inline-block">Enterprise</span>
+                            </div>
+                            <span className="font-bold text-lg text-white/80 italic">Mercado Pago</span>
+                          </div>
+
+                          <div className="my-6 z-10">
+                            {/* Card Chip Simulation */}
+                            <div className="w-10 h-8 rounded bg-gradient-to-r from-yellow-400 to-yellow-200 opacity-80 mb-4 flex items-center justify-center">
+                              <div className="w-6 h-5 border border-black/10 rounded-sm"></div>
+                            </div>
+                            <p className="text-xl font-mono tracking-widest text-white/95">
+                              {cardForm.cardNumber || "•••• •••• •••• ••••"}
+                            </p>
+                          </div>
+
+                          <div className="flex justify-between items-end z-10">
+                            <div className="max-w-[70%]">
+                              <p className="text-[9px] uppercase tracking-wider text-indigo-300">Titular de Tarjeta</p>
+                              <p className="font-bold text-sm font-mono truncate uppercase">
+                                {cardForm.cardholderName || "Nombre Completo"}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[9px] uppercase tracking-wider text-indigo-300">Expira</p>
+                              <p className="font-bold text-sm font-mono">
+                                {cardForm.expiryDate || "MM/YY"}
+                              </p>
+                            </div>
+                            <div className="text-right ml-4">
+                              <p className="text-[9px] uppercase tracking-wider text-indigo-300">CVV</p>
+                              <p className="font-bold text-sm font-mono">
+                                {cardForm.cvv || "•••"}
+                              </p>
                             </div>
                           </div>
                         </div>
-                        <p className="text-gray-500 text-sm flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                          {t("company_settings.billing.renewal", "Renovación:")}{" "}
-                          <span className="font-bold text-gray-800 dark:text-gray-200">
-                            {settings.billing.subscriptionEndsAt
-                              ? new Date(settings.billing.subscriptionEndsAt).toLocaleDateString(t("common.locale_code", "es-CO"), { year: "numeric", month: "long", day: "numeric" })
-                              : t("company_settings.billing.monthly", "Mensual")}
-                          </span>
-                        </p>
                       </div>
-                      {/* Stripe Promo */}
-                      <div className="bg-gradient-to-r from-[#635BFF] to-[#635BFF]/80 p-5 rounded-xl text-white shadow-lg max-w-sm w-full">
-                        <span className="font-bold text-lg flex items-center gap-2">Stripe <span className="text-[10px] bg-white text-[#635BFF] px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold">{t("common.soon", "PRONTO")}</span></span>
-                        <p className="text-white/90 text-sm leading-relaxed my-3">{t("company_settings.billing.stripe_promo.desc", "Pronto podrás vincular tu tarjeta para pagos automáticos.")}</p>
-                        <button className="w-full py-2 bg-white text-[#635BFF] rounded-lg font-bold text-sm cursor-not-allowed opacity-80" disabled>{t("company_settings.billing.stripe_promo.notify", "Notificarme cuando esté listo")}</button>
+
+                      {/* Card Input Fields Form */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{t("company_settings.billing.cardholder", "Nombre en la Tarjeta")}</label>
+                          <input
+                            type="text"
+                            placeholder="Ej. ANDRES F BETANCOURT"
+                            value={cardForm.cardholderName}
+                            onChange={(e) => setCardForm({ ...cardForm, cardholderName: e.target.value })}
+                            className="w-full border border-gray-200 dark:border-reply-border-dark rounded-xl p-3 text-sm bg-reply-bg dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium uppercase"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{t("company_settings.billing.cardnumber", "Número de Tarjeta")}</label>
+                          <input
+                            type="text"
+                            maxLength={19}
+                            placeholder="4000 1234 5678 9010"
+                            value={cardForm.cardNumber.replace(/\s?/g, '').replace(/(\d{4})/g, '$1 ').trim()}
+                            onChange={(e) => setCardForm({ ...cardForm, cardNumber: e.target.value.replace(/\s?/g, '') })}
+                            className="w-full border border-gray-200 dark:border-reply-border-dark rounded-xl p-3 text-sm bg-reply-bg dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium font-mono"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{t("company_settings.billing.expiry", "Vencimiento (MM/YY)")}</label>
+                            <input
+                              type="text"
+                              maxLength={5}
+                              placeholder="12/29"
+                              value={cardForm.expiryDate}
+                              onChange={(e) => {
+                                let val = e.target.value.replace(/\D/g, "");
+                                if (val.length > 2) {
+                                  val = val.substring(0, 2) + "/" + val.substring(2, 4);
+                                }
+                                setCardForm({ ...cardForm, expiryDate: val });
+                              }}
+                              className="w-full border border-gray-200 dark:border-reply-border-dark rounded-xl p-3 text-sm bg-reply-bg dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{t("company_settings.billing.cvv", "Código de Seguridad (CVV)")}</label>
+                            <input
+                              type="password"
+                              maxLength={4}
+                              placeholder="•••"
+                              value={cardForm.cvv}
+                              onChange={(e) => setCardForm({ ...cardForm, cvv: e.target.value.replace(/\D/g, "") })}
+                              className="w-full border border-gray-200 dark:border-reply-border-dark rounded-xl p-3 text-sm bg-reply-bg dark:bg-black/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={handleSubscribeCard}
+                            disabled={loading}
+                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            {loading ? (
+                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            ) : (
+                              <>
+                                <span>💳</span>
+                                <span>{t("company_settings.billing.subscribe_button", "Activar Suscripción Recurrente")}</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -378,7 +576,6 @@ export const CompanySettings: React.FC = () => {
                           {[
                             { name: t("company_settings.billing.features.ai", "Motor de Inteligencia Artificial"), enabled: (planData.plan.limits.max_ai_assistants || 0) > 0 },
                             { name: t("company_settings.billing.features.api", "API Access & Webhooks"), enabled: true },
-                            { name: t("company_settings.billing.features.white_label", "Marca Blanca (White Label)"), enabled: true },
                             { name: t("company_settings.billing.features.support", "Soporte Prioritario"), enabled: true },
                             { name: t("company_settings.billing.features.reports", "Reportes Avanzados"), enabled: true },
                           ].map((feature, i) => (
@@ -399,31 +596,6 @@ export const CompanySettings: React.FC = () => {
                       </div>
                     </div>
                   )}
-
-                  {/* Payment Methods */}
-                  <div id="payment-methods" className="bg-reply-bg dark:bg-reply-surface-dark p-6 rounded-xl border border-gray-200 dark:border-reply-border-dark text-left">
-                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center justify-between">
-                      {t("company_settings.billing.manual_payments", "Métodos de Pago Manuales")}
-                      <span className="text-[10px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-bold">{t("company_settings.billing.temporal", "TEMPORAL")}</span>
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-white dark:bg-reply-panel-dark p-4 rounded-lg border border-gray-100 dark:border-reply-border-dark shadow-sm">
-                        <h5 className="font-bold text-[#E90772] mb-1 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#E90772]"></span> Nequi</h5>
-                        <p className="font-mono text-lg text-gray-800 dark:text-white tracking-wide">322 901 2685</p>
-                      </div>
-                      <div className="bg-white dark:bg-reply-panel-dark p-4 rounded-lg border border-gray-100 dark:border-reply-border-dark shadow-sm">
-                        <h5 className="font-bold text-[#FF0000] mb-1 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#FF0000]"></span> Daviplata</h5>
-                        <p className="font-mono text-lg text-gray-800 dark:text-white tracking-wide">324 245 0628</p>
-                      </div>
-                      <div className="bg-white dark:bg-reply-panel-dark p-4 rounded-lg border border-gray-100 dark:border-reply-border-dark shadow-sm">
-                        <h5 className="font-bold text-purple-600 mb-1 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-purple-600"></span> Bre-B</h5>
-                        <p className="font-mono text-lg text-gray-800 dark:text-white tracking-wide">324 245 0628</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 text-xs text-center text-gray-500">
-                      {t("company_settings.billing.manual_desc", "Envía tu comprobante a soporte para activar tu renovación inmediatamente.")}
-                    </div>
-                  </div>
                 </div>
               )}
             </div>

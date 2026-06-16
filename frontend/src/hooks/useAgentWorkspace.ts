@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { Ticket, Contact, User, Tag, Channel } from "@/types";
@@ -62,7 +62,7 @@ function mergeServerTickets(
     const isPresentDirect = serverConversationIds.has(t.id);
     const isMissing = !isPresentById && !isPresentByConv && !isPresentDirect;
     const lastActivity = new Date(t.lastMessageAt).getTime();
-    const isRecent = now - lastActivity < 10000;
+    const isRecent = now - lastActivity < 30000;
     return isMissing && isRecent;
   });
 
@@ -265,7 +265,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
     if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
     refreshTimeoutRef.current = setTimeout(() => {
       fetchData(true);
-    }, 2000);
+    }, 5000);
   }, [fetchData]);
 
   // ── Socket Store Initialization ──
@@ -619,98 +619,119 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
   }, []);
 
   // ────────────────────────────────────────────────
-  // DERIVED STATE (Computed from tickets)
+  // DERIVED STATE (Memoized for performance)
   // ────────────────────────────────────────────────
 
-  const curatedTickets = deduplicateTickets(tickets);
   const currentUserId = user?.id;
-  const isAdminRole = ["ADMIN", "SUPERVISOR", "MASTER"].includes(
-    user?.role || "",
+  const isAdminRole = useMemo(
+    () => ["ADMIN", "SUPERVISOR", "MASTER"].includes(user?.role || ""),
+    [user?.role],
   );
-  const isRestricted =
-    user?.companyStatus === "INACTIVE" || user?.companyStatus === "CANCELED";
-
-  const myTickets = curatedTickets.filter(
-    (t) =>
-      currentUserId &&
-      t.assignedToId === currentUserId &&
-      (t.status === "OPEN" || t.status === "IN_PROGRESS"),
+  const isRestricted = useMemo(
+    () => user?.companyStatus === "INACTIVE" || user?.companyStatus === "CANCELED",
+    [user?.companyStatus],
   );
 
-  const queueTickets = curatedTickets.filter(
-    (t) =>
-      t.status === "OPEN" &&
-      !t.assignedToId &&
-      !t.isGroup &&
-      !t.contact?.isGroup,
-  );
+  const curatedTickets = useMemo(() => deduplicateTickets(tickets), [tickets]);
 
-  // Build displayedTickets based on active tab
-  let displayedTickets: Ticket[] = [];
-  if (activeTab === "my_chats") {
-    displayedTickets = myTickets.filter(
-      (t) => t.status !== "CLOSED" && t.status !== "RESOLVED",
-    );
-
-    // [SEC] Admin Empowerment: Include ALL active groups in the display context
-    // so they can be opened even if not assigned to the current admin.
-    if (isAdminRole) {
-      const allActiveGroupTickets = curatedTickets.filter(
+  const myTickets = useMemo(
+    () =>
+      curatedTickets.filter(
         (t) =>
-          (t.isGroup || t.contact?.isGroup) &&
-          t.status !== "CLOSED" &&
-          t.status !== "RESOLVED" &&
-          !displayedTickets.some(dt => dt.id === t.id) // Avoid duplicates
-      );
-      displayedTickets = [...displayedTickets, ...allActiveGroupTickets];
-    }
-  } else if (activeTab === "queue") {
-    displayedTickets = queueTickets.filter(
-      (t) => t.status !== "CLOSED" && t.status !== "RESOLVED",
-    );
-  } else if (activeTab === "resolved") {
-    if (isAdminRole) {
-      displayedTickets = tickets.filter(
-        (t) => t.status === "CLOSED" || t.status === "RESOLVED",
-      );
-    } else {
-      displayedTickets = tickets.filter(
-        (t) =>
-          (t.status === "CLOSED" || t.status === "RESOLVED") &&
-          t.assignedToId === currentUserId,
-      );
-    }
-  }
+          currentUserId &&
+          t.assignedToId === currentUserId &&
+          (t.status === "OPEN" || t.status === "IN_PROGRESS"),
+      ),
+    [curatedTickets, currentUserId],
+  );
 
-  // Apply filters
-  if (filterUnread) {
-    displayedTickets = displayedTickets.filter((t) => t.unreadCount > 0);
-  }
-  if (selectedTags.length > 0) {
-    displayedTickets = displayedTickets.filter((t) => {
-      if (!t.tags || t.tags.length === 0) return false;
-      return selectedTags.every((tagId) => t.tags.includes(tagId));
+  const queueTickets = useMemo(
+    () =>
+      curatedTickets.filter(
+        (t) =>
+          t.status === "OPEN" &&
+          !t.assignedToId &&
+          !t.isGroup &&
+          !t.contact?.isGroup,
+      ),
+    [curatedTickets],
+  );
+
+  // Build displayedTickets based on active tab, filters, and sort
+  const displayedTickets = useMemo(() => {
+    let result: Ticket[] = [];
+    if (activeTab === "my_chats") {
+      result = myTickets.filter(
+        (t) => t.status !== "CLOSED" && t.status !== "RESOLVED",
+      );
+
+      // [SEC] Admin Empowerment: Include ALL active groups
+      if (isAdminRole) {
+        const allActiveGroupTickets = curatedTickets.filter(
+          (t) =>
+            (t.isGroup || t.contact?.isGroup) &&
+            t.status !== "CLOSED" &&
+            t.status !== "RESOLVED" &&
+            !result.some((dt) => dt.id === t.id),
+        );
+        result = [...result, ...allActiveGroupTickets];
+      }
+    } else if (activeTab === "queue") {
+      result = queueTickets.filter(
+        (t) => t.status !== "CLOSED" && t.status !== "RESOLVED",
+      );
+    } else if (activeTab === "resolved") {
+      if (isAdminRole) {
+        result = tickets.filter(
+          (t) => t.status === "CLOSED" || t.status === "RESOLVED",
+        );
+      } else {
+        result = tickets.filter(
+          (t) =>
+            (t.status === "CLOSED" || t.status === "RESOLVED") &&
+            t.assignedToId === currentUserId,
+        );
+      }
+    }
+
+    // Apply filters
+    if (filterUnread) {
+      result = result.filter((t) => t.unreadCount > 0);
+    }
+    if (selectedTags.length > 0) {
+      result = result.filter((t) => {
+        if (!t.tags || t.tags.length === 0) return false;
+        return selectedTags.every((tagId) => t.tags.includes(tagId));
+      });
+    }
+
+    // Sort (create new array to avoid mutation)
+    return [...result].sort((a, b) => {
+      const dateA = new Date(a.lastMessageAt).getTime();
+      const dateB = new Date(b.lastMessageAt).getTime();
+      if (isNaN(dateA)) return 1;
+      if (isNaN(dateB)) return -1;
+      return sortOrder === "date_desc" ? dateB - dateA : dateA - dateB;
     });
-  }
+  }, [
+    activeTab, myTickets, queueTickets, curatedTickets, tickets,
+    isAdminRole, currentUserId, filterUnread, selectedTags, sortOrder,
+  ]);
 
-  // Sort
-  displayedTickets.sort((a, b) => {
-    const dateA = new Date(a.lastMessageAt).getTime();
-    const dateB = new Date(b.lastMessageAt).getTime();
-    if (isNaN(dateA)) return 1;
-    if (isNaN(dateB)) return -1;
-    return sortOrder === "date_desc" ? dateB - dateA : dateA - dateB;
-  });
+  // Convert to contacts (memoized)
+  const contacts = useMemo(
+    () => displayedTickets.map(ticketToContact),
+    [displayedTickets],
+  );
 
-  // Convert to contacts
-  const contacts: Contact[] = displayedTickets.map(ticketToContact);
+  // Group handling (memoized)
+  const { directContacts, groupContacts } = useMemo(() => {
+    if (activeTab !== "my_chats") {
+      return { directContacts: contacts, groupContacts: [] as Contact[] };
+    }
 
-  // Group handling
-  let directContacts = contacts;
-  let groupContacts: Contact[] = [];
-
-  if (activeTab === "my_chats") {
-    directContacts = contacts.filter((c) => !c.isGroup);
+    const direct = contacts.filter((c) => !c.isGroup);
+    let groups: Contact[];
     if (isAdminRole) {
       const allActiveGroupTickets = curatedTickets.filter(
         (t) =>
@@ -718,55 +739,69 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
           t.status !== "CLOSED" &&
           t.status !== "RESOLVED",
       );
-      groupContacts = allActiveGroupTickets.map(ticketToContact);
+      groups = allActiveGroupTickets.map(ticketToContact);
     } else {
-      groupContacts = contacts.filter((c) => c.isGroup);
+      groups = contacts.filter((c) => c.isGroup);
     }
-  }
+    return { directContacts: direct, groupContacts: groups };
+  }, [activeTab, contacts, isAdminRole, curatedTickets]);
 
-  // Active ticket/contact resolution
-  // [SEC] 100-YEAR FIX: Only resolve active ticket if it exists in the CURRENT displayed context
-  // This prevents "ghost" chats staying open when a ticket is transferred or reassigned away from the current view.
-  const activeTicket = displayedTickets.find((t) => t.id === activeTicketId || t.conversationId === activeTicketId);
-  const activeContact: Contact | null = activeTicket
-    ? {
-        ...activeTicket.contact,
-        name: resolveContactName(
-          activeTicket.contact as Partial<Contact>,
-          activeTicket.subject || undefined,
-        ),
-        id: activeTicket.conversationId || activeTicket.id,
-        lastMessage: activeTicket.lastMessage,
-        lastMessageTime: new Date(activeTicket.lastMessageAt),
-        tags: activeTicket.tags,
-        unreadCount: activeTicket.unreadCount,
-        channel: activeTicket.channel as Channel,
-        phone: resolveContactPhone(activeTicket),
-        channelId: activeTicket.contact.channelId,
-        avatarUrl: activeTicket.contact.avatarUrl || "",
-        profilePicUrl: activeTicket.contact.profilePicUrl || undefined,
-        about: activeTicket.contact.about || undefined,
-        status: activeTicket.status,
-        assignedMode: (activeTicket.queueId === "ai" ? "bot" : "human") as
-          | "bot"
-          | "human",
-        queueName: activeTicket.queue?.name,
-        assignedAgentName: activeTicket.assignedTo?.name,
-        assignedToId: activeTicket.assignedToId,
-        isGroup:
-          activeTicket.isGroup || activeTicket.contact.isGroup || false,
-        priority: activeTicket.priority,
-        ticketCreatedAt: activeTicket.createdAt,
-      }
-    : null;
+  // Active ticket/contact resolution (memoized)
+  const activeTicket = useMemo(
+    () =>
+      displayedTickets.find(
+        (t) => t.id === activeTicketId || t.conversationId === activeTicketId,
+      ),
+    [displayedTickets, activeTicketId],
+  );
 
-  // Resolved today count
-  const resolvedTodayCount = tickets.filter(
-    (t) =>
-      (t.status === "CLOSED" || t.status === "RESOLVED") &&
-      t.resolvedAt &&
-      new Date(t.resolvedAt).toDateString() === new Date().toDateString(),
-  ).length;
+  const activeContact: Contact | null = useMemo(
+    () =>
+      activeTicket
+        ? {
+            ...activeTicket.contact,
+            name: resolveContactName(
+              activeTicket.contact as Partial<Contact>,
+              activeTicket.subject || undefined,
+            ),
+            id: activeTicket.conversationId || activeTicket.id,
+            lastMessage: activeTicket.lastMessage,
+            lastMessageTime: new Date(activeTicket.lastMessageAt),
+            tags: activeTicket.tags,
+            unreadCount: activeTicket.unreadCount,
+            channel: activeTicket.channel as Channel,
+            phone: resolveContactPhone(activeTicket),
+            channelId: activeTicket.contact.channelId,
+            avatarUrl: activeTicket.contact.avatarUrl || "",
+            profilePicUrl: activeTicket.contact.profilePicUrl || undefined,
+            about: activeTicket.contact.about || undefined,
+            status: activeTicket.status,
+            assignedMode: (activeTicket.queueId === "ai" ? "bot" : "human") as
+              | "bot"
+              | "human",
+            queueName: activeTicket.queue?.name,
+            assignedAgentName: activeTicket.assignedTo?.name,
+            assignedToId: activeTicket.assignedToId,
+            isGroup:
+              activeTicket.isGroup || activeTicket.contact.isGroup || false,
+            priority: activeTicket.priority,
+            ticketCreatedAt: activeTicket.createdAt,
+          }
+        : null,
+    [activeTicket],
+  );
+
+  // Resolved today count (memoized)
+  const resolvedTodayCount = useMemo(
+    () =>
+      tickets.filter(
+        (t) =>
+          (t.status === "CLOSED" || t.status === "RESOLVED") &&
+          t.resolvedAt &&
+          new Date(t.resolvedAt).toDateString() === new Date().toDateString(),
+      ).length,
+    [tickets],
+  );
 
   return {
     // Core state

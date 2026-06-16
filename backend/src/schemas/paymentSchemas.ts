@@ -4,11 +4,7 @@ export const CreateCheckoutSessionSchema = z.object({
   body: z.object({
     priceId: z
       .string()
-      .min(5, "Invalid price ID format")
-      .regex(
-        /^price_[a-zA-Z0-9]+$/,
-        "Price ID must be a valid Stripe price ID",
-      ),
+      .min(1, "Plan/Price ID is required"),
   }),
 });
 

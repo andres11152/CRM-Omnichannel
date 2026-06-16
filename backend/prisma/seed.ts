@@ -9,68 +9,186 @@ async function main() {
 
   // 1. CREATE PLANS (Para que los tenants puedan suscribirse)
   // IDs uuid v4 para cumplir con validaciones del backend
-  const planFreeId = "11111111-1111-1111-1111-111111111111";
-  const planProId = "22222222-2222-2222-2222-222222222222";
-  const planEnterpriseId = "33333333-3333-3333-3333-333333333333";
+  const planStarterId = "11111111-1111-1111-1111-111111111111"; // Starter
+  const planGrowthId = "15151515-1515-1515-1515-151515151515";  // Growth
+  const planProId = "22222222-2222-2222-2222-222222222222";     // Pro
+  const planEnterpriseId = "33333333-3333-3333-3333-333333333333"; // Enterprise
+  const planUltimateId = "44444444-4444-4444-4444-444444444444";  // Ultimate
 
   await prisma.plan.upsert({
-    where: { id: planFreeId },
-    update: {},
-    create: {
-      id: planFreeId,
-      name: "Free",
-      price: 0,
+    where: { id: planStarterId },
+    update: {
+      name: "Starter",
+      price: 4.90,
       config: {
         max_users: 1,
         max_whatsapp_sessions: 1,
         max_queues: 1,
         enable_ai: false,
+        enable_api: false,
       },
-      storageLimitGb: 1,
-      maxContacts: 100,
+      storageLimitGb: 5,
+      maxContacts: 1000,
+      maxCompanies: 1,
+    },
+    create: {
+      id: planStarterId,
+      name: "Starter",
+      price: 4.90,
+      config: {
+        max_users: 1,
+        max_whatsapp_sessions: 1,
+        max_queues: 1,
+        enable_ai: false,
+        enable_api: false,
+      },
+      storageLimitGb: 5,
+      maxContacts: 1000,
+      maxCompanies: 1,
+    },
+  });
+
+  await prisma.plan.upsert({
+    where: { id: planGrowthId },
+    update: {
+      name: "Growth",
+      price: 9.90,
+      config: {
+        max_users: 3,
+        max_whatsapp_sessions: 2,
+        max_queues: 3,
+        enable_ai: true,
+        enable_api: false,
+      },
+      storageLimitGb: 20,
+      maxContacts: 5000,
+      maxCompanies: 1,
+    },
+    create: {
+      id: planGrowthId,
+      name: "Growth",
+      price: 9.90,
+      config: {
+        max_users: 3,
+        max_whatsapp_sessions: 2,
+        max_queues: 3,
+        enable_ai: true,
+        enable_api: false,
+      },
+      storageLimitGb: 20,
+      maxContacts: 5000,
       maxCompanies: 1,
     },
   });
 
   const proPlan = await prisma.plan.upsert({
     where: { id: planProId },
-    update: {},
+    update: {
+      name: "Pro",
+      price: 19.90,
+      config: {
+        max_users: 10,
+        max_whatsapp_sessions: 5,
+        max_queues: 10,
+        enable_ai: true,
+        enable_api: true,
+        max_workflows: 10,
+        max_ai_assistants: 3,
+      },
+      storageLimitGb: 50,
+      maxContacts: 20000,
+      maxCompanies: 3,
+    },
     create: {
       id: planProId,
       name: "Pro",
-      price: 49,
+      price: 19.90,
       config: {
-        max_users: 5,
+        max_users: 10,
         max_whatsapp_sessions: 5,
-        max_queues: 5,
+        max_queues: 10,
         enable_ai: true,
         enable_api: true,
+        max_workflows: 10,
+        max_ai_assistants: 3,
       },
       storageLimitGb: 50,
-      maxContacts: 10000,
+      maxContacts: 20000,
       maxCompanies: 3,
     },
   });
 
   await prisma.plan.upsert({
     where: { id: planEnterpriseId },
-    update: {},
-    create: {
-      id: planEnterpriseId,
+    update: {
       name: "Enterprise",
-      price: 199,
+      price: 39.90, // Optimized from 199.00
       config: {
-        max_users: 50,
-        max_whatsapp_sessions: 20,
+        max_users: 30,
+        max_whatsapp_sessions: 10,
         max_queues: 20,
         enable_ai: true,
         enable_api: true,
         max_ai_assistants: 10,
-        max_workflows: 50,
+        max_workflows: 30,
+      },
+      storageLimitGb: 200,
+      maxContacts: 50000,
+      maxCompanies: 10,
+    },
+    create: {
+      id: planEnterpriseId,
+      name: "Enterprise",
+      price: 39.90,
+      config: {
+        max_users: 30,
+        max_whatsapp_sessions: 10,
+        max_queues: 20,
+        enable_ai: true,
+        enable_api: true,
+        max_ai_assistants: 10,
+        max_workflows: 30,
+      },
+      storageLimitGb: 200,
+      maxContacts: 50000,
+      maxCompanies: 10,
+    },
+  });
+
+  await prisma.plan.upsert({
+    where: { id: planUltimateId },
+    update: {
+      name: "Ultimate",
+      price: 79.90,
+      config: {
+        max_users: 100, // Practically unlimited
+        max_whatsapp_sessions: 25,
+        max_queues: 50,
+        enable_ai: true,
+        enable_api: true,
+        max_ai_assistants: 30,
+        max_workflows: 100,
       },
       storageLimitGb: 500,
       maxContacts: 100000,
-      maxCompanies: 10,
+      maxCompanies: 20,
+    },
+    create: {
+      id: planUltimateId,
+      name: "Ultimate",
+      price: 79.90,
+      config: {
+        max_users: 100,
+        max_whatsapp_sessions: 25,
+        max_queues: 50,
+        enable_ai: true,
+        enable_api: true,
+        max_ai_assistants: 30,
+        max_workflows: 100,
+      },
+      storageLimitGb: 500,
+      maxContacts: 100000,
+      maxCompanies: 20,
     },
   });
 

@@ -115,6 +115,7 @@ export class WhatsAppEventWiring {
               password: env.REDIS_PASSWORD || undefined,
               tls: isTls ? { rejectUnauthorized: false } : undefined,
             });
+            redis.on("error", () => {}); // Silence transient connection errors
             const outboundQueue = new Queue("whatsapp-outbound", { connection: redis });
             const failedJobs = await outboundQueue.getFailed(0, 100);
 

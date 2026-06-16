@@ -84,7 +84,10 @@ export default defineConfig({
     },
   },
   esbuild: {
-    drop: ["console", "debugger"],
+    // Only strip console/debugger in production builds
+    ...(process.env.NODE_ENV === "production"
+      ? { drop: ["console", "debugger"] }
+      : {}),
   },
   server: {
     // WebSocket server configuration for HMR support

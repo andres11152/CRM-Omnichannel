@@ -5,6 +5,7 @@ import { z } from "zod";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast, Toaster } from "sonner";
 import { AxiosError } from "axios";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { useAuthStore } from "@/stores/authStore";
 import { api } from "@/lib/axios";
@@ -13,22 +14,41 @@ import { LoginResponse } from "@/types/auth.types";
 import { API_BASE_URL } from "@/services/apiConfig";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 
-//  VALIDATION SCHEMA
+//  VALIDATION SCHEMAS
 const loginSchema = z.object({
-  email: z.string().min(1, "El email es requerido").email("Email invlido"),
+  email: z.string().min(1, "El email es requerido").email("Email inválido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
+const registerSchema = z.object({
+  companyName: z
+    .string()
+    .min(2, "El nombre de la empresa debe tener al menos 2 caracteres")
+    .max(100, "El nombre de la empresa es muy largo"),
+  adminEmail: z
+    .string()
+    .min(1, "El email es requerido")
+    .email("Por favor, proporciona un email válido"),
+  adminPassword: z
+    .string()
+    .min(8, "La contraseña debe tener al menos 8 caracteres")
+    .regex(/[A-Z]/, "Debe contener al menos una mayúscula")
+    .regex(/[a-z]/, "Debe contener al menos una minúscula")
+    .regex(/[0-9]/, "Debe contener al menos un número"),
+  slug: z.string().optional(),
+});
+
 type LoginFormData = z.infer<typeof loginSchema>;
+type RegisterFormData = z.infer<typeof registerSchema>;
 
 //  REUSABLE COMPONENT: INPUT FIELD
 interface FormInputProps {
   label: string;
-  name: Path<LoginFormData>;
+  name: string;
   type?: string;
   placeholder?: string;
-  register: UseFormRegister<LoginFormData>;
-  error?: FieldErrors<LoginFormData>[keyof LoginFormData];
+  register: UseFormRegister<any>;
+  error?: any;
   togglePassword?: boolean;
 }
 
@@ -46,8 +66,8 @@ const FormInput = ({
   const effectiveType = isPassword ? (show ? "text" : "password") : type;
 
   return (
-    <div>
-      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 ml-1">
+    <div className="space-y-1">
+      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 ml-0.5">
         {label}
       </label>
       <div className="relative group">
@@ -56,15 +76,16 @@ const FormInput = ({
           {...register(name)}
           placeholder={placeholder}
           className={`
-            block w-full px-4 py-3.5 rounded-xl border text-base transition-all duration-200
-            bg-reply-bg dark:bg-reply-surface-dark text-reply-text-primary dark:text-reply-text-primary-dark
-            placeholder-gray-400 dark:placeholder-gray-500
+            block w-full px-4 py-3 rounded-xl border-0 text-sm font-medium transition-all duration-200
+            bg-gray-50/80 dark:bg-gray-800/60 text-gray-900 dark:text-gray-100
+            placeholder-gray-400 dark:placeholder-gray-600
+            ring-1 ring-inset
             ${
               error
-                ? "border-red-500 bg-red-50/50 dark:bg-red-900/10 focus:ring-red-200"
-                : "border-reply-border dark:border-reply-border-dark hover:border-gray-300 dark:hover:border-gray-600 focus:border-reply-brand focus:ring-4 focus:ring-reply-brand/10"
+                ? "ring-red-400/50 bg-red-50/30 dark:bg-red-950/10 focus:ring-red-500"
+                : "ring-gray-200/60 dark:ring-gray-700/40 hover:ring-gray-300/80 dark:hover:ring-gray-600/60 focus:ring-2 focus:ring-reply-brand/40"
             }
-            focus:outline-none
+            focus:outline-none focus:bg-white dark:focus:bg-gray-800
           `}
         />
         {isPassword && (
@@ -132,6 +153,7 @@ const FormInput = ({
   );
 };
 
+
 export const LoginPage = () => {
   const { login } = useAuthStore();
   const navigate = useNavigate();
@@ -143,15 +165,99 @@ export const LoginPage = () => {
   // UI State
   const [darkMode, setDarkMode] = useState(false);
   const [blockedStatus, setBlockedStatus] = useState<string | null>(null);
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<LoginFormData>({
+  // Forms
+  const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
+
+  const registerForm = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { companyName: "", adminEmail: "", adminPassword: "", slug: "" },
+  });
+
+  // Watch company name to suggest slug
+  const watchedCompanyName = registerForm.watch("companyName");
+  useEffect(() => {
+    if (watchedCompanyName) {
+      const suggestedSlug = watchedCompanyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+      registerForm.setValue("slug", suggestedSlug);
+    }
+  }, [watchedCompanyName]);
+
+  // Check for Token from Google Login Redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const errorParam = params.get("error");
+
+    if (token) {
+      const fetchGoogleUser = async () => {
+        try {
+          // Set token locally for Axios interceptor
+          localStorage.setItem("token", token);
+
+          // Fetch hydrated user info from profile endpoint, passing token explicitly
+          const response = await api.get<{ user: any }>("/users/me", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          const user = response.data?.user;
+
+          if (!user) {
+            throw new Error("No se pudo obtener el perfil de usuario");
+          }
+
+          // Sync Dates
+          const mappedUser = {
+            ...user,
+            createdAt: user.createdAt ? new Date(user.createdAt) : new Date(),
+            updatedAt: user.updatedAt ? new Date(user.updatedAt) : new Date(),
+            company: user.company
+              ? {
+                  ...user.company,
+                  createdAt: new Date(user.company.createdAt),
+                  updatedAt: new Date(user.company.updatedAt),
+                  subscriptionEndsAt: user.company.subscriptionEndsAt
+                    ? new Date(user.company.subscriptionEndsAt)
+                    : null,
+                }
+              : undefined,
+          };
+
+          // @ts-ignore
+          login(mappedUser, token);
+          toast.success(`Bienvenido de nuevo, ${user.name.split(" ")[0]}`);
+
+          // Clean URL parameters
+          window.history.replaceState({}, document.title, window.location.pathname);
+          navigate("/dashboard", { replace: true });
+        } catch (err) {
+          console.error("[LoginPage] Google Token Fetch Error:", err);
+          localStorage.removeItem("token");
+          toast.error("Error al iniciar sesión con Google.");
+        }
+      };
+
+      fetchGoogleUser();
+    } else if (errorParam) {
+      if (errorParam === "no_email") {
+        toast.error("No pudimos obtener tu email de Google.");
+      } else if (errorParam === "auth_failed") {
+        toast.error("Falló la autenticación con Google.");
+      } else {
+        toast.error("Error de inicio de sesión con Google.");
+      }
+      // Clean URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   // Dark Mode Sync
   useEffect(() => {
@@ -159,7 +265,7 @@ export const LoginPage = () => {
     else document.documentElement.classList.remove("dark");
   }, [darkMode]);
 
-  const onSubmit = async (data: LoginFormData) => {
+  const onSubmitLogin = async (data: LoginFormData) => {
     try {
       const response = await api.post<ApiResponse<LoginResponse>>(
         "/auth/login",
@@ -171,7 +277,7 @@ export const LoginPage = () => {
 
       if (!token || !user) {
         throw new Error(
-          "Respuesta invlida del servidor (Falta token o usuario)",
+          "Respuesta inválida del servidor (Falta token o usuario)",
         );
       }
 
@@ -232,27 +338,150 @@ export const LoginPage = () => {
     }
   };
 
+  const handleGoogleRegister = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const companyName = registerForm.getValues("companyName");
+    const slug = registerForm.getValues("slug") || "";
+
+    if (!companyName || companyName.trim().length < 2) {
+      registerForm.setError("companyName", {
+        type: "manual",
+        message: "Por favor, ingresa el nombre de tu empresa primero.",
+      });
+      return;
+    }
+
+    window.location.href = `${API_BASE_URL}/google/auth?action=login&companyName=${encodeURIComponent(companyName)}&slug=${encodeURIComponent(slug)}`;
+  };
+
+  const onSubmitRegister = async (data: RegisterFormData) => {
+    try {
+      const response = await api.post<ApiResponse<LoginResponse>>("/onboarding", {
+        companyName: data.companyName,
+        adminEmail: data.adminEmail,
+        adminPassword: data.adminPassword,
+        slug: data.slug,
+        plan: "free",
+      });
+
+      const { token, data: responseData } = response.data;
+      const user = responseData?.user;
+
+      if (!token || !user) {
+        throw new Error(
+          "Respuesta inválida del servidor (Falta token o usuario)",
+        );
+      }
+
+      // [SYNC] DATA MAPPING: Convert ISO strings to Date objects to satisfy Store types
+      const mappedUser = {
+        ...user,
+        createdAt: new Date(user.createdAt),
+        updatedAt: new Date(user.updatedAt),
+        company: user.company
+          ? {
+              ...user.company,
+              createdAt: new Date(user.company.createdAt),
+              updatedAt: new Date(user.company.updatedAt),
+              subscriptionEndsAt: user.company.subscriptionEndsAt
+                ? new Date(user.company.subscriptionEndsAt)
+                : null,
+            }
+          : undefined,
+      };
+
+      // @ts-ignore - Explicit mapping above handles the Date/String mismatch
+      login(mappedUser, token);
+      toast.success(`¡Empresa registrada exitosamente! Bienvenido, ${user.name.split(" ")[0]}`);
+      navigate("/dashboard", { replace: true });
+    } catch (error: any) {
+      console.error("[LoginPage] Register Error:", error);
+      const msg = error.response?.data?.message || "Error al registrar la empresa";
+      toast.error(msg);
+    }
+  };
+
+
   return (
-    <div className="flex min-h-screen bg-reply-surface dark:bg-reply-bg-dark font-sans selection:bg-reply-brand/10 dark:selection:bg-reply-brand/20 relative">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-reply-bg-dark font-sans selection:bg-reply-brand/10 dark:selection:bg-reply-brand/20 relative">
       <Toaster
         position="top-right"
         richColors
         toastOptions={{ style: { zIndex: 99999 } }}
       />
-      {/* ️ LEFT SIDE: ARTWORK & BRANDING */}
-      <div className="hidden lg:flex w-[48%] fixed inset-y-0 left-0 bg-gradient-to-br from-reply-brand to-reply-brand-dark items-center justify-center p-12 overflow-hidden z-0">
-        {/* Background Patterns */}
-        <div className="absolute inset-0 opacity-10 dark:opacity-20 bg-[radial-gradient(#ffffff33_1px,transparent_1px)] [background-size:24px_24px]"></div>
-        <div className="absolute -top-32 -right-32 w-96 h-96 bg-white/10 rounded-full blur-[80px]"></div>
-        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-black/10 rounded-full blur-[80px]"></div>
+      {/* ️ LEFT SIDE: ARTWORK & BRANDING — Enterprise Grade */}
+      <div className="hidden lg:flex w-[48%] fixed inset-y-0 left-0 bg-gradient-to-br from-[#0b3c2c] via-[#051c15] to-[#010906] items-center justify-center p-12 overflow-hidden z-0">
+        {/* ═══ LAYER 1: Animated Gradient Mesh ═══ */}
+        <div className="absolute inset-0">
+          <motion.div
+            className="absolute inset-0 opacity-30"
+            animate={{
+              background: [
+                "radial-gradient(ellipse at 20% 50%, rgba(16,185,129,0.15) 0%, transparent 50%)",
+                "radial-gradient(ellipse at 80% 20%, rgba(20,184,166,0.12) 0%, transparent 50%)",
+                "radial-gradient(ellipse at 40% 80%, rgba(5,150,105,0.15) 0%, transparent 50%)",
+                "radial-gradient(ellipse at 20% 50%, rgba(16,185,129,0.15) 0%, transparent 50%)",
+              ],
+            }}
+            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+          />
+        </div>
 
-        <div className="z-10 text-center text-white max-w-lg">
-          <div className="mb-10 flex justify-center relative">
-            <div className="absolute inset-0 bg-white/20 blur-2xl rounded-full scale-150 animate-pulse-slow"></div>
-            <svg
+        {/* ═══ LAYER 2: Fine Technical Grid ═══ */}
+        <div className="absolute inset-0 opacity-[0.06] bg-[linear-gradient(to_right,#80808020_1px,transparent_1px),linear-gradient(to_bottom,#80808020_1px,transparent_1px)] [background-size:40px_40px]" />
+
+        {/* ═══ LAYER 3: Floating Luminous Orbs ═══ */}
+        {[
+          { size: 320, x: [-60, 80, -20, -60], y: [-40, 20, 60, -40], color: "emerald", opacity: 0.08, dur: 20 },
+          { size: 200, x: [200, 120, 260, 200], y: [300, 200, 350, 300], color: "teal", opacity: 0.06, dur: 25 },
+          { size: 150, x: [400, 350, 450, 400], y: [-50, 30, -30, -50], color: "cyan", opacity: 0.05, dur: 18 },
+          { size: 180, x: [100, 200, 50, 100], y: [400, 350, 500, 400], color: "emerald", opacity: 0.07, dur: 22 },
+        ].map((orb, i) => (
+          <motion.div
+            key={`orb-${i}`}
+            className={`absolute rounded-full blur-[80px] bg-${orb.color}-500`}
+            style={{ width: orb.size, height: orb.size, opacity: orb.opacity }}
+            animate={{ x: orb.x, y: orb.y }}
+            transition={{ duration: orb.dur, repeat: Infinity, ease: "easeInOut" }}
+          />
+        ))}
+
+        {/* ═══ LAYER 4: Scanning Line (Cyber/Enterprise feel) ═══ */}
+        <motion.div
+          className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent"
+          animate={{ top: ["-5%", "105%"] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+        />
+
+        {/* ═══ CONTENT: Staggered Enterprise Reveal ═══ */}
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: {},
+            visible: { transition: { staggerChildren: 0.15, delayChildren: 0.3 } },
+          }}
+          className="z-10 text-center text-white max-w-xl"
+        >
+          {/* Logo with Radial Pulse */}
+          <motion.div
+            variants={{ hidden: { opacity: 0, scale: 0.8, y: 20 }, visible: { opacity: 1, scale: 1, y: 0 } }}
+            transition={{ type: "spring", stiffness: 100, damping: 15 }}
+            className="mb-8 flex justify-center relative"
+          >
+            {/* Animated radial pulse behind logo */}
+            <motion.div
+              className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full scale-150"
+              animate={{ opacity: [0.15, 0.35, 0.15], scale: [1.3, 1.6, 1.3] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.svg
+              whileHover={{ scale: 1.08, rotate: 3, filter: "drop-shadow(0 0 20px rgba(16,185,129,0.5))" }}
+              whileTap={{ scale: 0.95 }}
               viewBox="0 0 100 100"
               fill="none"
-              className="w-32 h-32 relative drop-shadow-2xl"
+              className="w-24 h-24 relative cursor-pointer"
+              transition={{ type: "spring", stiffness: 300, damping: 15 }}
             >
               <path
                 d="M25 65C25 51.19 36.19 40 50 40H60C62.76 40 65 42.24 65 45V65C65 78.81 53.81 90 40 90H25V65Z"
@@ -260,92 +489,153 @@ export const LoginPage = () => {
               />
               <path
                 d="M40 50C40 36.19 51.19 25 65 25H75L90 10L85 50H75C72.24 50 70 52.24 70 55V60C70 68.28 63.28 75 55 75H40V50Z"
-                className="fill-green-200"
+                className="fill-emerald-400"
               />
-            </svg>
-          </div>
+            </motion.svg>
+          </motion.div>
 
-          <h1 className="text-5xl font-bold mb-6 tracking-tight drop-shadow-sm">
+          {/* Title with Gradient Reveal */}
+          <motion.h1
+            variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="text-4xl font-extrabold mb-4 tracking-tight drop-shadow-sm bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent"
+          >
             Sentry CRM
-          </h1>
-          <p className="text-xl text-green-50 font-medium leading-relaxed opacity-90">
-            La plataforma definitiva de <br />
-            <span className="text-white font-bold">
-              Mensajería Inteligente & IA
-            </span>{" "}
-            <br />
-            para escalar tu negocio.
-          </p>
+          </motion.h1>
 
-          {/* Trust Badges / Mini Footer for Left Side */}
-          <div className="mt-16 flex items-center justify-center gap-6 opacity-60">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span className="text-sm font-semibold">Enterprise Grade</span>
-            </div>
-            <div className="h-4 w-px bg-white/40"></div>
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-              </svg>
-              <span className="text-sm font-semibold">500+ Empresas</span>
-            </div>
-          </div>
-        </div>
+          {/* Tagline with Stagger */}
+          <motion.p
+            variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+            transition={{ duration: 0.5 }}
+            className="text-lg text-emerald-100/90 font-medium leading-relaxed max-w-md mx-auto"
+          >
+            La plataforma definitiva de <br />
+            <span className="text-white font-semibold">Mensajería Inteligente & IA</span> para escalar las operaciones comerciales de tu negocio.
+          </motion.p>
+
+          {/* ═══ Trust Badges — Animated ═══ */}
+          <motion.div
+            variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 0.7, y: 0 } }}
+            transition={{ duration: 0.5 }}
+            className="mt-14 flex items-center justify-center gap-6"
+          >
+            {[
+              {
+                label: "Enterprise Grade",
+                icon: (
+                  <svg className="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                ),
+              },
+              {
+                label: "SLA del 99.9%",
+                icon: (
+                  <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ),
+              },
+            ].map((badge, i) => (
+              <React.Fragment key={badge.label}>
+                {i > 0 && <div className="h-4 w-px bg-white/20" />}
+                <motion.div
+                  className="flex items-center gap-2 cursor-default"
+                  whileHover={{ scale: 1.05, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                >
+                  {badge.icon}
+                  <span className="text-xs font-semibold uppercase tracking-wider">{badge.label}</span>
+                </motion.div>
+              </React.Fragment>
+            ))}
+          </motion.div>
+        </motion.div>
       </div>
 
       {/* [AUTH] RIGHT SIDE: LOGIN FORM */}
-      <div className="flex-1 lg:ml-[48%] flex flex-col px-6 sm:px-12 xl:px-32 relative bg-reply-surface dark:bg-reply-surface-dark min-h-screen overflow-y-auto">
-        {/* Theme Toggle (Absolute Top Right) */}
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          className="absolute top-6 right-6 p-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-95 z-20"
-          aria-label="Toggle Theme"
-        >
-          {darkMode ? (
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-              />
-            </svg>
-          ) : (
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-              />
-            </svg>
-          )}
-        </button>
+      <div className="flex-1 lg:ml-[48%] flex flex-col justify-start px-6 sm:px-16 xl:px-28 relative bg-white dark:bg-reply-bg-dark min-h-screen overflow-y-auto">
+        {/* Subtle grid pattern for light and dark modes on right panel */}
+        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none bg-[radial-gradient(#808080_1px,transparent_1px)] [background-size:24px_24px] z-0" />
 
-        {/* [DEV] FIX: Use my-auto and py-12 for safe vertical centering that respects overflow */}
-        <div className="w-full max-w-[420px] mx-auto my-auto py-12 sm:py-16 animate-fade-in-up z-10 flex flex-col">
+        {/* ═══ MOBILE: Animated Gradient Header (replaces left panel on small screens) ═══ */}
+        <div className="lg:hidden absolute top-0 left-0 right-0 h-32 overflow-hidden z-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-emerald-600/5 via-teal-500/3 to-transparent dark:from-emerald-500/10 dark:via-teal-500/5 dark:to-transparent" />
+          <motion.div
+            className="absolute w-40 h-40 rounded-full blur-[60px] bg-emerald-500/10 -top-10 -left-10"
+            animate={{ x: [0, 60, 0], opacity: [0.08, 0.15, 0.08] }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className="absolute w-32 h-32 rounded-full blur-[50px] bg-teal-500/8 -top-5 right-10"
+            animate={{ x: [0, -40, 0], opacity: [0.06, 0.12, 0.06] }}
+            transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+
+        {/* Theme Toggle with micro-animation */}
+        <motion.button
+          onClick={() => setDarkMode(!darkMode)}
+          className="absolute top-6 right-6 p-2 rounded-xl text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-all z-20 border border-gray-100 dark:border-gray-800/40"
+          aria-label="Toggle Theme"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9, rotate: 15 }}
+          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+        >
+          <AnimatePresence mode="wait">
+            {darkMode ? (
+              <motion.svg
+                key="sun"
+                initial={{ rotate: -90, opacity: 0 }}
+                animate={{ rotate: 0, opacity: 1 }}
+                exit={{ rotate: 90, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                />
+              </motion.svg>
+            ) : (
+              <motion.svg
+                key="moon"
+                initial={{ rotate: 90, opacity: 0 }}
+                animate={{ rotate: 0, opacity: 1 }}
+                exit={{ rotate: -90, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                />
+              </motion.svg>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 80, damping: 18, delay: 0.1 }}
+          className="w-full max-w-[400px] mx-auto pt-8 pb-10 z-10 flex flex-col my-auto"
+        >
           {/* Header */}
-          <div className="mb-10 text-center lg:text-left">
-            <div className="inline-block lg:hidden mb-4">
+          <div className="mb-8 text-center lg:text-left">
+            <div className="inline-block lg:hidden mb-5">
               {/* Mobile Logo */}
-              <svg viewBox="0 0 100 100" fill="none" className="w-12 h-12">
+              <svg viewBox="0 0 100 100" fill="none" className="w-11 h-11 mx-auto lg:mx-0">
                 <path
                   d="M25 65C25 51.19 36.19 40 50 40H60C62.76 40 65 42.24 65 45V65C65 78.81 53.81 90 40 90H25V65Z"
                   className="fill-reply-brand"
@@ -356,159 +646,293 @@ export const LoginPage = () => {
                 />
               </svg>
             </div>
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
-              Bienvenido de nuevo
+            <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-1.5 tracking-tight">
+              {isRegisterMode ? "Crear una Cuenta" : "Iniciar Sesión"}
             </h2>
-            <p className="text-base text-gray-500 dark:text-gray-400">
-              Ingresa tus credenciales para acceder a tu panel de control.
+            <p className="text-[13px] font-medium text-gray-400 dark:text-gray-500">
+              {isRegisterMode
+                ? "Registra tu empresa y empieza a gestionar tus chats con IA."
+                : "Accede a tu panel de control empresarial."}
             </p>
           </div>
 
-          {/* Single Social Button */}
-          <div className="mb-8">
-            <a
-              href={`${API_BASE_URL}/google/auth?action=login`}
-              className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border border-reply-border dark:border-reply-border-dark bg-reply-surface dark:bg-reply-panel-dark hover:bg-reply-bg dark:hover:bg-reply-border-dark hover:border-reply-border transition-all shadow-sm group"
-            >
-              <svg
-                className="w-5 h-5 group-hover:scale-110 transition-transform"
-                viewBox="0 0 24 24"
-                width="24"
-                height="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
-                  <path
-                    fill="#4285F4"
-                    d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.799 L -6.734 42.379 C -8.804 40.439 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"
-                  />
-                </g>
-              </svg>
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                Continuar con Google
-              </span>
-            </a>
-          </div>
-
-          {/* Divider */}
-          <div className="relative mb-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200 dark:border-reply-border-dark"></div>
-            </div>
-            <div className="relative flex justify-center">
-              <span className="px-4 bg-reply-surface dark:bg-reply-surface-dark text-xs font-semibold text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
-                O con tu email
-              </span>
-            </div>
-          </div>
-
-          {/* Main Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <FormInput
-              label="Correo Electrónico"
-              name="email"
-              type="email"
-              placeholder="ej. nombre@empresa.com"
-              register={register}
-              error={errors.email}
-            />
-
-            <div>
-              <FormInput
-                label="Contraseña"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                register={register}
-                error={errors.password}
-                togglePassword={true}
-              />
-              <div className="flex justify-end mt-2">
-                <Link
-                  to="/forgot-password"
-                  className="text-sm font-semibold text-reply-green hover:text-green-700 dark:hover:text-green-400 transition-colors"
-                >
-                  ¿Olvidaste tu contraseña?
-                </Link>
-              </div>
-            </div>
-
+          {/* Unified Sliding Tabs Switcher (Premium HSL style with Framer Motion layoutId sliding pill) */}
+          <div className="bg-gray-100/50 dark:bg-gray-800/30 p-1 rounded-xl flex items-center mb-6 relative">
             <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full py-4 bg-reply-brand hover:bg-reply-brand-dark dark:bg-reply-brand dark:hover:bg-reply-brand-dark text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+              type="button"
+              onClick={() => setIsRegisterMode(false)}
+              className={`relative flex-1 py-2.5 text-xs font-bold rounded-[10px] transition-colors duration-200 z-10 ${
+                !isRegisterMode
+                  ? "text-gray-900 dark:text-white"
+                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              }`}
             >
-              {isSubmitting && (
-                <svg
-                  className="animate-spin h-5 w-5 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth={4}
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
+              {!isRegisterMode && (
+                <motion.div
+                  layoutId="activeTabBubble"
+                  className="absolute inset-0 bg-white dark:bg-gray-800 rounded-[10px] shadow-sm z-0"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
               )}
-              {isSubmitting ? "Iniciando Sesión..." : "Ingresar al Panel"}
+              <span className="relative z-10">Iniciar Sesión</span>
             </button>
-          </form>
+            <button
+              type="button"
+              onClick={() => setIsRegisterMode(true)}
+              className={`relative flex-1 py-2.5 text-xs font-bold rounded-[10px] transition-colors duration-200 z-10 ${
+                isRegisterMode
+                  ? "text-gray-900 dark:text-white"
+                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              }`}
+            >
+              {isRegisterMode && (
+                <motion.div
+                  layoutId="activeTabBubble"
+                  className="absolute inset-0 bg-white dark:bg-gray-800 rounded-[10px] shadow-sm z-0"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">Registrar Empresa</span>
+            </button>
+          </div>
+
+          <AnimatePresence mode="wait">
+            {!isRegisterMode ? (
+              <motion.div
+                key="login"
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 12 }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+              >
+                {/* Google Login (Only in Sign In) */}
+                <div className="mb-5">
+                  <motion.a
+                    whileHover={{ scale: 1.01, y: -0.5 }}
+                    whileTap={{ scale: 0.99 }}
+                    href={`${API_BASE_URL}/google/auth?action=login`}
+                    className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-gray-50/80 dark:bg-gray-800/50 hover:bg-gray-100/80 dark:hover:bg-gray-800/80 transition-all duration-200 group ring-1 ring-inset ring-gray-200/50 dark:ring-gray-700/30"
+                  >
+                    <svg
+                      className="w-[18px] h-[18px] group-hover:scale-105 transition-transform"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+                        <path
+                          fill="#4285F4"
+                          d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.799 L -6.734 42.379 C -8.804 40.439 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"
+                        />
+                      </g>
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">
+                      Continuar con Google
+                    </span>
+                  </motion.a>
+                </div>
+
+                {/* Divider */}
+                <div className="relative mb-5">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-100 dark:border-gray-800/60"></div>
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="px-4 bg-white dark:bg-reply-bg-dark text-[10px] font-semibold text-gray-300 dark:text-gray-600 uppercase tracking-[0.15em]">
+                      o con tu email
+                    </span>
+                  </div>
+                </div>
+
+                {/* Login Form */}
+                <form onSubmit={loginForm.handleSubmit(onSubmitLogin)} className="space-y-4">
+                  <FormInput
+                    label="Correo Electrónico"
+                    name="email"
+                    type="email"
+                    placeholder="ej. nombre@empresa.com"
+                    register={loginForm.register}
+                    error={loginForm.formState.errors.email}
+                  />
+
+                  <div>
+                    <FormInput
+                      label="Contraseña"
+                      name="password"
+                      type="password"
+                      placeholder="••••••••"
+                      register={loginForm.register}
+                      error={loginForm.formState.errors.password}
+                      togglePassword={true}
+                    />
+                    <div className="flex justify-end mt-1.5">
+                      <Link
+                        to="/forgot-password"
+                        className="text-xs font-semibold text-gray-400 hover:text-reply-brand dark:hover:text-teal-400 transition-colors"
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </Link>
+                    </div>
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.01, y: -0.5 }}
+                    whileTap={{ scale: 0.99 }}
+                    type="submit"
+                    disabled={loginForm.formState.isSubmitting}
+                    className="w-full py-3 bg-reply-brand hover:bg-reply-brand-dark text-white text-sm font-bold rounded-xl shadow-[0_2px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_4px_20px_rgba(16,185,129,0.35)] hover:-translate-y-px transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+                  >
+                    {loginForm.formState.isSubmitting && (
+                      <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></div>
+                    )}
+                    {loginForm.formState.isSubmitting ? "Iniciando Sesión..." : "Ingresar al Panel"}
+                  </motion.button>
+                </form>
+              </motion.div>
+            ) : (
+              /* Registration Onboarding Form */
+              <motion.div
+                key="register"
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                className="space-y-4"
+              >
+                <FormInput
+                  label="Nombre de tu Empresa"
+                  name="companyName"
+                  placeholder="Ej. SkyCode Agency"
+                  register={registerForm.register}
+                  error={registerForm.formState.errors.companyName}
+                />
+
+                <div className="pt-2">
+                  <motion.button
+                    whileHover={{ scale: 1.01, y: -0.5 }}
+                    whileTap={{ scale: 0.99 }}
+                    type="button"
+                    onClick={handleGoogleRegister}
+                    className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-gray-50/80 dark:bg-gray-800/50 hover:bg-gray-100/80 dark:hover:bg-gray-800/80 transition-all duration-200 group cursor-pointer ring-1 ring-inset ring-gray-200/50 dark:ring-gray-700/30"
+                  >
+                    <svg
+                      className="w-[18px] h-[18px] group-hover:scale-105 transition-transform"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+                        <path
+                          fill="#4285F4"
+                          d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.799 L -6.734 42.379 C -8.804 40.439 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"
+                        />
+                      </g>
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">
+                      Registrarme con Google
+                    </span>
+                  </motion.button>
+                </div>
+
+                {/* Divider */}
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-100 dark:border-gray-800/60"></div>
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="px-4 bg-white dark:bg-reply-bg-dark text-[10px] font-semibold text-gray-300 dark:text-gray-600 uppercase tracking-[0.15em]">
+                      o crear credenciales directas
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={registerForm.handleSubmit(onSubmitRegister)} className="space-y-4">
+                  <FormInput
+                    label="Correo del Administrador"
+                    name="adminEmail"
+                    type="email"
+                    placeholder="ej. nombre@empresa.com"
+                    register={registerForm.register}
+                    error={registerForm.formState.errors.adminEmail}
+                  />
+
+                  <FormInput
+                    label="Contraseña de Administrador"
+                    name="adminPassword"
+                    type="password"
+                    placeholder="Contraseña robusta"
+                    register={registerForm.register}
+                    error={registerForm.formState.errors.adminPassword}
+                    togglePassword={true}
+                  />
+
+                  <motion.button
+                    whileHover={{ scale: 1.01, y: -0.5 }}
+                    whileTap={{ scale: 0.99 }}
+                    type="submit"
+                    disabled={registerForm.formState.isSubmitting}
+                    className="w-full py-3 bg-reply-brand hover:bg-reply-brand-dark text-white text-sm font-bold rounded-xl shadow-[0_2px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_4px_20px_rgba(16,185,129,0.35)] hover:-translate-y-px transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 mt-4"
+                  >
+                    {registerForm.formState.isSubmitting && (
+                      <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></div>
+                    )}
+                    {registerForm.formState.isSubmitting ? "Registrando Empresa..." : "Registrar Empresa"}
+                  </motion.button>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
 
           {/* Footer */}
-          <div className="mt-10 pt-6 border-t border-gray-100 dark:border-reply-border-dark text-center">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              ¿Aún no tienes cuenta?{" "}
-              <a
-                href="#"
-                className="font-bold text-reply-green hover:underline"
-              >
-                Solicita una demo
-              </a>
-            </p>
+          <div className="mt-4 pt-3 border-t border-gray-100/60 dark:border-gray-800/40 text-center">
+            {isRegisterMode && (
+              <p className="text-gray-400 dark:text-gray-500 text-xs">
+                ¿Ya tienes cuenta?{" "}
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterMode(false)}
+                  className="font-bold text-reply-brand hover:underline focus:outline-none"
+                >
+                  Inicia Sesión
+                </button>
+              </p>
+            )}
 
-            <div className="mt-8 flex justify-center gap-8 text-xs font-medium text-gray-400 dark:text-gray-500">
-              <a
-                href="#"
-                className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                Términos y Condiciones
-              </a>
-              <a
-                href="#"
-                className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                Política de Privacidad
-              </a>
-              <a
-                href="#"
-                className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                Soporte
-              </a>
+            <div className="mt-3 flex justify-center gap-6 text-[11px] font-medium text-gray-300 dark:text-gray-600">
+              <Link to="/terms" className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors">Términos</Link>
+              <span className="text-gray-200 dark:text-gray-700">·</span>
+              <Link to="/privacy" className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors">Privacidad</Link>
+              <span className="text-gray-200 dark:text-gray-700">·</span>
+              <a href="mailto:soporte@sentrycrm.cloud" className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors">Soporte</a>
             </div>
           </div>
-        </div>
       </div>
 
       {/*  BLOCKED USER MODAL */}

@@ -181,13 +181,6 @@ export const NAV_ITEMS: NavItem[] = [
     allowedRoles: ["company_admin", "agent", "ADMIN", "AGENT"],
     icon: <Icon I={Tag} />,
   },
-  {
-    id: "settings",
-    title: "Configuración",
-    path: "/settings",
-    allowedRoles: ["company_admin", "ADMIN"],
-    icon: <Icon I={Settings} />,
-  },
   // --- MASTER & DEV ---
   {
     id: "tenants",
@@ -259,5 +252,12 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/developers",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={Code} />,
+  },
+  {
+    id: "settings",
+    title: "Configuración",
+    path: "/settings",
+    allowedRoles: ["company_admin", "ADMIN"],
+    icon: <Icon I={Settings} />,
   },
 ];

@@ -27,7 +27,7 @@ export class FlowQueueService {
       { sessionId },
       {
         delay: delayMs,
-        jobId: `resume:${sessionId}:${Date.now()}`, // Unique job ID prevents dups if needed, but timestamp ensures uniqueness here
+        jobId: `resume-${sessionId}-${Date.now()}`, // Unique job ID prevents dups if needed, but timestamp ensures uniqueness here
         removeOnComplete: true, // Keep Redis clean
         removeOnFail: 100, // Keep last 100 failed for debugging
       },

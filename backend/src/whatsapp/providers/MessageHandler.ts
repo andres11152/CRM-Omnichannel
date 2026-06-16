@@ -33,7 +33,7 @@ import { Logger } from "@/utils/logger";
 /**
  * [BUILD] MESSAGE HANDLER (Thin Orchestrator)
  *
- * After Phase 2 & 3 (BullMQ) refactoring, this class is now an 
+ * After Phase 2 & 3 (BullMQ) refactoring, this class is now an
  * asynchronous routing layer. All heavy logic is offloaded to Redis queues.
  */
 export class MessageHandler implements IMessageHandler {
@@ -109,10 +109,14 @@ export class MessageHandler implements IMessageHandler {
       WhatsAppEventType.MESSAGE_RECEIVED,
       async (event) => {
         //  OFF-LOAD TO QUEUE
-        await this.handleIncoming(event.data.message, event.sessionId, event.companyId);
+        await this.handleIncoming(
+          event.data.message,
+          event.sessionId,
+          event.companyId,
+        );
       },
     );
-// ... reste del archivo ...
+    // ... reste del archivo ...
 
     this.eventBus.subscribe(WhatsAppEventType.MESSAGE_UPDATE, async (event) => {
       await this.statusHandler.handleMessageUpdate(
@@ -169,25 +173,33 @@ export class MessageHandler implements IMessageHandler {
   // Protobuf binary encoding preserves ALL fields with full fidelity.
   private serializeForQueue(message: proto.IWebMessageInfo): string {
     const encoded = proto.WebMessageInfo.encode(
-      proto.WebMessageInfo.create(message)
+      proto.WebMessageInfo.create(message),
     ).finish();
-    return Buffer.from(encoded).toString('base64');
+    return Buffer.from(encoded).toString("base64");
   }
 
-  async handleIncoming(message: proto.IWebMessageInfo, sessionId: string, companyId: string): Promise<void> {
+  async handleIncoming(
+    message: proto.IWebMessageInfo,
+    sessionId: string,
+    companyId: string,
+  ): Promise<void> {
     // [SEC] PROTOBUF BINARY: Serialize via proto.encode → Base64 for lossless Redis transport
     const encodedMessage = this.serializeForQueue(message);
 
     // [SEC] CIRCUIT BREAKER: Evaluate if company is flooding the system
     const delayMs = await InboundCircuitBreaker.getDelayFor(companyId);
 
-    await getWhatsAppQueue().inboundQueue.add("process-message", {
-      encodedMessage,
-      sessionId,
-      companyId,
-    }, {
-      delay: delayMs
-    });
+    await getWhatsAppQueue().inboundQueue.add(
+      "process-message",
+      {
+        encodedMessage,
+        sessionId,
+        companyId,
+      },
+      {
+        delay: delayMs,
+      },
+    );
   }
 
   /**
@@ -197,7 +209,7 @@ export class MessageHandler implements IMessageHandler {
    */
   private async getOutboundDelayAndPriority(
     companyId: string,
-    options: SendMessageOptions
+    options: SendMessageOptions,
   ): Promise<{ delay: number; priority: number }> {
     const isAiGenerated = options.metadata?.aiGenerated === true;
     const isFlowGenerated = options.metadata?.flowGenerated === true;
@@ -217,9 +229,16 @@ export class MessageHandler implements IMessageHandler {
     const now = Date.now();
 
     // Human-like delay config: average 3 seconds (2-5s range)
-    const minDelay = parseInt(process.env.WA_OUTBOUND_MIN_DELAY_MS || "2000", 10);
-    const maxDelay = parseInt(process.env.WA_OUTBOUND_MAX_DELAY_MS || "5000", 10);
-    const jitter = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+    const minDelay = parseInt(
+      process.env.WA_OUTBOUND_MIN_DELAY_MS || "2000",
+      10,
+    );
+    const maxDelay = parseInt(
+      process.env.WA_OUTBOUND_MAX_DELAY_MS || "5000",
+      10,
+    );
+    const jitter =
+      Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
 
     try {
       // Lua script to atomically calculate and set the next execution timestamp
@@ -239,13 +258,16 @@ export class MessageHandler implements IMessageHandler {
 
       const delayStr = await redisClient.eval(luaScript, {
         keys: [key],
-        arguments: [String(now), String(jitter)]
+        arguments: [String(now), String(jitter)],
       });
 
       const delay = parseInt(delayStr as string, 10);
       return { delay: delay > 0 ? delay : 0, priority: 10 };
     } catch (err) {
-      Logger.error(`[OutboundScheduler] Error calculating delay for ${companyId}:`, err);
+      Logger.error(
+        `[OutboundScheduler] Error calculating delay for ${companyId}:`,
+        err,
+      );
       return { delay: 0, priority: 10 };
     }
   }
@@ -255,7 +277,10 @@ export class MessageHandler implements IMessageHandler {
     content: string,
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
-    const { delay, priority } = await this.getOutboundDelayAndPriority(options.companyId, options);
+    const { delay, priority } = await this.getOutboundDelayAndPriority(
+      options.companyId,
+      options,
+    );
 
     const job = await getWhatsAppQueue().outboundQueue.add(
       "send-text",
@@ -266,9 +291,9 @@ export class MessageHandler implements IMessageHandler {
       {
         delay,
         priority,
-      }
+      },
     );
-    
+
     return {
       sessionId: "queued",
       companyId: options.companyId,
@@ -285,7 +310,10 @@ export class MessageHandler implements IMessageHandler {
     media: MediaPayload,
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
-    const { delay, priority } = await this.getOutboundDelayAndPriority(options.companyId, options);
+    const { delay, priority } = await this.getOutboundDelayAndPriority(
+      options.companyId,
+      options,
+    );
 
     const job = await getWhatsAppQueue().outboundQueue.add(
       "send-media",
@@ -296,7 +324,7 @@ export class MessageHandler implements IMessageHandler {
       {
         delay,
         priority,
-      }
+      },
     );
 
     return {

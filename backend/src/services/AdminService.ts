@@ -162,6 +162,8 @@ export const adminService = {
       slug: data.slug,
       plan: { connect: { id: data.planId } },
       smtpPassword: data.smtpPassword,
+      trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day free trial
+      status: "TRIAL",
       users: {
         create: {
           email: data.adminEmail,

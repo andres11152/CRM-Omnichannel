@@ -42,6 +42,8 @@ const SystemDeepMonitor = React.lazy(() => import("@/components/admin/SystemDeep
 const FeatureFlagManager = React.lazy(() => import("@/components/admin/FeatureFlagManager").then(m => ({ default: m.FeatureFlagManager })));
 const GlobalTemplateMarketplace = React.lazy(() => import("@/components/admin/GlobalTemplateMarketplace").then(m => ({ default: m.GlobalTemplateMarketplace })));
 const EmailInbox = React.lazy(() => import("@/components/EmailInbox").then(m => ({ default: m.EmailInbox })));
+const TermsPage = React.lazy(() => import("@/pages/TermsPage").then(m => ({ default: m.TermsPage })));
+const PrivacyPage = React.lazy(() => import("@/pages/PrivacyPage").then(m => ({ default: m.PrivacyPage })));
 const NotFoundPage = React.lazy(() => import("@/pages/NotFoundPage").then(m => ({ default: m.NotFoundPage })));
 
 // --- LOADING FALLBACK ---
@@ -114,6 +116,8 @@ export const AppRoutes: React.FC = () => {
         <Route path="/login-legacy" element={<LegacyLoginWrapper />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
 
         {/* PROTECTED APP ROUTES */}
         <Route element={<ProtectedRoute />}>

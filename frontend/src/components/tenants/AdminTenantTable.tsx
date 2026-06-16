@@ -128,20 +128,30 @@ export const AdminTenantTable: React.FC<Props> = ({
               </td>
               <td className="px-6 py-3">
                 <div className="flex flex-col gap-1">
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border ${
-                      company.planId?.toLowerCase().includes("pro")
-                        ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800"
-                        : company.planId?.toLowerCase().includes("enterprise")
-                          ? "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800"
-                          : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700"
-                    }`}
-                  >
-                    <Zap className="w-2.5 h-2.5" />
-                    {plans?.find((p) => p.id === company.planId)?.name ||
-                      company.planId ||
-                      t("admin_tenants.plan_free", "Plan Free")}
-                  </span>
+                  {(() => {
+                    const plan = plans?.find((p) => p.id === company.planId);
+                    const planName = plan?.name?.toLowerCase() || company.planId?.toLowerCase() || "free";
+                    
+                    let badgeClass = "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700";
+                    if (planName.includes("starter")) {
+                      badgeClass = "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/30 dark:text-slate-300 dark:border-slate-800";
+                    } else if (planName.includes("growth")) {
+                      badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800";
+                    } else if (planName.includes("pro")) {
+                      badgeClass = "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800";
+                    } else if (planName.includes("enterprise")) {
+                      badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800";
+                    } else if (planName.includes("ultimate")) {
+                      badgeClass = "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/50 font-black";
+                    }
+                    
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] uppercase tracking-tighter border ${badgeClass}`}>
+                        <Zap className="w-2.5 h-2.5" />
+                        {plan?.name || company.planId || t("admin_tenants.plan_free", "Plan Free")}
+                      </span>
+                    );
+                  })()}
                   <div className="text-[10px] text-gray-400 font-medium">
                     ${plans?.find((p) => p.id === company.planId)?.price || 0}
                     {t("admin_tenants.per_month", "/mes")}

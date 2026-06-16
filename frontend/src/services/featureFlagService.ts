@@ -5,7 +5,6 @@ export interface FeatureFlags {
   email_module: boolean;
   bulk_marketing: boolean;
   api_access: boolean;
-  custom_branding: boolean;
   group_sync: boolean;
   kanban_deals: boolean;
   voice_messages: boolean;

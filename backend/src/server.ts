@@ -103,14 +103,17 @@ const bootstrap = async () => {
 
 // Handle Uncaught Errors (Legacy Handlers)
 process.on("uncaughtException", (err: Error) => {
-  if (err.message?.includes("ECONNRESET") || err.message?.includes("ETIMEDOUT"))
-    return;
+  const msg = err.message || "";
+  const isNetworkNoise = ["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "ENOTFOUND", "EPIPE"].some(e => msg.includes(e));
+  if (isNetworkNoise || err.constructor?.name === "AggregateError") return;
   Logger.error("UNCAUGHT EXCEPTION! ", err);
-  if (err.message?.includes("EADDRINUSE")) process.exit(1);
+  if (msg.includes("EADDRINUSE")) process.exit(1);
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
-  if (String(reason).includes("ECONNRESET")) return;
+  const msg = String(reason);
+  const isNetworkNoise = ["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "AggregateError"].some(e => msg.includes(e));
+  if (isNetworkNoise) return;
   Logger.error("UNHANDLED REJECTION! ", reason);
 });
 

@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import redisClient from "@/config/redis";
+import { connection } from "@/config/bullmq";
 import { healthRepository } from "@/repositories/HealthRepository";
 import { Logger } from "@/utils/logger";
 
@@ -103,13 +104,7 @@ export class InfrastructureService {
     const results = await Promise.all(
       this.queueNames.map(async (name) => {
         try {
-          const queue = new Queue(name, { 
-            connection: {
-              host: process.env.REDIS_HOST || "localhost",
-              port: parseInt(process.env.REDIS_PORT || "6379", 10),
-              password: process.env.REDIS_PASSWORD
-            }
-          });
+          const queue = new Queue(name, { connection });
           
           const counts = await queue.getJobCounts("waiting", "active", "completed", "failed", "delayed");
           await queue.close();

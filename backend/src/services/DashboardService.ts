@@ -258,11 +258,6 @@ export class DashboardService {
       const features: { label: string; enabled: boolean; icon: string }[] = [
         { label: "IA", enabled: limits?.enable_ai || false, icon: "[AI]" },
         { label: "API", enabled: limits?.enable_api || false, icon: "" },
-        {
-          label: "White Label",
-          enabled: limits?.enable_whitelabel || false,
-          icon: "[VIP]",
-        },
       ];
 
       // [BUILD] ENTERPRISE: Build COMPLETE usage metrics from real data

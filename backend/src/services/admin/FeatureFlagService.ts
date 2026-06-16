@@ -7,7 +7,6 @@ export interface FeatureFlags {
   email_module: boolean;
   bulk_marketing: boolean;
   api_access: boolean;
-  custom_branding: boolean;
   group_sync: boolean;
   kanban_deals: boolean;
   voice_messages: boolean;
@@ -24,7 +23,6 @@ const DEFAULT_FLAGS: FeatureFlags = {
   email_module: false,
   bulk_marketing: false,
   api_access: false,
-  custom_branding: false,
   group_sync: false,
   kanban_deals: true,
   voice_messages: true,

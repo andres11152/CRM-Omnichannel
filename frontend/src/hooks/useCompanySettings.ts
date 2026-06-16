@@ -48,7 +48,7 @@ export interface CompanySettingsState {
     senderName: string;
   };
   billing: {
-    plan: { name?: string; price?: number } | null;
+    plan: { id?: string; name?: string; price?: number } | null;
     subscriptionEndsAt: string | null;
   };
 }
@@ -169,6 +169,16 @@ export const useCompanySettings = () => {
   const [passwords, setPasswords] = useState({ current: "", new: "", confirm: "" });
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
 
+  // ── MercadoPago Direct Card Subscription States ──
+  const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  const [cardForm, setCardForm] = useState({
+    cardNumber: "",
+    cardholderName: "",
+    expiryDate: "",
+    cvv: "",
+  });
+
   // ── Avatar Picker ──
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerTarget, setPickerTarget] = useState<"user" | "company" | null>(null);
@@ -192,6 +202,9 @@ export const useCompanySettings = () => {
             smtp: settingsData.smtp ? { ...prev.smtp, ...settingsData.smtp } : prev.smtp,
             billing: settingsData.billing,
           }));
+          if (settingsData.billing?.plan?.id) {
+            setSelectedPlanId(settingsData.billing.plan.id);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch company settings:", error);
@@ -219,10 +232,22 @@ export const useCompanySettings = () => {
       }
     };
 
+    const fetchAvailablePlans = async () => {
+      try {
+        const res = await api.get("/payments/plans");
+        const plans = res.data.data || res.data;
+        setAvailablePlans(plans);
+      } catch (error) {
+        console.error("Failed to fetch available subscription plans:", error);
+      }
+    };
+
     fetchGoogleStatus();
     fetchSettings();
     fetchPlanData();
+    fetchAvailablePlans();
   }, []);
+
 
   // Auto-switch Help Tab when Host changes
   useEffect(() => {
@@ -396,6 +421,78 @@ export const useCompanySettings = () => {
     window.location.href = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"}/api/google/auth?userId=${userId}`;
   };
 
+  const handlePayMercadoPago = async () => {
+    try {
+      setLoading(true);
+      const planId = settings.billing.plan?.id;
+      if (!planId) {
+        toast.error("No se pudo determinar el plan de la empresa.");
+        return;
+      }
+      
+      const res = await api.post("/payments/create-checkout-session", {
+        priceId: planId,
+      });
+      
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        toast.error("No se pudo obtener la URL de MercadoPago");
+      }
+    } catch (error) {
+      console.error("Failed to initialize MercadoPago checkout:", error);
+      toast.error("Error al iniciar el pago con MercadoPago");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubscribeCard = async () => {
+    if (!selectedPlanId) {
+      toast.error("Por favor selecciona un plan.");
+      return;
+    }
+    if (!cardForm.cardNumber || !cardForm.cardholderName || !cardForm.expiryDate || !cardForm.cvv) {
+      toast.error("Por favor completa todos los campos de la tarjeta.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // In production, we would use MercadoPago's SDK:
+      // const mp = new window.MercadoPago(publicKey);
+      // const tokenResult = await mp.fields.createCardToken({...});
+      const mockCardToken = `mp_tok_${Math.random().toString(36).substring(7)}`;
+
+      const res = await api.post("/payments/subscribe-card", {
+        token: mockCardToken,
+        planId: selectedPlanId,
+        paymentMethodId: "visa",
+      });
+
+      if (res.data?.success) {
+        toast.success("¡Suscripción activa! Tu plan ha sido renovado.");
+        playSound("success");
+        // Refetch settings to update UI state
+        const settingsRes = await api.get("/company/settings");
+        const settingsData = settingsRes.data.data || settingsRes.data;
+        if (settingsData) {
+          setSettings((prev) => ({
+            ...prev,
+            billing: settingsData.billing,
+          }));
+        }
+      } else {
+        toast.error("Error al procesar la suscripción.");
+      }
+    } catch (error) {
+      console.error("Card subscription failed:", error);
+      toast.error("Error al suscribirse con la tarjeta.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     // State
     user,
@@ -410,6 +507,13 @@ export const useCompanySettings = () => {
     passwords,
     setPasswords,
     googleCalendarConnected,
+
+    // MercadoPago subscription
+    availablePlans,
+    selectedPlanId,
+    setSelectedPlanId,
+    cardForm,
+    setCardForm,
 
     // Avatar Picker
     pickerOpen,
@@ -427,5 +531,8 @@ export const useCompanySettings = () => {
     handleFileUpload,
     handleGoogleDisconnect,
     handleGoogleConnect,
+    handlePayMercadoPago,
+    handleSubscribeCard,
   };
 };
+

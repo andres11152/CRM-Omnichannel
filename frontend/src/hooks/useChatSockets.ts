@@ -87,7 +87,10 @@ export const useChatSockets = (currentTicketId: string | null) => {
         });
       }
 
-      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
+      // [PERF] REMOVED: invalidateQueries was causing race conditions.
+      // Socket already provides complete data via optimistic cache updates above.
+      // Refetching here overwrites optimistic data with stale server state,
+      // causing tickets to appear then vanish from the queue.
     };
 
     const handleConversationUpdated = (payload: SocketConversationPayload) => {
@@ -98,13 +101,24 @@ export const useChatSockets = (currentTicketId: string | null) => {
       const updates = payload.updates || payload.conversation || payload as Partial<Conversation>;
       
       updateConversationInCache(queryClient, convId, updates);
-      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
+      // [PERF] REMOVED: invalidateQueries — cache already updated above
     };
 
     const handleTicketDeleted = (payload: { ticketId: string }) => {
-      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
+      // Remove messages from cache directly (no refetch needed)
       queryClient.removeQueries({
         queryKey: CHAT_KEYS.messages(payload.ticketId),
+      });
+      // Remove conversation from cache optimistically
+      queryClient.setQueryData<{
+        conversations: Conversation[];
+        total: number;
+      }>(CHAT_KEYS.conversations(), (old) => {
+        if (!old) return old;
+        const filtered = old.conversations.filter(
+          (c) => c.ticketId !== payload.ticketId && c.id !== payload.ticketId,
+        );
+        return { ...old, conversations: filtered, total: filtered.length };
       });
     };
 
@@ -128,16 +142,19 @@ export const useChatSockets = (currentTicketId: string | null) => {
       );
     };
 
+    // [PERF] ticket.created, conversation.created, conversation.closed:
+    // These events are already handled by useConversationSync (created)
+    // and useAgentWorkspaceSockets (updated/closed). No refetch needed.
     const handleTicketCreated = () => {
-      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
+      // Handled by useAgentWorkspaceSockets via ticket.updated
     };
 
     const handleConversationCreated = () => {
-      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
+      // Handled by useConversationSync which does optimistic cache update
     };
 
     const handleConversationClosed = () => {
-      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
+      // Handled by useAgentWorkspaceSockets via ticket.updated (status change)
     };
 
     const handleConversationTyping = (payload: {

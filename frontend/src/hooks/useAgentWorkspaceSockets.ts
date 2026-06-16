@@ -215,11 +215,7 @@ export const useAgentWorkspaceSockets = ({
         //  LAST MESSAGE LOGIC ROBUST FIX
         let incomingMessage = ticket.lastMessage;
 
-        // Debug payload structure
-        console.log(
-          "[AgentWorkspace]  Socket Payload:",
-          JSON.stringify(payload, null, 2),
-        );
+        // [PERF] Debug logging removed - JSON.stringify on every socket event was expensive
 
         if (payload.content) {
           incomingMessage = payload.content;

@@ -73,11 +73,13 @@ export class ChatSyncIngest {
               for (const chat of chats) {
                 const phone = this.resolveJid(chat.id, store);
                 if (phone && !isJidBroadcast(chat.id)) {
+                  const isGroup = chat.id.endsWith("@g.us");
+                  const cleanPhone = isGroup ? WhatsAppIdUtils.cleanChannelId(phone) : phone;
                   await syncRepositoryHelper.ensureConversation({
                     companyId,
-                    phone,
+                    phone: cleanPhone,
                     name: chat.name || chat.subject || undefined,
-                    isGroup: chat.id.endsWith("@g.us")
+                    isGroup
                   });
                 }
               }
@@ -377,10 +379,13 @@ export class ChatSyncIngest {
       companyId,
       phone: cleanPhone,
       isGroup,
-      name: bestNameMsg?.pushName || undefined
+      name: isGroup ? undefined : (bestNameMsg?.pushName || undefined)
     });
 
     if (!conversation) return; // Skipped invalid phone (LID guard)
+
+    const senderIdCache = new Map<string, string>();
+    const { chatService } = await import("@/services/ChatService");
 
     const validBatch: Prisma.MessageCreateManyInput[] = [];
     for (const msg of msgs) {
@@ -415,6 +420,42 @@ export class ChatSyncIngest {
         ...(parsed.contextInfo || {})
       };
 
+      // Resolve sender for this specific message (crucial for group participant identification)
+      let resolvedSenderId = adminId;
+      if (parsed.direction === "OUTBOUND") {
+        resolvedSenderId = adminId;
+      } else if (isGroup) {
+        const participantJid = msg.key.participant || WhatsAppIdUtils.getSenderJid(msg);
+        const cleanParticipantJid = participantJid ? WhatsAppIdUtils.getCleanJid(participantJid) : null;
+        
+        if (cleanParticipantJid) {
+          if (senderIdCache.has(cleanParticipantJid)) {
+            resolvedSenderId = senderIdCache.get(cleanParticipantJid)!;
+          } else {
+            const senderPhone = WhatsAppIdUtils.getPhoneNumber(cleanParticipantJid);
+            const resolvedName = msg.pushName || (senderPhone ? `+${senderPhone}` : undefined);
+            try {
+              const user = await chatService.upsertWhatsAppUser({
+                email: `${cleanParticipantJid.split("@")[0]}@whatsapp.user`,
+                name: resolvedName || `+${senderPhone || "unknown"}`,
+                companyId,
+                phone: senderPhone,
+                role: "USER",
+              });
+              resolvedSenderId = user.id;
+              senderIdCache.set(cleanParticipantJid, resolvedSenderId);
+            } catch (err) {
+              Logger.warn(`[ChatSync] Failed to resolve group message sender ${cleanParticipantJid}:`, err);
+              resolvedSenderId = adminId;
+            }
+          }
+        } else {
+          resolvedSenderId = customerUserId || adminId;
+        }
+      } else {
+        resolvedSenderId = customerUserId || adminId;
+      }
+
       validBatch.push({
         companyId,
         conversationId: conversation.id,
@@ -422,7 +463,7 @@ export class ChatSyncIngest {
         content: parsed.textContent,
         channel: Channel.WHATSAPP,
         direction: parsed.direction === "OUTBOUND" ? MessageDirection.OUTBOUND : MessageDirection.INBOUND,
-        senderId: parsed.direction === "OUTBOUND" ? adminId : (customerUserId || adminId),
+        senderId: resolvedSenderId,
         status: parsed.textContent.includes("eliminado") ? "REVOKED" : "DELIVERED",
         metadata: metadata as Prisma.InputJsonValue,
         createdAt: new Date(syncMessageParser.getTimestamp(msg.messageTimestamp) * 1000)

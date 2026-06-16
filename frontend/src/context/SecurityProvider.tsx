@@ -128,8 +128,8 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({
 
     window.addEventListener("storage", handleStorageChange);
 
-    // Periodic check (every 5 seconds) as extra safety
-    const interval = setInterval(checkCompanyId, 5000);
+    // Periodic check (every 30 seconds) as extra safety
+    const interval = setInterval(checkCompanyId, 30000);
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);

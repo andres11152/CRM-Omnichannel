@@ -33,6 +33,8 @@ const LOGIN_SCOPES = [
 interface StateData {
   action: "login" | "calendar";
   userId?: string;
+  companyName?: string;
+  slug?: string;
 }
 
 export const googleAuthController = {
@@ -43,6 +45,8 @@ export const googleAuthController = {
     const actionQuery = req.query.action;
     const action = typeof actionQuery === "string" ? actionQuery : "login";
     const userId = req.user?.id;
+    const companyName = typeof req.query.companyName === "string" ? req.query.companyName : undefined;
+    const slug = typeof req.query.slug === "string" ? req.query.slug : undefined;
 
     let SCOPES = LOGIN_SCOPES;
     let stateData: StateData = { action: "login" };
@@ -56,6 +60,8 @@ export const googleAuthController = {
       }
       SCOPES = CALENDAR_SCOPES;
       stateData = { action: "calendar", userId };
+    } else {
+      stateData = { action: "login", companyName, slug };
     }
 
     const authUrl = oauth2Client.generateAuthUrl({
@@ -106,6 +112,8 @@ export const googleAuthController = {
             email,
             name: name || "Google User",
             picture,
+            companyName: stateData.companyName,
+            slug: stateData.slug,
           });
         } else {
           if (!user.profilePicUrl && picture) {

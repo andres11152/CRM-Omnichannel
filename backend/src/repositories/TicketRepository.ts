@@ -38,6 +38,10 @@ export class TicketRepository extends BaseRepository {
     return this.db.ticket.update(this.applyTenantFilter(args, companyId));
   }
 
+  async updateMany(args: Prisma.TicketUpdateManyArgs, companyId?: string): Promise<Prisma.BatchPayload> {
+    return this.db.ticket.updateMany(this.applyTenantFilter(args, companyId));
+  }
+
   async count(args: Prisma.TicketCountArgs, companyId?: string): Promise<number> {
     return this.db.ticket.count(this.applyTenantFilter(args, companyId));
   }

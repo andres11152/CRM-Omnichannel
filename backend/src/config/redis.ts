@@ -30,10 +30,12 @@ if (redisUrl) {
     //  SILENCE DNS AND NETWORK NOISE
     const isNetworkError = [
       "ECONNRESET", "ETIMEDOUT", "Socket closed", "ENOTFOUND", 
-      "ECONNABORTED", "getaddrinfo", "Connection timeout", "EPIPE"
+      "ECONNABORTED", "ECONNREFUSED", "getaddrinfo", "Connection timeout", "EPIPE",
+      "AggregateError"
     ].some(e => msg.includes(e));
 
-    if (isNetworkError) {
+    // Also catch AggregateError by constructor name (Node.js wraps multiple connection failures)
+    if (isNetworkError || err.constructor?.name === "AggregateError") {
       // Logic: Only log network issues once to avoid spamming 1000 lines/sec
       return;
     }

@@ -18,3 +18,14 @@ export const DeleteTagSchema = z.object({
     id: z.string().cuid("ID de etiqueta no válido"),
   }),
 });
+
+export const UpdateTagSchema = z.object({
+  params: z.object({
+    id: z.string().cuid("ID de etiqueta no válido"),
+  }),
+  body: z.object({
+    name: z.string().min(1, "El nombre de la etiqueta no puede estar vacío.").optional(),
+    color: z.string().min(1, "El color no puede estar vacío.").optional(),
+  }),
+});
+

@@ -137,8 +137,9 @@ export class FlowNodeHandlers {
     session: FlowSessionState,
     flowStructure: FlowStructure,
     moveToNextNode: (sessionId: string, currentNodeId: string, flowStructure: FlowStructure, variables?: FlowVariables) => Promise<void>,
+    moveToSpecificNode: (sessionId: string, targetNodeId: string) => Promise<void>,
   ): Promise<string | null> {
-    return this.httpRequestNodeHandler.handle(node, session, flowStructure, moveToNextNode);
+    return this.httpRequestNodeHandler.handle(node, session, flowStructure, moveToNextNode, moveToSpecificNode);
   }
 
   async handleTagContactNode(

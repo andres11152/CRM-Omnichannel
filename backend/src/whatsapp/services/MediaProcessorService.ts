@@ -72,6 +72,22 @@ export class MediaProcessorService {
       return null;
     }
 
+    // Unwrap ephemeral and view-once messages to extract the inner media content
+    if (messageType === "ephemeralMessage") {
+      const inner = (message.message as Record<string, unknown>)?.ephemeralMessage as { message?: WAMessage["message"] } | undefined;
+      if (inner?.message) {
+        return this.extractMessageContent(companyId, { ...message, message: inner.message }, messageId, sessionId, getSession);
+      }
+      return null;
+    }
+    if (messageType === "viewOnceMessageV2" || messageType === "viewOnceMessageV2Extension") {
+      const inner = (message.message as Record<string, unknown>)?.[messageType] as { message?: WAMessage["message"] } | undefined;
+      if (inner?.message) {
+        return this.extractMessageContent(companyId, { ...message, message: inner.message }, messageId, sessionId, getSession);
+      }
+      return null;
+    }
+
     if (messageType === "conversation") {
       textContent = message.message?.conversation || "";
     } else if (messageType === "extendedTextMessage") {

@@ -10,10 +10,10 @@ import { flowSessionRepository } from "@/repositories/FlowSessionRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { Logger } from "@/utils/logger";
 import { getErrorMessage } from "@/utils/errorHelpers";
+import { replaceVariables } from "./utils/FlowUtils";
 import { Prisma } from "@prisma/client";
 import type {
   FlowSessionState,
-  FlowVariables,
   FlowNode,
   FlowStructure,
 } from "@/types/flow.types";
@@ -35,8 +35,8 @@ export class FlowCRMHandler {
     ) => Promise<void>,
   ): Promise<string | null> {
     try {
-      const dealTitle = this.replaceVariables(
-        node.data.title || "New Deal",
+      const dealTitle = replaceVariables(
+        node.data.title || "Nuevo Negocio",
         session.variables,
       );
       const dealValue = parseFloat(node.data.value || "0");
@@ -69,7 +69,7 @@ export class FlowCRMHandler {
       const errorMsg = getErrorMessage(error);
       Logger.error("[FlowExecutor] Error creating deal:", errorMsg);
       await moveToNextNode(session.id, node.id, flowStructure);
-      return "There was a problem creating the deal. The flow will continue.";
+      return null;
     }
   }
 
@@ -140,7 +140,7 @@ export class FlowCRMHandler {
     for (const [key, value] of Object.entries(fieldsToUpdate)) {
       if (typeof value !== "string" && typeof value !== "number") continue;
 
-      const resolvedValue = this.replaceVariables(
+      const resolvedValue = replaceVariables(
         String(value),
         session.variables,
       );
@@ -197,16 +197,4 @@ export class FlowCRMHandler {
     return null;
   }
 
-  // ────────────────────────────────────────────────
-  // UTILITY
-  // ────────────────────────────────────────────────
-
-  private replaceVariables(text: string, variables: FlowVariables): string {
-    let result = text;
-    for (const [key, value] of Object.entries(variables)) {
-      const regex = new RegExp(`{{${key}}}`, "g");
-      result = result.replace(regex, String(value));
-    }
-    return result;
-  }
 }

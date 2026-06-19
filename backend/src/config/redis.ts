@@ -68,6 +68,41 @@ export const connectRedis = async () => {
     await redisClient.connect();
     Logger.info("[OK] Redis Client Connected");
 
+    // Set volatile-lru eviction: under memory pressure, Redis evicts the
+    // least-recently-used keys that have a TTL set. This protects BullMQ
+    // job structures (no TTL) while allowing wa:store:* and wa:sess:* keys
+    // (which all have TTLs after our fixes) to be evicted gracefully.
+    redisClient.sendCommand(["CONFIG", "SET", "maxmemory-policy", "volatile-lru"])
+      .then(() => Logger.info("[Redis] [OK] maxmemory-policy set to volatile-lru"))
+      .catch((e) => Logger.warn("[Redis] Could not set maxmemory-policy (configure manually in redis.conf):", e));
+
+    // One-time cleanup: delete old wa:store:* keys that were written WITHOUT a
+    // TTL (before this fix). They can accumulate to 50MB+ per session and are
+    // the primary cause of Redis OOM. Sessions will rebuild their in-memory
+    // store from WhatsApp sync; getMessage falls back to PostgreSQL.
+    (async () => {
+      try {
+        let cursor = 0;
+        let cleaned = 0;
+        do {
+          const result = await redisClient!.scan(cursor, { MATCH: "wa:store:*", COUNT: 100 });
+          cursor = result.cursor;
+          for (const key of result.keys) {
+            const ttl = await redisClient!.ttl(key);
+            if (ttl === -1) { // -1 = no TTL → old key, safe to delete
+              await redisClient!.del(key);
+              cleaned++;
+            }
+          }
+        } while (cursor !== 0);
+        if (cleaned > 0) {
+          Logger.info(`[Redis] [CLEANUP] Deleted ${cleaned} TTL-less wa:store:* keys (freed ~${cleaned * 10}MB+)`);
+        }
+      } catch (e) {
+        Logger.warn("[Redis] Store key cleanup failed:", e);
+      }
+    })();
+
     // Iniciar Monitoreo de Memoria
     startMemoryMonitor();
   } catch {

@@ -55,7 +55,9 @@ export class SessionManager implements ISessionManager {
   constructor(private authProvider: IAuthProvider) {
     this.eventBus = EventBus.getInstance();
     this.healer = new ConnectionHealer();
-    this.contactResolver = new SessionContactResolver(this.sessions, this.sessionStores);
+    // Pass sessionMetadata so SessionContactResolver can use the composite
+    // (companyId::sessionId) store key and prevent cross-tenant store collisions.
+    this.contactResolver = new SessionContactResolver(this.sessions, this.sessionStores, this.sessionMetadata);
   }
 
   // ────────────────────────────────────────────────
@@ -136,15 +138,31 @@ export class SessionManager implements ISessionManager {
       await this.terminateSession(sessionId, false);
     }
 
+    // [SEC] C3 GUARD: Prevent the same sessionId from being reused by a different company.
+    // If two tenants share a sessionId string, their in-memory stores would collide and
+    // data would leak across tenant boundaries.
+    const existingMeta = this.sessionMetadata.get(sessionId);
+    if (existingMeta && existingMeta.companyId !== companyId) {
+      throw new Error(
+        `[SessionManager] SECURITY: sessionId "${sessionId}" is already registered for company ` +
+        `"${existingMeta.companyId}" and cannot be reused by company "${companyId}". ` +
+        `Use a unique sessionId per company.`,
+      );
+    }
+
     this.healer.cancelReconnect(sessionId);
     logger.info(`[SessionManager] Initializing session: ${sessionId}`);
     this.sessionMetadata.set(sessionId, { companyId, status: "CONNECTING" });
 
-    // [SEC] CREATE ISOLATED STORE FOR THIS SESSION
+    // [SEC] CREATE ISOLATED STORE FOR THIS SESSION (composite key: companyId::sessionId)
+    // Using a composite key prevents store collisions when two companies accidentally
+    // use the same sessionId string value.
     const sessionStore = new SimpleInMemoryStore();
-    this.sessionStores.set(sessionId, sessionStore);
+    const storeKey = `${companyId}::${sessionId}`;
+    this.sessionStores.set(storeKey, sessionStore);
 
-    // Enable Redis persistence scoped to this session
+    // Enable Redis persistence scoped to this session.
+    // Redis key uses underscore separator (wa:store:companyId_sessionId) for legacy compatibility.
     await sessionStore.enablePersistence(`${companyId}_${sessionId}`).catch((e) =>
       logger.error({ err: e }, `[SessionManager] Failed to enable persistence for ${sessionId}`)
     );
@@ -269,9 +287,12 @@ export class SessionManager implements ISessionManager {
             if (found) return (found as proto.IWebMessageInfo).message as proto.IMessage;
           }
 
-          // Fallback to database if not in memory
-          const msg = await TenantContextManager.runAsSystem(async () =>
-            messageRepository.findFirst({
+          // Fallback to database scoped to this session's companyId.
+          // Using run() instead of runAsSystem() ensures the query respects
+          // Row Level Security and cannot return messages from other tenants.
+          const msg = await TenantContextManager.run(
+            { companyId, userId: "system", requestId: `getmsg:${key.id}` },
+            () => messageRepository.findFirst({
               where: { whatsappMessageId: key.id },
               select: { metadata: true },
             }),
@@ -318,8 +339,13 @@ export class SessionManager implements ISessionManager {
     // [FIX] Clean corruption tracker state to prevent memory leaks
     cleanupSessionLogger(sessionId);
 
-    // [SEC] STORE LIFECYCLE: Clear intervals and clean up references to prevent timer/memory leaks
-    const store = this.sessionStores.get(sessionId);
+    // [SEC] STORE LIFECYCLE: Clear intervals and clean up references to prevent timer/memory leaks.
+    // Use composite key (companyId::sessionId) to find the correct tenant-isolated store.
+    const meta = this.sessionMetadata.get(sessionId);
+    const storeKey = meta ? `${meta.companyId}::${sessionId}` : sessionId;
+    const store = this.sessionStores.get(storeKey) ?? this.sessionStores.get(sessionId);
+    const resolvedStoreKey = this.sessionStores.has(storeKey) ? storeKey : sessionId;
+
     if (store) {
       // ALWAYS disable persistence (clear the setInterval timer) before dereferencing
       store.disablePersistence();
@@ -327,15 +353,14 @@ export class SessionManager implements ISessionManager {
       if (clearAuth) {
         // Hard termination (logout): wipe everything
         store.flush();
-        this.sessionStores.delete(sessionId);
+        this.sessionStores.delete(resolvedStoreKey);
       } else {
         // Soft reconnect: persist current store to Redis before socket teardown
         // so history is preserved across reconnections, then clear reference
-        const meta = this.sessionMetadata.get(sessionId);
         if (meta?.companyId) {
           await store.writeToRedis(`${meta.companyId}_${sessionId}`).catch(() => {});
         }
-        this.sessionStores.delete(sessionId);
+        this.sessionStores.delete(resolvedStoreKey);
       }
     }
 
@@ -481,7 +506,10 @@ export class SessionManager implements ISessionManager {
     contacts: Record<string, Contact>;
     lidToPhone: Record<string, string>;
   } | null {
-    const store = this.sessionStores.get(sessionId);
+    // Try composite key first (companyId::sessionId), fall back to plain sessionId
+    const meta = this.sessionMetadata.get(sessionId);
+    const storeKey = meta ? `${meta.companyId}::${sessionId}` : sessionId;
+    const store = this.sessionStores.get(storeKey) ?? this.sessionStores.get(sessionId);
     if (!store) return null;
     return {
       chats: store.chats,

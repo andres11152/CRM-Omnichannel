@@ -120,13 +120,14 @@ export class ConversationRepository {
   }
 
   async findByIdWithRelations(companyId: string, id: string) {
-    return this.db.conversation.findFirst({
+    const conversation = await this.db.conversation.findFirst({
       where: { id, companyId },
       include: {
         participants: true,
         assignedTo: true,
         messages: {
-          orderBy: { createdAt: "asc" },
+          orderBy: { createdAt: "desc" },
+          take: 200,
           include: {
             reactions: true,
             sender: {
@@ -141,6 +142,12 @@ export class ConversationRepository {
         contact: true,
       },
     });
+
+    if (conversation && conversation.messages) {
+      conversation.messages = [...conversation.messages].reverse();
+    }
+
+    return conversation;
   }
 
   /**

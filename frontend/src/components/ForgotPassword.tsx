@@ -7,6 +7,9 @@ export const ForgotPassword: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  const GENERIC_SUCCESS_MSG =
+    'Si existe una cuenta con ese correo, recibirás un enlace de recuperación en los próximos minutos.';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -19,16 +22,24 @@ export const ForgotPassword: React.FC = () => {
         body: JSON.stringify({ email }),
       });
 
-      const data = await response.json();
-
       if (response.ok) {
-        setMessage({ text: 'Se ha enviado un correo con las instrucciones.', type: 'success' });
+        // Always show the generic message regardless of backend detail (no enumeration)
+        setMessage({ text: GENERIC_SUCCESS_MSG, type: 'success' });
         setEmail('');
+      } else if (response.status === 400) {
+        // Validation error only — safe to surface
+        setMessage({ text: 'Por favor, ingresa un correo electrónico válido.', type: 'error' });
+      } else if (response.status === 429) {
+        setMessage({ text: 'Demasiados intentos. Espera unos minutos e intenta de nuevo.', type: 'error' });
+      } else if (response.status === 500) {
+        setMessage({ text: 'No se pudo enviar el correo. Intenta de nuevo más tarde.', type: 'error' });
       } else {
-        setMessage({ text: data.message || 'Error al procesar la solicitud.', type: 'error' });
+        // Any other error — use generic success to prevent enumeration
+        setMessage({ text: GENERIC_SUCCESS_MSG, type: 'success' });
+        setEmail('');
       }
-    } catch (error) {
-       setMessage({ text: 'Error de conexión. Intente nuevamente.', type: 'error' });
+    } catch {
+      setMessage({ text: 'Error de conexión. Verifica tu internet e intenta nuevamente.', type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -51,7 +62,7 @@ export const ForgotPassword: React.FC = () => {
             </div>
             <h1 className="text-4xl font-bold mb-6 tracking-tight">Recuperación de Cuenta</h1>
             <p className="text-lg text-green-100 max-w-md mx-auto leading-relaxed">
-              No te preocupes, te ayudaremos a recuperar el acceso a tu cuenta rpidamente.
+              No te preocupes, te ayudaremos a recuperar el acceso a tu cuenta rápidamente.
             </p>
          </div>
       </div>
@@ -60,11 +71,11 @@ export const ForgotPassword: React.FC = () => {
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 sm:px-12 xl:px-24">
           <div className="max-w-md w-full mx-auto">
              <div className="mb-10 text-center lg:text-left">
-                <Link to="/" className="text-reply-green dark:text-reply-green-dark hover:underline text-sm font-semibold mb-6 inline-block">
+                <Link to="/login" className="text-reply-green dark:text-reply-green-dark hover:underline text-sm font-semibold mb-6 inline-block">
                     &larr; Volver al inicio de sesión
                 </Link>
                 <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
-                   ¿¿Olvidaste tu contraseña?
+                   ¿Olvidaste tu contraseña?
                 </h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                    Ingresa tu correo electrónico y te enviaremos un enlace para restablecerla.
@@ -74,29 +85,29 @@ export const ForgotPassword: React.FC = () => {
              <form onSubmit={handleSubmit} className="space-y-6">
                  <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 ml-1">Correo Electrónico</label>
-                    <input 
-                      type="email" 
-                      required 
+                    <input
+                      type="email"
+                      required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="block w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-reply-panel-dark text-gray-900 dark:text-white shadow-sm focus:ring-2 focus:ring-reply-green focus:border-transparent transition-all placeholder-gray-400 dark:placeholder-gray-500"
                       placeholder="nombre@empresa.com"
                     />
                  </div>
-                 
+
                  {message && (
                    <div className={`p-4 rounded-xl text-sm text-center font-medium ${message.type === 'success' ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300'}`}>
                      {message.text}
                    </div>
                  )}
 
-                 <button 
-                   type="submit" 
+                 <button
+                   type="submit"
                    disabled={isLoading}
                    className="w-full py-3.5 px-4 bg-reply-green hover:bg-green-600 dark:bg-reply-green-dark dark:hover:bg-green-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                  >
                     {isLoading && <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4}></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-                    {isLoading ? 'Enviando Link...' : 'Enviar Link de Recuperación'}
+                    {isLoading ? 'Enviando...' : 'Enviar Link de Recuperación'}
                  </button>
              </form>
           </div>
@@ -104,5 +115,3 @@ export const ForgotPassword: React.FC = () => {
     </div>
   );
 };
-
-

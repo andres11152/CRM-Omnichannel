@@ -1,4 +1,4 @@
-import { Worker, Job } from "bullmq";
+import { Worker, Job, UnrecoverableError } from "bullmq";
 import IORedis from "ioredis";
 import { getEnv } from "@/config/env";
 import { Logger } from "@/utils/logger";
@@ -72,8 +72,25 @@ export class OutboundWorker {
           Logger.info(`[OutboundWorker] [OK] Message sent to ${payload.to} (ID: ${result.messageId})`);
           return result;
         } catch (error) {
-          Logger.error(`[OutboundWorker] [ERROR] Failed to send message to ${payload.to}: ${error instanceof Error ? error.message : error}`);
-          throw error; // Let BullMQ retry
+          const errMsg = error instanceof Error ? error.message : String(error);
+          Logger.error(`[OutboundWorker] [ERROR] Failed to send message to ${payload.to}: ${errMsg}`);
+
+          // Fatal errors: retrying will never succeed — mark as unrecoverable so
+          // BullMQ skips remaining attempts and immediately fires the 'failed' event.
+          const FATAL_PATTERNS = [
+            "not on whatsapp",
+            "not-on-whatsapp",
+            "invalid phone",
+            "invalid number",
+            "no active whatsapp session",
+            "bad jid",
+            "recipient is not on whatsapp",
+          ];
+          if (FATAL_PATTERNS.some((p) => errMsg.toLowerCase().includes(p))) {
+            throw new UnrecoverableError(errMsg);
+          }
+
+          throw error; // Retriable — let BullMQ retry
         }
       },
       { 

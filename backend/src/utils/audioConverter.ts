@@ -1,10 +1,68 @@
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import { promises as fs } from "fs";
+import * as fsSync from "fs";
 import * as path from "path";
 import { Buffer } from "buffer";
 import { Logger } from "@/utils/logger";
 import axios from "axios";
+
+/**
+ * Scans the `temp/` directory for audio conversion artifacts older than
+ * `maxAgeMs` and deletes them. Called on server startup and graceful shutdown
+ * so SIGKILL victims don't accumulate stale files indefinitely.
+ */
+export async function cleanupStaleTempFiles(
+  maxAgeMs = 30 * 60 * 1000, // 30 minutes default
+): Promise<void> {
+  const tempDir = path.join(process.cwd(), "temp");
+
+  try {
+    if (!fsSync.existsSync(tempDir)) return;
+
+    const entries = await fs.readdir(tempDir);
+    const now = Date.now();
+    let removed = 0;
+
+    for (const entry of entries) {
+      // Only touch files created by audioConverter (input_* / output_*)
+      if (!entry.startsWith("input_") && !entry.startsWith("output_")) continue;
+
+      const filePath = path.join(tempDir, entry);
+      try {
+        const stat = await fs.stat(filePath);
+        const ageMs = now - stat.mtimeMs;
+        if (ageMs > maxAgeMs) {
+          await fs.unlink(filePath);
+          removed++;
+        }
+      } catch {
+        // File may already be gone — ignore
+      }
+    }
+
+    if (removed > 0) {
+      Logger.info(`[AudioConverter] [CLEANUP] Removed ${removed} stale temp file(s) from ${tempDir}`);
+    }
+  } catch (err) {
+    Logger.warn(`[AudioConverter] [CLEANUP] Failed to scan temp directory:`, err);
+  }
+}
+
+/**
+ * Starts a periodic background sweep that removes stale temp files
+ * every `intervalMs`. Returns a cleanup handle to stop the sweep on shutdown.
+ */
+export function startTempFileWatchdog(intervalMs = 15 * 60 * 1000): NodeJS.Timeout {
+  const handle = setInterval(() => {
+    cleanupStaleTempFiles().catch(() => {});
+  }, intervalMs);
+
+  // Don't hold the process open just for cleanup
+  handle.unref();
+  Logger.info(`[AudioConverter] Temp file watchdog started (interval: ${intervalMs / 1000}s)`);
+  return handle;
+}
 
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);

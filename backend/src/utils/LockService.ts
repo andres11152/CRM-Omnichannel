@@ -94,7 +94,17 @@ export class LockService {
     }
 
     if (!lockValue) {
-      return null;
+      // Redis unavailable or OOM — fall back to running without the distributed lock.
+      // Application-level deduplication (doesMessageExist DB check + DeduplicationService
+      // in-memory fallback) provides safety against duplicate processing.
+      // Without this fallback, Redis OOM causes ALL inbound messages to be silently dropped.
+      // ERROR-level because in a multi-instance cluster this raises duplicate-processing risk.
+      Logger.error(
+        `[LockService] [CRITICAL] Could not acquire lock for ${key} after ${retries} retries. ` +
+        `Running WITHOUT distributed lock — duplicate processing risk is HIGH. ` +
+        `Check Redis memory usage and connectivity immediately.`,
+      );
+      return await task();
     }
 
     try {

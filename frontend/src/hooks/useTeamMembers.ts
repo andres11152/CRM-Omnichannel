@@ -23,19 +23,19 @@ export const useTeamMembers = () => {
         setLoading(true);
         const response = await api.get("/users");
 
-        if (response.data.status === "success") {
-          const users: TeamMember[] = response.data.data.users.map(
-            (user: {
-              id: string;
-              name?: string;
-              email: string;
-              role?: string;
-            }) => ({
-              id: user.id,
-              name: user.name || user.email,
-              email: user.email,
-              role: user.role,
-            }),
+        // apiClient interceptor returns response.data directly (the backend JSON body)
+        const body = response as unknown as { status: string; data: { users: unknown[] } };
+        if (body.status === "success") {
+          const users: TeamMember[] = body.data.users.map(
+            (user: unknown) => {
+              const u = user as { id: string; name?: string; email: string; role?: string };
+              return {
+                id: u.id,
+                name: u.name || u.email,
+                email: u.email,
+                role: u.role,
+              };
+            },
           );
 
           setTeamMembers(users);

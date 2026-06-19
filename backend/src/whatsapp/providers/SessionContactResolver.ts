@@ -19,14 +19,31 @@ export class SessionContactResolver {
 
   constructor(
     private sessions: Map<string, WASocket>,
-    private sessionStores: Map<string, SimpleInMemoryStore>
+    private sessionStores: Map<string, SimpleInMemoryStore>,
+    private sessionMetadata: Map<string, { companyId: string; status: string }>,
   ) {}
+
+  /**
+   * Resolves the correct store for a session, guarding against cross-tenant collisions.
+   * Uses companyId from sessionMetadata to build the composite key used by SessionManager.
+   */
+  private getStore(sessionId: string): SimpleInMemoryStore | undefined {
+    // Try composite key first (companyId::sessionId) — preferred, tenant-safe
+    const meta = this.sessionMetadata.get(sessionId);
+    if (meta) {
+      const compositeKey = `${meta.companyId}::${sessionId}`;
+      const storeByComposite = this.sessionStores.get(compositeKey);
+      if (storeByComposite) return storeByComposite;
+    }
+    // Fallback to plain sessionId key for backwards compatibility
+    return this.sessionStores.get(sessionId);
+  }
 
   /**
    * Obtiene la información de un contacto directamente de la memoria local (store) de la sesión.
    */
   public getContactInfo(sessionId: string, jid: string): Contact | undefined {
-    const store = this.sessionStores.get(sessionId);
+    const store = this.getStore(sessionId);
     if (!store) return undefined;
     return store.contacts[jidNormalizedUser(jid)];
   }
@@ -35,7 +52,7 @@ export class SessionContactResolver {
    * Busca un contacto en memoria a partir de su LID (LID -> Contacto).
    */
   public findContactByLid(sessionId: string, lid: string): Contact | undefined {
-    const store = this.sessionStores.get(sessionId);
+    const store = this.getStore(sessionId);
     if (!store) return undefined;
 
     const lidBase = lid.split("@")[0].split(":")[0];
@@ -97,12 +114,19 @@ export class SessionContactResolver {
       return null; // Caída inmediata al fallback offline
     }
 
-    // 3. Consulta segura para forzar la resolución de LID sin corromper el stream
+    // 3. Consulta segura para forzar la resolución de LID sin corromper el stream.
+    // Timeout de 5s: sock.onWhatsApp puede bloquearse indefinidamente si los servidores
+    // de WhatsApp no responden, dejando el BullMQ worker colgado y acumulando backlog.
     let queryFailed = false;
     try {
       const fullLid = lid.includes("@lid") ? lid : `${lid}@lid`;
-      await sock.onWhatsApp(fullLid);
-      
+      await Promise.race([
+        sock.onWhatsApp(fullLid),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("LID resolution timeout after 5s")), 5000),
+        ),
+      ]);
+
       // Si la petición es exitosa, reseteamos fallos del Circuit Breaker
       if (cb.consecutiveFailures > 0) {
         cb.consecutiveFailures = 0;

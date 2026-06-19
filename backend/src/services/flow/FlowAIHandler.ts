@@ -11,6 +11,7 @@ import { flowSessionRepository } from "@/repositories/FlowSessionRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { Logger } from "@/utils/logger";
 import { getErrorMessage } from "@/utils/errorHelpers";
+import { replaceVariables } from "./utils/FlowUtils";
 import OpenAI from "openai";
 import { GoogleGenerativeAI, Part, Content } from "@google/generative-ai";
 import type {
@@ -50,7 +51,7 @@ export class FlowAIHandler {
     if (!aiAssistantId) {
       Logger.error("[FlowExecutor] AI_AGENT node without aiAssistantId");
       await moveToNextNode(session.id, node.id, flowStructure);
-      return "Sorry, the AI agent is not configured. Please contact support.";
+      return "Lo siento, el agente de IA no está configurado. Contacta a soporte.";
     }
 
     const agent = await flowSessionRepository.findAIAssistant(aiAssistantId);
@@ -60,13 +61,22 @@ export class FlowAIHandler {
         `[FlowExecutor] AI Assistant ${aiAssistantId} not found or inactive`,
       );
       await moveToNextNode(session.id, node.id, flowStructure);
-      return "The AI agent is currently unavailable. We are working to resolve this.";
+      return "El agente de IA no está disponible en este momento. Estamos trabajando para resolverlo.";
+    }
+
+    // C6: Validate that the assistant belongs to the current company (multi-tenant isolation)
+    if (agent.companyId !== session.companyId) {
+      Logger.error(
+        `[FlowExecutor] [SEC] AI Assistant ${aiAssistantId} belongs to company ${agent.companyId}, not ${session.companyId}. Access denied.`,
+      );
+      await moveToNextNode(session.id, node.id, flowStructure);
+      return "El agente de IA no está disponible. Contacta a soporte.";
     }
 
     try {
       let systemPrompt =
         agent.systemPrompt || "You are a helpful and friendly virtual assistant.";
-      systemPrompt = this.replaceVariables(systemPrompt, session.variables);
+      systemPrompt = replaceVariables(systemPrompt, session.variables);
 
       // Conversational Memory
       const recentMessages = await messageRepository.findMany({
@@ -313,7 +323,7 @@ export class FlowAIHandler {
 
   private async callOpenAI(
     openaiKey: string | undefined | null,
-    agent: { modelName?: string | null; temperature?: number | null },
+    agent: { modelName?: string | null; temperature?: number | null; maxTokens?: number | null },
     messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   ): Promise<string> {
     let openaiClient = this.openai;
@@ -328,11 +338,11 @@ export class FlowAIHandler {
           model: agent.modelName || "gpt-3.5-turbo",
           messages: messages,
           temperature: agent.temperature || 0.7,
-          max_tokens: 500,
+          max_tokens: agent.maxTokens || 1000,
         });
         return (
           completion.choices[0]?.message?.content ||
-          "Sorry, I could not generate a response."
+          "Lo siento, no pude generar una respuesta en este momento."
         );
       } catch (openaiErr) {
         Logger.error("[FlowExecutor] OpenAI Error:", openaiErr);
@@ -340,19 +350,7 @@ export class FlowAIHandler {
       }
     }
 
-    throw new Error("No OpenAI credentials configured.");
+    throw new Error("No hay credenciales de OpenAI configuradas.");
   }
 
-  // ────────────────────────────────────────────────
-  // UTILITY
-  // ────────────────────────────────────────────────
-
-  private replaceVariables(text: string, variables: FlowVariables): string {
-    let result = text;
-    for (const [key, value] of Object.entries(variables)) {
-      const regex = new RegExp(`{{${key}}}`, "g");
-      result = result.replace(regex, String(value));
-    }
-    return result;
-  }
 }

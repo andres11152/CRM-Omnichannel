@@ -101,41 +101,22 @@ export class WhatsAppEventWiring {
           const { ensureWorkerForCompany } = await import("@/loaders/workerLoader");
           await ensureWorkerForCompany(event.companyId);
 
-          // [FIX] AUTO-RETRY: Retry failed outbound jobs on reconnect.
-          // Messages that failed with "No active WhatsApp session" sit permanently
-          // in BullMQ's failed state. On reconnection, we retry them so they get delivered.
+          // [FIX] AUTO-RETRY: Retry failed Bull jobs on reconnect.
+          // Messages that failed while the session was down sit in the per-company
+          // whatsapp-messages:${companyId} Bull queue. Retry them now that we're back.
           try {
-            const { Queue } = await import("bullmq");
-            const IORedis = (await import("ioredis")).default;
-            const { getEnv } = await import("@/config/env");
-            const env = getEnv();
-            const isTls = env.REDIS_URL?.startsWith("rediss://");
-            const redis = new IORedis(env.REDIS_URL, {
-              maxRetriesPerRequest: null,
-              password: env.REDIS_PASSWORD || undefined,
-              tls: isTls ? { rejectUnauthorized: false } : undefined,
-            });
-            redis.on("error", () => {}); // Silence transient connection errors
-            const outboundQueue = new Queue("whatsapp-outbound", { connection: redis });
-            const failedJobs = await outboundQueue.getFailed(0, 100);
+            const { messageQueueService } = await import("@/services/queue/messageQueueService");
+            const queue = messageQueueService.getQueue(event.companyId);
+            const failedJobs = await queue.getFailed(0, 100);
 
-            // Filter jobs that belong to THIS company
-            const companyJobs = failedJobs.filter((job) => {
-              const payload = job.data?.payload;
-              return payload?.options?.companyId === event.companyId;
-            });
-
-            if (companyJobs.length > 0) {
-              Logger.info(`[WA] Retrying ${companyJobs.length} failed outbound jobs for company ${event.companyId}`);
-              for (const job of companyJobs) {
+            if (failedJobs.length > 0) {
+              Logger.info(`[WA] Retrying ${failedJobs.length} failed outbound jobs for company ${event.companyId}`);
+              for (const job of failedJobs) {
                 await job.retry().catch((retryErr: Error) => {
-                  Logger.warn(`[WA] Failed to retry outbound job ${job.id}: ${retryErr.message}`);
+                  Logger.warn(`[WA] Failed to retry job ${job.id}: ${retryErr.message}`);
                 });
               }
             }
-
-            await outboundQueue.close();
-            redis.disconnect();
           } catch (retryErr) {
             Logger.warn("[WA] Non-critical: Failed to retry outbound jobs on reconnect:", retryErr);
           }

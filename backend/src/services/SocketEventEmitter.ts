@@ -113,17 +113,20 @@ export class SocketEventEmitter {
     // 1. Emit for Active Chat (ChatInterface)
     // Frontend expects 'conversation.new_message'
     const messagePayload = this.formatMessage(message);
+    // Include ticketId so frontend isForThisChat check works without needing
+    // the conversationId fallback (which fails when ticket.conversationId is null)
+    const messagePayloadWithTicket = ticketId ? { ...messagePayload, ticketId } : messagePayload;
 
     this.socketGateway.emitToCompany(
       conversation.companyId,
       "conversation.new_message",
-      messagePayload,
+      messagePayloadWithTicket,
     );
     if (this.socketGateway.emitToRoom) {
       this.socketGateway.emitToRoom(
         `conversation:${conversation.id}`,
         "conversation.new_message",
-        messagePayload,
+        messagePayloadWithTicket,
       );
     }
 
@@ -167,18 +170,19 @@ export class SocketEventEmitter {
     Logger.info(`[SocketEvents] [SOUND] Emitting message.sent: ${message.id}`);
 
     const messagePayload = this.formatMessage(message);
+    const messagePayloadWithTicket = ticketId ? { ...messagePayload, ticketId } : messagePayload;
 
     // 1. Unified Message Event
     this.socketGateway.emitToCompany(
       conversation.companyId,
       "conversation.new_message",
-      messagePayload,
+      messagePayloadWithTicket,
     );
     if (this.socketGateway.emitToRoom) {
       this.socketGateway.emitToRoom(
         `conversation:${conversation.id}`,
         "conversation.new_message",
-        messagePayload,
+        messagePayloadWithTicket,
       );
     }
 
@@ -525,6 +529,7 @@ export class SocketEventEmitter {
    * Format message for client consumption
    */
   private formatMessage(message: MessageWithSender) {
+    const mediaMeta = (message.metadata as Record<string, unknown> | null)?.media as { type?: string; url?: string } | undefined;
     return {
       id: message.id,
       senderId: message.senderId,
@@ -532,10 +537,8 @@ export class SocketEventEmitter {
       content: message.content,
       direction: message.direction,
       status: message.status,
-      mediaType:
-        (message as unknown as Record<string, unknown>).mediaType || null,
-      mediaUrl:
-        (message as unknown as Record<string, unknown>).mediaUrl || null,
+      mediaType: mediaMeta?.type || null,
+      mediaUrl: mediaMeta?.url || null,
       sender: message.sender
         ? {
             id: message.sender.id,
@@ -546,5 +549,31 @@ export class SocketEventEmitter {
       createdAt: message.createdAt,
       metadata: message.metadata,
     };
+  }
+
+  /**
+   * Emit a system-level warning toast to agents in a specific conversation.
+   *
+   * Used for non-fatal events the agent should be aware of, e.g. a quote was
+   * dropped because the original sender info is missing in a group message.
+   * Frontend: shows a transient warning banner or toast in the chat view.
+   */
+  emitSystemWarning(
+    conversationId: string,
+    companyId: string,
+    warning: string,
+  ): void {
+    Logger.warn(`[SocketEvents] [WARN] system.warning for conv ${conversationId}: ${warning}`);
+
+    const payload = {
+      conversationId,
+      warning,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.socketGateway.emitToCompany(companyId, "system.warning", payload);
+    if (this.socketGateway.emitToRoom) {
+      this.socketGateway.emitToRoom(`conversation:${conversationId}`, "system.warning", payload);
+    }
   }
 }

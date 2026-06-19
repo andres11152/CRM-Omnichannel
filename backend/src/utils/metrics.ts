@@ -75,11 +75,47 @@ const whatsappMessages = new client.Counter({
   registers: [register],
 });
 
-// Queue Jobs
+// Queue Jobs (incremented per job event)
 const queueJobs = new client.Counter({
   name: "queue_jobs_total",
   help: "Total queue jobs processed",
   labelNames: ["queue", "status"],
+  registers: [register],
+});
+
+// BullMQ Queue Depth — real-time snapshot (Gauges, scraped by Prometheus)
+const queueWaiting = new client.Gauge({
+  name: "bullmq_queue_waiting",
+  help: "Number of jobs waiting in queue",
+  labelNames: ["queue"],
+  registers: [register],
+});
+
+const queueActive = new client.Gauge({
+  name: "bullmq_queue_active",
+  help: "Number of jobs currently being processed",
+  labelNames: ["queue"],
+  registers: [register],
+});
+
+const queueFailed = new client.Gauge({
+  name: "bullmq_queue_failed",
+  help: "Number of jobs that failed (retained in DLQ)",
+  labelNames: ["queue"],
+  registers: [register],
+});
+
+const queueDelayed = new client.Gauge({
+  name: "bullmq_queue_delayed",
+  help: "Number of delayed jobs (scheduled for future execution)",
+  labelNames: ["queue"],
+  registers: [register],
+});
+
+const queueCompleted = new client.Gauge({
+  name: "bullmq_queue_completed",
+  help: "Number of completed jobs still retained",
+  labelNames: ["queue"],
   registers: [register],
 });
 
@@ -179,5 +215,49 @@ export const metrics = {
     });
   },
 };
+
+/**
+ * Starts a background interval that scrapes BullMQ queue statistics
+ * and updates Prometheus Gauges every `intervalMs`.
+ * Call once after WhatsApp queues are initialized.
+ */
+export function startQueueMetricsScraper(intervalMs = 30_000): NodeJS.Timeout {
+  const scrape = async () => {
+    try {
+      // Lazy-import to avoid circular deps during early startup
+      const { getWhatsAppQueue } = await import("@/whatsapp/queue/WhatsAppQueue");
+      const qm = getWhatsAppQueue();
+
+      const queues = [
+        { name: "whatsapp-inbound", q: qm.inboundQueue },
+        { name: "whatsapp-outbound", q: qm.outboundQueue },
+      ];
+
+      for (const { name, q } of queues) {
+        const [waiting, active, failed, delayed, completed] = await Promise.all([
+          q.getWaitingCount(),
+          q.getActiveCount(),
+          q.getFailedCount(),
+          q.getDelayedCount(),
+          q.getCompletedCount(),
+        ]);
+
+        queueWaiting.set({ queue: name }, waiting);
+        queueActive.set({ queue: name }, active);
+        queueFailed.set({ queue: name }, failed);
+        queueDelayed.set({ queue: name }, delayed);
+        queueCompleted.set({ queue: name }, completed);
+      }
+    } catch {
+      // Non-fatal — scraper will retry on next tick
+    }
+  };
+
+  const handle = setInterval(scrape, intervalMs);
+  handle.unref();
+  // Run immediately on startup
+  scrape().catch(() => {});
+  return handle;
+}
 
 export { register };

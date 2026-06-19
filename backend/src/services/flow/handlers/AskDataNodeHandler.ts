@@ -13,6 +13,7 @@ export class AskDataNodeHandler {
   ): Promise<string | null> {
     const variableName = node.data.variable || "response";
     const question = node.data.question;
+    const MAX_INPUT_LENGTH = 2000;
 
     if (!shouldConsumeInput) {
       await flowSessionRepository.updateSession(session.id, {
@@ -26,9 +27,13 @@ export class AskDataNodeHandler {
       return null;
     }
 
+    const sanitizedMessage = userMessage.length > MAX_INPUT_LENGTH
+      ? userMessage.substring(0, MAX_INPUT_LENGTH)
+      : userMessage;
+
     const updatedVariables = {
       ...session.variables,
-      [variableName]: userMessage,
+      [variableName]: sanitizedMessage,
     };
 
     await flowSessionRepository.updateSession(session.id, {

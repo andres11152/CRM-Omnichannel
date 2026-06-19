@@ -13,7 +13,8 @@ export const getTickets = async (
   if (filters.queueId) params.append("queueId", filters.queueId);
 
   const res = await api.get(`/tickets?${params.toString()}`);
-  return res.data.data?.tickets || res.data.data || res.data;
+  const result = res.data.data?.tickets ?? res.data.data ?? res.data;
+  return Array.isArray(result) ? result : [];
 };
 
 /**

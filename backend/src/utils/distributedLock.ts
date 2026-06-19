@@ -7,7 +7,7 @@ import { Logger } from "@/utils/logger";
  * Supports graceful fallback to in-memory locking for dev/offline scenarios.
  */
 export class DistributedLock {
-  private static localLocks = new Map<string, Promise<void>>();
+  private static localLocks = new Map<string, Promise<unknown>>();
 
   /**
    * Executes a task within a distributed lock.
@@ -26,13 +26,14 @@ export class DistributedLock {
   ): Promise<T> {
     const lockKey = `lock:${key}`;
     const start = Date.now();
+    const lockValue = Math.random().toString(36).substring(2) + Date.now();
 
     // 1. REDIS LOCK STRATEGY
     if (redisClient && redisClient.isOpen) {
       // Spin-wait algorithm with exponential backoff could be better, but fixed delay is fine for this scale
       while (true) {
         // Attempt to acquire lock
-        const result = await redisClient.set(lockKey, "1", {
+        const result = await redisClient.set(lockKey, lockValue, {
           NX: true, // Only set if not exists
           PX: ttlMs, // Auto-expire (ms)
         });
@@ -42,8 +43,18 @@ export class DistributedLock {
           try {
             return await task();
           } finally {
-            // Release Lock (Lua script is SAFER to ensure we own it, but simple DEL is acceptable for this level)
-            await redisClient.del(lockKey).catch((err) => {
+            // Release Lock safely (Lua script ensures we only release if we own it)
+            const script = `
+              if redis.call("get", KEYS[1]) == ARGV[1] then
+                return redis.call("del", KEYS[1])
+              else
+                return 0
+              end
+            `;
+            await redisClient.eval(script, {
+              keys: [lockKey],
+              arguments: [lockValue],
+            }).catch((err) => {
               Logger.warn(
                 `[DistributedLock] Failed to release lock ${lockKey}`,
                 err,
@@ -67,36 +78,41 @@ export class DistributedLock {
 
     // 2. IN-MEMORY FALLBACK STRATEGY
     else {
-      // Logger.debug(`[DistributedLock] Redis unavailable. Using Memory Lock for ${key}`);
+      const hasExistingLock = this.localLocks.has(key);
+      const previousPromise = this.localLocks.get(key) || Promise.resolve();
 
-      // Wait for existing promise
-      while (this.localLocks.has(key)) {
-        if (Date.now() - start > waitTimeoutMs) {
-          throw new Error(
-            `[DistributedLock] Timeout acquiring memory lock for ${key}`,
-          );
-        }
+      const currentPromise = (async () => {
         try {
-          await this.localLocks.get(key);
-        } catch {
-          // Ignore failures of previous tasks
+          if (hasExistingLock) {
+            let timeoutId: NodeJS.Timeout | undefined;
+            await Promise.race([
+              previousPromise,
+              new Promise<void>((_, reject) => {
+                timeoutId = setTimeout(
+                  () => reject(new Error(`[DistributedLock] Timeout acquiring memory lock for ${key}`)),
+                  waitTimeoutMs
+                );
+              })
+            ]);
+            if (timeoutId) clearTimeout(timeoutId);
+          }
+        } catch (err) {
+          if (err instanceof Error && err.message.includes("Timeout")) {
+            throw err;
+          }
         }
-      }
+        return await task();
+      })();
 
-      // Create new lock
-      let resolveLock: () => void;
-      const lockPromise = new Promise<void>((resolve) => {
-        resolveLock = resolve;
+      this.localLocks.set(key, currentPromise);
+
+      currentPromise.finally(() => {
+        if (this.localLocks.get(key) === currentPromise) {
+          this.localLocks.delete(key);
+        }
       });
 
-      this.localLocks.set(key, lockPromise);
-
-      try {
-        return await task();
-      } finally {
-        this.localLocks.delete(key);
-        resolveLock!();
-      }
+      return currentPromise;
     }
   }
 }

@@ -29,6 +29,8 @@ import { initSocketGateway } from "@/loaders/socketLoader";
 import { initWorkers } from "@/loaders/workerLoader";
 import { whatsappService } from "@/whatsapp";
 import { memoryMonitor } from "@/utils/resourceManager";
+import { cleanupStaleTempFiles, startTempFileWatchdog } from "@/utils/audioConverter";
+import { startQueueMetricsScraper } from "@/utils/metrics";
 
 // [SEARCH] MEMORY CHECK
 const heapStats = v8.getHeapStatistics();
@@ -61,6 +63,13 @@ const bootstrap = async () => {
     // 4. Background Services
     memoryMonitor.start(60000);
 
+    // Cleanup stale audio conversion temp files left by previous runs (e.g. SIGKILL victims)
+    await cleanupStaleTempFiles();
+    startTempFileWatchdog();
+
+    // Scrape BullMQ queue depths into Prometheus every 30s
+    startQueueMetricsScraper(30_000);
+
     // [SEC] SCALE FIX: Only load workers if NOT running in dedicated worker mode.
     // When using separate PM2 processes (sentry-crm-api + sentry-crm-workers),
     // the API process should NOT run background jobs to prevent event loop starvation.
@@ -86,6 +95,8 @@ const bootstrap = async () => {
       Logger.info(" SIGTERM/SIGINT received. Shutting down gracefully...");
       httpServer.close(async () => {
         Logger.info(" HTTP server closed");
+        // Clean up any temp audio files still on disk before exiting
+        await cleanupStaleTempFiles(0).catch(() => {}); // maxAge=0 removes ALL temp files
         await prisma.$disconnect();
         Logger.info("[Server] Database disconnected");
         process.exit(0);

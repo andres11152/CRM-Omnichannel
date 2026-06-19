@@ -126,6 +126,7 @@ export interface FlowNodeData {
   httpMethod?: string;
   authHeader?: string;
   bodyTemplate?: string;
+  errorNodeId?: string;
 
   // TAG_CONTACT
   tags?: string;
@@ -144,7 +145,7 @@ export interface FlowNodeData {
  * Condition definition for CONDITION nodes.
  */
 export interface FlowCondition {
-  operator: "equals" | "contains" | "greater_than" | "less_than";
+  operator: "equals" | "contains" | "greater_than" | "less_than" | "starts_with" | "ends_with" | "regex" | "is_empty";
   value: string;
   targetHandle: string;
 }

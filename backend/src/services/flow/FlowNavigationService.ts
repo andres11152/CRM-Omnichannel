@@ -63,8 +63,8 @@ export class FlowNavigationService {
       throw new Error(`Execution error: No START node found in flow ${flowId}`);
     }
 
-    // Clean up old active sessions for this contact/flow
-    await flowSessionRepository.deleteActiveSessions(contactId, flow.id);
+    // Remove ALL prior sessions (active or not) for this contact/flow to avoid unique constraint race
+    await flowSessionRepository.deleteAllSessionsByContactAndFlow(contactId, flow.id);
 
     try {
       const newSession = await flowSessionRepository.createSession({
@@ -85,20 +85,30 @@ export class FlowNavigationService {
         variables: (newSession.variables as FlowVariables) || {},
       } as FlowSessionState;
     } catch (err: unknown) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === "P2003"
-      ) {
-        Logger.error(`[FlowNav] [ERROR] FK Violation for Flow ${flow.id}. Invalidating cache.`);
-        await cacheService.delete(`workflow:${flow.id}`);
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === "P2003") {
+          Logger.error(`[FlowNav] [ERROR] FK Violation for Flow ${flow.id}. Invalidating cache.`);
+          await cacheService.delete(`workflow:${flow.id}`);
+        } else if (err.code === "P2002") {
+          // Concurrent message race: another session was created between our delete and create.
+          // Return the session that won the race.
+          Logger.warn(`[FlowNav] [RACE] P2002 on session create for contact ${contactId} / flow ${flow.id}. Fetching winner.`);
+          const existing = await flowSessionRepository.findActiveSession(contactId);
+          if (existing) {
+            return {
+              ...existing,
+              variables: (existing.variables as FlowVariables) || {},
+            } as FlowSessionState;
+          }
+        }
       }
       throw err;
     }
   }
 
   async endSession(sessionId: string): Promise<void> {
-    await flowSessionRepository.deleteSession(sessionId);
-    Logger.info(`[FlowNav] [COMPLETE] Session ended: ${sessionId}`);
+    await flowSessionRepository.completeSession(sessionId);
+    Logger.info(`[FlowNav] [COMPLETE] Session completed: ${sessionId}`);
   }
 
   // ────────────────────────────────────────────────

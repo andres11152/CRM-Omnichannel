@@ -273,15 +273,18 @@ export class SimpleInMemoryStore {
   public async writeToRedis(redisKey: string): Promise<void> {
     if (!redisClient?.isOpen) return;
 
+    // Messages are excluded: stored in PostgreSQL already and can be 50MB+ per
+    // session. Including them was the primary cause of Redis OOM errors.
     const data = {
       contacts: this.contacts,
       chats: Array.from(this.chats.entries()),
-      messages: this.messages,
       lidToPhone: this.lidToPhone,
     };
 
     try {
-      await redisClient.set(`wa:store:${redisKey}`, JSON.stringify(data));
+      await redisClient.set(`wa:store:${redisKey}`, JSON.stringify(data), {
+        EX: 7 * 24 * 60 * 60, // 7-day TTL — prevents indefinite accumulation
+      });
       Logger.debug(
         `[Store] Wrote memory store to Redis (Key: wa:store:${redisKey})`,
       );
@@ -299,7 +302,8 @@ export class SimpleInMemoryStore {
         const data = JSON.parse(dataStr);
         this.contacts = data.contacts || {};
         this.chats = new Map(data.chats || []);
-        this.messages = data.messages || {};
+        // messages are not restored from Redis — messages are fetched from
+        // PostgreSQL on-demand via the getMessage callback in SessionManager.
         this.lidToPhone = data.lidToPhone || {};
         Logger.info(
           `[Store] Loaded memory store from Redis (Key: wa:store:${redisKey})`,

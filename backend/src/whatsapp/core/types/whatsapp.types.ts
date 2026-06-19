@@ -43,6 +43,7 @@ export interface SessionStatus {
   qrCode?: string;
   error?: string;
   updatedAt?: Date;
+  createdAt?: Date;
   defaultQueueId?: string | null;
   proxyUrl?: string | null;
 }

@@ -410,9 +410,29 @@ export const forgotPassword = catchAsync(
     const parsed = ForgotPasswordSchema.parse({ body: req.body });
     const { email } = parsed.body;
 
-    const { user, resetToken } =
-      await authCrudService.generateResetToken(email);
+    // Generic response — always returned regardless of whether email exists (prevents enumeration)
+    const GENERIC_SUCCESS = {
+      status: "success",
+      message:
+        "Si existe una cuenta con ese correo, recibirás un enlace de recuperación en los próximos minutos.",
+    };
 
+    let generateResult: {
+      user: { id: string; email: string; companyId: string | null };
+      resetToken: string;
+    } | null = null;
+
+    try {
+      generateResult = await authCrudService.generateResetToken(email);
+    } catch (err) {
+      // Silently succeed — do NOT reveal whether the email exists or not
+      Logger.warn(
+        `[Auth] forgot-password: skipped for ${email.substring(0, 3)}***: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return res.status(200).json(GENERIC_SUCCESS);
+    }
+
+    const { user, resetToken } = generateResult;
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
 
@@ -432,17 +452,16 @@ export const forgotPassword = catchAsync(
         subject: "Recuperación de Contraseña - Sentry CRM",
         html: message,
       });
-
-      res.status(200).json({
-        status: "success",
-        message: "Token enviado al correo.",
-      });
+      return res.status(200).json(GENERIC_SUCCESS);
     } catch (error: unknown) {
-      const err = error as Error & Partial<AppError>;
+      Logger.error("[Auth] Failed to send password reset email:", error);
       await authCrudService.clearResetToken(user.id);
-      const errorMessage =
-        err.message || "Hubo un error enviando el correo. Intenta de nuevo.";
-      return next(new AppError(errorMessage, err.statusCode || 500));
+      return next(
+        new AppError(
+          "No se pudo enviar el correo de recuperación. Intenta de nuevo más tarde.",
+          500,
+        ),
+      );
     }
   },
 );
@@ -457,23 +476,51 @@ export const resetPassword = catchAsync(
       password,
     );
 
-    // Cast safely using intersection
     const userWithCompany = user as unknown as typeof user & {
       company?: { status: string; planId?: string };
     };
 
-    const token = signToken({
+    // Create a proper server-side session (mirrors the login flow)
+    const ipAddress = req.ip || req.socket.remoteAddress || "unknown";
+    const userAgent = req.get("user-agent") || "unknown";
+
+    const { sessionId, refreshToken } = await sessionService.createSession({
+      userId: user.id,
+      companyId: user.companyId,
+      ip: ipAddress,
+      userAgent,
+    });
+
+    const accessToken = signAccessToken({
       id: user.id,
       role: user.role,
+      email: user.email,
+      name: user.name,
       companyId: user.companyId,
       companyStatus: userWithCompany.company?.status,
       planId: userWithCompany.company?.planId,
+      sessionId,
     });
+
+    // Set HttpOnly cookies (XSS-proof) — consistent with login flow
+    setAuthCookies(res, accessToken, refreshToken);
 
     res.status(200).json({
       status: "success",
-      token,
+      token: accessToken,
       message: "Contraseña restablecida correctamente.",
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          companyId: user.companyId,
+          company: userWithCompany.company,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+      },
     });
   },
 );

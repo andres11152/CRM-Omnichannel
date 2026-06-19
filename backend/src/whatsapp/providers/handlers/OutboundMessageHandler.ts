@@ -105,6 +105,12 @@ export class OutboundMessageHandler {
           // but lack the 'participant' field. If we don't have the senderJid, we MUST omit the quote!
           if (isGroup && dbQuoted.direction === "INBOUND" && !participant) {
             Logger.warn(`[OutboundHandler] Missing senderJid for quoted group message. Dropping quote to ensure delivery.`);
+            // Notify the agent in real-time that the quote was dropped
+            this.socketEmitter.emitSystemWarning(
+              conversationId,
+              companyId,
+              "La cita del mensaje no pudo adjuntarse (falta información del remitente original en el grupo). El mensaje fue enviado sin cita.",
+            );
           } else {
             quotedMsg = {
               key: {
@@ -310,6 +316,10 @@ export class OutboundMessageHandler {
         (options.metadata?.generatedMessageId as string) || generateMessageID();
       await deduplicationService.markMessageSent(generatedId);
 
+      // Guard against echo re-processing if Baileys assigns a different final ID
+      const mediaPlaceholder = media.caption || getMediaPlaceholder(media.type);
+      await deduplicationService.markContentSent(conversationId, mediaPlaceholder);
+
       // [SYNC] RESOLVE QUOTED (MEDIA)
       let quotedMsg;
       if (options.quotedMessageId) {
@@ -326,6 +336,12 @@ export class OutboundMessageHandler {
           // but lack the 'participant' field. If we don't have the senderJid, we MUST omit the quote!
           if (isGroup && dbQuoted.direction === "INBOUND" && !participant) {
             Logger.warn(`[OutboundHandler] Missing senderJid for quoted group message. Dropping quote to ensure delivery.`);
+            // Notify the agent in real-time that the quote was dropped
+            this.socketEmitter.emitSystemWarning(
+              conversationId,
+              companyId,
+              "La cita del mensaje no pudo adjuntarse (falta información del remitente original en el grupo). El mensaje fue enviado sin cita.",
+            );
           } else {
             quotedMsg = {
               key: {

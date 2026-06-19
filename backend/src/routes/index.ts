@@ -23,6 +23,7 @@ import {
   adminRateLimiter,
 } from "@/middleware/advancedRateLimiter";
 import { superAdminGuard } from "@/middleware/superAdminMiddleware";
+import { createQueueDashboardRouter } from "@/routes/queueDashboardRoute";
 import { validate } from "@/middleware/validationMiddleware";
 import { metaIncomingWebhookSchema } from "@/schemas/webhookSchemas";
 
@@ -167,6 +168,15 @@ router.use(
   superAdminGuard,
   adminRateLimiter,
   adminRouter,
+);
+
+// Queue Dashboard (Bull Board) — superadmin only
+// UI available at /api/admin/queues/
+router.use(
+  "/api/admin/queues",
+  protect,
+  superAdminGuard,
+  createQueueDashboardRouter(),
 );
 
 // Core Modules

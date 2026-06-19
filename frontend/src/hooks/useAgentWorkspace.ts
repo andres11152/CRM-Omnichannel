@@ -168,6 +168,7 @@ export function ticketToContact(ticket: Ticket): Contact {
     isGroup: ticket.isGroup || ticket.contact.isGroup || false,
     whatsappSessionIndex: ticket.contact.whatsappSessionIndex,
     priority: ticket.priority,
+    ticketId: ticket.id,
     ticketCreatedAt: ticket.createdAt,
   };
 }
@@ -208,6 +209,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
   // ── Refs ──
   const activeTicketIdRef = useRef(activeTicketId);
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Keep ref in sync
   useEffect(() => {
@@ -245,17 +247,35 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
 
   const fetchData = useCallback(
     (isBackground = false) => {
-      if (!isBackground) setLoading(true);
+      if (!isBackground) {
+        setLoading(true);
+        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = setTimeout(() => setLoading(false), 20000);
+      }
       socketEmit("session.check_status", {});
 
       getTickets()
         .then((allTickets) => {
-          setTickets((prev) => mergeServerTickets(allTickets, prev));
-          if (!isBackground) setLoading(false);
+          const safeTickets = Array.isArray(allTickets) ? allTickets : [];
+          setTickets((prev) => {
+            try {
+              return mergeServerTickets(safeTickets, prev);
+            } catch (e) {
+              console.error("[Workspace] mergeServerTickets error", e);
+              return prev;
+            }
+          });
+          if (!isBackground) {
+            if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+            setLoading(false);
+          }
         })
         .catch((err) => {
           console.error("Error fetching tickets", err);
-          if (!isBackground) setLoading(false);
+          if (!isBackground) {
+            if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+            setLoading(false);
+          }
         });
     },
     [socketEmit],
@@ -785,6 +805,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
             isGroup:
               activeTicket.isGroup || activeTicket.contact.isGroup || false,
             priority: activeTicket.priority,
+            ticketId: activeTicket.id,
             ticketCreatedAt: activeTicket.createdAt,
           }
         : null,

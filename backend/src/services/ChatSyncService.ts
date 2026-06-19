@@ -151,7 +151,10 @@ class ChatSyncService {
       }
 
       // 3. Extract messages
-      const targetJid = conversationId ? WhatsAppIdUtils.getTargetJid(conversationId) : undefined;
+      let targetJid = conversationId ? WhatsAppIdUtils.getTargetJid(conversationId) : undefined;
+      if (targetJid && conversationId) {
+        targetJid = await this.ingest.resolveRealJid(companyId, sessionId, targetJid);
+      }
 
       Logger.info(`[ChatSync] [SEARCH] STORE DIAG: targetJid=${targetJid || "ALL"}`);
 

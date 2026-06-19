@@ -153,6 +153,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
       // Normalize the message for the React Query cache
+      const mediaMeta = ((rawMsg.metadata as Record<string, unknown>)?.media as Record<string, unknown> | undefined);
       const normalizedMessage: Message = {
         id: rawMsg.id as string,
         senderId: (rawMsg.senderId as string) || undefined,
@@ -160,8 +161,8 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         companyId: (rawMsg.companyId as string) || '',
         senderType: (rawMsg.senderType as SenderType) || (rawMsg.direction === 'OUTBOUND' ? SenderType.AGENT : SenderType.USER),
         content: (rawMsg.content as string) || '',
-        type: (rawMsg.type as Message['type']) || ((rawMsg.metadata as Record<string, unknown>)?.type as Message['type']) || 'text',
-        mediaUrl: (rawMsg.mediaUrl as string) || ((rawMsg.metadata as Record<string, unknown>)?.mediaUrl as string) || undefined,
+        type: (rawMsg.mediaType as Message['type']) || (mediaMeta?.type as Message['type']) || (rawMsg.type as Message['type']) || 'text',
+        mediaUrl: (rawMsg.mediaUrl as string) || (mediaMeta?.url as string) || undefined,
         direction: rawMsg.direction as 'INBOUND' | 'OUTBOUND' | undefined,
         timestamp: rawMsg.createdAt
           ? new Date(rawMsg.createdAt as string).toISOString()

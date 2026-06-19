@@ -5,9 +5,10 @@ import {
   MediaPayload,
   MessagePayload,
 } from "../core/types/whatsapp.types";
-import { proto } from "@whiskeysockets/baileys";
+import { proto, WAMessage } from "@whiskeysockets/baileys";
 import { EventBus } from "../core/events/EventBus";
 import { WhatsAppEventType } from "../core/events/WhatsAppEvents";
+import { runWithCompanyId } from "@/context/requestContext";
 
 // [BUILD] SRP SERVICES
 import { IdentityResolverService } from "../services/IdentityResolverService";
@@ -168,38 +169,37 @@ export class MessageHandler implements IMessageHandler {
   // IMessageHandler INTERFACE (Delegation)
   // ────────────────────────────────────────────────
 
-  // [SEC] PROTOBUF SERIALIZATION: Use binary encoding to preserve byte fields
-  // JSON.stringify destroys Uint8Array fields (mediaKey, fileEncSha256) → causes 'bad decrypt'
-  // Protobuf binary encoding preserves ALL fields with full fidelity.
-  private serializeForQueue(message: proto.IWebMessageInfo): string {
-    const encoded = proto.WebMessageInfo.encode(
-      proto.WebMessageInfo.create(message),
-    ).finish();
-    return Buffer.from(encoded).toString("base64");
-  }
-
   async handleIncoming(
     message: proto.IWebMessageInfo,
     sessionId: string,
     companyId: string,
   ): Promise<void> {
-    // [SEC] PROTOBUF BINARY: Serialize via proto.encode → Base64 for lossless Redis transport
-    const encodedMessage = this.serializeForQueue(message);
+    const msgId = message.key?.id;
+    Logger.info(`[MessageHandler] Inbound ${msgId} received — processing inline`);
 
-    // [SEC] CIRCUIT BREAKER: Evaluate if company is flooding the system
+    // [SEC] CIRCUIT BREAKER: Under a message flood, apply a fair-share delay so a single
+    // tenant cannot saturate the event loop. Normal traffic returns delay 0 (no wait).
     const delayMs = await InboundCircuitBreaker.getDelayFor(companyId);
+    if (delayMs > 0) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
 
-    await getWhatsAppQueue().inboundQueue.add(
-      "process-message",
-      {
-        encodedMessage,
-        sessionId,
-        companyId,
-      },
-      {
-        delay: delayMs,
-      },
-    );
+    // [INBOUND FIX] Process the message INLINE instead of via the BullMQ inbound queue.
+    // The BullMQ InboundWorker was observed never consuming jobs (messages were published to
+    // the EventBus and enqueued, but the handler never ran → no ticket created → empty waiting
+    // queue). Inline processing guarantees delivery. InboundMessageHandler has its own
+    // distributed lock + dedup, so concurrent/duplicate processing is safe. runWithCompanyId
+    // provides the RLS context that doesMessageExist() and other Prisma calls require.
+    try {
+      await runWithCompanyId(companyId, async () => {
+        await this.inboundHandler.handleIncoming(message as WAMessage, sessionId);
+      });
+    } catch (err) {
+      Logger.error(
+        `[MessageHandler] Inline inbound processing FAILED for ${msgId}: ${err instanceof Error ? err.message : String(err)}`,
+        err instanceof Error ? err : undefined,
+      );
+    }
   }
 
   /**

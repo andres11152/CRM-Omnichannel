@@ -268,7 +268,6 @@ class MessageQueueService {
     const queue = this.getQueue(jobData.companyId);
 
     const job = await queue.add(jobData, {
-      priority: jobData.media ? 2 : 1, // Media messages have higher priority
       timeout: 60000, // 60s timeout per job
     });
 

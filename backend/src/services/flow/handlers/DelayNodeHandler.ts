@@ -22,8 +22,8 @@ export class DelayNodeHandler {
     }
 
     await moveToNextNode(session.id, node.id, flowStructure);
-    await flowQueueService.scheduleResume(session.id, duration);
     await flowSessionRepository.updateSession(session.id, { isPaused: true });
+    await flowQueueService.scheduleResume(session.id, duration);
 
     return null;
   }

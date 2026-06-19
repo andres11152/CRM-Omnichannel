@@ -33,8 +33,16 @@ class MessageQueueWorker {
   }
 
   /**
-   * Start worker for a specific company
-   * Creates 3 concurrent workers per company
+   * Start worker for a specific company.
+   *
+   * [ORDER FIX] Concurrency MUST be 1 per company. All of a company's outbound
+   * messages are dispatched through a SINGLE WhatsApp socket (one phone number),
+   * so they are inherently sequential. Running 3 concurrent workers made the jobs
+   * race for the per-conversation DistributedLock; the lock's random jitter meant
+   * whichever worker's timer fired first won, scrambling delivery order
+   * (e.g. sent 1..10, arrived 1,5,6,3,2,8,4,10,9,7). Worse, starved jobs could not
+   * acquire the lock within Bull's 60s job timeout and FAILED, then got retried
+   * out of order. Concurrency 1 guarantees strict FIFO dispatch per company.
    */
   async startWorker(companyId: string): Promise<void> {
     if (this.activeWorkers.has(companyId)) {
@@ -44,7 +52,7 @@ class MessageQueueWorker {
 
     const queue = messageQueueService.getQueue(companyId);
 
-    queue.process(3, async (job: Job<MessageJob>) => {
+    queue.process(1, async (job: Job<MessageJob>) => {
       // [SEC] SECURITY CONTEXT INJECTION
       // Background workers run outside the HTTP request lifecycle. We must manually
       // inject the companyId into the contextStorage so Prisma RLS can function.
@@ -57,18 +65,55 @@ class MessageQueueWorker {
         // This prevents out-of-order delivery to the same recipient while allowing
         // concurrency across different chats in the same company.
         const lockKey = `msg_proc:${job.data.conversationId}`;
-        
+
         return DistributedLock.run(
           lockKey,
           () => this.processMessage(job),
-          10000, // TTL 10s (if process crashes)
-          30000  // Wait up to 30s for previous message to finish
+          60000, // TTL 60s (fail-safe if worker crashes, gives plenty of time for media uploads and cooldowns)
+          90000  // Wait up to 90s for previous message to finish in the queue
         );
       });
     });
 
+    // When all retries are exhausted, mark the DB record as FAILED so the UI
+    // stops showing "EN COLA" permanently.
+    queue.on("failed", async (job: Job<MessageJob>, err: Error) => {
+      const maxAttempts = (job.opts?.attempts as number | undefined) ?? 10;
+      if (job.attemptsMade < maxAttempts) return; // Still has retries remaining
+
+      const metadata = job.data.metadata as Record<string, unknown> | undefined;
+      const dbId = metadata?.dbId as string | undefined;
+      if (!dbId) return;
+
+      Logger.error(
+        `[Worker:${companyId}] Job ${job.id} permanently failed after ${job.attemptsMade} attempts — marking message ${dbId} as FAILED`,
+        err,
+      );
+
+      try {
+        await contextStorage.run(
+          { companyId, userId: job.data.senderId, requestId: `job-failed:${job.id}` },
+          async () => {
+            await messageRepository
+              .update(dbId, { status: "FAILED" }, companyId)
+              .catch((updateErr: Error) => {
+                Logger.error(
+                  `[Worker:${companyId}] Could not mark message ${dbId} as FAILED:`,
+                  updateErr,
+                );
+              });
+          },
+        );
+      } catch (ctxErr) {
+        Logger.error(
+          `[Worker:${companyId}] Context error when marking message ${dbId} as FAILED:`,
+          ctxErr,
+        );
+      }
+    });
+
     this.activeWorkers.set(companyId, true);
-    Logger.info(`[Worker:${companyId}]  Started (3 concurrent workers)`);
+    Logger.info(`[Worker:${companyId}]  Started (sequential, concurrency 1 for strict ordering)`);
   }
 
   /**

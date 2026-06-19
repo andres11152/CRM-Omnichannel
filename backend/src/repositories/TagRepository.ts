@@ -15,6 +15,13 @@ export class TagRepository {
   async deleteMany(args: Prisma.TagDeleteManyArgs) {
     return this.db.tag.deleteMany(args);
   }
+
+  async update(companyId: string, id: string, data: Prisma.TagUpdateInput) {
+    return this.db.tag.update({
+      where: { id, companyId },
+      data,
+    });
+  }
 }
 
 export const tagRepository = new TagRepository();

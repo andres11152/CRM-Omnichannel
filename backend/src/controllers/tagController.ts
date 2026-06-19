@@ -51,3 +51,19 @@ export const deleteTag = catchAsync(
     res.status(204).send();
   },
 );
+
+export const updateTag = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const { name, color } = req.body;
+    const companyId = req.companyId || req.user?.companyId;
+
+    if (!companyId) {
+      return next(new AppError("Company ID missing", 400));
+    }
+
+    const tag = await tagService.update(companyId, id, name, color);
+    res.status(200).json(tag);
+  },
+);
+

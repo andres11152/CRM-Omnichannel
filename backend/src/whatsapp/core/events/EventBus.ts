@@ -30,8 +30,20 @@ export class EventBus extends EventEmitter {
     eventType: T | "*",
     handler: (event: WhatsAppEvent<T>) => void | Promise<void>,
   ): () => void {
-    this.on(eventType, handler);
-    return () => this.off(eventType, handler);
+    // Wrap with try/catch so async subscriber errors never become
+    // unhandled promise rejections that silently kill the event chain.
+    const safeHandler = async (event: WhatsAppEvent<T>) => {
+      try {
+        await handler(event);
+      } catch (err) {
+        Logger.error(
+          `[EventBus] Unhandled error in subscriber for ${String(eventType)}:`,
+          err instanceof Error ? err : new Error(String(err)),
+        );
+      }
+    };
+    this.on(eventType, safeHandler);
+    return () => this.off(eventType, safeHandler);
   }
 
   subscribeOnce<T extends WhatsAppEventType>(

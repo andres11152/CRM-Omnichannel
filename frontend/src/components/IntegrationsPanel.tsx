@@ -30,6 +30,7 @@ export const IntegrationsPanel: React.FC = () => {
     null,
   );
   const [queues, setQueues] = useState<Queue[]>([]);
+  const [reconnectingIds, setReconnectingIds] = useState<Set<string>>(new Set());
 
   const fetchSessions = async () => {
     try {
@@ -111,6 +112,7 @@ export const IntegrationsPanel: React.FC = () => {
       // Priority check: Is this the session we are waiting for?
       if (data.sessionId === currentScanningId) {
         setCurrentQr(data.qr);
+        setIsScanning(true);
       }
 
       setSessions((prev) => {
@@ -315,6 +317,43 @@ export const IntegrationsPanel: React.FC = () => {
     }
   };
 
+  const handleReconnectSession = async (sessionId: string) => {
+    // Add to reconnecting Set
+    setReconnectingIds((prev) => {
+      const next = new Set(prev);
+      next.add(sessionId);
+      return next;
+    });
+
+    // Set scanningSessionId to this one so if it goes to SCANNING we automatically open/track the QR
+    setScanningSessionId(sessionId);
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/whatsapp/sessions/${sessionId}/reconnect`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        toast.success("Proceso de reconexión iniciado. Esperando código QR...");
+        await fetchSessions();
+      } else {
+        toast.error("Error al iniciar reconexión: " + (data.message || "Error desconocido"));
+      }
+    } catch (error) {
+      console.error("Failed to reconnect session", error);
+      toast.error("Error al conectar con el servidor para reconectar");
+    } finally {
+      // Remove from reconnecting Set
+      setReconnectingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
+    }
+  };
+
   const handleUpdateSessionQueue = async (
     sessionId: string,
     queueId: string,
@@ -426,7 +465,13 @@ export const IntegrationsPanel: React.FC = () => {
                   className={`group bg-white dark:bg-reply-panel-dark rounded-2xl border border-gray-200 dark:border-reply-border-dark shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden ${session.status === "SCANNING" ? "ring-2 ring-yellow-400/50 dark:ring-yellow-500/30" : ""}`}
                 >
                   <div
-                    className={`absolute top-0 left-0 w-full h-1 ${session.status === "CONNECTED" ? "bg-gradient-to-r from-green-400 to-green-600" : "bg-gradient-to-r from-yellow-400 to-amber-500 animate-pulse"}`}
+                    className={`absolute top-0 left-0 w-full h-1 ${
+                      session.status === "CONNECTED"
+                        ? "bg-gradient-to-r from-green-400 to-green-600"
+                        : session.status === "DISCONNECTED" || session.status === "FAILED"
+                          ? "bg-gradient-to-r from-red-400 to-red-600"
+                          : "bg-gradient-to-r from-yellow-400 to-amber-500 animate-pulse"
+                    }`}
                   ></div>
                   <div className="p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -448,10 +493,16 @@ export const IntegrationsPanel: React.FC = () => {
                       </div>
                       <div className="px-2.5 py-1 rounded-full bg-reply-bg dark:bg-gray-800 border border-gray-100 dark:border-reply-border-dark flex items-center gap-2 shadow-sm">
                         <div
-                          className={`w-2 h-2 rounded-full ${session.status === "CONNECTED" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-yellow-500"}`}
+                          className={`w-2 h-2 rounded-full ${
+                            session.status === "CONNECTED"
+                              ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"
+                              : session.status === "DISCONNECTED" || session.status === "FAILED"
+                                ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                                : "bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)] animate-pulse"
+                          }`}
                         ></div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                          {session.status}
+                          {session.status === "DISCONNECTED" ? "Desconectado" : session.status === "FAILED" ? "Fallido" : session.status}
                         </span>
                       </div>
                     </div>
@@ -462,9 +513,13 @@ export const IntegrationsPanel: React.FC = () => {
                     <p className="text-sm text-gray-500 dark:text-gray-400 font-mono mb-4 truncate">
                       {session.status === "SCANNING"
                         ? "⏳ Esperando escaneo..."
-                        : session.phone
-                          ? `+${session.phone}`
-                          : "Desconocido"}
+                        : session.status === "DISCONNECTED"
+                          ? "🔴 Sesión desconectada"
+                          : session.status === "FAILED"
+                            ? "⚠️ Conexión fallida"
+                            : session.phone
+                              ? `+${session.phone}`
+                              : "Desconocido"}
                     </p>
 
                     <div className="mb-4">
@@ -500,6 +555,25 @@ export const IntegrationsPanel: React.FC = () => {
                           ? "Cancelar"
                           : "Desconectar"}
                       </button>
+                      {(session.status === "DISCONNECTED" || session.status === "FAILED") && (
+                        <button
+                          disabled={reconnectingIds.has(session.sessionId)}
+                          onClick={() => handleReconnectSession(session.sessionId)}
+                          className="flex-1 px-3 py-2 text-xs font-semibold text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors border border-transparent hover:border-green-100 dark:hover:border-green-900/30 flex items-center justify-center gap-1 disabled:opacity-50"
+                        >
+                          {reconnectingIds.has(session.sessionId) ? (
+                            <>
+                              <svg className="animate-spin h-3 w-3 text-green-600" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              Reconectando...
+                            </>
+                          ) : (
+                            "Reconectar"
+                          )}
+                        </button>
+                      )}
                       {session.status === "SCANNING" && session.qrCode && (
                         <button
                           onClick={() => {

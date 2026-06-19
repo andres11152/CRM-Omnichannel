@@ -54,6 +54,19 @@ export class FlowSessionRepository {
     });
   }
 
+  async deleteAllSessionsByContactAndFlow(contactId: string, flowId: string) {
+    return this.db.contactFlowSession.deleteMany({
+      where: { contactId, flowId },
+    });
+  }
+
+  async completeSession(id: string) {
+    return this.db.contactFlowSession.update({
+      where: { id },
+      data: { isActive: false, completedAt: new Date(), isPaused: false },
+    });
+  }
+
   // ── Workflow ──
 
   async findWorkflow(id: string) {

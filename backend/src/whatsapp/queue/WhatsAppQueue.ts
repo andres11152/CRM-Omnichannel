@@ -41,7 +41,9 @@ class WhatsAppQueueManager {
         attempts: 3,
         backoff: { type: "exponential", delay: 1000 },
         removeOnComplete: true,
-        removeOnFail: { count: 1000 },
+        // Keep failed inbound jobs for 7 days (DLQ-lite) so operators can inspect
+        // which messages were lost and why, and replay them if needed.
+        removeOnFail: { count: 500, age: 7 * 24 * 3600 },
       },
     });
 
@@ -52,7 +54,8 @@ class WhatsAppQueueManager {
         attempts: 5,
         backoff: { type: "exponential", delay: 2000 },
         removeOnComplete: true,
-        removeOnFail: { count: 5000 },
+        // Keep failed outbound jobs for 7 days for post-mortem and replay.
+        removeOnFail: { count: 500, age: 7 * 24 * 3600 },
       },
     });
 
@@ -72,7 +75,14 @@ class WhatsAppQueueManager {
 
   private setupListeners() {
     this.inboundEvents.on("failed", ({ jobId, failedReason }) => {
-      Logger.error(`[WhatsAppQueue] [ERROR] Inbound job ${jobId} failed: ${failedReason}`);
+      Logger.error(
+        `[WhatsAppQueue] [DLQ] Inbound job ${jobId} exhausted all retries — message was NOT processed. ` +
+        `Reason: ${failedReason}. Inspect via Bull dashboard or Redis key whatsapp-inbound:failed.`,
+      );
+    });
+
+    this.inboundEvents.on("stalled", ({ jobId }) => {
+      Logger.warn(`[WhatsAppQueue] Inbound job ${jobId} stalled (worker may have crashed). BullMQ will retry.`);
     });
   }
 

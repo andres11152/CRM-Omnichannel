@@ -48,18 +48,38 @@ export const useConversations = (status?: "open" | "pending" | "resolved") => {
   });
 };
 
+const sortByTimestamp = (msgs: Message[]): Message[] =>
+  [...msgs].sort(
+    (a, b) =>
+      new Date(String(a.timestamp)).getTime() - new Date(String(b.timestamp)).getTime(),
+  );
+
 /**
  * CUSTOM HOOK: useMessages
- * Fetches and manages message history for a conversation
+ * Fetches and manages message history for a conversation.
+ * Merges API result with any socket messages already in cache (race-condition guard).
  */
 export const useMessages = (ticketId: string | null) => {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ticketId ? CHAT_KEYS.messages(ticketId) : ["messages", "null"],
-    queryFn: () =>
-      ticketId ? chatService.getMessages(ticketId) : Promise.resolve([]),
-    enabled: !!ticketId, // Only fetch if ticketId exists
-    staleTime: Infinity, // Messages don't change (only new ones added)
-    gcTime: 1000 * 60 * 10, // Keep in cache for 10 minutes
+    queryFn: async () => {
+      if (!ticketId) return [];
+      const apiMessages = await chatService.getMessages(ticketId);
+      // Preserve socket messages that arrived while this fetch was in flight
+      const cached =
+        queryClient.getQueryData<Message[]>(CHAT_KEYS.messages(ticketId)) ?? [];
+      const socketOnly = cached.filter(
+        (m) =>
+          !String(m.id).startsWith("temp-") &&
+          !apiMessages.some((api) => api.id === m.id),
+      );
+      return sortByTimestamp([...apiMessages, ...socketOnly]);
+    },
+    enabled: !!ticketId,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 10,
   });
 };
 
@@ -318,7 +338,7 @@ export const addMessageToCache = (
       console.log(
         ` [Socket.IO] New message, appending (${(performance.now() - socketStart).toFixed(2)}ms)`,
       );
-      return [...old, message];
+      return sortByTimestamp([...old, message]);
     },
   );
 };

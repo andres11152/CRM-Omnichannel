@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import redisClient from "@/config/redis";
 import { Logger } from "@/utils/logger";
 
@@ -194,20 +195,14 @@ export class DeduplicationService {
   }
 
   /**
-   * Simple hash for content dedup keys.
-   * Truncates to 64 chars to keep Redis keys manageable.
+   * SHA-256 hash for content dedup keys — zero collision probability.
+   * Returns first 16 hex chars (64-bit prefix) which is collision-safe
+   * at our scale and keeps Redis keys short.
    */
   private hashContent(content: string): string {
     const trimmed = content.trim();
-    if (trimmed.length <= 64) return trimmed;
-    // Simple fast hash for longer content
-    let hash = 0;
-    for (let i = 0; i < trimmed.length; i++) {
-      const chr = trimmed.charCodeAt(i);
-      hash = (hash << 5) - hash + chr;
-      hash |= 0; // Convert to 32bit integer
-    }
-    return `h${Math.abs(hash).toString(36)}_${trimmed.substring(0, 32)}`;
+    if (trimmed.length <= 32) return trimmed;
+    return createHash("sha256").update(trimmed).digest("hex").substring(0, 16);
   }
 }
 

@@ -35,6 +35,8 @@ export class ConnectionHealer {
   private heartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
   private retryTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private retryCounts: Map<string, number> = new Map();
+  // Tracks consecutive heartbeat probe failures per session for zombie detection
+  private heartbeatFailures: Map<string, number> = new Map();
   private readonly config: Required<ConnectionHealerConfig>;
 
   constructor(config?: ConnectionHealerConfig) {
@@ -46,8 +48,13 @@ export class ConnectionHealer {
   // ────────────────────────────────────────────────
 
   /**
-   * Start periodic keep-alive pings for a session.
-   * Prevents WhatsApp from closing the connection due to inactivity.
+   * Start a real-probe heartbeat for a session.
+   *
+   * Uses `sendPresenceUpdate` (sends an actual WebSocket packet) raced against
+   * a 10-second timeout — unlike the old `presenceSubscribe` which returned
+   * success even on zombie sockets. After MAX_HEARTBEAT_FAILURES consecutive
+   * failures the socket is force-closed, triggering the existing reconnect logic
+   * in SessionEventBinder via the `connection.update` close event.
    */
   startHeartbeat(
     sessionId: string,
@@ -55,8 +62,10 @@ export class ConnectionHealer {
     isSessionActive: () => boolean,
   ): void {
     this.stopHeartbeat(sessionId);
-    // On successful heartbeat start, we assume connectivity is better
-    // but don't reset retryCount here (done in SessionManager on open)
+    this.heartbeatFailures.set(sessionId, 0);
+
+    const MAX_FAILURES = 2;
+    const PROBE_TIMEOUT_MS = 10_000;
 
     const timer = setInterval(async () => {
       try {
@@ -64,15 +73,52 @@ export class ConnectionHealer {
           this.stopHeartbeat(sessionId);
           return;
         }
-        if (sock.user?.id) {
-          // Presence subscribe acts as a "ping" to keep the socket warm
-          await sock.presenceSubscribe(sock.user.id).catch(() => {});
+
+        if (!sock.user?.id) return;
+
+        // Real probe: send a presence packet and race against timeout.
+        // presenceSubscribe only subscribes — sendPresenceUpdate actually
+        // transmits a packet and will throw/timeout on a dead socket.
+        await Promise.race([
+          sock.sendPresenceUpdate("available", sock.user.id),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Heartbeat timeout after ${PROBE_TIMEOUT_MS / 1000}s`)),
+              PROBE_TIMEOUT_MS,
+            ),
+          ),
+        ]);
+
+        // Probe succeeded — reset failure counter
+        const prev = this.heartbeatFailures.get(sessionId) ?? 0;
+        if (prev > 0) {
+          this.heartbeatFailures.set(sessionId, 0);
+          logger.info(`[ConnectionHealer] [HEARTBEAT] Session ${sessionId} recovered after ${prev} failure(s)`);
         }
-      } catch {
-        // Heartbeat errors are non-fatal
+      } catch (err) {
+        const failures = (this.heartbeatFailures.get(sessionId) ?? 0) + 1;
+        this.heartbeatFailures.set(sessionId, failures);
+
+        logger.warn(
+          `[ConnectionHealer] [HEARTBEAT] Probe failure ${failures}/${MAX_FAILURES} for session ${sessionId}: ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+        );
+
+        if (failures >= MAX_FAILURES) {
+          logger.error(
+            `[ConnectionHealer] [ZOMBIE] Session ${sessionId} is unresponsive after ${MAX_FAILURES} ` +
+            `consecutive probe failures. Force-closing socket to trigger reconnect.`,
+          );
+          this.heartbeatFailures.delete(sessionId);
+          this.stopHeartbeat(sessionId);
+          // Force close → triggers connection.update 'close' → healer.scheduleReconnect
+          try { sock.end(new Error("Zombie session detected by heartbeat monitor")); } catch { /* ignore */ }
+        }
       }
     }, this.config.heartbeatIntervalMs);
 
+    // Don't prevent clean process shutdown
+    timer.unref();
     this.heartbeatTimers.set(sessionId, timer);
   }
 
@@ -83,6 +129,7 @@ export class ConnectionHealer {
       clearInterval(timer);
       this.heartbeatTimers.delete(sessionId);
     }
+    this.heartbeatFailures.delete(sessionId);
   }
 
   // ────────────────────────────────────────────────
@@ -186,10 +233,11 @@ export class ConnectionHealer {
   }
 
   /** Get stats for monitoring */
-  getStats(): { heartbeats: number; pendingReconnects: number } {
+  getStats(): { heartbeats: number; pendingReconnects: number; sessionsWithFailures: number } {
     return {
       heartbeats: this.heartbeatTimers.size,
       pendingReconnects: this.retryTimeouts.size,
+      sessionsWithFailures: [...this.heartbeatFailures.values()].filter(f => f > 0).length,
     };
   }
 }

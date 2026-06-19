@@ -88,9 +88,18 @@ export class WhatsAppSessionService {
                     Logger.info(`[WA] [BG-Restore] Restored: ${session.sessionId}`);
                   } catch (err) {
                     Logger.error(`[WA] [BG-Restore] ERROR: Failed to restore ${session.sessionId}:`, err);
-                    await this.sessionRepository
-                      .update(session.companyId, session.sessionId, { status: "ERROR" })
-                      .catch(() => {});
+                    
+                    const isDecryptionError = err instanceof Error && err.message.includes("[AuthProvider] Decryption failed");
+                    if (isDecryptionError) {
+                      Logger.warn(
+                        `[WA] [BG-Restore] Restoration skipped for ${session.sessionId} due to decryption failure (possible mismatched SESSION_SECRET). ` +
+                        `Skipping status update in database to prevent breaking production.`
+                      );
+                    } else {
+                      await this.sessionRepository
+                        .update(session.companyId, session.sessionId, { status: "ERROR" })
+                        .catch(() => {});
+                    }
                   }
                 })
               );
@@ -324,6 +333,7 @@ export class WhatsAppSessionService {
       phone: record.phone || undefined,
       qrCode: record.qrCode || undefined,
       updatedAt: record.updatedAt,
+      createdAt: record.createdAt,
       defaultQueueId: record.defaultQueueId,
       proxyUrl: record.proxyUrl,
     };
@@ -349,6 +359,7 @@ export class WhatsAppSessionService {
         phone: record.phone || undefined,
         qrCode: record.qrCode || undefined,
         updatedAt: record.updatedAt,
+        createdAt: record.createdAt,
         defaultQueueId: record.defaultQueueId,
         proxyUrl: record.proxyUrl,
       };

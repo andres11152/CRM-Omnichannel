@@ -54,4 +54,24 @@ export const tagService = {
       throw new AppError("Tag not found or permission denied", 404);
     }
   },
+
+  async update(companyId: string, id: string, name?: string, color?: string) {
+    try {
+      const data: { name?: string; color?: string } = {};
+      if (name !== undefined) data.name = name;
+      if (color !== undefined) data.color = color;
+
+      return await tagRepository.update(companyId, id, data);
+    } catch (error: unknown) {
+      const prismaError = error as { code?: string };
+      if (prismaError.code === "P2002") {
+        throw new AppError("La etiqueta ya existe", 400);
+      }
+      if (prismaError.code === "P2025") {
+        throw new AppError("Tag not found or permission denied", 404);
+      }
+      Logger.error("[TagService] Error updating tag:", error);
+      throw new AppError("Failed to update tag", 500);
+    }
+  },
 };

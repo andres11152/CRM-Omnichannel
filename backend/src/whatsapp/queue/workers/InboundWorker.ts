@@ -79,15 +79,28 @@ export class InboundWorker {
     );
 
     this.setupListeners();
+    Logger.info("[InboundWorker] [OK] Started — consuming queue 'whatsapp-inbound' (concurrency 3)");
   }
 
   private setupListeners() {
+    this.worker.on("ready", () => {
+      Logger.info("[InboundWorker] Worker READY (connected to Redis, listening for jobs)");
+    });
+
+    this.worker.on("active", (job) => {
+      Logger.debug(`[InboundWorker] Job ${job.id} active (picked up).`);
+    });
+
     this.worker.on("completed", (job) => {
       Logger.debug(`[InboundWorker] Job ${job.id} completed.`);
     });
 
     this.worker.on("failed", (job, err) => {
       Logger.error(`[InboundWorker] Job ${job?.id} failed: ${err.message}`);
+    });
+
+    this.worker.on("error", (err) => {
+      Logger.error(`[InboundWorker] Worker error: ${err.message}`);
     });
   }
 

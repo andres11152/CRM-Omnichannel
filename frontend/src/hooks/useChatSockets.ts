@@ -49,9 +49,10 @@ export const useChatSockets = (currentTicketId: string | null) => {
     const handleMessageReceived = (payload: SocketMessagePayload) => {
       const rawMsg = payload.message;
       
-      // Resolve the message type from socket payload (mediaType takes priority over type)
-      const resolvedType = rawMsg.mediaType 
-        ? String(rawMsg.mediaType).toLowerCase() 
+      // Resolve the message type from socket payload (mediaType → metadata.media.type → type → "text")
+      const socketMediaType = rawMsg.mediaType || (rawMsg.metadata as Record<string, unknown> | undefined)?.media && ((rawMsg.metadata as Record<string, unknown>).media as Record<string, unknown>)?.type;
+      const resolvedType = socketMediaType
+        ? String(socketMediaType).toLowerCase()
         : (rawMsg.type || "text");
 
       const normalizedMessage: Message = {
@@ -60,7 +61,7 @@ export const useChatSockets = (currentTicketId: string | null) => {
         companyId: (rawMsg.companyId as string) || "",
         senderType: (rawMsg.senderType as SenderType) || (rawMsg.direction === "OUTBOUND" ? SenderType.AGENT : SenderType.USER),
         type: resolvedType,
-        mediaUrl: (rawMsg.mediaUrl as string) || undefined,
+        mediaUrl: (rawMsg.mediaUrl as string) || ((rawMsg.metadata as Record<string, unknown>)?.media as Record<string, unknown> | undefined)?.url as string | undefined,
         timestamp: rawMsg.createdAt
           ? new Date(rawMsg.createdAt).toISOString()
           : typeof rawMsg.timestamp === "string"

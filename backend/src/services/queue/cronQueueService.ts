@@ -209,6 +209,28 @@ export const initCronWorker = async () => {
             });
             break;
           }
+          case "stale-flow-sessions": {
+            await TenantContextManager.runAsSystem(async () => {
+              const { prisma } = await import("@/config/database");
+              const STALE_THRESHOLD_HOURS = 24;
+              const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
+              const result = await prisma.contactFlowSession.updateMany({
+                where: {
+                  isActive: true,
+                  lastStepAt: { lt: cutoff },
+                },
+                data: {
+                  isActive: false,
+                  isPaused: false,
+                  completedAt: new Date(),
+                },
+              });
+              if (result.count > 0) {
+                Logger.info(`[CronQueue] Expired ${result.count} stale flow session(s) older than ${STALE_THRESHOLD_HOURS}h.`);
+              }
+            });
+            break;
+          }
           default:
             Logger.warn(`[CronQueue] Unknown job name: ${job.name}`);
         }
@@ -266,8 +288,14 @@ export const initCronWorker = async () => {
     // Run every 1 hour (3.6M milliseconds)
     { repeat: { every: 60 * 60 * 1000 }, jobId: "rep-temp-cleanup" },
   );
+  await cronQueue.add(
+    "stale-flow-sessions",
+    {},
+    // Run every 6 hours
+    { repeat: { every: 6 * 60 * 60 * 1000 }, jobId: "rep-stale-flow-sessions" },
+  );
 
-  Logger.info(`[CronQueue] Scheduled 8 repeating jobs in Redis.`);
+  Logger.info(`[CronQueue] Scheduled 9 repeating jobs in Redis.`);
 
   return worker;
 };

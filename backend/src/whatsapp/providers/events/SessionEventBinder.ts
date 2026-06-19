@@ -275,82 +275,127 @@ export function bindSessionEvents(
     }
   });
 
-  // Message listener (notify only)
+  /**
+   * Routes a single message through the REAL-TIME inbound pipeline:
+   * unwraps wrappers, dispatches revocations/reactions, and publishes
+   * MESSAGE_RECEIVED (which emits socket events to the frontend + triggers AI).
+   * Shared by both `notify` and fresh `append` messages.
+   */
+  const dispatchRealtimeMessage = (msg: (typeof MessagesUpsertSchema._type)["messages"][number]) => {
+    if (!msg.message) {
+      logger.debug(`[SessionEventBinder] Skipping msg with no .message: ${msg.key?.id}`);
+      return;
+    }
+    let msgContent = msg.message as Record<string, unknown>;
+
+    // Unwrap specific types
+    if (msgContent["ephemeralMessage"]) {
+      const eph = msgContent["ephemeralMessage"] as Record<string, unknown>;
+      if (eph["message"]) msgContent = eph["message"] as Record<string, unknown>;
+    }
+    if (msgContent["viewOnceMessageV2"]) {
+      const v2 = msgContent["viewOnceMessageV2"] as Record<string, unknown>;
+      if (v2["message"]) msgContent = v2["message"] as Record<string, unknown>;
+    }
+
+    // Protocol message handling (revocations, internal messages)
+    const proto = msgContent["protocolMessage"] as Record<string, unknown> | undefined;
+    if (proto) {
+      // Revocation (Delete for Everyone)
+      const protoType = proto["type"];
+      const protoKey = proto["key"] as Record<string, unknown> | undefined;
+      if ((protoType === 0 || protoType === "REVOKE" || !protoType) && protoKey?.["id"]) {
+        eventBus.publish({
+          type: WhatsAppEventType.MESSAGE_REVOKED,
+          sessionId, companyId, timestamp: new Date(),
+          data: { revokedMessageId: String(protoKey["id"]), revokedBy: msg.key.remoteJid || "unknown", fromMe: msg.key.fromMe || false },
+        });
+      } else {
+        logger.debug(`[SessionEventBinder] Skipping internal protocolMessage type: ${protoType} for ${msg.key?.id}`);
+      }
+      return; // ALL protocolMessages are internal — never process as chat messages
+    }
+
+    // Reaction check
+    const react = msgContent["reactionMessage"] as Record<string, unknown> | undefined;
+    if (react) {
+      const reactKey = react["key"] as Record<string, unknown> | undefined;
+      if (reactKey?.["id"]) {
+        eventBus.publish({
+          type: WhatsAppEventType.MESSAGE_REACTION,
+          sessionId, companyId, timestamp: new Date(),
+          data: { messageId: String(reactKey["id"]), reaction: String(react["text"] || ""), participant: msg.key.participant || msg.key.remoteJid || "unknown" },
+        });
+        return;
+      }
+    }
+
+    logger.debug(`[SessionEventBinder] Publishing MESSAGE_RECEIVED to EventBus: ${msg.key?.id}`);
+    eventBus.publish({
+      type: WhatsAppEventType.MESSAGE_RECEIVED,
+      sessionId, companyId, timestamp: new Date(),
+      // [SEC] CAST NOTE: We cast 'msg' (validated zod output) to WAMessage to satisfy Baileys interfaces.
+      // The Zod schema (MessagesUpsertSchema) ensures structural compatibility.
+      data: { message: msg as unknown as WAMessage },
+    });
+  };
+
+  // Message listener (notify + fresh append)
   sock.ev.on("messages.upsert", async (rawData: unknown) => {
     logger.debug(`[SessionEventBinder] messages.upsert FIRED for session ${sessionId}`);
     const validated = validateBaileysEvent(MessagesUpsertSchema, rawData, "messages.upsert", { sessionId, companyId });
     if (!validated) {
-      logger.debug(`[SessionEventBinder] Zod validation FAILED for messages.upsert`);
+      logger.warn(`[SessionEventBinder] Zod validation FAILED for messages.upsert — event dropped (session: ${sessionId})`);
       return;
     }
     logger.debug(`[SessionEventBinder] Validated. Type: ${validated.type}, Count: ${validated.messages?.length}`);
     if (validated && validated.type === "notify") {
       logger.debug(`[SessionEventBinder] Processing ${validated.messages.length} notify messages`);
       for (const msg of validated.messages) {
-        if (!msg.message) {
-          logger.debug(`[SessionEventBinder] Skipping msg with no .message: ${msg.key?.id}`);
-          continue;
-        }
-        let msgContent = msg.message as Record<string, unknown>;
-
-        // Unwrap specific types
-        if (msgContent["ephemeralMessage"]) {
-          const eph = msgContent["ephemeralMessage"] as Record<string, unknown>;
-          if (eph["message"]) msgContent = eph["message"] as Record<string, unknown>;
-        }
-        if (msgContent["viewOnceMessageV2"]) {
-          const v2 = msgContent["viewOnceMessageV2"] as Record<string, unknown>;
-          if (v2["message"]) msgContent = v2["message"] as Record<string, unknown>;
-        }
-        
-        // Protocol message handling (revocations, internal messages)
-        const proto = msgContent["protocolMessage"] as Record<string, unknown> | undefined;
-        if (proto) {
-          // Revocation (Delete for Everyone)
-          const protoType = proto["type"];
-          const protoKey = proto["key"] as Record<string, unknown> | undefined;
-          if ((protoType === 0 || protoType === "REVOKE" || !protoType) && protoKey?.["id"]) {
-            eventBus.publish({
-              type: WhatsAppEventType.MESSAGE_REVOKED,
-              sessionId, companyId, timestamp: new Date(),
-              data: { revokedMessageId: String(protoKey["id"]), revokedBy: msg.key.remoteJid || "unknown", fromMe: msg.key.fromMe || false },
-            });
-          } else {
-            logger.debug(`[SessionEventBinder] Skipping internal protocolMessage type: ${protoType} for ${msg.key?.id}`);
-          }
-          continue; // ALL protocolMessages are internal — never process as chat messages
-        }
-
-        // Reaction check
-        const react = msgContent["reactionMessage"] as Record<string, unknown> | undefined;
-        if (react) {
-          const reactKey = react["key"] as Record<string, unknown> | undefined;
-          if (reactKey?.["id"]) {
-            eventBus.publish({
-              type: WhatsAppEventType.MESSAGE_REACTION,
-              sessionId, companyId, timestamp: new Date(),
-              data: { messageId: String(reactKey["id"]), reaction: String(react["text"] || ""), participant: msg.key.participant || msg.key.remoteJid || "unknown" },
-            });
-            continue;
-          }
-        }
-
-        logger.debug(`[SessionEventBinder] Publishing MESSAGE_RECEIVED to EventBus: ${msg.key?.id}`);
-        eventBus.publish({
-          type: WhatsAppEventType.MESSAGE_RECEIVED,
-          sessionId, companyId, timestamp: new Date(),
-          // [SEC] CAST NOTE: We cast 'msg' (validated zod output) to WAMessage to satisfy Baileys interfaces.
-          // The Zod schema (MessagesUpsertSchema) ensures structural compatibility.
-          data: { message: msg as unknown as WAMessage },
-        });
+        dispatchRealtimeMessage(msg);
       }
     } else if (validated && validated.type === "append") {
-      logger.info(`[SessionEventBinder] Processing ${validated.messages.length} APPEND messages via History Sync`);
-      chatSyncService
-        .handleHistorySync(companyId, validated.messages as unknown as WAMessage[], [], [])
-        .catch((err) => {
-          logger.error(`[SessionManager] Append ingest failed: ${err}`);
-        });
+      // [INBOUND RACE FIX] Baileys delivers genuinely-new inbound messages as BOTH a
+      // `notify` AND an `append` upsert. Previously ALL append messages were dumped into
+      // the silent History-Sync path (which persists to DB but emits NO socket event).
+      // When the append won the race, the message was saved silently and the later `notify`
+      // was deduped away by doesMessageExist() — so the message NEVER appeared live.
+      //
+      // Fix: split fresh real-time messages (recent timestamp) out of the append batch and
+      // route them through the SAME real-time pipeline as `notify`. The InboundMessageHandler
+      // already dedupes by message id / content, so processing a message via both paths is safe
+      // (only the first wins and emits). Only genuinely OLD messages go to History-Sync.
+      const REALTIME_WINDOW_SECONDS = 120; // 2 minutes
+      const nowSeconds = Date.now() / 1000;
+
+      const realtimeMsgs: typeof validated.messages = [];
+      const historyMsgs: typeof validated.messages = [];
+
+      for (const msg of validated.messages) {
+        const ts = Number(msg.messageTimestamp || 0);
+        const isFresh = ts > 0 && nowSeconds - ts < REALTIME_WINDOW_SECONDS;
+        if (isFresh && msg.message) {
+          realtimeMsgs.push(msg);
+        } else {
+          historyMsgs.push(msg);
+        }
+      }
+
+      if (realtimeMsgs.length > 0) {
+        logger.info(`[SessionEventBinder] Routing ${realtimeMsgs.length} FRESH append messages through real-time pipeline`);
+        for (const msg of realtimeMsgs) {
+          dispatchRealtimeMessage(msg);
+        }
+      }
+
+      if (historyMsgs.length > 0) {
+        logger.info(`[SessionEventBinder] Processing ${historyMsgs.length} APPEND messages via History Sync`);
+        chatSyncService
+          .handleHistorySync(companyId, historyMsgs as unknown as WAMessage[], [], [])
+          .catch((err) => {
+            logger.error(`[SessionManager] Append ingest failed: ${err}`);
+          });
+      }
     } else {
       logger.debug(`[SessionEventBinder] Skipping non-notify upsert type: ${validated?.type}`);
     }

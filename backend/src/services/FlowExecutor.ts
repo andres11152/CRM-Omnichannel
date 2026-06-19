@@ -154,7 +154,7 @@ export class FlowExecutorService {
       );
     } catch (error: unknown) {
       Logger.error("[FlowExec] [ERROR] Error processing message:", getErrorMessage(error));
-      return ["A technical error occurred processing your request."];
+      return ["Ocurrió un error técnico al procesar tu mensaje. Por favor, intenta de nuevo."];
     }
   }
 
@@ -290,7 +290,7 @@ export class FlowExecutorService {
       if (msg.includes("Timeout")) {
         Logger.error(`[FlowExec] [ALERT] TIMEOUT: Node ${node.id} (${node.type})`);
         await this.navigation.endSession(session.id);
-        return "Process timed out. Please try again.";
+        return "El proceso tardó demasiado. Por favor, intenta de nuevo.";
       }
       throw error;
     }
@@ -351,7 +351,7 @@ export class FlowExecutorService {
         return this.nodeHandlers.handleHandoffNode(node, session, conversationId, endSess);
 
       case "HTTP_REQUEST":
-        return this.nodeHandlers.handleHttpRequestNode(node, session, struct, moveNext);
+        return this.nodeHandlers.handleHttpRequestNode(node, session, struct, moveNext, moveSpecific);
 
       case "TAG_CONTACT":
         return this.nodeHandlers.handleTagContactNode(node, session, struct, moveNext);
@@ -364,7 +364,7 @@ export class FlowExecutorService {
 
       case "END":
         await this.navigation.endSession(session.id);
-        return node.data.message || "Thank you!";
+        return node.data.message || "¡Gracias!";
 
       default:
         await this.navigation.moveToNextNode(session.id, node.id, struct);

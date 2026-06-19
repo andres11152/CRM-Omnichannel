@@ -19,6 +19,8 @@ export class ConditionNodeHandler {
         const { operator, value, targetHandle } = condition;
 
         let matched = false;
+        const numA = parseFloat(valueToCheck);
+        const numB = parseFloat(value);
         switch (operator) {
           case "equals":
             matched = valueToCheck.toLowerCase() === value.toLowerCase();
@@ -26,11 +28,23 @@ export class ConditionNodeHandler {
           case "contains":
             matched = valueToCheck.toLowerCase().includes(value.toLowerCase());
             break;
+          case "starts_with":
+            matched = valueToCheck.toLowerCase().startsWith(value.toLowerCase());
+            break;
+          case "ends_with":
+            matched = valueToCheck.toLowerCase().endsWith(value.toLowerCase());
+            break;
+          case "regex":
+            try { matched = new RegExp(value, "i").test(valueToCheck); } catch { matched = false; }
+            break;
+          case "is_empty":
+            matched = valueToCheck.trim().length === 0;
+            break;
           case "greater_than":
-            matched = parseFloat(valueToCheck) > parseFloat(value);
+            matched = !isNaN(numA) && !isNaN(numB) && numA > numB;
             break;
           case "less_than":
-            matched = parseFloat(valueToCheck) < parseFloat(value);
+            matched = !isNaN(numA) && !isNaN(numB) && numA < numB;
             break;
         }
 
@@ -63,7 +77,9 @@ export class ConditionNodeHandler {
     const conditionValue = node.data.conditionValue || "";
     
     let conditionMet = false;
-    
+    const numA = parseFloat(valueToCheck);
+    const numB = parseFloat(conditionValue);
+
     switch (operator) {
       case "equals":
         conditionMet = valueToCheck.toLowerCase() === conditionValue.toLowerCase();
@@ -71,11 +87,23 @@ export class ConditionNodeHandler {
       case "contains":
         conditionMet = valueToCheck.toLowerCase().includes(conditionValue.toLowerCase());
         break;
+      case "starts_with":
+        conditionMet = valueToCheck.toLowerCase().startsWith(conditionValue.toLowerCase());
+        break;
+      case "ends_with":
+        conditionMet = valueToCheck.toLowerCase().endsWith(conditionValue.toLowerCase());
+        break;
+      case "regex":
+        try { conditionMet = new RegExp(conditionValue, "i").test(valueToCheck); } catch { conditionMet = false; }
+        break;
+      case "is_empty":
+        conditionMet = valueToCheck.trim().length === 0;
+        break;
       case "greater_than":
-        conditionMet = parseFloat(valueToCheck) > parseFloat(conditionValue);
+        conditionMet = !isNaN(numA) && !isNaN(numB) && numA > numB;
         break;
       case "less_than":
-        conditionMet = parseFloat(valueToCheck) < parseFloat(conditionValue);
+        conditionMet = !isNaN(numA) && !isNaN(numB) && numA < numB;
         break;
       case "exists":
         conditionMet = valueToCheck.trim().length > 0;

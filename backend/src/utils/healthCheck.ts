@@ -220,9 +220,13 @@ async function checkRedis(): Promise<ServiceStatus> {
 /**
  * [SEARCH] Check Memory Usage
  */
+import v8 from "v8";
+
 function checkMemory(): MemoryStatus {
   const usage = process.memoryUsage();
-  const heapUsedPercent = (usage.heapUsed / usage.heapTotal) * 100;
+  const heapStats = v8.getHeapStatistics();
+  const maxHeapLimit = heapStats.heap_size_limit;
+  const heapUsedPercent = (usage.heapUsed / maxHeapLimit) * 100;
 
   const status: "up" | "degraded" | "down" =
     heapUsedPercent > 90 ? "down" : heapUsedPercent > 75 ? "degraded" : "up";
@@ -230,7 +234,7 @@ function checkMemory(): MemoryStatus {
   return {
     status,
     heapUsed: Math.round(usage.heapUsed / 1024 / 1024), // MB
-    heapTotal: Math.round(usage.heapTotal / 1024 / 1024), // MB
+    heapTotal: Math.round(maxHeapLimit / 1024 / 1024), // Show max limit as total for better visibility
     heapUsedPercent: Math.round(heapUsedPercent),
     rss: Math.round(usage.rss / 1024 / 1024), // MB
     external: Math.round(usage.external / 1024 / 1024), // MB

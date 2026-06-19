@@ -5,6 +5,7 @@ import {
   WAMessage,
   isJidBroadcast,
   WASocket,
+  jidNormalizedUser,
 } from "@whiskeysockets/baileys";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { reactionRepository } from "@/repositories/ReactionRepository";
@@ -132,7 +133,8 @@ export class ChatSyncIngest {
       const admin = await syncRepositoryHelper.getAdminUser(companyId);
       if (!admin) return;
 
-      const targetJid = WhatsAppIdUtils.getTargetJid(channelId);
+      let targetJid = WhatsAppIdUtils.getTargetJid(channelId);
+      targetJid = await this.resolveRealJid(companyId, session.sessionId, targetJid);
       let messages = this.extractMessagesFromStore(store, undefined, targetJid);
 
       // If memory store has no messages, fetch on-demand from WhatsApp
@@ -286,7 +288,8 @@ export class ChatSyncIngest {
       }
 
       const sock = activeSession.socket;
-      const targetJid = WhatsAppIdUtils.getTargetJid(channelId);
+      let targetJid = WhatsAppIdUtils.getTargetJid(channelId);
+      targetJid = await this.resolveRealJid(companyId, sessionId, targetJid);
 
       // [SEC] Check if fetchMessageHistory method exists in this Baileys version
       if (typeof sock.fetchMessageHistory !== "function") {
@@ -295,7 +298,7 @@ export class ChatSyncIngest {
       }
 
       // Find oldest message in database for this conversation to use as anchor
-      const cleanPhone = WhatsAppIdUtils.cleanChannelId(targetJid);
+      const cleanPhone = WhatsAppIdUtils.cleanChannelId(channelId);
       const oldestDbMsg = await messageRepository.findFirst({
         where: {
           companyId,
@@ -343,14 +346,20 @@ export class ChatSyncIngest {
           }
         } else {
           // Tier 3: Complete Fallback (DB & Memory Store are completely empty)
-          Logger.info(`[ChatSync] No messages found in DB or Memory Store for ${cleanPhone}. Cannot anchor history sync.`);
-          return false;
+          // Signal the phone to send the latest messages by sending empty key ID
+          oldestMsgKey = {
+            remoteJid: targetJid,
+            fromMe: false,
+            id: "",
+          };
+          oldestMsgTimestampMs = 0;
+          anchorSource = "None (Unanchored Fallback)";
         }
       }
 
       Logger.info(
         `[ChatSync] Requesting ${limit} historical messages on-demand from WhatsApp for ${targetJid}. ` +
-        `Resolved anchor from ${anchorSource}: msg ${oldestMsgKey.id} at ${new Date(oldestMsgTimestampMs).toISOString()}`
+        `Resolved anchor from ${anchorSource}: msg ${oldestMsgKey.id} at ${oldestMsgTimestampMs > 0 ? new Date(oldestMsgTimestampMs).toISOString() : "0"}`
       );
 
       // Trigger the on-demand query to the phone
@@ -553,6 +562,59 @@ export class ChatSyncIngest {
     return store as BaileysStore | null;
   }
 
+  public async resolveRealJid(
+    companyId: string,
+    sessionId: string,
+    targetJid: string
+  ): Promise<string> {
+    if (!targetJid) return targetJid;
+    if (targetJid.includes("@lid")) return targetJid;
+
+    const cleanPhone = WhatsAppIdUtils.cleanChannelId(targetJid);
+
+    // 1. Search database message metadata for this conversation
+    const latestDbMsg = await messageRepository.findFirst({
+      where: {
+        companyId,
+        conversation: {
+          channelId: cleanPhone
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (latestDbMsg && latestDbMsg.metadata) {
+      const meta = latestDbMsg.metadata as any;
+      if (meta.senderJid && meta.senderJid.includes("@lid")) {
+        Logger.info(`[ChatSync] Resolved Real JID ${meta.senderJid} from DB metadata for channel ${cleanPhone}`);
+        return meta.senderJid;
+      }
+    }
+
+    // 2. Search in memory store
+    const store = await this.getSessionStore(sessionId);
+    if (store) {
+      const cleanTarget = jidNormalizedUser(targetJid);
+      const contact = (store as any).contacts?.[cleanTarget];
+      if (contact?.lid) {
+        Logger.info(`[ChatSync] Resolved Real JID ${contact.lid} from memory contacts for channel ${cleanPhone}`);
+        return contact.lid;
+      }
+      
+      if (store.lidToPhone) {
+        for (const [lidBase, phone] of Object.entries(store.lidToPhone)) {
+          if (jidNormalizedUser(phone) === cleanTarget) {
+            const resolved = `${lidBase}@lid`;
+            Logger.info(`[ChatSync] Resolved Real JID ${resolved} from memory lidToPhone for channel ${cleanPhone}`);
+            return resolved;
+          }
+        }
+      }
+    }
+
+    return targetJid;
+  }
+
   public extractMessagesFromStore(store: BaileysStore, since?: Date | string, targetJid?: string): WAMessage[] {
     if (!store?.messages) return [];
     let all: WAMessage[] = [];
@@ -561,12 +623,17 @@ export class ChatSyncIngest {
 
     if (targetJid) {
       all = store.messages[targetJid] || [];
-      if (all.length === 0 && store.lidToPhone) {
-        // [SEC] Search for LID mapped to this phone JID
-        for (const [lidBase, phone] of Object.entries(store.lidToPhone)) {
-          if (phone === targetJid) {
-            all = store.messages[`${lidBase}@lid`] || [];
-            if (all.length > 0) break;
+      if (all.length === 0) {
+        const cleanTarget = jidNormalizedUser(targetJid);
+        all = store.messages[cleanTarget] || [];
+        
+        if (all.length === 0 && store.lidToPhone) {
+          // [SEC] Search for LID mapped to this phone JID
+          for (const [lidBase, phone] of Object.entries(store.lidToPhone)) {
+            if (jidNormalizedUser(phone) === cleanTarget) {
+              all = store.messages[`${lidBase}@lid`] || [];
+              if (all.length > 0) break;
+            }
           }
         }
       }

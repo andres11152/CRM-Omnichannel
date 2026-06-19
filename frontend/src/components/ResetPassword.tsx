@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '@/services/apiConfig';
+import { useAuthStore } from '@/stores/authStore';
 
 export const ResetPassword: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  
+  const { login } = useAuthStore();
+
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,28 +28,51 @@ export const ResetPassword: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}/auth/reset-password/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies so HttpOnly cookies are set
         body: JSON.stringify({ password, passwordConfirm: confirmPassword }),
       });
 
       const data = await response.json();
 
-      if (response.ok) {
-        setMessage({ text: 'Contraseña restablecida con éxito. Redirigiendo...', type: 'success' });
-        // Optional: Save token if returned to auto-login?
-        if (data.token) {
-           localStorage.setItem('token', data.token);
-           // Wait a sec then reload/redirect
-           setTimeout(() => {
-               window.location.href = '/'; // Force reload/nav to dashboard
-           }, 1500);
-        } else {
-           setTimeout(() => navigate('/'), 2000);
-        }
+      if (response.ok && data.token && data.data?.user) {
+        const user = data.data.user;
+
+        // Map ISO strings to Date objects to satisfy authStore type
+        const mappedUser = {
+          ...user,
+          createdAt: user.createdAt ? new Date(user.createdAt) : new Date(),
+          updatedAt: user.updatedAt ? new Date(user.updatedAt) : new Date(),
+          company: user.company
+            ? {
+                ...user.company,
+                createdAt: user.company.createdAt ? new Date(user.company.createdAt) : new Date(),
+                updatedAt: user.company.updatedAt ? new Date(user.company.updatedAt) : new Date(),
+                subscriptionEndsAt: user.company.subscriptionEndsAt
+                  ? new Date(user.company.subscriptionEndsAt)
+                  : null,
+              }
+            : undefined,
+        };
+
+        // Hydrate authStore with the new session (sets localStorage + Zustand isAuthenticated)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        login(mappedUser as any, data.token);
+
+        setMessage({ text: 'Contraseña restablecida. Redirigiendo al panel...', type: 'success' });
+        setTimeout(() => navigate('/dashboard', { replace: true }), 1200);
+      } else if (response.ok) {
+        // Backend succeeded but no token — redirect to login so user can sign in
+        setMessage({ text: 'Contraseña restablecida. Inicia sesión con tu nueva contraseña.', type: 'success' });
+        setTimeout(() => navigate('/login', { replace: true }), 2000);
       } else {
-        setMessage({ text: data.message || 'El enlace es invlido o ha expirado.', type: 'error' });
+        const msg =
+          response.status === 400
+            ? data.message || 'El enlace es inválido o ha expirado.'
+            : 'El enlace es inválido o ha expirado. Solicita uno nuevo.';
+        setMessage({ text: msg, type: 'error' });
       }
-    } catch (error) {
-       setMessage({ text: 'Error de conexión. Intente nuevamente.', type: 'error' });
+    } catch {
+      setMessage({ text: 'Error de conexión. Intenta nuevamente.', type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -79,7 +104,7 @@ export const ResetPassword: React.FC = () => {
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 sm:px-12 xl:px-24">
           <div className="max-w-md w-full mx-auto">
              <div className="mb-10 text-center lg:text-left">
-                <Link to="/" className="text-reply-green dark:text-reply-green-dark hover:underline text-sm font-semibold mb-6 inline-block">
+                <Link to="/login" className="text-reply-green dark:text-reply-green-dark hover:underline text-sm font-semibold mb-6 inline-block">
                     &larr; Volver al inicio de sesión
                 </Link>
                 <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
@@ -94,17 +119,17 @@ export const ResetPassword: React.FC = () => {
                  <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 ml-1">Nueva Contraseña</label>
                     <div className="relative">
-                      <input 
-                        type={showPassword ? "text" : "password"} 
-                        required 
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
                         minLength={8}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="block w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-reply-panel-dark text-gray-900 dark:text-white shadow-sm focus:ring-2 focus:ring-reply-green focus:border-transparent transition-all placeholder-gray-400 dark:placeholder-gray-500 pr-12"
                         placeholder="••••••••"
                       />
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                       >
@@ -119,9 +144,9 @@ export const ResetPassword: React.FC = () => {
 
                  <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 ml-1">Confirmar Contraseña</label>
-                    <input 
-                      type={showPassword ? "text" : "password"} 
-                      required 
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
                       minLength={8}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
@@ -129,16 +154,16 @@ export const ResetPassword: React.FC = () => {
                       placeholder="••••••••"
                     />
                  </div>
-                 
+
                  {message && (
-                   <div className={`p-4 rounded-xl text-sm text-center font-medium ${message.type === 'success' ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300 animate-shake'}`}>
+                   <div className={`p-4 rounded-xl text-sm text-center font-medium ${message.type === 'success' ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300'}`}>
                      {message.text}
                    </div>
                  )}
 
-                 <button 
-                   type="submit" 
-                   disabled={isLoading}
+                 <button
+                   type="submit"
+                   disabled={isLoading || message?.type === 'success'}
                    className="w-full py-3.5 px-4 bg-reply-green hover:bg-green-600 dark:bg-reply-green-dark dark:hover:bg-green-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                  >
                     {isLoading && <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4}></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
@@ -150,5 +175,3 @@ export const ResetPassword: React.FC = () => {
     </div>
   );
 };
-
-

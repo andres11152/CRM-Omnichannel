@@ -135,6 +135,7 @@ export class ConversationQueryService {
 
       return {
         ...msg,
+        ticketId: msg.conversationId, // [SEC] Compatibility with Frontend Message interface
         timestamp: msg.createdAt, // [SEC] Compatibility with Frontend Message interface
         attachment: att,
         sender: senderRole,

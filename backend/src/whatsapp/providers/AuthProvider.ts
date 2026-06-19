@@ -11,6 +11,7 @@ import { whatsappCredentialRepository } from "@/repositories/WhatsAppCredentialR
 import redisClient from "@/config/redis";
 import { encrypt, decrypt } from "@/utils/cryptoUtils";
 import { Logger } from "@/utils/logger";
+import { prisma } from "@/config/database";
 
 const REDIS_PREFIX = "wa:sess:";
 const REDIS_TTL = 60 * 60 * 24; // 24 hours
@@ -57,7 +58,10 @@ export class DatabaseAuthProvider implements IAuthProvider {
                   // Cached value is Encrypted -> Decrypt -> Parse
                   const decrypted = decrypt(val, sessionId);
                   if (decrypted) {
-                    data[id] = JSON.parse(decrypted, BufferJSON.reviver);
+                    const parsed = JSON.parse(decrypted, BufferJSON.reviver);
+                    if (parsed !== null && parsed !== undefined) {
+                      data[id] = parsed;
+                    }
                   }
                 } catch {
                   Logger.warn(
@@ -104,15 +108,18 @@ export class DatabaseAuthProvider implements IAuthProvider {
                 }
 
                 const parsed = JSON.parse(rawJson, BufferJSON.reviver);
-                data[id] = parsed;
+                if (parsed !== null && parsed !== undefined) {
+                  data[id] = parsed;
+                }
 
-                // 3. Populate Cache (Read-Through)
-                if (redisClient?.isOpen) {
-                  await redisClient.set(
+                // 3. Populate Cache (Read-Through) — fire-and-forget so Redis OOM never
+                // propagates into Baileys' signal key retrieval and breaks encryption.
+                if (redisClient?.isOpen && parsed !== null && parsed !== undefined) {
+                  redisClient.set(
                     `${REDIS_PREFIX}${sessionId}:${cred.key}`,
-                    cred.value, // Cache encrypted value directly
+                    cred.value,
                     { EX: REDIS_TTL },
-                  );
+                  ).catch((e) => Logger.warn(`[AuthProvider] Cache write-back skipped (${cred.key}):`, e));
                 }
               } catch (e) {
                 Logger.error(
@@ -130,44 +137,76 @@ export class DatabaseAuthProvider implements IAuthProvider {
       set: async (data) => {
         const ops: Promise<unknown>[] = [];
         const redisMulti = redisClient?.isOpen ? redisClient.multi() : null;
-        const dbData: { sessionId: string; key: string; value: string }[] = [];
+        const dbUpserts: { sessionId: string; key: string; value: string }[] = [];
+        const dbDeletes: string[] = [];
+        const redisDeletes: string[] = [];
 
         for (const category of Object.keys(data)) {
           for (const id of Object.keys(data[category])) {
             const value = data[category][id];
             const key = `${category}-${id}`;
-            const json = JSON.stringify(value, BufferJSON.replacer);
-            const encrypted = encrypt(json, sessionId);
 
-            // Prepare DB Upsert Data
-            dbData.push({ sessionId, key, value: encrypted });
+            if (value === null || value === undefined) {
+              dbDeletes.push(key);
+              redisDeletes.push(`${REDIS_PREFIX}${sessionId}:${key}`);
+            } else {
+              const json = JSON.stringify(value, BufferJSON.replacer);
+              const encrypted = encrypt(json, sessionId);
+              dbUpserts.push({ sessionId, key, value: encrypted });
 
-            if (redisMulti) {
-              redisMulti.set(`${REDIS_PREFIX}${sessionId}:${key}`, encrypted, {
-                EX: REDIS_TTL,
-              });
+              if (redisMulti) {
+                redisMulti.set(`${REDIS_PREFIX}${sessionId}:${key}`, encrypted, {
+                  EX: REDIS_TTL,
+                });
+              }
             }
           }
         }
 
         // Execute Redis Pipeline
-        if (redisMulti) {
+        if (redisClient?.isOpen) {
+          if (redisDeletes.length > 0) {
+            ops.push(
+              redisClient.del(redisDeletes).catch((e) => Logger.warn("Redis delete keys failed", e))
+            );
+          }
+          if (redisMulti) {
+            ops.push(
+              redisMulti.exec().catch((e) => Logger.warn("Redis set failed", e)),
+            );
+          }
+        }
+
+        // Execute DB Upserts
+        if (dbUpserts.length > 0) {
           ops.push(
-            redisMulti.exec().catch((e) => Logger.warn("Redis set failed", e)),
+            whatsappCredentialRepository
+              .upsertMany(dbUpserts)
+              .catch((e) =>
+                Logger.error(
+                  `[AuthProvider] DB Upsert failed for ${sessionId}`,
+                  e,
+                ),
+              ),
           );
         }
 
-        // Execute DB Transaction
-        ops.push(
-          whatsappCredentialRepository
-            .upsertMany(dbData)
-            .catch((e) =>
+        // Execute DB Deletes
+        if (dbDeletes.length > 0) {
+          ops.push(
+            prisma.whatsAppCredential.deleteMany({
+              where: {
+                sessionId,
+                key: { in: dbDeletes },
+              },
+            }).catch((e) =>
               Logger.error(
-                `[AuthProvider] DB Transaction failed for ${sessionId}`,
+                `[AuthProvider] DB Delete failed for ${sessionId}`,
                 e,
               ),
             ),
-        );
+          );
+        }
 
         await Promise.all(ops);
       },

@@ -163,11 +163,28 @@ export class MessageHandler implements IMessageHandler {
         );
       },
     );
+
+    // [DIAG] Confirm the inbound chain is wired. If this count is 0 for MESSAGE_RECEIVED,
+    // inbound messages will be published but never enqueued (silent loss).
+    const recvListeners = this.eventBus.listenerCount(WhatsAppEventType.MESSAGE_RECEIVED);
+    Logger.info(
+      `[MessageHandler] Subscribed to WhatsApp events. MESSAGE_RECEIVED listeners=${recvListeners} (EventBus instance ${this.eventBus.constructor.name})`,
+    );
   }
 
   // ────────────────────────────────────────────────
   // IMessageHandler INTERFACE (Delegation)
   // ────────────────────────────────────────────────
+
+  // [SEC] PROTOBUF SERIALIZATION: Use binary encoding to preserve byte fields
+  // JSON.stringify destroys Uint8Array fields (mediaKey, fileEncSha256) → causes 'bad decrypt'.
+  // Protobuf binary encoding preserves ALL fields with full fidelity for Redis transport.
+  private serializeForQueue(message: proto.IWebMessageInfo): string {
+    const encoded = proto.WebMessageInfo.encode(
+      proto.WebMessageInfo.create(message),
+    ).finish();
+    return Buffer.from(encoded).toString("base64");
+  }
 
   async handleIncoming(
     message: proto.IWebMessageInfo,
@@ -175,30 +192,36 @@ export class MessageHandler implements IMessageHandler {
     companyId: string,
   ): Promise<void> {
     const msgId = message.key?.id;
-    Logger.info(`[MessageHandler] Inbound ${msgId} received — processing inline`);
 
-    // [SEC] CIRCUIT BREAKER: Under a message flood, apply a fair-share delay so a single
-    // tenant cannot saturate the event loop. Normal traffic returns delay 0 (no wait).
+    // [SEC] CIRCUIT BREAKER: Evaluate if company is flooding the system
     const delayMs = await InboundCircuitBreaker.getDelayFor(companyId);
-    if (delayMs > 0) {
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
 
-    // [INBOUND FIX] Process the message INLINE instead of via the BullMQ inbound queue.
-    // The BullMQ InboundWorker was observed never consuming jobs (messages were published to
-    // the EventBus and enqueued, but the handler never ran → no ticket created → empty waiting
-    // queue). Inline processing guarantees delivery. InboundMessageHandler has its own
-    // distributed lock + dedup, so concurrent/duplicate processing is safe. runWithCompanyId
-    // provides the RLS context that doesMessageExist() and other Prisma calls require.
+    // PRIMARY PATH: enqueue to BullMQ so heavy processing (media, S3, DB, AI) runs in the
+    // worker, off the socket event loop. (Smoke test confirmed BullMQ consumes on this Redis.)
     try {
-      await runWithCompanyId(companyId, async () => {
-        await this.inboundHandler.handleIncoming(message as WAMessage, sessionId);
-      });
-    } catch (err) {
-      Logger.error(
-        `[MessageHandler] Inline inbound processing FAILED for ${msgId}: ${err instanceof Error ? err.message : String(err)}`,
-        err instanceof Error ? err : undefined,
+      const encodedMessage = this.serializeForQueue(message);
+      const job = await getWhatsAppQueue().inboundQueue.add(
+        "process-message",
+        { encodedMessage, sessionId, companyId },
+        { delay: delayMs },
       );
+      Logger.info(`[MessageHandler] Inbound ${msgId} → enqueued to 'whatsapp-inbound' (job ${job.id})`);
+    } catch (queueErr) {
+      // BullMQ unavailable (Redis OOM/down) — process inline so no messages are lost.
+      // runWithCompanyId provides the RLS context that doesMessageExist() & Prisma require.
+      Logger.warn(
+        `[MessageHandler] BullMQ enqueue failed for ${msgId}, processing INLINE: ${queueErr instanceof Error ? queueErr.message : String(queueErr)}`,
+      );
+      try {
+        await runWithCompanyId(companyId, async () => {
+          await this.inboundHandler.handleIncoming(message as WAMessage, sessionId);
+        });
+      } catch (inlineErr) {
+        Logger.error(
+          `[MessageHandler] Inline inbound fallback FAILED for ${msgId}: ${inlineErr instanceof Error ? inlineErr.message : String(inlineErr)}`,
+          inlineErr instanceof Error ? inlineErr : undefined,
+        );
+      }
     }
   }
 

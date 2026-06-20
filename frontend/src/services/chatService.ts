@@ -39,8 +39,16 @@ export const getConversations = async (params?: {
  */
 export const getMessages = async (ticketId: string): Promise<Message[]> => {
   const res = await apiClient.get(`/conversations/${ticketId}`);
-  const payload = res.data || res;
-  return payload?.conversation?.messages || [];
+  // apiClient's response interceptor returns the response BODY. The backend wraps
+  // the payload as { status, data: { conversation: { messages } } }. Be defensive
+  // about the exact nesting so a future shape tweak never silently yields an empty
+  // history (a network/HTTP error still rejects upstream and triggers a retry).
+  const body = res as {
+    data?: { conversation?: { messages?: Message[] } };
+    conversation?: { messages?: Message[] };
+  };
+  const conversation = body?.data?.conversation ?? body?.conversation ?? null;
+  return conversation?.messages ?? [];
 };
 
 /**

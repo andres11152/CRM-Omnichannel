@@ -55,12 +55,12 @@ export const EmailModal: React.FC<EmailModalProps> = ({
 
   const handleSend = async () => {
     if (!emailConfigured) {
-      toast.error("Debes configurar tu correo corporativo primero");
+      toast.error("Configura tu correo primero");
       return;
     }
 
     if (!to || !subject || !body) {
-      toast.error("Por favor completa todos los campos");
+      toast.error("Completa todos los campos");
       return;
     }
 
@@ -77,7 +77,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
       };
 
       await sendEmail(emailData);
-      toast.success("Email enviado correctamente");
+      toast.success("Email enviado");
       onClose();
 
       // Reset form

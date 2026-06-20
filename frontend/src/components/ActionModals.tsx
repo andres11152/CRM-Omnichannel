@@ -525,11 +525,11 @@ export const DataRequestPicker: React.FC<{
         dataRequest: { suggestedFields: updatedFields }
       });
       
-      toast.success(t("actions.field_saved", "Campo guardado en la configuración"));
+      toast.success(t("actions.field_saved", "Campo guardado"));
       setCustomFields(prev => prev.filter(f => f !== label));
       setSuggestedFields([...suggestedFields, { ...newField, icon: Tag }]);
     } catch (error) {
-      toast.error(t("actions.err_save_config", "Error al guardar configuración"));
+      toast.error(t("actions.err_save_config", "Error al guardar"));
     } finally {
       setIsSaving(false);
     }
@@ -586,10 +586,10 @@ export const DataRequestPicker: React.FC<{
         setSelectedIds(prev => prev.map(lbl => lbl === oldLabel ? editingLabel.trim() : lbl));
       }
 
-      toast.success(t("actions.field_updated", "Campo modificado con éxito"));
+      toast.success(t("actions.field_updated", "Campo actualizado"));
       setEditingFieldId(null);
     } catch (error) {
-      toast.error(t("actions.err_save_config", "Error al guardar configuración"));
+      toast.error(t("actions.err_save_config", "Error al guardar"));
     } finally {
       setIsSaving(false);
     }
@@ -619,10 +619,10 @@ export const DataRequestPicker: React.FC<{
         setSelectedIds(prev => prev.filter(lbl => lbl !== labelToDelete));
       }
 
-      toast.success(t("actions.field_deleted", "Campo eliminado con éxito"));
+      toast.success(t("actions.field_deleted", "Campo eliminado"));
       setDeletingFieldId(null);
     } catch (error) {
-      toast.error(t("actions.err_save_config", "Error al guardar configuración"));
+      toast.error(t("actions.err_save_config", "Error al guardar"));
     } finally {
       setIsSaving(false);
     }

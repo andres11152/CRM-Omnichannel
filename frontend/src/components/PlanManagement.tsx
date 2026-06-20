@@ -273,7 +273,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
       }
     } catch (error) {
       console.error("Failed to fetch plans", error);
-      toast.error("Error al cargar los planes. Por favor recarga la pgina.");
+      toast.error("Error al cargar planes");
     } finally {
       setIsLoading(false);
     }
@@ -347,10 +347,10 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
         }
       });
 
-      toast.success("¡Plan guardado correctamente!");
+      toast.success("Plan guardado");
     } catch (error) {
       console.error("Error saving plan", error);
-      toast.error("Error al guardar el plan. Inténtalo de nuevo.");
+      toast.error("Error al guardar plan");
     } finally {
       setIsSaving(false);
     }
@@ -403,10 +403,10 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
         setPlans(newPlans);
         setSelectedPlanId(newPlans[0]?.id || null);
 
-        toast.success("Plan eliminado correctamente.");
+        toast.success("Plan eliminado");
       } catch (error) {
         console.error("Error deleting plan", error);
-        toast.error("Error al eliminar el plan.");
+        toast.error("Error al eliminar plan");
       } finally {
         setIsDeleting(false);
       }

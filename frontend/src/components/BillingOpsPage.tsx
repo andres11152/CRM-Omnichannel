@@ -62,7 +62,7 @@ export const BillingOpsPage = () => {
       setStats(res.stats);
     } catch (error) {
       console.error(error);
-      toast.error("Error cargando transacciones");
+      toast.error("Error al cargar transacciones");
     } finally {
       setLoading(false);
     }
@@ -82,7 +82,7 @@ export const BillingOpsPage = () => {
       toast.success("Cobro reprogramado");
       setTransactions((prev) => prev.map((t) => (t.id === txn.id ? { ...t, status: "pending" } : t)));
     } catch (error) {
-      toast.error("Falló el reintento");
+      toast.error("Error al reintentar");
     } finally {
       setRetryingId(null);
     }

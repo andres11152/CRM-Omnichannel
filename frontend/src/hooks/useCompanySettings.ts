@@ -208,7 +208,7 @@ export const useCompanySettings = () => {
         }
       } catch (error) {
         console.error("Failed to fetch company settings:", error);
-        toast.error("Error cargando configuración");
+        toast.error("Error al cargar configuración");
       } finally {
         setLoading(false);
       }
@@ -312,10 +312,10 @@ export const useCompanySettings = () => {
         }
 
         setPasswords({ current: "", new: "", confirm: "" });
-        toast.success("Contraseña actualizada correctamente");
+        toast.success("Contraseña actualizada");
       } else {
         await api.patch("/company/settings", settings);
-        toast.success("Configuración de empresa guardada");
+        toast.success("Configuración guardada");
       }
       playSound("success");
     } catch (error: unknown) {
@@ -329,18 +329,18 @@ export const useCompanySettings = () => {
 
   const handleTestEmail = async () => {
     if (!settings.smtp.host || !settings.smtp.user) {
-      toast.error("Ingresa al menos el Host y Usuario");
+      toast.error("Host y usuario requeridos");
       return;
     }
 
     const targetEmail = user?.email || settings.smtp.senderEmail;
     if (!targetEmail) {
-      toast.error("No se pudo determinar el correo destinatario de prueba (configure el email de remitente o verifique su perfil)");
+      toast.error("Configura el email de remitente primero");
       return;
     }
 
     setTestingConnection(true);
-    const toastId = toast.loading("Probando conexión SMTP...");
+    const toastId = toast.loading("Probando SMTP…");
 
     try {
       await api.post("/emails/test-connection", {
@@ -352,12 +352,12 @@ export const useCompanySettings = () => {
         toEmail: targetEmail,
         senderEmail: settings.smtp.senderEmail,
       });
-      toast.success(`Conexión Exitosa. Correo enviado a ${targetEmail}`, { id: toastId });
+      toast.success(`Correo de prueba enviado`, { id: toastId });
       playSound("success");
     } catch (error: unknown) {
       console.error("SMTP Test Failed:", error);
       const msg = error instanceof Error ? error.message : "Falló la conexión";
-      toast.error(`Error: ${msg}`, { id: toastId });
+      toast.error(`SMTP: ${msg}`, { id: toastId });
       playSound("error");
     } finally {
       setTestingConnection(false);
@@ -388,13 +388,13 @@ export const useCompanySettings = () => {
 
       if (uploadedUrl) {
         handleAvatarSelect(uploadedUrl);
-        toast.success("Imagen subida correctamente");
+        toast.success("Imagen actualizada");
       } else {
-        toast.error("No se pudo obtener la URL de la imagen");
+        toast.error("Error al subir imagen");
       }
     } catch (error: unknown) {
       console.error("Upload error:", error);
-      toast.error("Error al subir la imagen");
+      toast.error("Error al subir imagen");
     } finally {
       setUploadingImage(false);
     }
@@ -404,16 +404,16 @@ export const useCompanySettings = () => {
     try {
       await api.post("/google/disconnect");
       setGoogleCalendarConnected(false);
-      toast.success("Google Calendar desconectado");
+      toast.success("Google Calendar desvinculado");
     } catch {
-      toast.error("Error al desconectar");
+      toast.error("Error al desvincular");
     }
   };
 
   const handleGoogleConnect = () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      toast.error("Por favor inicia sesión primero");
+      toast.error("Sesión requerida");
       return;
     }
     const payload = JSON.parse(atob(token.split(".")[1]));
@@ -426,7 +426,7 @@ export const useCompanySettings = () => {
       setLoading(true);
       const planId = settings.billing.plan?.id;
       if (!planId) {
-        toast.error("No se pudo determinar el plan de la empresa.");
+        toast.error("Plan no encontrado");
         return;
       }
       
@@ -437,11 +437,11 @@ export const useCompanySettings = () => {
       if (res.data?.url) {
         window.location.href = res.data.url;
       } else {
-        toast.error("No se pudo obtener la URL de MercadoPago");
+        toast.error("Error al redirigir a pago");
       }
     } catch (error) {
       console.error("Failed to initialize MercadoPago checkout:", error);
-      toast.error("Error al iniciar el pago con MercadoPago");
+      toast.error("Error al iniciar pago");
     } finally {
       setLoading(false);
     }
@@ -449,11 +449,11 @@ export const useCompanySettings = () => {
 
   const handleSubscribeCard = async () => {
     if (!selectedPlanId) {
-      toast.error("Por favor selecciona un plan.");
+      toast.error("Selecciona un plan");
       return;
     }
     if (!cardForm.cardNumber || !cardForm.cardholderName || !cardForm.expiryDate || !cardForm.cvv) {
-      toast.error("Por favor completa todos los campos de la tarjeta.");
+      toast.error("Completa los datos de la tarjeta");
       return;
     }
 
@@ -471,7 +471,7 @@ export const useCompanySettings = () => {
       });
 
       if (res.data?.success) {
-        toast.success("¡Suscripción activa! Tu plan ha sido renovado.");
+        toast.success("Suscripción activada");
         playSound("success");
         // Refetch settings to update UI state
         const settingsRes = await api.get("/company/settings");
@@ -483,11 +483,11 @@ export const useCompanySettings = () => {
           }));
         }
       } else {
-        toast.error("Error al procesar la suscripción.");
+        toast.error("Error al procesar pago");
       }
     } catch (error) {
       console.error("Card subscription failed:", error);
-      toast.error("Error al suscribirse con la tarjeta.");
+      toast.error("Error al procesar tarjeta");
     } finally {
       setLoading(false);
     }

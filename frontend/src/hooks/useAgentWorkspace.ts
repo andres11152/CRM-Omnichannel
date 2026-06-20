@@ -363,7 +363,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         if (activeTicketId === ticketId) {
           setActiveTicketId(null);
         }
-        toast.success("Ticket eliminado correctamente");
+        toast.success("Ticket eliminado");
       } catch (error: unknown) {
         const msg =
           error instanceof Error
@@ -445,8 +445,8 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
 
         toast.success(
           type === "AGENT"
-            ? "Ticket asignado al agente correctamente"
-            : "Ticket movido a la cola correctamente",
+            ? "Ticket transferido a agente"
+            : "Ticket transferido a cola",
         );
         setIsTransferModalOpen(false);
         setTransferringTicketId(null);
@@ -528,7 +528,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         ),
       );
       setActiveTab("my_chats");
-      toast.success("Ticket asignado. ¡Puedes comenzar a chatear!");
+      toast.success("Ticket asignado");
     } catch (error: unknown) {
       const msg =
         error instanceof Error ? error.message : "Error al atender ticket";
@@ -605,9 +605,9 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
           ),
         );
         setActiveTicketId(null);
-        toast.success("Ticket resuelto correctamente");
+        toast.success("Ticket resuelto");
       } catch {
-        toast.error("Error al resolver el ticket");
+        toast.error("Error al resolver ticket");
       }
     },
     [activeTicketId],

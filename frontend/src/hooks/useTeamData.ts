@@ -68,7 +68,7 @@ export const useTeamData = (): UseTeamDataReturn => {
         return result;
       } catch (err) {
         console.error("[useTeamData] Error loading team data:", err);
-        toast.error("Error cargando datos del equipo");
+        toast.error("Error al cargar equipo");
         throw err;
       }
     },

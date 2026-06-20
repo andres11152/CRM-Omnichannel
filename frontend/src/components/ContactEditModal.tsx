@@ -103,7 +103,7 @@ export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, on
       if (!res.ok) throw new Error('Failed to update contact');
 
       const data = await res.json();
-      toast.success('Contacto actualizado correctamente');
+      toast.success('Contacto actualizado');
       onSuccess(data); // Provide updated contact back to parent
       onClose();
     } catch (error) {

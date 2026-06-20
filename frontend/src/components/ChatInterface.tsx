@@ -217,7 +217,7 @@ export const ChatInterface: React.FC<Props> = ({
       const { updatePriority } = await import("@/services/ticketService");
       await updatePriority(activeContact.ticketId, newPriority);
       onTicketUpdate?.(activeContact.ticketId, { priority: newPriority });
-      toast.success(`${t("chat.priority_updated", "Prioridad actualizada a ")}${newPriority}`);
+      toast.success(`Prioridad: ${newPriority}`);
     } catch (error) {
       toast.error(t("chat.priority_update_error", "Error al actualizar la prioridad"));
       console.error(error);

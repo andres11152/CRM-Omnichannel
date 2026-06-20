@@ -127,7 +127,13 @@ export const protect = catchAsync(
     // A. Try reading from Redis (Cache-Aside)
     if (redisClient?.isOpen) {
       try {
-        const cachedUser = await redisClient.get(cacheKey);
+        // [RESILIENCE] Cap the Redis read at 800ms. A degraded Redis can leave
+        // `redisClient.get` hanging without throwing, blocking auth for the full
+        // request timeout. On timeout we fall through to the DB (cache miss).
+        const cachedUser = await Promise.race([
+          redisClient.get(cacheKey),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 800)),
+        ]);
         if (cachedUser) {
           currentUser = JSON.parse(cachedUser);
         }

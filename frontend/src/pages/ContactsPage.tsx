@@ -95,13 +95,13 @@ export const ContactsPage: React.FC = () => {
       if (!res.ok) throw new Error("save failed");
       toast.success(
         next
-          ? "Auto-importación de contactos ACTIVADA (solo números reales)"
-          : "Auto-importación de contactos DESACTIVADA",
+          ? "Sincronización automática activada"
+          : "Sincronización automática desactivada",
       );
     } catch (error) {
       console.error("Error saving auto-import setting:", error);
       setAutoImportWa(!next); // revert
-      toast.error("No se pudo guardar la preferencia");
+      toast.error("Error al guardar preferencia");
     } finally {
       setSavingAutoImport(false);
     }
@@ -109,7 +109,7 @@ export const ContactsPage: React.FC = () => {
 
   const handleImportWhatsApp = async () => {
     setImportingWa(true);
-    const toastId = toast.loading("Importando contactos de WhatsApp...");
+    const toastId = toast.loading("Importando contactos…");
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/company/import-whatsapp-contacts`, {
@@ -123,13 +123,13 @@ export const ContactsPage: React.FC = () => {
       if (!res.ok) throw new Error("import failed");
       const r = data.data || data;
       toast.success(
-        `Importación completa: ${r.imported} contactos importados, ${r.skipped} omitidos (LIDs/no válidos)`,
+        `${r.imported} importados · ${r.skipped} omitidos`,
         { id: toastId },
       );
       await fetchContacts(page, debouncedSearch);
     } catch (error) {
       console.error("Error importing WhatsApp contacts:", error);
-      toast.error("Error al importar contactos de WhatsApp", { id: toastId });
+      toast.error("Error al importar contactos", { id: toastId });
     } finally {
       setImportingWa(false);
     }
@@ -271,7 +271,7 @@ export const ContactsPage: React.FC = () => {
       }
     } catch (error: unknown) {
       console.error("[ERROR] Error saving contact (catch):", error);
-      toast.error("Error de conexión al guardar contacto");
+      toast.error("Error de conexión");
     }
   };
 
@@ -284,7 +284,7 @@ export const ContactsPage: React.FC = () => {
     // Temp: Bypass confirm to test event firing
     // if (!confirm(`¿Ests seguro de eliminar a ${name}?`)) return;
 
-    const toastId = toast.loading(`${t("common.delete")} ${name}...`);
+    const toastId = toast.loading(`Eliminando…`);
 
     try {
       const token = localStorage.getItem("token");
@@ -311,17 +311,17 @@ export const ContactsPage: React.FC = () => {
       toast.success(t("queues_config.toasts.deleted_success"), { id: toastId });
     } catch (error) {
       console.error("[ERROR] Error deleting contact:", error);
-      toast.error("No se pudo eliminar el contacto", { id: toastId });
+      toast.error("Error al eliminar contacto", { id: toastId });
     }
   };
 
   const handleOpenChat = async (contact: Contact) => {
     if (!contact.phone) {
-      toast.error("Este contacto no tiene un teléfono vlido");
+      toast.error("Teléfono no válido");
       return;
     }
 
-    const toastId = toast.loading("Abriendo chat...");
+    const toastId = toast.loading("Abriendo chat…");
 
     try {
       const token = localStorage.getItem("token");
@@ -361,7 +361,7 @@ export const ContactsPage: React.FC = () => {
       }
     } catch (error) {
       console.error("Error opening chat:", error);
-      toast.error("Error al abrir WhatsApp", { id: toastId });
+      toast.error("Error al abrir chat", { id: toastId });
     }
   };
 

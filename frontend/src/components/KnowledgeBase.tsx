@@ -26,7 +26,7 @@ export const KnowledgeBase: React.FC = () => {
       setDocuments(docs);
     } catch (error) {
       console.error("Error fetching documents:", error);
-      toast.error(t("knowledge_base.err_load", "Error al cargar la base de conocimiento."));
+      toast.error(t("knowledge_base.err_load", "Error al cargar base de conocimiento"));
     } finally {
       setIsLoading(false);
     }
@@ -63,22 +63,22 @@ export const KnowledgeBase: React.FC = () => {
     ];
 
     if (file.size > maxSize) {
-      toast.error(t("knowledge_base.err_size", "El archivo excede el límite de 50MB."));
+      toast.error(t("knowledge_base.err_size", "Archivo demasiado grande (máx 50MB)"));
       return;
     }
 
     if (!validTypes.includes(file.type)) {
-      toast.error(t("knowledge_base.err_format", "Formato no soportado. Usa PDF, TXT, DOCX o CSV."));
+      toast.error(t("knowledge_base.err_format", "Formato no soportado"));
       return;
     }
 
     setIsUploading(true);
-    const toastId = toast.loading(t("knowledge_base.uploading", "Subiendo e indexando..."));
+    const toastId = toast.loading(t("knowledge_base.uploading", "Subiendo e indexando…"));
 
     try {
       const newDoc = await uploadKnowledgeDoc(file);
       setDocuments((prev) => [newDoc, ...prev]);
-      toast.success(t("knowledge_base.upload_success", "Documento subido e indexado correctamente."), {
+      toast.success(t("knowledge_base.upload_success", "Documento indexado"), {
         id: toastId,
       });
     } catch (error: unknown) {
@@ -102,11 +102,11 @@ export const KnowledgeBase: React.FC = () => {
     )
       return;
 
-    const toastId = toast.loading(t("knowledge_base.deleting", "Eliminando..."));
+    const toastId = toast.loading(t("knowledge_base.deleting", "Eliminando…"));
     try {
       await deleteMedia(id);
       setDocuments(documents.filter((d) => d.id !== id));
-      toast.success(t("knowledge_base.delete_success", "Documento eliminado."), { id: toastId });
+      toast.success(t("knowledge_base.delete_success", "Documento eliminado"), { id: toastId });
     } catch (error: unknown) {
       console.error(error);
       toast.error(

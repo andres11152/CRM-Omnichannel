@@ -58,7 +58,7 @@ export const FeatureFlagManager: React.FC = () => {
       const data = await featureFlagService.getCompanyFlags(companyId);
       setFlags(data);
     } catch (error) {
-      toast.error("Error al cargar los flags de la empresa");
+      toast.error("Error al cargar flags");
     } finally {
       setLoading(false);
     }
@@ -74,9 +74,9 @@ export const FeatureFlagManager: React.FC = () => {
     setSaving(true);
     try {
       await featureFlagService.updateCompanyFlags(selectedCompanyId, flags);
-      toast.success("Feature Flags actualizados correctamente");
+      toast.success("Flags actualizados");
     } catch (error) {
-      toast.error("Error al guardar los cambios");
+      toast.error("Error al guardar");
     } finally {
       setSaving(false);
     }

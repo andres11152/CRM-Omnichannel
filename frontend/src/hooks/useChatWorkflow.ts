@@ -317,7 +317,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
           console.log(`[Workflow] Media uploaded:`, { url: mediaUrl, type: detectedType });
         } catch (uploadErr) {
           console.error("[Workflow] Upload failed:", uploadErr);
-          toast.error("Error al subir archivo. Revisa tu conexión.");
+          toast.error("Error al subir archivo");
           setIsTyping(false);
           return;
         }
@@ -341,7 +341,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       await sendMessageMutation.mutateAsync(payload);
       
       if (scheduledAt) {
-        toast.success("Mensaje programado correctamente.");
+        toast.success("Mensaje programado");
       }
 
       setIsTyping(false);
@@ -356,7 +356,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     
     try {
       setIsSyncing(true);
-      const loadingToast = toast.loading("Sincronizando historial desde WhatsApp...");
+      const loadingToast = toast.loading("Sincronizando historial…");
       
       await chatService.syncFullHistory(ticketId);
       
@@ -364,10 +364,10 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       await queryClient.invalidateQueries({ queryKey: ["messages", ticketId] });
       
       toast.dismiss(loadingToast);
-      toast.success("Historial sincronizado correctamente.");
+      toast.success("Historial sincronizado");
     } catch (err) {
       console.error("[Workflow] Sync error:", err);
-      toast.error("Error al sincronizar historial. Revisa tu conexión.");
+      toast.error("Error al sincronizar");
     } finally {
       setIsSyncing(false);
     }
@@ -402,7 +402,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     handleTransfer: async (targetId: string, type: "AGENT" | "QUEUE") => {
       try {
         await chatService.transferTicket(ticketId, targetId, type);
-        toast.success(`Ticket transferido correctamente a ${type === "AGENT" ? "un agente" : "una cola"}`);
+        toast.success(`Ticket transferido a ${type === "AGENT" ? "agente" : "cola"}`);
         // Optional: onBack() or similar if current agent loses access
       } catch (err) {
         toast.error("Error al transferir ticket");

@@ -46,7 +46,7 @@ export function useTenantManagement() {
       setAvailablePlans(planData);
     } catch (error) {
       Logger.error("[useTenantManagement] Failed to fetch data", error);
-      toast.error("Error cargando empresas. Verifique la conexión.");
+      toast.error("Error al cargar empresas");
     } finally {
       setLoading(false);
     }
@@ -80,10 +80,10 @@ export function useTenantManagement() {
     );
     try {
       await adminService.updateCompanyStatus(id, status);
-      toast.success("Estado actualizado.");
+      toast.success("Estado actualizado");
     } catch (error) {
       Logger.error("[useTenantManagement] Error al actualizar estado", error);
-      toast.error("Error al actualizar estado.");
+      toast.error("Error al actualizar estado");
       fetchData(); // Rollback
     }
   };
@@ -93,10 +93,10 @@ export function useTenantManagement() {
       const updated = await adminService.updateCompany(companyId, data);
       setCompanies(companies.map((c) => (c.id === companyId ? updated : c)));
       setEditingCompany(null);
-      toast.success("Empresa actualizada correctamente.");
+      toast.success("Empresa actualizada");
     } catch (error) {
       Logger.error("[useTenantManagement] Error updating company", error);
-      toast.error("Error al actualizar la empresa.");
+      toast.error("Error al actualizar empresa");
     }
   };
 
@@ -111,7 +111,7 @@ export function useTenantManagement() {
         setCompanyUsers(users);
       } catch (error) {
         Logger.error("[useTenantManagement] Error fetching users", error);
-        toast.error("Error al cargar usuarios de la empresa");
+        toast.error("Error al cargar usuarios");
       } finally {
         setLoadingUsers(false);
       }

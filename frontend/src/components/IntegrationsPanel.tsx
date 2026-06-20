@@ -188,7 +188,7 @@ export const IntegrationsPanel: React.FC = () => {
           // [OK] ENTERPRISE UX: Show success message with phone number
           const phoneDisplay = data.phone ? `+${data.phone}` : "tu dispositivo";
           toast.success(
-            `[OK] ¡Conectado exitosamente! WhatsApp ${phoneDisplay} vinculado correctamente.`,
+            `WhatsApp ${phoneDisplay} vinculado`,
             {
               duration: 5000,
               icon: "",
@@ -216,7 +216,7 @@ export const IntegrationsPanel: React.FC = () => {
   const handleCreateSession = async () => {
     // [SEC] GUARD: Prevent duplicate session creation
     if (loading || isScanning) {
-      toast.info("Ya hay una conexión en progreso...");
+      toast.info("Conexión en progreso…");
       return;
     }
 
@@ -241,7 +241,7 @@ export const IntegrationsPanel: React.FC = () => {
         // [SEC] If aborted/timeout, the session may still be initializing in the backend.
         // The QR will arrive via WebSocket. Show scanning state and wait.
         if (fetchErr instanceof DOMException && fetchErr.name === "AbortError") {
-          toast.info("Conectando... el QR llegará en unos segundos.", { duration: 5000 });
+          toast.info("Conectando… QR en camino", { duration: 5000 });
           setIsScanning(true);
           // Refresh to pick up the newly created session
           await fetchSessions();
@@ -278,14 +278,14 @@ export const IntegrationsPanel: React.FC = () => {
         fetchSessions();
 
         if (newSession.qrCode) {
-          toast.success("[OK] QR generado! Escanea para conectar");
+          toast.success("QR generado. Escanea para conectar");
         } else {
-          toast.info("Generando código QR...", { duration: 3000 });
+          toast.info("Generando QR…", { duration: 3000 });
         }
       }
     } catch (error) {
       console.error("Failed to create session", error);
-      toast.error("Error al crear sesión. Intenta de nuevo.");
+      toast.error("Error al crear sesión");
     } finally {
       setLoading(false);
     }
@@ -310,7 +310,7 @@ export const IntegrationsPanel: React.FC = () => {
       }
 
       fetchSessions();
-      toast.success("[OK] Dispositivo desvinculado correctamente");
+      toast.success("Dispositivo desvinculado");
     } catch (error) {
       console.error("Failed to delete session", error);
       toast.error("Error al desvincular dispositivo");
@@ -336,14 +336,14 @@ export const IntegrationsPanel: React.FC = () => {
       });
       const data = await res.json();
       if (data.status === "success") {
-        toast.success("Proceso de reconexión iniciado. Esperando código QR...");
+        toast.success("Reconexión iniciada. Esperando QR…");
         await fetchSessions();
       } else {
-        toast.error("Error al iniciar reconexión: " + (data.message || "Error desconocido"));
+        toast.error("Error al reconectar");
       }
     } catch (error) {
       console.error("Failed to reconnect session", error);
-      toast.error("Error al conectar con el servidor para reconectar");
+      toast.error("Error de conexión");
     } finally {
       // Remove from reconnecting Set
       setReconnectingIds((prev) => {

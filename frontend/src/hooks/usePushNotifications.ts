@@ -79,7 +79,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
    */
   const subscribe = async () => {
     if (!isSupported) {
-      toast.error("Tu navegador no soporta notificaciones push");
+      toast.error("Navegador no compatible");
       return;
     }
 
@@ -93,7 +93,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
       }
 
       if (perm !== "granted") {
-        toast.warning("Activa las notificaciones en tu navegador para recibir alertas importantes");
+        toast.warning("Activa notificaciones en tu navegador");
         setIsLoading(false);
         return;
       }
@@ -122,7 +122,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
       console.log("Successfully subscribed to push notifications");
     } catch (error) {
       console.error("Failed to subscribe:", error);
-      toast.error("No se pudieron activar las notificaciones push. Intenta de nuevo.");
+      toast.error("Error al activar notificaciones");
     } finally {
       setIsLoading(false);
     }

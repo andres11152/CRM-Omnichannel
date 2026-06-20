@@ -108,8 +108,9 @@ export const MainLayout = () => {
     >
       <Toaster
         position="top-right"
-        richColors
-        theme={darkMode ? "dark" : "light"}
+        theme="dark"
+        gap={6}
+        toastOptions={{ duration: 3000, closeButton: true }}
       />
 
       {/* Mobile Header */}

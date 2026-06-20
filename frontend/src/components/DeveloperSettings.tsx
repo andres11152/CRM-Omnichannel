@@ -111,9 +111,9 @@ export const DeveloperSettings: React.FC = () => {
       setIsCreatingWebhook(false);
       setNewDesc("");
       setSelectedEvents([]);
-      toast.success("Webhook creado correctamente");
+      toast.success("Webhook creado");
     } catch (error) {
-      toast.error("Error al crear el webhook");
+      toast.error("Error al crear webhook");
     }
   };
 
@@ -463,7 +463,7 @@ export const DeveloperSettings: React.FC = () => {
                           <button
                             onClick={() => {
                               navigator.clipboard.writeText(wh.secret);
-                              toast.success("Secret copiado!");
+                              toast.success("Copiado");
                             }}
                             className="text-gray-400 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
                           >
@@ -485,7 +485,7 @@ export const DeveloperSettings: React.FC = () => {
                   </h3>
                   <button
                     onClick={() => {
-                      toast.info("Actualizando logs...");
+                      toast.info("Actualizando…");
                     }}
                     className="text-reply-brand dark:text-reply-brand-light text-xs font-black hover:underline cursor-pointer"
                   >
@@ -654,7 +654,7 @@ export const DeveloperSettings: React.FC = () => {
                         <Button
                           onClick={() => {
                             navigator.clipboard.writeText(generatedKey);
-                            toast.success("Copiado!", {
+                            toast.success("Copiado", {
                               position: "bottom-center",
                             });
                           }}

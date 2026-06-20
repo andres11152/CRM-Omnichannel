@@ -364,7 +364,7 @@ export const MarketingDashboard: React.FC = () => {
                   </button>
                 </div>
                 <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
-                <button onClick={() => toast.success("Prueba de envío simulada a " + (localStorage.getItem("userEmail") || "tu correo"))} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors">Enviar Test</button>
+                <button onClick={() => toast.success("Test enviado")} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors">Enviar Test</button>
                 <button onClick={ctx.handleCreateTemplate} disabled={!ctx.newTemplate.name || !ctx.newTemplate.content} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2">
                   <span>Guardar</span>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>

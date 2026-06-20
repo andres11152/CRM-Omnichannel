@@ -230,7 +230,7 @@ export const FlowBuilder: React.FC = () => {
     const previous = undoStack[undoStack.length - 1];
     setUndoStack(prev => prev.slice(0, -1));
     setFlow(previous);
-    toast.info("Undo applied");
+    toast.info("Cambio revertido");
   }, [undoStack]);
 
   const handleNodeDragStart = (e: React.MouseEvent, nodeId: string) => {
@@ -404,7 +404,7 @@ export const FlowBuilder: React.FC = () => {
       }
     } catch (error) {
       console.error("Error saving flow:", error);
-      toast.error("Error saving flow");
+      toast.error("Error al guardar flujo");
     } finally { setSaving(false); }
   };
 

@@ -50,7 +50,7 @@ export const ImpersonationHandler = () => {
                      // Login via store (updates localStorage and state)
                      login(user, token);
                      
-                     toast.success(`Accediendo como ${user.role}...`);
+                     toast.success(`Accediendo como ${user.role}`);
                      console.log("[OK] Impersonation exitosa:", user);
                      
                      // Clean URL
@@ -64,7 +64,7 @@ export const ImpersonationHandler = () => {
                 }
             } catch (e) {
                 console.error("[ERROR] Fallo al procesar token de impersonation", e);
-                toast.error("Token de acceso invlido.");
+                toast.error("Token inválido");
             }
         }
     }, [login, navigate]);

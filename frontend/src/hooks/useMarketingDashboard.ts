@@ -159,7 +159,7 @@ export const useMarketingDashboard = () => {
       setNewTemplate((t) => ({ ...t, content: prev }));
       setHistoryIndex(historyIndex - 1);
     } else {
-      toast.info("Nada más que deshacer");
+      toast.info("Sin acciones para deshacer");
     }
   };
 
@@ -169,7 +169,7 @@ export const useMarketingDashboard = () => {
       setNewTemplate((t) => ({ ...t, content: next }));
       setHistoryIndex(historyIndex + 1);
     } else {
-      toast.info("Nada más que rehacer");
+      toast.info("Sin acciones para rehacer");
     }
   };
 
@@ -199,7 +199,7 @@ export const useMarketingDashboard = () => {
       toast.success("Variable insertada");
     } else {
       navigator.clipboard.writeText(tag);
-      toast.info("Copiado: " + tag);
+      toast.info("Copiado");
     }
   };
 
@@ -250,7 +250,7 @@ export const useMarketingDashboard = () => {
         setNewTemplate(DEFAULT_TEMPLATE);
         setIsCreatingTemplate(false);
         loadData();
-        toast.success("Plantilla creada con éxito");
+        toast.success("Plantilla creada");
       }
     } catch (e) {
       console.error(e);
@@ -304,20 +304,20 @@ export const useMarketingDashboard = () => {
     try {
       await marketingService.deleteCampaign(id);
       setCampaigns((prev) => prev.filter((c) => c.id !== id));
-      toast.success("Campaña eliminada correctamente");
+      toast.success("Campaña eliminada");
     } catch (error) {
       console.error("Error deleting campaign:", error);
-      toast.error("Error al eliminar la campaña");
+      toast.error("Error al eliminar campaña");
     }
   };
 
   const handleLaunch = async () => {
     if (!campaignName || !selectedTemplateId || (selectedTags.length === 0 && targetPhones.length === 0)) {
-      toast.error("Debes completar los campos requeridos y seleccionar al menos una etiqueta o subir destinatarios.");
+      toast.error("Completa los campos requeridos");
       return;
     }
     if (scheduleMode === "later" && !scheduledDate) {
-      toast.error("Por favor selecciona una fecha y hora para programar la campaña.");
+      toast.error("Selecciona fecha y hora");
       return;
     }
 
@@ -375,11 +375,11 @@ export const useMarketingDashboard = () => {
       setSelectedTemplateId("");
       setScheduledDate("");
       setScheduleMode("now");
-      toast.success(editingCampaignId ? "Campaña actualizada correctamente" : "Campaña creada y lanzada correctamente");
+      toast.success(editingCampaignId ? "Campaña actualizada" : "Campaña creada y lanzada");
     } catch (error) {
       console.error("Error launching/updating campaign:", error);
       setIsSending(false);
-      toast.error("Error al guardar la campaña");
+      toast.error("Error al guardar campaña");
     }
   };
 
@@ -402,7 +402,7 @@ export const useMarketingDashboard = () => {
       toast.success("Diseño actualizado");
     } catch (e) {
       console.error(e);
-      toast.error("Error en generación");
+      toast.error("Error al generar");
     } finally {
       setIsGeneratingAI(false);
       setGenerationStatus("");

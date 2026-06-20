@@ -161,7 +161,7 @@ export const EmailInbox: React.FC = () => {
       setTotal(data.total || 0);
     } catch (error) {
       console.error("Failed to fetch emails:", error);
-      toast.error("Error cargando emails");
+      toast.error("Error al cargar emails");
     } finally {
       setLoading(false);
       setRefreshing(false);

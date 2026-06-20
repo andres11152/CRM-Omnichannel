@@ -78,7 +78,7 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
-    toast.success(`${field} ${t("customer360.copied", "copiado")}`);
+    toast.success("Copiado");
     setTimeout(() => setCopiedField(null), 2000);
   };
 

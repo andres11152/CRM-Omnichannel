@@ -233,7 +233,7 @@ export const LoginPage = () => {
 
           // @ts-ignore
           login(mappedUser, token);
-          toast.success(`Bienvenido de nuevo, ${user.name.split(" ")[0]}`);
+          toast.success(`Bienvenido, ${user.name.split(" ")[0]}`);
 
           // Clean URL parameters
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -241,18 +241,18 @@ export const LoginPage = () => {
         } catch (err) {
           console.error("[LoginPage] Google Token Fetch Error:", err);
           localStorage.removeItem("token");
-          toast.error("Error al iniciar sesión con Google.");
+          toast.error("Error con Google");
         }
       };
 
       fetchGoogleUser();
     } else if (errorParam) {
       if (errorParam === "no_email") {
-        toast.error("No pudimos obtener tu email de Google.");
+        toast.error("Email no disponible");
       } else if (errorParam === "auth_failed") {
-        toast.error("Falló la autenticación con Google.");
+        toast.error("Error de autenticación");
       } else {
-        toast.error("Error de inicio de sesión con Google.");
+        toast.error("Error con Google");
       }
       // Clean URL parameters
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -309,7 +309,7 @@ export const LoginPage = () => {
         console.log("[LoginPage] Axios Response:", error.response);
 
         if (error.response?.status === 429) {
-          toast.error("Demasiados intentos. Espera un minuto.");
+          toast.error("Demasiados intentos");
         } else if (error.response?.status === 401) {
           //  SHOW SPECIFIC INVALID CREDENTIALS MESSAGE
           const serverMsg = error.response.data?.message;
@@ -392,7 +392,7 @@ export const LoginPage = () => {
 
       // @ts-ignore - Explicit mapping above handles the Date/String mismatch
       login(mappedUser, token);
-      toast.success(`¡Empresa registrada exitosamente! Bienvenido, ${user.name.split(" ")[0]}`);
+      toast.success(`Bienvenido, ${user.name.split(" ")[0]}`);
       navigate("/dashboard", { replace: true });
     } catch (error: any) {
       console.error("[LoginPage] Register Error:", error);
@@ -406,8 +406,9 @@ export const LoginPage = () => {
     <div className="flex min-h-screen bg-gray-50 dark:bg-reply-bg-dark font-sans selection:bg-reply-brand/10 dark:selection:bg-reply-brand/20 relative">
       <Toaster
         position="top-right"
-        richColors
-        toastOptions={{ style: { zIndex: 99999 } }}
+        theme="dark"
+        gap={6}
+        toastOptions={{ duration: 3000, closeButton: true }}
       />
       {/* ️ LEFT SIDE: ARTWORK & BRANDING — Enterprise Grade */}
       <div className="hidden lg:flex w-[48%] fixed inset-y-0 left-0 bg-gradient-to-br from-[#0b3c2c] via-[#051c15] to-[#010906] items-center justify-center p-12 overflow-hidden z-0">

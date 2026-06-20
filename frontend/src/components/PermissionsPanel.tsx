@@ -483,7 +483,7 @@ export const PermissionsPanel: React.FC = () => {
       setRoles(data.roles || []);
     } catch (error) {
       console.error("Error fetching roles:", error);
-      toast.error("Error cargando roles");
+      toast.error("Error al cargar roles");
     } finally {
       setLoading(false);
     }
@@ -520,7 +520,7 @@ export const PermissionsPanel: React.FC = () => {
 
   const handleSaveRole = async () => {
     if (!roleForm.name.trim()) {
-      toast.error("El nombre del rol es requerido");
+      toast.error("Nombre del rol requerido");
       return;
     }
 
@@ -540,7 +540,7 @@ export const PermissionsPanel: React.FC = () => {
             permissions,
           }),
         });
-        toast.success("Rol creado exitosamente");
+        toast.success("Rol creado");
       } else if (selectedRole) {
         await fetchAPI(`/roles/${selectedRole.id}`, {
           method: "PATCH",
@@ -549,7 +549,7 @@ export const PermissionsPanel: React.FC = () => {
             permissions,
           }),
         });
-        toast.success("Rol actualizado exitosamente");
+        toast.success("Rol actualizado");
       }
 
       fetchRoles();
@@ -578,7 +578,7 @@ export const PermissionsPanel: React.FC = () => {
     try {
       setLoading(true);
       await fetchAPI(`/roles/${roleId}`, { method: "DELETE" });
-      toast.success("Rol eliminado exitosamente");
+      toast.success("Rol eliminado");
       fetchRoles();
     } catch (error: unknown) {
       console.error("Error deleting role:", error);

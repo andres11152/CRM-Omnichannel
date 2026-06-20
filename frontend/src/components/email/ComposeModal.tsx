@@ -89,8 +89,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ open, onClose, onSen
   }, [open, mode, replyTo]);
 
   const handleSend = async () => {
-    if (!form.to.trim()) { toast.error("Ingresa al menos un destinatario"); return; }
-    if (!form.subject.trim()) { toast.error("Ingresa un asunto"); return; }
+    if (!form.to.trim()) { toast.error("Destinatario requerido"); return; }
+    if (!form.subject.trim()) { toast.error("Asunto requerido"); return; }
 
     setSending(true);
     try {
@@ -107,12 +107,12 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ open, onClose, onSen
         contactId: form.contactId || undefined,
       });
 
-      toast.success("Correo enviado exitosamente");
+      toast.success("Correo enviado");
       onSent();
       onClose();
     } catch (error) {
       console.error("Send email failed:", error);
-      toast.error("Error al enviar el correo");
+      toast.error("Error al enviar correo");
     } finally {
       setSending(false);
     }

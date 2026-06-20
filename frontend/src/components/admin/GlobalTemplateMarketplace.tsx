@@ -37,7 +37,7 @@ export const GlobalTemplateMarketplace: React.FC = () => {
       const data = await marketplaceService.getInventory();
       setInventory(data);
     } catch (error) {
-      toast.error("Error al cargar el inventario global");
+      toast.error("Error al cargar inventario");
     } finally {
       setLoading(false);
     }
@@ -50,10 +50,10 @@ export const GlobalTemplateMarketplace: React.FC = () => {
       } else {
         await marketplaceService.toggleWorkflow(id, !currentStatus);
       }
-      toast.success("Estado actualizado correctamente");
+      toast.success("Estado actualizado");
       fetchInventory();
     } catch (error) {
-      toast.error("Error al actualizar el estado");
+      toast.error("Error al actualizar");
     }
   };
 

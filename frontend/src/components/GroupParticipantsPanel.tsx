@@ -152,7 +152,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           }),
         },
       );
-      toast.success(`Contacto añadido: ${participant.displayName}`);
+      toast.success("Contacto añadido");
       
       // Update local state
       setData((prev) => {
@@ -194,7 +194,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
       }));
 
     if (participantsToImport.length === 0) {
-      toast.info("No hay contactos seleccionados válidos para importar");
+      toast.info("Sin contactos válidos");
       return;
     }
 
@@ -209,7 +209,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
       );
       
       const result = res.data;
-      toast.success(`${result.successful} contactos importados exitosamente`);
+      toast.success(`${result.successful} contactos importados`);
       
       // Update local state
       setData((prev) => {
@@ -270,7 +270,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           : "Sincronización automática DESACTIVADA",
       );
     } catch (error) {
-      toast.error("Error al actualizar preferencia de sincronización");
+      toast.error("Error al actualizar preferencia");
     } finally {
       setProcessing(false);
     }

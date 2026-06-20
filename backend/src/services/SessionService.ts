@@ -61,6 +61,33 @@ class SessionService {
     return !!redisClient?.isOpen;
   }
 
+  /**
+   * [RESILIENCE] Race a Redis operation against a short timeout.
+   *
+   * A degraded/reconnecting Redis can leave `await redisClient.get()` hanging
+   * for the full request timeout (~15s) WITHOUT throwing — so a plain try/catch
+   * never fires. That single hang blocks `protect`, taking the entire API down.
+   *
+   * This wrapper guarantees auth never waits more than `ms` on Redis: on timeout
+   * it returns `fallback` (fail-open), so a slow Redis degrades to a cache miss
+   * instead of an outage.
+   */
+  private async withTimeout<T>(
+    op: Promise<T>,
+    ms: number,
+    fallback: T,
+  ): Promise<T> {
+    let timer: NodeJS.Timeout;
+    const timeout = new Promise<T>((resolve) => {
+      timer = setTimeout(() => resolve(fallback), ms);
+    });
+    try {
+      return await Promise.race([op, timeout]);
+    } finally {
+      clearTimeout(timer!);
+    }
+  }
+
   // --------------------------------------------------------------------------
   // SESSION LIFECYCLE
   // --------------------------------------------------------------------------
@@ -248,10 +275,18 @@ class SessionService {
     if (!this.isAvailable()) return false;
 
     try {
-      const result = await redisClient!.get(`${REDIS_PREFIX.BLACKLIST}${jti}`);
+      // [RESILIENCE] Cap the Redis wait at 800ms. A degraded Redis would
+      // otherwise hang this await for the full request timeout (~15s) and take
+      // down every authenticated endpoint via `protect`. On timeout we fail-open
+      // (treat as not blacklisted) — availability over instant revocation.
+      const result = await this.withTimeout(
+        redisClient!.get(`${REDIS_PREFIX.BLACKLIST}${jti}`),
+        800,
+        null,
+      );
       return result === "1";
     } catch {
-      // If Redis fails, allow the request (fail-open for availability)
+      // If Redis errors, allow the request (fail-open for availability)
       return false;
     }
   }

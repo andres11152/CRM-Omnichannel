@@ -78,8 +78,19 @@ export const useMessages = (ticketId: string | null) => {
       return sortByTimestamp([...apiMessages, ...socketOnly]);
     },
     enabled: !!ticketId,
+    // History is kept fresh by sockets while a chat is open, so we don't poll.
     staleTime: Infinity,
     gcTime: 1000 * 60 * 10,
+    // [FIX] Always reload history from the server when a chat is (re)opened.
+    // Without this, a single failed initial load (e.g. a transient backend/Redis
+    // hiccup) would stick forever under `staleTime: Infinity`, leaving the chat
+    // showing only socket messages and never recovering until a hard refresh.
+    refetchOnMount: "always",
+    refetchOnReconnect: true,
+    // Recover from transient failures (slow Redis, network blips) with backoff
+    // instead of giving up on the first error.
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
   });
 };
 
@@ -229,7 +240,7 @@ export const useSendMessage = (ticketId: string) => {
       }
 
       console.error("[useSendMessage] Error:", error);
-      toast.error("Error enviando mensaje. Intenta de nuevo.");
+      toast.error("Error al enviar mensaje");
     },
 
     // 4. SETTLED (Always runs after success or error)
@@ -362,7 +373,7 @@ export const useResolveTicket = () => {
     }) => chatService.resolveTicket(ticketId, { resolutionType, notes }),
 
     onSuccess: (_, { ticketId }) => {
-      toast.success("Ticket resuelto correctamente");
+      toast.success("Ticket resuelto");
 
       // Invalidate conversations to update status
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });

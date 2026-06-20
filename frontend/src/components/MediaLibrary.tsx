@@ -79,7 +79,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
           category: MediaCategory.MEDIA_LIBRARY, // Mark as library media
         });
         setMedia([newMedia, ...media]);
-        toast.success(`Archivo ${file.name} subido correctamente`);
+        toast.success("Archivo subido");
       } catch (error: unknown) {
         toast.error(
           `Error al subir ${file.name}: ${error instanceof Error ? error.message : "Error"}`,
@@ -148,8 +148,8 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
       }
       
       toast.success(
-        mediaToDelete.length === 1 
-          ? "Archivo eliminado correctamente" 
+        mediaToDelete.length === 1
+          ? "Archivo eliminado"
           : `${mediaToDelete.length} archivos eliminados`
       );
     } catch (error: unknown) {
@@ -164,7 +164,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
 
   const copyUrl = (url: string) => {
     navigator.clipboard.writeText(url);
-    toast.success("[OK] URL copiada al portapapeles");
+    toast.success("URL copiada");
   };
 
   // Drag & Drop handlers

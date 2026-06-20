@@ -75,7 +75,7 @@ class SocketService {
       Logger.warn(`[SocketService]  Disconnected: ${reason}`);
       if (reason !== "io client disconnect") {
         import("sonner").then(({ toast }) => {
-          toast.error("Desconectado del servidor. Intentando reconectar...");
+          toast.error("Reconectando…");
         });
       }
     });
@@ -83,7 +83,7 @@ class SocketService {
     this.socket.on("reconnect", (attemptNumber) => {
       Logger.info(`[SocketService] [SYNC] Reconnected (attempt ${attemptNumber})`);
       import("sonner").then(({ toast }) => {
-        toast.success(`Reconectado exitosamente (Intento ${attemptNumber})`);
+        toast.success("Reconectado");
       });
     });
 

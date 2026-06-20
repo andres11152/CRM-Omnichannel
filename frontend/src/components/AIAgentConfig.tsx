@@ -94,15 +94,15 @@ export const AIAgentConfig: React.FC<Props> = () => {
   const handleSaveCreds = async () => {
     try {
       await updateAIConfig(creds);
-      toast.success(t("ai_config.credentials.success", "Credenciales actualizadas correctamente."));
+      toast.success(t("ai_config.credentials.success", "Credenciales actualizadas"));
     } catch (error) {
-      toast.error(t("ai_config.credentials.error", "Error al guardar credenciales."));
+      toast.error(t("ai_config.credentials.error", "Error al guardar credenciales"));
     }
   };
 
   const handleSaveAssistant = async () => {
     if (!currentAssistant.name || !currentAssistant.systemPrompt)
-      return toast.error(t("ai_config.assistants.err_required", "Nombre y Prompt son obligatorios"));
+      return toast.error(t("ai_config.assistants.err_required", "Nombre y Prompt requeridos"));
 
     try {
       if (currentAssistant.id) {

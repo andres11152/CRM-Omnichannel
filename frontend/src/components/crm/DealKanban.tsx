@@ -247,7 +247,7 @@ export const DealKanban: React.FC = () => {
         } else if (isLostStage(newStage.name)) {
           toast(t("crm.deals.lost_toast"), { icon: "😔" });
         } else {
-          toast.success(`${t("crm.deals.moved_success")} "${newStage.name}"`);
+          toast.success(`Movido a "${newStage.name}"`);
         }
       }
     } catch (error) {

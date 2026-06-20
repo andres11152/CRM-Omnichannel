@@ -41,7 +41,7 @@ export const AnalyticsDashboard: React.FC = () => {
       setTagData(tags);
     } catch (error) {
       console.error("Analytics Error:", error);
-      toast.error("Error cargando estadísticas. Intente nuevamente.");
+      toast.error("Error al cargar estadísticas");
     } finally {
       setLoading(false);
     }

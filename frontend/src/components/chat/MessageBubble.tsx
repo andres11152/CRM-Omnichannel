@@ -639,7 +639,7 @@ const UnavailableMediaFallback: React.FC<{ message: Message; type: string }> = (
       const response = await api.post(`/conversations/${message.ticketId || "0"}/messages/${message.id}/retry-media`);
       
       if (response.data.status === "success") {
-        toast.success("Archivo recuperado correctamente. Refresca para verlo.");
+        toast.success("Archivo recuperado");
       }
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }, message?: string };

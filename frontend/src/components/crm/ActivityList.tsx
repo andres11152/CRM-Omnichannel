@@ -53,7 +53,7 @@ export const ActivityList: React.FC = () => {
       action: {
         label: "Eliminar",
         onClick: async () => {
-          const toastId = toast.loading("Eliminando actividad...");
+          const toastId = toast.loading("Eliminando…");
           try {
             await deleteActivity(id);
             toast.success("Actividad eliminada", { id: toastId });

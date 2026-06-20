@@ -181,6 +181,24 @@ export class WhatsAppIdUtils {
   }
 
   /**
+   * [CRM] STRICT validation for persisting a number as a CRM Contact.
+   *
+   * Stricter than isRealPhoneNumber on purpose: real WhatsApp/E.164 subscriber
+   * numbers are 7-13 digits in practice. WhatsApp LIDs (internal identifiers) are
+   * 14-19 digits and were polluting the Contacts list (e.g. 248472515174606,
+   * 251432250957917). The prefix-based LID heuristic misses unknown prefixes, so we
+   * also enforce a hard 13-digit ceiling here for anything that becomes a contact.
+   */
+  static isValidCrmPhone(value: string | null | undefined): boolean {
+    if (!value) return false;
+    const digits = String(value).replace(/\D/g, "");
+    if (!this.isRealPhoneNumber(digits)) return false;
+    // Real subscriber numbers don't exceed 13 digits; 14+ are LIDs / internal IDs.
+    if (digits.length > 13) return false;
+    return true;
+  }
+
+  /**
    * [SEC] 100-YEAR FIX: Enhanced LID Detection
    *
    * Detects "Linked Device IDs" which hide the real phone number.

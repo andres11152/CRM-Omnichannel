@@ -9,6 +9,7 @@ import { ImpersonationBanner } from "./components/auth/ImpersonationBanner.tsx";
 
 // SECURITY: Tenant isolation and emergency logout
 import { SecurityProvider } from "./context/SecurityProvider";
+import { ModalProvider } from "./context/ModalContext";
 import { setupAxiosInterceptors } from "./config/axiosInterceptors";
 
 // REAL-TIME: Conversation synchronization
@@ -37,8 +38,9 @@ const App: React.FC = () => {
             <ImpersonationBanner />
             <div className="flex-1 relative w-full overflow-hidden flex flex-col">
               <SoundProvider>
-                {/* SRP: Routing is completely isolated */}
-                <AppRoutes />
+                <ModalProvider>
+                  <AppRoutes />
+                </ModalProvider>
               </SoundProvider>
             </div>
           </div>

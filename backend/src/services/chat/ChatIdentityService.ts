@@ -4,6 +4,7 @@ import { Logger } from "@/utils/logger";
 import { userRepository } from "@/repositories/UserRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
+import { companySettingsService } from "@/services/CompanySettingsService";
 
 /**
  * [CHAT] CHAT IDENTITY SERVICE
@@ -121,46 +122,50 @@ export class ChatIdentityService {
       }
     }
 
-    // 2. [SEC] 100-YEAR ENTERPRISE FIX: CRM Contact Sync with Real Phone Validation
-    const isGroup = params.email.includes("@g.us") || 
+    // 2. CRM CONTACT SYNC — two guards:
+    //    (a) STRICT phone validation: never persist LIDs / internal IDs as contacts.
+    //    (b) OPT-IN: auto-import is OFF by default; contacts are created automatically
+    //        only when the company enables it. Otherwise the user imports manually.
+    const isGroup = params.email.includes("@g.us") ||
                    (params.phone ? !WhatsAppIdUtils.isRealPhoneNumber(params.phone) && params.phone.startsWith("120") : false);
 
-    const hasRealPhone =
-      params.phone && 
-      params.phone.length >= 7 && 
-      params.phone.length <= 15 &&
-      WhatsAppIdUtils.isRealPhoneNumber(params.phone);
+    const hasValidCrmPhone = WhatsAppIdUtils.isValidCrmPhone(params.phone);
 
-    if (user.role === "USER" && !isGroup && hasRealPhone) {
-      try {
-        await contactService.upsert(params.companyId, {
-          phone: params.phone!,
-          name: user.name,
-          email: null,
-          customFields: {
-            source: "whatsapp",
-            whatsappId: params.email.split("@")[0],
-            userId: user.id,
-          },
-          tags: ["Imported from Chat"],
-        });
-        Logger.info(
-          `[ChatIdentityService] [OK] CRM Contact synced for real phone: ${params.phone}`,
-        );
-      } catch (error) {
-        Logger.warn(
-          `[ChatIdentityService] Failed to sync CRM contact for ${params.email}`,
-          { error },
+    if (user.role === "USER" && !isGroup && hasValidCrmPhone) {
+      const autoImport = await companySettingsService.isAutoImportContactsEnabled(params.companyId);
+      if (autoImport) {
+        try {
+          await contactService.upsert(params.companyId, {
+            phone: params.phone!,
+            name: user.name,
+            email: null,
+            customFields: {
+              source: "whatsapp",
+              whatsappId: params.email.split("@")[0],
+              userId: user.id,
+            },
+            tags: ["Imported from Chat"],
+          });
+          Logger.info(
+            `[ChatIdentityService] [OK] CRM Contact auto-synced for real phone: ${params.phone}`,
+          );
+        } catch (error) {
+          Logger.warn(
+            `[ChatIdentityService] Failed to sync CRM contact for ${params.email}`,
+            { error },
+          );
+        }
+      } else {
+        Logger.debug(
+          `[ChatIdentityService] [SKIP] Auto-import OFF for ${params.companyId} — not creating contact for ${params.phone}`,
         );
       }
-    } else {
-      if (isGroup) {
-        Logger.info(`[ChatIdentityService] [SKIP] Skipped CRM sync: Group chat detected (${params.email})`);
-      } else if (!hasRealPhone) {
-        Logger.info(
-          `[ChatIdentityService] [SKIP] Skipped CRM sync: No real phone (LID or invalid format): ${params.phone || "N/A"}`,
-        );
-      }
+    } else if (isGroup) {
+      Logger.debug(`[ChatIdentityService] [SKIP] Group chat, no contact (${params.email})`);
+    } else if (!hasValidCrmPhone) {
+      Logger.debug(
+        `[ChatIdentityService] [SKIP] Not a valid CRM phone (LID/invalid): ${params.phone || "N/A"}`,
+      );
     }
 
     return user;

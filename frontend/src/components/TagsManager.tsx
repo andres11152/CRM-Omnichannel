@@ -4,12 +4,14 @@ import { Tag } from "@/types";
 import { api } from "@/lib/axios";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { useAuthStore } from "@/stores/authStore";
+import { useModal } from "@/context/ModalContext";
 
 const ADMIN_ROLES = ["ADMIN", "SUPERVISOR", "MASTER"];
 
 export const TagsManager: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const canManageTags = user?.role ? ADMIN_ROLES.includes(user.role) : false;
+  const { confirm } = useModal();
   const [tags, setTags] = useState<Tag[]>([]);
   const [filteredTags, setFilteredTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +113,14 @@ export const TagsManager: React.FC = () => {
   };
 
   const handleDeleteTag = async (id: string, name: string) => {
-    if (!window.confirm(`¿Eliminar la etiqueta "${name}"?`)) return;
+    const ok = await confirm({
+      title: `¿Eliminar etiqueta?`,
+      message: `La etiqueta "${name}" será eliminada permanentemente.`,
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/tags/${id}`);

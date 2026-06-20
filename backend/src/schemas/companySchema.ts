@@ -67,5 +67,10 @@ export const UpdateCompanySettingsSchema = z.object({
           .optional(),
       })
       .optional(),
+    whatsappSync: z
+      .object({
+        autoImportContacts: z.boolean().optional(),
+      })
+      .optional(),
   }),
 });

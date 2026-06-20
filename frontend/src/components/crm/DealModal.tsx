@@ -5,6 +5,7 @@ import { Deal, Account } from "@/types/crm";
 import { getAccounts, updateDeal, createDeal } from "@/services/crmService";
 import { EmailModal } from "../EmailModal";
 import { toast } from "sonner";
+import { useModal } from "@/context/ModalContext";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import {
@@ -60,6 +61,7 @@ export const DealModal: React.FC<Props> = ({
   deal,
 }) => {
   const { t } = useTranslation();
+  const { confirm } = useModal();
   const [formData, setFormData] = useState<DealFormData>({
     title: "",
     value: 0,
@@ -548,24 +550,26 @@ export const DealModal: React.FC<Props> = ({
                     variant="ghost"
                     className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/10 gap-1.5"
                     onClick={async () => {
-                      if (
-                        window.confirm(
-                          t("crm.deals.delete_confirm"),
-                        )
-                      ) {
-                        setLoading(true);
-                        try {
-                          const { deleteDeal } =
-                            await import("../../services/crmService");
-                          await deleteDeal(deal.id);
-                          onSave(); // Refresh list
-                          onClose(); // Close modal
-                        } catch (error) {
-                          console.error("Error deleting deal:", error);
-                          toast.error(t("crm.deals.delete_error"));
-                        } finally {
-                          setLoading(false);
-                        }
+                      const ok = await confirm({
+                        title: t("crm.deals.delete_confirm"),
+                        message: "El negocio será eliminado permanentemente.",
+                        confirmText: "Eliminar negocio",
+                        cancelText: "Cancelar",
+                        variant: "danger",
+                      });
+                      if (!ok) return;
+                      setLoading(true);
+                      try {
+                        const { deleteDeal } =
+                          await import("../../services/crmService");
+                        await deleteDeal(deal.id);
+                        onSave();
+                        onClose();
+                      } catch (error) {
+                        console.error("Error deleting deal:", error);
+                        toast.error(t("crm.deals.delete_error"));
+                      } finally {
+                        setLoading(false);
                       }
                     }}
                   >

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ProductCreationModal } from "./ProductCreationModal";
 import { Product } from "@/types";
 import { toast } from "sonner";
+import { useModal } from "@/context/ModalContext";
 import {
   getProducts,
   createProduct,
@@ -50,6 +51,7 @@ const formatPrice = (price: number, currency: string) => {
 
 export const ProductCatalogView: React.FC = () => {
   const { t } = useTranslation();
+  const { confirm } = useModal();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
@@ -111,7 +113,14 @@ export const ProductCatalogView: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm(t("crm.products.delete_confirm"))) return;
+    const ok = await confirm({
+      title: t("crm.products.delete_confirm"),
+      message: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await deleteProduct(id);
       setProducts((prev: Product[]) =>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { toast } from "sonner"; // New Import
+import { toast } from "sonner";
 import { Plan, PlanConfig } from "@/types";
 import { adminService } from "@/services/adminService";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { useModal } from "@/context/ModalContext";
 
 // Metadata for known features to provide icons and descriptions
 const FEATURE_META: Record<
@@ -241,6 +242,7 @@ interface Props {
 }
 
 export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
+  const { confirm } = useModal();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Plan | null>(null);
@@ -385,11 +387,14 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
   const handleDeletePlan = async () => {
     if (!selectedPlanId || !formData) return;
 
-    if (
-      window.confirm(
-        `¿Ests seguro de que deseas eliminar el plan "${formData.name}"? Esta acción no se puede deshacer.`,
-      )
-    ) {
+    const ok = await confirm({
+      title: `¿Eliminar plan "${formData.name}"?`,
+      message: "Esta acción es permanente y no se puede deshacer.",
+      confirmText: "Eliminar plan",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (ok) {
       setIsDeleting(true);
       try {
         await adminService.deletePlan(selectedPlanId);

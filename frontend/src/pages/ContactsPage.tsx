@@ -41,6 +41,11 @@ export const ContactsPage: React.FC = () => {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [newNotes, setNewNotes] = useState("");
 
+  // WhatsApp contact import control (manual / opt-in)
+  const [autoImportWa, setAutoImportWa] = useState(false);
+  const [savingAutoImport, setSavingAutoImport] = useState(false);
+  const [importingWa, setImportingWa] = useState(false);
+
   // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -56,7 +61,79 @@ export const ContactsPage: React.FC = () => {
 
   useEffect(() => {
     fetchTags();
+    fetchAutoImportSetting();
   }, []);
+
+  const fetchAutoImportSetting = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/company/settings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      const settings = data.data || data;
+      setAutoImportWa(settings?.whatsappSync?.autoImportContacts === true);
+    } catch (error) {
+      console.error("Error fetching WhatsApp import setting:", error);
+    }
+  };
+
+  const handleToggleAutoImport = async () => {
+    const next = !autoImportWa;
+    setSavingAutoImport(true);
+    setAutoImportWa(next); // optimistic
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/company/settings`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ whatsappSync: { autoImportContacts: next } }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      toast.success(
+        next
+          ? "Auto-importación de contactos ACTIVADA (solo números reales)"
+          : "Auto-importación de contactos DESACTIVADA",
+      );
+    } catch (error) {
+      console.error("Error saving auto-import setting:", error);
+      setAutoImportWa(!next); // revert
+      toast.error("No se pudo guardar la preferencia");
+    } finally {
+      setSavingAutoImport(false);
+    }
+  };
+
+  const handleImportWhatsApp = async () => {
+    setImportingWa(true);
+    const toastId = toast.loading("Importando contactos de WhatsApp...");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/company/import-whatsapp-contacts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error("import failed");
+      const r = data.data || data;
+      toast.success(
+        `Importación completa: ${r.imported} contactos importados, ${r.skipped} omitidos (LIDs/no válidos)`,
+        { id: toastId },
+      );
+      await fetchContacts(page, debouncedSearch);
+    } catch (error) {
+      console.error("Error importing WhatsApp contacts:", error);
+      toast.error("Error al importar contactos de WhatsApp", { id: toastId });
+    } finally {
+      setImportingWa(false);
+    }
+  };
 
   const fetchTags = async () => {
     try {
@@ -323,25 +400,36 @@ export const ContactsPage: React.FC = () => {
           value: totalResults,
         }}
         action={
-          <button
-            onClick={() => handleOpenModal()}
-            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors backdrop-blur-sm border border-white/20 font-medium"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleImportWhatsApp}
+              disabled={importingWa}
+              title="Importar contactos de WhatsApp (solo números reales, no LIDs)"
+              className="bg-white/15 hover:bg-white/25 disabled:opacity-50 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors backdrop-blur-sm border border-white/20 font-medium"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            {t("common.new")}
-          </button>
+              <MessageSquare className="w-5 h-5" />
+              {importingWa ? "Importando…" : "Importar WhatsApp"}
+            </button>
+            <button
+              onClick={() => handleOpenModal()}
+              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors backdrop-blur-sm border border-white/20 font-medium"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              {t("common.new")}
+            </button>
+          </div>
         }
       />
 
@@ -361,6 +449,29 @@ export const ContactsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Auto-import WhatsApp contacts toggle (opt-in). OFF = no se crean solos. */}
+              <button
+                onClick={handleToggleAutoImport}
+                disabled={savingAutoImport}
+                title="Cuando está activo, los chats de WhatsApp con número real crean contactos automáticamente. Los LIDs nunca se importan."
+                className="flex items-center gap-2 px-4 py-2 bg-reply-surface dark:bg-reply-panel-dark rounded-2xl border border-reply-border dark:border-reply-border-dark shadow-sm disabled:opacity-50"
+              >
+                <span
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    autoImportWa ? "bg-cyan-500" : "bg-gray-400/50"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      autoImportWa ? "translate-x-4" : "translate-x-0.5"
+                    }`}
+                  />
+                </span>
+                <span className="hidden sm:inline text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
+                  Auto-importar WhatsApp
+                </span>
+              </button>
+
               <div className="hidden sm:flex px-4 py-2 bg-reply-surface dark:bg-reply-panel-dark rounded-2xl border border-reply-border dark:border-reply-border-dark shadow-sm text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                 {totalResults} {t("navigation.contacts")}

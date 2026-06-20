@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 
 /**
  *  USE PUSH NOTIFICATIONS HOOK
@@ -78,7 +79,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
    */
   const subscribe = async () => {
     if (!isSupported) {
-      alert("Push notifications are not supported in this browser");
+      toast.error("Tu navegador no soporta notificaciones push");
       return;
     }
 
@@ -92,7 +93,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
       }
 
       if (perm !== "granted") {
-        alert("Please enable notifications to receive important updates");
+        toast.warning("Activa las notificaciones en tu navegador para recibir alertas importantes");
         setIsLoading(false);
         return;
       }
@@ -121,7 +122,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
       console.log("Successfully subscribed to push notifications");
     } catch (error) {
       console.error("Failed to subscribe:", error);
-      alert("Failed to enable push notifications. Please try again.");
+      toast.error("No se pudieron activar las notificaciones push. Intenta de nuevo.");
     } finally {
       setIsLoading(false);
     }

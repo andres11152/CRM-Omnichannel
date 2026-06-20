@@ -6,8 +6,10 @@ import { useTranslation } from "react-i18next";
 import { getAccounts, deleteAccount } from "@/services/crmService";
 import { AccountModal } from "./AccountModal";
 import { ModuleHeader } from "../common/ModuleHeader";
+import { useModal } from "@/context/ModalContext";
 export const AccountList: React.FC = () => {
   const { t } = useTranslation();
+  const { confirm } = useModal();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,13 +34,19 @@ export const AccountList: React.FC = () => {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (window.confirm(t("queues_config.toasts.confirm_delete"))) {
-      try {
-        await deleteAccount(id);
-        fetchAccounts();
-      } catch (error) {
-        console.error("Error deleting account:", error);
-      }
+    const ok = await confirm({
+      title: t("queues_config.toasts.confirm_delete"),
+      message: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await deleteAccount(id);
+      fetchAccounts();
+    } catch (error) {
+      console.error("Error deleting account:", error);
     }
   };
 

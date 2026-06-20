@@ -4,6 +4,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { companySettingsService } from "@/services/CompanySettingsService";
+import { prisma } from "@/config/database";
 
 /**
  *  COMPANY CONTROLLER
@@ -78,6 +79,10 @@ export const getCompanySettings = catchAsync(
       dataRequest: (jsonSettings.dataRequest as Record<string, unknown>) || {
         suggestedFields: [],
       },
+      whatsappSync: (jsonSettings.whatsappSync as Record<string, unknown>) || {
+        // Default OFF: contacts are NOT auto-created from WhatsApp chats.
+        autoImportContacts: false,
+      },
       billing: {
         plan: company.plan,
         subscriptionEndsAt: company.subscriptionEndsAt,
@@ -91,7 +96,7 @@ export const getCompanySettings = catchAsync(
 export const updateCompanySettings = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const companyId = req.user?.companyId;
-    const { general, businessHours, automation, smtp, dataRequest } = req.body;
+    const { general, businessHours, automation, smtp, dataRequest, whatsappSync } = req.body;
 
     if (!companyId) {
       throw new AppError("Usuario no tiene compañía asignada", 400);
@@ -99,7 +104,7 @@ export const updateCompanySettings = catchAsync(
 
     const updatedCompany = await companySettingsService.updateSettings(
       companyId,
-      { general, businessHours, automation, smtp, dataRequest },
+      { general, businessHours, automation, smtp, dataRequest, whatsappSync },
     );
 
     Logger.info(
@@ -107,5 +112,56 @@ export const updateCompanySettings = catchAsync(
     );
 
     res.json({ status: "success", data: updatedCompany });
+  },
+);
+
+/**
+ * [WA-CONTACTS] Manual, on-demand import of WhatsApp contacts into the CRM.
+ * Imports ONLY valid real phone numbers (skips LIDs / internal IDs).
+ */
+export const importWhatsAppContacts = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.user?.companyId;
+
+    if (!companyId) {
+      throw new AppError("Usuario no tiene compañía asignada", 400);
+    }
+
+    const result = await companySettingsService.importWhatsAppContacts(companyId);
+
+    Logger.info(
+      `[Company] Manual WhatsApp contact import by ${req.user?.email}: ${result.imported} imported, ${result.skipped} skipped`,
+    );
+
+    res.json({ status: "success", data: result });
+  },
+);
+
+/**
+ * [ADMIN-ONLY] Nuclear cleanup: DELETE all contacts across all tenants.
+ * Use ONLY in dev/staging, NEVER in production.
+ */
+export const deleteAllContactsNuclear = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const user = req.user;
+
+    // [SEC] Only MASTER can nuke
+    if (user?.role !== "MASTER") {
+      throw new AppError("Solo MASTER puede ejecutar limpiezas nucleares", 403);
+    }
+
+    const result = await prisma.contact.deleteMany({});
+
+    Logger.warn(
+      `[NUCLEAR] All contacts deleted by ${user.email}: ${result.count} records removed`,
+    );
+
+    res.json({
+      status: "success",
+      data: {
+        deleted: result.count,
+        message: "Todos los contactos de todos los tenants han sido eliminados",
+      },
+    });
   },
 );

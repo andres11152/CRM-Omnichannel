@@ -239,6 +239,13 @@ async function indexGroupParticipants(
       continue;
     }
 
+    // [WA-CONTACTS] Never persist LIDs / internal IDs as contacts. Group participants
+    // are frequently LIDs (14-19 digit identifiers) that are NOT real phone numbers.
+    if (!WhatsAppIdUtils.isValidCrmPhone(phone)) {
+      skipped++;
+      continue;
+    }
+
     // Skip if they are the business number
     const sessionPhone = sock.user?.id
       ? WhatsAppIdUtils.getPhoneNumber(

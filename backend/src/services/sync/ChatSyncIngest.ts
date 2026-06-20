@@ -46,6 +46,16 @@ export interface BaileysStore {
 export class ChatSyncIngest {
   private activeContextSyncs = new Set<string>();
 
+  // [POOL-SAFETY] Serial executor for history syncs. Baileys can fire many
+  // `messaging-history.set` events in a burst (reconnect / full re-link), and each
+  // sync runs hundreds of sequential DB round-trips. Running them concurrently
+  // drained the Prisma pool (connection_limit=15) → every API request (incl. /health)
+  // queued 20s and 408'd. Chaining them so AT MOST ONE runs at a time leaves the
+  // pool free for live API traffic. Background sync slowing down is an acceptable
+  // trade vs. taking the whole app down.
+  private historySyncChain: Promise<void> = Promise.resolve();
+  private pendingHistorySyncs = 0;
+
   // ------------------------------------------------
   // HISTORY SYNC (Bulk Ingest on Connection)
   // ------------------------------------------------
@@ -58,55 +68,73 @@ export class ChatSyncIngest {
   ): Promise<void> {
     if ((!messages || messages.length === 0) && (!chats || chats.length === 0)) return;
 
-    setImmediate(async () => {
-      await TenantContextManager.run(
-        { companyId, userId: "system", requestId: `history-sync-${companyId}` },
-        async () => {
-          try {
-            Logger.info(`[ChatSync] History Ingest Started | ${messages?.length || 0} msgs, ${chats?.length || 0} chats`);
+    // Enqueue onto the serial chain (fire-and-forget — keep the socket handler non-blocking).
+    this.pendingHistorySyncs++;
+    this.historySyncChain = this.historySyncChain
+      .catch(() => {}) // never let one failure break the chain
+      .then(() => this.runHistorySync(companyId, messages, chats, contacts))
+      .finally(() => {
+        this.pendingHistorySyncs--;
+      });
+  }
 
-            const store = await this.resolveStore(companyId, contacts);
-            const admin = await syncRepositoryHelper.getAdminUser(companyId);
-            if (!admin) return;
+  private async runHistorySync(
+    companyId: string,
+    messages: WAMessage[],
+    chats?: HistoryChat[],
+    contacts?: HistoryContact[],
+  ): Promise<void> {
+    await TenantContextManager.run(
+      { companyId, userId: "system", requestId: `history-sync-${companyId}` },
+      async () => {
+        try {
+          Logger.info(
+            `[ChatSync] History Ingest Started | ${messages?.length || 0} msgs, ${chats?.length || 0} chats (queued: ${this.pendingHistorySyncs - 1})`,
+          );
 
-            // 1. Identity Discovery
-            if (chats) {
-              for (const chat of chats) {
-                const phone = this.resolveJid(chat.id, store);
-                if (phone && !isJidBroadcast(chat.id)) {
-                  const isGroup = chat.id.endsWith("@g.us");
-                  const cleanPhone = isGroup ? WhatsAppIdUtils.cleanChannelId(phone) : phone;
-                  await syncRepositoryHelper.ensureConversation({
-                    companyId,
-                    phone: cleanPhone,
-                    name: chat.name || chat.subject || undefined,
-                    isGroup
-                  });
-                }
+          const store = await this.resolveStore(companyId, contacts);
+          const admin = await syncRepositoryHelper.getAdminUser(companyId);
+          if (!admin) return;
+
+          // 1. Identity Discovery
+          if (chats) {
+            for (const chat of chats) {
+              const phone = this.resolveJid(chat.id, store);
+              if (phone && !isJidBroadcast(chat.id)) {
+                const isGroup = chat.id.endsWith("@g.us");
+                const cleanPhone = isGroup ? WhatsAppIdUtils.cleanChannelId(phone) : phone;
+                await syncRepositoryHelper.ensureConversation({
+                  companyId,
+                  phone: cleanPhone,
+                  name: chat.name || chat.subject || undefined,
+                  isGroup
+                });
               }
             }
-
-            if (!messages || messages.length === 0) return;
-
-            // 2. Group Messages by Conversation
-            const msgsByPhone = this.groupMessagesByPhone(messages, store);
-
-            // 3. Process each conversation
-            for (const [phone, chatMsgs] of msgsByPhone.entries()) {
-              await this.ingestConversationBatch(companyId, phone, chatMsgs, admin.id);
-            }
-
-            Logger.info(`[ChatSync] History Ingest Complete for ${companyId}`);
-          } catch (err: unknown) {
-            Logger.error(`[ChatSync] ERROR: Fatal History Ingest Failure:`, {
-              companyId,
-              error: err instanceof Error ? err.message : String(err),
-              stack: err instanceof Error ? err.stack : undefined
-            });
           }
+
+          if (!messages || messages.length === 0) return;
+
+          // 2. Group Messages by Conversation
+          const msgsByPhone = this.groupMessagesByPhone(messages, store);
+
+          // 3. Process each conversation. Yield to the event loop between conversations
+          // so the API stays responsive even during a large sync.
+          for (const [phone, chatMsgs] of msgsByPhone.entries()) {
+            await this.ingestConversationBatch(companyId, phone, chatMsgs, admin.id);
+            await new Promise((r) => setImmediate(r));
+          }
+
+          Logger.info(`[ChatSync] History Ingest Complete for ${companyId}`);
+        } catch (err: unknown) {
+          Logger.error(`[ChatSync] ERROR: Fatal History Ingest Failure:`, {
+            companyId,
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined
+          });
         }
-      );
-    });
+      }
+    );
   }
 
   // ------------------------------------------------

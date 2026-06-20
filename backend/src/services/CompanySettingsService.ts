@@ -2,6 +2,9 @@ import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { companyRepository } from "@/repositories/CompanyRepository";
 import { SystemEmailService } from "@/services/EmailService";
+import { userRepository } from "@/repositories/UserRepository";
+import { contactService } from "@/services/ContactService";
+import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 
 /**
  *  COMPANY SETTINGS SERVICE
@@ -9,6 +12,11 @@ import { SystemEmailService } from "@/services/EmailService";
  * Data access layer for company/tenant settings.
  * Handles read and update of general, SMTP, business hours, and automation settings.
  */
+
+// [WA-CONTACTS] Small cache for the auto-import flag. upsertWhatsAppUser runs on every
+// inbound/synced message, so we must NOT hit the DB each time. 60s TTL is plenty.
+const autoImportCache = new Map<string, { value: boolean; expires: number }>();
+const AUTO_IMPORT_TTL_MS = 60_000;
 
 export const companySettingsService = {
   async getSettings(companyId: string) {
@@ -62,6 +70,7 @@ export const companySettingsService = {
       automation?: Record<string, unknown>;
       smtp?: Record<string, unknown>;
       dataRequest?: Record<string, unknown>;
+      whatsappSync?: Record<string, unknown>;
     },
   ) {
     const updateData: Record<string, unknown> = {};
@@ -100,7 +109,7 @@ export const companySettingsService = {
     }
 
     // 3. JSON settings (merge)
-    if (data.businessHours || data.automation || data.dataRequest) {
+    if (data.businessHours || data.automation || data.dataRequest || data.whatsappSync) {
       const currentCompany = await companyRepository.findUnique({
         where: { id: companyId },
         select: { settings: true },
@@ -114,13 +123,91 @@ export const companySettingsService = {
         ...(data.businessHours ? { businessHours: data.businessHours } : {}),
         ...(data.automation ? { automation: data.automation } : {}),
         ...(data.dataRequest ? { dataRequest: data.dataRequest } : {}),
+        ...(data.whatsappSync ? { whatsappSync: data.whatsappSync } : {}),
       };
+
+      // Invalidate the cached auto-import flag so the change takes effect immediately.
+      if (data.whatsappSync) autoImportCache.delete(companyId);
     }
 
     const updated = await companyRepository.update(companyId, updateData);
 
     Logger.info(`[Company] Settings updated for ${companyId}`);
     return updated;
+  },
+
+  /**
+   * [WA-CONTACTS] Whether to auto-create CRM Contacts from WhatsApp chats/sync.
+   * Default FALSE — contacts are NOT created automatically; the user enables it
+   * explicitly (toggle) or imports manually. Cached to avoid per-message DB reads.
+   */
+  async isAutoImportContactsEnabled(companyId: string): Promise<boolean> {
+    const cached = autoImportCache.get(companyId);
+    if (cached && cached.expires > Date.now()) return cached.value;
+
+    let value = false;
+    try {
+      const company = await companyRepository.findUnique({
+        where: { id: companyId },
+        select: { settings: true },
+      });
+      const settings = (company?.settings as Record<string, unknown>) || {};
+      const wa = (settings.whatsappSync as Record<string, unknown>) || {};
+      value = wa.autoImportContacts === true; // strict: default false
+    } catch (err) {
+      Logger.warn(`[CompanySettings] Failed to read auto-import flag for ${companyId}, defaulting OFF`, { err });
+      value = false;
+    }
+
+    autoImportCache.set(companyId, { value, expires: Date.now() + AUTO_IMPORT_TTL_MS });
+    return value;
+  },
+
+  /**
+   * [WA-CONTACTS] Manual, on-demand import: scans existing WhatsApp "shadow" users
+   * (created from chats) and creates CRM Contacts ONLY for valid real phone numbers,
+   * skipping LIDs / internal IDs. Returns counts for UI feedback.
+   */
+  async importWhatsAppContacts(companyId: string): Promise<{ imported: number; skipped: number; total: number }> {
+    const users = await userRepository.findMany({
+      where: {
+        companyId,
+        role: "USER",
+        email: { endsWith: "@whatsapp.user" },
+        phone: { not: null },
+      },
+      select: { id: true, name: true, phone: true, email: true },
+    });
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const u of users) {
+      if (!u.phone || !WhatsAppIdUtils.isValidCrmPhone(u.phone)) {
+        skipped++;
+        continue;
+      }
+      try {
+        await contactService.upsert(companyId, {
+          phone: u.phone,
+          name: u.name,
+          email: null,
+          customFields: {
+            source: "whatsapp",
+            whatsappId: u.email.split("@")[0],
+            userId: u.id,
+          },
+          tags: ["Imported from Chat"],
+        });
+        imported++;
+      } catch (err) {
+        Logger.warn(`[CompanySettings] Manual import: failed to upsert contact for ${u.phone}`, { err });
+        skipped++;
+      }
+    }
+
+    Logger.info(`[CompanySettings] Manual WhatsApp contact import for ${companyId}: ${imported} imported, ${skipped} skipped (of ${users.length})`);
+    return { imported, skipped, total: users.length };
   },
 
   /**

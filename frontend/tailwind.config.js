@@ -117,6 +117,10 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.5" },
         },
+        modalIn: {
+          "0%": { opacity: "0", transform: "scale(0.92) translateY(12px)" },
+          "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+        },
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-out",
@@ -125,6 +129,7 @@ export default {
         "slide-up": "slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
         "pulse-slow": "pulseSlow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "flow-line": "flowAnimation 1s linear infinite",
+        "modal-in": "modalIn 0.2s cubic-bezier(0.34,1.56,0.64,1)",
       },
     },
   },

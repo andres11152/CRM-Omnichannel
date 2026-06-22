@@ -267,6 +267,22 @@ class MessageQueueService {
   async enqueue(jobData: MessageJob): Promise<string> {
     const queue = this.getQueue(jobData.companyId);
 
+    // [RELIABILITY] Guarantee a consumer exists before enqueuing. Worker startup
+    // was previously tied ONLY to the WhatsApp 'connected' event, which is missed
+    // on session restore-at-boot or silent reconnect — leaving outbound messages
+    // enqueued forever with no processor (the "EN COLA" / messages-never-sent bug).
+    // Ensuring the worker here makes delivery correct regardless of how the session
+    // came up. Idempotent: a no-op once the worker is running.
+    try {
+      const { ensureWorkerForCompany } = await import("@/loaders/workerLoader");
+      await ensureWorkerForCompany(jobData.companyId);
+    } catch (err) {
+      Logger.error(
+        `[Queue:${jobData.companyId}] Failed to ensure worker before enqueue`,
+        err as Error,
+      );
+    }
+
     const job = await queue.add(jobData, {
       timeout: 60000, // 60s timeout per job
     });

@@ -424,6 +424,20 @@ export class ChatSyncIngest {
     const senderIdCache = new Map<string, string>();
     const { chatService } = await import("@/services/ChatService");
 
+    // [GROUP NAMES] Pre-compute the best pushName per participant across the WHOLE
+    // batch. A participant's first message often lacks a pushName (so it would be
+    // cached as the bare phone number forever), while a later message in the same
+    // batch carries the real WhatsApp name. Scan once so we always use the best name.
+    const bestPushNameByJid = new Map<string, string>();
+    if (isGroup) {
+      for (const m of msgs) {
+        if (m.key.fromMe || !m.pushName) continue;
+        const pj = m.key.participant || WhatsAppIdUtils.getSenderJid(m);
+        const cj = pj ? WhatsAppIdUtils.getCleanJid(pj) : null;
+        if (cj && !bestPushNameByJid.has(cj)) bestPushNameByJid.set(cj, m.pushName);
+      }
+    }
+
     const validBatch: Prisma.MessageCreateManyInput[] = [];
     for (const msg of msgs) {
       const parsed: ParsedMessage | null = syncMessageParser.parseContent(msg);
@@ -451,10 +465,11 @@ export class ChatSyncIngest {
         };
       }
 
-      const metadata: Record<string, unknown> = { 
-        origin: "history_sync", 
+      const metadata: Record<string, unknown> = {
+        origin: "history_sync",
         ...mediaMeta,
-        ...(parsed.contextInfo || {})
+        ...(parsed.contextInfo || {}),
+        ...(parsed.isSystem ? { system: true } : {})
       };
 
       // Resolve sender for this specific message (crucial for group participant identification)
@@ -470,7 +485,10 @@ export class ChatSyncIngest {
             resolvedSenderId = senderIdCache.get(cleanParticipantJid)!;
           } else {
             const senderPhone = WhatsAppIdUtils.getPhoneNumber(cleanParticipantJid);
-            const resolvedName = msg.pushName || (senderPhone ? `+${senderPhone}` : undefined);
+            const resolvedName =
+              msg.pushName ||
+              bestPushNameByJid.get(cleanParticipantJid) ||
+              (senderPhone ? `+${senderPhone}` : undefined);
             try {
               const user = await chatService.upsertWhatsAppUser({
                 email: `${cleanParticipantJid.split("@")[0]}@whatsapp.user`,

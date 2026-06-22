@@ -9,6 +9,8 @@
 import { Prisma, TicketStatus, TicketPriority, User } from "@prisma/client";
 import { ticketRepository } from "@/repositories/TicketRepository";
 import { userRepository } from "@/repositories/UserRepository";
+import { conversationRepository } from "@/repositories/ConversationRepository";
+import { ticketSyncService } from "./TicketSyncService";
 import { Logger } from "@/utils/logger";
 import { toTicketDTO, TicketDTO, TicketWithRelations } from "@/types/ticket.types";
 import { AppError } from "@/utils/AppError";
@@ -207,6 +209,30 @@ class TicketService {
       if (ticketByConv) {
         existingTicket = ticketByConv;
         ticketId = ticketByConv.id;
+      }
+    }
+
+    // [RACE FIX] Taking a just-arrived ticket. A fresh inbound message creates the
+    // CONVERSATION, but its Ticket row is materialized on-demand — so if the agent
+    // clicks fast, the ticket may not exist yet and the id passed is actually the
+    // conversationId. If that conversation exists, create the ticket now (idempotent,
+    // distributed-locked) instead of failing with "Ticket not found (ya no existe)".
+    if (!existingTicket) {
+      const conversation = await conversationRepository.findFirst({
+        where: { id: ticketId, companyId },
+      });
+      if (conversation) {
+        await ticketSyncService.ensureActiveTicket({
+          companyId,
+          conversationId: conversation.id,
+          agentId: updaterId,
+          subject: conversation.subject || "Nueva conversación",
+          description: "Ticket creado al atender la conversación",
+        });
+        existingTicket = await ticketRepository.findFirst({
+          where: { conversationId: conversation.id },
+        });
+        if (existingTicket) ticketId = existingTicket.id;
       }
     }
 

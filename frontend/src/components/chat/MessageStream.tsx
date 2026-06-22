@@ -33,10 +33,12 @@ const DateDivider: React.FC<{ timestamp: string | Date }> = ({ timestamp }) => {
     const yesterdayDate = new Date(nowDate);
     yesterdayDate.setDate(nowDate.getDate() - 1);
     
-    // User requested: "don't show dates if they are from today" 
-    if (dDate.getTime() === nowDate.getTime()) return null;
-    
-    if (dDate.getTime() === yesterdayDate.getTime()) return "Yesterday";
+    // Always label today's group as "Hoy". Returning null here hid the separator,
+    // which made today's messages render directly under the previous day's divider
+    // (e.g. today's message appearing beneath "Sábado").
+    if (dDate.getTime() === nowDate.getTime()) return "Hoy";
+
+    if (dDate.getTime() === yesterdayDate.getTime()) return "Ayer";
     const diffTime = nowDate.getTime() - dDate.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     if (diffDays < 7 && diffDays > 0) {

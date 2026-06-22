@@ -115,17 +115,13 @@ export const assignTicketToAgent = async (
       }
     }
 
-    // 2. Load Balancing with Capacity Check
+    // 2. Load Balancing with Capacity Check (Aggregated query to solve N+1 issue)
     const eligibleAgents = [];
+    const candidateIds = candidates.map((c) => c.id);
+    const agentLoads = await ticketRepository.getAgentLoads(candidateIds, companyId);
 
     for (const agent of candidates) {
-      // Get current active load via repository
-      const currentLoad = await ticketRepository.count({
-        where: {
-          assignedToId: agent.id,
-          status: { in: ["OPEN", "IN_PROGRESS"] },
-        },
-      }, companyId);
+      const currentLoad = agentLoads[agent.id] ?? 0;
 
       // CHECK MAX CONCURRENCY from Agent settings
       // Enterprise Config: Default to 10 if not set in DB

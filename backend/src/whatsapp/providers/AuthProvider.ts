@@ -49,7 +49,14 @@ export class DatabaseAuthProvider implements IAuthProvider {
             const redisKeys = fullKeys.map(
               (k) => `${REDIS_PREFIX}${sessionId}:${k}`,
             );
-            const cachedValues = await redisClient.mGet(redisKeys);
+            // [RESILIENCE] Cap at 2.5s; fall back to DB for all keys on timeout so a
+            // slow Redis can't stall Baileys' signal-key reads during messaging.
+            const cachedValues = await Promise.race([
+              redisClient.mGet(redisKeys),
+              new Promise<null[]>((resolve) =>
+                setTimeout(() => resolve(fullKeys.map(() => null)), 2500),
+              ),
+            ]);
 
             cachedValues.forEach((val, i) => {
               if (val) {
@@ -233,9 +240,13 @@ export class DatabaseAuthProvider implements IAuthProvider {
     // 1. Try Redis
     if (redisClient?.isOpen) {
       try {
-        const cached = await redisClient.get(
-          `${REDIS_PREFIX}${sessionId}:${key}`,
-        );
+        // [RESILIENCE] Cap the Redis read at 2.5s and fall through to the DB. A
+        // slow/reconnecting Redis would otherwise hang here (try/catch only guards
+        // errors, not slowness), blocking session init and QR generation.
+        const cached = await Promise.race([
+          redisClient.get(`${REDIS_PREFIX}${sessionId}:${key}`),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+        ]);
         if (cached) {
           const decrypted = decrypt(cached, sessionId);
           if (decrypted) {

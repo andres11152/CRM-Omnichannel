@@ -2,6 +2,7 @@ import { flowSessionRepository } from "@/repositories/FlowSessionRepository";
 import { Logger } from "@/utils/logger";
 import { FlowSessionState, KeywordTriggerData } from "@/types/flow.types";
 import { FlowNavigationService } from "./FlowNavigationService";
+import { cacheService } from "@/services/CacheService";
 
 const TRIGGER_RATE_LIMIT_MS = 3000;
 const triggerTimestamps = new Map<string, number>();
@@ -16,10 +17,25 @@ export class FlowTriggerService {
     conversationId: string,
     activeFlowId?: string,
   ): Promise<FlowSessionState | null> {
-    // A1: Per-contact rate limiting to prevent trigger spam
-    const now = Date.now();
-    const lastTrigger = triggerTimestamps.get(contactId) ?? 0;
-    if (now - lastTrigger < TRIGGER_RATE_LIMIT_MS) {
+    // A1: Per-contact rate limiting to prevent trigger spam (Distributed via Redis with Local fallback)
+    const redisKey = `flow:trigger_limit:${contactId}`;
+    let isRateLimited = false;
+
+    try {
+      const cachedLimit = await cacheService.get<boolean>(redisKey);
+      if (cachedLimit) {
+        isRateLimited = true;
+      }
+    } catch (err) {
+      Logger.warn(`[FlowTrigger] Redis check failed, falling back to memory map.`, err);
+      const now = Date.now();
+      const lastTrigger = triggerTimestamps.get(contactId) ?? 0;
+      if (now - lastTrigger < TRIGGER_RATE_LIMIT_MS) {
+        isRateLimited = true;
+      }
+    }
+
+    if (isRateLimited) {
       Logger.warn(`[FlowTrigger] Rate limit hit for contact ${contactId}. Skipping trigger check.`);
       return null;
     }
@@ -71,7 +87,14 @@ export class FlowTriggerService {
           Logger.info(
             `[FlowTrigger]  Trigger match! Keyword: "${keyword}" found in message. Starting flow ${flow.id}`,
           );
-          triggerTimestamps.set(contactId, Date.now());
+          
+          try {
+            await cacheService.set(redisKey, true, Math.ceil(TRIGGER_RATE_LIMIT_MS / 1000));
+          } catch (err) {
+            Logger.warn(`[FlowTrigger] Redis set failed, setting in local memory map.`, err);
+            triggerTimestamps.set(contactId, Date.now());
+          }
+
           return await this.navigationService.startNewSession(
             flow.id,
             contactId,
@@ -85,3 +108,4 @@ export class FlowTriggerService {
     return null;
   }
 }
+

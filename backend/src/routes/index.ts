@@ -68,6 +68,7 @@ import searchRouter from "@/routes/searchRoutes";
 import notificationsRouter from "@/routes/notificationsRoutes";
 import paymentRouter from "@/routes/paymentRoutes";
 import externalApiRouter from "@/routes/externalApiRoutes";
+import routingRouter from "@/routes/routingRoutes";
 
 const router = Router();
 
@@ -185,6 +186,7 @@ router.use("/api/roles", apiLimiter, protect, rolesRouter);
 router.use("/api/company", apiLimiter, protect, companyRouter);
 router.use("/api/usage", apiLimiter, protect, usageRouter);
 router.use("/api/api-keys", apiLimiter, protect, apiKeyRouter);
+router.use("/api/routing-config", apiLimiter, protect, routingRouter);
 router.use("/api/webhooks", webhookRouter);
 router.use("/api/integrations", apiLimiter, protect, integrationRouter);
 router.use(

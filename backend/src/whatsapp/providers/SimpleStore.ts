@@ -297,7 +297,14 @@ export class SimpleInMemoryStore {
     if (!redisClient?.isOpen) return;
 
     try {
-      const dataStr = await redisClient.get(`wa:store:${redisKey}`);
+      // [RESILIENCE] Cap the Redis read at 2.5s. A slow/reconnecting Redis would
+      // otherwise hang session initialization (and thus QR generation) here, since
+      // try/catch only guards errors, not slowness. This store is a rebuildable
+      // cache, so on timeout we proceed without it.
+      const dataStr = await Promise.race([
+        redisClient.get(`wa:store:${redisKey}`),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+      ]);
       if (dataStr) {
         const data = JSON.parse(dataStr);
         this.contacts = data.contacts || {};

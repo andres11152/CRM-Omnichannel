@@ -89,12 +89,20 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     return `${apiUrl}${url.startsWith("/") ? "" : "/"}${url}`;
   };
 
-  // System messages (e.g., "Ticket resolved")
+  // System messages (group events, protocol notices, "Ticket resolved", etc.)
   if (isSystem) {
+    // Group history-sync stores content-less system/protocol events as placeholders.
+    // Show a friendly label instead of the raw "[Mensaje]" / "[Sistema/Protocolo]".
+    const systemLabel =
+      message.content === "[Sistema/Protocolo]"
+        ? "Evento del grupo"
+        : message.content === "[Mensaje]"
+          ? "Mensaje no disponible"
+          : message.content;
     return (
       <div className="flex justify-center my-2">
-        <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-4 py-2 rounded-lg text-sm max-w-md text-center">
-          {message.content}
+        <div className="bg-black/5 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-3 py-1 rounded-full text-xs max-w-md text-center">
+          {systemLabel}
         </div>
       </div>
     );

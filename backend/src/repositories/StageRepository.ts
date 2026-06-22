@@ -36,7 +36,10 @@ export class StageRepository {
     });
   }
 
-  async update(id: string, data: Prisma.StageUpdateInput) {
+  async update(id: string, pipelineId: string, data: Prisma.StageUpdateInput) {
+    const exists = await prisma.stage.findFirst({ where: { id, pipelineId } });
+    if (!exists) throw new Error(`Stage ${id} not found in pipeline ${pipelineId}`);
+
     return prisma.stage.update({
       where: { id },
       data,
@@ -48,8 +51,34 @@ export class StageRepository {
     });
   }
 
-  async delete(id: string) {
+  async delete(id: string, pipelineId: string) {
+    const exists = await prisma.stage.findFirst({ where: { id, pipelineId } });
+    if (!exists) throw new Error(`Stage ${id} not found in pipeline ${pipelineId}`);
+
     return prisma.stage.delete({ where: { id } });
+  }
+
+  async updateOrders(pipelineId: string, stages: { id: string; order: number }[]) {
+    const stageIds = stages.map((s) => s.id);
+    const count = await prisma.stage.count({
+      where: {
+        id: { in: stageIds },
+        pipelineId,
+      },
+    });
+
+    if (count !== stages.length) {
+      throw new Error("One or more stage IDs are invalid or belong to a different pipeline");
+    }
+
+    return prisma.$transaction(
+      stages.map((stage) =>
+        prisma.stage.update({
+          where: { id: stage.id },
+          data: { order: stage.order },
+        })
+      )
+    );
   }
 
   async updateMany(

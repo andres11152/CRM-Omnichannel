@@ -2,7 +2,8 @@ import { Response } from "express";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { routingConfigService } from "@/services/RoutingConfigService";
+import { routingConfigService, RoutingRule } from "@/services/RoutingConfigService";
+import { UpdateRoutingConfigSchema } from "@/schemas/routingSchema";
 
 /**
  * GET /api/routing-config
@@ -42,13 +43,14 @@ export const updateRoutingConfig = catchAsync(
       throw new AppError("Permission denied", 403);
     }
 
-    const { enabled, defaultQueueId, aiAutoResponse, rules } = req.body;
+    // Validate body
+    const { body } = UpdateRoutingConfigSchema.parse({ body: req.body });
 
     await routingConfigService.updateConfig(companyId, {
-      enabled,
-      defaultQueueId,
-      aiAutoResponse,
-      rules,
+      enabled: body.enabled,
+      defaultQueueId: body.defaultQueueId,
+      aiAutoResponse: body.aiAutoResponse,
+      rules: body.rules as RoutingRule[],
     });
 
     const updatedConfig = await routingConfigService.getConfig(companyId);

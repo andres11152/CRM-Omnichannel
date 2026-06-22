@@ -61,7 +61,7 @@ export class StageService {
     if (data.color !== undefined) updateData.color = data.color;
     if (data.order !== undefined) updateData.order = data.order;
 
-    return this.stageRepo.update(stageId, updateData);
+    return this.stageRepo.update(stageId, pipelineId, updateData);
   }
 
   async reorderStages(
@@ -72,18 +72,8 @@ export class StageService {
     const pipeline = await this.pipelineRepo.findById(pipelineId, companyId);
     if (!pipeline) throw new AppError("Pipeline not found", 404);
 
-    // Transaction for atomicity is best handled at service level if repository doesn't support batch update with different values easily
-    // OR we add a method to Repo. For now, doing it here with prisma transaction is pragmatic but technically violates strict layering if we interpret it as "no prisma import".
-    // Ideally we'd move this to the repository "updateOrders" method.
-
-    // Correct approach: Add updateOrders to StageRepository.
-    // For now, I'll loop updates.
-
-    const updatePromises = stages.map((stage) =>
-      this.stageRepo.update(stage.id, { order: stage.order }),
-    );
-
-    await Promise.all(updatePromises);
+    // Securely delegate transactional order updates to repository layer
+    await this.stageRepo.updateOrders(pipelineId, stages);
 
     return this.stageRepo.findMany(pipelineId);
   }
@@ -106,7 +96,7 @@ export class StageService {
     if (count <= 1)
       throw new AppError("Cannot delete the only stage in the pipeline", 400);
 
-    await this.stageRepo.delete(stageId);
+    await this.stageRepo.delete(stageId, pipelineId);
   }
 }
 

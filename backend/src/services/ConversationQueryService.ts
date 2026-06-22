@@ -127,7 +127,20 @@ export class ConversationQueryService {
 
       // [SEC] Map Baileys/Prisma direction to Frontend 'sender' role
       let senderRole: "agent" | "customer" | "system" = "customer";
-      if (msg.direction === "OUTBOUND") {
+
+      // [GROUP] Group system events (joins/leaves/subject changes) and protocol
+      // messages have no real text body — they were stored as placeholders. Render
+      // them as centered "system" events instead of participant chat bubbles, so a
+      // group no longer looks like everyone is sending "[Mensaje]".
+      const isPlaceholder =
+        !att &&
+        (msg.content === "[Mensaje]" || msg.content === "[Sistema/Protocolo]");
+
+      if ((metadata as { system?: boolean }).system === true) {
+        senderRole = "system";
+      } else if (conversation.isGroup && isPlaceholder) {
+        senderRole = "system";
+      } else if (msg.direction === "OUTBOUND") {
         senderRole = "agent";
       } else if ((msg.sender as { role?: string })?.role === "SYSTEM") {
         senderRole = "system";

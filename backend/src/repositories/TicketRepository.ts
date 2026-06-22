@@ -46,6 +46,33 @@ export class TicketRepository extends BaseRepository {
     return this.db.ticket.count(this.applyTenantFilter(args, companyId));
   }
 
+  async getAgentLoads(agentIds: string[], companyId: string): Promise<Record<string, number>> {
+    if (agentIds.length === 0) return {};
+
+    const groups = await this.db.ticket.groupBy({
+      by: ["assignedToId"],
+      where: {
+        assignedToId: { in: agentIds },
+        companyId,
+        status: { in: ["OPEN", "IN_PROGRESS"] },
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    const loads: Record<string, number> = {};
+    for (const agentId of agentIds) {
+      loads[agentId] = 0;
+    }
+    for (const group of groups) {
+      if (group.assignedToId) {
+        loads[group.assignedToId] = group._count.id;
+      }
+    }
+    return loads;
+  }
+
   // Backwards compatibility for existing codebase callers
   async findByIdWithCreator(id: string, companyId: string): Promise<TicketWithRelations | null> {
     return (await this.db.ticket.findFirst({

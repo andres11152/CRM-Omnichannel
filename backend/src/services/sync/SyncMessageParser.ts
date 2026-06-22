@@ -1,4 +1,4 @@
-import { WAMessage, getContentType, proto } from "@whiskeysockets/baileys";
+import { WAMessage, getContentType, proto, WAMessageStubType } from "@whiskeysockets/baileys";
 import { MessageDirection } from "@prisma/client";
 
 /**
@@ -29,6 +29,8 @@ interface WhatsAppMessageContent {
 
 export interface ParsedMessage {
   type: "message" | "reaction";
+  /** Group/protocol system event (join/leave/subject change) — render centered, not as a bubble. */
+  isSystem?: boolean;
   textContent: string;
   mediaType?: "image" | "video" | "audio" | "document" | "sticker" | "contact" | "location";
   mediaCaption?: string;
@@ -101,7 +103,46 @@ export class SyncMessageParser {
    *  PARSE MESSAGE CONTENT
    * Extracts text representation and identifies media types.
    */
+  /**
+   * [GROUP] Human-readable label for a WhatsApp system event (message stub).
+   * Group histories are full of these (joins/leaves/subject changes); without a
+   * label they get stored as a meaningless "[Mensaje]" participant bubble.
+   */
+  private describeSystemEvent(stubType: number, params: string[]): string {
+    const T = WAMessageStubType;
+    switch (stubType) {
+      case T.GROUP_CREATE: return "Se creó el grupo";
+      case T.GROUP_CHANGE_SUBJECT: return params[0] ? `Cambió el asunto a "${params[0]}"` : "Cambió el asunto del grupo";
+      case T.GROUP_CHANGE_ICON: return "Cambió la foto del grupo";
+      case T.GROUP_CHANGE_DESCRIPTION: return "Cambió la descripción del grupo";
+      case T.GROUP_CHANGE_INVITE_LINK: return "Cambió el enlace de invitación";
+      case T.GROUP_PARTICIPANT_ADD: return "Se añadió un participante";
+      case T.GROUP_PARTICIPANT_INVITE: return "Se unió mediante enlace de invitación";
+      case T.GROUP_PARTICIPANT_REMOVE: return "Salió un participante";
+      case T.GROUP_PARTICIPANT_LEAVE: return "Un participante abandonó el grupo";
+      case T.GROUP_PARTICIPANT_PROMOTE: return "Ahora es administrador";
+      case T.GROUP_PARTICIPANT_DEMOTE: return "Ya no es administrador";
+      default: return "Evento del grupo";
+    }
+  }
+
   parseContent(msg: WAMessage): ParsedMessage | null {
+    // [GROUP] System events (joins/leaves/subject changes...) arrive as message
+    // stubs with no message body. Surface them as readable system events instead
+    // of letting them fall through to a "[Mensaje]" participant bubble.
+    const stubType = (msg as WAMessage & { messageStubType?: number | null }).messageStubType;
+    if (stubType != null && !msg.message) {
+      const params = (((msg as WAMessage & { messageStubParameters?: (string | null)[] | null }).messageStubParameters) || [])
+        .filter((p): p is string => !!p);
+      return {
+        type: "message",
+        isSystem: true,
+        textContent: this.describeSystemEvent(stubType, params),
+        direction: msg.key.fromMe ? MessageDirection.OUTBOUND : MessageDirection.INBOUND,
+        msgContent: {} as WhatsAppMessageContent,
+      };
+    }
+
     const msgContent = this.unwrapContent(msg);
     // Use the correctly unwrapped content to determine the actual message type
     const messageType = msgContent ? getContentType(msgContent as import("@whiskeysockets/baileys").proto.IMessage) : undefined;

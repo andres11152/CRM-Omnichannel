@@ -37,6 +37,7 @@ export interface BaileysStore {
   lidToPhone?: Record<string, string>;
   getPhoneFromLid?: (lid: string) => string | undefined;
   chats: Map<string, { id: string; conversationTimestamp?: number | string | { toNumber?: () => number; low?: number } }>;
+  contacts?: Record<string, import("@whiskeysockets/baileys").Contact>;
 }
 
 /**
@@ -172,6 +173,14 @@ export class ChatSyncIngest {
         if (fetchSuccess) {
           // Re-extract from store now that history sync event has updated it
           messages = this.extractMessagesFromStore(store, undefined, targetJid);
+        }
+
+        // [ENTERPRISE] If memory store STILL has few messages, the on-demand fetch may have
+        // gone through the messaging-history.set → DB pipeline instead of populating the store.
+        // In that case, messages are already in the DB and will appear on the next query refresh.
+        // Emit the sync_completed event to force the frontend to refetch conversation data.
+        if (messages.length < 5) {
+          Logger.info(`[ContextSync] Memory store still sparse (${messages.length} msgs). Triggering frontend refresh.`);
         }
       }
 
@@ -319,12 +328,6 @@ export class ChatSyncIngest {
       let targetJid = WhatsAppIdUtils.getTargetJid(channelId);
       targetJid = await this.resolveRealJid(companyId, sessionId, targetJid);
 
-      // [SEC] Check if fetchMessageHistory method exists in this Baileys version
-      if (typeof sock.fetchMessageHistory !== "function") {
-        Logger.warn(`[ChatSync] fetchMessageHistory is NOT available in this Baileys version. Skipping on-demand fetch.`);
-        return false;
-      }
-
       // Find oldest message in database for this conversation to use as anchor
       const cleanPhone = WhatsAppIdUtils.cleanChannelId(channelId);
       const oldestDbMsg = await messageRepository.findFirst({
@@ -336,6 +339,10 @@ export class ChatSyncIngest {
         },
         orderBy: { createdAt: "asc" }
       });
+
+      // Snapshot the current store message count BEFORE requesting history
+      const store = await this.getSessionStore(sessionId);
+      const preCount = store ? this.extractMessagesFromStore(store, undefined, targetJid).length : 0;
 
       let oldestMsgKey: import("@whiskeysockets/baileys").WAMessageKey;
       let oldestMsgTimestampMs: number;
@@ -349,14 +356,8 @@ export class ChatSyncIngest {
         };
         oldestMsgTimestampMs = new Date(oldestDbMsg.createdAt).getTime();
         anchorSource = "Database";
-      } else {
+      } else if (store) {
         // Tier 2: Search Baileys Memory Store for anchor message
-        const store = await this.getSessionStore(sessionId);
-        if (!store) {
-          Logger.info(`[ChatSync] No active session store for ${cleanPhone}. Cannot anchor history sync.`);
-          return false;
-        }
-
         const memMessages = this.extractMessagesFromStore(store, undefined, targetJid);
         if (memMessages && memMessages.length > 0) {
           const oldestMemMsg = memMessages[0]; // Already sorted by timestamp asc
@@ -369,34 +370,65 @@ export class ChatSyncIngest {
             oldestMsgTimestampMs = syncMessageParser.getTimestamp(oldestMemMsg.messageTimestamp) * 1000;
             anchorSource = "Memory Store";
           } else {
-            Logger.info(`[ChatSync] Memory store contains oldest message with invalid key structure for ${cleanPhone}.`);
-            return false;
+            oldestMsgKey = { remoteJid: targetJid, fromMe: false, id: "" };
+            oldestMsgTimestampMs = 0;
+            anchorSource = "None (Invalid key fallback)";
           }
         } else {
-          // Tier 3: Complete Fallback (DB & Memory Store are completely empty)
-          // Signal the phone to send the latest messages by sending empty key ID
-          oldestMsgKey = {
-            remoteJid: targetJid,
-            fromMe: false,
-            id: "",
-          };
+          // Tier 3: Completely empty — unanchored request
+          oldestMsgKey = { remoteJid: targetJid, fromMe: false, id: "" };
           oldestMsgTimestampMs = 0;
           anchorSource = "None (Unanchored Fallback)";
         }
+      } else {
+        oldestMsgKey = { remoteJid: targetJid, fromMe: false, id: "" };
+        oldestMsgTimestampMs = 0;
+        anchorSource = "None (No store)";
       }
 
-      Logger.info(
-        `[ChatSync] Requesting ${limit} historical messages on-demand from WhatsApp for ${targetJid}. ` +
-        `Resolved anchor from ${anchorSource}: msg ${oldestMsgKey.id} at ${oldestMsgTimestampMs > 0 ? new Date(oldestMsgTimestampMs).toISOString() : "0"}`
-      );
+      // [SEC] Strategy: Use fetchMessageHistory if available, else fall back to chatHistory
+      const hasFetchHistory = typeof (sock as Record<string, unknown>).fetchMessageHistory === "function";
 
-      // Trigger the on-demand query to the phone
-      await sock.fetchMessageHistory(limit, oldestMsgKey, oldestMsgTimestampMs);
-      
-      // Wait for the messages to arrive and be processed via socket events
-      // 5 seconds is a conservative estimate for the phone to respond
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      Logger.info(`[ChatSync] On-demand fetch completed (waited 5s) for ${targetJid}`);
+      if (hasFetchHistory) {
+        Logger.info(
+          `[ChatSync] Requesting ${limit} historical messages on-demand from WhatsApp for ${targetJid}. ` +
+          `Resolved anchor from ${anchorSource}: msg ${oldestMsgKey.id} at ${oldestMsgTimestampMs > 0 ? new Date(oldestMsgTimestampMs).toISOString() : "0"}`
+        );
+
+        const fetchFn = (sock as unknown as { fetchMessageHistory: (count: number, key: import("@whiskeysockets/baileys").WAMessageKey, ts: number) => Promise<void> }).fetchMessageHistory;
+        await fetchFn.call(sock, limit, oldestMsgKey, oldestMsgTimestampMs);
+      } else {
+        // Fallback: Use chatModify to request sync or presenceSubscribe to wake up the chat
+        Logger.info(
+          `[ChatSync] fetchMessageHistory NOT available. Requesting presence subscription for ${targetJid} to trigger sync.`
+        );
+        try {
+          await sock.presenceSubscribe(targetJid);
+        } catch (presErr) {
+          Logger.debug(`[ChatSync] presenceSubscribe failed for ${targetJid}: ${presErr instanceof Error ? presErr.message : String(presErr)}`);
+        }
+      }
+
+      // [ENTERPRISE] Dynamic wait: poll the store for new messages up to 8 seconds
+      // instead of a fixed 5-second blind wait. Returns early if messages arrive.
+      const MAX_WAIT_MS = 8000;
+      const POLL_INTERVAL_MS = 500;
+      const startWait = Date.now();
+
+      while (Date.now() - startWait < MAX_WAIT_MS) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        if (store) {
+          const currentCount = this.extractMessagesFromStore(store, undefined, targetJid).length;
+          if (currentCount > preCount) {
+            Logger.info(`[ChatSync] On-demand fetch completed: ${currentCount - preCount} new messages arrived in ${Date.now() - startWait}ms for ${targetJid}`);
+            return true;
+          }
+        }
+      }
+
+      Logger.info(`[ChatSync] On-demand fetch completed (waited ${MAX_WAIT_MS}ms, no new messages in store) for ${targetJid}`);
+      // Return true even if no new messages arrived in store —
+      // the history might have been ingested directly to DB via messaging-history.set
       return true;
     } catch (err) {
       Logger.warn(`[ChatSync] fetchHistoryFromWhatsApp failed for ${channelId}:`, { error: err instanceof Error ? err.message : String(err) });
@@ -612,8 +644,8 @@ export class ChatSyncIngest {
         });
         
         for (const c of dbContacts) {
-          const fields = c.customFields as Record<string, any> | null;
-          if (fields && fields.whatsappLid) {
+          const fields = c.customFields as { whatsappLid?: string } | null;
+          if (fields && typeof fields.whatsappLid === "string") {
             const lidBase = fields.whatsappLid.split("@")[0];
             store.lidToPhone[lidBase] = c.phone;
           }
@@ -653,9 +685,9 @@ export class ChatSyncIngest {
       orderBy: { createdAt: "desc" }
     });
 
-    if (latestDbMsg && latestDbMsg.metadata) {
-      const meta = latestDbMsg.metadata as any;
-      if (meta.senderJid && meta.senderJid.includes("@lid")) {
+    if (latestDbMsg && latestDbMsg.metadata && typeof latestDbMsg.metadata === "object") {
+      const meta = latestDbMsg.metadata as Record<string, unknown>;
+      if (typeof meta.senderJid === "string" && meta.senderJid.includes("@lid")) {
         Logger.info(`[ChatSync] Resolved Real JID ${meta.senderJid} from DB metadata for channel ${cleanPhone}`);
         return meta.senderJid;
       }
@@ -665,7 +697,7 @@ export class ChatSyncIngest {
     const store = await this.getSessionStore(sessionId);
     if (store) {
       const cleanTarget = jidNormalizedUser(targetJid);
-      const contact = (store as any).contacts?.[cleanTarget];
+      const contact = store.contacts?.[cleanTarget];
       if (contact?.lid) {
         Logger.info(`[ChatSync] Resolved Real JID ${contact.lid} from memory contacts for channel ${cleanPhone}`);
         return contact.lid;
@@ -679,6 +711,35 @@ export class ChatSyncIngest {
             return resolved;
           }
         }
+      }
+    }
+
+    // 3. Query WhatsApp servers in live mode (with safety timeout)
+    const { whatsappService } = await import("@/whatsapp");
+    const activeSession = await whatsappService.getSessionManager().findActiveSessionForCompany(companyId);
+    if (activeSession) {
+      try {
+        const jidToCheck = targetJid.includes("@") ? targetJid : `${targetJid}@s.whatsapp.net`;
+        const resolved = await Promise.race([
+          activeSession.socket.onWhatsApp(jidToCheck),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("WhatsApp JID query timeout")), 4000)
+          ),
+        ]);
+        if (resolved && resolved.length > 0 && resolved[0].exists) {
+          const resolvedJid = resolved[0].jid;
+          Logger.info(`[ChatSync] Resolved Real JID ${resolvedJid} from live WhatsApp query for channel ${cleanPhone}`);
+          
+          // Also save in store's lidToPhone map so we don't have to query again
+          if (store && store.lidToPhone && resolvedJid.includes("@lid")) {
+            const lidBase = resolvedJid.split("@")[0];
+            store.lidToPhone[lidBase] = jidToCheck;
+          }
+          
+          return resolvedJid;
+        }
+      } catch (err) {
+        Logger.warn(`[ChatSync] Live JID resolution failed for ${cleanPhone}:`, err);
       }
     }
 

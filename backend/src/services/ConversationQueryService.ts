@@ -189,6 +189,23 @@ export class ConversationQueryService {
       }
     }
 
+    // [ENTERPRISE] PROFILE PICTURE HEAL: If the customer has no profile picture,
+    // proactively fetch it from WhatsApp. This covers contacts created via history sync
+    // (where ProfilePictureService.fetchAndPersist is never called).
+    if (!conversation.isGroup) {
+      const customer = conversation.participants?.find(
+        (p: { role?: string; phone?: string | null; profilePicUrl?: string | null }) =>
+          p.role === "USER" || p.phone === conversation.channelId
+      );
+      const contactPic = conversation.contact?.profilePicUrl;
+      const customerPic = (customer as { profilePicUrl?: string | null } | undefined)?.profilePicUrl;
+
+      if (!contactPic && !customerPic && customer) {
+        const customerId = (customer as { id: string }).id;
+        this.triggerProfilePicHeal(companyId, conversation.channelId, customerId);
+      }
+    }
+
     return {
       ...conversation,
       tags: resolvedTags,
@@ -210,11 +227,31 @@ export class ConversationQueryService {
       whatsappService.getSessionManager().findActiveSessionForCompany(companyId).then((session) => {
         if (session) {
           import("./queue/groupContactIndexer").then(({ groupContactIndexer }) => {
-            groupContactIndexer.queueGroupForIndexing(companyId, groupJid, session.sessionId).catch((err) =>
-              Logger.warn(`[QueryService] Failed to queue group heal:`, err)
+            groupContactIndexer.queueGroupForIndexing(companyId, groupJid, session.sessionId).catch((err: Error) =>
+              Logger.warn(`[QueryService] Failed to queue group heal:`, { error: err.message })
             );
           });
         }
+      });
+    }).catch(() => {});
+  }
+
+  /**
+   * [ENTERPRISE] Proactively fetch a WhatsApp profile picture for a contact
+   * that was created via history sync and never had its picture fetched.
+   * Fire-and-forget — errors are silently logged.
+   */
+  private triggerProfilePicHeal(companyId: string, channelId: string, userId: string) {
+    import("@/whatsapp").then(({ whatsappService }) => {
+      whatsappService.getSessionManager().findActiveSessionForCompany(companyId).then((session) => {
+        if (!session) return;
+        const jid = WhatsAppIdUtils.getTargetJid(channelId);
+        import("@/whatsapp/services/ProfilePictureService").then(({ ProfilePictureService }) => {
+          const profilePicService = new ProfilePictureService(whatsappService.getSessionManager());
+          profilePicService.fetchAndPersist(session.sessionId, jid, userId, companyId).catch((err: Error) =>
+            Logger.warn(`[QueryService] Profile pic heal failed for ${channelId}:`, { error: err.message })
+          );
+        });
       });
     }).catch(() => {});
   }

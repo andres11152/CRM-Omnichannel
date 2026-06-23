@@ -32,6 +32,12 @@ export const IntegrationsPanel: React.FC = () => {
   const [queues, setQueues] = useState<Queue[]>([]);
   const [reconnectingIds, setReconnectingIds] = useState<Set<string>>(new Set());
 
+  // Phone pairing states
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [pairingPhone, setPairingPhone] = useState("");
+  const [connectionMethod, setConnectionMethod] = useState<"qr" | "phone">("qr");
+  const [loadingPairingCode, setLoadingPairingCode] = useState(false);
+
   const fetchSessions = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -198,8 +204,18 @@ export const IntegrationsPanel: React.FC = () => {
       }
     };
 
+    const handlePairingCodeUpdate = (data: { sessionId: string; code: string }) => {
+      console.log("Pairing Code Update Received:", data);
+      const currentScanningId = scanningSessionIdRef.current;
+      if (data.sessionId === currentScanningId) {
+        setPairingCode(data.code);
+        setIsScanning(true);
+      }
+    };
+
     socketService.on("qr.updated", handleQrUpdate);
     socketService.on("session.status", handleStatusUpdate);
+    socketService.on("pairing_code.updated", handlePairingCodeUpdate);
 
     // Fallback Polling (Reduced frequency to 10s)
     const interval = setInterval(fetchSessions, 10000);
@@ -207,6 +223,7 @@ export const IntegrationsPanel: React.FC = () => {
     return () => {
       socketService.off("qr.updated", handleQrUpdate);
       socketService.off("session.status", handleStatusUpdate);
+      socketService.off("pairing_code.updated", handlePairingCodeUpdate);
       clearInterval(interval);
     };
   }, []); // Empty deps = Stable listeners!
@@ -215,7 +232,7 @@ export const IntegrationsPanel: React.FC = () => {
 
   const handleCreateSession = async () => {
     // [SEC] GUARD: Prevent duplicate session creation
-    if (loading || isScanning) {
+    if (loading) {
       toast.info("Conexión en progreso…");
       return;
     }
@@ -288,6 +305,60 @@ export const IntegrationsPanel: React.FC = () => {
       toast.error("Error al crear sesión");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRequestPairingCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pairingPhone) {
+      toast.error("Por favor ingresa un número de teléfono");
+      return;
+    }
+
+    // Normalize phone number: must be digits only
+    const normalizedPhone = pairingPhone.replace(/\D/g, "");
+    if (normalizedPhone.length < 10) {
+      toast.error("El número de teléfono es muy corto");
+      return;
+    }
+
+    setLoadingPairingCode(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/whatsapp/sessions/pairing-code`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone: normalizedPhone }),
+      });
+      const data = await res.json();
+
+      if (res.status === 403) {
+        setShowUpgradeModal(true);
+        setIsScanning(false);
+        return;
+      }
+
+      if (data.status === "success" && data.data) {
+        const { sessionId, code } = data.data;
+        setScanningSessionId(sessionId);
+        setIsScanning(true);
+        if (code) {
+          setPairingCode(code);
+        } else {
+          toast.info("Generando código de vinculación...");
+        }
+        fetchSessions();
+      } else {
+        toast.error(data.message || "Error al solicitar código de vinculación");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error de conexión");
+    } finally {
+      setLoadingPairingCode(false);
     }
   };
 
@@ -593,7 +664,12 @@ export const IntegrationsPanel: React.FC = () => {
 
               {/* Add New Button Card */}
               <button
-                onClick={handleCreateSession}
+                onClick={() => {
+                  setConnectionMethod("qr");
+                  setPairingCode(null);
+                  setCurrentQr(null);
+                  setIsScanning(true);
+                }}
                 disabled={loading}
                 className="group flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed border-gray-200 dark:border-reply-border-dark hover:border-blue-400 dark:hover:border-blue-500/50 bg-reply-bg/50 dark:bg-reply-surface-dark hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all duration-300 h-full min-h-[220px]"
               >
@@ -702,16 +778,19 @@ export const IntegrationsPanel: React.FC = () => {
             </div>
           </section>
         </div>
-      </div>      {/* Scan QR Modal - Clean Enterprise Design */}
+      </div>      {/* Scan QR / Phone Link Modal - Clean Enterprise Design */}
       {isScanning && (
         <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl w-full max-w-3xl overflow-hidden border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row relative">
+          <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl w-full max-w-3xl overflow-hidden border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row relative min-h-[350px]">
             {/* Close Button Absolute (Mobile Optimized) */}
             <button
               onClick={() => {
                 setIsScanning(false);
                 setCurrentQr(null);
                 setScanningSessionId(null);
+                setPairingCode(null);
+                setPairingPhone("");
+                setConnectionMethod("qr");
               }}
               className="absolute top-4 right-4 z-50 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors bg-white/10 rounded-full p-1 scroll-m-2"
             >
@@ -730,105 +809,234 @@ export const IntegrationsPanel: React.FC = () => {
               </svg>
             </button>
 
-            {/* Left Panel: QR Scanner */}
-            <div className="w-full md:w-5/12 bg-gray-50/50 dark:bg-[#1F2937]/30 flex flex-col items-center justify-center p-8 relative border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-800">
-              <div className="relative z-10 p-4 bg-white rounded-2xl shadow-sm border border-gray-200 min-h-[233px] flex items-center justify-center w-full">
-                {currentQr ? (
-                  <QRCode
-                    value={currentQr}
-                    size={200}
-                    style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                    viewBox={`0 0 256 256`}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-center space-y-4">
-                    <div className="w-12 h-12 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin"></div>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
-                      Generando QR...
+            {!currentQr && !pairingCode && !loading && !loadingPairingCode ? (
+              /* Step 0: Choose Pairing Method */
+              <div className="flex-1 p-8 flex flex-col justify-center bg-white dark:bg-[#111827]">
+                <div className="mb-6 text-center">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Vincular WhatsApp
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Elige el método de vinculación que prefieras para tu dispositivo.
+                  </p>
+                </div>
+
+                <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6">
+                  <button
+                    onClick={() => setConnectionMethod("qr")}
+                    className={`flex-1 py-3 text-sm font-bold border-b-2 transition-all ${
+                      connectionMethod === "qr"
+                        ? "border-green-500 text-green-600 dark:text-green-400 font-bold"
+                        : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    }`}
+                  >
+                    Código QR (Recomendado)
+                  </button>
+                  <button
+                    onClick={() => setConnectionMethod("phone")}
+                    className={`flex-1 py-3 text-sm font-bold border-b-2 transition-all ${
+                      connectionMethod === "phone"
+                        ? "border-green-500 text-green-600 dark:text-green-400 font-bold"
+                        : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    }`}
+                  >
+                    Número de Teléfono (Enterprise)
+                  </button>
+                </div>
+
+                {connectionMethod === "qr" ? (
+                  <div className="text-center py-4 space-y-4">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Genera un código QR dinámico para escanear directamente con la cámara de tu WhatsApp.
                     </p>
+                    <button
+                      onClick={handleCreateSession}
+                      className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-bold transition-all shadow-md"
+                    >
+                      Generar Código QR
+                    </button>
                   </div>
+                ) : (
+                  <form onSubmit={handleRequestPairingCode} className="space-y-4 py-2">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        Número de WhatsApp (con Código de País)
+                      </label>
+                      <input
+                        type="tel"
+                        placeholder="Ej: 573001234567"
+                        value={pairingPhone}
+                        onChange={(e) => setPairingPhone(e.target.value)}
+                        className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-reply-bg dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all text-sm font-mono"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-bold transition-all shadow-md"
+                    >
+                      Generar Código de Emparejamiento
+                    </button>
+                  </form>
                 )}
               </div>
+            ) : (
+              /* Step 1: Render Connection Screen */
+              <>
+                {/* Left Panel: QR or Pairing Code Display */}
+                <div className="w-full md:w-5/12 bg-gray-50/50 dark:bg-[#1F2937]/30 flex flex-col items-center justify-center p-8 relative border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-800">
+                  <div className="relative z-10 p-4 bg-white rounded-2xl shadow-sm border border-gray-200 min-h-[233px] flex items-center justify-center w-full">
+                    {loading || loadingPairingCode ? (
+                      <div className="flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-12 h-12 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin"></div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
+                          Iniciando Baileys...
+                        </p>
+                      </div>
+                    ) : currentQr ? (
+                      <QRCode
+                        value={currentQr}
+                        size={200}
+                        style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                        viewBox={`0 0 256 256`}
+                      />
+                    ) : pairingCode ? (
+                      <div className="flex flex-col items-center justify-center text-center py-4">
+                        <div className="text-3xl font-mono font-extrabold tracking-widest text-[#25D366] bg-slate-950 px-6 py-4 rounded-2xl border-2 border-slate-800 animate-pulse select-all shadow-inner">
+                          {pairingCode}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-4 uppercase tracking-wider font-bold">
+                          Haz clic para seleccionar el código
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-12 h-12 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin"></div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
+                          Generando código...
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
-              <div className="mt-8 text-center space-y-2 z-10">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 font-medium text-sm">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  {currentQr ? "Esperando conexión..." : "Iniciando Baileys..."}
+                  <div className="mt-8 text-center space-y-2 z-10">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 font-medium text-sm">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                      </span>
+                      {currentQr || pairingCode ? "Esperando conexión..." : "Iniciando Baileys..."}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Right Panel: Instructions */}
-            <div className="flex-1 p-6 md:p-8 flex flex-col justify-center relative bg-white/80 dark:bg-transparent backdrop-blur-sm">
-              <div className="mb-6 text-center md:text-left">
-                <div className="flex items-center justify-center md:justify-start gap-3 mb-1">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#25D366] to-[#128C7E] flex items-center justify-center shadow-lg shadow-green-500/20">
-                    <svg
-                      className="w-5 h-5 text-white fill-current"
-                      viewBox="0 0 24 24"
+                {/* Right Panel: Instructions */}
+                <div className="flex-1 p-6 md:p-8 flex flex-col justify-center relative bg-white/80 dark:bg-transparent backdrop-blur-sm">
+                  <div className="mb-6 text-center md:text-left">
+                    <div className="flex items-center justify-center md:justify-start gap-3 mb-1">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#25D366] to-[#128C7E] flex items-center justify-center shadow-lg shadow-green-500/20">
+                        <svg
+                          className="w-5 h-5 text-white fill-current"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                        Conectar WhatsApp
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {currentQr ? (
+                      [
+                        {
+                          title: "Abre WhatsApp",
+                          desc: "Configuración > Dispositivos Vinculados",
+                        },
+                        {
+                          title: "Toca 'Vincular'",
+                          desc: "Usa tu huella o FaceID si te lo pide",
+                        },
+                        {
+                          title: "Escanea el QR",
+                          desc: "Apunta la cámara al código",
+                        },
+                      ].map((step, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700/50 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all cursor-default"
+                        >
+                          <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center font-bold text-xs">
+                            {i + 1}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-gray-800 dark:text-white text-xs">
+                              {step.title}
+                            </h4>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {step.desc}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      [
+                        {
+                          title: "Abre WhatsApp",
+                          desc: "Configuración > Dispositivos Vinculados",
+                        },
+                        {
+                          title: "Toca 'Vincular un dispositivo'",
+                          desc: "Usa tu huella o FaceID si te lo pide",
+                        },
+                        {
+                          title: "Vincular con número",
+                          desc: "Toca 'Vincular con el número de teléfono en su lugar' en la parte inferior",
+                        },
+                        {
+                          title: "Ingresa el código",
+                          desc: "Escribe el código de 8 dígitos que se muestra a la izquierda",
+                        },
+                      ].map((step, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700/50 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all cursor-default"
+                        >
+                          <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center font-bold text-xs">
+                            {i + 1}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-gray-800 dark:text-white text-xs">
+                              {step.title}
+                            </h4>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {step.desc}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setIsScanning(false);
+                        setCurrentQr(null);
+                        setScanningSessionId(null);
+                        setPairingCode(null);
+                        setPairingPhone("");
+                        setConnectionMethod("qr");
+                      }}
+                      className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                    </svg>
+                      Cancelar
+                    </button>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Conectar WhatsApp
-                  </h3>
                 </div>
-              </div>
-
-              <div className="space-y-3">
-                {[
-                  {
-                    title: "Abre WhatsApp",
-                    desc: "Configuración > Dispositivos Vinculados",
-                    icon: "[APP]",
-                  },
-                  {
-                    title: "Toca 'Vincular'",
-                    desc: "Usa tu huella o FaceID si te lo pide",
-                    icon: "",
-                  },
-                  {
-                    title: "Escanea el QR",
-                    desc: "Apunta la camara al código",
-                    icon: "",
-                  },
-                ].map((step, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700/50 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all cursor-default"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center font-bold text-xs">
-                      {i + 1}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-800 dark:text-white text-xs">
-                        {step.title}
-                      </h4>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                        {step.desc}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 flex justify-end">
-                <button
-                  onClick={() => {
-                    setIsScanning(false);
-                    setCurrentQr(null);
-                    setScanningSessionId(null);
-                  }}
-                  className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -11,6 +11,7 @@ import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { IAuthProvider } from "../core/interfaces/IAuthProvider";
 import { SessionConfig, SessionStatus } from "../core/types/whatsapp.types";
 import { EventBus } from "../core/events/EventBus";
+import { WhatsAppEventType } from "../core/events/WhatsAppEvents";
 import makeWASocket, {
   WASocket,
   Browsers,
@@ -44,7 +45,7 @@ export class SessionManager implements ISessionManager {
   private sessions: Map<string, WASocket> = new Map();
   private sessionMetadata: Map<
     string,
-    { companyId: string; status: SessionStatus["status"] }
+    { companyId: string; status: SessionStatus["status"]; isPairing?: boolean }
   > = new Map();
   // [SEC] MEMORY STORES (Isolated per Session/Tenant)
   private sessionStores: Map<string, SimpleInMemoryStore> = new Map();
@@ -152,7 +153,11 @@ export class SessionManager implements ISessionManager {
 
     this.healer.cancelReconnect(sessionId);
     logger.info(`[SessionManager] Initializing session: ${sessionId}`);
-    this.sessionMetadata.set(sessionId, { companyId, status: "CONNECTING" });
+    this.sessionMetadata.set(sessionId, {
+      companyId,
+      status: "CONNECTING",
+      isPairing: !!config.phoneForPairing,
+    });
 
     // [SEC] CREATE ISOLATED STORE FOR THIS SESSION (composite key: companyId::sessionId)
     // Using a composite key prevents store collisions when two companies accidentally
@@ -270,10 +275,10 @@ export class SessionManager implements ISessionManager {
       // Previously this returned `false` which silently rejected ALL history,
       // making on-demand sync impossible (store was always empty).
       shouldSyncHistoryMessage: (msg) => {
-        if (syncFullHistory) return true;
-        // Accept recent history types only (types 0=RECENT, 2=INITIAL_BOOTSTRAP)
-        const syncType = msg.syncType;
-        return syncType === 0 || syncType === 2;
+        // ALWAYS accept history sync messages. We already limit chat history depth
+        // and deduplicate messages dynamically, so filtering them out at the socket level
+        // is unnecessary and breaks manual/on-demand history synchronization.
+        return true;
       },
       getMessage: async (key) => {
         if (!key.id) return undefined;
@@ -321,6 +326,27 @@ export class SessionManager implements ISessionManager {
     });
 
     this.sessions.set(sessionId, sock);
+
+    if (config.phoneForPairing && !sock.authState.creds.registered) {
+      setTimeout(async () => {
+        try {
+          const cleanPhone = config.phoneForPairing!.replace(/\D/g, "");
+          logger.info(`[SessionManager] Requesting pairing code for session ${sessionId} with phone ${cleanPhone}`);
+          const code = await sock.requestPairingCode(cleanPhone);
+          logger.info(`[SessionManager] Pairing code generated successfully for ${sessionId}: ${code}`);
+          this.eventBus.publish({
+            type: WhatsAppEventType.SESSION_PAIRING_CODE,
+            sessionId,
+            companyId,
+            timestamp: new Date(),
+            data: { code },
+          });
+        } catch (err) {
+          logger.error({ err }, `[SessionManager] Failed to request pairing code for session ${sessionId}`);
+        }
+      }, 1000);
+    }
+
     return sock;
   }
 

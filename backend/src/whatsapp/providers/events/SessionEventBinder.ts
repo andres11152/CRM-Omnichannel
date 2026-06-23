@@ -47,7 +47,7 @@ export interface SessionEventBinderDeps {
   sessions: Map<string, WASocket>;
   sessionMetadata: Map<
     string,
-    { companyId: string; status: SessionStatus["status"] }
+    { companyId: string; status: SessionStatus["status"]; isPairing?: boolean }
   >;
   terminateSession: (sessionId: string, clearAuth?: boolean) => Promise<void>;
   reconnectSession: (sessionId: string) => Promise<void>;
@@ -161,31 +161,36 @@ export function bindSessionEvents(
     const { connection, lastDisconnect, qr } = validated;
 
     if (qr) {
-      eventBus.publish({
-        type: WhatsAppEventType.SESSION_QR_CODE,
-        sessionId,
-        companyId,
-        timestamp: new Date(),
-        data: { qr },
-      });
+      const meta = sessionMetadata.get(sessionId);
+      if (meta?.isPairing) {
+        logger.info(`[SessionEventBinder] Ignoring QR code generation for session ${sessionId} because it is in phone pairing mode.`);
+      } else {
+        eventBus.publish({
+          type: WhatsAppEventType.SESSION_QR_CODE,
+          sessionId,
+          companyId,
+          timestamp: new Date(),
+          data: { qr },
+        });
 
-      // [SEC] Audit: QR Emitted
-      await auditService.logWhatsAppEvent(companyId, sessionId, "SCANNING", { qrLength: qr.length });
+        // [SEC] Audit: QR Emitted
+        await auditService.logWhatsAppEvent(companyId, sessionId, "SCANNING", { qrLength: qr.length });
 
-      await TenantContextManager.runAsSystem(async () =>
-        whatsappSessionRepository.updateSystemSession(sessionId, {
-          qrCode: qr,
-          status: "SCANNING",
-          phone: null,
-        }),
-      ).catch(async (err: { code?: string; message?: string }) => {
-        if (err?.code === "P2025") {
-          logger.warn(`[SessionEventBinder] QR update failed: session ${sessionId} not found in DB. Terminating session.`);
-          await terminateSession(sessionId, true).catch((termErr) => {
-            logger.error({ err: termErr }, `[SessionEventBinder] Failed to terminate session ${sessionId} on P2025`);
-          });
-        }
-      });
+        await TenantContextManager.runAsSystem(async () =>
+          whatsappSessionRepository.updateSystemSession(sessionId, {
+            qrCode: qr,
+            status: "SCANNING",
+            phone: null,
+          }),
+        ).catch(async (err: { code?: string; message?: string }) => {
+          if (err?.code === "P2025") {
+            logger.warn(`[SessionEventBinder] QR update failed: session ${sessionId} not found in DB. Terminating session.`);
+            await terminateSession(sessionId, true).catch((termErr) => {
+              logger.error({ err: termErr }, `[SessionEventBinder] Failed to terminate session ${sessionId} on P2025`);
+            });
+          }
+        });
+      }
     }
 
     if (connection === "open") {
@@ -199,7 +204,7 @@ export function bindSessionEvents(
       // [SEC] Audit: Connected
       await auditService.logWhatsAppEvent(companyId, sessionId, "CONNECTED", { phone: phoneNumber });
 
-      sessionMetadata.set(sessionId, { companyId, status: "CONNECTED" });
+      sessionMetadata.set(sessionId, { companyId, status: "CONNECTED", isPairing: false });
 
       await TenantContextManager.runAsSystem(async () =>
         whatsappSessionRepository.updateSystemSession(sessionId, {
@@ -259,7 +264,7 @@ export function bindSessionEvents(
       healer.stopHeartbeat(sessionId);
 
       if (resetConnection) {
-        sessionMetadata.set(sessionId, { companyId, status: "DISCONNECTED" });
+        sessionMetadata.set(sessionId, { companyId, status: "DISCONNECTED", isPairing: false });
         healer.scheduleReconnect(sessionId, errorMsg, (sid) => reconnectSession(sid));
       } else {
         await terminateSession(sessionId, true);

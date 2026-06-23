@@ -13,6 +13,7 @@ import {
 import {
   SessionIdParamSchema,
   UpdateSessionSchema,
+  RequestPairingCodeSchema,
 } from "@/schemas/whatsappSchema";
 
 const router = Router();
@@ -25,6 +26,13 @@ router.post(
   requestTimeout({ timeout: 60000 }),
   checkPlanLimit("whatsapp_sessions"),
   whatsappController.createSession,
+);
+router.post(
+  "/sessions/pairing-code",
+  requestTimeout({ timeout: 60000 }),
+  checkPlanLimit("whatsapp_sessions"),
+  validate(RequestPairingCodeSchema),
+  whatsappController.requestPairingCode,
 );
 router.get("/sessions", whatsappController.getSessions);
 router.delete(

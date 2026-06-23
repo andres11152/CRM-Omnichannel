@@ -98,6 +98,14 @@ export class WhatsAppService {
     return this.sessionService.createSession(companyId, sessionId);
   }
 
+  async requestPairingCode(
+    companyId: string,
+    phone: string,
+    sessionId?: string,
+  ): Promise<{ sessionId: string; code: string | null }> {
+    return this.sessionService.requestPairingCode(companyId, phone, sessionId);
+  }
+
   async deleteSession(companyId: string, sessionId: string): Promise<void> {
     return this.sessionService.deleteSession(companyId, sessionId);
   }

@@ -1,5 +1,6 @@
 import { Logger } from "@/utils/logger";
 import { Response } from "express";
+import type { ParamsDictionary } from "express-serve-static-core";
 // ️ REFACTOR: Unified Service (Split Brain Fix)
 import { whatsappService } from "@/whatsapp";
 import { planLimitsService } from "@/services/PlanLimitsService";
@@ -120,6 +121,47 @@ export const reconnectSession = catchAsync(
     res.status(200).json({
       status: "success",
       message: "Reconnection process started",
+    });
+  },
+);
+
+export const requestPairingCode = catchAsync(
+  async (req: AuthenticatedRequest<ParamsDictionary, unknown, { phone: string }>, res: Response) => {
+    Logger.info("[WhatsAppController] requestPairingCode called");
+    if (!req.companyId) {
+      Logger.error("[WhatsAppController] No company ID in request");
+      throw new Error("No company ID");
+    }
+
+    const { phone } = req.body;
+
+    // 1. Check Plan Limits
+    const canCreate = await planLimitsService.canCreateResource(
+      req.companyId,
+      "whatsapp_sessions",
+    );
+
+    if (!canCreate) {
+      const { limit } = await planLimitsService.checkPlanLimit(
+        req.companyId,
+        "whatsapp_sessions",
+      );
+      throw new AppError(
+        `Plan limit reached. Your plan allows ${limit} WhatsApp connection(s). Please upgrade to add more.`,
+        403,
+      );
+    }
+
+    // 2. Request pairing code via service
+    const cleanPhone = phone.replace(/\D/g, "");
+    const { sessionId, code } = await whatsappService.requestPairingCode(
+      req.companyId,
+      cleanPhone,
+    );
+
+    res.status(200).json({
+      status: "success",
+      data: { sessionId, code },
     });
   },
 );

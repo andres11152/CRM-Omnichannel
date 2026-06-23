@@ -4,6 +4,7 @@ export enum WhatsAppEventType {
   SESSION_CONNECTED = "session.connected",
   SESSION_DISCONNECTED = "session.disconnected",
   SESSION_QR_CODE = "session.qr_code",
+  SESSION_PAIRING_CODE = "session.pairing_code",
   SESSION_ERROR = "session.error",
   MESSAGE_RECEIVED = "message.received",
   MESSAGE_SENT = "message.sent",
@@ -23,6 +24,7 @@ export interface WhatsAppEventData {
     isReconnecting?: boolean;
   };
   [WhatsAppEventType.SESSION_QR_CODE]: { qr: string };
+  [WhatsAppEventType.SESSION_PAIRING_CODE]: { code: string };
   [WhatsAppEventType.SESSION_ERROR]: { error: Error };
   [WhatsAppEventType.MESSAGE_RECEIVED]: { message: WAMessage };
   [WhatsAppEventType.MESSAGE_SENT]: { message: WAMessage };

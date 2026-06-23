@@ -3,6 +3,7 @@ export interface SessionConfig {
   companyId: string;
   /** @deprecated Ignored. DatabaseAuthProvider handles all credential storage. */
   authDir?: string;
+  phoneForPairing?: string;
 }
 
 export interface MessagePayload {

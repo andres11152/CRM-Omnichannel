@@ -255,6 +255,139 @@ export class WhatsAppSessionService {
     });
   }
 
+  async requestPairingCode(
+    companyId: string,
+    phone: string,
+    sessionId?: string,
+  ): Promise<{ sessionId: string; code: string | null }> {
+    let finalSessionId = sessionId;
+
+    if (!finalSessionId) {
+      const existingSessions = await this.sessionRepository.findByCompany(companyId);
+      if (existingSessions.length > 0) {
+        const connectedSession = existingSessions.find((s) => s.status === "CONNECTED");
+        if (connectedSession) {
+          Logger.info(`[WA] Session already connected: ${connectedSession.sessionId} for company ${companyId}`);
+          return {
+            sessionId: connectedSession.sessionId,
+            code: null,
+          };
+        }
+
+        // Recycle the first session we find for this company
+        const sessionToRecycle = existingSessions[0];
+        Logger.info(`[WA] Recycling existing session for pairing: ${sessionToRecycle.sessionId} (status: ${sessionToRecycle.status}) for company ${companyId}`);
+        finalSessionId = sessionToRecycle.sessionId;
+      } else {
+        finalSessionId = `wa_${companyId}_${Date.now().toString(36)}`;
+      }
+    }
+
+    Logger.info(
+      `[WA] Requesting pairing code for session ${finalSessionId} for company ${companyId} phone ${phone}`,
+    );
+
+    try {
+      const { planLimitsService } = await import("@/services/PlanLimitsService");
+
+      const existing = await this.sessionRepository.findOne(companyId, finalSessionId);
+      if (!existing) {
+        const canCreate = await planLimitsService.canCreateResource(
+          companyId,
+          "whatsapp_sessions",
+        );
+        if (!canCreate) {
+          throw new AppError(
+            "You have reached the WhatsApp connection limit for your plan.",
+            403,
+          );
+        }
+      }
+    } catch (planErr) {
+      if (
+        planErr &&
+        typeof planErr === "object" &&
+        "statusCode" in planErr &&
+        (planErr as { statusCode: number }).statusCode === 403
+      )
+        throw planErr;
+      Logger.warn(
+        "[WA] Plan limits check skipped (service unavailable):",
+        planErr,
+      );
+    }
+
+    try {
+      const session = await this.sessionRepository.findOne(companyId, finalSessionId);
+      if (session) {
+        await this.sessionRepository.update(companyId, finalSessionId, {
+          status: "CONNECTING",
+          qrCode: null,
+          phone: null,
+        });
+      } else {
+        await this.sessionRepository.create({
+          sessionId: finalSessionId,
+          company: { connect: { id: companyId } },
+          status: "CONNECTING",
+        });
+      }
+    } catch (err) {
+      Logger.error(`[WA] Error ensuring session record for pairing ${finalSessionId}:`, err);
+    }
+
+    await this.sessionManager.initializeSession({
+      sessionId: finalSessionId,
+      companyId,
+      phoneForPairing: phone,
+    });
+
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      const handler = (
+        event: WhatsAppEvent<WhatsAppEventType.SESSION_PAIRING_CODE>,
+      ) => {
+        if (event.sessionId === finalSessionId && event.data.code && !resolved) {
+          resolved = true;
+          this.eventBus.off(WhatsAppEventType.SESSION_PAIRING_CODE, handler);
+          resolve({
+            sessionId: finalSessionId,
+            code: event.data.code,
+          });
+        }
+      };
+
+      this.eventBus.on(WhatsAppEventType.SESSION_PAIRING_CODE, handler);
+
+      setTimeout(async () => {
+        if (!resolved) {
+          const sessions = await this.sessionRepository.findByStatus(
+            "CONNECTED",
+            [companyId],
+          );
+          const isConnected = sessions.some(
+            (s) => s.sessionId === finalSessionId,
+          );
+
+          if (isConnected && !resolved) {
+            resolved = true;
+            this.eventBus.off(WhatsAppEventType.SESSION_PAIRING_CODE, handler);
+            resolve({ sessionId: finalSessionId, code: null });
+          }
+        }
+      }, 3000);
+
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          this.eventBus.off(WhatsAppEventType.SESSION_PAIRING_CODE, handler);
+          resolve({ sessionId: finalSessionId, code: null });
+        }
+      }, 15000);
+    });
+  }
+
   async deleteSession(companyId: string, sessionId: string): Promise<void> {
     Logger.info(`[WA] Requested deletion for session ${sessionId} (Company: ${companyId})`);
 

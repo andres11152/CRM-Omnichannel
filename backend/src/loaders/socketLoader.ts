@@ -53,6 +53,14 @@ export const initSocketGateway = async (httpServer: Server) => {
     });
   });
 
+  eventBus.subscribe(WhatsAppEventType.SESSION_PAIRING_CODE, (event) => {
+    gateway.emitToCompany(event.companyId, "pairing_code.updated", {
+      sessionId: event.sessionId,
+      code: event.data?.code,
+      timestamp: event.timestamp,
+    });
+  });
+
   //  Legacy direct message propagation removed (Handled gracefully via SocketEventEmitter now)
   eventBus.subscribe(WhatsAppEventType.MESSAGE_RECEIVED, (_event) => {
     // We strictly use `socketEventEmitter.sendMessageReceived(...)` dynamically from chatService

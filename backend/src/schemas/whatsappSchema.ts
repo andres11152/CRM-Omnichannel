@@ -24,6 +24,19 @@ export const SessionIdParamSchema = z.object({
 });
 
 /**
+ * POST /sessions/pairing-code
+ */
+export const RequestPairingCodeSchema = z.object({
+  body: z.object({
+    phone: z
+      .string()
+      .min(10, "El número de teléfono es muy corto")
+      .max(20, "El número de teléfono es muy largo")
+      .regex(/^\+?[1-9]\d{1,14}$/, "Formato de número inválido"),
+  }),
+});
+
+/**
  * PATCH /sessions/:sessionId — update defaultQueue
  */
 export const UpdateSessionSchema = z.object({

@@ -614,19 +614,31 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
   );
 
   const handleContactUpdate = useCallback((updatedContact: Contact) => {
+    const updatedPhone = updatedContact.phone?.replace(/\D/g, "");
     setTickets((prev) =>
-      prev.map((t) =>
-        t.id === updatedContact.id ||
-        t.conversationId === updatedContact.id ||
-        t.contact.id === updatedContact.id ||
-        t.contact.realContactId === updatedContact.id
-          ? { 
-              ...t, 
-              tags: updatedContact.tags !== undefined ? updatedContact.tags : t.tags,
-              contact: { ...t.contact, ...updatedContact } 
-            }
-          : t,
-      ),
+      prev.map((t) => {
+        const ticketPhone = t.contact.phone?.replace(/\D/g, "");
+        const isMatch =
+          t.id === updatedContact.id ||
+          t.conversationId === updatedContact.id ||
+          t.contact.id === updatedContact.id ||
+          t.contact.realContactId === updatedContact.id ||
+          (!!ticketPhone && !!updatedPhone && ticketPhone === updatedPhone);
+
+        if (isMatch) {
+          const realContactId = updatedContact.realContactId || updatedContact.id;
+          return { 
+            ...t, 
+            tags: updatedContact.tags !== undefined ? updatedContact.tags : t.tags,
+            contact: { 
+              ...t.contact, 
+              ...updatedContact,
+              realContactId: realContactId
+            } 
+          };
+        }
+        return t;
+      }),
     );
   }, []);
 

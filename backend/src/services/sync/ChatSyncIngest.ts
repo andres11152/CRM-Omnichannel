@@ -165,9 +165,9 @@ export class ChatSyncIngest {
       targetJid = await this.resolveRealJid(companyId, session.sessionId, targetJid);
       let messages = this.extractMessagesFromStore(store, undefined, targetJid);
 
-      // If memory store has no messages, fetch on-demand from WhatsApp
-      if (messages.length === 0) {
-        Logger.info(`[ContextSync] No messages in memory for ${channelId}, fetching on-demand from WhatsApp...`);
+      // If memory store has fewer than 15 messages, fetch on-demand from WhatsApp to backfill history
+      if (messages.length < 15) {
+        Logger.info(`[ContextSync] Only ${messages.length} messages in memory for ${channelId}, fetching on-demand from WhatsApp...`);
         const fetchSuccess = await this.fetchHistoryFromWhatsApp(companyId, session.sessionId, channelId, 50);
         if (fetchSuccess) {
           // Re-extract from store now that history sync event has updated it
@@ -578,8 +578,8 @@ export class ChatSyncIngest {
         if (mapped) return mapped.split("@")[0];
       }
 
-      // ENTERPRISE FIX: Do NOT return the raw LID as a phone number!
-      return null;
+      // ENTERPRISE FIX: Fallback to raw LID prefix instead of dropping history!
+      return jid.split("@")[0].split(":")[0];
     }
 
     // Normal @s.whatsapp.net JID → extract phone number
@@ -591,11 +591,35 @@ export class ChatSyncIngest {
     const session = sessionGroups[0];
     const store = session ? await this.getSessionStore(session.sessionId) : null;
     
-    if (contacts && store && store.lidToPhone) {
-      for (const c of contacts) {
-        if (c.id && c.resolved && c.lid) {
-          store.lidToPhone[c.lid.split("@")[0]] = c.id;
+    if (store && store.lidToPhone) {
+      if (contacts) {
+        for (const c of contacts) {
+          if (c.id && c.resolved && c.lid) {
+            store.lidToPhone[c.lid.split("@")[0]] = c.id;
+          }
         }
+      }
+
+      // Pre-populate using previously saved LID mappings from CRM contacts
+      try {
+        const { contactRepository } = await import("@/repositories/ContactRepository");
+        const dbContacts = await contactRepository.findMany({
+          where: {
+            companyId,
+            deletedAt: null,
+          },
+          select: { phone: true, customFields: true }
+        });
+        
+        for (const c of dbContacts) {
+          const fields = c.customFields as Record<string, any> | null;
+          if (fields && fields.whatsappLid) {
+            const lidBase = fields.whatsappLid.split("@")[0];
+            store.lidToPhone[lidBase] = c.phone;
+          }
+        }
+      } catch (err) {
+        Logger.warn(`[ChatSync] Failed to pre-populate LID mappings from DB:`, err);
       }
     }
     return store;

@@ -38,10 +38,10 @@ export class SyncRepositoryHelper {
         let subject = name || phone;
 
         if (!isGroup) {
-          // [SEC] ENTERPRISE GUARD: Validate phone before creating contacts
-          // Blocks LID bases that somehow leaked through resolveJid
-          if (!WhatsAppIdUtils.isRealPhoneNumber(phone.replace(/\D/g, ""))) {
-            Logger.warn(`[SyncRepo] [BLOCKED] Skipping invalid phone (likely LID): ${phone}`);
+          // [SEC] ENTERPRISE GUARD: Validate phone/LID before creating contacts
+          // Allow valid phone numbers or LIDs
+          if (!WhatsAppIdUtils.isRealPhoneNumber(phone.replace(/\D/g, "")) && !WhatsAppIdUtils.isLid(phone)) {
+            Logger.warn(`[SyncRepo] [BLOCKED] Skipping invalid phone / LID: ${phone}`);
             return { conversation: null as unknown as Conversation & { participants: User[] }, customerUserId: undefined };
           }
           const newUser = await chatService.upsertWhatsAppUser({

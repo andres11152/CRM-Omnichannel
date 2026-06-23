@@ -155,9 +155,12 @@ class MessageQueueWorker {
         }
       }
 
-      // 3. [AI] HUMAN-LIKE BEHAVIOR: Simulate typing & Random delay
+      // 3. [AI] HUMAN-LIKE BEHAVIOR: brief "typing" presence before sending.
+      // [UX] Kept SHORT (0.3-0.7s). The old 1.5-3s here + 2-5s cooldown below meant
+      // 3.5-8s PER message under concurrency-1, so a burst of 10 manual messages sat
+      // 35-80s in "EN COLA". Agent 1:1 chat doesn't need heavy anti-ban throttling.
       await job.progress(40);
-      const typingTime = Math.floor(Math.random() * (3000 - 1500 + 1) + 1500); // 1.5 - 3s
+      const typingTime = Math.floor(Math.random() * (700 - 300 + 1) + 300); // 0.3 - 0.7s
 
       // Emit "composing" presence carefully
       try {
@@ -196,8 +199,9 @@ class MessageQueueWorker {
         Logger.warn(`[Worker] Failed to emit paused presence for ${to}`, err);
       }
 
-      // 5. POST-SEND COOL-DOWN (Random 2-5s)
-      const cooldown = Math.floor(Math.random() * (5000 - 2000 + 1) + 2000);
+      // 5. POST-SEND COOL-DOWN — short (0.3-0.8s) just to avoid hammering WhatsApp.
+      // (Was 2-5s, the main cause of outbound messages piling up in "EN COLA".)
+      const cooldown = Math.floor(Math.random() * (800 - 300 + 1) + 300);
       await new Promise((r) => setTimeout(r, cooldown));
 
       await job.progress(100);

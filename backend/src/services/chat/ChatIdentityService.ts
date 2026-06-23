@@ -139,6 +139,11 @@ export class ChatIdentityService {
             phone: params.phone!,
             name: user.name,
             email: null,
+            // Propagate the WhatsApp profile picture from the shadow User so the CRM
+            // Contact shows the avatar too (only when present — never overwrite with null).
+            ...((user as { profilePicUrl?: string | null }).profilePicUrl
+              ? { profilePicUrl: (user as { profilePicUrl?: string | null }).profilePicUrl }
+              : {}),
             customFields: {
               source: "whatsapp",
               whatsappId: params.email.split("@")[0],

@@ -75,6 +75,19 @@ export const getConversation = catchAsync(
       req.params.id,
     );
 
+    // [PROFILE PIC] The CRM Contact row is often created/synced AFTER the WhatsApp
+    // profile picture was fetched onto the shadow User, so contact.profilePicUrl can
+    // be null while the participant User already has it. Fall back to the participant
+    // (same logic listConversations already uses) so the avatar shows regardless of
+    // sync timing — both in the chat header and Customer 360 panel.
+    const participants =
+      (conversation as { participants?: Array<{ role?: string; phone?: string | null; profilePicUrl?: string | null }> }).participants || [];
+    const customer = participants.find(
+      (p) => p.profilePicUrl && (p.role === "USER" || p.phone === conversation.channelId),
+    );
+    const resolvedProfilePicUrl =
+      conversation.contact?.profilePicUrl || customer?.profilePicUrl || null;
+
     res.status(200).json({
       status: "success",
       data: {
@@ -86,12 +99,13 @@ export const getConversation = catchAsync(
           lastMessageAt: conversation.lastMessageAt || null,
           isGroup: conversation.isGroup,
           tags: conversation.tags,
+          profilePicUrl: resolvedProfilePicUrl,
           contact: conversation.contact
             ? {
                 id: conversation.contact.id,
                 name: conversation.contact.name,
                 phone: conversation.contact.phone,
-                profilePicUrl: conversation.contact.profilePicUrl,
+                profilePicUrl: resolvedProfilePicUrl,
               }
             : null,
           messages: conversation.messages || [],

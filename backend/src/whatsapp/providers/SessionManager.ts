@@ -239,7 +239,8 @@ export class SessionManager implements ISessionManager {
     const sock = makeWASocket({
       version,
       auth: state,
-      printQRInTerminal: false,
+      // [DOCS · v7] `printQRInTerminal` is removed in Baileys 7 — QR is delivered via the
+      // `connection.update` event (handled in SessionEventBinder), so we don't pass it.
       agent: proxyAgent,
       fetchAgent: proxyAgent,
       // Intercept Baileys internal logs to detect corruption
@@ -265,24 +266,16 @@ export class SessionManager implements ISessionManager {
       syncFullHistory,
       msgRetryCounterCache: new NodeCache(),
       shouldIgnoreJid: (jid) => isJidBroadcast(jid),
-      // [FIX] CRITICAL: Disable init queries that block the event buffer.
-      // When executeInitQueries times out (which happens consistently),
-      // Baileys' internal event buffer NEVER flushes, causing messages.upsert
-      // to never fire. This was the ROOT CAUSE of messages not arriving.
+      // [DOCS · v7] Default is true. We keep it false deliberately: in production the init
+      // queries (blocklist/privacy/abprops) consistently timed out and stalled the event
+      // buffer so `messages.upsert` never fired. Disabling them keeps live messaging
+      // reliable; the data they fetch is non-essential for our CRM use case.
       fireInitQueries: false,
-      // [FIX] HISTORY SYNC: Accept history sync messages from WhatsApp
-      // so that the store is populated with historical messages during
-      // QR pairing. We conditionally accept based on sync type:
-      // - INITIAL_BOOTSTRAP (2) and RECENT (0) are always accepted
-      // - FULL (3) and PUSH_NAME (1) are accepted when syncFullHistory is enabled
-      // Previously this returned `false` which silently rejected ALL history,
-      // making on-demand sync impossible (store was always empty).
-      shouldSyncHistoryMessage: (msg) => {
-        // ALWAYS accept history sync messages. We already limit chat history depth
-        // and deduplicate messages dynamically, so filtering them out at the socket level
-        // is unnecessary and breaks manual/on-demand history synchronization.
-        return true;
-      },
+      // [DOCS · v7] shouldSyncHistoryMessage: (msg) => boolean. Accept ALL history so the
+      // store is populated for on-demand/manual sync; depth is bounded downstream
+      // (SessionEventBinder per-chat cap + LID skip). Returning false here would disable
+      // history entirely (per docs).
+      shouldSyncHistoryMessage: () => true,
       getMessage: async (key) => {
         // [DOCS] Baileys requires getMessage to return the ORIGINAL message CONTENT
         // (proto.IMessage) so it can decrypt poll votes, retry sends and serve on-demand

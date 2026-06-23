@@ -1,4 +1,5 @@
 import { WAMessage } from "@whiskeysockets/baileys";
+import { isValidPhoneNumber } from "libphonenumber-js";
 
 /**
  * [DEV] WHATSAPP ID UTILITIES (100-Year Solution)
@@ -109,9 +110,13 @@ export class WhatsAppIdUtils {
     if (!clean) return null;
 
     if (this.isGroup(clean)) return null; // Groups don't have phone numbers
-    
-    // [SEC] REVERTED: We now ALLOW LIDs to be returned as the identifier 
-    // because the user wants to import them into the CRM to send messages to them.
+
+    // [SEC] LIDs are internal WhatsApp identifiers, NEVER real phone numbers.
+    // Returning a LID here pollutes User.phone and the CRM Contacts list with
+    // fake "numbers" (e.g. 3939223269449). Code that needs to address a LID must
+    // use the JID / LID->Phone mapping path (OutboundJidResolver, saveLidPhoneMapping),
+    // not this method. This is the single source of truth that keeps LIDs out of the CRM.
+    if (this.isLid(clean)) return null;
 
     // Remove domain
     const userPart = clean.split("@")[0].split(":")[0];
@@ -126,9 +131,8 @@ export class WhatsAppIdUtils {
     // Standard phone length validation (E.164: usually 15, but LIDs are 20-30)
     if (userPart.length < 7 || userPart.length > 30) return null;
 
-    // [SEC] Final validation: Is this a realistic phone number OR LID?
-    const isLidMode = this.isLid(clean);
-    if (!isLidMode && !this.isRealPhoneNumber(userPart)) {
+    // [SEC] Final validation: must be a realistic phone number.
+    if (!this.isRealPhoneNumber(userPart)) {
       return null;
     }
 
@@ -192,9 +196,23 @@ export class WhatsAppIdUtils {
   static isValidCrmPhone(value: string | null | undefined): boolean {
     if (!value) return false;
     const digits = String(value).replace(/\D/g, "");
+
+    // Cheap pre-filter: reject obvious LIDs/groups/garbage by pattern.
     if (!this.isRealPhoneNumber(digits)) return false;
     // Real subscriber numbers don't exceed 13 digits; 14+ are LIDs / internal IDs.
     if (digits.length > 13) return false;
+
+    // [SEC] AUTHORITATIVE CHECK: validate as a real E.164 number per libphonenumber's
+    // per-country rules. This is what distinguishes a bare 13-digit LID (e.g.
+    // 3939223269449, 4797495271544 — invalid for their apparent country codes) from a
+    // genuine subscriber number of any country. Without it, LIDs that happen to be
+    // <=13 digits slip into the CRM Contacts list. Numbers are stored without "+".
+    try {
+      if (!isValidPhoneNumber(`+${digits}`)) return false;
+    } catch {
+      return false;
+    }
+
     return true;
   }
 

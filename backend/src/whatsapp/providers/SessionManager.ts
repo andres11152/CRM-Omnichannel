@@ -431,6 +431,14 @@ export class SessionManager implements ISessionManager {
           })
           .catch(() => {}),
       );
+    } else {
+      await TenantContextManager.runAsSystem(async () =>
+        whatsappSessionRepository
+          .updateSystemSession(sessionId, {
+            status: "DISCONNECTED",
+          })
+          .catch(() => {}),
+      );
     }
   }
 

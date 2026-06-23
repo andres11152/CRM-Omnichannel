@@ -242,15 +242,15 @@ export function bindSessionEvents(
         message?: string;
       };
 
-      const resetConnection = boomError?.output?.statusCode !== DisconnectReason.loggedOut;
+      const isLoggedOut = boomError?.output?.statusCode === DisconnectReason.loggedOut;
       const errorMsg = boomError?.message || "Unknown";
 
-      logger.warn(`[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg}. Reconnect: ${resetConnection}`);
+      logger.warn(`[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg}. Reconnect: true (LoggedOut: ${isLoggedOut})`);
 
       // [SEC] Audit: Disconnected
       await auditService.logWhatsAppEvent(companyId, sessionId, "DISCONNECTED", { 
         reason: errorMsg, 
-        isReconnecting: resetConnection,
+        isReconnecting: true,
         statusCode: boomError?.output?.statusCode
       });
 
@@ -263,19 +263,25 @@ export function bindSessionEvents(
       sock.ev.removeAllListeners("presence.update");
       healer.stopHeartbeat(sessionId);
 
-      if (resetConnection) {
-        sessionMetadata.set(sessionId, { companyId, status: "DISCONNECTED", isPairing: false });
-        healer.scheduleReconnect(sessionId, errorMsg, (sid) => reconnectSession(sid));
-      } else {
-        await terminateSession(sessionId, true);
-      }
+      sessionMetadata.set(sessionId, { companyId, status: "DISCONNECTED", isPairing: false });
+      
+      healer.scheduleReconnect(
+        sessionId,
+        errorMsg,
+        (sid) => reconnectSession(sid),
+        isLoggedOut,
+        async () => {
+          logger.warn(`[SessionEventBinder] LoggedOut attempts exhausted for session ${sessionId}. Performing soft-disconnect.`);
+          await terminateSession(sessionId, false);
+        }
+      );
 
       eventBus.publish({
         type: WhatsAppEventType.SESSION_DISCONNECTED,
         sessionId,
         companyId,
         timestamp: new Date(),
-        data: { reason: errorMsg, isReconnecting: resetConnection },
+        data: { reason: errorMsg, isReconnecting: true },
       });
     }
   });

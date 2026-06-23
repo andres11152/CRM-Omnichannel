@@ -35,6 +35,7 @@ export class ConnectionHealer {
   private heartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
   private retryTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private retryCounts: Map<string, number> = new Map();
+  private loggedOutRetryCounts: Map<string, number> = new Map();
   // Tracks consecutive heartbeat probe failures per session for zombie detection
   private heartbeatFailures: Map<string, number> = new Map();
   private readonly config: Required<ConnectionHealerConfig>;
@@ -141,6 +142,7 @@ export class ConnectionHealer {
    */
   resetRetryCount(sessionId: string): void {
     this.retryCounts.set(sessionId, 0);
+    this.loggedOutRetryCounts.set(sessionId, 0);
   }
 
   /**
@@ -151,11 +153,30 @@ export class ConnectionHealer {
     sessionId: string,
     errorMessage: string,
     reconnectFn: ReconnectFn,
+    isLoggedOut: boolean = false,
+    onLoggedOutExhausted?: () => Promise<void>,
   ): void {
     this.cancelReconnect(sessionId);
 
     const currentRetry = this.retryCounts.get(sessionId) || 0;
     const isConflict = errorMessage.toLowerCase().includes("conflict");
+
+    if (isLoggedOut) {
+      const loggedOutRetries = this.loggedOutRetryCounts.get(sessionId) || 0;
+      if (loggedOutRetries >= 5) {
+        logger.error(
+          `[ConnectionHealer] [FATAL] Session ${sessionId} failed to reconnect after ${loggedOutRetries} consecutive loggedOut (401) attempts. Stopping reconnect loop.`
+        );
+        this.loggedOutRetryCounts.delete(sessionId);
+        if (onLoggedOutExhausted) {
+          onLoggedOutExhausted().catch((e) =>
+            logger.error(`[ConnectionHealer] Failed to execute onLoggedOutExhausted callback: ${e}`)
+          );
+        }
+        return;
+      }
+      this.loggedOutRetryCounts.set(sessionId, loggedOutRetries + 1);
+    }
 
     // Strategy: Base * 2^retry + (Jitter)
     // Retry 0: 5s
@@ -175,18 +196,27 @@ export class ConnectionHealer {
     delayMs += Math.random() * (delayMs * 0.1);
 
     logger.warn(
-      `[ConnectionHealer] [SYNC] Scheduling reconnect #${currentRetry + 1} for ${sessionId} in ${Math.round(delayMs / 1000)}s (Conflict: ${isConflict})`,
+      `[ConnectionHealer] [SYNC] Scheduling reconnect #${currentRetry + 1} for ${sessionId} in ${Math.round(delayMs / 1000)}s (Conflict: ${isConflict}, LoggedOut Retry: ${isLoggedOut})`,
     );
 
     const timeout = setTimeout(() => {
       this.retryTimeouts.delete(sessionId);
       this.retryCounts.set(sessionId, currentRetry + 1); // Increment for next time if it fails again
       
-      reconnectFn(sessionId).catch((e) =>
+      reconnectFn(sessionId).catch((e) => {
         logger.error(
-          `[ConnectionHealer] Reconnect attempt failed for ${sessionId}: ${e}`,
-        ),
-      );
+          `[ConnectionHealer] Reconnect attempt failed for ${sessionId}: ${e}. Rescheduling.`,
+        );
+        // [IMMUNITY RESILIENCE] If reconnectFn throws during execution (e.g. database error, proxy error, DNS timeout),
+        // we reschedule the next reconnect using exponential backoff instead of breaking the reconnect loop!
+        this.scheduleReconnect(
+          sessionId,
+          e instanceof Error ? e.message : String(e),
+          reconnectFn,
+          isLoggedOut,
+          onLoggedOutExhausted
+        );
+      });
     }, delayMs);
 
     this.retryTimeouts.set(sessionId, timeout);
@@ -217,6 +247,7 @@ export class ConnectionHealer {
   cleanupSession(sessionId: string): void {
     this.stopHeartbeat(sessionId);
     this.cancelReconnect(sessionId);
+    this.loggedOutRetryCounts.delete(sessionId);
   }
 
   /**

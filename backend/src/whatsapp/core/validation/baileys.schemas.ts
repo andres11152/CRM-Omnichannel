@@ -128,6 +128,12 @@ export const HistorySyncSchema = z
     chats: z.array(z.unknown()).optional(),
     contacts: z.array(z.unknown()).optional(),
     isLatest: z.boolean().optional(),
+    // Baileys tags each history batch with its origin. ON_DEMAND batches are the
+    // result of an explicit fetchMessageHistory() call (manual / on-demand sync) and
+    // MUST be ingested in full — never truncated like the bulk initial bootstrap.
+    syncType: z.number().optional(),
+    progress: z.number().nullable().optional(),
+    peerDataRequestSessionId: z.string().nullable().optional(),
   })
   .passthrough();
 

@@ -15,6 +15,7 @@ import {
   DisconnectReason,
   WAMessage,
   WAMessageUpdate,
+  proto,
 } from "@whiskeysockets/baileys";
 import { HistoryChat, HistoryContact } from "@/services/sync/ChatSyncIngest";
 import { EventBus } from "../../core/events/EventBus";
@@ -83,19 +84,26 @@ export function bindSessionEvents(
     );
     if (!validated) return;
 
-    const { messages, chats, contacts } = validated;
-    
+    const { messages, chats, contacts, syncType } = validated;
+
+    // ON_DEMAND batches come from an explicit fetchMessageHistory() (manual / on-demand
+    // sync the agent triggered). They must be ingested in FULL — truncating them is
+    // exactly what dropped the older backfilled messages ("omite algunos"). The per-chat
+    // cap only protects the DB pool during the massive initial bootstrap on first link.
+    const isOnDemand =
+      syncType === proto.HistorySync.HistorySyncType.ON_DEMAND;
+
     const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
-    const MAX_MESSAGES_PER_CHAT = process.env.WA_HISTORY_LIMIT_PER_CHAT 
-      ? parseInt(process.env.WA_HISTORY_LIMIT_PER_CHAT, 10) 
-      : (syncFullHistory ? 100 : 20);
+    const MAX_MESSAGES_PER_CHAT = process.env.WA_HISTORY_LIMIT_PER_CHAT
+      ? parseInt(process.env.WA_HISTORY_LIMIT_PER_CHAT, 10)
+      : (syncFullHistory ? 200 : 60);
 
     const syncMessages: WAMessage[] = [];
-    
+
     if (messages && messages.length > 0) {
       const messagesByChat = new Map<string, WAMessage[]>();
       const rawMessages = messages as WAMessage[];
-      
+
       for (const msg of rawMessages) {
         const jid = msg.key?.remoteJid;
         if (!jid) continue;
@@ -109,16 +117,19 @@ export function bindSessionEvents(
           const tB = Number(b.messageTimestamp || 0);
           return tB - tA;
         });
-        syncMessages.push(...chatMsgs.slice(0, MAX_MESSAGES_PER_CHAT));
+        // On-demand: keep everything WhatsApp sent back. Bulk: keep the newest N.
+        syncMessages.push(
+          ...(isOnDemand ? chatMsgs : chatMsgs.slice(0, MAX_MESSAGES_PER_CHAT)),
+        );
       }
 
       logger.info(
-        `[SessionManager]  History Sync for ${sessionId}: ${syncMessages.length} messages, ${chats?.length || 0} chats, ${contacts?.length || 0} contacts`,
+        `[SessionManager]  History Sync for ${sessionId}: ${syncMessages.length} messages, ${chats?.length || 0} chats, ${contacts?.length || 0} contacts ${isOnDemand ? "[ON-DEMAND · full ingest]" : "[bulk · capped]"}`,
       );
     }
 
     chatSyncService
-      .handleHistorySync(companyId, syncMessages, chats as HistoryChat[], contacts as HistoryContact[])
+      .handleHistorySync(companyId, syncMessages, chats as HistoryChat[], contacts as HistoryContact[], { onDemand: isOnDemand })
       .catch((err) => {
         logger.error(`[SessionManager] History ingest failed: ${err}`);
       });

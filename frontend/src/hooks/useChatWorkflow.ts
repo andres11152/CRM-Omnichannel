@@ -254,6 +254,24 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     };
     socketService.on('message.deleted', handleMessageDeleted);
 
+    // [HISTORY SYNC] When the backend finishes backfilling history (on-demand auto-sync
+    // via contextSync OR late-arriving manual sync batches via messaging-history.set), it
+    // emits conversation:history_synced. Without this listener the messages were written to
+    // the DB but the open chat never refreshed — so it looked like sync "did nothing".
+    const handleHistorySynced = (payload: { conversationId?: string; channelId?: string; newMessages?: number }) => {
+      const matches =
+        payload.conversationId === ticketId ||
+        payload.conversationId === activeContact.id ||
+        payload.channelId === activeContact.phone?.replace(/\D/g, "");
+      if (!matches) return;
+      console.log(`[Workflow] [WS] History synced (${payload.newMessages ?? "?"} msgs) — refreshing chat`);
+      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+      if (payload.newMessages && payload.newMessages > 0) {
+        toast.success(`${payload.newMessages} mensajes del historial importados`);
+      }
+    };
+    socketService.on('conversation:history_synced', handleHistorySynced);
+
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       socketService.off('message.received', handleIncomingMessage);
@@ -262,6 +280,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       socketService.off('conversation:typing', handleTypingStatus);
       socketService.off('message.pinned', handlePinEvent);
       socketService.off('message.deleted', handleMessageDeleted);
+      socketService.off('conversation:history_synced', handleHistorySynced);
     };
   }, [ticketId, activeContact.id, activeContact.phone, queryClient, aiConfig.isActive]);
 
@@ -358,13 +377,19 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       setIsSyncing(true);
       const loadingToast = toast.loading("Sincronizando historial…");
       
-      await chatService.syncFullHistory(ticketId);
-      
+      const result = await chatService.syncFullHistory(ticketId);
+
       // Invalidate query to refresh messages
       await queryClient.invalidateQueries({ queryKey: ["messages", ticketId] });
-      
+
       toast.dismiss(loadingToast);
-      toast.success("Historial sincronizado");
+      if (result.newMessages > 0) {
+        toast.success(`${result.newMessages} mensajes importados`);
+      } else {
+        // Late on-demand batches may still arrive via conversation:history_synced (handled
+        // above). Be honest: nothing was available synchronously.
+        toast.info("No hay mensajes nuevos por ahora");
+      }
     } catch (err) {
       console.error("[Workflow] Sync error:", err);
       toast.error("Error al sincronizar");

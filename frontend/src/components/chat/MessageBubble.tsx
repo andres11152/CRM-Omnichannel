@@ -223,7 +223,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
         {/* Message Bubble */}
         <div
-          className={`rounded-2xl px-4 py-2 shadow-md transition-all relative group ${
+          className={`rounded-2xl px-3 py-1.5 shadow-md transition-all relative group ${
             isAgent
               ? "rounded-br-none bg-[#00a884] text-white"
               : "rounded-bl-none border bg-[#f1f5f9] text-[#0f172a] border-[#e2e8f0] dark:bg-[#202c33] dark:text-[#e9edef] dark:border-[#2a3942]"
@@ -299,14 +299,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                         <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
                           <span className="text-white text-3xl font-bold drop-shadow-lg">
                             +{remaining}
-                          </span>
-                        </div>
-                      )}
-                      {/* Timestamp on last visible image */}
-                      {isLast && !showOverlay && msg.timestamp && (
-                        <div className="absolute bottom-1 right-1.5 bg-black/50 backdrop-blur-sm rounded px-1.5 py-0.5">
-                          <span className="text-[10px] text-white/90 font-medium">
-                            {formatTime(msg.timestamp)}
                           </span>
                         </div>
                       )}
@@ -498,6 +490,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             );
           })()}
 
+          {/* Inline timestamp + status (inside bubble, bottom-right corner — saves vertical space) */}
+          <div
+            className={`flex items-center justify-end gap-1 mt-0.5 -mb-0.5 select-none ${
+              isAgent ? "text-white/70" : "text-gray-400 dark:text-gray-500"
+            }`}
+          >
+            <span className="text-[10px] leading-none whitespace-nowrap">
+              {formatTime(message.timestamp)}
+            </span>
+            {isAgent && message.status && <MessageStatus status={message.status} />}
+          </div>
+
           {/* Floating Reactions List (Subtle Enterprise Style) */}
           {reactions.length > 0 && (
             <div
@@ -532,20 +536,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             </div>
           )}
         </div>
-
-        {/* Timestamp and Status */}
-        <div
-          className={`flex items-center gap-2 mt-1 ${isAgent ? "justify-end" : "justify-start"}`}
-        >
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            {formatTime(message.timestamp)}
-          </span>
-
-          {/* Message Status (only for agent messages) */}
-          {isAgent && message.status && (
-            <MessageStatus status={message.status} />
-          )}
-        </div>
       </div>
     </div>
   );
@@ -576,27 +566,27 @@ const MessageStatus: React.FC<{ status: Message["status"] }> = ({ status }) => {
         );
       case "sent":
         return (
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         );
       case "delivered":
         return (
-          <div className="flex -space-x-1">
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          <div className="flex -space-x-1.5">
+            <svg className="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            <svg className="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
           </div>
         );
       case "read":
         return (
-          <div className="flex -space-x-1">
-            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          <div className="flex -space-x-1.5 text-sky-300">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
           </div>
         );
       case "failed":
         return (
-          <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         );

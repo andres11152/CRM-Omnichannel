@@ -202,7 +202,11 @@ export class SessionManager implements ISessionManager {
       `[SessionManager] Using WA v${version.join(".")}, isLatest: ${isLatest}`,
     );
 
-    // [SEC] MEMORY OPTIMIZATION: Default to false unless explicitly enabled
+    // [HISTORY] OPT-IN ONLY. Enabling this makes the phone push the ENTIRE chat history
+    // (hundreds of chats × thousands of messages) via repeated messaging-history.set bursts.
+    // On this deployment that floods the Prisma pool and Postgres starts closing connections
+    // (scheduler/credential upserts fail). So default OFF; only recent history syncs on link.
+    // Set WA_SYNC_FULL_HISTORY=true ONLY if the DB (connection_limit) can absorb the burst.
     const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
 
     // Fetch session details from DB to read the proxyUrl if configured

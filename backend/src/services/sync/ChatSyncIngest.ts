@@ -46,6 +46,11 @@ export interface BaileysStore {
  */
 export class ChatSyncIngest {
   private activeContextSyncs = new Set<string>();
+  // [LOAD] Cooldown so opening a chat repeatedly doesn't fire an 8s on-demand fetch
+  // every time (which otherwise hammers the DB/socket — observed in prod logs). Once a
+  // conversation has attempted an on-demand backfill, skip re-attempts for this window.
+  private contextSyncCooldown = new Map<string, number>();
+  private static readonly CONTEXT_SYNC_COOLDOWN_MS = 5 * 60 * 1000;
 
   // [POOL-SAFETY] Serial executor for history syncs. Baileys can fire many
   // `messaging-history.set` events in a burst (reconnect / full re-link), and each
@@ -66,6 +71,7 @@ export class ChatSyncIngest {
     messages: WAMessage[],
     chats?: HistoryChat[],
     contacts?: HistoryContact[],
+    options?: { onDemand?: boolean },
   ): Promise<void> {
     if ((!messages || messages.length === 0) && (!chats || chats.length === 0)) return;
 
@@ -73,7 +79,7 @@ export class ChatSyncIngest {
     this.pendingHistorySyncs++;
     this.historySyncChain = this.historySyncChain
       .catch(() => {}) // never let one failure break the chain
-      .then(() => this.runHistorySync(companyId, messages, chats, contacts))
+      .then(() => this.runHistorySync(companyId, messages, chats, contacts, options))
       .finally(() => {
         this.pendingHistorySyncs--;
       });
@@ -84,6 +90,7 @@ export class ChatSyncIngest {
     messages: WAMessage[],
     chats?: HistoryChat[],
     contacts?: HistoryContact[],
+    options?: { onDemand?: boolean },
   ): Promise<void> {
     await TenantContextManager.run(
       { companyId, userId: "system", requestId: `history-sync-${companyId}` },
@@ -122,7 +129,16 @@ export class ChatSyncIngest {
           // 3. Process each conversation. Yield to the event loop between conversations
           // so the API stays responsive even during a large sync.
           for (const [phone, chatMsgs] of msgsByPhone.entries()) {
-            await this.ingestConversationBatch(companyId, phone, chatMsgs, admin.id);
+            const conversationId = await this.ingestConversationBatch(companyId, phone, chatMsgs, admin.id);
+            // On-demand backfill: tell the frontend to refetch this chat now that
+            // older messages have landed in the DB (handles batches that arrive after
+            // the HTTP sync request already returned).
+            if (options?.onDemand && conversationId) {
+              gateway.emitToCompany(companyId, "conversation:history_synced", {
+                conversationId,
+                newMessages: chatMsgs.length,
+              });
+            }
             await new Promise((r) => setImmediate(r));
           }
 
@@ -145,6 +161,14 @@ export class ChatSyncIngest {
   async contextSync(companyId: string, conversationId: string, channelId: string): Promise<void> {
     const lockKey = `${companyId}:${conversationId}`;
     if (this.activeContextSyncs.has(lockKey)) return;
+
+    // [LOAD] Skip if we already attempted a backfill for this chat recently. Prevents the
+    // 8s on-demand fetch from re-running on every chat re-open (a major source of DB load).
+    const lastAttempt = this.contextSyncCooldown.get(lockKey);
+    if (lastAttempt && Date.now() - lastAttempt < ChatSyncIngest.CONTEXT_SYNC_COOLDOWN_MS) {
+      return;
+    }
+    this.contextSyncCooldown.set(lockKey, Date.now());
 
     this.activeContextSyncs.add(lockKey);
     gateway.emitToCompany(companyId, "conversation:sync_started", { conversationId, channelId, type: "chat_context" });
@@ -440,7 +464,7 @@ export class ChatSyncIngest {
   // HELPERS
   // ────────────────────────────────────────────────
 
-  private async ingestConversationBatch(companyId: string, phone: string, msgs: WAMessage[], adminId: string) {
+  private async ingestConversationBatch(companyId: string, phone: string, msgs: WAMessage[], adminId: string): Promise<string | null> {
     const isGroup = phone.includes("@g.us");
     const cleanPhone = isGroup ? WhatsAppIdUtils.cleanChannelId(phone) : phone;
     const bestNameMsg = msgs.find(m => !m.key.fromMe && m.pushName);
@@ -451,7 +475,7 @@ export class ChatSyncIngest {
       name: isGroup ? undefined : (bestNameMsg?.pushName || undefined)
     });
 
-    if (!conversation) return; // Skipped invalid phone (LID guard)
+    if (!conversation) return null; // Skipped invalid phone (LID guard)
 
     const senderIdCache = new Map<string, string>();
     const { chatService } = await import("@/services/ChatService");
@@ -560,6 +584,8 @@ export class ChatSyncIngest {
     if (validBatch.length > 0) {
       await messageRepository.createMany({ data: validBatch, skipDuplicates: true });
     }
+
+    return conversation.id;
   }
 
   private async handleReaction(companyId: string, react: { key?: { id?: string }, text?: string | null }, senderId: string) {
@@ -610,8 +636,13 @@ export class ChatSyncIngest {
         if (mapped) return mapped.split("@")[0];
       }
 
-      // ENTERPRISE FIX: Fallback to raw LID prefix instead of dropping history!
-      return jid.split("@")[0].split(":")[0];
+      // [LOAD/DATA] UNRESOLVED LID → SKIP. Previously we fell back to the raw LID base,
+      // which made the history sync create a junk Conversation for EVERY unresolvable LID
+      // chat (hundreds of WhatsApp internal IDs / group participants). That flooded the
+      // Prisma pool until Postgres closed connections (P1017) and the whole API 500'd.
+      // A LID with no phone mapping is not an addressable contact, so dropping it loses
+      // nothing useful and keeps the DB load bounded to REAL chats.
+      return null;
     }
 
     // Normal @s.whatsapp.net JID → extract phone number

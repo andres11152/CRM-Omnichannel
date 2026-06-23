@@ -307,7 +307,17 @@ export const useAgentWorkspaceSockets = ({
       );
 
       setTickets((prev) => {
-        const ticketIndex = prev.findIndex((t) => t.id === data.ticket.id);
+        // [DEDUP] Match on the UNIFIED identity (id ↔ conversationId). An optimistic
+        // ticket created from conversation.updated uses conversationId as its `id`, so a
+        // plain `t.id === data.ticket.id` lookup misses it and would append a duplicate.
+        const ticketIndex = prev.findIndex(
+          (t) =>
+            t.id === data.ticket.id ||
+            (data.ticket.conversationId &&
+              (t.conversationId === data.ticket.conversationId ||
+                t.id === data.ticket.conversationId)) ||
+            (t.conversationId && t.conversationId === data.ticket.id),
+        );
 
         // [SEC] 100-YEAR FIX: Role-aware visibility
         // ADMINs/SUPERVISORs see ALL tickets (company-wide view)
@@ -390,7 +400,8 @@ export const useAgentWorkspaceSockets = ({
             setActiveTicketId(null);
           }
 
-          return prev.filter((t) => t.id !== incoming.id);
+          // Remove the matched entry (could be the optimistic one keyed by conversationId)
+          return prev.filter((_, idx) => idx !== ticketIndex);
         }
 
         // Update logic (preserve local overrides if valid)
@@ -475,14 +486,18 @@ export const useAgentWorkspaceSockets = ({
         enrichedTicket.status = "IN_PROGRESS";
       }
 
-      // Add ticket to list if not already present
+      // Add ticket to list if not already present (unified id ↔ conversationId match
+      // so we reconcile with an optimistic entry instead of duplicating it).
       setTickets((prev) => {
-        const exists = prev.some((t) => t.id === enrichedTicket.id);
-        if (exists) {
-          // Update existing ticket
-          return prev.map((t) =>
-            t.id === enrichedTicket.id ? { ...t, ...enrichedTicket } : t,
-          );
+        const matches = (t: Ticket) =>
+          t.id === enrichedTicket.id ||
+          (enrichedTicket.conversationId &&
+            (t.conversationId === enrichedTicket.conversationId ||
+              t.id === enrichedTicket.conversationId)) ||
+          (t.conversationId && t.conversationId === enrichedTicket.id);
+
+        if (prev.some(matches)) {
+          return prev.map((t) => (matches(t) ? { ...t, ...enrichedTicket } : t));
         }
         // Add new ticket to the top
         return [enrichedTicket, ...prev];

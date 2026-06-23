@@ -24,23 +24,58 @@ export interface UseAgentWorkspaceOptions {
 // TICKET PROCESSING UTILITIES (Pure Functions)
 // ────────────────────────────────────────────────
 
-/** Deduplicates tickets by conversationId, keeping the most recent */
+/**
+ * Deduplicates tickets that point to the SAME underlying conversation, keeping the
+ * most recent. Identity is unified across BOTH `id` and `conversationId`: an optimistic
+ * ticket created from a socket event uses the conversationId as its `id`, while the real
+ * server ticket has its own `id` + a `conversationId`. They must collapse into one row
+ * even though their `id`s differ. We therefore link any tickets that share ANY identity
+ * value (a tickets's id OR conversationId matching another's id OR conversationId).
+ */
 function deduplicateTickets(tickets: Ticket[]): Ticket[] {
-  const map = new Map<string, Ticket>();
-  tickets.forEach((ticket) => {
-    const key = ticket.conversationId || ticket.id;
-    if (!map.has(key)) {
-      map.set(key, ticket);
-    } else {
-      const existing = map.get(key)!;
-      const existingTime = new Date(existing.lastMessageAt || 0).getTime();
-      const newTime = new Date(ticket.lastMessageAt || 0).getTime();
-      if (newTime > existingTime) {
-        map.set(key, ticket);
-      }
+  const newer = (a: Ticket, b: Ticket): Ticket => {
+    const ta = new Date(a.lastMessageAt || 0).getTime();
+    const tb = new Date(b.lastMessageAt || 0).getTime();
+    // Prefer the most recent; on a tie prefer the one with a real conversationId.
+    if (tb > ta) return b;
+    if (ta > tb) return a;
+    return a.conversationId ? a : b;
+  };
+
+  // canonical[identityValue] -> representative ticket (deduped winner)
+  const canonical = new Map<string, Ticket>();
+  const order: Ticket[] = [];
+
+  for (const ticket of tickets) {
+    const keys = [ticket.id, ticket.conversationId].filter(Boolean) as string[];
+    const existing = keys.map((k) => canonical.get(k)).find(Boolean);
+
+    if (!existing) {
+      order.push(ticket);
+      for (const k of keys) canonical.set(k, ticket);
+      continue;
     }
-  });
-  return Array.from(map.values());
+
+    const winner = newer(existing, ticket);
+    // Replace the loser in the ordered output.
+    const loser = winner === existing ? ticket : existing;
+    if (winner !== existing) {
+      const idx = order.indexOf(existing);
+      if (idx !== -1) order[idx] = winner;
+    }
+    // Point every identity value (from both tickets) at the winner.
+    const allKeys = [
+      ...keys,
+      existing.id,
+      existing.conversationId,
+      loser.id,
+      loser.conversationId,
+    ].filter(Boolean) as string[];
+    for (const k of allKeys) canonical.set(k, winner);
+  }
+
+  // De-dupe the order array (a winner could appear more than once after replacement).
+  return Array.from(new Set(order));
 }
 
 /** Merges server tickets with protected local tickets (race condition guard) */

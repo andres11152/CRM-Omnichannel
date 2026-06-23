@@ -91,8 +91,12 @@ class ChatSyncService {
     const { companyId, sessionId, sinceDate, limit, dryRun, conversationId } =
       request;
 
+    // Lock scope: targeted on-demand syncs lock PER CONVERSATION so a long-running
+    // background bulk sync (e.g. right after reconnect) never blocks an agent's manual
+    // "sync history" on a specific chat. Two syncs of the same chat are still deduped.
+    const lockKey = conversationId ? `${companyId}:${conversationId}` : companyId;
 
-    if (this.activeSyncs.get(companyId)) {
+    if (this.activeSyncs.get(lockKey)) {
       return {
         success: false,
         duration: 0,
@@ -100,11 +104,11 @@ class ChatSyncService {
         messagesFound: 0,
         messagesNew: 0,
         messagesDuplicate: 0,
-        errors: ["A sync is already running for this company"],
+        errors: ["A sync is already running for this conversation"],
       };
     }
 
-    this.activeSyncs.set(companyId, true);
+    this.activeSyncs.set(lockKey, true);
     const startTime = Date.now();
     const errors: string[] = [];
 
@@ -306,7 +310,7 @@ class ChatSyncService {
         errors: [...errors, errMsg],
       };
     } finally {
-      this.activeSyncs.set(companyId, false);
+      this.activeSyncs.set(lockKey, false);
     }
   }
 
@@ -319,8 +323,9 @@ class ChatSyncService {
     messages: WAMessage[],
     chats?: HistoryChat[],
     contacts?: HistoryContact[],
+    options?: { onDemand?: boolean },
   ): Promise<void> {
-    return this.ingest.handleHistorySync(companyId, messages, chats, contacts);
+    return this.ingest.handleHistorySync(companyId, messages, chats, contacts, options);
   }
 
   async contextSync(

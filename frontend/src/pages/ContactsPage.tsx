@@ -366,13 +366,23 @@ export const ContactsPage: React.FC = () => {
   };
 
   // Server-side filtering is active, so we use contacts directly
-    const displayContacts = contacts;
+  const displayContacts = contacts;
 
-  
-  
-  
-  
-  
+  // ── Display helpers (hide internal/technical identifiers from the UI) ──
+  const isFakeEmail = (email?: string | null) =>
+    !!email &&
+    (email.includes("@whatsapp.user") ||
+      email.includes("@c.us") ||
+      email.includes("@lid"));
+  const displayEmail = (email?: string | null) =>
+    !email || isFakeEmail(email) ? null : email;
+  const displayName = (c: Contact) =>
+    c.name && c.name !== "Unknown Contact" ? c.name : c.phone || "Sin nombre";
+  const initialOf = (c: Contact) => {
+    const base = displayName(c).trim();
+    const ch = base.charAt(0).toUpperCase();
+    return /[A-Z0-9]/.test(ch) ? ch : "#";
+  };
 
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark">
@@ -434,10 +444,10 @@ export const ContactsPage: React.FC = () => {
       />
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {/* TOOLBAR */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-20 bg-reply-bg/80 dark:bg-reply-bg-dark/80 backdrop-blur-xl py-2">
-            <div className="relative group flex-1 max-w-2xl">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* SEARCH BAR */}
+          <div className="sticky top-0 z-20 bg-reply-bg/80 dark:bg-reply-bg-dark/80 backdrop-blur-xl py-2">
+            <div className="relative group w-full">
               <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
               <input
                 type="text"
@@ -447,35 +457,62 @@ export const ContactsPage: React.FC = () => {
                 className="w-full pl-12 pr-6 py-4 bg-reply-surface dark:bg-reply-panel-dark border border-reply-border dark:border-reply-border-dark rounded-[1.5rem] shadow-sm focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand transition-all outline-none font-medium text-reply-text-primary dark:text-reply-text-primary-dark"
               />
             </div>
+          </div>
 
-            <div className="flex items-center gap-3">
-              {/* Auto-import WhatsApp contacts toggle (opt-in). OFF = no se crean solos. */}
+          {/* WHATSAPP SYNC PANEL — self-explanatory enterprise control */}
+          <div className="bg-reply-surface dark:bg-reply-panel-dark rounded-[1.75rem] border border-reply-border dark:border-reply-border-dark shadow-sm overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
+              <div className="flex items-start gap-4 min-w-0">
+                <div className="h-12 w-12 shrink-0 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <MessageSquare className="w-6 h-6 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-black text-gray-900 dark:text-white tracking-tight">
+                      Sincronización de WhatsApp
+                    </h3>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                        autoImportWa
+                          ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50"
+                          : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-reply-border-dark"
+                      }`}
+                    >
+                      {autoImportWa ? "Automático activado" : "Manual"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1 leading-relaxed max-w-xl">
+                    {autoImportWa
+                      ? "Cada chat de WhatsApp con número real se guarda como contacto automáticamente. Los identificadores internos (LIDs) nunca se importan."
+                      : "Los contactos no se crean solos. Activa el interruptor para guardar automáticamente cada chat con número real, o usa “Importar WhatsApp” para una importación puntual."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle with explicit ON/OFF label */}
               <button
                 onClick={handleToggleAutoImport}
                 disabled={savingAutoImport}
+                role="switch"
+                aria-checked={autoImportWa}
                 title="Cuando está activo, los chats de WhatsApp con número real crean contactos automáticamente. Los LIDs nunca se importan."
-                className="flex items-center gap-2 px-4 py-2 bg-reply-surface dark:bg-reply-panel-dark rounded-2xl border border-reply-border dark:border-reply-border-dark shadow-sm disabled:opacity-50"
+                className="flex items-center justify-between sm:justify-center gap-3 shrink-0 px-4 py-3 sm:py-2.5 bg-reply-bg dark:bg-gray-800/50 rounded-2xl border border-reply-border dark:border-reply-border-dark shadow-sm disabled:opacity-50 hover:border-emerald-400 dark:hover:border-emerald-600 transition-colors"
               >
+                <span className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                  Auto-importar
+                </span>
                 <span
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    autoImportWa ? "bg-cyan-500" : "bg-gray-400/50"
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    autoImportWa ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      autoImportWa ? "translate-x-4" : "translate-x-0.5"
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                      autoImportWa ? "translate-x-[22px]" : "translate-x-0.5"
                     }`}
                   />
                 </span>
-                <span className="hidden sm:inline text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
-                  Auto-importar WhatsApp
-                </span>
               </button>
-
-              <div className="hidden sm:flex px-4 py-2 bg-reply-surface dark:bg-reply-panel-dark rounded-2xl border border-reply-border dark:border-reply-border-dark shadow-sm text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-                {totalResults} {t("navigation.contacts")}
-              </div>
             </div>
           </div>
 
@@ -490,18 +527,38 @@ export const ContactsPage: React.FC = () => {
               ))}
             </div>
           ) : displayContacts.length === 0 ? (
-            <div className="text-center py-24 bg-reply-surface dark:bg-reply-panel-dark rounded-[3rem] border border-dashed border-reply-border dark:border-reply-border-dark shadow-inner">
+            <div className="text-center py-20 px-6 bg-reply-surface dark:bg-reply-panel-dark rounded-[3rem] border border-dashed border-reply-border dark:border-reply-border-dark shadow-inner">
               <div className="w-24 h-24 bg-reply-bg dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform hover:scale-110">
                 <User className="w-10 h-10 text-gray-300" />
               </div>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                {debouncedSearch ? t("common.unknown") : t("ai_config.assistants.empty_title")}
+                {debouncedSearch
+                  ? "Sin resultados"
+                  : "Aún no tienes contactos"}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
                 {debouncedSearch
-                  ? t("common.error")
-                  : t("ai_config.assistants.empty_desc")}
+                  ? `No encontramos contactos para “${debouncedSearch}”. Prueba con otro término.`
+                  : "Crea tu primer contacto manualmente o importa los chats de WhatsApp con número real."}
               </p>
+              {!debouncedSearch && (
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
+                  <button
+                    onClick={() => handleOpenModal()}
+                    className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-500/20 transition-all"
+                  >
+                    {t("common.new")}
+                  </button>
+                  <button
+                    onClick={handleImportWhatsApp}
+                    disabled={importingWa}
+                    className="px-6 py-3 bg-reply-bg dark:bg-gray-800 border border-reply-border dark:border-reply-border-dark text-gray-700 dark:text-gray-200 rounded-xl font-bold hover:border-emerald-400 disabled:opacity-50 transition-all flex items-center gap-2"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    {importingWa ? "Importando…" : "Importar WhatsApp"}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -514,11 +571,11 @@ export const ContactsPage: React.FC = () => {
                   >
                     <div className="flex items-center gap-5 mb-5">
                       <div className="h-16 w-16 rounded-[1.25rem] bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-2xl font-black shadow-xl shadow-cyan-500/20">
-                        {contact.name.charAt(0).toUpperCase()}
+                        {initialOf(contact)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="text-lg font-black text-gray-900 dark:text-white truncate">
-                          {contact.name}
+                          {displayName(contact)}
                         </h4>
                         <div className="flex items-center gap-1.5 mt-1">
                           <div className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -553,8 +610,10 @@ export const ContactsPage: React.FC = () => {
                             <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                           </svg>
                         </div>
-                        <span className="text-sm font-semibold truncate">
-                          {contact.email || t("common.unknown")}
+                        <span
+                          className={`text-sm truncate ${displayEmail(contact.email) ? "font-semibold" : "italic text-gray-400 dark:text-gray-500 font-medium"}`}
+                        >
+                          {displayEmail(contact.email) || "Sin correo registrado"}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
@@ -616,11 +675,11 @@ export const ContactsPage: React.FC = () => {
                         <td className="px-6 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold shadow-lg shadow-cyan-500/10 border-2 border-white dark:border-reply-border-dark transform group-hover:scale-105 transition-all duration-300">
-                              {contact.name.charAt(0).toUpperCase()}
+                              {initialOf(contact)}
                             </div>
                             <div className="min-w-0">
                               <div className="text-sm font-bold text-gray-900 dark:text-white mb-0.5 tracking-tight truncate max-w-[180px]">
-                                {contact.name}
+                                {displayName(contact)}
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -642,8 +701,10 @@ export const ContactsPage: React.FC = () => {
                               >
                                 <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                               </svg>
-                              <span className="truncate max-w-[150px]">
-                                {contact.email || t("common.unknown")}
+                              <span
+                                className={`truncate max-w-[150px] ${displayEmail(contact.email) ? "" : "italic text-gray-400 dark:text-gray-500"}`}
+                              >
+                                {displayEmail(contact.email) || "Sin correo"}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-900 dark:text-white tracking-wider bg-reply-bg dark:bg-gray-800/50 w-fit px-2 py-0.5 rounded-md border border-gray-100 dark:border-reply-border-dark">

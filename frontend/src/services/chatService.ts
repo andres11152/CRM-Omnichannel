@@ -129,9 +129,18 @@ export const toggleGroupSync = async (
 
 /**
  * SYNC FULL HISTORY
+ * Returns counts so the UI can give honest feedback (e.g. "0 nuevos" vs "12 importados").
  */
-export const syncFullHistory = async (ticketId: string): Promise<void> => {
-  await apiClient.post(`/conversations/${ticketId}/sync`);
+export const syncFullHistory = async (
+  ticketId: string,
+): Promise<{ newMessages: number; duplicates: number }> => {
+  const res = await apiClient.post(`/conversations/${ticketId}/sync`);
+  const payload = (res as { data?: { newMessages?: number; duplicates?: number } }).data
+    || (res as { newMessages?: number; duplicates?: number });
+  return {
+    newMessages: payload?.newMessages ?? 0,
+    duplicates: payload?.duplicates ?? 0,
+  };
 };
 
 export const chatService = {

@@ -123,6 +123,11 @@ export const AdminTenantTable: React.FC<Props> = ({
                       <span className="opacity-50">reply.com/</span>
                       {company.slug}
                     </div>
+                    {company.users && company.users.length > 0 && (
+                      <div className="text-[10px] text-indigo-500 dark:text-indigo-400 font-medium mt-0.5">
+                        {company.users[0].email}
+                      </div>
+                    )}
                   </div>
                 </div>
               </td>

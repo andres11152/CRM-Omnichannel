@@ -21,6 +21,8 @@ interface SystemEmailOptions {
   subject: string;
   html: string;
   from?: string;
+  /** Optional plaintext alternative. If omitted, one is derived from the HTML. */
+  text?: string;
 }
 
 export class SystemEmailService {
@@ -77,14 +79,18 @@ export class SystemEmailService {
     const transporter = this.getTransporter();
     const env = getEnv();
 
+    // [DELIVERABILITY] Always send with a friendly display name. A bare address as the
+    // From header lands in spam more often and looks untrustworthy to recipients.
+    const fromAddress = options.from
+      || (env.SMTP_USER ? `"Sentry CRM" <${env.SMTP_USER}>` : '"Sentry CRM" <no-reply@sentry.software>');
+
     const mailOptions = {
-      from:
-        options.from ||
-        env.SMTP_USER ||
-        '"Sentry Software" <no-reply@sentry.software>',
+      from: fromAddress,
       to: options.to,
       subject: options.subject,
       html: options.html,
+      // A plaintext alternative also improves deliverability / spam scoring.
+      text: options.text || options.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
     };
 
     try {

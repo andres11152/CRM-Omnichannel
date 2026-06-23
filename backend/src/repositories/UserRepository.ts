@@ -63,6 +63,17 @@ export class UserRepository extends BaseRepository {
     });
   }
 
+  /**
+   * [SYSTEM] Update a user by id WITHOUT a tenant (companyId) scope.
+   * For system-level flows that legitimately target a single user regardless of tenant
+   * (e.g. password-reset token generation, which also works for global users that have
+   * no companyId). Caller MUST have already authorized the operation. Run inside
+   * TenantContextManager.runAsSystem to bypass RLS.
+   */
+  async updateById(id: string, data: Prisma.UserUpdateInput): Promise<User> {
+    return this.db.user.update({ where: { id }, data });
+  }
+
   async count(args: Prisma.UserCountArgs, companyId?: string): Promise<number> {
     return this.db.user.count(this.applyTenantFilter(args, companyId));
   }

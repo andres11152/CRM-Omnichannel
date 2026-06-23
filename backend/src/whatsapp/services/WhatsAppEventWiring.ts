@@ -7,6 +7,7 @@ import { TenantContextManager } from "@/config/tenantContext";
 import { webhookDispatcher } from "@/services/WebhookDispatcher";
 import { notificationRepository } from "@/repositories/NotificationRepository";
 import { emailService } from "@/services/EmailService";
+import { whatsappDisconnectedEmail } from "@/utils/emailTemplates";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { userRepository } from "@/repositories/UserRepository";
 import { Prisma } from "@prisma/client";
@@ -194,20 +195,17 @@ export class WhatsAppEventWiring {
             }).catch(() => null);
 
             if (admin.email) {
+              const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+              const { html, text } = whatsappDisconnectedEmail({
+                adminName: admin.name,
+                reason: errorReason,
+                reconnectUrl: `${frontendUrl}/settings`,
+              });
               emailService.sendEmail({
                 to: admin.email,
-                subject: "[CRITICAL] Urgent: WhatsApp has disconnected in Sentry CRM",
-                html: `
-                  <div style="font-family: sans-serif; padding: 20px;">
-                    <h2 style="color: #d9534f;">CRM System Alert</h2>
-                    <p>Hello ${admin.name},</p>
-                    <p>We have detected that the WhatsApp connection has been unexpectedly closed.</p>
-                    <p><strong>Reported Reason:</strong> ${errorReason}</p>
-                    <p>This means that <b>no new messages will come in or go out</b> until you take action. Please log in and re-link your device in the Settings section.</p>
-                    <br/>
-                    <p>Regards,<br/>The Sentry CRM Team</p>
-                  </div>
-                `
+                subject: "WhatsApp se desconectó · Sentry CRM",
+                html,
+                text,
               }).catch(() => null);
             }
           }

@@ -46,11 +46,14 @@ const getDatabaseUrl = (): string => {
     `connection_limit=${connLimit}`,
     "pool_timeout=20",
     "connect_timeout=15",
+    "keepalives=1",
+    "keepalives_idle=30",
+    "statement_cache_size=0",
   ].join("&");
   return `${baseUrl}${separator}${poolParams}`;
 };
 
-type MyPrismaAny = {
+type PrismaModelDelegate = {
   [key: string]:
     | {
         findFirst: (args: unknown) => Promise<unknown>;
@@ -78,152 +81,193 @@ const createExtendedClient = () => {
 
   // Log listeners
   basePrisma.$on("warn", (e) => Logger.warn("[Prisma]", e));
-  basePrisma.$on("error", (e) => Logger.error("[Prisma]", e));
+  basePrisma.$on("error", (e) => {
+    const isTransientConnectionClosed = 
+      e.message?.includes("Closed") || 
+      e.message?.includes("connection") || 
+      e.message?.includes("quaint") || 
+      e.message?.includes("P1017");
+
+    if (isTransientConnectionClosed) {
+      Logger.warn(`[Prisma] Connection drop event (reconnection handled automatically): ${e.message}`);
+    } else {
+      Logger.error("[Prisma]", e);
+    }
+  });
 
   return basePrisma.$extends({
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
-          // --- 1. GLOBAL BYPASS ---
-          if (GLOBAL_MODELS.includes(model)) {
-            return query(args);
-          }
+          const maxDbRetries = 3;
+          let lastErr: Error | unknown;
 
-          // --- 2. RLS & SECURITY CONTEXT ---
-          const store = contextStorage.getStore();
-          if (!store) {
-            if (process.env.SKIP_SECURITY_CHECK === "true") return query(args);
-            throw new Error(
-              `[ERROR] SECURITY VIOLATION: Access to ${model} denied.`,
-            );
-          }
+          for (let attempt = 1; attempt <= maxDbRetries; attempt++) {
+            try {
+              // --- 1. GLOBAL BYPASS ---
+              if (GLOBAL_MODELS.includes(model)) {
+                return await query(args);
+              }
 
-          const argsObj = (args || {}) as Record<string, unknown>;
-          const isSystem = store.companyId === "__SYSTEM__";
-          const companyId = isSystem ? null : store.companyId;
+              // --- 2. RLS & SECURITY CONTEXT ---
+              const store = contextStorage.getStore();
+              if (!store) {
+                if (process.env.SKIP_SECURITY_CHECK === "true") return await query(args);
+                throw new Error(
+                  `[ERROR] SECURITY VIOLATION: Access to ${model} denied.`,
+                );
+              }
 
-          // --- 2.1 INJECTION LOGIC (Mandatory Tenant Filtering) ---
-          if (companyId) {
-            const injectToRecord = (target: Record<string, unknown>) => {
-              if (target && typeof target === "object" && !Array.isArray(target)) {
-                // [SEC] SECURITY: Only inject if not already present via relation
-                if (!target.company && !target.companyId) {
-                  target.companyId = companyId;
+              const argsObj = (args || {}) as Record<string, unknown>;
+              const isSystem = store.companyId === "__SYSTEM__";
+              const companyId = isSystem ? null : store.companyId;
+
+              // --- 2.1 INJECTION LOGIC (Mandatory Tenant Filtering) ---
+              if (companyId) {
+                const injectToRecord = (target: Record<string, unknown>) => {
+                  if (target && typeof target === "object" && !Array.isArray(target)) {
+                    // [SEC] SECURITY: Only inject if not already present via relation
+                    if (!target.company && !target.companyId) {
+                      target.companyId = companyId;
+                    }
+                  }
+                };
+
+                // READS & SCALARS
+                const READ_OPS = ["findMany", "findFirst", "findUnique", "findUniqueOrThrow", "count", "aggregate", "groupBy"];
+                if (READ_OPS.includes(operation)) {
+                  argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
+                } 
+                // UPDATES & DELETES
+                else if (["update", "updateMany", "delete", "deleteMany", "upsert"].includes(operation)) {
+                  argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
+                  if (argsObj.data) delete (argsObj.data as Record<string, unknown>).companyId;
+                  if (argsObj.update) delete (argsObj.update as Record<string, unknown>).companyId;
+                  // [SEC] Always filter the target records by companyId
+                  argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
+                  
+                  if (operation === "upsert") {
+                    if (argsObj.create) injectToRecord(argsObj.create as Record<string, unknown>);
+                    // [WARNING] On update part of upsert, we DON'T inject companyId to 'update' data (it's immutable)
+                  } 
+                  // [WARNING] CRITICAL: We NO LONGER inject companyId into 'data' during standalone updates.
+                  // This fixes Prisma collisions and reinforces that companyId is IMMUTABLE after creation.
+                }
+                // CREATES
+                else if (operation === "create" || operation === "createMany") {
+                  if (Array.isArray(argsObj.data)) {
+                    (argsObj.data as Record<string, unknown>[]).forEach((d) => injectToRecord(d));
+                  } else {
+                    injectToRecord((argsObj.data as Record<string, unknown>) || {});
+                  }
                 }
               }
-            };
 
-            // READS & SCALARS
-            const READ_OPS = ["findMany", "findFirst", "findUnique", "findUniqueOrThrow", "count", "aggregate", "groupBy"];
-            if (READ_OPS.includes(operation)) {
-              argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
-            } 
-            // UPDATES & DELETES
-            else if (["update", "updateMany", "delete", "deleteMany", "upsert"].includes(operation)) {
-              argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
-              if (argsObj.data) delete (argsObj.data as Record<string, unknown>).companyId;
-              if (argsObj.update) delete (argsObj.update as Record<string, unknown>).companyId;
-              // [SEC] Always filter the target records by companyId
-              argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
+              // --- 3. SOFT DELETE LOGIC ---
+              const isSoftDeleteModel = SOFT_DELETE_MODELS.includes(model);
+              const includeDeleted = argsObj?.includeDeleted === true;
+
+              if ("includeDeleted" in argsObj) {
+                delete argsObj.includeDeleted;
+              }
+
+              if (isSoftDeleteModel) {
+                const delegateName = model.charAt(0).toLowerCase() + model.slice(1);
+                const prismaUnknown = basePrisma as unknown as PrismaModelDelegate;
+                const delegate = prismaUnknown[delegateName];
+
+                // Turn DELETE into UPDATE with deletedAt (using base delegate)
+                if (delegate) {
+                  if (operation === "delete") {
+                    // For 'delete', basePrisma allows where id etc. Even if we mutated argsObj.where above to include companyId,
+                    // delegate.update on basePrisma will respect it, securing the soft delete!
+                    const deleteWhere = companyId
+                      ? { ...(argsObj.where as Prisma.JsonObject), companyId }
+                      : (argsObj.where as Prisma.JsonObject);
+                    return await delegate.update({
+                      where: deleteWhere,
+                      data: { deletedAt: new Date() },
+                    });
+                  }
+                  if (operation === "deleteMany") {
+                    const deleteWhere = companyId
+                      ? { ...(argsObj.where as Prisma.JsonObject), companyId }
+                      : (argsObj.where as Prisma.JsonObject);
+                    return await delegate.updateMany({
+                      where: deleteWhere,
+                      data: { deletedAt: new Date() },
+                    });
+                  }
+                }
+
+                // Exclude soft-deleted rows from READs
+                if (!includeDeleted) {
+                  if (
+                    [
+                      "findFirst",
+                      "findMany",
+                      "count",
+                      "aggregate",
+                      "groupBy",
+                    ].includes(operation)
+                  ) {
+                    argsObj.where = { ...(argsObj.where as Prisma.JsonObject), deletedAt: null };
+                  }
+                }
+              }
+
+              // --- 4. FIND UNIQUE HANDLER ---
+              // Because 'findUnique' requires strictly unique criteria (like 'id'), we cannot easily add 'companyId' or 'deletedAt'
+              // to its 'where' object without Prisma complaining. Therefore, we convert findUnique -> findFirst using the base delegate.
+              if (operation === "findUnique" || operation === "findUniqueOrThrow") {
+                const delegateName = model.charAt(0).toLowerCase() + model.slice(1);
+                const prismaUnknown = basePrisma as unknown as PrismaModelDelegate;
+                const delegate = prismaUnknown[delegateName];
+
+                if (delegate?.findFirst) {
+                  const findFirstWhere = { ...(argsObj.where as Prisma.JsonObject) };
+                  if (companyId) (findFirstWhere as Prisma.JsonObject).companyId = companyId;
+                  if (isSoftDeleteModel && !includeDeleted)
+                    (findFirstWhere as Prisma.JsonObject).deletedAt = null;
+
+                  const result = await delegate.findFirst({
+                    ...argsObj,
+                    where: findFirstWhere,
+                  });
+
+                  if (!result && operation === "findUniqueOrThrow") {
+                    throw new Error(`Record not found for model ${model}`);
+                  }
+                  return result;
+                }
+              }
+
+              // All other standard queries fall through
+              return await query(argsObj);
+             } catch (err: unknown) {
+              lastErr = err;
               
-              if (operation === "upsert") {
-                if (argsObj.create) injectToRecord(argsObj.create as Record<string, unknown>);
-                // [WARNING] On update part of upsert, we DON'T inject companyId to 'update' data (it's immutable)
-              } 
-              // [WARNING] CRITICAL: We NO LONGER inject companyId into 'data' during standalone updates.
-              // This fixes Prisma collisions and reinforces that companyId is IMMUTABLE after creation.
-            }
-            // CREATES
-            else if (operation === "create" || operation === "createMany") {
-              if (Array.isArray(argsObj.data)) {
-                (argsObj.data as Record<string, unknown>[]).forEach((d) => injectToRecord(d));
-              } else {
-                injectToRecord((argsObj.data as Record<string, unknown>) || {});
+              const errMsg = err instanceof Error ? err.message : String(err);
+              const errCode = err && typeof err === "object" && "code" in err ? (err as { code: string }).code : undefined;
+              const isConnectionClosed = 
+                errCode === "P1017" || 
+                errMsg.includes("Server has closed the connection") ||
+                errMsg.includes("Closed") ||
+                (errMsg.includes("connection") && errMsg.includes("closed")) ||
+                errMsg.includes("quaint::connector::postgres::native");
+
+              if (isConnectionClosed && attempt < maxDbRetries) {
+                Logger.warn(
+                  `[Prisma] Connection closed error detected during operation '${operation}' on model '${model}' (attempt ${attempt}/${maxDbRetries}). Retrying query...`
+                );
+                // Wait briefly before retrying, backing off slightly
+                await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+                continue;
               }
-            }
-          }
-
-          // --- 3. SOFT DELETE LOGIC ---
-          const isSoftDeleteModel = SOFT_DELETE_MODELS.includes(model);
-          const includeDeleted = argsObj?.includeDeleted === true;
-
-          if ("includeDeleted" in argsObj) {
-            delete argsObj.includeDeleted;
-          }
-
-          if (isSoftDeleteModel) {
-            const delegateName = model.charAt(0).toLowerCase() + model.slice(1);
-            const prismaUnknown = basePrisma as unknown as MyPrismaAny;
-            const delegate = prismaUnknown[delegateName];
-
-            // Turn DELETE into UPDATE with deletedAt (using base delegate)
-            if (delegate) {
-              if (operation === "delete") {
-                // For 'delete', basePrisma allows where id etc. Even if we mutated argsObj.where above to include companyId,
-                // delegate.update on basePrisma will respect it, securing the soft delete!
-                const deleteWhere = companyId
-                  ? { ...(argsObj.where as Prisma.JsonObject), companyId }
-                  : (argsObj.where as Prisma.JsonObject);
-                return delegate.update({
-                  where: deleteWhere,
-                  data: { deletedAt: new Date() },
-                });
-              }
-              if (operation === "deleteMany") {
-                const deleteWhere = companyId
-                  ? { ...(argsObj.where as Prisma.JsonObject), companyId }
-                  : (argsObj.where as Prisma.JsonObject);
-                return delegate.updateMany({
-                  where: deleteWhere,
-                  data: { deletedAt: new Date() },
-                });
-              }
-            }
-
-            // Exclude soft-deleted rows from READs
-            if (!includeDeleted) {
-              if (
-                [
-                  "findFirst",
-                  "findMany",
-                  "count",
-                  "aggregate",
-                  "groupBy",
-                ].includes(operation)
-              ) {
-                argsObj.where = { ...(argsObj.where as Prisma.JsonObject), deletedAt: null };
-              }
+              throw err;
             }
           }
-
-          // --- 4. FIND UNIQUE HANDLER ---
-          // Because 'findUnique' requires strictly unique criteria (like 'id'), we cannot easily add 'companyId' or 'deletedAt'
-          // to its 'where' object without Prisma complaining. Therefore, we convert findUnique -> findFirst using the base delegate.
-          if (operation === "findUnique" || operation === "findUniqueOrThrow") {
-            const delegateName = model.charAt(0).toLowerCase() + model.slice(1);
-            const prismaUnknown = basePrisma as unknown as MyPrismaAny;
-            const delegate = prismaUnknown[delegateName];
-
-            if (delegate?.findFirst) {
-              const findFirstWhere = { ...(argsObj.where as Prisma.JsonObject) };
-              if (companyId) (findFirstWhere as Prisma.JsonObject).companyId = companyId;
-              if (isSoftDeleteModel && !includeDeleted)
-                (findFirstWhere as Prisma.JsonObject).deletedAt = null;
-
-              const result = await delegate.findFirst({
-                ...argsObj,
-                where: findFirstWhere,
-              });
-
-              if (!result && operation === "findUniqueOrThrow") {
-                throw new Error(`Record not found for model ${model}`);
-              }
-              return result;
-            }
-          }
-
-          // All other standard queries fall through
-          return query(argsObj);
+          throw lastErr;
         },
       },
     },

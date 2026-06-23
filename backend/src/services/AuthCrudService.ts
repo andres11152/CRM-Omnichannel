@@ -124,14 +124,15 @@ export const authCrudService = {
       .digest("hex");
     const passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-    if (!user.companyId) {
-      throw new AppError("Global users cannot reset password via token", 403);
-    }
-
-    await userRepository.update(user.id, user.companyId, {
-      resetPasswordToken: passwordResetToken,
-      resetPasswordExpires: passwordResetExpires,
-    });
+    // [SYSTEM] Persist the token by user id, bypassing tenant scope. This path runs on a
+    // public (no-auth) route, and must also work for global users without a companyId
+    // (previously they were rejected with a 403, silently breaking their reset).
+    await TenantContextManager.runAsSystem(async () =>
+      userRepository.updateById(user.id, {
+        resetPasswordToken: passwordResetToken,
+        resetPasswordExpires: passwordResetExpires,
+      }),
+    );
 
     return { user, resetToken };
   },
@@ -140,13 +141,12 @@ export const authCrudService = {
    * Clear reset token (on error or after use)
    */
   async clearResetToken(userId: string) {
-    const user = await userRepository.findFirst({ where: { id: userId } });
-    if (user?.companyId) {
-      await userRepository.update(userId, user.companyId, {
+    await TenantContextManager.runAsSystem(async () =>
+      userRepository.updateById(userId, {
         resetPasswordToken: null,
         resetPasswordExpires: null,
-      });
-    }
+      }),
+    );
   },
 
   /**

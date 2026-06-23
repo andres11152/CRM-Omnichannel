@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { Logger } from "@/utils/logger";
 import { getEnv } from "@/config/env";
 import { emailService } from "@/services/EmailService";
+import { passwordResetEmail } from "@/utils/emailTemplates";
 import { authCrudService } from "@/services/AuthCrudService";
 import { sessionService, SESSION_TTL } from "@/services/SessionService";
 import {
@@ -418,17 +419,29 @@ export const forgotPassword = catchAsync(
     };
 
     let generateResult: {
-      user: { id: string; email: string; companyId: string | null };
+      user: { id: string; email: string; name?: string | null; companyId: string | null };
       resetToken: string;
     } | null = null;
+
+    const maskedEmail = `${email.substring(0, 3)}***@${email.split("@")[1] || "?"}`;
 
     try {
       generateResult = await authCrudService.generateResetToken(email);
     } catch (err) {
-      // Silently succeed — do NOT reveal whether the email exists or not
-      Logger.warn(
-        `[Auth] forgot-password: skipped for ${email.substring(0, 3)}***: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      // [SEC] Anti-enumeration: we always return the SAME generic response. BUT we must
+      // distinguish a legitimately-missing account (expected, info-level) from a REAL
+      // failure (DB down, token-gen bug). Swallowing real errors as "success" is exactly
+      // what made this look broken with no trace. Real errors are logged loudly so they
+      // surface in monitoring while the user still sees the generic message.
+      const status = err instanceof AppError ? err.statusCode : 500;
+      if (status === 404) {
+        Logger.info(`[Auth] forgot-password: no account for ${maskedEmail} (silent, no email)`);
+      } else {
+        Logger.error(
+          `[Auth] forgot-password: token generation FAILED for ${maskedEmail} (status ${status}):`,
+          err instanceof Error ? err : new Error(String(err)),
+        );
+      }
       return res.status(200).json(GENERIC_SUCCESS);
     }
 
@@ -436,25 +449,30 @@ export const forgotPassword = catchAsync(
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
 
-    const message = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Restablecer Contraseña</h2>
-      <p>Has solicitado restablecer tu contraseña en Sentry CRM.</p>
-      <p>Haz clic en el siguiente botón para continuar (válido por 10 minutos):</p>
-      <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 6px;">Restablecer Contraseña</a>
-      <p style="margin-top: 20px; font-size: 12px; color: #666;">Si no solicitaste esto, ignora este correo.</p>
-    </div>
-  `;
+    const { html, text } = passwordResetEmail({
+      resetUrl,
+      userName: user.name,
+      expiryMinutes: 10,
+      requestIp: req.ip || req.socket.remoteAddress || null,
+      requestedAt: new Date(),
+    });
 
     try {
       await emailService.sendEmail({
         to: user.email,
-        subject: "Recuperación de Contraseña - Sentry CRM",
-        html: message,
+        subject: "Recupera tu contraseña · Sentry CRM",
+        html,
+        text,
       });
+      Logger.info(
+        `[Auth] ✅ Password reset email dispatched to ${maskedEmail} (userId: ${user.id})`,
+      );
       return res.status(200).json(GENERIC_SUCCESS);
     } catch (error: unknown) {
-      Logger.error("[Auth] Failed to send password reset email:", error);
+      Logger.error(
+        `[Auth] ❌ Failed to send password reset email to ${maskedEmail}:`,
+        error instanceof Error ? error : new Error(String(error)),
+      );
       await authCrudService.clearResetToken(user.id);
       return next(
         new AppError(

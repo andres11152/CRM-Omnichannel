@@ -105,6 +105,10 @@ export const adminService = {
           },
           include: {
             plan: true,
+            users: {
+              where: { isOwner: true },
+              select: { email: true },
+            },
             _count: { select: { users: true, tickets: true } },
           },
           orderBy: { createdAt: "desc" },

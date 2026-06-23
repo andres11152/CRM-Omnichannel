@@ -43,38 +43,44 @@ export class IdentityResolverService {
       return { cleanRemoteJid: "", remoteJid: "", resolved: false };
     }
 
+    // [DOCS · Baileys 7.x] When a chat is LID-addressed, the key carries the OTHER party's
+    // REAL phone JID in `remoteJidAlt` (and `addressingMode === "lid"`). This is the
+    // authoritative per-message source of the real number. (Baileys 6.7.x exposed the same
+    // value as `senderPn` instead — we accept either for forward/backward safety.)
+    const messageKey = message.key as {
+      remoteJidAlt?: string;
+      senderPn?: string;
+      addressingMode?: string;
+    };
+
+    const peerPnRaw =
+      (messageKey.remoteJidAlt && messageKey.remoteJidAlt.includes("@s.whatsapp.net")
+        ? messageKey.remoteJidAlt
+        : undefined) ||
+      (messageKey.senderPn && messageKey.senderPn.includes("@s.whatsapp.net")
+        ? messageKey.senderPn
+        : undefined);
+
+    if (peerPnRaw) {
+      const pnJid = WhatsAppIdUtils.getCleanJid(peerPnRaw);
+      const pn = WhatsAppIdUtils.getPhoneNumber(peerPnRaw);
+      if (pnJid && pn) {
+        if (WhatsAppIdUtils.isLid(cleanRemoteJid)) {
+          const lidBase = cleanRemoteJid.split("@")[0].split(":")[0];
+          await chatService.saveLidPhoneMapping(companyId, lidBase, pn).catch(() => {});
+        }
+        Logger.info(`[IdentityResolver] [OK] Resolved via key PN (${messageKey.remoteJidAlt ? "remoteJidAlt" : "senderPn"}): ${cleanRemoteJid} → ${pnJid}`);
+        return { cleanRemoteJid: pnJid, remoteJid: pnJid, resolved: true };
+      }
+    }
+
     if (!WhatsAppIdUtils.isLid(cleanRemoteJid)) {
       return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
     }
 
-    Logger.info(`[IdentityResolver] [SEARCH] LID Detected: ${cleanRemoteJid}`);
-
-    // Strategy 1: remoteJidAlt
-    const messageKey = message.key as {
-      remoteJidAlt?: string;
-      senderPn?: string;
-    };
-
-    if (
-      messageKey.remoteJidAlt &&
-      messageKey.remoteJidAlt.includes("@s.whatsapp.net") &&
-      !messageKey.remoteJidAlt.includes("@lid")
-    ) {
-      cleanRemoteJid =
-        WhatsAppIdUtils.getCleanJid(messageKey.remoteJidAlt) || cleanRemoteJid;
-      return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
-    }
-
-    // Strategy 2: senderPn
-    if (
-      messageKey.senderPn &&
-      messageKey.senderPn.includes("@s.whatsapp.net") &&
-      !messageKey.senderPn.includes("@lid")
-    ) {
-      cleanRemoteJid =
-        WhatsAppIdUtils.getCleanJid(messageKey.senderPn) || cleanRemoteJid;
-      return { cleanRemoteJid, remoteJid: cleanRemoteJid, resolved: true };
-    }
+    Logger.info(
+      `[IdentityResolver] [SEARCH] LID Detected: ${cleanRemoteJid} (fromMe=${message.key.fromMe}, addressingMode=${messageKey.addressingMode || "—"}, remoteJidAlt=${messageKey.remoteJidAlt || "—"})`,
+    );
 
     // Strategy 3: participant
     const participant = message.key.participant;

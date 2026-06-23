@@ -103,6 +103,30 @@ export class SessionContactResolver {
       return fromStore.id.split("@")[0].split(":")[0];
     }
 
+    // 1.5 [DOCS · Baileys 7.x] LID store NATIVO y autoritativo:
+    // signalRepository.lidMapping.getPNForLID(lid) → JID de teléfono real (o null).
+    // Es la fuente oficial (mantenida por Baileys a partir de senderPn/usync), mucho más
+    // fiable que onWhatsApp + polling. Lo intentamos antes de cualquier consulta de red.
+    try {
+      const lidMapping = (sock as unknown as {
+        signalRepository?: { lidMapping?: { getPNForLID?: (l: string) => Promise<string | null> } };
+      }).signalRepository?.lidMapping;
+      if (lidMapping?.getPNForLID) {
+        const fullLid = lid.includes("@lid") ? lid : `${lid}@lid`;
+        const pnJid = await lidMapping.getPNForLID(fullLid);
+        if (pnJid && pnJid.includes("@s.whatsapp.net")) {
+          const phone = pnJid.split("@")[0].split(":")[0];
+          logger.info(`[SessionContactResolver] [LID-STORE] ${fullLid} → ${pnJid}`);
+          // Sembrar el cache local para futuras búsquedas síncronas
+          const store = this.getStore(sessionId);
+          if (store) store.lidToPhone[lid.split("@")[0].split(":")[0]] = pnJid;
+          return phone;
+        }
+      }
+    } catch (err) {
+      logger.debug(`[SessionContactResolver] lidMapping.getPNForLID failed for ${lid}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     // 2. Comprobación del estado del Circuit Breaker
     const cb = this.circuitBreakers.get(sessionId) || { consecutiveFailures: 0, circuitOpenedUntil: 0 };
     const now = Date.now();

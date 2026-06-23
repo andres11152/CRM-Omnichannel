@@ -183,7 +183,9 @@ export class SyncMediaService {
     let rawMsg: WAMessage | undefined;
     for (const jid in store.messages) {
       const msgs = store.messages[jid];
-      rawMsg = msgs.find(m => m.key.id === message.whatsappMessageId);
+      // Baileys 7: store holds proto.IWebMessageInfo (key optional). We only keep entries
+      // that actually carry a key, so the cast to WAMessage is safe.
+      rawMsg = msgs.find((m) => m.key?.id === message.whatsappMessageId) as WAMessage | undefined;
       if (rawMsg) break;
     }
 

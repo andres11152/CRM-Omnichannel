@@ -172,7 +172,7 @@ export class SimpleInMemoryStore {
       for (const msg of msgs) {
         const key = msg.key as typeof msg.key & {
           remoteJidAlt?: string;
-          senderPn?: string;
+          participantAlt?: string;
         };
         const jid = key.remoteJid;
 
@@ -180,24 +180,23 @@ export class SimpleInMemoryStore {
           this.appendMessage(jid, msg);
         }
 
-        if (!jid || !jid.includes("@lid")) continue;
+        // [LID·v7] The key carries the alternate JID: when the chat is LID-addressed,
+        // `remoteJidAlt` (DM) / `participantAlt` (group) holds the real phone JID — and
+        // vice-versa. Capture the LID→PN mapping from whichever side is the LID.
+        const capture = (a?: string | null, b?: string) => {
+          if (!a || !b) return;
+          if (a.includes("@lid") && b.includes("@s.whatsapp.net")) {
+            this.lidToPhone[a.split("@")[0].split(":")[0]] = b;
+          } else if (b.includes("@lid") && a.includes("@s.whatsapp.net")) {
+            this.lidToPhone[b.split("@")[0].split(":")[0]] = a;
+          }
+        };
+        capture(jid, key.remoteJidAlt);
+        capture(key.participant, key.participantAlt);
 
-        const lidBase = jid.split("@")[0].split(":")[0];
-
-        if (key.remoteJidAlt && key.remoteJidAlt.includes("@s.whatsapp.net")) {
-          if (!this.lidToPhone[lidBase])
-            this.lidToPhone[lidBase] = key.remoteJidAlt;
-        }
-
-        if (key.senderPn && key.senderPn.includes("@s.whatsapp.net")) {
-          if (!this.lidToPhone[lidBase])
-            this.lidToPhone[lidBase] = key.senderPn;
-        }
-
-        if (
-          msg.messageStubParameters &&
-          Array.isArray(msg.messageStubParameters)
-        ) {
+        // Fallback: stub parameters occasionally carry the PN for an unresolved LID chat.
+        if (jid && jid.includes("@lid") && Array.isArray(msg.messageStubParameters)) {
+          const lidBase = jid.split("@")[0].split(":")[0];
           for (const param of msg.messageStubParameters) {
             if (
               typeof param === "string" &&
@@ -212,19 +211,23 @@ export class SimpleInMemoryStore {
       }
     });
 
+    // [DOCS · Baileys 7.x] The 'lid-mapping.update' event delivers the official LID↔PN
+    // mapping as { pn, lid } (Auth.LIDMapping). It may arrive as a single object or an
+    // array depending on the emit site, so we normalize both. `pn` is a full JID.
     (
       ev as unknown as {
         on: (event: string, cb: (data: unknown) => void) => void;
       }
     ).on("lid-mapping.update", (data: unknown) => {
-      const mappings = data as
-        | Array<{ lid: string; number: string }>
-        | undefined;
-      if (!mappings) return;
-      for (const mapping of mappings) {
-        if (mapping.lid && mapping.number) {
-          const lidBase = mapping.lid.split("@")[0].split(":")[0];
-          const phoneJid = `${mapping.number}@s.whatsapp.net`;
+      const list = Array.isArray(data) ? data : data ? [data] : [];
+      for (const raw of list) {
+        const m = raw as { pn?: string; lid?: string; number?: string };
+        const lid = m.lid;
+        const pn = m.pn || (m.number ? `${m.number}@s.whatsapp.net` : undefined);
+        if (!lid || !pn) continue;
+        const lidBase = lid.split("@")[0].split(":")[0];
+        const phoneJid = pn.includes("@") ? pn : `${pn}@s.whatsapp.net`;
+        if (lidBase && phoneJid.includes("@s.whatsapp.net")) {
           this.lidToPhone[lidBase] = phoneJid;
         }
       }

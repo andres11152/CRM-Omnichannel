@@ -35,7 +35,6 @@ import {
 import NodeCache from "node-cache";
 
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
-import { messageRepository } from "@/repositories/MessageRepository";
 import TenantContextManager from "@/config/tenantContext";
 import { bindSessionEvents } from "./events/SessionEventBinder";
 import { getProxyAgent } from "@/utils/proxy";
@@ -285,28 +284,27 @@ export class SessionManager implements ISessionManager {
         return true;
       },
       getMessage: async (key) => {
-        if (!key.id) return undefined;
+        // [DOCS] Baileys requires getMessage to return the ORIGINAL message CONTENT
+        // (proto.IMessage) so it can decrypt poll votes, retry sends and serve on-demand
+        // history. We only have the raw proto in the in-memory store (messages[jid]).
+        // The DB only stores our parsed CRM content/metadata — that is NOT a proto.IMessage,
+        // so returning it (as before) fed Baileys corrupt data. If the raw proto isn't in
+        // the store, return undefined so Baileys falls back to a placeholder resend request.
+        if (!key.id || !key.remoteJid) return undefined;
         try {
-          // Check session-specific store first
-          if (key.remoteJid && sessionStore.messages[key.remoteJid]) {
-            const msgArray = sessionStore.messages[key.remoteJid];
-            const found = msgArray.find(
+          const candidates = [
+            sessionStore.messages[key.remoteJid],
+            // LID/PN duality: the same chat may be keyed by the alternate JID in the store.
+            ...Object.values(sessionStore.messages),
+          ];
+          for (const arr of candidates) {
+            if (!arr) continue;
+            const found = arr.find(
               (m) => (m as proto.IWebMessageInfo)?.key?.id === key.id,
             );
-            if (found) return (found as proto.IWebMessageInfo).message as proto.IMessage;
+            if (found?.message) return (found as proto.IWebMessageInfo).message as proto.IMessage;
           }
-
-          // Fallback to database scoped to this session's companyId.
-          // Using run() instead of runAsSystem() ensures the query respects
-          // Row Level Security and cannot return messages from other tenants.
-          const msg = await TenantContextManager.run(
-            { companyId, userId: "system", requestId: `getmsg:${key.id}` },
-            () => messageRepository.findFirst({
-              where: { whatsappMessageId: key.id },
-              select: { metadata: true },
-            }),
-          );
-          return msg?.metadata ? (msg.metadata as proto.IMessage) : undefined;
+          return undefined;
         } catch (err) {
           logger.error(
             `[SessionManager] getMessage error for ${key.id}: ${err instanceof Error ? err.message : String(err)}`,

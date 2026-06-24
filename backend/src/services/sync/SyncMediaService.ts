@@ -1,10 +1,16 @@
-import { WAMessage, downloadMediaMessage, getContentType } from "@whiskeysockets/baileys";
+import { WAMessage, downloadMediaMessage, getContentType, BufferJSON } from "@whiskeysockets/baileys";
 import { Logger } from "@/utils/logger";
 import { storageService } from "@/services/StorageService";
 import { Readable } from "stream";
 import mime from "mime-types";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { Prisma } from "@prisma/client";
+
+/** Context that lets Baileys re-request expired media from the phone (reuploadRequest). */
+type MediaCtx = {
+  reuploadRequest: (m: WAMessage) => Promise<WAMessage>;
+  logger: unknown;
+};
 
 export class SyncMediaService {
   /**
@@ -101,16 +107,20 @@ export class SyncMediaService {
     whatsappMessageId: string,
     msg: WAMessage,
     mediaType: string,
-    msgContent: Record<string, unknown> // Baileys message content can be highly variable
+    msgContent: Record<string, unknown>, // Baileys message content can be highly variable
+    // [DOCS · Baileys] Pass the session's updateMediaMessage as reuploadRequest so media
+    // whose CDN URL expired (always the case for history) is re-requested from the phone.
+    mediaCtx?: MediaCtx,
   }) {
-    const { companyId, whatsappMessageId, msg, mediaType, msgContent } = params;
+    const { companyId, whatsappMessageId, msg, mediaType, msgContent, mediaCtx } = params;
     const mediaProp = mediaType === "audio" ? "audioMessage" : mediaType + "Message";
     const msgObj = msgContent && (msgContent[mediaProp as keyof typeof msgContent] as Prisma.JsonObject | undefined);
     const rawMime = (msgObj?.mimetype as string | undefined) || "application/octet-stream";
+    const ctx = mediaCtx as unknown as Parameters<typeof downloadMediaMessage>[3];
 
     try {
       // PRIMARY: Try stream
-      const stream = await downloadMediaMessage(msg, "stream", {});
+      const stream = await downloadMediaMessage(msg, "stream", {}, ctx);
       if (stream) {
         const ext = mime.extension(rawMime) || "bin";
         const filename = `sync_${whatsappMessageId}.${ext}`;
@@ -120,7 +130,7 @@ export class SyncMediaService {
     } catch (dlErr: unknown) {
       // FALLBACK: Try buffer
       try {
-        const buffer = await downloadMediaMessage(msg, "buffer", {});
+        const buffer = await downloadMediaMessage(msg, "buffer", {}, ctx);
         if (buffer && buffer.length > 0) {
           const ext = mime.extension(rawMime) || "bin";
           const filename = `sync_${whatsappMessageId}.${ext}`;
@@ -179,7 +189,7 @@ export class SyncMediaService {
       throw new Error("El almacén de sesión no está disponible.");
     }
 
-    // Try to find the message in the Baileys store
+    // 1. Try the in-memory Baileys store (recent live messages)
     let rawMsg: WAMessage | undefined;
     for (const jid in store.messages) {
       const msgs = store.messages[jid];
@@ -189,8 +199,21 @@ export class SyncMediaService {
       if (rawMsg) break;
     }
 
+    // 2. Fallback: rebuild from the raw proto we persisted during history ingest (_raw),
+    //    so history media works even when the message left the in-memory store.
     if (!rawMsg) {
-      throw new Error("El mensaje es muy antiguo y ya no está en la memoria caché del teléfono. Sincroniza de nuevo.");
+      const rawSerialized = mediaObj._raw as string | undefined;
+      if (rawSerialized) {
+        try {
+          rawMsg = JSON.parse(rawSerialized, BufferJSON.reviver) as WAMessage;
+        } catch (e) {
+          Logger.warn(`[MediaRetry] Failed to parse persisted _raw for ${messageId}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+    }
+
+    if (!rawMsg || !rawMsg.message) {
+      throw new Error("El mensaje es muy antiguo y ya no está disponible para descargar. Sincroniza de nuevo.");
     }
 
     // Attempt to download and upload again
@@ -201,12 +224,25 @@ export class SyncMediaService {
       throw new Error("El mensaje crudo no tiene contenido.");
     }
 
+    // [DOCS · Baileys 7] reuploadRequest = sock.updateMediaMessage: asks the phone to
+    // re-upload the media so we can download it even when the original CDN link is gone
+    // (the normal case for history images). Without this, retries always failed.
+    const sock = activeSession.socket as unknown as {
+      updateMediaMessage: (m: WAMessage) => Promise<WAMessage>;
+      logger: unknown;
+    };
+    const mediaCtx: MediaCtx = {
+      reuploadRequest: (m: WAMessage) => sock.updateMediaMessage(m),
+      logger: sock.logger,
+    };
+
     const result = await this.downloadAndUpload({
       companyId,
       whatsappMessageId: message.whatsappMessageId,
       msg: rawMsg,
       mediaType,
       msgContent,
+      mediaCtx,
     });
 
     if (!result.url) {

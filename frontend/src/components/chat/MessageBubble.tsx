@@ -6,6 +6,8 @@ import { VoiceNotePlayer } from "./VoiceNotePlayer";
 import { jwtDecode } from "jwt-decode";
 import { api } from "@/lib/axios";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { CHAT_KEYS } from "@/hooks/useChat";
 
 // Cache token decoding for performance
 let cachedUserId: string | null = null;
@@ -630,14 +632,19 @@ const formatTime = (timestamp: string | Date): string => {
 
 const UnavailableMediaFallback: React.FC<{ message: Message; type: string }> = ({ message, type }) => {
   const [isRetrying, setIsRetrying] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleRetry = async () => {
     setIsRetrying(true);
     try {
       const response = await api.post(`/conversations/${message.ticketId || "0"}/messages/${message.id}/retry-media`);
-      
+
       if (response.data.status === "success") {
         toast.success("Archivo recuperado");
+        // Refresh the chat so the recovered media renders immediately (instead of after reopen)
+        if (message.ticketId) {
+          queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(message.ticketId) });
+        }
       }
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }, message?: string };

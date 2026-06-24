@@ -6,6 +6,7 @@ import {
   isJidBroadcast,
   WASocket,
   jidNormalizedUser,
+  BufferJSON,
 } from "@whiskeysockets/baileys";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { reactionRepository } from "@/repositories/ReactionRepository";
@@ -507,6 +508,17 @@ export class ChatSyncIngest {
         // Instead, we mark it as '_unavailable' and empty URL, allowing the agent to lazily recover it on-demand
         // via the retryMedia/retry download mechanism if they click on it in the UI.
         const mimetype = "application/octet-stream";
+        // [MEDIA RETRY] Persist the raw message proto (key + media node with mediaKey/
+        // directPath, serialized via BufferJSON) so the on-demand "Reintentar descarga"
+        // can rebuild the WAMessage and call downloadMediaMessage + reuploadRequest later,
+        // even after this message is no longer in the in-memory store.
+        let rawSerialized: string | undefined;
+        try {
+          rawSerialized = JSON.stringify(
+            { key: msg.key, message: msg.message },
+            BufferJSON.replacer,
+          );
+        } catch { /* best-effort */ }
         mediaMeta = {
           mediaType: parsed.mediaType,
           mediaCaption: parsed.mediaCaption,
@@ -516,7 +528,8 @@ export class ChatSyncIngest {
             url: "",
             mimetype,
             name: parsed.mediaFilename || (parsed.mediaType === "audio" ? "Nota de voz" : "Adjunto"),
-            size: 0
+            size: 0,
+            ...(rawSerialized ? { _raw: rawSerialized } : {}),
           }
         };
       }

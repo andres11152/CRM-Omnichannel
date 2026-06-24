@@ -1,6 +1,42 @@
 import { Logger } from "./logger";
 import v8 from "v8";
+import fs from "fs";
+import os from "os";
 import { whatsappService } from "@/whatsapp/WhatsAppService";
+
+/**
+ * Reads the REAL memory ceiling enforced on this process — the container's cgroup limit
+ * (Render/Docker), not the V8 heap limit. Critical: --max-old-space-size can be far larger
+ * than the container RAM, so heapUsed/heapLimit never crosses thresholds and the container
+ * OOM-kills the process before the monitor reacts. Comparing RSS to the cgroup limit fixes
+ * that. Cached after first read. Falls back to os.totalmem() when unconstrained.
+ */
+let cachedContainerLimit: number | null | undefined;
+const getContainerMemoryLimitBytes = (): number | null => {
+  if (cachedContainerLimit !== undefined) return cachedContainerLimit;
+  const total = os.totalmem();
+  const candidates = [
+    "/sys/fs/cgroup/memory.max", // cgroup v2
+    "/sys/fs/cgroup/memory/memory.limit_in_bytes", // cgroup v1
+  ];
+  let limit: number | null = null;
+  for (const path of candidates) {
+    try {
+      const raw = fs.readFileSync(path, "utf8").trim();
+      if (raw === "max") continue;
+      const val = Number(raw);
+      // Ignore the "unlimited" sentinel (a huge number close to int64 max) and bogus values.
+      if (Number.isFinite(val) && val > 0 && val < total * 4) {
+        limit = val;
+        break;
+      }
+    } catch {
+      // path not present (non-Linux / no cgroup) — try next
+    }
+  }
+  cachedContainerLimit = limit ?? (Number.isFinite(total) && total > 0 ? total : null);
+  return cachedContainerLimit;
+};
 
 /**
  * [SEC] RESOURCE CLEANUP MANAGER
@@ -207,16 +243,22 @@ class MemoryMonitor {
     const heapLimit = v8Stats.heap_size_limit;
     const heapPercent = usage.heapUsed / heapLimit;
 
-    if (heapPercent >= this.CRITICAL_THRESHOLD) {
+    // RSS vs the container's real memory limit — this is what actually triggers an OOM kill
+    // on Render. Use the WORST of (heap %, rss %) so we react before the container kills us.
+    const containerLimit = getContainerMemoryLimitBytes();
+    const rssPercent = containerLimit ? usage.rss / containerLimit : 0;
+    const worstPercent = Math.max(heapPercent, rssPercent);
+
+    if (worstPercent >= this.CRITICAL_THRESHOLD) {
       Logger.error(
-        `[MemoryMonitor] [ALERT] CRITICAL: Memory usage at ${(
-          heapPercent * 100
-        ).toFixed(1)}% of LIMIT`,
+        `[MemoryMonitor] [ALERT] CRITICAL: Memory at ${(worstPercent * 100).toFixed(1)}% ` +
+          `(heap ${(heapPercent * 100).toFixed(0)}% / rss ${(rssPercent * 100).toFixed(0)}% of container)`,
         {
           heapUsedMB: Math.round(usage.heapUsed / 1024 / 1024),
           heapTotalAllocatedMB: Math.round(usage.heapTotal / 1024 / 1024),
           heapLimitMB: Math.round(heapLimit / 1024 / 1024),
           rssMB: Math.round(usage.rss / 1024 / 1024),
+          containerLimitMB: containerLimit ? Math.round(containerLimit / 1024 / 1024) : null,
         },
       );
 
@@ -235,9 +277,10 @@ class MemoryMonitor {
         Logger.warn("[MemoryMonitor] Forcing garbage collection");
         global.gc();
       }
-    } else if (heapPercent >= this.WARNING_THRESHOLD) {
+    } else if (worstPercent >= this.WARNING_THRESHOLD) {
       Logger.warn(
-        `[MemoryMonitor] [WARNING] Memory usage at ${(heapPercent * 100).toFixed(1)}%`,
+        `[MemoryMonitor] [WARNING] Memory at ${(worstPercent * 100).toFixed(1)}% ` +
+          `(heap ${(heapPercent * 100).toFixed(0)}% / rss ${(rssPercent * 100).toFixed(0)}% of container)`,
       );
     }
   }

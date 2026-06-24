@@ -19,7 +19,10 @@ import redisClient from "@/config/redis";
  */
 
 const MAX_MESSAGES_PER_JID = parseInt(
-  process.env.WA_STORE_MAX_MESSAGES_PER_JID || "1000",
+  // Lowered from 1000: the in-memory message store is the largest WA memory consumer
+  // (msgs × jids × sessions). 150 keeps enough recent context for getMessage/retries
+  // while drastically cutting RAM on small containers (Render). Tune via env if needed.
+  process.env.WA_STORE_MAX_MESSAGES_PER_JID || "150",
   10,
 );
 const MAX_TOTAL_CONTACTS = parseInt(

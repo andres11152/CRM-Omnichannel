@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "nodemon",
     "build": "npx rimraf dist && tsc",
-    "start": "node --max-old-space-size=3072 -r module-alias/register dist/server.js",
-    "start:worker": "node --max-old-space-size=2048 -r module-alias/register dist/worker.js",
+    "start": "node --expose-gc --max-old-space-size=${NODE_MAX_OLD_SPACE_MB:-2048} -r module-alias/register dist/server.js",
+    "start:worker": "node --expose-gc --max-old-space-size=${NODE_MAX_OLD_SPACE_MB:-2048} -r module-alias/register dist/worker.js",
     "start:all": "npx pm2 start ecosystem.config.json",
     "test": "jest",
     "lint": "eslint src/**",

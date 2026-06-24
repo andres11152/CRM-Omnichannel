@@ -61,7 +61,9 @@ const bootstrap = async () => {
     await whatsappService.initialize();
 
     // 4. Background Services
-    memoryMonitor.start(60000);
+    // 20s (not 60s): memory can spike past the container limit within a minute (WA history
+    // bursts / pre-key gen), so we must check often enough to flush+GC before an OOM kill.
+    memoryMonitor.start(20000);
 
     // Cleanup stale audio conversion temp files left by previous runs (e.g. SIGKILL victims)
     await cleanupStaleTempFiles();

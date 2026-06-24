@@ -14,6 +14,14 @@ import type { TicketDTO } from "@/types/ticket.types";
 
 const whatsappSessionRepository = new WhatsAppSessionRepository();
 
+/** Relative storage paths (e.g. "companies/.../uploads/x.jpg") need a leading "/" to be
+ * served by the backend; absolute URLs and ui-avatars links are left untouched. */
+const normalizePic = (u?: string | null): string | null => {
+  if (!u) return null;
+  if (u.startsWith("http") || u.startsWith("/")) return u;
+  return `/${u}`;
+};
+
 export class TicketEnrichment {
   async enrichWithCrmData(
     dtos: TicketDTO[],
@@ -189,10 +197,18 @@ export class TicketEnrichment {
         // [SEC] 100-YEAR FIX: Aggressive name resolution
         // If CRM has a name and it's NOT just the phone number, use it!
         const crmName = crmData.name?.trim();
-        const isCrmNameValid = crmName && 
-                              crmName !== crmData.phone && 
-                              !crmName.startsWith("+") && 
-                              !/^\d+$/.test(crmName.replace(/\D/g, ""));
+        const crmNameLc = (crmName || "").toLowerCase();
+        const isCrmNameValid = crmName &&
+                              crmName !== crmData.phone &&
+                              !crmName.startsWith("+") &&
+                              !/^\d+$/.test(crmName.replace(/\D/g, "")) &&
+                              // Reject placeholder names so a stale CRM Contact does NOT
+                              // override the real WhatsApp pushName (e.g. "AB") resolved on
+                              // the shadow user / participant by the orchestrator.
+                              !crmNameLc.includes("usuario whatsapp") &&
+                              !crmNameLc.includes("usuario de whatsapp") &&
+                              !crmNameLc.includes("unknown") &&
+                              !crmNameLc.includes("sin nombre");
 
         return {
           ...dto,
@@ -202,8 +218,8 @@ export class TicketEnrichment {
             ...dto.contact,
             realContactId: crmData.id,
             name: isCrmNameValid ? crmName : dto.contact.name,
-            avatarUrl: crmData.avatarUrl || dto.contact.avatarUrl,
-            profilePicUrl: crmData.profilePicUrl || dto.contact.profilePicUrl,
+            avatarUrl: normalizePic(crmData.avatarUrl) || dto.contact.avatarUrl,
+            profilePicUrl: normalizePic(crmData.profilePicUrl) || dto.contact.profilePicUrl,
             whatsappSessionIndex,
             whatsappSessionPhone,
           },

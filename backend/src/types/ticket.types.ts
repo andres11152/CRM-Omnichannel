@@ -130,45 +130,67 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
   // The actual customer is the conversation participant who is NOT an admin/agent.
   const AGENT_ROLES = ["ADMIN", "SUPERVISOR", "AGENT", "MASTER"];
 
-  // Priority 0: Use the CRM Contact linked to the conversation (most authoritative source)
   const crmContact = conversation?.contact;
 
-  const customer: { id: string; name: string | null; email: string | null; phone: string | null; profilePicUrl?: string | null; about?: string | null; role?: string } | null | undefined = (() => {
-    // Priority 0: CRM Contact (authoritative — set by Orchestrator when conversation is created)
-    if (crmContact) {
-      return {
-        id: crmContact.id,
-        name: crmContact.name,
-        email: crmContact.email,
-        phone: crmContact.phone,
-        profilePicUrl: crmContact.profilePicUrl || crmContact.avatarUrl,
-        about: crmContact.about,
-      };
-    }
+  // A name is only usable if it's a real WhatsApp display name — not a placeholder
+  // ("Usuario WhatsApp"), not "unknown", and not a bare phone number.
+  const isUsableName = (n?: string | null): boolean => {
+    if (!n) return false;
+    const x = n.toLowerCase().trim();
+    if (!x) return false;
+    if (
+      x.includes("unknown") ||
+      x.includes("sin nombre") ||
+      x.includes("usuario whatsapp") ||
+      x.includes("usuario de whatsapp")
+    )
+      return false;
+    if (/^\+?\d[\d\s-]*$/.test(x)) return false; // bare phone number
+    return true;
+  };
 
-    const participants = conversation?.participants;
-    if (participants && participants.length > 0) {
-      // Priority 1: Find participant whose email is a shadow user (WhatsApp pattern)
-      const shadowUser = participants.find((p) =>
-        p.email?.endsWith("@whatsapp.user"),
-      );
-      if (shadowUser) return shadowUser;
-
-      // Priority 2: Find participant who is NOT an agent/admin
-      const nonAgent = participants.find((p) => !AGENT_ROLES.includes(p.role));
-      if (nonAgent) return nonAgent;
-
-      // Priority 3: Find participant whose phone matches the channelId
-      if (conversation?.channelId) {
-        const byChannel = participants.find(
-          (p) => p.phone === conversation.channelId,
-        );
-        if (byChannel) return byChannel;
-      }
-    }
-    // Fallback: Use createdBy (legacy behavior)
-    return ticket.createdBy;
+  // The real WhatsApp identity lives on the shadow-user participant (pushName + profile
+  // pic, set by the Baileys orchestrator). The CRM Contact can be stale (e.g. created with
+  // a "Usuario WhatsApp" placeholder before the name/pic resolved). So we MERGE both,
+  // preferring a usable name and any available picture, instead of letting a stale CRM
+  // Contact override the good live data.
+  const participant: (Partial<User> & { about?: string | null }) | null = (() => {
+    const ps = conversation?.participants;
+    if (!ps || ps.length === 0) return null;
+    return (
+      ps.find((p) => p.email?.endsWith("@whatsapp.user")) ||
+      ps.find((p) => !AGENT_ROLES.includes(p.role)) ||
+      (conversation?.channelId
+        ? ps.find((p) => p.phone === conversation.channelId)
+        : undefined) ||
+      null
+    );
   })();
+
+  const customer:
+    | { id: string; name: string | null; email: string | null; phone: string | null; profilePicUrl?: string | null; about?: string | null; role?: string }
+    | null
+    | undefined = crmContact || participant
+    ? {
+        id: crmContact?.id || participant?.id || ticket.createdById || "missing-user",
+        // Prefer whichever side has a real human name.
+        name:
+          [crmContact?.name, participant?.name].find(isUsableName) ||
+          crmContact?.name ||
+          participant?.name ||
+          null,
+        email: crmContact?.email ?? participant?.email ?? null,
+        phone: crmContact?.phone || participant?.phone || null,
+        // Prefer any non-null picture from either source.
+        profilePicUrl:
+          crmContact?.profilePicUrl ||
+          crmContact?.avatarUrl ||
+          participant?.profilePicUrl ||
+          null,
+        about: crmContact?.about ?? participant?.about ?? null,
+        role: participant?.role,
+      }
+    : ticket.createdBy;
 
   // --- PHONE RESOLUTION STRATEGY (Using WhatsAppIdUtils) ---
   const derivedPhone = WhatsAppIdUtils.extractDisplayPhone(
@@ -185,16 +207,20 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     displayName = `[GROUP] ${cleanGroupName}`;
   } else {
     displayName = customer?.name || "";
-    const checkName = displayName.toLowerCase();
-    const isInvalidName =
-      !displayName ||
-      checkName.includes("unknown") ||
-      checkName.includes("sin nombre") ||
-      displayName.trim() === "";
-    if (isInvalidName) {
+    if (!isUsableName(displayName)) {
       displayName = derivedPhone || "Usuario WhatsApp";
     }
   }
+
+  // Profile pics are stored as relative storage paths (e.g. "companies/.../uploads/x.jpg").
+  // The frontend serves them from the backend, which expects a leading "/". Normalize so the
+  // path resolves correctly (leave absolute http(s) URLs and ui-avatars untouched).
+  const normalizePic = (u?: string | null): string | null => {
+    if (!u) return null;
+    if (u.startsWith("http") || u.startsWith("/")) return u;
+    return `/${u}`;
+  };
+  const customerPic = normalizePic(customer?.profilePicUrl);
 
   // --- LAST MESSAGE ---
   const lastMsg = conversation?.messages?.[0];
@@ -213,11 +239,11 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     companyId: ticket.companyId,
     avatarUrl:
       isGroup
-        ? groupMetadata?.groupPicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName.replace(/^\[GROUP\]\s*/i, ""))}&background=22c55e&color=ffffff`
-        : customer?.profilePicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`,
+        ? normalizePic(groupMetadata?.groupPicUrl) || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName.replace(/^\[GROUP\]\s*/i, ""))}&background=22c55e&color=ffffff`
+        : customerPic || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`,
     profilePicUrl: isGroup
-      ? groupMetadata?.groupPicUrl || null
-      : customer?.profilePicUrl || null,
+      ? normalizePic(groupMetadata?.groupPicUrl)
+      : customerPic,
     about: customer?.about,
     unreadCount: 0,
     status: ticket.status,

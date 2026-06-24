@@ -40,12 +40,32 @@ export class ConversationResolver {
    * Resolves the conversation for a given phone/company.
    * Creates a new conversation + ticket if none exists.
    */
+  /**
+   * [DATA INTEGRITY] Canonicalize the channelId for DMs.
+   *
+   * Different ingest paths used to pass the remoteJid in two formats for the SAME
+   * person — "573011836367@s.whatsapp.net" (live inbound) vs "573011836367" (history
+   * sync) — which fooled the @@unique([companyId, channelId]) constraint into creating
+   * TWO conversations (duplicated chats in the inbox). We collapse the DM/user suffix
+   * to bare digits so there is exactly one canonical channelId per phone.
+   *
+   * Groups (@g.us) and unresolved LIDs (@lid) are left untouched to avoid forking
+   * their existing conversations.
+   */
+  private normalizeChannelId(raw: string): string {
+    if (!raw) return raw;
+    if (raw.endsWith("@s.whatsapp.net")) {
+      // strip domain + AD device suffix (:1, :2…) → bare digits
+      return raw.split("@")[0].split(":")[0].replace(/\D/g, "");
+    }
+    return raw;
+  }
+
   async resolve(
     params: ConversationResolverParams,
   ): Promise<ConversationWithQueue> {
     const {
       companyId,
-      phone,
       identity,
       isOutbound,
       sessionId,
@@ -53,6 +73,8 @@ export class ConversationResolver {
       userId,
       originalLid,
     } = params;
+
+    const phone = this.normalizeChannelId(params.phone);
 
     // 1. PRIMARY LOOKUP: Search by normalized phone
     let conversation = await conversationRepository.findFirst({

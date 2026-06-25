@@ -5,6 +5,8 @@ import { getAgents, updateAgentQueues } from "@/services/queueService";
 import { getTickets, updateTicket } from "@/services/ticketService";
 import { TicketsKanbanView } from "./TicketsKanbanView";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { Modal, ModalButton } from "./ui/Modal";
+import { AlertTriangle, CheckCircle2, Users } from "lucide-react";
 
 import {
   getDepartments,
@@ -790,59 +792,39 @@ export const QueueDashboard: React.FC = () => {
       />
 
       {/* Custom Alert Modal */}
-      {alertModal.isOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl max-w-sm w-full p-6 transform transition-all scale-100 border border-gray-100 dark:border-reply-border-dark">
-            <div
-              className={`w-14 h-14 rounded-full flex items-center justify-center mb-5 mx-auto ${alertModal.type === "error" ? "bg-red-50 text-red-500 dark:bg-red-900/20" : "bg-green-50 text-green-500 dark:bg-green-900/20"}`}
-            >
-              {alertModal.type === "error" ? (
-                <svg
-                  className="w-8 h-8"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  className="w-8 h-8"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              )}
-            </div>
-            <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">
-              {alertModal.title}
-            </h3>
-            <p className="text-center text-gray-500 dark:text-gray-400 mb-8 text-sm leading-relaxed">
-              {alertModal.message}
-            </p>
-            <button
-              onClick={() =>
-                setAlertModal((prev) => ({ ...prev, isOpen: false }))
-              }
-              className="w-full py-3 rounded-xl font-bold text-white transition-all transform active:scale-95 bg-gray-900 hover:bg-black dark:bg-indigo-600 dark:hover:bg-indigo-700 shadow-lg shadow-indigo-500/20"
-            >
-              Entendido
-            </button>
+      <Modal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        size="sm"
+        hideCloseButton
+        footer={
+          <ModalButton
+            variant="primary"
+            className="w-full"
+            onClick={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+          >
+            Entendido
+          </ModalButton>
+        }
+      >
+        <div className="flex flex-col items-center text-center py-2">
+          <div
+            className={`w-14 h-14 rounded-full flex items-center justify-center mb-5 ${alertModal.type === "error" ? "bg-red-50 text-red-500 dark:bg-red-900/20" : "bg-green-50 text-green-500 dark:bg-green-900/20"}`}
+          >
+            {alertModal.type === "error" ? (
+              <AlertTriangle className="w-8 h-8" />
+            ) : (
+              <CheckCircle2 className="w-8 h-8" />
+            )}
           </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            {alertModal.title}
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
+            {alertModal.message}
+          </p>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };
@@ -1006,13 +988,24 @@ const QueueAssignmentModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-xl shadow-xl w-96 p-6">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-          Configurar Colas para {agent.name}
-        </h3>
-
-        <div className="space-y-3 mb-6">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={`Configurar Colas para ${agent.name}`}
+      icon={<Users className="w-5 h-5" />}
+      size="sm"
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose}>
+            Cancelar
+          </ModalButton>
+          <ModalButton variant="primary" onClick={() => onSave(selectedQueues)}>
+            Guardar Cambios
+          </ModalButton>
+        </>
+      }
+    >
+        <div className="space-y-3">
           {availableQueues.length === 0 ? (
             <p className="text-gray-500 text-sm">No hay colas disponibles.</p>
           ) : (
@@ -1034,23 +1027,7 @@ const QueueAssignmentModal = ({
             ))
           )}
         </div>
-
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 font-medium"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={() => onSave(selectedQueues)}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700"
-          >
-            Guardar Cambios
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

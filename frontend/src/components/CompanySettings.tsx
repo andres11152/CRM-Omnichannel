@@ -1,6 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { Modal } from "./ui/Modal";
 import SoundSettings from "./SoundSettings";
 import PermissionsPanel from "./PermissionsPanel";
 
@@ -70,8 +71,6 @@ export const CompanySettings: React.FC = () => {
 
   // ── Avatar Picker Modal ──
   const AvatarPickerModal = () => {
-    if (!pickerOpen) return null;
-
     const predeterminedAvatars = [
       `https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random()}`,
       `https://api.dicebear.com/7.x/bottts/svg?seed=${Math.random()}`,
@@ -84,16 +83,13 @@ export const CompanySettings: React.FC = () => {
     ];
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-        <div className="bg-white dark:bg-reply-panel-dark rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-          <div className="p-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center">
-            <h3 className="font-bold text-lg text-gray-800 dark:text-white">
-              {pickerTarget === "user" ? t("company_settings.avatar_modal.select_profile", "Seleccionar Foto de Perfil") : t("company_settings.avatar_modal.select_logo", "Seleccionar Logo de Empresa")}
-            </h3>
-            <button onClick={() => setPickerOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
-          </div>
-
-          <div className="p-6">
+      <Modal
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        size="md"
+        title={pickerTarget === "user" ? t("company_settings.avatar_modal.select_profile", "Seleccionar Foto de Perfil") : t("company_settings.avatar_modal.select_logo", "Seleccionar Logo de Empresa")}
+      >
+          <div>
             <h4 className="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">{t("company_settings.avatar_modal.upload_title", "Subir Imagen")}</h4>
             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors">
               <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -132,8 +128,7 @@ export const CompanySettings: React.FC = () => {
               ))}
             </div>
           </div>
-        </div>
-      </div>
+      </Modal>
     );
   };
 

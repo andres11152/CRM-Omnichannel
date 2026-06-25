@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { Modal } from "./ui/Modal";
 import { useSound } from "./SoundContext";
 import { api } from "@/lib/axios";
 import { useAuthStore } from "@/stores/authStore";
@@ -95,8 +96,6 @@ export const ProfileSettings: React.FC = () => {
   };
 
   const AvatarPickerModal = () => {
-    if (!pickerOpen) return null;
-
     const predeterminedAvatars = [
       `https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random()}`,
       `https://api.dicebear.com/7.x/bottts/svg?seed=${Math.random()}`,
@@ -108,21 +107,13 @@ export const ProfileSettings: React.FC = () => {
     ];
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-        <div className="bg-white dark:bg-reply-panel-dark rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-          <div className="p-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center">
-            <h3 className="font-bold text-lg text-gray-800 dark:text-white">
-              Seleccionar Foto de Perfil
-            </h3>
-            <button
-              onClick={() => setPickerOpen(false)}
-              className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-            >
-              
-            </button>
-          </div>
-
-          <div className="p-6">
+      <Modal
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        size="md"
+        title="Seleccionar Foto de Perfil"
+      >
+          <div>
             <h4 className="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">
               Subir Imagen
             </h4>
@@ -190,8 +181,7 @@ export const ProfileSettings: React.FC = () => {
               ))}
             </div>
           </div>
-        </div>
-      </div>
+      </Modal>
     );
   };
 

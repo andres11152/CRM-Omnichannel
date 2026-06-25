@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { UserPen } from 'lucide-react';
 import { Contact } from '@/types';
 import { API_BASE_URL } from '@/services/apiConfig';
 import { toast } from 'sonner';
+import { Modal, ModalButton } from '@/components/ui/Modal';
 
 interface Props {
   isOpen: boolean;
@@ -114,26 +115,26 @@ export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, on
     }
   };
 
-  if (!isOpen) return null;
-
-  // Hack: Detect dark mode from main app container since Portal escapes the React tree context
-  // This ensures the modal matches the current theme even outside the main root div
-  const isDark = document.querySelector('.dark') !== null;
-
-  return createPortal(
-    <div className={`${isDark ? 'dark' : ''} fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-opacity`}>
-      <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up border border-gray-100 dark:border-reply-border-dark">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-gray-800/50">
-          <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2 text-lg">
-            <span className="text-xl">️</span> Editar Contacto
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto bg-white dark:bg-reply-panel-dark">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Editar Contacto"
+      icon={<UserPen className="w-5 h-5" />}
+      size="md"
+      busy={loading}
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose} className="flex-1">
+            Cancelar
+          </ModalButton>
+          <ModalButton variant="primary" type="submit" form="contact-edit-form" loading={loading} className="flex-1">
+            Guardar Cambios
+          </ModalButton>
+        </>
+      }
+    >
+        <form id="contact-edit-form" onSubmit={handleSubmit} className="space-y-5">
           {/* Avatar */}
           <div className="flex justify-center mb-2">
               <div className="w-20 h-20 rounded-full bg-reply-green/10 dark:bg-reply-green/20 flex items-center justify-center text-3xl text-reply-green dark:text-reply-green-light font-bold ring-4 ring-white dark:ring-gray-700 shadow-lg">
@@ -215,34 +216,8 @@ export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, on
             </div>
           </div>
 
-          {/* Footer Actions */}
-          <div className="pt-4 flex gap-3">
-            <button 
-              type="button" 
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-reply-bg dark:hover:bg-gray-700 transition-colors font-medium"
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-reply-green hover:bg-reply-green-dark text-white font-medium shadow-lg shadow-reply-green/20 transition-all transform active:scale-[0.98] flex justify-center items-center gap-2"
-            >
-              {loading ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    Guardando...
-                  </>
-              ) : (
-                  <>Guardar Cambios</>
-              )}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 };
 

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { createPortal } from "react-dom";
 import { Deal, Account } from "@/types/crm";
 import { getAccounts, updateDeal, createDeal } from "@/services/crmService";
 import { EmailModal } from "../EmailModal";
@@ -8,17 +7,13 @@ import { toast } from "sonner";
 import { useModal } from "@/context/ModalContext";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import {
-  X,
-  Loader2,
   Mail,
   Trash2,
   Building2,
   User,
-  Calendar,
-  DollarSign,
   Target,
-  Layers,
   Inbox,
 } from "lucide-react";
 
@@ -258,47 +253,32 @@ export const DealModal: React.FC<Props> = ({
     }
   };
 
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100 dark:border-reply-border-dark flex flex-col max-h-[90vh]">
-        {/* Header with Tabs */}
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-white dark:bg-reply-panel-dark">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                {deal ? t("crm.activities.deal") : t("crm.activities.new_deal")}
-              </h2>
-            </div>
-            {deal && (
-              <div className="flex bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1">
-                <button
-                  onClick={() => setActiveTab("details")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "details" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
-                >
-                  {t("crm.accounts.form.general_info")}
-                </button>
-                <button
-                  onClick={() => setActiveTab("history")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "history" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
-                >
-                  {t("crm.activities.history")}
-                </button>
-              </div>
-            )}
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={deal ? t("crm.activities.deal") : t("crm.activities.new_deal")}
+      icon={<Target className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+      size="lg"
+      busy={loading}
+    >
+      <div>
+        {deal && (
+          <div className="flex bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 w-fit mb-5">
+            <button
+              onClick={() => setActiveTab("details")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "details" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
+            >
+              {t("crm.accounts.form.general_info")}
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "history" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
+            >
+              {t("crm.activities.history")}
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors bg-reply-bg dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-full"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        )}
           {activeTab === "details" ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -685,7 +665,6 @@ export const DealModal: React.FC<Props> = ({
             </div>
           )}
         </div>
-      </div>
 
       {showEmailModal && deal?.contactId && (
         <EmailModal
@@ -697,7 +676,6 @@ export const DealModal: React.FC<Props> = ({
           }
         />
       )}
-    </div>,
-    document.body,
+    </Modal>
   );
 };

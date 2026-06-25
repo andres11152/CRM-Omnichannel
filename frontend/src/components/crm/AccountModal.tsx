@@ -2,20 +2,18 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Account } from "@/types/crm";
 import { createAccount, updateAccount } from "@/services/crmService";
-import { 
-  Building2, 
-  Globe, 
-  Mail, 
-  Users, 
-  MapPin, 
-  Activity, 
-  X, 
+import {
+  Building2,
+  Globe,
+  Mail,
+  MapPin,
+  Activity,
   Briefcase,
   CheckCircle2,
   AlertCircle,
   TrendingDown,
-  Zap
 } from "lucide-react";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 
 interface Props {
   isOpen: boolean;
@@ -94,36 +92,35 @@ export const AccountModal: React.FC<Props> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-reply-bg-dark/80 backdrop-blur-md p-4 md:p-6 animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden border border-white/10 relative">
-        {/* Header - Fixed */}
-        <div className="px-8 py-6 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg/30 dark:bg-reply-surface-dark/30 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-inner">
-              <Building2 size={24} />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
-                {account ? t("crm.accounts.edit_title") : t("crm.accounts.new_title")}
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                {account ? t("crm.accounts.edit_desc") : t("crm.accounts.new_desc")}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all duration-200 active:scale-95"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={account ? t("crm.accounts.edit_title") : t("crm.accounts.new_title")}
+      subtitle={account ? t("crm.accounts.edit_desc") : t("crm.accounts.new_desc")}
+      icon={<Building2 size={22} className="text-indigo-600 dark:text-indigo-400" />}
+      size="xl"
+      busy={loading}
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </ModalButton>
+          <ModalButton
+            variant="primary"
+            type="submit"
+            form="account-form"
+            loading={loading}
+            disabled={!formData.name}
           >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Form Content - Scrollable */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8">
+            {!loading && <Building2 size={16} />}
+            {account ? t("common.save") : t("common.new")}
+          </ModalButton>
+        </>
+      }
+    >
+        {/* Form Content */}
+        <form id="account-form" onSubmit={handleSubmit} className="space-y-8">
           {/* Section 1: Basic Information */}
           <section className="space-y-6">
             <div className="flex items-center gap-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
@@ -334,31 +331,7 @@ export const AccountModal: React.FC<Props> = ({
             </div>
           </section>
         </form>
-
-        {/* Footer - Fixed */}
-        <div className="px-8 py-6 border-t border-gray-100 dark:border-reply-border-dark flex justify-end gap-4 shrink-0 bg-gray-50/50 dark:bg-reply-surface-dark/30">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-2.5 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-all active:scale-95"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            onClick={() => handleSubmit()}
-            disabled={loading || !formData.name}
-            className="group relative px-8 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center gap-3 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Building2 size={16} className="transition-transform group-hover:scale-110" />
-            )}
-            <span>{account ? t("common.save") : t("common.new")}</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

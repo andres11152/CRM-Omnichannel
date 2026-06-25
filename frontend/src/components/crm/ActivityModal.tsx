@@ -10,15 +10,14 @@ import {
   User,
   Building2,
   ClipboardList,
-  X,
   Info,
   AlertTriangle,
   Users,
   Briefcase,
   CheckCircle2,
-  Zap
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 import { Activity, Account, Deal } from "@/types/crm";
 import {
   createActivity,
@@ -199,8 +198,6 @@ export const ActivityModal: React.FC<Props> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   const isMeeting = formData.type === "MEETING";
 
   // Activity type icons
@@ -213,35 +210,30 @@ export const ActivityModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-gray-200 dark:border-reply-border-dark transform transition-all scale-100">
-        {/* Header */}
-        <div className="px-8 py-6 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg/30 dark:bg-reply-surface-dark/30 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-orange-600/10 flex items-center justify-center text-orange-600 dark:text-orange-400 border border-orange-500/20 shadow-inner">
-              <ClipboardList size={24} />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
-                {activity ? t("crm.activities.edit_title") : t("crm.activities.new_title")}
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                {isMeeting ? t("crm.activities.meeting_sync") : t("crm.activities.new_desc")}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all duration-200 active:scale-95"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={activity ? t("crm.activities.edit_title") : t("crm.activities.new_title")}
+      subtitle={isMeeting ? t("crm.activities.meeting_sync") : t("crm.activities.new_desc")}
+      icon={<ClipboardList size={22} className="text-orange-600 dark:text-orange-400" />}
+      size="lg"
+      busy={loading}
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </ModalButton>
+          <ModalButton variant="primary" type="submit" form="activity-form" loading={loading}>
+            {activity ? t("common.save") : t("crm.activities.new_title")}
+          </ModalButton>
+        </>
+      }
+    >
         {/* Form */}
         <form
+          id="activity-form"
           onSubmit={handleSubmit}
-          className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-180px)]"
+          className="space-y-5"
         >
           {/* Locked Contact Card */}
           {preselectedContact ? (
@@ -587,48 +579,6 @@ export const ActivityModal: React.FC<Props> = ({
             </div>
           )}
         </form>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-reply-border-dark bg-reply-bg dark:bg-gray-800/50 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-2.5 h-11 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl font-semibold transition-all"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            type="submit"
-            onClick={handleSubmit}
-            disabled={loading}
-            className="px-6 py-2.5 h-11 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading && (
-              <svg
-                className="animate-spin h-4 w-4 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-            )}
-            {activity ? t("common.save") : t("crm.activities.new_title")}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

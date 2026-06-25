@@ -115,10 +115,18 @@ export const Modal: React.FC<ModalProps> = ({
     if (closeOnBackdrop && !busy) onClose();
   }, [closeOnBackdrop, busy, onClose]);
 
+  // El portal sale del árbol React y se monta en <body>. Propagamos la clase
+  // `dark` para que el tema aplique siempre, sin importar dónde viva el toggle.
+  const isDark =
+    typeof document !== "undefined" &&
+    (document.documentElement.classList.contains("dark") ||
+      document.body.classList.contains("dark") ||
+      !!document.querySelector(".dark"));
+
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <div className={`${isDark ? "dark" : ""} fixed inset-0 z-[9999] flex items-center justify-center p-4`}>
           {/* Backdrop con blur */}
           <motion.div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"

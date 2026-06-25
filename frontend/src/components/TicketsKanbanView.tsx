@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Modal, ModalButton } from "./ui/Modal";
 import {
   DragDropContext,
   Droppable,
@@ -619,39 +620,27 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
 
       {/* ─── VIEW DETAILS MODAL ─── */}
       {showViewModal && selectedTicket && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={handleCloseModals}
+        <Modal
+          isOpen
+          onClose={handleCloseModals}
+          title={t("tickets_kanban.labels.ticket_details", "Detalles del Ticket")}
+          subtitle={`#${selectedTicket.ticketNumber || selectedTicket.id.slice(-8)}`}
+          icon={<Eye className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+          size="md"
+          footer={
+            <>
+              <ModalButton variant="secondary" onClick={handleCloseModals}>
+                {t("tickets_kanban.labels.close", "Cerrar")}
+              </ModalButton>
+              <ModalButton variant="primary" onClick={() => handleGoToChat(selectedTicket)}>
+                <ExternalLink className="w-3.5 h-3.5" />
+                {t("tickets_kanban.labels.go_to_chat", "Ir al Chat")}
+              </ModalButton>
+            </>
+          }
         >
-          <div
-            className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-200 dark:border-reply-border-dark"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                  <Eye className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                    {t("tickets_kanban.labels.ticket_details", "Detalles del Ticket")}
-                  </h3>
-                  <p className="text-[10px] text-gray-400 font-mono">
-                    #{selectedTicket.ticketNumber || selectedTicket.id.slice(-8)}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleCloseModals}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-
             {/* Body */}
-            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-4">
               {/* Contact */}
               <div className="flex items-center gap-3 p-3.5 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-700/40">
                 <Avatar
@@ -739,62 +728,26 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 </div>
               )}
             </div>
-
-            {/* Footer */}
-            <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/30 border-t border-gray-100 dark:border-reply-border-dark flex justify-between items-center">
-              <button
-                onClick={handleCloseModals}
-                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors font-medium"
-              >
-                {t("tickets_kanban.labels.close", "Cerrar")}
-              </button>
-              <button
-                onClick={() => handleGoToChat(selectedTicket)}
-                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors text-xs flex items-center gap-1.5"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                {t("tickets_kanban.labels.go_to_chat", "Ir al Chat")}
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ─── ASSIGN AGENT MODAL ─── */}
       {showAssignModal && selectedTicket && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={handleCloseModals}
+        <Modal
+          isOpen
+          onClose={handleCloseModals}
+          title={t("tickets_kanban.labels.assign_title", "Asignar Agente")}
+          subtitle={`${selectedTicket.contact?.name} · #${selectedTicket.ticketNumber || selectedTicket.id.slice(-6)}`}
+          icon={<UserPlus className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+          size="sm"
+          footer={
+            <ModalButton variant="secondary" onClick={handleCloseModals}>
+              {t("tickets_kanban.labels.cancel", "Cancelar")}
+            </ModalButton>
+          }
         >
-          <div
-            className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-gray-200 dark:border-reply-border-dark"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <UserPlus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                    {t("tickets_kanban.labels.assign_title", "Asignar Agente")}
-                  </h3>
-                  <p className="text-[10px] text-gray-400">
-                    {selectedTicket.contact?.name} · #{selectedTicket.ticketNumber || selectedTicket.id.slice(-6)}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleCloseModals}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-
             {/* Agent List */}
-            <div className="p-4 space-y-1.5 max-h-72 overflow-y-auto">
+            <div className="space-y-1.5">
               {agents.length === 0 ? (
                 <div className="text-center py-6">
                   <UserPlus className="w-8 h-8 text-gray-300 mx-auto mb-2" />
@@ -836,18 +789,7 @@ export const TicketsKanbanView: React.FC<Props> = ({ isWidget = false }) => {
                 ))
               )}
             </div>
-
-            {/* Footer */}
-            <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/30 border-t border-gray-100 dark:border-reply-border-dark flex justify-end">
-              <button
-                onClick={handleCloseModals}
-                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors font-medium"
-              >
-                {t("tickets_kanban.labels.cancel", "Cancelar")}
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -132,6 +132,9 @@ const EnvSchema = z.object({
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_REGION: z.string().optional(),
   S3_BUCKET_NAME: z.string().optional().describe("AWS S3 Bucket name"),
+  // Para emular S3 en local con MinIO: si se define, el S3Client usa este
+  // endpoint + path-style. En prod NO se define → comportamiento AWS normal.
+  S3_ENDPOINT: z.string().optional().describe("Custom S3 endpoint (e.g. MinIO http://localhost:9000)"),
 
   GOOGLE_AI_API_KEY: z.string().optional(),
 

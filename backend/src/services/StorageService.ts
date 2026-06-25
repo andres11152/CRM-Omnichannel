@@ -66,6 +66,9 @@ class S3StorageService implements IStorageService {
       Logger.warn("[StorageService] AWS Credentials missing. S3 will fail.");
     }
 
+    // MinIO/local: si hay endpoint custom, usarlo con path-style (bucket en el
+    // path, no en el host). Sin S3_ENDPOINT → AWS real (prod intacto).
+    const endpoint = env.S3_ENDPOINT;
     this.client = new S3Client({
       region,
       credentials:
@@ -75,6 +78,7 @@ class S3StorageService implements IStorageService {
               secretAccessKey,
             }
           : undefined,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
     });
   }
 

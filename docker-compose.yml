@@ -55,6 +55,38 @@ services:
       timeout: 3s
       retries: 5
 
+  # MinIO — almacenamiento S3-compatible para emular AWS S3 en local.
+  # Mismo código/SDK que prod (STORAGE_PROVIDER=s3), datos 100% separados.
+  # API: http://localhost:9000  ·  Consola web: http://localhost:9001
+  minio:
+    image: minio/minio:latest
+    container_name: reply-minio-local
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data_local:/data
+
+  # One-shot: espera a MinIO y crea el bucket local (idempotente).
+  minio-init:
+    image: minio/mc:latest
+    container_name: reply-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin; do echo 'esperando a minio...'; sleep 2; done;
+      /usr/bin/mc mb -p local/reply-media-local || true;
+      /usr/bin/mc anonymous set download local/reply-media-local || true;
+      echo 'bucket reply-media-local listo';
+      "
+
 volumes:
   postgres_data_18:
   redis_data_local:
+  minio_data_local:

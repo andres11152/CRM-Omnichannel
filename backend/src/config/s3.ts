@@ -13,6 +13,10 @@ export const s3Config = {
           secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
         }
       : undefined,
+  // MinIO/local: endpoint custom + path-style si S3_ENDPOINT está definido.
+  ...(process.env.S3_ENDPOINT
+    ? { endpoint: process.env.S3_ENDPOINT, forcePathStyle: true }
+    : {}),
 };
 
 // Only initialize S3 client if credentials are provided

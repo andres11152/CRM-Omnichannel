@@ -68,12 +68,14 @@ export const connectRedis = async () => {
     await redisClient.connect();
     Logger.info("[OK] Redis Client Connected");
 
-    // Set volatile-lru eviction: under memory pressure, Redis evicts the
-    // least-recently-used keys that have a TTL set. This protects BullMQ
-    // job structures (no TTL) while allowing wa:store:* and wa:sess:* keys
-    // (which all have TTLs after our fixes) to be evicted gracefully.
-    redisClient.sendCommand(["CONFIG", "SET", "maxmemory-policy", "volatile-lru"])
-      .then(() => Logger.info("[Redis] [OK] maxmemory-policy set to volatile-lru"))
+    // Política: noeviction. Es la que EXIGE BullMQ (con cualquier otra emite
+    // "IMPORTANT! Eviction policy ... should be noeviction" y no garantiza no
+    // perder jobs) y es la que realmente usa Redis en Render. Antes forzábamos
+    // volatile-lru, que en Render no aplicaba (NOPERM) pero en local rompía la
+    // paridad y molestaba a BullMQ. El control de OOM se hace con TTLs en las
+    // llaves de caché/wa:store + el MemoryMonitor, no con eviction.
+    redisClient.sendCommand(["CONFIG", "SET", "maxmemory-policy", "noeviction"])
+      .then(() => Logger.info("[Redis] [OK] maxmemory-policy set to noeviction"))
       .catch((e) => Logger.warn("[Redis] Could not set maxmemory-policy (configure manually in redis.conf):", e));
 
     // One-time cleanup: delete old wa:store:* keys that were written WITHOUT a

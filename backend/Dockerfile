@@ -1,6 +1,6 @@
 # 🐳 PRODUCTION DOCKERFILE (Scale-Optimized for 1000+ Tenants)
-# Node.js 20 LTS with memory optimization
-FROM node:20-alpine AS base
+# Node.js 22 LTS — paridad con el runtime de Render (22.22.0)
+FROM node:22-alpine AS base
 
 # Install dependencies for native modules
 RUN apk add --no-cache \
@@ -33,7 +33,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 
 # Install only runtime dependencies
 RUN apk add --no-cache \

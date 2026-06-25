@@ -1,10 +1,26 @@
-version: '3.8'
+# 🐳 STACK LOCAL — Paridad exacta con Render (staging)
+#
+# Versiones espejo de Render (verificadas el 2026-06-24):
+#   - Postgres 18.x   (Render: PostgreSQL 18.3)
+#   - Redis 7.2.4     (Render: 7.2.4, maxmemory 256M, policy noeviction)
+#
+# Este stack es AISLADO: tiene su propia BD/Redis con datos locales. El backend
+# local debe apuntar AQUÍ (ver backend/.env), nunca a Render, para no provocar
+# el conflicto de sesión de WhatsApp (stream:error conflict / chats duplicados).
+#
+# Uso:
+#   docker compose up -d              # levanta Postgres + Redis
+#   docker compose down              # detiene (conserva datos)
+#   docker compose down -v           # detiene y BORRA el volumen (reset total)
+#
+# ⚠️ Si antes corriste Postgres 15/16, el volumen viejo NO arranca en PG18.
+#    Ejecuta una vez:  docker compose down -v   y luego  docker compose up -d
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: reply-postgres-local
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: reply_user
       POSTGRES_PASSWORD: reply_password
@@ -12,14 +28,33 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PG18+ requiere el mount en /var/lib/postgresql (no en /data); guarda los
+      # datos en un subdirectorio por versión mayor (compat. pg_upgrade).
+      - postgres_data_18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reply_user -d reply_db_local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2.4-alpine
     container_name: reply-redis-local
-    restart: always
+    restart: unless-stopped
+    # Espejo de la config de Render: 256MB y noeviction (rechaza escrituras al
+    # llenarse, en vez de evictar). Reproduce localmente el comportamiento de
+    # Redis OOM de producción para detectarlo antes de desplegar.
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data_local:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
 volumes:
-  postgres_data:
+  postgres_data_18:
+  redis_data_local:

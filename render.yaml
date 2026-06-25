@@ -1,0 +1,74 @@
+# 🚀 RENDER BLUEPRINT — Despliegue automático del backend (staging)
+#
+# Cómo se usa:
+#   A) Si adoptas este Blueprint (Render → New → Blueprint, apuntando a este repo),
+#      Render creará/sincronizará el servicio con esta config y pedirá los secretos
+#      marcados `sync: false`.
+#   B) Si tu servicio ya existe (creado a mano en el dashboard), este archivo es la
+#      fuente de verdad documentada. Lo ÚNICO que debes replicar en el dashboard
+#      para activar las migraciones automáticas es el Build Command de abajo:
+#         npm install && npx prisma migrate deploy && npm run build
+#
+# Node: se fija a 22.22.0 vía backend/.node-version y NODE_VERSION (paridad con el
+# entorno actual de Render). Postgres 18 / Redis 7.2.4 son recursos gestionados ya
+# existentes (no se redefinen aquí para no duplicarlos); sus URLs van como secretos.
+
+services:
+  - type: web
+    name: sentry-crm-api
+    runtime: node
+    rootDir: backend
+    branch: main
+    autoDeploy: true                       # 🔁 deploy automático en cada push a main
+    healthCheckPath: /health
+    # 🔑 migrate deploy en el build → nunca falta una migración tras un push.
+    #    Es idempotente: no hace nada si la BD ya está al día.
+    buildCommand: npm install && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      # NODE_MAX_OLD_SPACE_MB ≈ 75% del plan de RAM (ver memoria render-oom).
+      - key: NODE_MAX_OLD_SPACE_MB
+        value: "2048"
+      # ── Secretos (se configuran en el dashboard, no se versionan) ──
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SESSION_SECRET            # ⚠️ DEBE ser idéntico en todo entorno que comparta esta BD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Email (SMTP global)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      # IA / Storage / WhatsApp (opcionales según features activas)
+      - key: GOOGLE_AI_API_KEY
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: S3_BUCKET_NAME
+        sync: false
+      - key: WA_SYNC_FULL_HISTORY
+        sync: false

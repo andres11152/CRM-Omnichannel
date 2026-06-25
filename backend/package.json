@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Backend for Sentry",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "nodemon",
     "build": "npx rimraf dist && tsc",

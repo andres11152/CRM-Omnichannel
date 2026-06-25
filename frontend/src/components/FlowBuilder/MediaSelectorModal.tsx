@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "@/services/apiConfig";
-import { ImageIcon, Video, Headphones, FileText, Zap, X, Library, Mic } from "lucide-react";
+import { ImageIcon, Video, Headphones, FileText, Zap, Library, Mic } from "lucide-react";
 import { AudioRecorder } from "../Media/AudioRecorder";
 import { MediaAsset } from "@/types/media.types";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 
 interface MediaSelectorModalProps {
   type: "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT";
@@ -90,36 +91,29 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
     }
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[99999] p-4 animate-fadeIn">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-slideUp">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-reply-border-dark bg-gradient-to-r from-gray-50 to-white dark:from-[#111b21] dark:to-[#202c33]">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                {getTypeIcon(type)} Seleccionar{" "}
-                {type === "IMAGE"
-                  ? "Imagen"
-                  : type === "VIDEO"
-                    ? "Video"
-                    : type === "AUDIO"
-                      ? "Audio"
-                      : "Documento"}
-              </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Haz click en un archivo para seleccionarlo
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-            >
-              <X size={20} />
-            </button>
-          </div>
-        </div>
+  const typeLabel =
+    type === "IMAGE" ? "Imagen" : type === "VIDEO" ? "Video" : type === "AUDIO" ? "Audio" : "Documento";
 
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={`Seleccionar ${typeLabel}`}
+      subtitle="Haz click en un archivo para seleccionarlo"
+      icon={getTypeIcon(type)}
+      size="xl"
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose}>
+            Cancelar
+          </ModalButton>
+          <ModalButton variant="primary" onClick={handleSelect} disabled={!selectedAsset}>
+            Seleccionar
+          </ModalButton>
+        </>
+      }
+    >
+      <div className="-mx-6 -my-5">
         {type === "AUDIO" && (
           <div className="px-6 pb-0 flex gap-6 border-b border-gray-200 dark:border-reply-border-dark bg-gray-50/50 dark:bg-reply-surface-dark/50">
             <button
@@ -244,27 +238,7 @@ export const MediaSelectorModal: React.FC<MediaSelectorModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-200 dark:border-reply-border-dark flex justify-end gap-4 bg-gray-50/50 dark:bg-reply-surface-dark/50">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 rounded-xl text-sm font-black text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all uppercase tracking-widest"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSelect}
-            disabled={!selectedAsset}
-            className={`px-8 py-2.5 rounded-xl text-sm font-black transition-all shadow-xl uppercase tracking-widest ${
-              selectedAsset
-                ? "bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95"
-                : "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed shadow-none"
-            }`}
-          >
-            Seleccionar
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

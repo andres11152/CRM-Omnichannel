@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Users } from "lucide-react";
 import { QueueConfig, Agent } from "@/types";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 import {
   getQueues,
   createQueue,
@@ -341,35 +343,30 @@ const QueuesConfig: React.FC = () => {
         )}
       </div>
 
-      {/* Modal / Slide-over */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-reply-panel-dark w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-reply-border-dark animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-reply-border-dark bg-reply-bg/50 dark:bg-reply-surface-dark/50 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-                {editingQueue ? t("queues_config.modal.edit_title", "Editar Cola") : t("queues_config.modal.create_title", "Crear Nueva Cola")}
-              </h3>
-              <button
-                onClick={handleCloseModal}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
+      {/* Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        title={editingQueue ? t("queues_config.modal.edit_title", "Editar Cola") : t("queues_config.modal.create_title", "Crear Nueva Cola")}
+        icon={<Users className="w-5 h-5" />}
+        size="md"
+        busy={isSaving}
+        footer={
+          <>
+            <ModalButton variant="secondary" onClick={handleCloseModal}>
+              {t("common.cancel", "Cancelar")}
+            </ModalButton>
+            <ModalButton variant="primary" onClick={handleSave} loading={isSaving}>
+              {isSaving
+                ? t("queues_config.modal.saving", "Guardando...")
+                : editingQueue
+                  ? t("queues_config.modal.update", "Actualizar")
+                  : t("queues_config.modal.create", "Crear Cola")}
+            </ModalButton>
+          </>
+        }
+      >
+            <div className="space-y-4">
               {/* Name */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
@@ -550,34 +547,7 @@ const QueuesConfig: React.FC = () => {
                 </p>
               </div>
             </div>
-
-            <div className="px-6 py-4 bg-reply-bg dark:bg-reply-surface-dark flex justify-end gap-3 border-t border-gray-200 dark:border-reply-border-dark">
-              <button
-                onClick={handleCloseModal}
-                className="px-4 py-2 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              >
-                {t("common.cancel", "Cancelar")}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg shadow-indigo-500/30 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    {t("queues_config.modal.saving", "Guardando...")}
-                  </>
-                ) : editingQueue ? (
-                  t("queues_config.modal.update", "Actualizar")
-                ) : (
-                  t("queues_config.modal.create", "Crear Cola")
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };

@@ -17,6 +17,7 @@ import {
   Zap,
   Globe
 } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
 
 interface Props {
   isOpen: boolean;
@@ -34,7 +35,7 @@ export const TenantMetricsModal: React.FC<Props> = ({
   loading,
 }) => {
   const { t } = useTranslation();
-  if (!isOpen || !company) return null;
+  if (!company) return null;
 
   const formatTime = (seconds: number) => {
     if (seconds < 60) return `${seconds}s`;
@@ -44,36 +45,15 @@ export const TenantMetricsModal: React.FC<Props> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in backdrop-blur-md"
-      onClick={onClose}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={company.name}
+      subtitle={t("tenants.metrics.full_dashboard", "Dashboard de Métricas Completo")}
+      icon={<Globe className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+      size="full"
     >
-      <div
-        className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto border border-gray-150 dark:border-reply-border-dark"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sticky top-0 px-6 py-5 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-white/95 dark:bg-reply-panel-dark/95 backdrop-blur-sm z-10">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl text-indigo-600 dark:text-indigo-400">
-              <Globe className="w-6 h-6 animate-pulse" />
-            </div>
-            <div>
-              <h3 className="font-bold text-2xl text-gray-800 dark:text-white tracking-tight">
-                {company.name}
-              </h3>
-              <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">
-                {t("tenants.metrics.full_dashboard", "Dashboard de Métricas Completo")}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-2xl font-semibold leading-none"
-          >
-            ×
-          </button>
-        </div>
-
+      <div className="-mx-6 -my-5">
         {loading ? (
           <div className="p-16 text-center text-gray-500">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600/30 border-t-indigo-600 mx-auto mb-4"></div>
@@ -179,7 +159,7 @@ export const TenantMetricsModal: React.FC<Props> = ({
           <div className="p-12 text-center text-gray-500">{t("tenants.metrics.error_loading", "No se pudieron cargar las métricas.")}</div>
         )}
       </div>
-    </div>
+    </Modal>
   );
 };
 

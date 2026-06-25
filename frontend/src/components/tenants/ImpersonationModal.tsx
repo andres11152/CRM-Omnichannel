@@ -1,14 +1,13 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { 
-  ShieldAlert, 
-  X, 
-  User as UserIcon, 
-  ChevronRight, 
+import {
+  ShieldAlert,
+  ChevronRight,
   Loader2,
   ShieldCheck,
-  Headset
+  Headset,
 } from "lucide-react";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 
 interface UserInfo {
   id: string;
@@ -38,8 +37,6 @@ export const ImpersonationModal: React.FC<Props> = ({
   const { t } = useTranslation();
   const [selectedUserId, setSelectedUserId] = useState<string | "">("");
 
-  if (!isOpen) return null;
-
   const handleConfirm = () => {
     onConfirm(selectedUserId || undefined);
   };
@@ -50,33 +47,32 @@ export const ImpersonationModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl border border-slate-200 dark:border-reply-border-dark w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-reply-border-dark flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-              <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                {t("tenants.impersonation.title", "Protocolo de Soporte")}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {t("tenants.impersonation.impersonating", "Impersonando:")} <span className="font-semibold text-amber-600 dark:text-amber-400">{companyName}</span>
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors"
-          >
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
-        </div>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t("tenants.impersonation.title", "Protocolo de Soporte")}
+      subtitle={
+        <>
+          {t("tenants.impersonation.impersonating", "Impersonando:")}{" "}
+          <span className="font-semibold text-amber-600 dark:text-amber-400">{companyName}</span>
+        </>
+      }
+      icon={<ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+      size="md"
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose} className="flex-1">
+            {t("common.cancel", "Cancelar")}
+          </ModalButton>
+          <ModalButton variant="primary" onClick={handleConfirm} disabled={!selectedUserId} className="flex-1">
+            {t("tenants.impersonation.login_button", "Iniciar Sesión")}
+            <ChevronRight className="w-4 h-4" />
+          </ModalButton>
+        </>
+      }
+    >
         {/* Content */}
-        <div className="p-6">
+        <div>
           <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/30">
             <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
               {t("tenants.impersonation.description", "Seleccione el perfil de usuario con el que desea acceder para realizar las labores de soporte técnico.")}
@@ -141,29 +137,6 @@ export const ImpersonationModal: React.FC<Props> = ({
             )}
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-reply-border-dark flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-colors"
-          >
-            {t("common.cancel", "Cancelar")}
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!selectedUserId}
-            className={`flex-1 px-4 py-2.5 text-sm font-bold text-white rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${
-              selectedUserId
-                ? "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20"
-                : "bg-slate-400 cursor-not-allowed opacity-50"
-            }`}
-          >
-            {t("tenants.impersonation.login_button", "Iniciar Sesión")}
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

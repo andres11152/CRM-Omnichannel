@@ -1,19 +1,19 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { 
-  X, 
-  User, 
-  Mail, 
-  Lock, 
-  Shield, 
-  Building, 
-  Zap, 
-  Plus, 
-  Save, 
-  UserPlus, 
+import {
+  User,
+  Mail,
+  Lock,
+  Shield,
+  Building,
+  Zap,
+  Plus,
+  Save,
+  UserPlus,
   Settings2,
-  Trash2
+  Trash2,
 } from "lucide-react";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 
 export interface AgentFormData {
   name: string;
@@ -68,36 +68,30 @@ export const AgentModal: React.FC<AgentModalProps> = ({
   onRemoveSkill,
 }) => {
   const { t } = useTranslation();
-  if (!show) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4 animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-t-3xl sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-100 dark:border-reply-border-dark transform transition-all flex flex-col max-h-[95vh] sm:max-h-[90vh]">
-        {/* Header */}
-        <div className="px-8 py-6 border-b border-gray-50 dark:border-reply-border-dark flex justify-between items-center bg-[#FBFCFE] dark:bg-reply-surface-dark">
-          <div className="flex items-center gap-4">
-            <div className={`p-3 rounded-2xl ${isEditing ? 'bg-indigo-500 text-white' : 'bg-emerald-500 text-white'} shadow-lg`}>
-              {isEditing ? <Settings2 size={24} /> : <UserPlus size={24} />}
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
-                {isEditing ? t("agent_modal.edit_title", "Editar Agente") : t("agent_modal.create_title", "Nuevo Agente")}
-              </h3>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">
-                {isEditing ? t("agent_modal.edit_desc", "Configuración de perfil") : t("agent_modal.create_desc", "Registro de nuevo miembro")}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
+    <Modal
+      isOpen={show}
+      onClose={onClose}
+      title={isEditing ? t("agent_modal.edit_title", "Editar Agente") : t("agent_modal.create_title", "Nuevo Agente")}
+      subtitle={isEditing ? t("agent_modal.edit_desc", "Configuración de perfil") : t("agent_modal.create_desc", "Registro de nuevo miembro")}
+      icon={isEditing ? <Settings2 size={22} /> : <UserPlus size={22} />}
+      size="xl"
+      busy={saving}
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose}>
+            {t("common.cancel", "Cancelar")}
+          </ModalButton>
+          <ModalButton variant="primary" onClick={onSave} loading={saving}>
+            {!saving && <Save size={16} />}
+            {saving ? t("agent_modal.processing", "Procesando...") : isEditing ? t("company_settings.save_button", "Guardar Cambios") : t("agent_modal.finish_registration", "Finalizar Registro")}
+          </ModalButton>
+        </>
+      }
+    >
         {/* Form Content */}
-        <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
+        <div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
             {/* LEFT COLUMN: Identity & Access */}
             <div className="space-y-8">
@@ -249,29 +243,6 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="px-8 py-6 border-t border-gray-50 dark:border-reply-border-dark bg-[#FBFCFE] dark:bg-reply-surface-dark flex justify-end gap-4">
-          <button
-            onClick={onClose}
-            className="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-900 dark:hover:text-white transition-all"
-          >
-            {t("common.cancel", "Cancelar")}
-          </button>
-          <button
-            onClick={onSave}
-            disabled={saving}
-            className="group px-10 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1.25rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-wait"
-          >
-            {saving ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Save size={16} className="group-hover:scale-110 transition-transform" />
-            )}
-            {saving ? t("agent_modal.processing", "Procesando...") : isEditing ? t("company_settings.save_button", "Guardar Cambios") : t("agent_modal.finish_registration", "Finalizar Registro")}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

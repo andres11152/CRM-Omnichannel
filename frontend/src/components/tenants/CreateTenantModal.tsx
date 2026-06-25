@@ -9,10 +9,10 @@ import {
   Mail,
   Lock,
   Zap,
-  X,
   ShieldCheck,
   Rocket,
 } from "lucide-react";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 
 interface Props {
   isOpen: boolean;
@@ -99,36 +99,36 @@ export const CreateTenantModal: React.FC<Props> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-reply-bg-dark/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-reply-panel-dark rounded-3xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden border border-white/10">
-        {/* Header - Fixed */}
-        <div className="px-8 py-6 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg/30 dark:bg-reply-surface-dark/30 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-inner">
-              <Rocket size={24} />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
-                {t("tenants.modal.create_title", "Crear Nueva Empresa")}
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                Onboarding de nuevo tenant SaaS
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all duration-200"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t("tenants.modal.create_title", "Crear Nueva Empresa")}
+      subtitle="Onboarding de nuevo tenant SaaS"
+      icon={<Rocket size={22} className="text-indigo-600 dark:text-indigo-400" />}
+      size="lg"
+      busy={isCreating}
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose}>
+            {t("common.cancel", "Cancelar")}
+          </ModalButton>
+          <ModalButton
+            variant="primary"
+            onClick={handleCreateCompany}
+            loading={isCreating}
+            disabled={!newCompanyName || !newAdminEmail}
           >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8">
+            {!isCreating && <Rocket size={16} />}
+            {isCreating
+              ? t("tenants.modal.creating", "Creando...")
+              : t("tenants.modal.create_button", "Confirmar y Crear")}
+          </ModalButton>
+        </>
+      }
+    >
+        {/* Content */}
+        <div className="space-y-8">
           {/* Section: Company Identity */}
           <section className="space-y-6">
             <div className="flex items-center gap-2 border-b border-gray-100 dark:border-reply-border-dark pb-2">
@@ -299,36 +299,6 @@ export const CreateTenantModal: React.FC<Props> = ({
             </div>
           </section>
         </div>
-
-        {/* Footer - Fixed */}
-        <div className="px-8 py-6 border-t border-gray-100 dark:border-reply-border-dark flex justify-end gap-4 shrink-0 bg-gray-50/50 dark:bg-reply-surface-dark/30">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-gray-700 transition-all active:scale-95"
-          >
-            {t("common.cancel", "Cancelar")}
-          </button>
-          <button
-            onClick={handleCreateCompany}
-            disabled={isCreating || !newCompanyName || !newAdminEmail}
-            className="group relative px-8 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center gap-3 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed"
-          >
-            {isCreating ? (
-              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Rocket
-                size={16}
-                className="transition-transform group-hover:translate-x-1 group-hover:-translate-y-1"
-              />
-            )}
-            <span>
-              {isCreating
-                ? t("tenants.modal.creating", "Creando...")
-                : t("tenants.modal.create_button", "Confirmar y Crear")}
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

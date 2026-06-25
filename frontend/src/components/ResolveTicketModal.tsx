@@ -1,9 +1,7 @@
 import React, { useState } from "react";
 import {
-  X,
   CheckCircle2,
   LifeBuoy,
-  ShieldAlert,
   Archive,
   Ban,
   Briefcase,
@@ -11,6 +9,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { ResolutionType } from "@/types";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 
 interface Props {
   isOpen: boolean;
@@ -27,8 +26,6 @@ export const ResolveTicketModal: React.FC<Props> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [note, setNote] = useState("");
-
-  if (!isOpen) return null;
 
   const categories = [
     {
@@ -80,34 +77,39 @@ export const ResolveTicketModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      {/* [SEC] ENTERPRISE: Max height constraints and flex column layout for scrolling content */}
-      <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 dark:border-reply-border-dark">
-        {/* 1. Header (Sticky) */}
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-white dark:bg-reply-panel-dark flex-shrink-0 z-10">
-          <div className="flex items-center gap-2">
-            <div className="bg-green-100 dark:bg-green-900/20 p-1.5 rounded-full">
-              <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
-                Finalizar Ticket
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Selecciona el resultado de la gestión
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Finalizar Ticket"
+      subtitle="Selecciona el resultado de la gestión"
+      icon={<CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />}
+      size="md"
+      busy={isResolving}
+      footer={
+        <>
+          <ModalButton
+            variant="secondary"
+            onClick={() => onResolve("SPAM", "Ticket marcado como Spam")}
+            disabled={isResolving}
+            className="!text-red-600 dark:!text-red-400 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/30"
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* 2. Content (Scrollable) */}
-        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 relative">
+            <Ban className="w-4 h-4" />
+            <span className="hidden sm:inline">Spam</span>
+          </ModalButton>
+          <ModalButton
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={!selectedCategory}
+            loading={isResolving}
+            className="flex-1"
+          >
+            {!isResolving && <CheckCircle2 className="w-4 h-4" />}
+            {isResolving ? "Procesando..." : "Confirmar Resolución"}
+          </ModalButton>
+        </>
+      }
+    >
+      <div>
           <div className="grid grid-cols-1 gap-3 mb-6">
             {categories.map((cat) => {
               const Icon = cat.icon;
@@ -182,63 +184,8 @@ export const ResolveTicketModal: React.FC<Props> = ({
               {/* Character count or helper could go here */}
             </div>
           </div>
-        </div>
-
-        {/* 3. Footer (Sticky) */}
-        <div className="p-4 border-t border-gray-100 dark:border-reply-border-dark bg-white dark:bg-reply-panel-dark flex-shrink-0 flex gap-3 z-10">
-          <button
-            onClick={() => onResolve("SPAM", "Ticket marcado como Spam")}
-            className="px-4 py-2.5 rounded-xl border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/30 font-bold text-sm flex items-center justify-center gap-2 transition-colors hover:shadow-sm"
-            title="Marcar como Spam y Bloquear"
-          >
-            <Ban className="w-4 h-4" />
-            <span className="hidden sm:inline">Spam</span>
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!selectedCategory || isResolving}
-            className={`flex-1 px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95
-                            ${
-                              !selectedCategory || isResolving
-                                ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed shadow-none"
-                                : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-500/30 hover:shadow-blue-500/40"
-                            }
-                        `}
-          >
-            {isResolving ? (
-              <>
-                <svg
-                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Procesando...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                Confirmar Resolución
-              </>
-            )}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

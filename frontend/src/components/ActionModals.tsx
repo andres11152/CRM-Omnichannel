@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { Modal } from "@/components/ui/Modal";
 import { 
   DollarSign, 
   CreditCard, 
@@ -41,43 +41,10 @@ const ModalBackdrop: React.FC<{
   children: React.ReactNode;
   title: string;
 }> = ({ onClose, children, title }) => {
-  return createPortal(
-    <div
-      className="fixed inset-0 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-      style={{ zIndex: 99999 }}
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-reply-border-dark transform transition-all scale-100"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-gray-800/50">
-          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-lg">
-            {title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          >
-            <svg
-              className="w-5 h-5 text-gray-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Modal isOpen onClose={onClose} title={title} size="md">
+      {children}
+    </Modal>
   );
 };
 

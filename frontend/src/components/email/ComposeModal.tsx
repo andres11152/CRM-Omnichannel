@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { api } from "@/lib/axios";
 import { toast } from "sonner";
-import { X, Send, Plus, Reply, Forward, ReplyAll } from "lucide-react";
+import { Send, Plus, Reply, Forward, ReplyAll } from "lucide-react";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 
 // ────────────────────────────────────────────────
 // TYPES
@@ -118,8 +119,6 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ open, onClose, onSen
     }
   };
 
-  if (!open) return null;
-
   const modeLabels: Record<ComposeMode, { title: string; icon: React.ReactNode }> = {
     new: { title: "Nuevo Correo", icon: <Plus size={18} /> },
     reply: { title: "Responder", icon: <Reply size={18} /> },
@@ -130,19 +129,26 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ open, onClose, onSen
   const modeInfo = modeLabels[mode];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white dark:bg-reply-panel-dark w-full sm:max-w-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200 dark:border-reply-border-dark">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-reply-border-dark/60 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30">
-          <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400">
-            {modeInfo.icon}
-            <h3 className="font-bold text-lg">{modeInfo.title}</h3>
-          </div>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-white/50 dark:hover:bg-gray-800 transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      title={modeInfo.title}
+      icon={modeInfo.icon}
+      size="lg"
+      busy={sending}
+      footer={
+        <>
+          <span className="mr-auto text-xs text-gray-400">
+            Presiona <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] font-bold">Ctrl+Enter</kbd> para enviar
+          </span>
+          <ModalButton variant="primary" onClick={handleSend} loading={sending}>
+            {!sending && <Send size={14} />}
+            {sending ? "Enviando..." : "Enviar"}
+          </ModalButton>
+        </>
+      }
+    >
+      <div className="-mx-6 -my-5">
         {/* Fields */}
         <div className="p-4 space-y-3 border-b border-gray-100 dark:border-reply-border-dark/60">
           <div className="flex items-center gap-2">
@@ -200,34 +206,15 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ open, onClose, onSen
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="p-4">
           <textarea
             value={form.bodyHtml}
             onChange={(e) => setForm((p) => ({ ...p, bodyHtml: e.target.value }))}
-            className="w-full h-full min-h-[200px] bg-transparent text-sm text-gray-900 dark:text-white outline-none resize-none leading-relaxed placeholder-gray-400"
+            className="w-full min-h-[220px] bg-transparent text-sm text-gray-900 dark:text-white outline-none resize-none leading-relaxed placeholder-gray-400"
             placeholder="Escribe tu mensaje aquí..."
           />
         </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-100 dark:border-reply-border-dark/60 flex items-center justify-between">
-          <div className="text-xs text-gray-400">
-            Presiona <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] font-bold">Ctrl+Enter</kbd> para enviar
-          </div>
-          <button
-            onClick={handleSend}
-            disabled={sending}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2 text-sm disabled:opacity-50"
-          >
-            {sending ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Send size={14} />
-            )}
-            {sending ? "Enviando..." : "Enviar"}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

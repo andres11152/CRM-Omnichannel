@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { Mail, Send } from "lucide-react";
 import { toast } from "sonner";
 import { sendEmail, SendEmailDTO } from "@/services/emailService";
 import { api } from "@/lib/axios";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 
 interface EmailModalProps {
   isOpen: boolean;
@@ -94,61 +95,29 @@ export const EmailModal: React.FC<EmailModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[5000] p-4 animate-fade-in">
-      {/* Container: Max height constrained to viewport, properly centered */}
-      <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200 dark:border-reply-border-dark">
-        {/* Header - Fixed at top */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-reply-border-dark flex-shrink-0 bg-reply-bg/50 dark:bg-reply-border-dark/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
-                Redactar Nuevo Email
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Envía correos directamente desde el CRM
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        {/* Scrollable Content Area */}
-        <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Redactar Nuevo Email"
+      subtitle="Envía correos directamente desde el CRM"
+      icon={<Mail className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+      size="lg"
+      busy={isSending}
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose}>
+            Cancelar
+          </ModalButton>
+          <ModalButton variant="primary" onClick={handleSend} loading={isSending} disabled={!emailConfigured}>
+            {!isSending && <Send className="w-4 h-4" />}
+            {isSending ? "Enviando..." : "Enviar Email"}
+          </ModalButton>
+        </>
+      }
+    >
+        {/* Content */}
+        <div className="space-y-5">
           {/* Email Not Configured Warning */}
           {!emailConfigured && (
             <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-4 animate-slide-in">
@@ -268,65 +237,6 @@ export const EmailModal: React.FC<EmailModalProps> = ({
             />
           </div>
         </div>
-
-        {/* Footer - Fixed at bottom */}
-        <div className="flex items-center justify-end gap-3 p-4 px-6 border-t border-gray-200 dark:border-reply-border-dark bg-reply-bg/50 dark:bg-reply-border-dark/50 flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 text-sm font-bold text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-xl transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={isSending || !emailConfigured}
-            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2 transform active:scale-95"
-          >
-            {isSending ? (
-              <>
-                <svg
-                  className="animate-spin h-4 w-4 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                <span className="text-sm font-bold">Enviando...</span>
-              </>
-            ) : (
-              <>
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                  />
-                </svg>
-                <span className="text-sm font-bold">Enviar Email</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 };

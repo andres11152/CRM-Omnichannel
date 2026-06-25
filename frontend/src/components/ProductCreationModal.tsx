@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MediaPicker } from "./MediaPicker";
 import { uploadMedia } from "@/services/mediaService";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { Modal, ModalButton } from "@/components/ui/Modal";
 import { Product } from "@/types";
-import { X, ImageIcon, Upload, Info } from "lucide-react";
+import { X, ImageIcon, Upload, Info, Package } from "lucide-react";
 
 interface ProductCreationModalProps {
   isOpen: boolean;
@@ -123,8 +123,6 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   const handleSubmit = async () => {
     if (!name || !price) {
       toast.error(t("common.error"));
@@ -159,37 +157,28 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-[99999] flex justify-end" role="dialog">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Drawer Panel */}
-      <div className="relative w-full max-w-2xl h-full bg-white dark:bg-reply-surface-dark shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-right duration-300">
-        {/* Header */}
-        <div className="p-6 border-b border-reply-border dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-reply-panel-dark">
-          <div>
-            <h2 className="text-xl font-black text-reply-text-primary dark:text-reply-text-primary-dark">
-              {product ? t("crm.products.edit_product") : t("crm.products.new_product")}
-            </h2>
-            <p className="text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark">
-              {product ? t("crm.products.description") : t("crm.products.empty_description")}
-            </p>
-          </div>
-          <Button
-            onClick={onClose}
-            variant="ghost"
-            className="p-2 rounded-full text-reply-text-secondary hover:text-reply-text-primary dark:hover:text-reply-text-primary-dark"
-          >
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
-
-        {/* Body - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={product ? t("crm.products.edit_product") : t("crm.products.new_product")}
+      subtitle={product ? t("crm.products.description") : t("crm.products.empty_description")}
+      icon={<Package className="w-5 h-5" />}
+      size="xl"
+      busy={isSaving}
+      footer={
+        <>
+          <ModalButton variant="secondary" onClick={onClose}>
+            {t("crm.products.form.cancel")}
+          </ModalButton>
+          <ModalButton variant="primary" onClick={handleSubmit} loading={isSaving}>
+            {isSaving ? t("crm.products.form.saving") : t("crm.products.form.save")}
+          </ModalButton>
+        </>
+      }
+    >
+        {/* Body */}
+        <div className="space-y-6">
           {/* Image Upload */}
           <div className="space-y-2">
             <label className="text-xs font-black uppercase text-reply-text-secondary dark:text-reply-text-secondary-dark tracking-widest">
@@ -385,26 +374,6 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-reply-border dark:border-reply-border-dark bg-reply-bg dark:bg-reply-panel-dark flex justify-end gap-3">
-          <Button
-            onClick={onClose}
-            variant="secondary"
-            className="px-6 py-2.5 rounded-xl text-xs uppercase tracking-widest"
-          >
-            {t("crm.products.form.cancel")}
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            isLoading={isSaving}
-            variant="primary"
-            className="px-6 py-2.5 rounded-xl text-xs uppercase tracking-widest bg-reply-brand hover:bg-reply-brand-dark"
-          >
-            {isSaving ? t("crm.products.form.saving") : t("crm.products.form.save")}
-          </Button>
-        </div>
-      </div>
-
       {/* MediaPicker Modal */}
       {showMediaPicker && (
         <MediaPicker
@@ -419,7 +388,6 @@ export const ProductCreationModal: React.FC<ProductCreationModalProps> = ({
           title={t("crm.products.form.select_library")}
         />
       )}
-    </div>,
-    document.body
+    </Modal>
   );
 };

@@ -2,32 +2,10 @@ import { Role, Permission, RolePermission } from "@prisma/client";
 
 /**
  * [SEC] PERMISSION CONSTANTS
+ * Fuente única: @/constants/permissions (re-exportadas para compatibilidad).
  */
-export type PermissionModule =
-  | "CONVERSATIONS"
-  | "TICKETS"
-  | "CONTACTS"
-  | "DEALS"
-  | "ACTIVITIES"
-  | "CAMPAIGNS"
-  | "REPORTS"
-  | "SETTINGS"
-  | "TEAM"
-  | "INTEGRATIONS"
-  | "MEDIA"
-  | "FLOWS"
-  | "PRODUCTS"
-  | "QUEUES";
-
-export type PermissionAction =
-  | "VIEW"
-  | "CREATE"
-  | "EDIT"
-  | "DELETE"
-  | "ASSIGN"
-  | "EXPORT"
-  | "IMPORT"
-  | "MANAGE";
+export type { PermissionModule, PermissionAction } from "@/constants/permissions";
+import type { PermissionModule, PermissionAction } from "@/constants/permissions";
 
 /**
  * [PKG] DTOs

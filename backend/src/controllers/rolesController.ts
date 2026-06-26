@@ -3,6 +3,7 @@ import { rolesService } from "@/services/RolesService";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
+import { PERMISSION_CATALOG } from "@/constants/permissions";
 
 /**
  * [AUTH] ROLES CONTROLLER
@@ -10,6 +11,11 @@ import { AppError } from "@/utils/AppError";
  */
 
 export const rolesController = {
+  /** Catálogo de permisos (fuente única para el editor del frontend). */
+  getCatalog: catchAsync(async (_req: Request, res: Response) => {
+    res.json({ catalog: PERMISSION_CATALOG });
+  }),
+
   getRoles: catchAsync(async (req: Request, res: Response) => {
     const companyId = req.user?.companyId;
     if (!companyId)
@@ -83,6 +89,7 @@ export const rolesController = {
 };
 
 // Exports for backward compatibility
+export const getCatalog = rolesController.getCatalog;
 export const getRoles = rolesController.getRoles;
 export const getRole = rolesController.getRole;
 export const createRole = rolesController.createRole;

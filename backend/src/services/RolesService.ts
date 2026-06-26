@@ -4,26 +4,43 @@ import { HTTP_STATUS } from "@/constants/httpStatus";
 import {
   RoleDTO,
   toRoleDTO,
-  PermissionModule,
-  PermissionAction,
   PermissionDTO,
 } from "@/types/role.types";
+import {
+  PermissionModule,
+  PermissionAction,
+  isValidPermission,
+} from "@/constants/permissions";
 import { roleRepository } from "@/repositories/RoleRepository";
 import { userRepository } from "@/repositories/UserRepository";
 
 interface CreateRoleParams {
   name: string;
   description?: string;
-  baseRole: string;
+  baseRole: UserRole;
   permissions?: PermissionDTO[];
 }
 
 interface UpdateRoleParams {
   name?: string;
   description?: string;
-  baseRole?: string;
+  baseRole?: UserRole;
   permissions?: PermissionDTO[];
   isActive?: boolean;
+}
+
+/** Defensa en profundidad: rechaza permisos fuera del catálogo. */
+function assertValidPermissions(permissions: PermissionDTO[] | undefined): void {
+  if (!permissions) return;
+  const invalid = permissions.find(
+    (p) => !isValidPermission(p.module, p.action, p.resource),
+  );
+  if (invalid) {
+    throw new AppError(
+      `Permiso inválido: ${invalid.module}/${invalid.action}/${invalid.resource}`,
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
 }
 
 export const rolesService = {
@@ -31,34 +48,21 @@ export const rolesService = {
    * Get all roles for a company
    */
   async findAll(companyId: string): Promise<RoleDTO[]> {
-    const roles = await roleRepository.findMany({
-      where: { companyId },
-      include: {
-        permissions: { include: { permission: true } },
-        _count: { select: { users: true } },
-      },
-      orderBy: [{ isSystem: "desc" }, { createdAt: "desc" }],
-    });
-
-    return (roles as unknown as Parameters<typeof toRoleDTO>[0][]).map(
-      toRoleDTO,
-    );
+    const roles = await roleRepository.findManyWithPermissions({ companyId });
+    return roles.map(toRoleDTO);
   },
 
   /**
    * Get single role
    */
   async findOne(companyId: string, roleId: string): Promise<RoleDTO> {
-    const role = await roleRepository.findFirst({
-      where: { id: roleId, companyId },
-      include: {
-        permissions: { include: { permission: true } },
-        _count: { select: { users: true } },
-      },
+    const role = await roleRepository.findFirstWithPermissions({
+      id: roleId,
+      companyId,
     });
 
     if (!role) throw new AppError("Role not found", HTTP_STATUS.NOT_FOUND);
-    return toRoleDTO(role as unknown as Parameters<typeof toRoleDTO>[0]);
+    return toRoleDTO(role);
   },
 
   /**
@@ -68,6 +72,7 @@ export const rolesService = {
     if (!data.name || !data.baseRole) {
       throw new AppError("Name and baseRole required", HTTP_STATUS.BAD_REQUEST);
     }
+    assertValidPermissions(data.permissions);
 
     const exists = await roleRepository.findFirst({
       where: { companyId, name: data.name },
@@ -82,14 +87,14 @@ export const rolesService = {
         companyId,
         name: data.name,
         description: data.description,
-        baseRole: data.baseRole as UserRole,
+        baseRole: data.baseRole,
         isSystem: false,
         isActive: true,
       },
     });
 
     if (data.permissions && data.permissions.length > 0) {
-      await this.syncPermissions(role.id, data.permissions);
+      await roleRepository.addPermissions(role.id, data.permissions);
     }
 
     return this.findOne(companyId, role.id);
@@ -103,6 +108,8 @@ export const rolesService = {
     roleId: string,
     data: UpdateRoleParams,
   ): Promise<RoleDTO> {
+    assertValidPermissions(data.permissions);
+
     const role = await roleRepository.findFirst({
       where: { id: roleId, companyId },
     });
@@ -126,14 +133,13 @@ export const rolesService = {
       data: {
         name: data.name,
         description: data.description,
-        baseRole: data.baseRole as UserRole,
+        baseRole: data.baseRole,
         isActive: data.isActive,
       },
     });
 
     if (data.permissions) {
-      await roleRepository.deleteRolePermissions(roleId);
-      await this.syncPermissions(roleId, data.permissions);
+      await roleRepository.replacePermissions(roleId, data.permissions);
     }
 
     return this.findOne(companyId, roleId);
@@ -143,14 +149,7 @@ export const rolesService = {
    * Delete role
    */
   async delete(companyId: string, roleId: string): Promise<void> {
-    const role = (await roleRepository.findFirst({
-      where: { id: roleId, companyId },
-      include: { _count: { select: { users: true } } },
-    })) as unknown as {
-      id: string;
-      isSystem: boolean;
-      _count: { users: number };
-    } | null;
+    const role = await roleRepository.findWithUserCount({ id: roleId, companyId });
 
     if (!role) throw new AppError("Role not found", HTTP_STATUS.NOT_FOUND);
     if (role.isSystem) {
@@ -198,78 +197,28 @@ export const rolesService = {
     action: PermissionAction,
     resource: string,
   ): Promise<boolean> {
-    const user = (await userRepository.findFirst({
-      where: { id: userId },
-      include: {
-        customRole: {
-          include: {
-            permissions: { include: { permission: true } },
-          },
-        },
-      },
-    })) as unknown as {
-      role: string;
-      customRole?: {
-        permissions: Array<{
-          permission: { module: string; action: string; resource: string };
-        }>;
-      };
-    } | null;
+    const user = await roleRepository.findUserPermissionContext(userId);
 
     if (!user) return false;
 
-    // Super Admins
+    // Super Admins tienen acceso total.
     if (user.role === "MASTER" || user.role === "ADMIN") return true;
 
-    // Custom Roles
+    // Roles personalizados: match exacto o comodín de recurso "*".
     if (user.customRole) {
       return user.customRole.permissions.some(
         (rp) =>
           rp.permission.module === module &&
           rp.permission.action === action &&
-          (rp.permission.resource === resource ||
-            rp.permission.resource === "*"),
+          (rp.permission.resource === resource || rp.permission.resource === "*"),
       );
     }
 
-    // Default Agent Fallback
-    if (user.role === "AGENT") {
-      if (action === "VIEW" && resource === "own") return true;
+    // Fallback del Agente: solo lectura de lo propio.
+    if (user.role === "AGENT" && action === "VIEW" && resource === "own") {
+      return true;
     }
 
     return false;
   },
-
-  /**
-   * Helper: Sync permissions (FindOrCreate)
-   */
-  async syncPermissions(roleId: string, permissions: PermissionDTO[]) {
-    for (const perm of permissions) {
-      let permission = await roleRepository.findPermission({
-        where: {
-          module: perm.module,
-          action: perm.action,
-          resource: perm.resource,
-        },
-      });
-
-      if (!permission) {
-        permission = await roleRepository.createPermission({
-          data: {
-            module: perm.module,
-            action: perm.action,
-            resource: perm.resource,
-          },
-        });
-      }
-
-      await roleRepository.createRolePermission({
-        data: {
-          roleId,
-          permissionId: permission.id,
-        },
-      });
-    }
-  },
 };
-

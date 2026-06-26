@@ -294,7 +294,7 @@ export const CompanySettings: React.FC = () => {
         gradient="from-indigo-600 to-blue-600 dark:from-indigo-800 dark:to-blue-800"
       />
 
-      <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col md:flex-row">
         {/* Sidebar Tabs */}
         <div className="w-full md:w-64 bg-white dark:bg-reply-surface-dark border-b md:border-b-0 md:border-r border-gray-200 dark:border-reply-border-dark flex flex-row md:flex-col overflow-x-auto md:overflow-visible no-scrollbar shrink-0">
           <NavButton active={activeTab === "general"} onClick={() => setActiveTab("general")} icon={<path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />} label={t("company_settings.nav.general", "General")} />
@@ -308,7 +308,7 @@ export const CompanySettings: React.FC = () => {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-reply-bg dark:bg-reply-bg-dark">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-reply-bg dark:bg-reply-bg-dark">
           <div className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth">
             <div className="max-w-4xl mx-auto pb-10">
               {renderTabContent()}

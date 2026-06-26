@@ -1,10 +1,16 @@
 import { Request, Response } from "express";
 import { google } from "googleapis";
+import jwt from "jsonwebtoken";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
 import { signToken } from "./authController";
+import { HTTP_STATUS } from "@/constants/httpStatus";
 import { Logger } from "@/utils/logger";
 import { googleAuthCrudService } from "@/services/GoogleAuthCrudService";
+
+// Secreto para firmar el `state` del flujo de calendario (anti-tampering).
+const STATE_SECRET =
+  process.env.JWT_SECRET || process.env.SESSION_SECRET || "dev-state-secret";
 
 // Environment Variables
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -38,6 +44,33 @@ interface StateData {
 }
 
 export const googleAuthController = {
+  /**
+   * Devuelve la URL de consentimiento de Google Calendar para el usuario
+   * autenticado. La auth va por XHR (Bearer) y el `state` se firma con JWT
+   * para que el callback no confíe en datos manipulables del cliente.
+   */
+  getAuthUrl: catchAsync(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res
+        .status(HTTP_STATUS.UNAUTHORIZED)
+        .json({ message: "No autorizado" });
+    }
+
+    const state = jwt.sign({ action: "calendar", userId }, STATE_SECRET, {
+      expiresIn: "10m",
+    });
+
+    const url = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      scope: CALENDAR_SCOPES,
+      state,
+      prompt: "consent",
+    });
+
+    res.json({ url });
+  }),
+
   /**
    * Initiate OAuth flow
    */
@@ -85,11 +118,17 @@ export const googleAuthController = {
     }
 
     try {
+      // El flujo de calendario usa un `state` firmado (JWT); el de login usa
+      // JSON plano. Intentamos verificar la firma primero.
       let stateData: StateData;
       try {
-        stateData = JSON.parse(state);
+        stateData = jwt.verify(state, STATE_SECRET) as StateData;
       } catch {
-        return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
+        try {
+          stateData = JSON.parse(state);
+        } catch {
+          return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
+        }
       }
 
       const { tokens } = await oauth2Client.getToken(code);

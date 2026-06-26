@@ -242,6 +242,27 @@ export const useCompanySettings = () => {
       }
     };
 
+    // Maneja el retorno del callback de Google Calendar (?calendar=connected / ?error=).
+    const handleGoogleCallbackResult = () => {
+      const params = new URLSearchParams(window.location.search);
+      const calendar = params.get("calendar");
+      const error = params.get("error");
+      if (!calendar && !error) return;
+
+      if (calendar === "connected") {
+        setGoogleCalendarConnected(true);
+        toast.success("Google Calendar conectado");
+      } else if (error) {
+        toast.error("No se pudo conectar Google Calendar");
+      }
+      // Limpia los query params para no repetir el toast al refrescar.
+      params.delete("calendar");
+      params.delete("error");
+      const clean = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+      window.history.replaceState({}, "", clean);
+    };
+
+    handleGoogleCallbackResult();
     fetchGoogleStatus();
     fetchSettings();
     fetchPlanData();
@@ -410,15 +431,21 @@ export const useCompanySettings = () => {
     }
   };
 
-  const handleGoogleConnect = () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      toast.error("Sesión requerida");
-      return;
+  const handleGoogleConnect = async () => {
+    try {
+      // Pide la URL de consentimiento al endpoint protegido (auth por Bearer);
+      // el state va firmado en el backend. Luego redirige directo a Google.
+      const res = await api.get("/google/auth-url");
+      const url = (res.data?.data?.url || res.data?.url) as string | undefined;
+      if (url) {
+        window.location.href = url;
+      } else {
+        toast.error("No se pudo iniciar la conexión con Google");
+      }
+    } catch (error) {
+      console.error("Failed to start Google Calendar connect:", error);
+      toast.error("Error al conectar Google Calendar");
     }
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const userId = payload.id;
-    window.location.href = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"}/api/google/auth?userId=${userId}`;
   };
 
   const handlePayMercadoPago = async () => {

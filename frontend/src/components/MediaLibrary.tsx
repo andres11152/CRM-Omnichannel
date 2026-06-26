@@ -8,6 +8,8 @@ import {
 } from "@/services/mediaService";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { MediaCategory } from "../constants/mediaCategories";
+import { AlertTriangle } from "lucide-react";
+import { Modal, ModalButton } from "./ui/Modal";
 
 interface MediaLibraryProps {
   onSelect?: (media: Media) => void;
@@ -823,54 +825,38 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
         </div>
       )}
       {/* Delete Confirmation Modal */}
-      {mediaToDelete && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 dark:border-reply-border-dark overflow-hidden transform transition-all scale-100">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-red-600 dark:text-red-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                {mediaToDelete.length === 1 
-                  ? "¿Eliminar archivo permanentemente?" 
-                  : `¿Eliminar ${mediaToDelete.length} archivos permanentemente?`}
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                Esta acción no se puede deshacer. {mediaToDelete.length === 1 
-                  ? "El archivo desaparecerá" 
-                  : "Los archivos desaparecerán"} de tu biblioteca y de cualquier chat donde se hayan compartido.
-              </p>
-
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => setMediaToDelete(null)}
-                  className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-reply-border-dark text-gray-700 dark:text-gray-300 font-medium hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-500/30 transition-all hover:scale-105 active:scale-95"
-                >
-                  Sí, Eliminar
-                </button>
-              </div>
-            </div>
+      <Modal
+        isOpen={!!mediaToDelete}
+        onClose={() => setMediaToDelete(null)}
+        size="sm"
+        hideCloseButton
+        footer={
+          <>
+            <ModalButton variant="secondary" onClick={() => setMediaToDelete(null)}>
+              Cancelar
+            </ModalButton>
+            <ModalButton variant="danger" onClick={confirmDelete}>
+              Sí, Eliminar
+            </ModalButton>
+          </>
+        }
+      >
+        <div className="text-center py-2">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-500" />
           </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            {mediaToDelete?.length === 1
+              ? "¿Eliminar archivo permanentemente?"
+              : `¿Eliminar ${mediaToDelete?.length || 0} archivos permanentemente?`}
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            Esta acción no se puede deshacer. {mediaToDelete?.length === 1
+              ? "El archivo desaparecerá"
+              : "Los archivos desaparecerán"} de tu biblioteca y de cualquier chat donde se hayan compartido.
+          </p>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

@@ -5,6 +5,8 @@ import { API_BASE_URL } from "@/services/apiConfig";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { Logger } from "@/utils/logger";
 import QRCode from "react-qr-code";
+import { Sparkles } from "lucide-react";
+import { Modal, ModalButton } from "./ui/Modal";
 
 interface WhatsAppSession {
   sessionId: string;
@@ -1042,53 +1044,36 @@ export const IntegrationsPanel: React.FC = () => {
       )}
 
       {/* Upgrade Modal */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl max-w-md w-full p-8 animate-fade-in border border-gray-200 dark:border-reply-border-dark">
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 bg-gradient-to-br from-yellow-100 to-amber-200 dark:from-yellow-900/40 dark:to-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                <svg
-                  className="w-10 h-10 text-yellow-600 dark:text-yellow-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                Desbloquea Todo el Potencial
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                Tu plan actual ha alcanzado el límite de conexiones. Actualiza a{" "}
-                <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                  Pro
-                </span>{" "}
-                para conectar múltiples números y canales ilimitados.
-              </p>
-            </div>
-            <div className="space-y-3">
-              <button
-                onClick={() => setShowUpgradeModal(false)}
-                className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-              >
-                Ver Planes & Precios
-              </button>
-              <button
-                onClick={() => setShowUpgradeModal(false)}
-                className="w-full py-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium transition-colors"
-              >
-                Quizs ms tarde
-              </button>
-            </div>
+      <Modal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        size="md"
+        hideCloseButton
+        footer={
+          <div className="w-full space-y-3">
+            <ModalButton variant="primary" className="w-full" onClick={() => setShowUpgradeModal(false)}>
+              Ver Planes & Precios
+            </ModalButton>
+            <ModalButton variant="secondary" className="w-full" onClick={() => setShowUpgradeModal(false)}>
+              Quizás más tarde
+            </ModalButton>
           </div>
+        }
+      >
+        <div className="text-center py-2">
+          <div className="w-20 h-20 bg-gradient-to-br from-yellow-100 to-amber-200 dark:from-yellow-900/40 dark:to-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <Sparkles className="w-10 h-10 text-yellow-600 dark:text-yellow-400" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+            Desbloquea Todo el Potencial
+          </h3>
+          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+            Tu plan actual ha alcanzado el límite de conexiones. Actualiza a{" "}
+            <span className="font-bold text-indigo-600 dark:text-indigo-400">Pro</span>{" "}
+            para conectar múltiples números y canales ilimitados.
+          </p>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

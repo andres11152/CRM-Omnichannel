@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { MediaLibrary } from "./MediaLibrary";
+import { Image as ImageIcon } from "lucide-react";
+import { Modal } from "./ui/Modal";
 
 // Hook (Single Source of Truth)
 import { useMarketingDashboard } from "@/hooks/useMarketingDashboard";
@@ -497,27 +499,25 @@ export const MarketingDashboard: React.FC = () => {
         )}
 
         {/* ── MEDIA LIBRARY MODAL ── */}
-        {ctx.showMediaLibrary && (
-          <div className="fixed inset-0 z-[110] bg-black/50 backdrop-blur-sm flex items-center justify-center p-8 animate-fade-in">
-            <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] overflow-hidden flex flex-col relative animate-scale-in">
-              <div className="p-4 border-b border-gray-200 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg dark:bg-reply-surface-dark">
-                <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">🖼️ Galería Multimedia</h3>
-                <button onClick={() => ctx.setShowMediaLibrary(false)} className="text-gray-500 hover:text-gray-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">✕</button>
-              </div>
-              <div className="flex-1 overflow-hidden relative">
-                <MediaLibrary
-                  onSelect={(media) => {
-                    const imgTag = `<img src="${media.url}" alt="Imagen" style="max-width: 100%; height: auto; border: 0; display: block;" />`;
-                    ctx.setNewTemplate((prev) => ({ ...prev, content: prev.content + "\n" + imgTag }));
-                    ctx.setShowMediaLibrary(false);
-                    toast.success("Imagen insertada");
-                  }}
-                  onClose={() => ctx.setShowMediaLibrary(false)}
-                />
-              </div>
-            </div>
+        <Modal
+          isOpen={ctx.showMediaLibrary}
+          onClose={() => ctx.setShowMediaLibrary(false)}
+          title="Galería Multimedia"
+          icon={<ImageIcon className="w-5 h-5" />}
+          size="xl"
+        >
+          <div className="-mx-6 -my-5 h-[70vh] overflow-hidden relative">
+            <MediaLibrary
+              onSelect={(media) => {
+                const imgTag = `<img src="${media.url}" alt="Imagen" style="max-width: 100%; height: auto; border: 0; display: block;" />`;
+                ctx.setNewTemplate((prev) => ({ ...prev, content: prev.content + "\n" + imgTag }));
+                ctx.setShowMediaLibrary(false);
+                toast.success("Imagen insertada");
+              }}
+              onClose={() => ctx.setShowMediaLibrary(false)}
+            />
           </div>
-        )}
+        </Modal>
       </div>
     </div>
   );

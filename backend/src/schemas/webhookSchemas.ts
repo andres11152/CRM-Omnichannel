@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { WebhookEvents } from "@/types/types";
+
+// Derive enum values at module level for runtime use in zod
+const VALID_WEBHOOK_EVENTS = Object.values(WebhookEvents) as [string, ...string[]];
 
 export const whatsappWebhookSchema = z.object({
   from: z.string().min(1, "Sender (from) is required"),
@@ -24,7 +28,10 @@ export type MetaWebhookQueryDto = z.infer<typeof metaWebhookQuerySchema>;
 
 export const createWebhookSchema = z.object({
   url: z.string().url("Invalid URL format"),
-  events: z.array(z.string()).min(1, "At least one event is required"),
+  description: z.string().max(200).optional(),
+  events: z
+    .array(z.enum(VALID_WEBHOOK_EVENTS))
+    .min(1, "At least one event is required"),
   secretKey: z.string().optional(),
 });
 
@@ -52,7 +59,16 @@ export const metaIncomingWebhookSchema = z
                             phone_number_id: z.string().optional(),
                           })
                           .optional(),
-                        contacts: z.array(z.any()).optional(),
+                        contacts: z
+                          .array(
+                            z.object({
+                              profile: z
+                                .object({ name: z.string().optional() })
+                                .optional(),
+                              wa_id: z.string().optional(),
+                            }),
+                          )
+                          .optional(),
                         messages: z
                           .array(
                             z
@@ -61,7 +77,9 @@ export const metaIncomingWebhookSchema = z
                                 id: z.string(),
                                 timestamp: z.string(),
                                 type: z.string(),
-                                text: z.object({ body: z.string() }).optional(),
+                                text: z
+                                  .object({ body: z.string() })
+                                  .optional(),
                                 image: z
                                   .object({
                                     id: z.string(),

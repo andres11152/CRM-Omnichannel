@@ -560,13 +560,13 @@ export interface WebhookEndpoint {
   id: string;
   companyId: string;
   url: string;
-  description: string;
+  description?: string;
   events: WebhookEventType[];
-  secret: string;
+  secretKey: string;
   isActive: boolean;
-  createdAt: Date;
+  createdAt: string;
   lastDeliveryStatus?: "success" | "failed";
-  lastDeliveryTime?: Date;
+  lastDeliveryTime?: string;
 }
 
 export interface Product {

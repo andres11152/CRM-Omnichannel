@@ -10,7 +10,7 @@ export const webhookRepository = {
 
   /**
    * Find all active webhooks for a company that are subscribed to a specific event.
-   * This is the critical path for the WebhookDispatcher.
+   * Critical path for the WebhookDispatcher.
    */
   findActiveByEvent(companyId: string, eventType: string) {
     return prisma.webhook.findMany({
@@ -27,11 +27,13 @@ export const webhookRepository = {
     url: string,
     events: string[],
     secretKey: string | null,
+    description?: string,
   ) {
     return prisma.webhook.create({
       data: {
         companyId,
         url,
+        description,
         events,
         secretKey,
         isActive: true,
@@ -65,8 +67,6 @@ export const webhookRepository = {
     });
   },
 
-  // ===== DELIVERY LOGS =====
-
   createDeliveryLog(data: {
     companyId: string;
     webhookId: string;
@@ -86,9 +86,9 @@ export const webhookRepository = {
         url: data.url,
         status: data.status,
         duration: data.duration,
-        error: data.error || null,
-        payload: data.payload || undefined,
-        attempt: data.attempt || 1,
+        error: data.error ?? null,
+        payload: data.payload ?? undefined,
+        attempt: data.attempt ?? 1,
       },
     });
   },
@@ -100,6 +100,7 @@ export const webhookRepository = {
       take: limit,
       select: {
         id: true,
+        webhookId: true,
         eventType: true,
         url: true,
         status: true,
@@ -111,4 +112,3 @@ export const webhookRepository = {
     });
   },
 };
-

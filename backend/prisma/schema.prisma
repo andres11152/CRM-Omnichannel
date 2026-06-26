@@ -580,14 +580,15 @@ model ApiAccessLog {
 }
 
 model Webhook {
-  id        String   @id @default(cuid())
-  companyId String
-  url       String
-  secretKey String?
-  events    String[]
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  companyId   String
+  url         String
+  description String?
+  secretKey   String?
+  events      String[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   deliveryLogs WebhookDeliveryLog[]
 

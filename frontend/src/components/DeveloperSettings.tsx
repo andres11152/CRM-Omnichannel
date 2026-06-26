@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/axios";
 import { WebhookEndpoint, WebhookEventType } from "@/types";
@@ -7,6 +7,7 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { Badge } from "./ui/Badge";
+import { useModal } from "@/context/ModalContext";
 import {
   Clipboard,
   ShieldCheck,
@@ -14,7 +15,14 @@ import {
   CheckCircle,
   XCircle,
   Code,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  RotateCcw,
+  Key,
 } from "lucide-react";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ApiKey {
   id: string;
@@ -24,124 +32,195 @@ interface ApiKey {
   lastUsedAt?: string;
 }
 
+interface DeliveryLog {
+  id: string;
+  webhookId: string;
+  status: number;
+  eventType: string;
+  url: string;
+  createdAt: string;
+  duration: number;
+  error?: string;
+  attempt: number;
+}
+
+// ── Event catalog ─────────────────────────────────────────────────────────────
+
+const AVAILABLE_EVENTS: WebhookEventType[] = [
+  "message.received",
+  "message.sent",
+  "ticket.created",
+  "ticket.status_changed",
+  "ticket.assigned",
+  "contact.created",
+  "contact.updated",
+  "deal.created",
+  "deal.stage_changed",
+  "deal.won",
+  "deal.lost",
+  "campaign.completed",
+  "session.connected",
+  "session.disconnected",
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const copyToClipboard = (text: string, label = "Copiado") => {
+  navigator.clipboard.writeText(text).then(() => toast.success(label));
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export const DeveloperSettings: React.FC = () => {
+  const { confirm } = useModal();
   const [activeTab, setActiveTab] = useState<"webhooks" | "api-keys" | "api-docs">(
     "webhooks",
   );
+
+  // ── Data state ──────────────────────────────────────────────────────────────
+
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [logs, setLogs] = useState<DeliveryLog[]>([]);
 
-  // Webhook States
+  // ── Webhook form state ───────────────────────────────────────────────────────
+
   const [isCreatingWebhook, setIsCreatingWebhook] = useState(false);
   const [newUrl, setNewUrl] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<WebhookEventType[]>([]);
-  const [visibleSecrets, setVisibleSecrets] = useState<string[]>([]);
+  const [visibleSecrets, setVisibleSecrets] = useState<Set<string>>(new Set());
 
-  // New States for Enhanced DX
-  const [logs, setLogs] = useState<
-    Array<{
-      id: string;
-      status: number;
-      eventType: string;
-      url: string;
-      timestamp: string;
-      duration: number;
-    }>
-  >([]);
-  const [globalSecret, setGlobalSecret] = useState("");
+  // ── API Key form state ───────────────────────────────────────────────────────
 
-  // API Key States
   const [isCreatingKey, setIsCreatingKey] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
 
-  // Load Data
+  // ── Busy flags ───────────────────────────────────────────────────────────────
+
+  const [isSavingWebhook, setIsSavingWebhook] = useState(false);
+  const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
+
+  // ── Data fetching ────────────────────────────────────────────────────────────
+
+  const fetchWebhooks = useCallback(async () => {
+    try {
+      const res = await api.get("/webhooks");
+      const data = res.data.data ?? res.data;
+      setWebhooks(Array.isArray(data) ? data : []);
+    } catch {
+      // silent — no toast on background refresh
+    }
+  }, []);
+
+  const fetchApiKeys = useCallback(async () => {
+    try {
+      const res = await api.get("/api-keys");
+      const data = res.data.data ?? res.data;
+      setApiKeys(Array.isArray(data) ? data : []);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  const fetchLogs = useCallback(async () => {
+    try {
+      const res = await api.get("/webhooks/logs");
+      const data = res.data.data ?? res.data;
+      setLogs(Array.isArray(data) ? data : []);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  const handleRefreshLogs = async () => {
+    setIsRefreshingLogs(true);
+    try {
+      await fetchLogs();
+      toast.success("Logs actualizados");
+    } finally {
+      setIsRefreshingLogs(false);
+    }
+  };
+
   useEffect(() => {
     fetchWebhooks();
     fetchApiKeys();
+    fetchLogs();
+  }, [fetchWebhooks, fetchApiKeys, fetchLogs]);
 
-    // Fetch Secret & Logs
-    api
-      .get("/webhooks/secret")
-      .then((res) => setGlobalSecret(res.data?.data?.secret || ""))
-      .catch(console.error);
-    api
-      .get("/webhooks/logs")
-      .then((res) => setLogs(res.data?.data || []))
-      .catch(console.error);
-  }, []);
-
-  const fetchWebhooks = async () => {
-    try {
-      const res = await api.get("/webhooks");
-      // Ensure we always have an array
-      const data = res.data.data || res.data;
-      setWebhooks(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Error fetching webhooks", error);
-    }
-  };
-
-  const fetchApiKeys = async () => {
-    try {
-      const res = await api.get("/api-keys");
-      const data = res.data.data || res.data;
-      setApiKeys(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Error fetching keys", error);
-    }
-  };
-
-  // --- WEBHOOK ACTIONS ---
-
-  // --- WEBHOOK ACTIONS ---
+  // ── Webhook actions ──────────────────────────────────────────────────────────
 
   const handleCreateWebhook = async () => {
     if (!newUrl) return;
+    setIsSavingWebhook(true);
     try {
       await api.post("/webhooks", {
         url: newUrl,
-        description: newDesc || "Sin descripción",
-        events:
-          selectedEvents.length > 0 ? selectedEvents : ["message.received"],
+        description: newDesc || undefined,
+        events: selectedEvents.length > 0 ? selectedEvents : ["message.received"],
       });
-
       await fetchWebhooks();
       setIsCreatingWebhook(false);
+      setNewUrl("");
       setNewDesc("");
       setSelectedEvents([]);
       toast.success("Webhook creado");
-    } catch (error) {
+    } catch {
       toast.error("Error al crear webhook");
+    } finally {
+      setIsSavingWebhook(false);
     }
   };
 
   const handleDeleteWebhook = async (id: string) => {
-    if (!confirm("¿Ests seguro de eliminar este webhook?")) return;
+    const ok = await confirm({
+      title: "Eliminar webhook",
+      message:
+        "¿Estás seguro? Las entregas en curso se cancelarán y no podrás recuperar este endpoint.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await api.delete(`/webhooks/${id}`);
       setWebhooks((prev) => prev.filter((w) => w.id !== id));
-    } catch (e) {
-      console.error(e);
+      toast.success("Webhook eliminado");
+    } catch {
+      toast.error("Error al eliminar webhook");
     }
   };
 
-  const handleToggleWebhook = async (id: string) => {
+  const handleToggleWebhook = async (id: string, current: boolean) => {
     try {
       await api.patch(`/webhooks/${id}/toggle`);
       setWebhooks((prev) =>
         prev.map((w) => (w.id === id ? { ...w, isActive: !w.isActive } : w)),
       );
-    } catch (e) {
-      console.error(e);
+      toast.success(current ? "Webhook desactivado" : "Webhook activado");
+    } catch {
+      toast.error("Error al cambiar estado del webhook");
     }
   };
 
-  const toggleSecret = (id: string) => {
-    setVisibleSecrets((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
-    );
+  const handleReplayLog = async (logId: string) => {
+    try {
+      await api.post(`/webhooks/logs/${logId}/retry`);
+      toast.success("Reintento programado");
+    } catch {
+      toast.error("Error al reintentar entrega");
+    }
+  };
+
+  const toggleSecretVisibility = (id: string) => {
+    setVisibleSecrets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const toggleEvent = (evt: WebhookEventType) => {
@@ -150,62 +229,46 @@ export const DeveloperSettings: React.FC = () => {
     );
   };
 
-  // --- API KEY ACTIONS ---
-
-  // --- API KEY ACTIONS ---
+  // ── API Key actions ──────────────────────────────────────────────────────────
 
   const handleCreateApiKey = async () => {
     try {
-      const res = await api.post("/api-keys", {
-        name: newKeyName || "API Key",
-      });
-      const data = res.data;
-      setGeneratedKey(data.secretKey || data.data?.secretKey);
+      const res = await api.post("/api-keys", { name: newKeyName || "API Key" });
+      const data = res.data.data ?? res.data;
+      setGeneratedKey(data.secretKey ?? null);
       await fetchApiKeys();
       setIsCreatingKey(false);
       setNewKeyName("");
-    } catch (e) {
+    } catch {
       toast.error("Error al crear API Key");
     }
   };
 
-  const handleDeleteApiKey = async (id: string) => {
-    if (
-      !confirm(
-        "¿Revocar esta clave API? Las integraciones que la usen dejarn de funcionar.",
-      )
-    )
-      return;
+  const handleRevokeApiKey = async (id: string, name: string) => {
+    const ok = await confirm({
+      title: "Revocar clave API",
+      message: `¿Revocar "${name}"? Las integraciones que la usen dejarán de funcionar de inmediato.`,
+      confirmText: "Revocar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await api.delete(`/api-keys/${id}`);
       setApiKeys((prev) => prev.filter((k) => k.id !== id));
-    } catch (e) {
-      console.error(e);
+      toast.success("Clave API revocada");
+    } catch {
+      toast.error("Error al revocar la clave");
     }
   };
 
-  const availableEvents: WebhookEventType[] = [
-    "message.received",
-    "message.sent",
-    "ticket.created",
-    "ticket.status_changed",
-    "ticket.assigned",
-    "contact.created",
-    "contact.updated",
-    "deal.created",
-    "deal.stage_changed",
-    "deal.won",
-    "deal.lost",
-    "campaign.completed",
-    "session.connected",
-    "session.disconnected",
-  ];
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-reply-panel-dark rounded-lg shadow-sm border border-gray-200 dark:border-reply-border-dark transition-colors duration-200">
       <ModuleHeader
         title="Developer API & Webhooks"
-        description="Herramientas para desarrolladores: Webhooks para eventos en tiempo real y API Keys para acceso programtico."
+        description="Webhooks para eventos en tiempo real y API Keys para acceso programático externo."
         icon={
           <svg
             className="w-8 h-8 text-white"
@@ -226,51 +289,51 @@ export const DeveloperSettings: React.FC = () => {
           label: activeTab === "webhooks" ? "Webhooks Activos" : "Keys Activas",
           value:
             activeTab === "webhooks"
-              ? (webhooks || []).filter((w) => w.isActive).length
-              : (apiKeys || []).length,
+              ? webhooks.filter((w) => w.isActive).length
+              : apiKeys.length,
         }}
         action={
           <div className="flex bg-black/20 rounded-xl p-1 backdrop-blur-sm border border-white/10 shrink-0">
-            <button
-              onClick={() => setActiveTab("webhooks")}
-              className={`px-3 md:px-5 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-2 ${activeTab === "webhooks" ? "bg-white text-gray-900 shadow-lg" : "text-white/70 hover:text-white"}`}
-            >
-              <Activity className="w-3.5 h-3.5" />
-              Webhooks
-            </button>
-            <button
-              onClick={() => setActiveTab("api-keys")}
-              className={`px-3 md:px-5 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-2 ${activeTab === "api-keys" ? "bg-white text-gray-900 shadow-lg" : "text-white/70 hover:text-white"}`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              API Keys
-            </button>
-            <button
-              onClick={() => setActiveTab("api-docs")}
-              className={`px-3 md:px-5 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-2 ${activeTab === "api-docs" ? "bg-white text-gray-900 shadow-lg" : "text-white/70 hover:text-white"}`}
-            >
-              <Code className="w-3.5 h-3.5" />
-              API Docs
-            </button>
+            {(
+              [
+                { key: "webhooks", icon: Activity, label: "Webhooks" },
+                { key: "api-keys", icon: ShieldCheck, label: "API Keys" },
+                { key: "api-docs", icon: Code, label: "API Docs" },
+              ] as const
+            ).map(({ key, icon: Icon, label }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`px-3 md:px-5 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-2 ${
+                  activeTab === key
+                    ? "bg-white text-gray-900 shadow-lg"
+                    : "text-white/70 hover:text-white"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
           </div>
         }
       />
 
-      <div className="flex-1 overflow-y-auto bg-reply-bg dark:bg-reply-bg-dark p-4 md:p-8">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-reply-bg dark:bg-reply-bg-dark p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-8 pb-12">
-          {/* --- WEBHOOKS TAB --- */}
+
+          {/* ── WEBHOOKS TAB ────────────────────────────────────────────── */}
           {activeTab === "webhooks" && (
             <div className="animate-in fade-in duration-500 space-y-6">
+
+              {/* Header card */}
               <Card className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
                 <div>
                   <h3 className="font-bold text-reply-text-primary dark:text-white text-lg flex items-center gap-2">
                     Endpoints Configurados
-                    <Badge variant="info">
-                      {webhooks.length}
-                    </Badge>
+                    <Badge variant="info">{webhooks.length}</Badge>
                   </h3>
                   <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark mt-1">
-                    Configura URLs externas donde Sentry enviará eventos en tiempo real.
+                    Configura URLs externas donde Sentry enviará eventos en tiempo real vía HMAC-SHA256.
                   </p>
                 </div>
                 <Button
@@ -289,6 +352,7 @@ export const DeveloperSettings: React.FC = () => {
                 </Button>
               </Card>
 
+              {/* Creation form */}
               {isCreatingWebhook && (
                 <Card className="p-6 border border-reply-brand/20 shadow-xl space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -302,7 +366,7 @@ export const DeveloperSettings: React.FC = () => {
                     />
                     <Input
                       type="text"
-                      label="Descripción"
+                      label="Descripción (opcional)"
                       value={newDesc}
                       onChange={(e) => setNewDesc(e.target.value)}
                       placeholder="Ej: Integración con ERP Interno"
@@ -314,7 +378,7 @@ export const DeveloperSettings: React.FC = () => {
                       Eventos a Suscribir
                     </label>
                     <div className="flex flex-wrap gap-2">
-                      {availableEvents.map((evt) => (
+                      {AVAILABLE_EVENTS.map((evt) => (
                         <button
                           key={evt}
                           onClick={() => toggleEvent(evt)}
@@ -328,6 +392,11 @@ export const DeveloperSettings: React.FC = () => {
                         </button>
                       ))}
                     </div>
+                    {selectedEvents.length === 0 && (
+                      <p className="text-[10px] text-reply-text-secondary/70 dark:text-reply-text-secondary-dark/70">
+                        Sin selección → se suscribirá a <code className="font-mono">message.received</code>
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex justify-end pt-2">
@@ -335,13 +404,15 @@ export const DeveloperSettings: React.FC = () => {
                       onClick={handleCreateWebhook}
                       variant="primary"
                       size="lg"
+                      disabled={!newUrl || isSavingWebhook}
                     >
-                      Guardar Configuración
+                      {isSavingWebhook ? "Guardando…" : "Guardar Configuración"}
                     </Button>
                   </div>
                 </Card>
               )}
 
+              {/* Webhook list */}
               <div className="grid grid-cols-1 gap-4">
                 {webhooks.length === 0 && !isCreatingWebhook && (
                   <div className="text-center py-20 bg-white dark:bg-reply-panel-dark rounded-2xl border border-dashed border-gray-200 dark:border-reply-border-dark">
@@ -363,22 +434,32 @@ export const DeveloperSettings: React.FC = () => {
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-2 h-2 rounded-full ${wh.isActive ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-gray-400"}`}
-                          ></div>
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              wh.isActive
+                                ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"
+                                : "bg-gray-400"
+                            }`}
+                          />
                           <h4 className="font-bold text-reply-text-primary dark:text-white font-mono text-sm break-all">
                             {wh.url}
                           </h4>
                         </div>
-                        <p className="text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark pl-5">
-                          {wh.description}
-                        </p>
+                        {wh.description && (
+                          <p className="text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark pl-5">
+                            {wh.description}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-reply-border dark:border-reply-border-dark">
                         <Button
-                          onClick={() => handleToggleWebhook(wh.id)}
+                          onClick={() => handleToggleWebhook(wh.id, wh.isActive)}
                           variant="secondary"
                           size="sm"
-                          className={wh.isActive ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30 border-none" : ""}
+                          className={
+                            wh.isActive
+                              ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30 border-none"
+                              : ""
+                          }
                         >
                           {wh.isActive ? "DESACTIVAR" : "ACTIVAR"}
                         </Button>
@@ -412,60 +493,29 @@ export const DeveloperSettings: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase mb-2 block tracking-widest">
-                          Signing Secret (HMAC)
+                          Signing Secret (HMAC-SHA256)
                         </span>
                         <div className="flex items-center gap-2 bg-white dark:bg-reply-surface-dark border border-reply-border dark:border-reply-border-dark rounded-lg px-3 py-2 font-mono text-xs shadow-sm">
                           <span className="flex-1 truncate dark:text-gray-300">
-                            {visibleSecrets.includes(wh.id)
-                              ? wh.secret
-                              : "•".repeat(24)}
+                            {visibleSecrets.has(wh.id)
+                              ? wh.secretKey
+                              : "•".repeat(32)}
                           </span>
                           <button
-                            onClick={() => toggleSecret(wh.id)}
+                            onClick={() => toggleSecretVisibility(wh.id)}
                             className="text-gray-400 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
+                            title={visibleSecrets.has(wh.id) ? "Ocultar" : "Mostrar"}
                           >
-                            {visibleSecrets.includes(wh.id) ? (
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                                />
-                              </svg>
+                            {visibleSecrets.has(wh.id) ? (
+                              <EyeOff className="w-4 h-4" />
                             ) : (
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                />
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                />
-                              </svg>
+                              <Eye className="w-4 h-4" />
                             )}
                           </button>
                           <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(wh.secret);
-                              toast.success("Copiado");
-                            }}
+                            onClick={() => copyToClipboard(wh.secretKey, "Secret copiado")}
                             className="text-gray-400 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
+                            title="Copiar"
                           >
                             <Clipboard className="w-4 h-4" />
                           </button>
@@ -476,7 +526,7 @@ export const DeveloperSettings: React.FC = () => {
                 ))}
               </div>
 
-              {/* DELIVERY LOGS SECTION */}
+              {/* Delivery logs */}
               <div className="mt-12 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-reply-text-primary dark:text-white text-lg flex items-center gap-2">
@@ -484,16 +534,16 @@ export const DeveloperSettings: React.FC = () => {
                     Logs de Entrega Recientes
                   </h3>
                   <button
-                    onClick={() => {
-                      toast.info("Actualizando…");
-                    }}
-                    className="text-reply-brand dark:text-reply-brand-light text-xs font-black hover:underline cursor-pointer"
+                    onClick={handleRefreshLogs}
+                    disabled={isRefreshingLogs}
+                    className="flex items-center gap-1.5 text-reply-brand dark:text-reply-brand-light text-xs font-black hover:underline cursor-pointer disabled:opacity-50"
                   >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingLogs ? "animate-spin" : ""}`} />
                     ACTUALIZAR
                   </button>
                 </div>
 
-                {/* DESKTOP VIEW */}
+                {/* Desktop table */}
                 <Card className="hidden lg:block overflow-hidden shadow-sm border-reply-border dark:border-reply-border-dark">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-reply-bg dark:bg-gray-800/50 text-[10px] uppercase tracking-widest font-bold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-reply-border-dark">
@@ -503,116 +553,136 @@ export const DeveloperSettings: React.FC = () => {
                         <th className="px-6 py-4">URL Destino</th>
                         <th className="px-6 py-4">Fecha/Hora</th>
                         <th className="px-6 py-4 text-right">Latencia</th>
+                        <th className="px-6 py-4" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-sm">
                       {logs.length === 0 ? (
                         <tr>
-                          <td
-                            colSpan={5}
-                            className="px-6 py-12 text-center text-gray-400 italic"
-                          >
+                          <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
                             No hay actividad reciente.
                           </td>
                         </tr>
                       ) : (
-                        logs.map((log) => (
-                          <tr
-                            key={log.id}
-                            className="hover:bg-reply-bg dark:hover:bg-white/5 transition-colors group"
-                          >
-                            <td className="px-6 py-4">
-                              <Badge variant={log.status >= 200 && log.status < 300 ? "success" : "error"}>
-                                {log.status >= 200 && log.status < 300 ? (
-                                  <CheckCircle className="w-3.5 h-3.5" />
-                                ) : (
-                                  <XCircle className="w-3.5 h-3.5" />
-                                )}{" "}
-                                {log.status}
-                              </Badge>
-                            </td>
-                            <td className="px-6 py-4 font-mono text-[11px] font-bold text-reply-text-secondary dark:text-reply-text-secondary-dark">
-                              {log.eventType}
-                            </td>
-                            <td
-                              className="px-6 py-4 text-reply-text-secondary dark:text-reply-text-secondary-dark truncate max-w-[250px] font-mono text-xs"
-                              title={log.url}
+                        logs.map((log) => {
+                          const isSuccess = log.status >= 200 && log.status < 300;
+                          return (
+                            <tr
+                              key={log.id}
+                              className="hover:bg-reply-bg dark:hover:bg-white/5 transition-colors group"
                             >
-                              {log.url}
-                            </td>
-                            <td className="px-6 py-4 text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 text-xs">
-                              {new Date(log.timestamp).toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 text-right font-mono text-[11px] font-bold text-reply-brand">
-                              {log.duration}ms
-                            </td>
-                          </tr>
-                        ))
+                              <td className="px-6 py-4">
+                                <Badge variant={isSuccess ? "success" : "error"}>
+                                  {isSuccess ? (
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <XCircle className="w-3.5 h-3.5" />
+                                  )}{" "}
+                                  {log.status || "ERR"}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 font-mono text-[11px] font-bold text-reply-text-secondary dark:text-reply-text-secondary-dark">
+                                {log.eventType}
+                              </td>
+                              <td
+                                className="px-6 py-4 text-reply-text-secondary dark:text-reply-text-secondary-dark truncate max-w-[200px] font-mono text-xs"
+                                title={log.url}
+                              >
+                                {log.url}
+                              </td>
+                              <td className="px-6 py-4 text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 text-xs">
+                                {new Date(log.createdAt).toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 text-right font-mono text-[11px] font-bold text-reply-brand">
+                                {log.duration}ms
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                {!isSuccess && (
+                                  <button
+                                    onClick={() => handleReplayLog(log.id)}
+                                    className="text-reply-text-secondary/60 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
+                                    title="Reintentar entrega"
+                                  >
+                                    <RotateCcw className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
                 </Card>
 
-                {/* MOBILE VIEW */}
+                {/* Mobile cards */}
                 <div className="lg:hidden space-y-3">
                   {logs.length === 0 ? (
                     <div className="text-center py-10 text-reply-text-secondary dark:text-reply-text-secondary-dark italic text-sm">
                       No hay actividad reciente.
                     </div>
                   ) : (
-                    logs.map((log) => (
-                      <Card
-                        key={log.id}
-                        className="p-4 space-y-3"
-                      >
-                        <div className="flex justify-between items-start">
-                          <Badge variant={log.status >= 200 && log.status < 300 ? "success" : "error"}>
-                            {log.status >= 200 && log.status < 300 ? (
-                              <CheckCircle className="w-3.5 h-3.5" />
-                            ) : (
-                              <XCircle className="w-3.5 h-3.5" />
-                            )}{" "}
-                            {log.status}
-                          </Badge>
-                          <span className="text-[11px] font-bold text-reply-brand font-mono">
-                            {log.duration}ms
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-mono text-[11px] font-bold text-reply-text-primary dark:text-reply-text-primary-dark">
-                            {log.eventType}
-                          </p>
-                          <p className="text-[10px] text-reply-text-secondary/80 dark:text-reply-text-secondary-dark/80 break-all font-mono">
-                            {log.url}
-                          </p>
-                        </div>
-                        <div className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 pt-2 border-t border-reply-border dark:border-reply-border-dark flex justify-between">
-                          <span>TIMESTAMPS</span>
-                          <span>
-                            {new Date(log.timestamp).toLocaleString()}
-                          </span>
-                        </div>
-                      </Card>
-                    ))
+                    logs.map((log) => {
+                      const isSuccess = log.status >= 200 && log.status < 300;
+                      return (
+                        <Card key={log.id} className="p-4 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <Badge variant={isSuccess ? "success" : "error"}>
+                              {isSuccess ? (
+                                <CheckCircle className="w-3.5 h-3.5" />
+                              ) : (
+                                <XCircle className="w-3.5 h-3.5" />
+                              )}{" "}
+                              {log.status || "ERR"}
+                            </Badge>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] font-bold text-reply-brand font-mono">
+                                {log.duration}ms
+                              </span>
+                              {!isSuccess && (
+                                <button
+                                  onClick={() => handleReplayLog(log.id)}
+                                  className="text-reply-text-secondary/60 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
+                                  title="Reintentar"
+                                >
+                                  <RotateCcw className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="font-mono text-[11px] font-bold text-reply-text-primary dark:text-reply-text-primary-dark">
+                              {log.eventType}
+                            </p>
+                            <p className="text-[10px] text-reply-text-secondary/80 dark:text-reply-text-secondary-dark/80 break-all font-mono">
+                              {log.url}
+                            </p>
+                          </div>
+                          <div className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 pt-2 border-t border-reply-border dark:border-reply-border-dark flex justify-between">
+                            <span>INTENTO #{log.attempt}</span>
+                            <span>{new Date(log.createdAt).toLocaleString()}</span>
+                          </div>
+                        </Card>
+                      );
+                    })
                   )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* --- API KEYS TAB --- */}
+          {/* ── API KEYS TAB ─────────────────────────────────────────────── */}
           {activeTab === "api-keys" && (
             <div className="animate-in fade-in duration-500 space-y-6">
               <Card className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
                 <div>
                   <h3 className="font-bold text-reply-text-primary dark:text-white text-lg flex items-center gap-2">
                     Claves API Activas
-                    <Badge variant="info">
-                      {apiKeys.length}
-                    </Badge>
+                    <Badge variant="info">{apiKeys.length}</Badge>
                   </h3>
                   <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark mt-1">
-                    Usa estas claves para autenticar peticiones directas desde tus scripts o backends.
+                    Autentifica peticiones externas con el header{" "}
+                    <code className="font-mono text-reply-brand dark:text-reply-brand-light">X-API-Key</code>.
                   </p>
                 </div>
                 <Button
@@ -631,11 +701,12 @@ export const DeveloperSettings: React.FC = () => {
                 </Button>
               </Card>
 
+              {/* One-time key display */}
               {generatedKey && (
-                <Card className="bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-900/50 p-6 mb-8 shadow-md">
+                <Card className="bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-900/50 p-6 shadow-md">
                   <div className="flex items-start gap-4">
                     <div className="bg-emerald-100 dark:bg-emerald-900/50 p-3 rounded-2xl text-emerald-600 dark:text-emerald-400 shadow-sm">
-                      <CheckCircle className="w-6 h-6" />
+                      <Key className="w-6 h-6" />
                     </div>
                     <div className="flex-1 space-y-4">
                       <div>
@@ -652,12 +723,7 @@ export const DeveloperSettings: React.FC = () => {
                           {generatedKey}
                         </div>
                         <Button
-                          onClick={() => {
-                            navigator.clipboard.writeText(generatedKey);
-                            toast.success("Copiado", {
-                              position: "bottom-center",
-                            });
-                          }}
+                          onClick={() => copyToClipboard(generatedKey, "Clave copiada")}
                           variant="primary"
                           size="lg"
                           className="bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700 border-none shrink-0"
@@ -670,15 +736,16 @@ export const DeveloperSettings: React.FC = () => {
                         onClick={() => setGeneratedKey(null)}
                         className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline uppercase tracking-widest cursor-pointer"
                       >
-                        YA LA HE GUARDADO, CONTINUAR
+                        Ya la guardé — Continuar
                       </button>
                     </div>
                   </div>
                 </Card>
               )}
 
+              {/* Creation form */}
               {isCreatingKey && !generatedKey && (
-                <Card className="p-6 border border-reply-brand/20 shadow-md mb-8 animate-fade-in">
+                <Card className="p-6 border border-reply-brand/20 shadow-md animate-in fade-in duration-300">
                   <div className="mb-4">
                     <Input
                       type="text"
@@ -686,19 +753,18 @@ export const DeveloperSettings: React.FC = () => {
                       value={newKeyName}
                       onChange={(e) => setNewKeyName(e.target.value)}
                       placeholder="Ej: Servidor de Producción"
+                      onKeyDown={(e) => e.key === "Enter" && handleCreateApiKey()}
                     />
                   </div>
                   <div className="flex justify-end">
-                    <Button
-                      onClick={handleCreateApiKey}
-                      variant="primary"
-                    >
+                    <Button onClick={handleCreateApiKey} variant="primary">
                       Generar Clave
                     </Button>
                   </div>
                 </Card>
               )}
 
+              {/* Key list */}
               <div className="grid grid-cols-1 gap-4">
                 {apiKeys.length === 0 && !isCreatingKey && (
                   <div className="text-center py-20 bg-white dark:bg-reply-panel-dark rounded-2xl border border-dashed border-gray-200 dark:border-reply-border-dark">
@@ -717,27 +783,31 @@ export const DeveloperSettings: React.FC = () => {
                     className="p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-reply-brand/10 dark:bg-reply-brand/20 rounded-xl flex items-center justify-center text-reply-brand">
+                      <div className="w-12 h-12 bg-reply-brand/10 dark:bg-reply-brand/20 rounded-xl flex items-center justify-center text-reply-brand flex-shrink-0">
                         <ShieldCheck className="w-6 h-6" />
                       </div>
                       <div>
                         <h4 className="font-bold text-reply-text-primary dark:text-white mb-0.5">
                           {key.name}
                         </h4>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                           <Badge variant="info" className="font-mono text-[10px] font-black uppercase tracking-widest">
                             {key.keyPrefix}
                           </Badge>
                           <span className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 uppercase font-bold tracking-tight">
-                            Creada el{" "}
-                            {new Date(key.createdAt).toLocaleDateString()}
+                            Creada el {new Date(key.createdAt).toLocaleDateString()}
                           </span>
+                          {key.lastUsedAt && (
+                            <span className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 uppercase font-bold tracking-tight">
+                              · Usada el {new Date(key.lastUsedAt).toLocaleDateString()}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
                     <div className="flex justify-end border-t md:border-t-0 pt-3 md:pt-0 border-reply-border dark:border-reply-border-dark w-full md:w-auto">
                       <Button
-                        onClick={() => handleDeleteApiKey(key.id)}
+                        onClick={() => handleRevokeApiKey(key.id, key.name)}
                         variant="ghost"
                         className="text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 w-full md:w-auto text-xs uppercase tracking-widest font-black"
                       >
@@ -750,7 +820,7 @@ export const DeveloperSettings: React.FC = () => {
             </div>
           )}
 
-          {/* --- API DOCS TAB --- */}
+          {/* ── API DOCS TAB ─────────────────────────────────────────────── */}
           {activeTab === "api-docs" && (
             <div className="animate-in fade-in duration-500 space-y-6">
               <Card className="p-6">
@@ -760,92 +830,115 @@ export const DeveloperSettings: React.FC = () => {
                     Referencia de API REST
                   </h3>
                   <p className="text-sm text-reply-text-secondary dark:text-reply-text-secondary-dark mt-2 leading-relaxed">
-                    Integra Sentry con tus sistemas internos. Autentícate enviando tu API Key en el header <code className="bg-reply-bg dark:bg-reply-bg-dark px-1.5 py-0.5 rounded text-reply-brand dark:text-reply-brand-light font-mono text-xs border border-reply-border dark:border-reply-border-dark">X-API-Key</code>.
-                    Todas las peticiones deben usar el Content-Type <code className="bg-reply-bg dark:bg-reply-bg-dark px-1.5 py-0.5 rounded text-reply-brand dark:text-reply-brand-light font-mono text-xs border border-reply-border dark:border-reply-border-dark">application/json</code>. Base URL: <code className="bg-reply-bg dark:bg-reply-bg-dark px-1.5 py-0.5 rounded text-reply-brand dark:text-reply-brand-light font-mono text-xs border border-reply-border dark:border-reply-border-dark">https://api.tudominio.com/api/v1/external</code>
+                    Integra Sentry con tus sistemas internos. Autentícate enviando tu API Key en el header{" "}
+                    <code className="bg-reply-bg dark:bg-reply-bg-dark px-1.5 py-0.5 rounded text-reply-brand dark:text-reply-brand-light font-mono text-xs border border-reply-border dark:border-reply-border-dark">
+                      X-API-Key
+                    </code>
+                    . Base URL:{" "}
+                    <code className="bg-reply-bg dark:bg-reply-bg-dark px-1.5 py-0.5 rounded text-reply-brand dark:text-reply-brand-light font-mono text-xs border border-reply-border dark:border-reply-border-dark">
+                      https://api.sentrycrm.cloud/api/v1/external
+                    </code>
                   </p>
                 </div>
 
                 <div className="space-y-8">
-                  {/* Endpoint 1: Mensajes */}
-                  <div className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm">
-                    <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
-                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">POST</span>
-                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">/messages/send</span>
-                      <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">Enviar Mensaje WhatsApp</span>
+                  {/* Webhook payload reference */}
+                  <div className="border border-amber-200 dark:border-amber-900/50 rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-amber-50 dark:bg-amber-950/30 p-4 border-b border-amber-200 dark:border-amber-900/50 flex items-center gap-4">
+                      <span className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">PAYLOAD</span>
+                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">Estructura de Evento Webhook</span>
                     </div>
                     <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
-                      <pre>
-{`curl -X POST https://api.tudominio.com/api/v1/external/messages/send \\
-  -H "X-API-Key: tu_api_key_aqui" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "to": "573001234567",
-    "text": "Hola, este es un mensaje automtico desde la API de Sentry."
-  }'`}
-                      </pre>
+                      <pre>{`{
+  "id": "evt_1750000000_a1b2c3d4",
+  "object": "event",
+  "apiVersion": "2025-04-01",
+  "created": 1750000000,
+  "type": "ticket.created",
+  "data": {
+    "object": { /* payload específico del evento */ }
+  }
+}
+
+// Header de verificación HMAC-SHA256:
+// X-Sentry-Signature: t=<timestamp>,v1=<sha256_hex>
+// Verifica: HMAC-SHA256(secret, "<timestamp>.<json_body>")`}</pre>
                     </div>
                   </div>
 
-                  {/* Endpoint 2: Crear Contacto */}
-                  <div className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm">
-                    <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
-                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">POST</span>
-                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">/contacts</span>
-                      <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">Crear o Actualizar Contacto</span>
-                    </div>
-                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
-                      <pre>
-{`curl -X POST https://api.tudominio.com/api/v1/external/contacts \\
-  -H "X-API-Key: tu_api_key_aqui" \\
+                  {[
+                    {
+                      method: "POST",
+                      path: "/messages/send",
+                      label: "Enviar Mensaje WhatsApp",
+                      color: "emerald",
+                      body: `{
+  "to": "573001234567",
+  "text": "Hola, este es un mensaje automático desde la API de Sentry."
+}`,
+                    },
+                    {
+                      method: "POST",
+                      path: "/contacts",
+                      label: "Crear o Actualizar Contacto",
+                      color: "emerald",
+                      body: `{
+  "name": "Juan Pérez",
+  "phone": "573001234567",
+  "email": "juan@empresa.com",
+  "tags": ["Cliente VIP", "API"]
+}`,
+                    },
+                    {
+                      method: "POST",
+                      path: "/deals",
+                      label: "Crear Oportunidad (Deal)",
+                      color: "emerald",
+                      body: `{
+  "title": "Renovación 2025",
+  "value": 15000,
+  "currency": "USD",
+  "pipelineId": "<cuid_pipeline>",
+  "stageId": "<cuid_stage>"
+}`,
+                    },
+                    {
+                      method: "GET",
+                      path: "/tickets",
+                      label: "Listar Tickets",
+                      color: "sky",
+                      body: null,
+                    },
+                  ].map(({ method, path, label, color, body }) => (
+                    <div
+                      key={path}
+                      className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm"
+                    >
+                      <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
+                        <span
+                          className={`bg-${color}-500/10 text-${color}-600 dark:text-${color}-400 border border-${color}-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider`}
+                        >
+                          {method}
+                        </span>
+                        <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">
+                          {path}
+                        </span>
+                        <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">
+                          {label}
+                        </span>
+                      </div>
+                      <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
+                        <pre>{`curl -X ${method} https://api.sentrycrm.cloud/api/v1/external${path} \\
+  -H "X-API-Key: tu_api_key_aqui"${
+    body
+      ? ` \\
   -H "Content-Type: application/json" \\
-  -d '{
-    "name": "Juan Perez",
-    "phone": "573001234567",
-    "email": "juan@empresa.com",
-    "tags": ["Cliente VIP", "API"]
-  }'`}
-                      </pre>
+  -d '${body}'`
+      : ""
+  }`}</pre>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Endpoint 3: Crear Deal */}
-                  <div className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm">
-                    <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
-                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">POST</span>
-                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">/deals</span>
-                      <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">Crear Oportunidad (Deal)</span>
-                    </div>
-                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
-                      <pre>
-{`curl -X POST https://api.tudominio.com/api/v1/external/deals \\
-  -H "X-API-Key: tu_api_key_aqui" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "title": "Renovación 2025",
-    "value": 15000,
-    "currency": "USD",
-    "pipelineId": "cuid_pipeline_123",
-    "stageId": "cuid_stage_123"
-  }'`}
-                      </pre>
-                    </div>
-                  </div>
-                  
-                  {/* Endpoint 4: Listar Tickets */}
-                  <div className="border border-reply-border dark:border-reply-border-dark rounded-xl overflow-hidden shadow-sm">
-                    <div className="bg-reply-bg dark:bg-reply-bg-dark/50 p-4 border-b border-reply-border dark:border-reply-border-dark flex items-center gap-4">
-                      <span className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">GET</span>
-                      <span className="font-mono text-sm text-reply-text-primary dark:text-white font-bold">/tickets</span>
-                      <span className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark ml-auto hidden sm:block">Listar Tickets</span>
-                    </div>
-                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs overflow-x-auto">
-                      <pre>
-{`curl -X GET https://api.tudominio.com/api/v1/external/tickets \\
-  -H "X-API-Key: tu_api_key_aqui"`}
-                      </pre>
-                    </div>
-                  </div>
-
+                  ))}
                 </div>
               </Card>
             </div>

@@ -558,21 +558,20 @@ const AgentDashboard: React.FC<{
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden font-sans">
       {/* 1. WELCOME HEADER */}
-      <div className="bg-white dark:bg-reply-surface-dark border-b border-slate-200 dark:border-reply-border-dark px-8 py-6 shadow-sm z-10">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-1 flex items-center gap-2">
-              {t("dashboard.agent_greeting", "Hola")}, {user?.name?.split(" ")[0]}{" "}
-              <span className="text-2xl"></span>
+      <div className="bg-white dark:bg-reply-surface-dark border-b border-slate-200 dark:border-reply-border-dark px-4 sm:px-8 py-4 sm:py-6 shadow-sm z-10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-1 flex items-center gap-2">
+              {t("dashboard.agent_greeting", "Hola")}, {user?.name?.split(" ")[0]}
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
               {t("dashboard.agent_subtitle", "¡Vamos con todo hoy! Aquí tienes tu resumen personal.")}
             </p>
           </div>
-          <div className="text-right">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-full border border-slate-200 dark:border-reply-border-dark">
-              <Activity className="w-4 h-4 text-orange-500 animate-pulse" />
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-300 capitalize">
+          <div className="shrink-0">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-100 dark:bg-slate-800 rounded-full border border-slate-200 dark:border-reply-border-dark">
+              <Activity className="w-4 h-4 text-orange-500 animate-pulse shrink-0" />
+              <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 lowercase first-letter:uppercase whitespace-nowrap">
                 {todayDate}
               </span>
             </div>
@@ -580,9 +579,9 @@ const AgentDashboard: React.FC<{
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 lg:p-8">
         {/* 2. PERSONAL METRICS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Active Tickets (Focus) */}
           <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-indigo-900/20 relative overflow-hidden group hover:shadow-xl transition-all">
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
@@ -811,23 +810,23 @@ const CompanyAdminDashboard: React.FC<{
 
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden font-sans">
-      <div className="bg-white dark:bg-reply-surface-dark border-b border-slate-200 dark:border-reply-border-dark px-8 py-6 shadow-sm z-10">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
+      <div className="bg-white dark:bg-reply-surface-dark border-b border-slate-200 dark:border-reply-border-dark px-4 sm:px-8 py-4 sm:py-6 shadow-sm z-10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
               {t("dashboard.navigation.dashboard", "Panel de Control")}
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
-              {user?.name 
+              {user?.name
                 ? t("dashboard.welcome_admin", { name: user.name, defaultValue: `Bienvenido, ${user.name}. Aquí tienes la visión general de tu negocio.` })
                 : t("dashboard.welcome_admin_generic", "Bienvenido. Aquí tienes la visión general de tu negocio.")
               }
             </p>
           </div>
-          <div className="text-right">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-full border border-slate-200 dark:border-reply-border-dark">
-              <Activity className="w-4 h-4 text-blue-500 animate-pulse" />
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-300 capitalize">
+          <div className="shrink-0">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-100 dark:bg-slate-800 rounded-full border border-slate-200 dark:border-reply-border-dark">
+              <Activity className="w-4 h-4 text-blue-500 animate-pulse shrink-0" />
+              <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 lowercase first-letter:uppercase whitespace-nowrap">
                 {todayDate}
               </span>
             </div>
@@ -835,9 +834,9 @@ const CompanyAdminDashboard: React.FC<{
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-900/20 relative overflow-hidden group hover:shadow-xl transition-all flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 lg:p-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 sm:p-6 text-white shadow-lg shadow-blue-900/20 relative overflow-hidden group hover:shadow-xl transition-all flex flex-col h-full">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
             <div className="absolute top-1/2 right-0 transform -translate-y-1/2 p-4 opacity-10 group-hover:opacity-20 transition-all duration-500 group-hover:scale-110">
               <MessageSquare className="w-24 h-24 text-white" />
@@ -877,7 +876,7 @@ const CompanyAdminDashboard: React.FC<{
             </div>
           </div>
 
-          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-amber-400/50 transition-colors group flex flex-col h-full">
+          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-5 sm:p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-amber-400/50 transition-colors group flex flex-col h-full">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-amber-600 dark:text-amber-400">
                 <Clock className="w-6 h-6" />
@@ -905,7 +904,7 @@ const CompanyAdminDashboard: React.FC<{
             </div>
           </div>
 
-          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-purple-400/50 transition-colors group flex flex-col h-full">
+          <div className="bg-white dark:bg-reply-panel-dark rounded-2xl p-5 sm:p-6 border border-slate-200 dark:border-reply-border-dark shadow-sm hover:border-purple-400/50 transition-colors group flex flex-col h-full">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-600 dark:text-purple-400">
                 <Zap className="w-6 h-6" />
@@ -1048,17 +1047,17 @@ const CompanyAdminDashboard: React.FC<{
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 flex flex-col gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="lg:col-span-2 flex flex-col gap-4 sm:gap-6">
             <div className="h-[360px]">
               <SalesFunnelWidget data={data?.salesFunnel} />
             </div>
-            
+
             <div className="h-[360px]">
               <ActiveLoadChart data={data?.agentWorkload} />
             </div>
           </div>
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4 sm:gap-6">
             <div className="h-[360px]">
               <ChannelDistributionWidget channels={data?.channelDistribution} />
             </div>

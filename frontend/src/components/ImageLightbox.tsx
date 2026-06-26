@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 interface ImageLightboxProps {
   imageUrl: string;
@@ -7,7 +8,7 @@ interface ImageLightboxProps {
 }
 
 export const ImageLightbox: React.FC<ImageLightboxProps> = ({ imageUrl, alt, onClose }) => {
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
@@ -39,6 +40,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ imageUrl, alt, onC
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white/70 text-sm">
         Clic fuera de la imagen o presiona ESC para cerrar
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

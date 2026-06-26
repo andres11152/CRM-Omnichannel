@@ -783,7 +783,7 @@ export const IntegrationsPanel: React.FC = () => {
       </div>      {/* Scan QR / Phone Link Modal - Clean Enterprise Design */}
       {isScanning && (
         <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl w-full max-w-3xl overflow-hidden border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row relative min-h-[350px]">
+          <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-scrollbar border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row relative md:min-h-[350px]">
             {/* Close Button Absolute (Mobile Optimized) */}
             <button
               onClick={() => {
@@ -813,7 +813,7 @@ export const IntegrationsPanel: React.FC = () => {
 
             {!currentQr && !pairingCode && !loading && !loadingPairingCode ? (
               /* Step 0: Choose Pairing Method */
-              <div className="flex-1 p-8 flex flex-col justify-center bg-white dark:bg-[#111827]">
+              <div className="flex-1 p-6 sm:p-8 flex flex-col justify-center bg-white dark:bg-[#111827]">
                 <div className="mb-6 text-center">
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                     Vincular WhatsApp
@@ -885,7 +885,7 @@ export const IntegrationsPanel: React.FC = () => {
               /* Step 1: Render Connection Screen */
               <>
                 {/* Left Panel: QR or Pairing Code Display */}
-                <div className="w-full md:w-5/12 bg-gray-50/50 dark:bg-[#1F2937]/30 flex flex-col items-center justify-center p-8 relative border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-800">
+                <div className="w-full md:w-5/12 bg-gray-50/50 dark:bg-[#1F2937]/30 flex flex-col items-center justify-center p-6 sm:p-8 relative border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-800 shrink-0">
                   <div className="relative z-10 p-4 bg-white rounded-2xl shadow-sm border border-gray-200 min-h-[233px] flex items-center justify-center w-full">
                     {loading || loadingPairingCode ? (
                       <div className="flex flex-col items-center justify-center text-center space-y-4">

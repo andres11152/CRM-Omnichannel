@@ -1,9 +1,8 @@
-import React, { useState } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { ModuleHeader } from "./common/ModuleHeader";
-import PermissionsPanel from "./PermissionsPanel";
 import { useAuthStore } from "@/stores/authStore";
-import { Users, Shield, UserPlus } from "lucide-react";
+import { Users, UserPlus } from "lucide-react";
 
 // Import atomic components
 import { TeamMetrics } from "./team/TeamMetrics";
@@ -23,9 +22,6 @@ import { useAgentActions } from "@/hooks/useAgentActions";
 export const TeamManager: React.FC = () => {
   const { t } = useTranslation();
   const { user: currentUser } = useAuthStore();
-
-  // View state (only UI state remains in component)
-  const [activeView, setActiveView] = useState<"team" | "permissions">("team");
 
   // Custom hooks (all business logic extracted)
   const { agents, departments, isLoading, refreshAgents } = useTeamData();
@@ -70,58 +66,24 @@ export const TeamManager: React.FC = () => {
         }
       />
 
-      {/* Navigation Tabs */}
-      <div className="px-4 md:px-8 pt-3 bg-transparent z-10 shrink-0">
-        <div className="flex gap-1 md:gap-4 border-b border-gray-200 dark:border-reply-border-dark overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveView("team")}
-            className={`group px-6 py-2.5 font-black text-xs uppercase tracking-[0.2em] transition-all border-b-2 whitespace-nowrap flex items-center gap-3 ${
-              activeView === "team"
-                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
-                : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-            }`}
-          >
-            <Users size={16} className={`${activeView === "team" ? "text-indigo-600" : "text-gray-400 group-hover:text-gray-600"} transition-colors`} />
-            {t("team.tabs.team", "Equipo")}
-          </button>
-          <button
-            onClick={() => setActiveView("permissions")}
-            className={`group px-6 py-2.5 font-black text-xs uppercase tracking-[0.2em] transition-all border-b-2 whitespace-nowrap flex items-center gap-3 ${
-              activeView === "permissions"
-                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
-                : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-            }`}
-          >
-            <Shield size={16} className={`${activeView === "permissions" ? "text-indigo-600" : "text-gray-400 group-hover:text-gray-600"} transition-colors`} />
-            {t("team.tabs.permissions", "Permisos y Roles")}
-          </button>
-        </div>
-      </div>
-
       {/* Content Area - Fixed height with single scrollable container */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-reply-bg dark:bg-reply-bg-dark">
-        {activeView === "permissions" ? (
-          <div className="p-0">
-            <PermissionsPanel />
-          </div>
-        ) : (
-          <div className="flex flex-col">
-            {/* Metrics Cards - Now inside the scrollable container */}
-            <TeamMetrics agents={agents} />
+        <div className="flex flex-col">
+          {/* Metrics Cards */}
+          <TeamMetrics agents={agents} />
 
-            {/* Table Section */}
-            <div className="px-4 md:px-8 pb-8">
-              <TeamTable
-                agents={agents}
-                loading={isLoading}
-                currentUser={currentUser}
-                onEdit={handleEditAgent}
-                onDelete={agentActions.deleteAgent}
-                onCreateNew={handleCreateAgent}
-              />
-            </div>
+          {/* Table Section */}
+          <div className="px-4 md:px-8 pt-6 pb-8">
+            <TeamTable
+              agents={agents}
+              loading={isLoading}
+              currentUser={currentUser}
+              onEdit={handleEditAgent}
+              onDelete={agentActions.deleteAgent}
+              onCreateNew={handleCreateAgent}
+            />
           </div>
-        )}
+        </div>
       </div>
 
       {/* Agent Modal */}

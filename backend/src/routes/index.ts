@@ -114,21 +114,43 @@ router.get(
   },
 );
 
+import { getEnv } from "@/config/env";
+
 // ==================== LOCAL MEDIA PROXY (DEV MODE) ====================
 // Used by LocalStorageService to serve files securely without AWS S3.
 router.get("/api/local-media/*", (req, res, next) => {
   try {
-    const key = req.params[0];
-    const uploadDir = path.join(os.tmpdir(), "omnicrm_uploads");
-    const filePath = path.join(uploadDir, key);
+    const key = decodeURIComponent(req.params[0]);
+    let uploadDir = path.join(os.tmpdir(), "omnicrm_uploads");
+    try {
+      const env = getEnv();
+      if (env.UPLOAD_DIR) {
+        uploadDir = env.UPLOAD_DIR;
+      }
+    } catch (e) {
+      // getEnv might throw if not initialized
+    }
+    
+    let filePath = path.join(uploadDir, key);
+    if (!fs.existsSync(filePath)) {
+      // Fallback check to temp dir if it wasn't the main one
+      const fallbackDir = path.join(os.tmpdir(), "omnicrm_uploads");
+      const fallbackPath = path.join(fallbackDir, key);
+      if (fs.existsSync(fallbackPath)) {
+        filePath = fallbackPath;
+        uploadDir = fallbackDir;
+      }
+    }
 
     // Prevent directory traversal attacks
-    if (!filePath.startsWith(uploadDir)) {
+    const resolvedUploadDir = path.resolve(uploadDir);
+    const resolvedFilePath = path.resolve(filePath);
+    if (!resolvedFilePath.startsWith(resolvedUploadDir)) {
       return next(new AppError("Acceso denegado", 403));
     }
 
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
+    if (fs.existsSync(resolvedFilePath)) {
+      res.sendFile(resolvedFilePath);
     } else {
       next(new AppError("Archivo no encontrado en almacenamiento local", 404));
     }

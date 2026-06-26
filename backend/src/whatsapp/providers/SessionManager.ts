@@ -12,15 +12,7 @@ import { IAuthProvider } from "../core/interfaces/IAuthProvider";
 import { SessionConfig, SessionStatus } from "../core/types/whatsapp.types";
 import { EventBus } from "../core/events/EventBus";
 import { WhatsAppEventType } from "../core/events/WhatsAppEvents";
-import makeWASocket, {
-  WASocket,
-  Browsers,
-  fetchLatestBaileysVersion,
-  isJidBroadcast,
-  proto,
-  jidNormalizedUser,
-  Contact,
-} from "@whiskeysockets/baileys";
+import { WASocket, Contact } from "@whiskeysockets/baileys";
 
 interface ExtendedWASocket extends WASocket {
   getLidToPhoneNumberMap?: (lids: string[]) => Promise<{ [lid: string]: string }>;
@@ -28,17 +20,15 @@ interface ExtendedWASocket extends WASocket {
 import { SimpleInMemoryStore } from "./SimpleStore";
 import { ConnectionHealer } from "./ConnectionHealer";
 import {
-  createSessionLogger,
   cleanupSessionLogger,
   sessionModuleLogger as logger,
 } from "./SessionLogger";
-import NodeCache from "node-cache";
 
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import TenantContextManager from "@/config/tenantContext";
 import { bindSessionEvents } from "./events/SessionEventBinder";
-import { getProxyAgent } from "@/utils/proxy";
 import { SessionContactResolver } from "./SessionContactResolver";
+import { WhatsAppSocketFactory } from "./WhatsAppSocketFactory";
 
 export class SessionManager implements ISessionManager {
   private sessions: Map<string, WASocket> = new Map();
@@ -174,40 +164,6 @@ export class SessionManager implements ISessionManager {
     // Load auth state
     const { state, saveCreds } = await this.authProvider.loadState(sessionId);
 
-    // [SEC] RESILIENCE FIX: fetchLatestBaileysVersion makes an external HTTP call.
-    // If the network is slow or restricted, it hangs indefinitely causing a 30s server timeout.
-    // We race against a 5s timeout and fall back to a known-stable WA version.
-    const FALLBACK_WA_VERSION: [number, number, number] = [2, 3000, 1023480872];
-    let version: [number, number, number] = FALLBACK_WA_VERSION;
-    let isLatest = false;
-    try {
-      const versionResult = await Promise.race([
-        fetchLatestBaileysVersion(),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Timeout")),
-            5000,
-          ),
-        ),
-      ]);
-      version = versionResult.version as [number, number, number];
-      isLatest = versionResult.isLatest;
-    } catch (vErr) {
-      logger.warn(
-        `[SessionManager] Could not fetch latest WA version (${(vErr as Error).message}). Using fallback: ${FALLBACK_WA_VERSION.join(".")}`,
-      );
-    }
-    logger.info(
-      `[SessionManager] Using WA v${version.join(".")}, isLatest: ${isLatest}`,
-    );
-
-    // [HISTORY] OPT-IN ONLY. Enabling this makes the phone push the ENTIRE chat history
-    // (hundreds of chats × thousands of messages) via repeated messaging-history.set bursts.
-    // On this deployment that floods the Prisma pool and Postgres starts closing connections
-    // (scheduler/credential upserts fail). So default OFF; only recent history syncs on link.
-    // Set WA_SYNC_FULL_HISTORY=true ONLY if the DB (connection_limit) can absorb the burst.
-    const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
-
     // Fetch session details from DB to read the proxyUrl if configured
     const dbSession = await TenantContextManager.runAsSystem(async () =>
       whatsappSessionRepository.findSystemSession(sessionId),
@@ -217,93 +173,22 @@ export class SessionManager implements ISessionManager {
       logger.warn(
         `[SessionManager] Session ${sessionId} was deleted from DB during initialization. Aborting socket creation.`
       );
-      this.sessionStores.delete(sessionId);
+      const storeKey = `${companyId}::${sessionId}`;
+      this.sessionStores.delete(storeKey);
       this.sessionMetadata.delete(sessionId);
       throw new Error(`Session ${sessionId} does not exist in database.`);
     }
-    
-    // [SEC] PROXY LIFE-CYCLE: Generate Sticky Session Proxy and apply strict Kill Switch
-    const { getEnv } = await import("@/config/env");
-    const env = getEnv();
-    const resolvedProxyUrl = dbSession?.proxyUrl || env.GLOBAL_PROXY_URL;
 
-    let proxyAgent: import("https").Agent | undefined;
-    if (resolvedProxyUrl) {
-      const agent = getProxyAgent(resolvedProxyUrl, sessionId);
-      if (!agent) {
-        throw new Error(`[Proxy] CRITICAL: Proxy URL was configured (${resolvedProxyUrl}) but agent could not be created. Aborting socket connection to prevent real IP exposure.`);
-      }
-      proxyAgent = agent as unknown as import("https").Agent;
-    }
-
-    const sock = makeWASocket({
-      version,
-      auth: state,
-      // [DOCS · v7] `printQRInTerminal` is removed in Baileys 7 — QR is delivered via the
-      // `connection.update` event (handled in SessionEventBinder), so we don't pass it.
-      agent: proxyAgent,
-      fetchAgent: proxyAgent,
-      // Intercept Baileys internal logs to detect corruption
-      logger: createSessionLogger(sessionId, (sid) => {
+    const sock = await WhatsAppSocketFactory.createSocket({
+      sessionId,
+      companyId,
+      state,
+      sessionStore,
+      proxyUrl: dbSession?.proxyUrl,
+      onLoggerError: (sid) => {
         this.reconnectSession(sid).catch((e) => {
           logger.error(`[SessionGuard] Auto-healing reconnect failed: ${e}`);
         });
-      }) as ReturnType<
-        typeof import("pino")
-      >,
-      // [SEC] FINGERPRINTING: Emulate a clean Windows/Chrome environment instead of leaking custom agent names
-      browser: ["Windows", "Chrome", "122.0.0.0"],
-      // [SEC] NETWORK FOOTPRINT: Inject browser headers for handshake and media transfers
-      options: {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-          "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-          "Cache-Control": "no-cache",
-          "Pragma": "no-cache",
-        },
-      },
-      generateHighQualityLinkPreview: true,
-      syncFullHistory,
-      msgRetryCounterCache: new NodeCache(),
-      shouldIgnoreJid: (jid) => isJidBroadcast(jid),
-      // [DOCS · v7] Default is true. We keep it false deliberately: in production the init
-      // queries (blocklist/privacy/abprops) consistently timed out and stalled the event
-      // buffer so `messages.upsert` never fired. Disabling them keeps live messaging
-      // reliable; the data they fetch is non-essential for our CRM use case.
-      fireInitQueries: false,
-      // [DOCS · v7] shouldSyncHistoryMessage: (msg) => boolean. Accept ALL history so the
-      // store is populated for on-demand/manual sync; depth is bounded downstream
-      // (SessionEventBinder per-chat cap + LID skip). Returning false here would disable
-      // history entirely (per docs).
-      shouldSyncHistoryMessage: () => true,
-      getMessage: async (key) => {
-        // [DOCS] Baileys requires getMessage to return the ORIGINAL message CONTENT
-        // (proto.IMessage) so it can decrypt poll votes, retry sends and serve on-demand
-        // history. We only have the raw proto in the in-memory store (messages[jid]).
-        // The DB only stores our parsed CRM content/metadata — that is NOT a proto.IMessage,
-        // so returning it (as before) fed Baileys corrupt data. If the raw proto isn't in
-        // the store, return undefined so Baileys falls back to a placeholder resend request.
-        if (!key.id || !key.remoteJid) return undefined;
-        try {
-          const candidates = [
-            sessionStore.messages[key.remoteJid],
-            // LID/PN duality: the same chat may be keyed by the alternate JID in the store.
-            ...Object.values(sessionStore.messages),
-          ];
-          for (const arr of candidates) {
-            if (!arr) continue;
-            const found = arr.find(
-              (m) => (m as proto.IWebMessageInfo)?.key?.id === key.id,
-            );
-            if (found?.message) return (found as proto.IWebMessageInfo).message as proto.IMessage;
-          }
-          return undefined;
-        } catch (err) {
-          logger.error(
-            `[SessionManager] getMessage error for ${key.id}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-          return undefined;
-        }
       },
     });
 

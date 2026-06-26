@@ -85,6 +85,18 @@ export class WhatsAppCredentialRepository {
   async deleteMany(sessionId: string): Promise<Prisma.BatchPayload> {
     return prisma.whatsAppCredential.deleteMany({ where: { sessionId } });
   }
+
+  async deleteKeys(
+    sessionId: string,
+    keys: string[],
+  ): Promise<Prisma.BatchPayload> {
+    return prisma.whatsAppCredential.deleteMany({
+      where: {
+        sessionId,
+        key: { in: keys },
+      },
+    });
+  }
 }
 
 export const whatsappCredentialRepository = new WhatsAppCredentialRepository();

@@ -9,6 +9,7 @@ import { MediaPayload } from "../core/types/whatsapp.types";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { getEnv } from "@/config/env";
 import { getMediaPlaceholder } from "@/utils/mediaUtils";
 import { storageService } from "@/services/StorageService";
 import { mediaRepository } from "@/repositories/MediaRepository";
@@ -239,8 +240,22 @@ export class MediaProcessorService {
     }
 
     if (localKey) {
-      const uploadDir = path.join(os.tmpdir(), "omnicrm_uploads");
-      const localFilePath = path.join(uploadDir, localKey);
+      let uploadDir = path.join(os.tmpdir(), "omnicrm_uploads");
+      try {
+        const env = getEnv();
+        if (env.UPLOAD_DIR) {
+          uploadDir = env.UPLOAD_DIR;
+        }
+      } catch (e) {
+        // Ignored
+      }
+      let localFilePath = path.join(uploadDir, localKey);
+      if (!fs.existsSync(localFilePath)) {
+        const fallbackFilePath = path.join(os.tmpdir(), "omnicrm_uploads", localKey);
+        if (fs.existsSync(fallbackFilePath)) {
+          localFilePath = fallbackFilePath;
+        }
+      }
       if (fs.existsSync(localFilePath)) {
         Logger.info(`[MediaProcessor] Resolved local file path for sending: ${localFilePath}`);
         resolvedUrl = localFilePath;

@@ -160,6 +160,9 @@ export const securityMiddleware = (app: Express) => {
       "Authorization",
       "X-CSRF-Token",
       "X-Impersonate-User",
+      "X-Api-Key",
+      "X-Request-Id",
+      "X-Company-Id",
     ],
 
     // Exposed response headers

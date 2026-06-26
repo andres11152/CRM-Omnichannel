@@ -138,7 +138,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const nameColor = displaySenderName ? colors[Math.abs(stringToHash(displaySenderName)) % colors.length] : undefined;
 
   return (
-    <div id={`msg-${message.id}`} className={`flex ${isAgent ? "justify-end" : "justify-start"} group/row relative py-1`}>
+    <div
+      id={`msg-${message.id}`}
+      className={`flex ${isAgent ? "justify-end" : "justify-start"} group/row relative ${
+        reactions.length > 0 ? "pb-3.5 pt-1" : "py-1"
+      }`}
+    >
       <div
         className={`flex flex-col max-w-[85%] md:max-w-[70%] ${
           isAgent ? "items-end" : "items-start"

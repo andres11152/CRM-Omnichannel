@@ -11,7 +11,7 @@ import { whatsappCredentialRepository } from "@/repositories/WhatsAppCredentialR
 import redisClient from "@/config/redis";
 import { encrypt, decrypt } from "@/utils/cryptoUtils";
 import { Logger } from "@/utils/logger";
-import { prisma } from "@/config/database";
+
 
 const REDIS_PREFIX = "wa:sess:";
 const REDIS_TTL = 60 * 60 * 24; // 24 hours
@@ -232,17 +232,14 @@ export class DatabaseAuthProvider implements IAuthProvider {
           // Execute DB Deletes
           if (dbDeletes.length > 0) {
             ops.push(
-              prisma.whatsAppCredential.deleteMany({
-                where: {
-                  sessionId,
-                  key: { in: dbDeletes },
-                },
-              }).catch((e) =>
-                Logger.error(
-                  `[AuthProvider] DB Delete failed for ${sessionId}`,
-                  e,
+              whatsappCredentialRepository
+                .deleteKeys(sessionId, dbDeletes)
+                .catch((e) =>
+                  Logger.error(
+                    `[AuthProvider] DB Delete failed for ${sessionId}`,
+                    e,
+                  ),
                 ),
-              ),
             );
           }
 

@@ -1,5 +1,6 @@
 import { prisma } from "@/config/database";
 import { WhatsAppSession, Prisma } from "@prisma/client";
+import { runAsSystem } from "@/context/requestContext";
 
 export class WhatsAppSessionRepository {
   /**
@@ -28,9 +29,11 @@ export class WhatsAppSessionRepository {
    * System-level lookup for Webhooks/Callbacks ONLY
    */
   async findSystemSession(sessionId: string): Promise<WhatsAppSession | null> {
-    return prisma.whatsAppSession.findFirst({
-      where: { sessionId },
-    });
+    return runAsSystem(() =>
+      prisma.whatsAppSession.findFirst({
+        where: { sessionId },
+      })
+    );
   }
 
   /**
@@ -54,10 +57,12 @@ export class WhatsAppSessionRepository {
     sessionId: string,
     data: Prisma.WhatsAppSessionUpdateInput,
   ): Promise<WhatsAppSession> {
-    return prisma.whatsAppSession.update({
-      where: { sessionId },
-      data,
-    });
+    return runAsSystem(() =>
+      prisma.whatsAppSession.update({
+        where: { sessionId },
+        data,
+      })
+    );
   }
 
   /**
@@ -137,7 +142,7 @@ export class WhatsAppSessionRepository {
    * Internal lookup across companies
    */
   async findManySystem(args: Prisma.WhatsAppSessionFindManyArgs) {
-    return prisma.whatsAppSession.findMany(args);
+    return runAsSystem(() => prisma.whatsAppSession.findMany(args));
   }
 
   async findMany(

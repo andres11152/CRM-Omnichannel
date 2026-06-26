@@ -34,8 +34,6 @@ export const tenantContextMiddleware = (
     role: req.user.role,
   };
 
-  // Use enterWith to persist context across the async chain linearly
-  // This allows it to work as a standard Express middleware
-  contextStorage.enterWith(context);
-  next();
+  // [SEC] Safe execution scoping using AsyncLocalStorage.run to prevent context/tenant leaks
+  return contextStorage.run(context, () => next());
 };

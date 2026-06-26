@@ -2,6 +2,7 @@ import { User, Prisma } from "@prisma/client";
 import { prisma, ExtendedPrismaClient } from "@/config/database";
 import TenantContextManager from "@/config/tenantContext";
 import { BaseRepository } from "./BaseRepository";
+import { runAsSystem } from "@/context/requestContext";
 
 export interface ShadowUserParams {
   email: string;
@@ -34,15 +35,15 @@ export class UserRepository extends BaseRepository {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    // [SEC] Used for login/auth, bypasses tenant check initially
-    return this.db.user.findFirst({ where: { email } });
+    // [SEC] Used for login/auth, bypasses tenant check initially via runAsSystem
+    return runAsSystem(() => this.db.user.findFirst({ where: { email } }));
   }
 
   async create(args: Prisma.UserCreateArgs, companyIdOverride?: string): Promise<User> {
     const companyId = companyIdOverride || (TenantContextManager.hasContext() ? TenantContextManager.getCompanyId() : undefined);
 
     // If running as system or no context, but company creation/connection is explicitly provided, respect it
-    if (companyId === "__SYSTEM__" || !companyId || (args.data as any).company) {
+    if (companyId === "__SYSTEM__" || !companyId || (args.data as Prisma.UserCreateInput).company) {
       return this.db.user.create(args);
     }
 
@@ -71,7 +72,7 @@ export class UserRepository extends BaseRepository {
    * TenantContextManager.runAsSystem to bypass RLS.
    */
   async updateById(id: string, data: Prisma.UserUpdateInput): Promise<User> {
-    return this.db.user.update({ where: { id }, data });
+    return runAsSystem(() => this.db.user.update({ where: { id }, data }));
   }
 
   async count(args: Prisma.UserCountArgs, companyId?: string): Promise<number> {

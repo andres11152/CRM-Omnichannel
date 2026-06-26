@@ -25,7 +25,7 @@ const GLOBAL_MODELS = [
   "Role",
   "Permission",
   "WhatsAppCredential",
-  "User", "Stage", "WhatsAppSession",
+  "Stage",
 ];
 
 const SOFT_DELETE_MODELS = ["Contact", "Deal", "Ticket", "Campaign"];

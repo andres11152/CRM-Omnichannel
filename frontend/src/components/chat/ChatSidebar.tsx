@@ -1,6 +1,7 @@
 import React from "react";
 import { type Conversation } from "@/types";
-import { MessageSquare, Mail, Globe, Plus, ChevronRight, User } from "lucide-react";
+import { MessageSquare, Mail, Globe, Plus, ChevronRight } from "lucide-react";
+import { Avatar } from "@/components/common/Avatar";
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -166,8 +167,12 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     >
       <div className="flex items-start gap-3">
         {/* Avatar */}
-        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700 flex-shrink-0 relative">
-          <User size={24} />
+        <div className="relative flex-shrink-0">
+          <Avatar
+            src={conversation.contact?.profilePicUrl}
+            name={conversation.contactName || "Desconocido"}
+            className="w-12 h-12"
+          />
           <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm">
             {getChannelIcon()}
           </div>

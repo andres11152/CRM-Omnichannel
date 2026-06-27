@@ -458,8 +458,8 @@ class WebSocketGateway {
       
       const effectiveCompanyId = companyId || "__SYSTEM__";
       
-      await TenantContextManager.run({ companyId: effectiveCompanyId, userId }, () => 
-        prisma.user.update({
+      await TenantContextManager.run({ companyId: effectiveCompanyId, userId }, async () => 
+        await prisma.user.update({
           where: { id: userId },
           data: {
             lastSeen: new Date(),

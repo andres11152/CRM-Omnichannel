@@ -152,7 +152,12 @@ export class ConversationQueryService {
         timestamp: msg.createdAt, // [SEC] Compatibility with Frontend Message interface
         attachment: att,
         sender: senderRole,
-        senderName: (msg.sender as { name?: string })?.name || "Usuario",
+        // [Baileys 7] For group messages, metadata.senderName carries the pushName stored at
+        // ingest time and is always more current than the User DB name (which may be stale).
+        senderName: (conversation.isGroup && senderRole !== "agent"
+          ? (metadata as Record<string, unknown>).senderName as string | undefined
+          : undefined) ||
+          (msg.sender as { name?: string })?.name || "Usuario",
         type: att ? (att.type as string) : "text",
         mediaUrl: att?.url || undefined,
       };

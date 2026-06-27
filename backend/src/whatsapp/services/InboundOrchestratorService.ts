@@ -419,6 +419,9 @@ export class InboundOrchestratorService {
       origin: isOutbound ? "phone_sync" : "whatsapp",
       isGroup,
       senderJid: WhatsAppIdUtils.getSenderJid(msg) || undefined,
+      // [Baileys 7] pushName = the sender's WhatsApp display name at send time.
+      // Stored in metadata so the frontend can show it even if the User record is stale.
+      senderName: isGroup && !isOutbound && msg.pushName ? msg.pushName : undefined,
       ...quotedInfo,
     };
   }

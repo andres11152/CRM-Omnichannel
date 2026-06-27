@@ -53,9 +53,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const [showPicker, setShowPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
 
-  // Extract actual sender name from possible backend populated relations
+  // Extract actual sender name from possible backend populated relations.
+  // Priority for group messages: metadata.senderName (WhatsApp pushName stored at ingest time)
+  // → message.senderName (REST API: User DB name) → sender.name (socket: User object)
   const senderNameObj = message.sender;
-  const rawSenderName = message.senderName || (senderNameObj && typeof senderNameObj === "object" ? ((senderNameObj as { name?: string; phone?: string }).name || (senderNameObj as { name?: string; phone?: string }).phone) : undefined);
+  const metaSenderName = isGroup && !isAgent
+    ? (message.metadata as Record<string, unknown> | null)?.senderName as string | undefined
+    : undefined;
+  const rawSenderName =
+    metaSenderName ||
+    (message.senderName && message.senderName !== "+unknown" ? message.senderName : undefined) ||
+    (senderNameObj && typeof senderNameObj === "object"
+      ? ((senderNameObj as { name?: string; phone?: string }).name || (senderNameObj as { name?: string; phone?: string }).phone)
+      : undefined);
   const displaySenderName = typeof rawSenderName === "string" ? rawSenderName : undefined;
 
   // [SEC] Detect dark mode for inline style fallback

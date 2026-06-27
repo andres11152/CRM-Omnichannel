@@ -188,11 +188,18 @@ export class ChatSyncBatchIngester {
         };
       }
 
+      // [Baileys 7] Store the sender's WhatsApp display name in metadata so the frontend
+      // can show it regardless of the User record state.
+      const msgPushName = !msg.key.fromMe && isGroup ? (msg.pushName || bestPushNameByJid.get(
+        msg.key.participant ? (WhatsAppIdUtils.getCleanJid(msg.key.participant) || "") : ""
+      ) || undefined) : undefined;
+
       const metadata: Record<string, unknown> = {
         origin: "history_sync",
         ...mediaMeta,
         ...(parsed.contextInfo || {}),
-        ...(parsed.isSystem ? { system: true } : {})
+        ...(parsed.isSystem ? { system: true } : {}),
+        ...(msgPushName ? { senderName: msgPushName } : {}),
       };
 
       // Resolve sender for this specific message (crucial for group participant identification)
@@ -215,7 +222,7 @@ export class ChatSyncBatchIngester {
             try {
               const user = await chatService.upsertWhatsAppUser({
                 email: `${cleanParticipantJid.split("@")[0]}@whatsapp.user`,
-                name: resolvedName || `+${senderPhone || "unknown"}`,
+                name: resolvedName || (senderPhone ? `+${senderPhone}` : `Participante`),
                 companyId,
                 phone: senderPhone,
                 role: "USER",

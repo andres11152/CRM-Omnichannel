@@ -505,6 +505,31 @@ export const useAgentWorkspaceSockets = ({
     };
     socketService.on("ticket.assigned", handleTicketAssigned);
 
+    // Real-time profile picture updates from WhatsApp (contacts.update Baileys event
+    // or after ProfilePictureService.fetchAndPersist completes for new contacts).
+    const handleContactUpdated = (data: {
+      id?: string;
+      profilePicUrl?: string | null;
+      phone?: string | null;
+    }) => {
+      if (!data.profilePicUrl) return;
+      const resolvedUrl = data.profilePicUrl.startsWith("/")
+        ? `${BASE_URL}${data.profilePicUrl}`
+        : data.profilePicUrl;
+      const normalizedPhone = data.phone?.replace(/\D/g, "");
+      setTickets((prev) =>
+        prev.map((t) => {
+          const idMatch = data.id && (t.contact.id === data.id || t.contact.realContactId === data.id);
+          const phoneMatch = normalizedPhone && t.contact.phone?.replace(/\D/g, "") === normalizedPhone;
+          if (idMatch || phoneMatch) {
+            return { ...t, contact: { ...t.contact, profilePicUrl: resolvedUrl } };
+          }
+          return t;
+        }),
+      );
+    };
+    socketService.on("contact.updated", handleContactUpdated);
+
     console.log("[AgentWorkspace] [OK] Listeners registered");
 
     return () => {
@@ -513,6 +538,7 @@ export const useAgentWorkspaceSockets = ({
       socketService.off("ticket_deleted", handleTicketDeleted);
       socketService.off("ticket.updated", handleTicketUpdated);
       socketService.off("ticket.assigned", handleTicketAssigned);
+      socketService.off("contact.updated", handleContactUpdated);
     };
   }, [user?.companyId]); // Depend on user.companyId
 };

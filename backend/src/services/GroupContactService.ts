@@ -321,7 +321,7 @@ export const groupContactService = {
       }
 
       const existsInCRM = existingContactId !== null;
-      const canAddToCRM = phone !== null;
+      const canAddToCRM = WhatsAppIdUtils.isValidCrmPhone(phone);
 
       if (canAddToCRM) addableCount++;
       if (existsInCRM) existingCount++;
@@ -385,15 +385,18 @@ export const groupContactService = {
       return { success: false, error: "Conversation not found" };
     }
 
-    // Extract and validate phone
-    const phone = WhatsAppIdUtils.getPhoneNumber(params.jid);
+    // Extract and validate phone — must pass strict CRM validation (isValidCrmPhone),
+    // not just isRealPhoneNumber, to reject LID-resolved numbers that slip through.
+    const rawPhone = WhatsAppIdUtils.getPhoneNumber(params.jid);
 
-    if (!phone) {
+    if (!rawPhone || !WhatsAppIdUtils.isValidCrmPhone(rawPhone)) {
       return {
         success: false,
-        error: "Cannot add to CRM: No valid phone number (LID detected)",
+        error: "Cannot add to CRM: No valid phone number (LID or non-E.164 detected)",
       };
     }
+
+    const phone = rawPhone;
 
     // Check if already exists
     const existing = await contactRepository.findFirst({

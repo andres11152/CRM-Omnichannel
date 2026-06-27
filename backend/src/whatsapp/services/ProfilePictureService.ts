@@ -148,6 +148,18 @@ export class ProfilePictureService {
           Logger.info(
             `[ProfilePic] [OK] Saved profile picture for user & contact ${userId}: ${profilePicUrl.slice(0, 60)}... - CompanyId: ${companyId}`,
           );
+
+          // Push real-time update so the frontend refreshes the avatar without a reload
+          try {
+            const { gateway } = await import("@/gateways/socketGateway");
+            gateway.emitToCompany(companyId, "contact.updated", {
+              id: userId,
+              profilePicUrl,
+              phone: existingUser?.phone || null,
+            });
+          } catch {
+            // Non-blocking — socket may not be ready
+          }
         },
       );
     } catch (error) {

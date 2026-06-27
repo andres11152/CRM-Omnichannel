@@ -54,6 +54,128 @@ export interface SessionEventBinderDeps {
   reconnectSession: (sessionId: string) => Promise<void>;
 }
 
+// Stale name patterns created by old fallback bugs — safe to overwrite with real pushName.
+const STALE_NAME_RE = /^(\+unknown|Participante|ID: \d+)$/;
+
+/**
+ * [Baileys 7] contacts.update also carries notify (pushName) and verifiedName.
+ * If the User in DB has a stale name ("+unknown", "Participante", "ID: …"), heal it.
+ * Fire-and-forget — errors are logged and never thrown.
+ */
+async function persistContactName(
+  jid: string,
+  notify: string,
+  companyId: string,
+): Promise<void> {
+  const base = jid.split("@")[0].split(":")[0];
+  if (!base || base.length < 3) return;
+  const email = `${base}@whatsapp.user`;
+
+  const [{ userRepository }, { TenantContextManager: TCM }] = await Promise.all([
+    import("@/repositories/UserRepository"),
+    import("@/config/tenantContext"),
+  ]);
+
+  await TCM.runAsSystem(async () => {
+    const user = await userRepository.findFirst({
+      where: { companyId, email },
+      select: { id: true, name: true },
+    });
+    if (!user || !STALE_NAME_RE.test(user.name)) return;
+
+    await userRepository.update(user.id, companyId, { name: notify });
+    logger.info(`[SessionEventBinder] [contacts.update] Healed stale name: ${base} → "${notify}"`);
+  });
+}
+
+/**
+ * Downloads a WhatsApp profile picture URL, uploads it to persistent storage,
+ * updates User + Contact records in DB, and emits a Socket.IO contact.updated event.
+ * Called when Baileys fires contacts.update with an imgUrl (Baileys 7 best practice).
+ */
+async function persistContactProfilePic(
+  jid: string,
+  imgUrl: string,
+  sessionId: string,
+  companyId: string,
+): Promise<void> {
+  // Extract normalized phone (digits only, no @domain)
+  const phone = jid.split("@")[0].split(":")[0];
+  if (!phone || !/^\d{7,15}$/.test(phone)) return;
+
+  const [
+    { userRepository },
+    { contactRepository },
+    { TenantContextManager },
+    { storageService },
+    { gateway },
+    axios,
+  ] = await Promise.all([
+    import("@/repositories/UserRepository"),
+    import("@/repositories/ContactRepository"),
+    import("@/config/tenantContext"),
+    import("@/services/StorageService"),
+    import("@/gateways/socketGateway"),
+    import("axios").then((m) => m.default),
+  ]);
+
+  await TenantContextManager.runAsSystem(async () => {
+    const user = await userRepository.findFirst({
+      where: { companyId, phone },
+      select: { id: true, profilePicUrl: true, phone: true },
+    });
+    if (!user) return;
+
+    // Skip if already has a persistent non-WA URL (amazonaws, GCS, minio, local)
+    const existing = user.profilePicUrl;
+    if (
+      existing &&
+      !existing.includes("pps.whatsapp.net") &&
+      (existing.includes("amazonaws.com") ||
+        existing.includes("storage.googleapis.com") ||
+        existing.startsWith("/uploads") ||
+        existing.includes("minio"))
+    ) {
+      return;
+    }
+
+    let profilePicUrl: string;
+    try {
+      const response = await axios.get(imgUrl, {
+        responseType: "arraybuffer",
+        timeout: 10000,
+      });
+      const buffer = Buffer.from(response.data as ArrayBuffer);
+      const mimeType = (response.headers["content-type"] as string) || "image/jpeg";
+      const filename = `profile_${user.id}_${Date.now()}.jpg`;
+      const uploadResult = await storageService.uploadFile(companyId, buffer, filename, mimeType);
+      profilePicUrl = uploadResult.url;
+    } catch {
+      // imgUrl may already be expired; fall back to it directly
+      profilePicUrl = imgUrl;
+    }
+
+    await userRepository.update(user.id, companyId, { profilePicUrl });
+
+    if (user.phone) {
+      await contactRepository.updateMany({
+        where: { companyId, phone: user.phone },
+        data: { profilePicUrl },
+      });
+    }
+
+    gateway.emitToCompany(companyId, "contact.updated", {
+      id: user.id,
+      profilePicUrl,
+      phone: user.phone,
+    });
+
+    logger.info(
+      `[SessionEventBinder] [contacts.update] Profile pic persisted for ${phone} (session ${sessionId})`,
+    );
+  });
+}
+
 export function bindSessionEvents(
   sock: WASocket,
   sessionId: string,
@@ -73,6 +195,30 @@ export function bindSessionEvents(
 
   //  Bind Store (Memory Only for Baileys usage)
   store.bind(sock.ev);
+
+  // [Baileys 7] contacts.update fires on session start (full sync) and on individual changes.
+  // Payload: { id, notify?, verifiedName?, imgUrl?, name? }
+  // notify = pushName (WhatsApp display name set by the contact on their device).
+  sock.ev.on("contacts.update", (updates) => {
+    for (const update of updates) {
+      if (!update.id) continue;
+
+      // Heal stale names ("+unknown", "Participante", "ID: …") with real pushName.
+      const displayName = update.notify || update.verifiedName;
+      if (displayName) {
+        persistContactName(update.id, displayName, companyId).catch((err) =>
+          logger.warn(`[SessionEventBinder] contacts.update name heal failed for ${update.id}: ${err instanceof Error ? err.message : err}`),
+        );
+      }
+
+      // Persist new profile picture when imgUrl changes.
+      if (update.imgUrl) {
+        persistContactProfilePic(update.id, update.imgUrl, sessionId, companyId).catch((err) =>
+          logger.warn(`[SessionEventBinder] contacts.update pic persist failed for ${update.id}: ${err instanceof Error ? err.message : err}`),
+        );
+      }
+    }
+  });
 
   //  Enterprise Persistence: Ingest history to DB
   sock.ev.on("messaging-history.set", (rawData: unknown) => {

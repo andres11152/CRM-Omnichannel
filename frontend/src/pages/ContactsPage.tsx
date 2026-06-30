@@ -120,16 +120,18 @@ export const ContactsPage: React.FC = () => {
         },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error("import failed");
+      if (!res.ok) {
+        throw new Error(data.message || "Error al importar contactos");
+      }
       const r = data.data || data;
       toast.success(
         `${r.imported} importados · ${r.skipped} omitidos`,
         { id: toastId },
       );
       await fetchContacts(page, debouncedSearch);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error importing WhatsApp contacts:", error);
-      toast.error("Error al importar contactos", { id: toastId });
+      toast.error(error.message || "Error al importar contactos", { id: toastId });
     } finally {
       setImportingWa(false);
     }

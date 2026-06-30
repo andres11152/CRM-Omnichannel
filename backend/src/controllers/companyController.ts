@@ -127,7 +127,9 @@ export const importWhatsAppContacts = catchAsync(
       throw new AppError("Usuario no tiene compañía asignada", 400);
     }
 
-    const result = await companySettingsService.importWhatsAppContacts(companyId);
+    const sessionId = (req.body?.sessionId || req.query?.sessionId) as string | undefined;
+
+    const result = await companySettingsService.importWhatsAppContacts(companyId, sessionId);
 
     Logger.info(
       `[Company] Manual WhatsApp contact import by ${req.user?.email}: ${result.imported} imported, ${result.skipped} skipped`,

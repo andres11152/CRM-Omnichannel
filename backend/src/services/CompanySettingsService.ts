@@ -5,6 +5,8 @@ import { SystemEmailService } from "@/services/EmailService";
 import { userRepository } from "@/repositories/UserRepository";
 import { contactService } from "@/services/ContactService";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
+import { prisma } from "@/config/database";
+import redisClient from "@/config/redis";
 
 /**
  *  COMPANY SETTINGS SERVICE
@@ -165,49 +167,110 @@ export const companySettingsService = {
 
   /**
    * [WA-CONTACTS] Manual, on-demand import: scans existing WhatsApp "shadow" users
-   * (created from chats) and creates CRM Contacts ONLY for valid real phone numbers,
-   * skipping LIDs / internal IDs. Returns counts for UI feedback.
+   * [WA-CONTACTS] Manual, on-demand import: scans the active WhatsApp session's
+   * memory store (persisted in Redis) and creates CRM Contacts ONLY for valid real phone numbers.
+   * If there are multiple active sessions, requires specifying a sessionId.
    */
-  async importWhatsAppContacts(companyId: string): Promise<{ imported: number; skipped: number; total: number }> {
-    const users = await userRepository.findMany({
-      where: {
-        companyId,
-        role: "USER",
-        email: { endsWith: "@whatsapp.user" },
-        phone: { not: null },
-      },
-      select: { id: true, name: true, phone: true, email: true },
+  async importWhatsAppContacts(
+    companyId: string,
+    sessionId?: string,
+  ): Promise<{ imported: number; skipped: number; total: number }> {
+    // 1. Fetch active sessions (status = CONNECTED)
+    const activeSessions = await prisma.whatsAppSession.findMany({
+      where: { companyId, status: "CONNECTED" },
+      select: { sessionId: true, phone: true },
     });
+
+    if (activeSessions.length === 0) {
+      throw new AppError("No se encontró ninguna sesión activa de WhatsApp. Conecta un dispositivo primero.", 400);
+    }
+
+    let targetSessionId = sessionId;
+
+    if (targetSessionId) {
+      // Validate requested sessionId is active
+      const exists = activeSessions.some((s) => s.sessionId === targetSessionId);
+      if (!exists) {
+        throw new AppError("La sesión de WhatsApp seleccionada no está activa o no existe.", 400);
+      }
+    } else {
+      // Auto-choose if exactly one active session
+      if (activeSessions.length === 1) {
+        targetSessionId = activeSessions[0].sessionId;
+      } else {
+        // Multiple sessions: user must specify
+        throw new AppError(
+          "Se encontraron múltiples sesiones de WhatsApp activas. Por favor especifica de cuál deseas importar los contactos.",
+          400,
+        );
+      }
+    }
+
+    // 2. Fetch contacts from Redis SimpleStore cache
+    const redisKey = `wa:store:${companyId}_${targetSessionId}`;
+    let contactsData: Record<string, { id: string; name?: string | null }> = {};
+
+    if (redisClient?.isOpen) {
+      try {
+        const dataStr = await redisClient.get(redisKey);
+        if (dataStr) {
+          const data = JSON.parse(dataStr);
+          contactsData = data.contacts || {};
+        }
+      } catch (e) {
+        Logger.error(`[CompanySettingsService] Failed to read/parse Redis store for ${redisKey}`, e);
+      }
+    }
+
+    const contactList = Object.values(contactsData);
+
+    if (contactList.length === 0) {
+      throw new AppError(
+        "No se encontraron contactos sincronizados en la sesión de WhatsApp seleccionada. Por favor espera a que se complete la sincronización inicial.",
+        400,
+      );
+    }
 
     let imported = 0;
     let skipped = 0;
 
-    for (const u of users) {
-      if (!u.phone || !WhatsAppIdUtils.isValidCrmPhone(u.phone)) {
+    for (const c of contactList) {
+      const jid = c.id;
+      if (!jid || jid.endsWith("@g.us")) {
         skipped++;
         continue;
       }
+
+      // Extract phone number from JID (e.g. 573123456789@s.whatsapp.net -> 573123456789)
+      const phone = jid.split("@")[0].split(":")[0];
+      if (!WhatsAppIdUtils.isValidCrmPhone(phone)) {
+        skipped++;
+        continue;
+      }
+
       try {
         await contactService.upsert(companyId, {
-          phone: u.phone,
-          name: u.name,
+          phone,
+          name: c.name || `WhatsApp Contact ${phone}`,
           email: null,
           customFields: {
             source: "whatsapp",
-            whatsappId: u.email.split("@")[0],
-            userId: u.id,
+            whatsappId: jid,
+            sessionId: targetSessionId,
           },
-          tags: ["Imported from Chat"],
+          tags: ["Imported from WhatsApp"],
         });
         imported++;
       } catch (err) {
-        Logger.warn(`[CompanySettings] Manual import: failed to upsert contact for ${u.phone}`, { err });
+        Logger.warn(`[CompanySettings] Manual import: failed to upsert contact for ${phone}`, { err });
         skipped++;
       }
     }
 
-    Logger.info(`[CompanySettings] Manual WhatsApp contact import for ${companyId}: ${imported} imported, ${skipped} skipped (of ${users.length})`);
-    return { imported, skipped, total: users.length };
+    Logger.info(
+      `[CompanySettings] Manual WhatsApp contact import for ${companyId} (session: ${targetSessionId}): ${imported} imported, ${skipped} skipped (of ${contactList.length})`,
+    );
+    return { imported, skipped, total: contactList.length };
   },
 
   /**

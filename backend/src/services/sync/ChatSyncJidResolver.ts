@@ -76,7 +76,7 @@ export class ChatSyncJidResolver {
     if (store && store.lidToPhone) {
       if (contacts) {
         for (const c of contacts) {
-          if (c.id && c.resolved && c.lid) {
+          if (c.id && c.lid) {
             store.lidToPhone[c.lid.split("@")[0]] = c.id;
           }
         }

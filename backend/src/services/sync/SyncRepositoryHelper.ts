@@ -26,8 +26,13 @@ export class SyncRepositoryHelper {
     name?: string,
     isGroup: boolean
   }) {
-    const { companyId, phone, name, isGroup } = params;
-    
+    const { companyId, name, isGroup } = params;
+    // Normalize: strip @domain and :device-suffix so "573...@s.whatsapp.net" and
+    // "573...:0" both map to the same channelId as the one stored in the DB.
+    const phone = isGroup
+      ? params.phone
+      : params.phone.replace(/@[^@]+$/, "").split(":")[0];
+
     let conversation = await this.findConversation(companyId, phone) as (Conversation & { participants: User[] }) | null;
     let customerUserId: string | undefined;
 

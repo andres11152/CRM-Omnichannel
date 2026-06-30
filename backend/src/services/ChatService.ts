@@ -150,8 +150,10 @@ export class ChatServiceFacade {
    * Useful for events where the specific message might be missing (e.g. Pin/Unpin).
    */
   async findOrCreateConversationByJid(companyId: string, remoteJid: string) {
-    const chatUniqueId = remoteJid.split("@")[0];
-    const chatEmail = `${remoteJid}@whatsapp.user`;
+    // Strip domain AND multi-device suffix (":0", ":1") so PIN events with
+    // JIDs like "573...:0@s.whatsapp.net" don't create duplicate conversations.
+    const chatUniqueId = remoteJid.split("@")[0].split(":")[0];
+    const chatEmail = `${chatUniqueId}@whatsapp.user`;
 
     let conv = await this.findConversation(companyId, chatUniqueId, chatEmail);
     if (!conv) {

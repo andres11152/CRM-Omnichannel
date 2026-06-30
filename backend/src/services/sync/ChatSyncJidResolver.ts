@@ -40,6 +40,10 @@ export class ChatSyncJidResolver {
   resolveJid(jid: string, store: BaileysStore | null): string | null {
     if (jid.endsWith("@g.us")) return jid;
 
+    // WhatsApp Channels (newsletters) are broadcast-only and should never appear as CRM
+    // conversations. Their JIDs look like "120363...@newsletter".
+    if (jid.includes("@newsletter")) return null;
+
     // [SEC] LID RESOLUTION: WhatsApp internal IDs must be resolved to real phones
     if (jid.includes("@lid")) {
       // Strategy 1: getPhoneFromLid helper

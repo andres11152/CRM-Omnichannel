@@ -111,12 +111,22 @@ export class WhatsAppEventWiring {
             const failedJobs = await queue.getFailed(0, 100);
 
             if (failedJobs.length > 0) {
-              Logger.info(`[WA] Retrying ${failedJobs.length} failed outbound jobs for company ${event.companyId}`);
+              let retried = 0;
+              let discarded = 0;
               for (const job of failedJobs) {
-                await job.retry().catch((retryErr: Error) => {
-                  Logger.warn(`[WA] Failed to retry job ${job.id}: ${retryErr.message}`);
-                });
+                const maxAttempts = (job.opts?.attempts as number | undefined) ?? 10;
+                if (job.attemptsMade >= maxAttempts) {
+                  // Permanently failed — remove from queue so it never replays on startup.
+                  await job.remove().catch(() => {});
+                  discarded++;
+                } else {
+                  await job.retry().catch((retryErr: Error) => {
+                    Logger.warn(`[WA] Failed to retry job ${job.id}: ${retryErr.message}`);
+                  });
+                  retried++;
+                }
               }
+              Logger.info(`[WA] Outbound job recovery for company ${event.companyId}: ${retried} retried, ${discarded} permanently-failed discarded`);
             }
           } catch (retryErr) {
             Logger.warn("[WA] Non-critical: Failed to retry outbound jobs on reconnect:", retryErr);

@@ -177,11 +177,15 @@ export class SyncMessageParser {
       textContent = (msgContent.extendedTextMessage as Record<string, unknown>)?.text as string || "";
     } else if (messageType === "protocolMessage") {
       const protoMsg = msgContent.protocolMessage as Record<string, unknown>;
-      // 0 is REVOKE in Baileys proto
-      textContent = (protoMsg?.type === 0 || String(protoMsg?.type) === "REVOKE") 
-        ? " Este mensaje fue eliminado" 
-        : "[Sistema/Protocolo]";
-    } 
+      // Only REVOKE (type 0) is user-visible — "this message was deleted".
+      // All other protocol types (14=MESSAGE_EDIT, ephemeral settings, etc.) are
+      // internal WhatsApp control frames and must not be stored as chat messages.
+      if (protoMsg?.type === 0 || String(protoMsg?.type) === "REVOKE") {
+        textContent = " Este mensaje fue eliminado";
+      } else {
+        return null;
+      }
+    }
     // Media Types
     else if (messageType === "imageMessage") {
       mediaType = "image";

@@ -242,7 +242,7 @@ export function bindSessionEvents(
     const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
     const MAX_MESSAGES_PER_CHAT = process.env.WA_HISTORY_LIMIT_PER_CHAT
       ? parseInt(process.env.WA_HISTORY_LIMIT_PER_CHAT, 10)
-      : (syncFullHistory ? 200 : 60);
+      : (syncFullHistory ? 500 : 200);
 
     const syncMessages: WAMessage[] = [];
 
@@ -269,7 +269,7 @@ export function bindSessionEvents(
         );
       }
 
-      logger.info(
+      logger.debug(
         `[SessionManager]  History Sync for ${sessionId}: ${syncMessages.length} messages, ${chats?.length || 0} chats, ${contacts?.length || 0} contacts ${isOnDemand ? "[ON-DEMAND · full ingest]" : "[bulk · capped]"}`,
       );
     }

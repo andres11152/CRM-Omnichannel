@@ -63,6 +63,16 @@ export class ChatSyncIngest {
   ): Promise<void> {
     if ((!messages || messages.length === 0) && (!chats || chats.length === 0)) return;
 
+    if (options?.onDemand) {
+      // ON_DEMAND syncs are scoped to 1 chat and use createMany+skipDuplicates, so they
+      // won't exhaust the pool. Bypass the bulk queue so the user sees history immediately
+      // instead of waiting 30-40s for all pending bulk batches to finish first.
+      this.runHistorySync(companyId, messages, chats, contacts, options).catch((err) => {
+        Logger.error(`[ChatSync] On-demand history ingest failed:`, err);
+      });
+      return;
+    }
+
     // Enqueue onto the serial chain (fire-and-forget — keep the socket handler non-blocking).
     this.pendingHistorySyncs++;
     this.historySyncChain = this.historySyncChain
@@ -96,7 +106,7 @@ export class ChatSyncIngest {
           if (chats) {
             for (const chat of chats) {
               const phone = this.jidResolver.resolveJid(chat.id, store);
-              if (phone && !isJidBroadcast(chat.id)) {
+              if (phone && !isJidBroadcast(chat.id) && !chat.id.includes("@newsletter")) {
                 const isGroup = chat.id.endsWith("@g.us");
                 const cleanPhone = isGroup ? WhatsAppIdUtils.cleanChannelId(phone) : phone;
                 await syncRepositoryHelper.ensureConversation({
@@ -181,7 +191,7 @@ export class ChatSyncIngest {
       // If memory store has fewer than 15 messages, fetch on-demand from WhatsApp to backfill history
       if (messages.length < 15) {
         Logger.info(`[ContextSync] Only ${messages.length} messages in memory for ${channelId}, fetching on-demand from WhatsApp...`);
-        const fetchSuccess = await this.fetchHistoryFromWhatsApp(companyId, session.sessionId, channelId, 50);
+        const fetchSuccess = await this.fetchHistoryFromWhatsApp(companyId, session.sessionId, channelId, 500);
         if (fetchSuccess) {
           // Re-extract from store now that history sync event has updated it
           messages = this.jidResolver.extractMessagesFromStore(store, undefined, targetJid);
@@ -196,10 +206,12 @@ export class ChatSyncIngest {
         }
       }
 
+      // Use the batch path (createMany + skipDuplicates) instead of per-message
+      // findFirst+create, which would take 20-30s for 500 messages on a remote DB.
       const recent = messages.slice(-500);
-      for (const msg of recent) {
-        const result = await this.batchIngester.processMessage(companyId, channelId, msg, false, admin.id);
-        if (result === "new") syncedCount++;
+      if (recent.length > 0) {
+        const convId = await this.batchIngester.ingestConversationBatch(companyId, channelId, recent, admin.id);
+        if (convId) syncedCount = recent.length;
       }
     } catch (err: unknown) {
       Logger.error(`[ContextSync] ERROR: Failed for ${channelId}:`, {
@@ -242,17 +254,21 @@ export class ChatSyncIngest {
       let targetJid = WhatsAppIdUtils.getTargetJid(channelId);
       targetJid = await this.jidResolver.resolveRealJid(companyId, sessionId, targetJid);
 
-      // Find oldest message in database for this conversation to use as anchor
+      // Find NEWEST message in database for this conversation to use as anchor.
+      // fetchMessageHistory fetches messages BEFORE the cursor, so anchoring on the
+      // newest message fills the gap between what we have and older history.
+      // (Anchoring on the OLDEST would only fetch messages before our oldest — useless
+      // for gaps in the middle like "have May 26 + June 30, missing May 27–June 29".)
       const { messageRepository } = await import("@/repositories/MessageRepository");
       const cleanPhone = WhatsAppIdUtils.cleanChannelId(channelId);
-      const oldestDbMsg = await messageRepository.findFirst({
+      const anchorMsg = await messageRepository.findFirst({
         where: {
           companyId,
           conversation: {
             channelId: cleanPhone
           }
         },
-        orderBy: { createdAt: "asc" }
+        orderBy: { createdAt: "desc" }
       });
 
       // Snapshot the current store message count BEFORE requesting history
@@ -263,14 +279,14 @@ export class ChatSyncIngest {
       let oldestMsgTimestampMs: number;
       let anchorSource: string;
 
-      if (oldestDbMsg?.whatsappMessageId) {
+      if (anchorMsg?.whatsappMessageId) {
         oldestMsgKey = {
           remoteJid: targetJid,
-          fromMe: oldestDbMsg.direction === "OUTBOUND",
-          id: oldestDbMsg.whatsappMessageId,
+          fromMe: anchorMsg.direction === "OUTBOUND",
+          id: anchorMsg.whatsappMessageId,
         };
-        oldestMsgTimestampMs = new Date(oldestDbMsg.createdAt).getTime();
-        anchorSource = "Database";
+        oldestMsgTimestampMs = new Date(anchorMsg.createdAt).getTime();
+        anchorSource = "Database (newest msg)";
       } else if (store) {
         // Tier 2: Search Baileys Memory Store for anchor message
         const memMessages = this.jidResolver.extractMessagesFromStore(store, undefined, targetJid);

@@ -97,9 +97,10 @@ class MessageQueueWorker {
             await messageRepository
               .update(dbId, { status: "FAILED" }, companyId)
               .catch((updateErr: Error) => {
-                Logger.error(
-                  `[Worker:${companyId}] Could not mark message ${dbId} as FAILED:`,
-                  updateErr,
+                // Warn (not error): the message row may not exist if the job was
+                // from a different environment or the DB record was never committed.
+                Logger.warn(
+                  `[Worker:${companyId}] Could not mark message ${dbId} as FAILED (row not found or already removed): ${updateErr.message}`,
                 );
               });
           },

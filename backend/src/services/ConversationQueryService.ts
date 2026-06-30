@@ -205,7 +205,14 @@ export class ConversationQueryService {
       const contactPic = conversation.contact?.profilePicUrl;
       const customerPic = (customer as { profilePicUrl?: string | null } | undefined)?.profilePicUrl;
 
-      if (!contactPic && !customerPic && customer) {
+      // Heal if: no pic at all, OR the stored URL is a WA CDN link (pps.whatsapp.net)
+      // which expires after ~6 hours. ProfilePictureService will internally skip if
+      // it's already persisted on permanent storage (amazonaws/GCS/MinIO).
+      const picNeedsHeal =
+        !customer ? false :
+        !contactPic && (!customerPic || customerPic.includes("pps.whatsapp.net"));
+
+      if (picNeedsHeal) {
         const customerId = (customer as { id: string }).id;
         this.triggerProfilePicHeal(companyId, conversation.channelId, customerId);
       }

@@ -82,25 +82,44 @@ export class ProfilePictureService {
             return;
           }
 
-          let profilePicUrl: string | undefined;
+          // [BAILEYS 7] LID-ADDRESSED CONTACTS: tctoken is stored under the LID JID.
+          // When we call profilePictureUrl with a PN JID, Baileys must resolve it to
+          // the LID via getLIDForPN (USYNC query). If that USYNC fails (cache miss
+          // post-restart, rate limit), the tctoken lookup falls back to the PN key
+          // where nothing is stored, and WhatsApp rejects the request without a token.
+          // Fix: try the PN JID first, then retry with the LID JID from the store.
+          const PP_TIMEOUT = 15_000;
 
-          try {
-            profilePicUrl = await sock.profilePictureUrl(
-              normalizedJid,
-              "image",
-            );
-          } catch {
+          const tryFetch = async (targetJid: string): Promise<string | undefined> => {
             try {
-              profilePicUrl = await sock.profilePictureUrl(
-                normalizedJid,
-                "preview",
-              );
+              return await sock.profilePictureUrl(targetJid, "image", PP_TIMEOUT);
             } catch {
-              Logger.info(
-                `[ProfilePic] No profile picture available for ${normalizedJid} - CompanyId: ${companyId}`,
-              );
-              return;
+              try {
+                return await sock.profilePictureUrl(targetJid, "preview", PP_TIMEOUT);
+              } catch {
+                return undefined;
+              }
             }
+          };
+
+          let profilePicUrl = await tryFetch(normalizedJid);
+
+          if (!profilePicUrl && !normalizedJid.includes("@lid")) {
+            // Fallback: look up LID JID from the in-memory store and retry with it
+            // so Baileys can find the tctoken that was stored under the LID key.
+            const contactInfo = this.sessionManager.getContactInfo(sessionId, normalizedJid);
+            const lidJid = contactInfo?.lid;
+            if (lidJid) {
+              Logger.info(`[ProfilePic] Retrying with LID JID ${lidJid} for ${normalizedJid}`);
+              profilePicUrl = await tryFetch(lidJid);
+            }
+          }
+
+          if (!profilePicUrl) {
+            Logger.info(
+              `[ProfilePic] No profile picture available for ${normalizedJid} - CompanyId: ${companyId}`,
+            );
+            return;
           }
 
           if (!profilePicUrl) return;

@@ -89,6 +89,10 @@ export class InboundMessageHandler {
         `[InboundHandler] CAUGHT EXCEPTION IN handleIncoming for ${messageId}:`,
         error instanceof Error ? error : new Error(String(error)),
       );
+      // Rethrow so BullMQ retries the job (queue is configured with attempts: 3,
+      // backoff: exponential). Without this rethrow the worker returns void and
+      // BullMQ marks the job "completed" — silently dropping the message.
+      throw error;
     }
   }
 

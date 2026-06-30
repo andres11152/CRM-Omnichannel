@@ -109,9 +109,17 @@ export class ChatIdentityService {
         Logger.info(
           `[ChatIdentityService] [SEC] Race condition detected for user ${params.email}, resolving existing...`,
         );
-        const existingUserAfterCollision = await userRepository.findFirst({
-          where: { email: params.email, companyId: params.companyId },
-        });
+        // The concurrent INSERT from history sync may not be committed yet.
+        // Retry findFirst up to 3× with growing delays so we don't rethrow
+        // on a transient read-before-commit timing gap.
+        let existingUserAfterCollision = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 80 * attempt));
+          existingUserAfterCollision = await userRepository.findFirst({
+            where: { email: params.email, companyId: params.companyId },
+          });
+          if (existingUserAfterCollision) break;
+        }
         if (existingUserAfterCollision) {
           user = existingUserAfterCollision;
         } else {

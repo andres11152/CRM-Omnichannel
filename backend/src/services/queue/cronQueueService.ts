@@ -211,22 +211,12 @@ export const initCronWorker = async () => {
           }
           case "stale-flow-sessions": {
             await TenantContextManager.runAsSystem(async () => {
-              const { prisma } = await import("@/config/database");
+              const { flowSessionRepository } = await import("@/repositories/FlowSessionRepository");
               const STALE_THRESHOLD_HOURS = 24;
               const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
-              const result = await prisma.contactFlowSession.updateMany({
-                where: {
-                  isActive: true,
-                  lastStepAt: { lt: cutoff },
-                },
-                data: {
-                  isActive: false,
-                  isPaused: false,
-                  completedAt: new Date(),
-                },
-              });
-              if (result.count > 0) {
-                Logger.info(`[CronQueue] Expired ${result.count} stale flow session(s) older than ${STALE_THRESHOLD_HOURS}h.`);
+              const deactivatedCount = await flowSessionRepository.deactivateStaleSessions(cutoff);
+              if (deactivatedCount > 0) {
+                Logger.info(`[CronQueue] Expired ${deactivatedCount} stale flow session(s) older than ${STALE_THRESHOLD_HOURS}h.`);
               }
             });
             break;

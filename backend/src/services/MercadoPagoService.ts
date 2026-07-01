@@ -112,9 +112,10 @@ export const mercadoPagoService = {
 
       Logger.info(`[MercadoPago] Subscription successful for company ${companyId}. SubId: ${subscriptionId}`);
       return { subscriptionId, status };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: unknown }; message?: string };
       Logger.error(`[MercadoPago] Card Subscription failed for company ${companyId}`, {
-        error: error.response?.data || error.message || error,
+        error: err.response?.data || err.message || error,
       });
       throw new AppError("Error processing card payment subscription with MercadoPago.", 400);
     }

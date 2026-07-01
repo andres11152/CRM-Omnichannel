@@ -216,6 +216,15 @@ export class ContactRepository {
       contacts.map((c) => this.db.contact.create({ data: c })),
     );
   }
+
+  /**
+   * [ADMIN-ONLY] Nuclear delete: deletes all contact records across all tenants.
+   * MUST be run under a system context to bypass companyId isolation.
+   */
+  async nuclearDeleteAll(): Promise<number> {
+    const result = await this.db.contact.deleteMany({});
+    return result.count;
+  }
 }
 
 export const contactRepository = new ContactRepository();

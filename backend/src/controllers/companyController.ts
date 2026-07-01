@@ -4,7 +4,6 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { companySettingsService } from "@/services/CompanySettingsService";
-import { prisma } from "@/config/database";
 
 /**
  *  COMPANY CONTROLLER
@@ -152,16 +151,16 @@ export const deleteAllContactsNuclear = catchAsync(
       throw new AppError("Solo MASTER puede ejecutar limpiezas nucleares", 403);
     }
 
-    const result = await prisma.contact.deleteMany({});
+    const deletedCount = await companySettingsService.nuclearDeleteAllContacts();
 
     Logger.warn(
-      `[NUCLEAR] All contacts deleted by ${user.email}: ${result.count} records removed`,
+      `[NUCLEAR] All contacts deleted by ${user.email}: ${deletedCount} records removed`,
     );
 
     res.json({
       status: "success",
       data: {
-        deleted: result.count,
+        deleted: deletedCount,
         message: "Todos los contactos de todos los tenants han sido eliminados",
       },
     });

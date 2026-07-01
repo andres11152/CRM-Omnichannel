@@ -16,6 +16,11 @@ export const HeatmapChart: React.FC<Props> = ({ data }) => {
     return Math.max(...data.map((d) => d.value));
   }, [data]);
 
+  const totalMessages = useMemo(
+    () => data.reduce((sum, d) => sum + d.value, 0),
+    [data],
+  );
+
   // Create a fast lookup matrix [day][hour]
   const matrix = useMemo(() => {
     const m = Array(7).fill(0).map(() => Array(24).fill(0));
@@ -44,7 +49,10 @@ export const HeatmapChart: React.FC<Props> = ({ data }) => {
         <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
           <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
         </div>
-        Mapa de Calor: Volumen de Mensajes
+        <span>Mapa de Calor: Volumen de Mensajes</span>
+        <span className="ml-auto text-xs font-medium text-gray-400 dark:text-gray-500">
+          {totalMessages.toLocaleString()} mensajes totales
+        </span>
       </h3>
 
       <div className="flex-1 flex flex-col min-h-0 overflow-x-auto overflow-y-hidden scrollbar-thin pb-2">

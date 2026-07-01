@@ -67,6 +67,21 @@ export class FlowSessionRepository {
     });
   }
 
+  async deactivateStaleSessions(cutoff: Date): Promise<number> {
+    const result = await this.db.contactFlowSession.updateMany({
+      where: {
+        isActive: true,
+        lastStepAt: { lt: cutoff },
+      },
+      data: {
+        isActive: false,
+        isPaused: false,
+        completedAt: new Date(),
+      },
+    });
+    return result.count;
+  }
+
   // ── Workflow ──
 
   async findWorkflow(id: string) {

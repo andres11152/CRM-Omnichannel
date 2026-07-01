@@ -63,13 +63,11 @@ export class WhatsAppBackupService {
         return;
       }
 
-      // Get all Baileys auth keys from Redis
-      const authKeys = await redisClient.keys("baileys:*");
-      const storeKeys = await redisClient.keys("wwebstore:*");
-      const allKeys = [...authKeys, ...storeKeys];
+      // Get all Baileys auth keys from Redis (Exclude wwebstore chat histories to prevent data leaks and save space)
+      const allKeys = await redisClient.keys("baileys:*");
 
       if (allKeys.length === 0) {
-        Logger.info("[WhatsApp Backup] No WhatsApp data to backup");
+        Logger.info("[WhatsApp Backup] No WhatsApp auth sessions to backup");
         return;
       }
 

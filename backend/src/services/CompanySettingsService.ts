@@ -5,7 +5,7 @@ import { SystemEmailService } from "@/services/EmailService";
 import { userRepository } from "@/repositories/UserRepository";
 import { contactService } from "@/services/ContactService";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
-import { prisma } from "@/config/database";
+import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import redisClient from "@/config/redis";
 
 /**
@@ -176,8 +176,8 @@ export const companySettingsService = {
     sessionId?: string,
   ): Promise<{ imported: number; skipped: number; total: number }> {
     // 1. Fetch active sessions (status = CONNECTED)
-    const activeSessions = await prisma.whatsAppSession.findMany({
-      where: { companyId, status: "CONNECTED" },
+    const activeSessions = await whatsappSessionRepository.findMany(companyId, {
+      where: { status: "CONNECTED" },
       select: { sessionId: true, phone: true },
     });
 
@@ -336,5 +336,17 @@ export const companySettingsService = {
         company.defaultSenderName || company.smtpUser?.split("@")[0] || null,
       provider: company.emailProvider,
     };
+  },
+
+  /**
+   * [ADMIN-ONLY] Nuclear cleanup: deletes all contacts across all tenants.
+   * Leverages runAsSystem to bypass automatic RLS company isolation.
+   */
+  async nuclearDeleteAllContacts(): Promise<number> {
+    const { runAsSystem } = await import("@/context/requestContext");
+    const { contactRepository } = await import("@/repositories/ContactRepository");
+    return runAsSystem(async () => {
+      return contactRepository.nuclearDeleteAll();
+    });
   },
 };

@@ -51,19 +51,19 @@ export const AnalyticsDashboard: React.FC = () => {
   const kpis = useMemo(() => {
     let totalTickets = 0;
     let totalResolved = 0;
-    let sumTime = 0;
-    let agentsWithTime = 0;
+    let totalWeightedMinutes = 0;
+    let totalResolvedForTime = 0;
 
     agentData.forEach((a) => {
       totalTickets += a.totalTickets || 0;
       totalResolved += a.resolvedTickets || 0;
-      if (a.avgResolutionTime > 0) {
-        sumTime += a.avgResolutionTime;
-        agentsWithTime++;
+      if (a.avgResolutionTime > 0 && a.resolvedTickets > 0) {
+        totalWeightedMinutes += a.avgResolutionTime * a.resolvedTickets;
+        totalResolvedForTime += a.resolvedTickets;
       }
     });
 
-    const avgTime = agentsWithTime > 0 ? Math.round(sumTime / agentsWithTime) : 0;
+    const avgTime = totalResolvedForTime > 0 ? Math.round(totalWeightedMinutes / totalResolvedForTime) : 0;
     const resolutionRate = totalTickets > 0 ? Math.round((totalResolved / totalTickets) * 100) : 0;
 
     return { totalTickets, totalResolved, avgTime, resolutionRate };

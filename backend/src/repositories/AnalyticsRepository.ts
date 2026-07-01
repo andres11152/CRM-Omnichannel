@@ -65,11 +65,18 @@ export class AnalyticsRepository {
   ): Promise<HeatmapQueryResult[]> {
     return this.db.$queryRawUnsafe<HeatmapQueryResult[]>(
       `
-      SELECT 
+      SELECT
         EXTRACT(DOW FROM m."createdAt")::int as day,
         EXTRACT(HOUR FROM m."createdAt")::int as hour,
         COUNT(*)::bigint as value
       FROM messages m
+      INNER JOIN (
+        SELECT "conversationId", MIN("createdAt") as "firstTicketAt"
+        FROM tickets
+        WHERE "deletedAt" IS NULL
+        GROUP BY "conversationId"
+      ) tkt ON tkt."conversationId" = m."conversationId"
+        AND m."createdAt" >= tkt."firstTicketAt"
       WHERE m."companyId" = $1
         AND m."createdAt" >= $2
         AND m."createdAt" <= $3

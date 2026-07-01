@@ -170,6 +170,28 @@ export class WhatsAppSessionRepository {
   }
 
   /**
+   * Find a session by its verification token (used for Webhooks verify)
+   */
+  async findSessionByVerifyToken(token: string): Promise<WhatsAppSession | null> {
+    return runAsSystem(() =>
+      prisma.whatsAppSession.findFirst({
+        where: { metaVerifyToken: token },
+      })
+    );
+  }
+
+  /**
+   * Find a connected session by Meta Phone Number ID
+   */
+  async findActiveSessionByPhoneId(phoneId: string): Promise<WhatsAppSession | null> {
+    return runAsSystem(() =>
+      prisma.whatsAppSession.findFirst({
+        where: { metaPhoneNumberId: phoneId, status: "CONNECTED" },
+      })
+    );
+  }
+
+  /**
    * [SEC] SELF-HEALING: Create/restore a session record (idempotent via upsert).
    * Used when connection.update fires "open" but the DB record was deleted (cleanup).
    */

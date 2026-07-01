@@ -28,7 +28,10 @@ import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionReposit
 import TenantContextManager from "@/config/tenantContext";
 import { bindSessionEvents } from "./events/SessionEventBinder";
 import { SessionContactResolver } from "./SessionContactResolver";
+import { container } from "@/config/container";
+import { WA_TOKENS } from "../di/tokens";
 import { WhatsAppSocketFactory } from "./WhatsAppSocketFactory";
+import { antiBanManager } from "../services/AntiBanManager";
 
 export class SessionManager implements ISessionManager {
   private sessions: Map<string, WASocket> = new Map();
@@ -179,7 +182,7 @@ export class SessionManager implements ISessionManager {
       throw new Error(`Session ${sessionId} does not exist in database.`);
     }
 
-    const sock = await WhatsAppSocketFactory.createSocket({
+    const rawSock = await WhatsAppSocketFactory.createSocket({
       sessionId,
       companyId,
       state,
@@ -191,6 +194,12 @@ export class SessionManager implements ISessionManager {
         });
       },
     });
+
+    // Wrap with baileys-antiban: rate limiting, warmup, group op guard,
+    // legitimacy signals, deaf-session detection, and more.
+    // The wrapped socket is a drop-in replacement — all existing sendMessage calls
+    // automatically go through anti-ban protection with no code changes required.
+    const sock = await antiBanManager.initSession(sessionId, rawSock);
 
     // Bind events (delegated to SessionEventBinder — store.bind is called inside)
     // [FIX] Removed duplicate sessionStore.bind(sock.ev) that was here.
@@ -239,6 +248,9 @@ export class SessionManager implements ISessionManager {
     clearAuth: boolean = false,
   ): Promise<void> {
     logger.info(`[SessionManager] Terminating session ${sessionId}. Clear: ${clearAuth}`);
+
+    // Stop entropy service, persist warmup state, clean up antiban registry
+    await antiBanManager.terminateSession(sessionId, true);
 
     // Delegate timer cleanup to healer
     this.healer.cleanupSession(sessionId);
@@ -369,6 +381,30 @@ export class SessionManager implements ISessionManager {
   // MEMORY-FIRST LOOKUPS
   // ────────────────────────────────────────────────
 
+  getMetaVirtualSocket(sessionId: string): WASocket {
+    const metaProvider = container.resolve(WA_TOKENS.MetaProvider);
+    return {
+      sendMessage: async (jid: string, content: { text?: string }, options?: { messageId?: string }) => {
+        const textContent = content?.text || "";
+        const res = (await metaProvider.sendMessage(sessionId, jid, textContent, options)) as { messages?: Array<{ id: string }> };
+        return {
+          key: {
+            id: res?.messages?.[0]?.id || options?.messageId || "meta_" + Date.now(),
+            remoteJid: jid,
+            fromMe: true
+          },
+          messageTimestamp: Math.floor(Date.now() / 1000)
+        };
+      },
+      sendPresenceUpdate: async (type: string, toJid: string) => {
+        // Meta Cloud API doesn't support typing indicator. No-op.
+      },
+      groupMetadata: async (groupJid: string) => {
+        return null;
+      }
+    } as unknown as WASocket;
+  }
+
   async findActiveSessionForCompany(
     companyId: string,
   ): Promise<{ sessionId: string; socket: WASocket } | null> {
@@ -387,6 +423,13 @@ export class SessionManager implements ISessionManager {
     const dbSession = connectedSessions[0] || null;
 
     if (dbSession) {
+      if (dbSession.provider === "META") {
+        return {
+          sessionId: dbSession.sessionId,
+          socket: this.getMetaVirtualSocket(dbSession.sessionId),
+        };
+      }
+
       const socket = this.sessions.get(dbSession.sessionId);
       if (socket) return { sessionId: dbSession.sessionId, socket };
 

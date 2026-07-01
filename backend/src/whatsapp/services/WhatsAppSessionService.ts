@@ -125,6 +125,13 @@ export class WhatsAppSessionService {
   async createSession(
     companyId: string,
     sessionId?: string,
+    meta?: {
+      provider?: "BAILEYS" | "META";
+      metaAccessToken?: string;
+      metaPhoneNumberId?: string;
+      metaBusinessId?: string;
+      metaVerifyToken?: string;
+    }
   ): Promise<{ sessionId: string; qrCode: string | null }> {
     let finalSessionId = sessionId;
 
@@ -185,23 +192,52 @@ export class WhatsAppSessionService {
       );
     }
 
+    const provider = meta?.provider || "BAILEYS";
+
     try {
       const session = await this.sessionRepository.findOne(companyId, finalSessionId);
+      const status = provider === "META" ? "CONNECTED" : "CONNECTING";
+      const qrCode = null;
+      const phone = null;
+      const metaAccessToken = provider === "META" ? meta?.metaAccessToken || null : null;
+      const metaPhoneNumberId = provider === "META" ? meta?.metaPhoneNumberId || null : null;
+      const metaBusinessId = provider === "META" ? meta?.metaBusinessId || null : null;
+      const metaVerifyToken = provider === "META" ? meta?.metaVerifyToken || null : null;
+
       if (session) {
         await this.sessionRepository.update(companyId, finalSessionId, {
-          status: "CONNECTING",
-          qrCode: null,
-          phone: null,
+          status,
+          qrCode,
+          phone,
+          provider,
+          metaAccessToken,
+          metaPhoneNumberId,
+          metaBusinessId,
+          metaVerifyToken,
         });
       } else {
         await this.sessionRepository.create({
           sessionId: finalSessionId,
           company: { connect: { id: companyId } },
-          status: "CONNECTING",
+          status,
+          qrCode,
+          phone,
+          provider,
+          metaAccessToken,
+          metaPhoneNumberId,
+          metaBusinessId,
+          metaVerifyToken,
         });
       }
     } catch (err) {
       Logger.error(`[WA] Error ensuring session record for ${finalSessionId}:`, err);
+    }
+
+    if (provider === "META") {
+      return {
+        sessionId: finalSessionId,
+        qrCode: null,
+      };
     }
 
     await this.sessionManager.initializeSession({

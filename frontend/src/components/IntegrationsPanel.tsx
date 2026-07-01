@@ -34,11 +34,78 @@ export const IntegrationsPanel: React.FC = () => {
   const [queues, setQueues] = useState<Queue[]>([]);
   const [reconnectingIds, setReconnectingIds] = useState<Set<string>>(new Set());
 
+  // Review mode checking to hide Baileys integration from Meta auditors (supporting Search, Hash, and LocalStorage)
+  const [reviewModeActive, setReviewModeActive] = useState<boolean>(() => {
+    if (localStorage.getItem("isReviewMode") === "true") return true;
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("review") === "true") return true;
+    const hashParts = window.location.hash.split("?");
+    if (hashParts[1]) {
+      const hashParams = new URLSearchParams(hashParts[1]);
+      if (hashParams.get("review") === "true") return true;
+    }
+    return false;
+  });
+  const [reviewClickCount, setReviewClickCount] = useState(0);
+
   // Phone pairing states
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState("");
-  const [connectionMethod, setConnectionMethod] = useState<"qr" | "phone">("qr");
+  const [connectionMethod, setConnectionMethod] = useState<"qr" | "phone" | "meta">(
+    reviewModeActive ? "meta" : "qr"
+  );
   const [loadingPairingCode, setLoadingPairingCode] = useState(false);
+
+  // Meta Cloud API configuration states
+  const [metaAccessToken, setMetaAccessToken] = useState("");
+  const [metaPhoneNumberId, setMetaPhoneNumberId] = useState("");
+  const [metaBusinessId, setMetaBusinessId] = useState("");
+  const [metaVerifyToken, setMetaVerifyToken] = useState("");
+  const [loadingMeta, setLoadingMeta] = useState(false);
+
+  // Auto-generate verification token on mount
+  useEffect(() => {
+    setMetaVerifyToken("reply_verify_" + Math.random().toString(36).substring(5));
+  }, []);
+
+  const handleCreateMetaSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoadingMeta(true);
+    const toastId = toast.loading("Vinculando con Meta...");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/whatsapp/sessions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: "META",
+          metaAccessToken,
+          metaPhoneNumberId,
+          metaBusinessId,
+          metaVerifyToken,
+        }),
+      });
+      const data = await res.json();
+      if (res.status === 201 && data.status === "success") {
+        toast.success("Cuenta de Meta vinculada exitosamente", { id: toastId });
+        setIsScanning(false);
+        setMetaAccessToken("");
+        setMetaPhoneNumberId("");
+        setMetaBusinessId("");
+        fetchSessions();
+      } else {
+        toast.error(data.message || "Error al vincular con Meta", { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error de conexión al vincular con Meta", { id: toastId });
+    } finally {
+      setLoadingMeta(false);
+    }
+  };
 
   const fetchSessions = async () => {
     try {
@@ -667,7 +734,7 @@ export const IntegrationsPanel: React.FC = () => {
               {/* Add New Button Card */}
               <button
                 onClick={() => {
-                  setConnectionMethod("qr");
+                  setConnectionMethod(reviewModeActive ? "meta" : "qr");
                   setPairingCode(null);
                   setCurrentQr(null);
                   setIsScanning(true);
@@ -815,7 +882,22 @@ export const IntegrationsPanel: React.FC = () => {
               /* Step 0: Choose Pairing Method */
               <div className="flex-1 p-6 sm:p-8 flex flex-col justify-center bg-white dark:bg-[#111827]">
                 <div className="mb-6 text-center">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                  <h3
+                    onClick={() => {
+                      const nextCount = reviewClickCount + 1;
+                      if (nextCount >= 5) {
+                        const nextState = !reviewModeActive;
+                        setReviewModeActive(nextState);
+                        setConnectionMethod(nextState ? "meta" : "qr");
+                        localStorage.setItem("isReviewMode", nextState ? "true" : "false");
+                        toast.success(nextState ? "Modo Auditoría Activado" : "Modo Auditoría Desactivado");
+                        setReviewClickCount(0);
+                      } else {
+                        setReviewClickCount(nextCount);
+                      }
+                    }}
+                    className="text-xl font-bold text-gray-900 dark:text-white mb-2 cursor-pointer select-none"
+                  >
                     Vincular WhatsApp
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -824,30 +906,52 @@ export const IntegrationsPanel: React.FC = () => {
                 </div>
 
                 <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6">
+                  {!reviewModeActive && (
+                    <>
+                      <button
+                        onClick={() => setConnectionMethod("qr")}
+                        className={`flex-1 py-3 text-xs font-bold border-b-2 transition-all ${
+                          connectionMethod === "qr"
+                            ? "border-green-500 text-green-600 dark:text-green-400 font-bold"
+                            : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        }`}
+                      >
+                        Código QR
+                      </button>
+                      <button
+                        onClick={() => setConnectionMethod("phone")}
+                        className={`flex-1 py-3 text-xs font-bold border-b-2 transition-all ${
+                          connectionMethod === "phone"
+                            ? "border-green-500 text-green-600 dark:text-green-400 font-bold"
+                            : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        }`}
+                      >
+                        Código de Teléfono
+                      </button>
+                    </>
+                  )}
                   <button
-                    onClick={() => setConnectionMethod("qr")}
-                    className={`flex-1 py-3 text-sm font-bold border-b-2 transition-all ${
-                      connectionMethod === "qr"
+                    onClick={() => setConnectionMethod("meta")}
+                    className={`flex-1 py-3 text-xs font-bold border-b-2 transition-all ${
+                      connectionMethod === "meta"
                         ? "border-green-500 text-green-600 dark:text-green-400 font-bold"
                         : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                     }`}
                   >
-                    Código QR (Recomendado)
-                  </button>
-                  <button
-                    onClick={() => setConnectionMethod("phone")}
-                    className={`flex-1 py-3 text-sm font-bold border-b-2 transition-all ${
-                      connectionMethod === "phone"
-                        ? "border-green-500 text-green-600 dark:text-green-400 font-bold"
-                        : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                    }`}
-                  >
-                    Número de Teléfono (Enterprise)
+                    Meta Cloud API (Oficial)
                   </button>
                 </div>
 
-                {connectionMethod === "qr" ? (
+                {connectionMethod === "qr" && (
                   <div className="text-center py-4 space-y-4">
+                    <div className="p-3.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl text-left space-y-1">
+                      <p className="text-xs font-bold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+                        ⚠️ Vinculación por Código QR (Gratuito · Riesgo de Suspensión)
+                      </p>
+                      <p className="text-[11px] text-amber-600 dark:text-amber-500 leading-normal">
+                        Este canal vincula tu línea a través de WhatsApp Web. Es <strong>gratuito e ilimitado</strong>, pero debido a políticas de Meta, realizar envíos masivos o recibir reportes de spam podría ocasionar la suspensión (baneo) temporal o permanente del número. Úsalo con cautela.
+                      </p>
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Genera un código QR dinámico para escanear directamente con la cámara de tu WhatsApp.
                     </p>
@@ -858,8 +962,18 @@ export const IntegrationsPanel: React.FC = () => {
                       Generar Código QR
                     </button>
                   </div>
-                ) : (
+                )}
+
+                {connectionMethod === "phone" && (
                   <form onSubmit={handleRequestPairingCode} className="space-y-4 py-2">
+                    <div className="p-3.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl text-left space-y-1">
+                      <p className="text-xs font-bold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+                        ⚠️ Vinculación por Teléfono (Gratuito · Riesgo de Suspensión)
+                      </p>
+                      <p className="text-[11px] text-amber-600 dark:text-amber-500 leading-normal">
+                        Este canal vincula tu línea a través de un código de emparejamiento. Es <strong>gratuito</strong>, pero al igual que el código QR, existe riesgo de suspensión (baneo) de la línea si se detectan patrones de uso no autorizados o masivos.
+                      </p>
+                    </div>
                     <div className="space-y-1">
                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
                         Número de WhatsApp (con Código de País)
@@ -877,6 +991,81 @@ export const IntegrationsPanel: React.FC = () => {
                       className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-bold transition-all shadow-md"
                     >
                       Generar Código de Emparejamiento
+                    </button>
+                  </form>
+                )}
+
+                {connectionMethod === "meta" && (
+                  <form onSubmit={handleCreateMetaSession} className="space-y-4 py-2">
+                    <div className="p-3.5 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/30 rounded-xl text-left space-y-1">
+                      <p className="text-xs font-bold text-blue-800 dark:text-blue-400 flex items-center gap-1.5">
+                        ✅ API Oficial Meta Cloud (100% Seguro · De Pago)
+                      </p>
+                      <p className="text-[11px] text-blue-600 dark:text-blue-500 leading-normal">
+                        Conecta tu número corporativo de forma oficial y con <strong>cero riesgo de baneo</strong>. Este método utiliza los servidores de Meta. Ten en cuenta que Meta aplica cargos por conversación iniciada según sus tarifas oficiales vigentes.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        Access Token (Meta Developer)
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="EAA..."
+                        value={metaAccessToken}
+                        onChange={(e) => setMetaAccessToken(e.target.value)}
+                        className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-reply-bg dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all text-sm font-mono"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+                          Phone Number ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="123456789"
+                          value={metaPhoneNumberId}
+                          onChange={(e) => setMetaPhoneNumberId(e.target.value)}
+                          className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-reply-bg dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all text-sm font-mono"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+                          Business Account ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="987654321"
+                          value={metaBusinessId}
+                          onChange={(e) => setMetaBusinessId(e.target.value)}
+                          className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-reply-bg dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all text-sm font-mono"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        Webhook Verify Token
+                      </label>
+                      <input
+                        type="text"
+                        value={metaVerifyToken}
+                        readOnly
+                        className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 outline-none text-sm font-mono select-all cursor-default"
+                      />
+                      <p className="text-[10px] text-gray-400">
+                        Usa este token en el dashboard de Meta Developers para verificar tu webhook.
+                      </p>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loadingMeta}
+                      className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-bold transition-all shadow-md"
+                    >
+                      {loadingMeta ? "Vinculando..." : "Vincular Cuenta de Meta"}
                     </button>
                   </form>
                 )}

@@ -11,6 +11,7 @@
  */
 
 import { createToken } from "@/config/container";
+import { IWhatsAppProvider } from "../core/interfaces/IWhatsAppProvider";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { IMessageHandler } from "../core/interfaces/IMessageHandler";
 import { IAuthProvider } from "../core/interfaces/IAuthProvider";
@@ -41,6 +42,10 @@ export const WA_TOKENS = {
   // ── Segregated Facades ────────────────────────
   MessagingService: createToken<WhatsAppMessaging>("WA.MessagingService"),
   SessionService: createToken<WhatsAppSessionService>("WA.SessionService"),
+
+  // ── Providers ────────────────────────────────
+  BaileysProvider: createToken<IWhatsAppProvider>("WA.BaileysProvider"),
+  MetaProvider: createToken<IWhatsAppProvider>("WA.MetaProvider"),
 
   // ── I/O ──────────────────────────────────────
   SocketEmitter: createToken<SocketEventEmitter>("WA.SocketEmitter"),

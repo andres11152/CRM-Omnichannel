@@ -35,6 +35,15 @@ router.get(
   verifyMetaWebhook,
 );
 
+// Global multi-tenant Meta webhooks
+import {
+  verifyMetaWebhook as verifyGlobalMeta,
+  handleMetaWebhookEvent,
+} from "@/controllers/metaWebhookController";
+
+router.get("/meta", verifyGlobalMeta);
+router.post("/meta", handleMetaWebhookEvent);
+
 // ── Protected management endpoints ──────────────────────────────────────────
 
 router.use("/", protect);

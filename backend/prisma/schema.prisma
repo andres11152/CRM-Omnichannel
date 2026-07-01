@@ -471,6 +471,11 @@ model WorkflowExecution {
   @@map("workflow_executions")
 }
 
+enum WhatsAppProvider {
+  BAILEYS
+  META
+}
+
 model WhatsAppSession {
   id        String  @id @default(cuid())
   companyId String
@@ -483,6 +488,13 @@ model WhatsAppSession {
 
   // Notification tracking
   notifiedAt DateTime? // Last time we notified about disconnection
+
+  // Provider configuration
+  provider      WhatsAppProvider @default(BAILEYS)
+  metaAccessToken     String?
+  metaPhoneNumberId   String?
+  metaBusinessId      String?
+  metaVerifyToken     String?
 
   // Custom Default Queue for this Session
   defaultQueueId String?

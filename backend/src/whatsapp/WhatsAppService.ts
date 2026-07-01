@@ -94,8 +94,15 @@ export class WhatsAppService {
   async createSession(
     companyId: string,
     sessionId?: string,
+    meta?: {
+      provider?: "BAILEYS" | "META";
+      metaAccessToken?: string;
+      metaPhoneNumberId?: string;
+      metaBusinessId?: string;
+      metaVerifyToken?: string;
+    }
   ): Promise<{ sessionId: string; qrCode: string | null }> {
-    return this.sessionService.createSession(companyId, sessionId);
+    return this.sessionService.createSession(companyId, sessionId, meta);
   }
 
   async requestPairingCode(

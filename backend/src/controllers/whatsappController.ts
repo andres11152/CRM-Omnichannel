@@ -33,7 +33,15 @@ export const createSession = catchAsync(
       );
     }
 
-    const session = await whatsappService.createSession(req.companyId);
+    const { provider, metaAccessToken, metaPhoneNumberId, metaBusinessId, metaVerifyToken } = req.body;
+
+    const session = await whatsappService.createSession(req.companyId, undefined, {
+      provider,
+      metaAccessToken,
+      metaPhoneNumberId,
+      metaBusinessId,
+      metaVerifyToken,
+    });
 
     res.status(201).json({
       status: "success",

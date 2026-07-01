@@ -28,6 +28,8 @@ import { IMessageHandler } from "../core/interfaces/IMessageHandler";
 import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { WhatsAppMessaging } from "../services/WhatsAppMessaging";
 import { WhatsAppSessionService } from "../services/WhatsAppSessionService";
+import { BaileysProviderService } from "../services/BaileysProviderService";
+import { MetaProviderService } from "../services/MetaProviderService";
 
 export function registerWhatsAppServices(): void {
   // ── EventBus (Singleton — shared pub/sub backbone) ──
@@ -108,4 +110,15 @@ export function registerWhatsAppServices(): void {
     const sessionRepository = new WhatsAppSessionRepository();
     return new WhatsAppSessionService(sessionManager, eventBus, sessionRepository);
   });
+
+  // ── Providers ──
+  container.registerSingleton(
+    WA_TOKENS.BaileysProvider,
+    () => new BaileysProviderService(),
+  );
+
+  container.registerSingleton(
+    WA_TOKENS.MetaProvider,
+    () => new MetaProviderService(),
+  );
 }

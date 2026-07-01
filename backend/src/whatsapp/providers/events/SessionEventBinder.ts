@@ -39,6 +39,8 @@ import { chatSyncService } from "@/services/ChatSyncService";
 import type { SessionStatus } from "../../core/types/whatsapp.types";
 import type { SimpleInMemoryStore } from "../SimpleStore";
 import { auditService } from "@/services/AuditService";
+import { antiBanManager, classifyDisconnect } from "@/whatsapp/services/AntiBanManager";
+import { proto as BaileysProto } from "@whiskeysockets/baileys";
 
 /** Dependencies injected from SessionManager */
 export interface SessionEventBinderDeps {
@@ -389,6 +391,11 @@ export function bindSessionEvents(
         data: { phone: phoneNumber || undefined },
       });
 
+      // Notify antiban that we're reconnected (resets health risk factor)
+      antiBanManager.notifyReconnect(sessionId);
+      // Start background human-like entropy (idle typing, delayed reads, presence cycles)
+      antiBanManager.startEntropy(sessionId);
+
       healer.resetRetryCount(sessionId);
       healer.startHeartbeat(sessionId, sock, () => sessions.has(sessionId));
     }
@@ -399,10 +406,21 @@ export function bindSessionEvents(
         message?: string;
       };
 
-      const isLoggedOut = boomError?.output?.statusCode === DisconnectReason.loggedOut;
+      const statusCode = boomError?.output?.statusCode ?? 0;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
       const errorMsg = boomError?.message || "Unknown";
 
-      logger.warn(`[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg}. Reconnect: true (LoggedOut: ${isLoggedOut})`);
+      // Classify the disconnect reason for observability and health tracking
+      const classification = classifyDisconnect(statusCode);
+      logger.warn(
+        `[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg} | ` +
+        `Category: ${classification.category} | ShouldReconnect: ${classification.shouldReconnect}` +
+        (classification.backoffMs ? ` | RecommendedBackoff: ${classification.backoffMs}ms` : ""),
+      );
+
+      // Stop idle-entropy and notify the antiban health tracker
+      antiBanManager.stopEntropy(sessionId);
+      antiBanManager.notifyDisconnect(sessionId, statusCode || errorMsg);
 
       // [SEC] Audit: Disconnected
       await auditService.logWhatsAppEvent(companyId, sessionId, "DISCONNECTED", { 
@@ -519,7 +537,12 @@ export function bindSessionEvents(
     logger.debug(`[SessionEventBinder] Validated. Type: ${validated.type}, Count: ${validated.messages?.length}`);
     if (validated && validated.type === "notify") {
       logger.debug(`[SessionEventBinder] Processing ${validated.messages.length} notify messages`);
+      const ab = antiBanManager.getSession(sessionId);
       for (const msg of validated.messages) {
+        // Track delivery confirmations for our outbound messages
+        if (msg.key.fromMe && msg.key.id) {
+          ab?.deliveryTracker.onMessageSent(msg.key.id);
+        }
         dispatchRealtimeMessage(msg);
       }
     } else if (validated && validated.type === "append") {
@@ -571,9 +594,24 @@ export function bindSessionEvents(
 
   sock.ev.on("messages.update", async (rawUpdates: unknown) => {
     if (Array.isArray(rawUpdates)) {
+      const ab = antiBanManager.getSession(sessionId);
       for (const rawUpdate of rawUpdates) {
+        // Bad MAC detection: CIPHERTEXT stub type signals a failed decrypt
+        const stubType = (rawUpdate as Record<string, unknown>)?.update as Record<string, unknown> | undefined;
+        if (
+          stubType?.messageStubType === BaileysProto.WebMessageInfo.StubType.CIPHERTEXT
+        ) {
+          ab?.healthMonitor.recordDecryptFail(true);
+        }
+
         const validated = validateBaileysEvent(MessageUpdateSchema, rawUpdate, "messages.update", { sessionId, companyId });
         if (validated && validated.key?.id) {
+          // Delivery receipt: status ≥ 3 means DELIVERY_ACK or READ
+          const status = validated.update?.status;
+          if (typeof status === "number" && status >= 3 && validated.key.id) {
+            ab?.deliveryTracker.onDeliveryReceipt(validated.key.id);
+          }
+
           eventBus.publish({
             type: WhatsAppEventType.MESSAGE_UPDATE,
             sessionId, companyId, timestamp: new Date(),

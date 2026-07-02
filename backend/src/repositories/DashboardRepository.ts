@@ -5,7 +5,7 @@ export class DashboardRepository {
 
   async getRecentTickets(companyId: string, take: number) {
     return this.db.ticket.findMany({
-      where: { companyId, deletedAt: null, conversation: { isNot: null, isGroup: false } },
+      where: { companyId, deletedAt: null, conversation: { is: { isGroup: false } } },
       orderBy: { updatedAt: "desc" },
       take,
       select: {
@@ -42,7 +42,7 @@ export class DashboardRepository {
         companyId,
         status: { notIn: ["RESOLVED", "CLOSED"] },
         deletedAt: null,
-        conversation: { isNot: null, isGroup: false },
+        conversation: { is: { isGroup: false } },
       },
     });
   }

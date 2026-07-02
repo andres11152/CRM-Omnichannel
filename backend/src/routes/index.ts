@@ -61,6 +61,8 @@ import googleAuthRouter from "@/routes/googleAuthRoutes";
 import companyRouter from "@/routes/companyRoutes";
 import analyticsRouter from "@/routes/analyticsRoutes";
 import productRouter from "@/routes/productRoutes";
+import propertyRouter from "@/routes/propertyRoutes";
+import publicPropertyRouter from "@/routes/publicPropertyRoutes";
 import emailRouter from "@/routes/emailRoutes";
 import pushNotificationsRoutes from "@/routes/pushNotifications";
 import rolesRouter from "@/routes/roles";
@@ -248,6 +250,9 @@ router.use(
 );
 router.use("/api/activities", apiLimiter, protect, activityRouter);
 router.use("/api/products", apiLimiter, protect, productRouter);
+router.use("/api/properties", apiLimiter, protect, propertyRouter);
+// Ficha pública de inmuebles (sin protect — compartible por WhatsApp)
+router.use("/public/properties", apiLimiter, publicPropertyRouter);
 router.use("/api/payments", paymentRouter);
 
 // Support & Ticketing

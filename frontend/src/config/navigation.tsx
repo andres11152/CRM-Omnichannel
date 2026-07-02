@@ -8,6 +8,7 @@ import {
   Users,
   Briefcase,
   DollarSign,
+  Home,
   Package,
   Calendar,
   Image,
@@ -101,6 +102,13 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/deals",
     allowedRoles: ["company_admin", "agent", "ADMIN", "AGENT"],
     icon: <Icon I={DollarSign} />,
+  },
+  {
+    id: "properties",
+    title: "Propiedades",
+    path: "/properties",
+    allowedRoles: ["company_admin", "agent", "ADMIN", "AGENT"],
+    icon: <Icon I={Home} />,
   },
   {
     id: "activities",

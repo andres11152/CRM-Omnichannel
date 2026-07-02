@@ -260,31 +260,52 @@ export class OutboundMessageHandler {
     companyId: string,
     fromMe: boolean = false,
   ): Promise<void> {
+    const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+
+    const sock = activeSession.socket;
+    if (!sock) {
+      throw new Error(`Session ${activeSession.sessionId} has no active socket`);
+    }
+
+    const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
+
     try {
-      const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
-      if (!activeSession) return;
-
-      const sock = activeSession.socket;
-      if (!sock) return;
-
-      const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
-
-      await sock.sendMessage(jid, {
-        react: {
-          text: reaction,
-          key: {
-            remoteJid: jid,
-            fromMe: fromMe,
-            id: messageId,
+      // [SEC] 100-YEAR FIX: baileys-antiban's wrapped sendMessage reads
+      // `options.circuitBreaker` unconditionally (wrapper.js) — calling
+      // sendMessage with only 2 args left `options` as `undefined` and threw
+      // "Cannot read properties of undefined (reading 'circuitBreaker')" on
+      // every single reaction, silently swallowed by the old catch below.
+      // A 3rd arg (even empty) is required, matching the normal text-send call.
+      await sock.sendMessage(
+        jid,
+        {
+          react: {
+            text: reaction,
+            key: {
+              remoteJid: jid,
+              fromMe: fromMe,
+              id: messageId,
+            },
           },
         },
-      });
-
-      Logger.debug(`[Reaction] Sent reaction ${reaction} to ${messageId}`);
-    } catch (error) {
-      Logger.warn(
-        `[Reaction] Failed to send reaction: ${error instanceof Error ? error.message : String(error)}`
+        {},
       );
+
+      Logger.debug(`[Reaction] Sent reaction "${reaction}" to ${messageId} (jid=${jid}, fromMe=${fromMe})`);
+    } catch (error) {
+      // [SEC] 100-YEAR FIX: Previously this error was swallowed here, so the caller
+      // (ConversationMessageService.reactToMessage) always proceeded to update the DB
+      // and emit the socket event as if the reaction had been delivered — the CRM
+      // showed the reaction while WhatsApp silently never received it. Re-throw so
+      // the caller can abort the DB write and surface a real error to the agent.
+      Logger.error(
+        `[Reaction] Failed to send reaction "${reaction}" to ${messageId} (jid=${jid}, fromMe=${fromMe}): ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      throw error;
     }
   }
 }

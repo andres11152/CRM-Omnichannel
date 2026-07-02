@@ -1017,6 +1017,15 @@
         "save": "Save Product",
         "cancel": "Cancel"
       }
+    },
+    "stages": {
+      "nuevo_lead": "New Lead",
+      "contactado": "Contacted",
+      "calificado": "Qualified",
+      "propuesta": "Proposal",
+      "negociacion": "Negotiation",
+      "cerrado_ganado": "Closed Won",
+      "cerrado_perdido": "Closed Lost"
     }
   },
   "schema": {

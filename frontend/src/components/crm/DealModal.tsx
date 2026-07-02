@@ -322,12 +322,6 @@ export const DealModal: React.FC<Props> = ({
                   >
                     <option value="COP"> COP</option>
                     <option value="USD"> USD</option>
-                    <option value="EUR"> EUR</option>
-                    <option value="MXN"> MXN</option>
-                    <option value="BRL"> BRL</option>
-                    <option value="PEN"> PEN</option>
-                    <option value="CLP"> CLP</option>
-                    <option value="ARS"> ARS</option>
                   </select>
                 </div>
               </div>
@@ -432,7 +426,7 @@ export const DealModal: React.FC<Props> = ({
                   >
                     {currentStages.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name}
+                        {t(`crm.stages.${s.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_")}`, s.name)}
                       </option>
                     ))}
                   </select>

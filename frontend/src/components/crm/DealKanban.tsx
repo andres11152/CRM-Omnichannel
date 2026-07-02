@@ -467,7 +467,7 @@ export const DealKanban: React.FC = () => {
                               <XCircle className="w-4 h-4 text-red-500" />
                             )}
                             <h3 className="font-bold text-gray-700 dark:text-gray-200 text-sm uppercase tracking-wide">
-                              {stage.name}
+                              {t(`crm.stages.${stage.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_")}`, stage.name)}
                             </h3>
                           </div>
                           <span

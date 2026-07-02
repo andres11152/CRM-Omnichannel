@@ -422,7 +422,14 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       }
     },
     handleReact: async (messageId: string, reaction: string) => {
-      await reactMutation.mutateAsync({ messageId, reaction });
+      try {
+        await reactMutation.mutateAsync({ messageId, reaction });
+      } catch (err) {
+        // El onError de la mutación ya revierte el optimistic update y muestra
+        // el toast; solo evitamos que el rechazo quede sin capturar (unhandled
+        // promise rejection) ya que MessageBubble no espera esta promesa.
+        console.error("[Workflow] React error:", err);
+      }
     },
     handleTransfer: async (targetId: string, type: "AGENT" | "QUEUE") => {
       try {

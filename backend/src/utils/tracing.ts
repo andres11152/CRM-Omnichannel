@@ -131,8 +131,8 @@ export const getCurrentSpanId = (): string | undefined => {
 // Export tracer for advanced usage
 export const getTracer = () => trace.getTracer("sentry-crm-api");
 
-// Auto-initialize if not in test environment
-if (process.env.NODE_ENV !== "test") {
+// Auto-initialize if not in test environment and tracing is not disabled
+if (process.env.NODE_ENV !== "test" && process.env.DISABLE_TRACING !== "true") {
   startTracing();
 
   // Graceful shutdown on signals

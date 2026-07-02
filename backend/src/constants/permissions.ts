@@ -12,6 +12,7 @@ export type PermissionModule =
   | "TICKETS"
   | "CONTACTS"
   | "DEALS"
+  | "PROPERTIES"
   | "REPORTS"
   | "TEAM"
   | "SETTINGS"
@@ -98,6 +99,22 @@ export const PERMISSION_CATALOG: readonly CatalogModule[] = [
       { action: "EDIT", resource: "own", label: "Editar propios", description: "Editar deals asignados" },
       { action: "EDIT", resource: "all", label: "Editar todos", description: "Editar cualquier deal" },
       { action: "ASSIGN", resource: "any", label: "Asignar", description: "Asignar deals a agentes" },
+    ],
+  },
+  {
+    id: "PROPERTIES",
+    name: "Propiedades",
+    description: "Módulo inmobiliario: inmuebles, galería y publicación",
+    permissions: [
+      { action: "VIEW", resource: "own", label: "Ver propias", description: "Ver solo inmuebles asignados" },
+      { action: "VIEW", resource: "all", label: "Ver todas", description: "Ver todos los inmuebles" },
+      { action: "CREATE", resource: "any", label: "Crear", description: "Registrar nuevos inmuebles" },
+      { action: "EDIT", resource: "own", label: "Editar propias", description: "Editar inmuebles asignados" },
+      { action: "EDIT", resource: "all", label: "Editar todas", description: "Editar cualquier inmueble" },
+      { action: "DELETE", resource: "all", label: "Eliminar", description: "Eliminar inmuebles" },
+      { action: "ASSIGN", resource: "any", label: "Asignar", description: "Asignar inmuebles a agentes" },
+      { action: "MANAGE", resource: "publish", label: "Publicar", description: "Publicar/despublicar la ficha pública" },
+      { action: "EXPORT", resource: "any", label: "Exportar", description: "Exportar inmuebles" },
     ],
   },
   {

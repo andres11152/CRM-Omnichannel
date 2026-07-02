@@ -198,9 +198,10 @@ model Contact {
   deals      Deal[]
   activities Activity[]
 
-  emails        Email[]
-  flowSessions  ContactFlowSession[]
-  conversations Conversation[]
+  emails          Email[]
+  flowSessions    ContactFlowSession[]
+  conversations   Conversation[]
+  ownedProperties Property[]           @relation("PropertyOwnerContact")
 
   // === SEARCH OPTIMIZATION ===
 
@@ -291,6 +292,7 @@ model Company {
   quickReplies     QuickReply[]
   pipelines        Pipeline[] // CRM Pipelines
   products         Product[] // Product Catalog
+  properties       Property[] // Real Estate Module
 
   // Chatbot Flows
   // Link to 'workflows' is the single source of truth (line 251)
@@ -378,6 +380,7 @@ model User {
 
   // CRM Relations
   assignedDeals           Deal[]     @relation("AssignedDeals")
+  assignedProperties      Property[] @relation("PropertyAssignedTo")
   assignedActivities      Activity[] @relation("AssignedActivities")
   createdActivities       Activity[] @relation("CreatedActivities")
   participatingActivities Activity[] @relation("ActivityParticipants")
@@ -964,6 +967,8 @@ model Account {
   deals      Deal[]
   activities Activity[]
 
+  ownedProperties Property[] @relation("PropertyOwnerAccount")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1006,6 +1011,7 @@ model Deal {
   assignedTo   User?   @relation("AssignedDeals", fields: [assignedToId], references: [id])
 
   activities Activity[]
+  properties Property[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1101,6 +1107,169 @@ model Product {
 
   @@index([companyId, status])
   @@map("products")
+}
+
+// ============================================
+// REAL ESTATE / PROPERTIES MODULE (Colombia)
+// ============================================
+
+enum PropertyOperation {
+  VENTA
+  ARRIENDO
+  ARRIENDO_VENTA
+  PERMUTA
+}
+
+enum PropertyKind {
+  APARTAMENTO
+  CASA
+  APARTAESTUDIO
+  CASA_CAMPESTRE
+  LOCAL_COMERCIAL
+  OFICINA
+  BODEGA
+  CONSULTORIO
+  LOTE
+  FINCA
+  PARQUEADERO
+  HABITACION
+  EDIFICIO
+  OTRO
+}
+
+enum PropertyStatus {
+  DISPONIBLE
+  RESERVADO
+  ARRENDADO
+  VENDIDO
+  SUSPENDIDO
+  BORRADOR
+}
+
+enum PropertyCondition {
+  NUEVO
+  USADO
+  SOBRE_PLANOS
+  EN_CONSTRUCCION
+  REMODELADO
+}
+
+model Property {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Identidad
+  reference String // Código interno autogenerado (INM-000123)
+  slug      String // Slug para URL pública (único por company)
+  publicId  String @default(cuid()) // ID impredecible para la URL pública
+
+  // Clasificación
+  operation PropertyOperation
+  kind      PropertyKind
+  status    PropertyStatus     @default(BORRADOR)
+  condition PropertyCondition?
+
+  // Título / descripción
+  title       String
+  description String?  @db.Text
+  highlights  String[] @default([])
+
+  // Precio (COP)
+  price              Float
+  currency           String  @default("COP")
+  adminFee           Float? // Valor administración mensual
+  priceIncludesAdmin Boolean @default(false)
+  negotiable         Boolean @default(false)
+  pricePerM2         Float? // Derivado (price / builtArea)
+
+  // Áreas (m²)
+  builtArea   Float?
+  privateArea Float?
+  lotArea     Float?
+
+  // Distribución
+  bedrooms     Int?
+  bathrooms    Float? // Permite medios baños (2.5)
+  parkingSpots Int?
+  floor        Int?
+  totalFloors  Int?
+  yearBuilt    Int?
+  stratum      Int? // Estrato 1-6
+
+  // Ubicación (Colombia)
+  country        String  @default("Colombia")
+  department     String? // Departamento
+  city           String? // Ciudad / Municipio
+  neighborhood   String? // Barrio / Zona
+  address        String?
+  addressVisible Boolean @default(false)
+  latitude       Float?
+  longitude      Float?
+  zipCode        String?
+
+  // Legal / captación
+  registryNumber  String? // Matrícula inmobiliaria
+  cadastralNumber String? // Cédula catastral
+  isExclusive     Boolean   @default(false)
+  capturedAt      DateTime?
+  commissionPct   Float?
+
+  // Amenidades
+  features  String[] @default([]) // Del inmueble
+  amenities String[] @default([]) // Del conjunto
+
+  // Media
+  images        PropertyImage[]
+  videoUrl      String?
+  virtualTourUrl String?
+
+  // Vínculos CRM
+  ownerContactId String?
+  ownerContact   Contact? @relation("PropertyOwnerContact", fields: [ownerContactId], references: [id])
+  ownerAccountId String?
+  ownerAccount   Account? @relation("PropertyOwnerAccount", fields: [ownerAccountId], references: [id])
+  assignedToId   String?
+  assignedTo     User?    @relation("PropertyAssignedTo", fields: [assignedToId], references: [id])
+  dealId         String?
+  deal           Deal?    @relation(fields: [dealId], references: [id])
+
+  // Publicación
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  viewsCount  Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 🗑️ SOFT DELETE
+  deletedAt DateTime?
+  deletedBy String?
+
+  @@unique([companyId, slug])
+  @@unique([companyId, reference])
+  @@index([companyId, status])
+  @@index([companyId, operation, kind])
+  @@index([companyId, city, neighborhood])
+  @@index([companyId, deletedAt])
+  @@index([publicId])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  url        String // URL pública S3
+  key        String // S3 key (para borrado)
+  order      Int      @default(0)
+  isCover    Boolean  @default(false)
+  width      Int?
+  height     Int?
+  createdAt  DateTime @default(now())
+
+  @@index([propertyId, order])
+  @@map("property_images")
 }
 
 enum MediaType {
@@ -1398,6 +1567,7 @@ enum PermissionModule {
   MEDIA // Biblioteca multimedia
   FLOWS // Chatbot flows
   PRODUCTS // Catálogo de productos
+  PROPERTIES // Módulo inmobiliario (propiedades)
   QUEUES // Gestión de colas
 }
 

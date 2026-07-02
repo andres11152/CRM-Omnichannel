@@ -16,13 +16,20 @@ export class QueueRepository extends BaseRepository {
     return this.db.queue.findFirst(this.applyTenantFilter(args, companyId));
   }
 
-  async create(args: Prisma.QueueCreateArgs, companyIdOverride?: string): Promise<Queue> {
+  async create(
+    args: Omit<Prisma.QueueCreateArgs, "data"> & {
+      data: Omit<Prisma.QueueCreateInput, "company">;
+    },
+    companyIdOverride?: string,
+  ): Promise<Queue> {
     const companyId = companyIdOverride || TenantContextManager.getCompanyId();
-    const data = { 
-      ...args.data, 
-      company: { connect: { id: companyId } } 
-    } as Prisma.QueueCreateInput;
-    return this.db.queue.create({ ...args, data });
+    return this.db.queue.create({
+      ...args,
+      data: {
+        ...(args.data as Prisma.QueueUncheckedCreateInput),
+        companyId,
+      },
+    } as unknown as Prisma.QueueCreateArgs);
   }
 
   async update(args: Prisma.QueueUpdateArgs, companyId?: string): Promise<Queue> {

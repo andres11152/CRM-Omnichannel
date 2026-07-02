@@ -4,10 +4,9 @@ import { api } from "@/lib/axios";
 // Strict DTOs for 100-year maintainability
 export interface CreateQueueDTO {
   name: string;
-  departmentId: string;
+  departmentId: string | null;
   type: "MANUAL" | "ROUND_ROBIN" | "AI";
   aiAssistantId?: string | null;
-  promptTemplateId?: string;
   config?: { requiredSkills?: string[] };
 }
 

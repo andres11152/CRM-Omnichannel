@@ -46,7 +46,7 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 export const createExternalDealSchema = z.object({
   title: z.string().min(1, "Title is required"),
   value: z.number().min(0).optional().default(0),
-  currency: z.string().length(3).optional().default("COP"),
+  currency: z.enum(["USD", "COP"]).optional().default("COP"),
   pipelineId: z.string().cuid("Invalid pipeline ID"),
   stageId: z.string().cuid("Invalid stage ID"),
   contactId: z.string().cuid().optional(),

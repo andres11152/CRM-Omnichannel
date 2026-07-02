@@ -32,13 +32,9 @@ const baseDealFields = {
     .default(0),
 
   currency: z
-    .string()
-    .length(
-      3,
-      "Currency code must be exactly 3 characters (e.g., USD, EUR, COP)",
-    )
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/, "Invalid currency code format")
+    .enum(["USD", "COP"], {
+      errorMap: () => ({ message: "Only USD and COP are allowed currencies" }),
+    })
     .default("USD"),
 
   pipelineId: z

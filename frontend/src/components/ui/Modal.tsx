@@ -91,25 +91,33 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen]);
 
-  // Escape para cerrar + foco inicial en el panel
+  // Escape para cerrar
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && closeOnEscape && !busy) onClose();
     };
     document.addEventListener("keydown", onKey);
-    // foco inicial (a11y): primer elemento enfocable o el panel
+    return () => {
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isOpen, closeOnEscape, busy, onClose]);
+
+  // Foco inicial (a11y): se ejecuta SOLO cuando se abre el modal (evita enfocar la X al teclear)
+  useEffect(() => {
+    if (!isOpen) return;
     const t = setTimeout(() => {
       const focusable = panelRef.current?.querySelector<HTMLElement>(
-        'input, textarea, select, button, [href], [tabindex]:not([tabindex="-1"])',
+        'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) || panelRef.current?.querySelector<HTMLElement>(
+        'button:not([disabled]), [href]'
       );
       (focusable || panelRef.current)?.focus?.();
     }, 50);
     return () => {
-      document.removeEventListener("keydown", onKey);
       clearTimeout(t);
     };
-  }, [isOpen, closeOnEscape, busy, onClose]);
+  }, [isOpen]);
 
   const handleBackdrop = useCallback(() => {
     if (closeOnBackdrop && !busy) onClose();

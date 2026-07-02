@@ -6,6 +6,11 @@ import { z } from "zod";
  * Validation for Queue (department groups/routing) operations
  */
 
+const emptyToNull = (val: unknown) => (val === "" ? null : val);
+
+const cuidOrNull = (label: string) =>
+  z.preprocess(emptyToNull, z.string().cuid(label).optional().nullable());
+
 export const CreateQueueSchema = z.object({
   body: z.object({
     name: z.string().min(1, "El nombre de la cola es requerido."),
@@ -13,16 +18,8 @@ export const CreateQueueSchema = z.object({
     type: z.enum(["MANUAL", "ROUND_ROBIN", "AI"]).optional().default("MANUAL"),
     isActive: z.boolean().optional().default(true),
     config: z.record(z.any()).optional().default({}),
-    departmentId: z
-      .string()
-      .cuid("ID de departamento no válido.")
-      .optional()
-      .nullable(),
-    aiAssistantId: z
-      .string()
-      .cuid("ID de asistente de IA no válido.")
-      .optional()
-      .nullable(),
+    departmentId: cuidOrNull("ID de departamento no válido."),
+    aiAssistantId: cuidOrNull("ID de asistente de IA no válido."),
   }),
 });
 
@@ -37,16 +34,8 @@ export const UpdateQueueSchema = z.object({
       type: z.enum(["MANUAL", "ROUND_ROBIN", "AI"]).optional(),
       isActive: z.boolean().optional(),
       config: z.record(z.any()).optional(),
-      departmentId: z
-        .string()
-        .cuid("ID de departamento no válido.")
-        .optional()
-        .nullable(),
-      aiAssistantId: z
-        .string()
-        .cuid("ID de asistente de IA no válido.")
-        .optional()
-        .nullable(),
+      departmentId: cuidOrNull("ID de departamento no válido."),
+      aiAssistantId: cuidOrNull("ID de asistente de IA no válido."),
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: "Debe proporcionar al menos un campo para actualizar.",

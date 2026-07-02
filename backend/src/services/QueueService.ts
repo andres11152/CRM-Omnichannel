@@ -19,18 +19,22 @@ export const queueService = {
   },
 
   async create(companyId: string, data: Record<string, unknown>) {
-    return await queueRepository.create({
-      data: {
-        name: data.name as string,
-        description: data.description as string | undefined,
-        type: data.type as QueueType | undefined,
-        config: data.config as Prisma.InputJsonValue | undefined,
-        isActive: data.isActive as boolean | undefined,
-        companyId,
-        departmentId: (data.departmentId as string) || null,
-        aiAssistantId: (data.aiAssistantId as string) || null,
+    return await queueRepository.create(
+      {
+        data: {
+          name: data.name as string,
+          description: data.description as string | undefined,
+          type: data.type as QueueType | undefined,
+          config: data.config as Prisma.InputJsonValue | undefined,
+          isActive: data.isActive as boolean | undefined,
+          department: data.departmentId ? { connect: { id: data.departmentId as string } } : undefined,
+          aiAssistant: data.aiAssistantId ? { connect: { id: data.aiAssistantId as string } } : undefined,
+          // companyId is intentionally omitted — QueueRepository.create
+          // sets it via `company: { connect: { id: companyId } }`
+        },
       },
-    });
+      companyId,
+    );
   },
 
   async update(id: string, companyId: string, data: Record<string, unknown>) {

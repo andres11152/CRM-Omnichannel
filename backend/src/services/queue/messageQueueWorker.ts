@@ -6,6 +6,17 @@ import { Logger } from "../../utils/logger";
 import { MediaPayload } from "@/whatsapp/core/types/whatsapp.types";
 import { DistributedLock } from "@/utils/distributedLock";
 import { contextStorage } from "@/context/requestContext";
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
+import { gateway } from "@/gateways/socketGateway";
+
+/**
+ * [SEC] Anti-ban blocks (warm-up daily limit, rate limit, health pause) are
+ * NOT transient: the daily quota resets in hours, not seconds. Retrying them
+ * 10 times with exponential backoff (~17 min) is guaranteed to fail every
+ * time while keeping the message stuck in "EN COLA" and burning CPU/locks.
+ */
+const isAntiBanBlock = (msg: string): boolean =>
+  msg.includes("[baileys-antiban] Message blocked");
 
 interface WorkerResult {
   success: boolean;
@@ -27,6 +38,7 @@ interface WorkerResult {
 class MessageQueueWorker {
   private whatsappService: WhatsAppService;
   private activeWorkers: Map<string, boolean> = new Map();
+  private socketEmitter = new SocketEventEmitter(gateway);
 
   constructor(whatsappService: WhatsAppService) {
     this.whatsappService = whatsappService;
@@ -214,13 +226,44 @@ class MessageQueueWorker {
       };
     } catch (error: unknown) {
       const isError = error instanceof Error;
+      const errMsg = isError ? error.message : String(error);
+
+      // [SEC] FAIL-FAST for anti-ban blocks: the daily warm-up quota won't
+      // reset within Bull's retry window, so retrying is pure waste and the
+      // agent stares at a permanent "EN COLA". Mark FAILED immediately with
+      // the reason and notify the UI, then discard remaining retries.
+      if (isAntiBanBlock(errMsg)) {
+        Logger.warn(
+          `[Worker] Job ${job.id} blocked by anti-ban protection (no retries): ${errMsg}`,
+        );
+
+        const metadata = job.data.metadata as Record<string, unknown> | undefined;
+        const dbId = metadata?.dbId as string | undefined;
+        if (dbId) {
+          await messageRepository
+            .update(dbId, { status: "FAILED" }, companyId)
+            .catch((e: Error) =>
+              Logger.warn(`[Worker] Could not mark ${dbId} FAILED: ${e.message}`),
+            );
+          this.socketEmitter.emitMessageStatus(
+            dbId,
+            conversationId,
+            companyId,
+            "failed",
+          );
+        }
+
+        job.discard(); // Prevent Bull from scheduling further attempts
+        throw error;
+      }
+
       Logger.error(
         `[Worker] Job ${job.id} failed for CompanyId: ${companyId}`,
         {
           companyId,
           conversationId,
           to,
-          error: isError ? error.message : String(error),
+          error: errMsg,
           stack: isError ? error.stack : undefined,
         },
       );

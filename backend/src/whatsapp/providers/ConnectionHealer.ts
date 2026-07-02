@@ -155,11 +155,23 @@ export class ConnectionHealer {
     reconnectFn: ReconnectFn,
     isLoggedOut: boolean = false,
     onLoggedOutExhausted?: () => Promise<void>,
+    statusCode?: number,
   ): void {
     this.cancelReconnect(sessionId);
 
     const currentRetry = this.retryCounts.get(sessionId) || 0;
-    const isConflict = errorMessage.toLowerCase().includes("conflict");
+    // [SEC] 100-YEAR FIX: Baileys' own disconnect message is often a generic
+    // "Connection Terminated" even when the underlying reason IS a real
+    // stream conflict (statusCode 409/428 — "another device took over").
+    // The string-match on `errorMessage` alone missed those, applying the
+    // normal (not 3x) backoff and reconnecting as if it were a transient
+    // blip — which fights WhatsApp's own conflict resolution and can
+    // prolong instability. Prefer the numeric statusCode when available;
+    // keep the text match as a fallback for callers that don't pass it.
+    const isConflict =
+      statusCode === 409 ||
+      statusCode === 428 ||
+      errorMessage.toLowerCase().includes("conflict");
 
     if (isLoggedOut) {
       const loggedOutRetries = this.loggedOutRetryCounts.get(sessionId) || 0;

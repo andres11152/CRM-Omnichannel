@@ -4,6 +4,7 @@ import { Logger } from "@/utils/logger";
 import { TenantContextManager } from "@/config/tenantContext";
 import { chatService } from "@/services/ChatService";
 import { messageRepository } from "@/repositories/MessageRepository";
+import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { SessionData } from "@/types/whatsapp.types";
 import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
@@ -48,7 +49,7 @@ export class StatusUpdateHandler {
       return;
     }
 
-    const companyId = this.sessionCache.get(sessionId)?.companyId as string;
+    const companyId = await this.resolveCompanyId(sessionId);
     if (!companyId) return;
 
     // ─── PIN DETECTION ───────────────────────────────────────────────
@@ -174,5 +175,31 @@ export class StatusUpdateHandler {
     } catch (error) {
       Logger.error(`[StatusHandler] [PIN] Failed to handle pin event:`, error);
     }
+  }
+
+  /**
+   * [SEC] 100-YEAR FIX: `this.sessionCache` is a `Map` shared across
+   * MessageHandler's sub-handlers (status/revocation/reaction) that was
+   * NEVER populated anywhere in the codebase — only InboundMessageHandler
+   * and PresenceHandler write to their OWN separate caches. As a result
+   * every status update (sent/delivered/read ticks) and pin/unpin event
+   * silently no-opped here, forever. Fall back to a DB lookup (same
+   * pattern InboundMessageHandler already uses) and warm the cache.
+   */
+  private async resolveCompanyId(sessionId: string): Promise<string | null> {
+    const cached = this.sessionCache.get(sessionId)?.companyId;
+    if (cached) return cached;
+
+    const session = await whatsappSessionRepository.findSystemSession(sessionId);
+    if (!session) return null;
+
+    this.sessionCache.set(sessionId, {
+      companyId: session.companyId,
+      sessionId,
+      status: "CONNECTED",
+      userId: session.phone || undefined,
+      defaultQueueId: session.defaultQueueId,
+    });
+    return session.companyId;
   }
 }

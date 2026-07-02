@@ -53,7 +53,9 @@ describe("PropertyCrudService", () => {
 
   describe("create", () => {
     it("genera reference secuencial INM-XXXXXX y slug a partir del título", async () => {
-      repo.count.mockResolvedValue(41); // ya hay 41 → siguiente es 42
+      // El último ref existente es 41 → el siguiente debe ser 42, sin importar
+      // cuántas filas queden en la tabla (huecos por hard-delete no rompen esto).
+      repo.findFirst.mockResolvedValue({ reference: "INM-000041" });
       repo.create.mockImplementation(({ data }) =>
         Promise.resolve(buildProperty(data)),
       );
@@ -68,8 +70,34 @@ describe("PropertyCrudService", () => {
       expect(result.reference).toBe("INM-000042");
     });
 
+    it("genera INM-000001 cuando no hay propiedades previas", async () => {
+      repo.findFirst.mockResolvedValue(null);
+      repo.create.mockImplementation(({ data }) =>
+        Promise.resolve(buildProperty(data)),
+      );
+
+      const result = await propertyCrudService.create(companyId, baseDTO);
+
+      expect(result.reference).toBe("INM-000001");
+    });
+
+    it("no colisiona con huecos dejados por propiedades borradas (hard delete)", async () => {
+      // Reproduce el bug real: quedan 2 filas en la tabla pero el último
+      // número usado fue el 3 (una fue hard-deleted). Un conteo naive de
+      // filas generaría "INM-000003" de nuevo y colisionaría con la
+      // existente; basarse en el máximo real evita eso.
+      repo.findFirst.mockResolvedValue({ reference: "INM-000003" });
+      repo.create.mockImplementation(({ data }) =>
+        Promise.resolve(buildProperty(data)),
+      );
+
+      const result = await propertyCrudService.create(companyId, baseDTO);
+
+      expect(result.reference).toBe("INM-000004");
+    });
+
     it("calcula pricePerM2 cuando hay precio y área construida", async () => {
-      repo.count.mockResolvedValue(0);
+      repo.findFirst.mockResolvedValue(null);
       repo.create.mockImplementation(({ data }) =>
         Promise.resolve(buildProperty(data)),
       );

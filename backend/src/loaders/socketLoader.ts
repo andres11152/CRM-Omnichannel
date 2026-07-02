@@ -2,6 +2,7 @@ import { Server } from "http";
 import { gateway } from "@/gateways/socketGateway";
 import { EventBus } from "@/whatsapp/core/events/EventBus";
 import { WhatsAppEventType } from "@/whatsapp/core/events/WhatsAppEvents";
+import { TenantContextManager } from "@/config/tenantContext";
 
 import { Logger } from "@/utils/logger";
 
@@ -87,9 +88,26 @@ export const initSocketGateway = async (httpServer: Server) => {
   // Status Sync on Connection
   const io = gateway.getIO();
   if (io) {
-    io.on("connection", async (socket) => {
+    io.on("connection", (socket) => {
       const user = socket.data.user;
-      if (user && user.companyId) {
+      if (!user || !user.companyId) return;
+
+      // [SEC] 100-YEAR FIX: Socket.IO event handlers run OUTSIDE the Express
+      // request lifecycle, so the AsyncLocalStorage tenant context set up by
+      // HTTP middleware never reaches here. Any Prisma query on a non-global
+      // model (WhatsAppSession included) without an explicit tenant context
+      // was throwing "SECURITY VIOLATION: Access to WhatsAppSession denied"
+      // as an UNHANDLED REJECTION on every socket connection — the initial
+      // session-status sync silently never ran. Wrap both handlers in
+      // TenantContextManager.run() to set the context for this async chain.
+      const tenantCtx = {
+        companyId: user.companyId,
+        userId: user.id,
+        role: user.role,
+        requestId: `socket:${socket.id}`,
+      };
+
+      TenantContextManager.run(tenantCtx, async () => {
         // [SYNC] Use Dynamic Import to avoid Circular Dependency OOM
         const { whatsappService } = await import("@/whatsapp");
 
@@ -109,15 +127,19 @@ export const initSocketGateway = async (httpServer: Server) => {
             timestamp: new Date(),
           });
         });
+      }).catch((err) => {
+        Logger.error(`[Loader] [SYNC] Failed to sync session status for ${user.id}:`, err);
+      });
 
-        // ⌨️ TYPING INDICATOR HANDLER moved to socketGateway.ts (Single Responsibility)
-        // Eliminado código duplicado para evitar doble ejecución de eventos.
+      // ⌨️ TYPING INDICATOR HANDLER moved to socketGateway.ts (Single Responsibility)
+      // Eliminado código duplicado para evitar doble ejecución de eventos.
 
-        // [SYNC] MANUAL STATUS CHECK HANDLER
-        // Allows frontend to request immediate status update (e.g. on "Update Data" click)
-        socket.on("session.check_status", async () => {
-          if (!user.companyId) return;
+      // [SYNC] MANUAL STATUS CHECK HANDLER
+      // Allows frontend to request immediate status update (e.g. on "Update Data" click)
+      socket.on("session.check_status", () => {
+        if (!user.companyId) return;
 
+        TenantContextManager.run(tenantCtx, async () => {
           Logger.debug(
             `[Loader] [SYNC] Manual status check requested by ${user.id}`,
           );
@@ -133,8 +155,10 @@ export const initSocketGateway = async (httpServer: Server) => {
               timestamp: new Date(),
             });
           });
+        }).catch((err) => {
+          Logger.error(`[Loader] [SYNC] Manual status check failed for ${user.id}:`, err);
         });
-      }
+      });
     });
   }
 };

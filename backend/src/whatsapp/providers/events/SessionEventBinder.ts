@@ -448,7 +448,8 @@ export function bindSessionEvents(
         async () => {
           logger.warn(`[SessionEventBinder] LoggedOut attempts exhausted for session ${sessionId}. Performing soft-disconnect.`);
           await terminateSession(sessionId, false);
-        }
+        },
+        statusCode,
       );
 
       eventBus.publish({

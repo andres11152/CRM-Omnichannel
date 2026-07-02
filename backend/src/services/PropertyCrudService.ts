@@ -193,10 +193,23 @@ export const propertyCrudService = {
     return property;
   },
 
-  /** Genera una referencia única tipo INM-000123 (reintenta ante colisión). */
+  /**
+   * Genera una referencia única tipo INM-000123, basada en el número más alto
+   * ya usado por la empresa (no en un conteo de filas). Un conteo se
+   * desincroniza en cuanto se borra una propiedad (hard delete) o queda una
+   * soft-deleted, generando el mismo número repetido en cada intento del
+   * retry de `create()` y garantizando la colisión en vez de evitarla.
+   * Ordenar por `reference` desc funciona porque el prefijo "INM-" y el
+   * padding a 6 dígitos hacen que el orden lexicográfico == orden numérico.
+   */
   async generateReference(companyId: string): Promise<string> {
-    const count = await propertyRepository.count({ where: { companyId } });
-    return `INM-${String(count + 1).padStart(6, "0")}`;
+    const last = await propertyRepository.findFirst({
+      where: { companyId },
+      orderBy: { reference: "desc" },
+      select: { reference: true },
+    });
+    const lastNum = last ? parseInt(last.reference.replace("INM-", ""), 10) || 0 : 0;
+    return `INM-${String(lastNum + 1).padStart(6, "0")}`;
   },
 
   async create(companyId: string, data: CreatePropertyDTO) {

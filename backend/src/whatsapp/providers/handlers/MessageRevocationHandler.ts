@@ -14,6 +14,7 @@ import { z } from "zod";
 import { Logger } from "@/utils/logger";
 import { TenantContextManager } from "@/config/tenantContext";
 import { messageRepository } from "@/repositories/MessageRepository";
+import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { gateway } from "@/gateways/socketGateway";
 import { SessionData } from "@/types/whatsapp.types";
@@ -55,7 +56,7 @@ export class MessageRevocationHandler {
       return;
     }
 
-    const companyId = this.sessionCache.get(sessionId)?.companyId as string;
+    const companyId = await this.resolveCompanyId(sessionId);
     if (!companyId) {
       Logger.warn(
         `[RevocationHandler] [WARNING] No companyId found for session ${sessionId}`,
@@ -115,5 +116,31 @@ export class MessageRevocationHandler {
         error,
       );
     }
+  }
+
+  /**
+   * [SEC] 100-YEAR FIX: `this.sessionCache` is a `Map` shared across
+   * MessageHandler's sub-handlers (status/revocation/reaction) that was
+   * NEVER populated anywhere in the codebase — only InboundMessageHandler
+   * and PresenceHandler write to their OWN separate caches. As a result
+   * every revocation ("delete for everyone") silently no-opped here,
+   * forever, for every session. Fall back to a DB lookup (same pattern
+   * InboundMessageHandler already uses) and warm the cache for next time.
+   */
+  private async resolveCompanyId(sessionId: string): Promise<string | null> {
+    const cached = this.sessionCache.get(sessionId)?.companyId;
+    if (cached) return cached;
+
+    const session = await whatsappSessionRepository.findSystemSession(sessionId);
+    if (!session) return null;
+
+    this.sessionCache.set(sessionId, {
+      companyId: session.companyId,
+      sessionId,
+      status: "CONNECTED",
+      userId: session.phone || undefined,
+      defaultQueueId: session.defaultQueueId,
+    });
+    return session.companyId;
   }
 }

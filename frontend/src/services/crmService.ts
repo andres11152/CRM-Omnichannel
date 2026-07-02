@@ -9,7 +9,7 @@ interface Pipeline {
 }
 
 /** CRM Contact (lightweight) */
-interface CrmContact {
+export interface CrmContact {
   id: string;
   name: string;
   email?: string;
@@ -104,6 +104,24 @@ export const getContacts = async (): Promise<{ contacts: CrmContact[] }> => {
     return { contacts: body.data };
   }
   return { contacts: [] };
+};
+
+// --- CONVERSATIONS ---
+
+/**
+ * Inicia (o resuelve, si ya existe) una conversación de WhatsApp con un número y,
+ * opcionalmente, envía un mensaje inicial a través de la sesión de WhatsApp conectada
+ * de la empresa. Si el número ya tiene un chat abierto, el mensaje se agrega ahí
+ * en vez de crear un duplicado.
+ */
+export const startConversationWithMessage = async (params: {
+  phone: string;
+  name?: string;
+  message?: string;
+  addToContacts?: boolean;
+}): Promise<{ conversationId: string }> => {
+  const res = await api.post("/conversations", params);
+  return { conversationId: res.data.data.conversation.id };
 };
 
 // --- ACTIVITIES ---

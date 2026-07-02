@@ -35,20 +35,48 @@ export class UserResolver {
 
     Logger.debug(`[UserResolver] Upserting user for: ${phone}`);
 
-    return userRepository.upsert({
-      where: { email: userEmail },
-      create: {
-        company: { connect: { id: companyId } },
-        email: userEmail,
-        name: identity.subjectDisplayName,
-        phone,
-        role: UserRole.USER,
-        password: await bcrypt.hash(phone, 10),
-        profilePicUrl,
-        about,
-      },
-      update: updateData,
-    });
+    const doUpsert = async (email: string) =>
+      userRepository.upsert({
+        where: { email },
+        create: {
+          company: { connect: { id: companyId } },
+          email,
+          name: identity.subjectDisplayName,
+          phone,
+          role: UserRole.USER,
+          password: await bcrypt.hash(phone, 10),
+          profilePicUrl,
+          about,
+        },
+        update: updateData,
+      });
+
+    try {
+      return await doUpsert(userEmail);
+    } catch (error: unknown) {
+      const isUnique =
+        error instanceof Error &&
+        error.message.includes("Unique constraint failed");
+      if (!isUnique) throw error;
+
+      // [SEC] 100-YEAR FIX (multi-tenant collision): User.email is globally
+      // unique but shadow emails are phone-derived. If this phone already has
+      // a shadow user under ANOTHER company, the RLS-scoped upsert takes the
+      // CREATE branch and hits P2002 forever. Fall back to this company's own
+      // row (legacy or scoped) or create a company-scoped email. Same pattern
+      // as ChatIdentityService.upsertWhatsAppUser.
+      const scopedEmail = `${phone}.${companyId}@whatsapp.user`;
+      const own = await userRepository.findFirst({
+        where: { email: { in: [userEmail, scopedEmail] }, companyId },
+      });
+      if (own) {
+        return userRepository.update(own.id, companyId, updateData);
+      }
+      Logger.info(
+        `[UserResolver] Cross-tenant email collision for ${userEmail} — creating scoped shadow user`,
+      );
+      return doUpsert(scopedEmail);
+    }
   }
 }
 

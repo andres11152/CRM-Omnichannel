@@ -67,27 +67,33 @@ export class ChatIdentityService {
     let nameToPersist = params.name;
     let user;
 
-    try {
-      // 0. Name Preservation
-      const existingUser = await userRepository.findFirst({
-        where: { email: params.email, companyId: params.companyId },
-        select: { id: true, name: true },
+    // [SEC] 100-YEAR FIX (multi-tenant collision): `User.email` is GLOBALLY
+    // unique, but shadow emails are phone-derived (`<phone>@whatsapp.user`).
+    // When the same customer phone chats with TWO different tenant companies,
+    // the second company can never create its shadow user: the RLS guard
+    // injects companyId into the upsert's where, the other tenant's row is
+    // invisible, Prisma takes the CREATE branch and hits P2002 — forever.
+    // Every inbound message from that customer was retried and dropped (DLQ),
+    // i.e. "no entran chats". The old catch only re-queried within the same
+    // company, so it could never resolve this. Fallback: a company-scoped
+    // shadow email (keeps the `@whatsapp.user` suffix every other lookup
+    // relies on). Existing single-tenant rows keep their legacy email.
+    const [localPart, emailDomain] = params.email.split("@");
+    const scopedEmail = `${localPart}.${params.companyId}@${emailDomain}`;
+
+    const findOwnShadowUser = () =>
+      userRepository.findFirst({
+        where: {
+          email: { in: [params.email, scopedEmail] },
+          companyId: params.companyId,
+        },
       });
 
-      if (existingUser) {
-        const isNewNamePhone = /^\+?\d[\d\s-]*$/.test(params.name);
-        const isOldNamePhone = /^\+?\d[\d\s-]*$/.test(existingUser.name);
-
-        if (isNewNamePhone && !isOldNamePhone) {
-          nameToPersist = existingUser.name;
-        }
-      }
-
-      // 1. Upsert System User (Authentication/Chat Identity)
-      user = await userRepository.upsert({
-        where: { email: params.email },
+    const doUpsert = (email: string) =>
+      userRepository.upsert({
+        where: { email },
         create: {
-          email: params.email,
+          email,
           name: nameToPersist,
           password: "$2a$10$DummyHashForWhatsAppUser",
           role: params.role || "USER",
@@ -100,33 +106,60 @@ export class ChatIdentityService {
           updatedAt: new Date(),
         },
       });
-    } catch (error: unknown) {
-      const isUniqueError =
-        error instanceof Error &&
-        error.message.includes("Unique constraint failed");
 
-      if (isUniqueError) {
-        Logger.info(
-          `[ChatIdentityService] [SEC] Race condition detected for user ${params.email}, resolving existing...`,
-        );
-        // The concurrent INSERT from history sync may not be committed yet.
-        // Retry findFirst up to 3× with growing delays so we don't rethrow
-        // on a transient read-before-commit timing gap.
-        let existingUserAfterCollision = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 80 * attempt));
-          existingUserAfterCollision = await userRepository.findFirst({
-            where: { email: params.email, companyId: params.companyId },
-          });
-          if (existingUserAfterCollision) break;
+    const isUniqueError = (error: unknown): boolean =>
+      error instanceof Error &&
+      error.message.includes("Unique constraint failed");
+
+    try {
+      // 0. Name Preservation (legacy o scoped, siempre dentro de ESTA empresa)
+      const existingUser = await findOwnShadowUser();
+
+      if (existingUser) {
+        const isNewNamePhone = /^\+?\d[\d\s-]*$/.test(params.name);
+        const isOldNamePhone = /^\+?\d[\d\s-]*$/.test(existingUser.name);
+
+        if (isNewNamePhone && !isOldNamePhone) {
+          nameToPersist = existingUser.name;
         }
-        if (existingUserAfterCollision) {
-          user = existingUserAfterCollision;
-        } else {
-          throw error;
-        }
+      }
+
+      // 1. Upsert System User — target the email this company already owns
+      // (legacy or scoped); default to legacy for brand-new users.
+      user = await doUpsert(existingUser?.email ?? params.email);
+    } catch (error: unknown) {
+      if (!isUniqueError(error)) throw error;
+
+      Logger.info(
+        `[ChatIdentityService] [SEC] Email collision for ${params.email} (company ${params.companyId}), resolving...`,
+      );
+
+      // (a) True race within this company: the concurrent INSERT from history
+      // sync may not be committed yet. Retry the read with growing delays.
+      let resolved = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 80 * attempt));
+        resolved = await findOwnShadowUser();
+        if (resolved) break;
+      }
+
+      if (resolved) {
+        user = resolved;
       } else {
-        throw error;
+        // (b) The legacy email belongs to ANOTHER tenant → create this
+        // company's own shadow user under the scoped email.
+        try {
+          user = await doUpsert(scopedEmail);
+          Logger.info(
+            `[ChatIdentityService] [SEC] Cross-tenant shadow user created as ${scopedEmail}`,
+          );
+        } catch (scopedError: unknown) {
+          if (!isUniqueError(scopedError)) throw scopedError;
+          // Race on the scoped email itself — final read.
+          const scopedExisting = await findOwnShadowUser();
+          if (!scopedExisting) throw scopedError;
+          user = scopedExisting;
+        }
       }
     }
 

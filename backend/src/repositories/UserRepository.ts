@@ -91,24 +91,59 @@ export class UserRepository extends BaseRepository {
 
   async upsertShadowUser(params: ShadowUserParams): Promise<User> {
     const { email, name, phone, companyId, password, preferences } = params;
-    return this.db.user.upsert({
-      where: { email },
-      update: {
-        name,
-        phone,
-        companyId,
-        preferences: preferences as Prisma.InputJsonValue,
-      },
-      create: {
-        email,
-        name,
-        phone,
-        companyId,
-        password: password || "",
-        role: "AGENT",
-        preferences: preferences as Prisma.InputJsonValue,
-      },
-    });
+
+    const doUpsert = (targetEmail: string) =>
+      this.db.user.upsert({
+        where: { email: targetEmail },
+        update: {
+          name,
+          phone,
+          companyId,
+          preferences: preferences as Prisma.InputJsonValue,
+        },
+        create: {
+          email: targetEmail,
+          name,
+          phone,
+          companyId,
+          password: password || "",
+          role: "AGENT",
+          preferences: preferences as Prisma.InputJsonValue,
+        },
+      });
+
+    try {
+      return await doUpsert(email);
+    } catch (error: unknown) {
+      const isUnique =
+        error instanceof Error &&
+        error.message.includes("Unique constraint failed");
+      if (!isUnique) throw error;
+
+      // [SEC] 100-YEAR FIX (multi-tenant collision): shadow emails are
+      // phone-derived but User.email is globally unique. If the same phone
+      // already has a shadow user under ANOTHER company, the RLS-scoped
+      // upsert always takes the CREATE branch and hits P2002 — manual chat
+      // creation for that customer was impossible for the second tenant.
+      // Fall back to this company's own row (legacy or scoped) or create a
+      // company-scoped email (keeps the @whatsapp.user suffix lookups rely on).
+      const [localPart, domain] = email.split("@");
+      const scopedEmail = `${localPart}.${companyId}@${domain}`;
+      const own = await this.db.user.findFirst({
+        where: { email: { in: [email, scopedEmail] }, companyId },
+      });
+      if (own) {
+        return this.db.user.update({
+          where: { id: own.id },
+          data: {
+            name,
+            phone,
+            preferences: preferences as Prisma.InputJsonValue,
+          },
+        });
+      }
+      return doUpsert(scopedEmail);
+    }
   }
 }
 

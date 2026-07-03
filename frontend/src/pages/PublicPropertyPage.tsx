@@ -63,7 +63,7 @@ export const PublicPropertyPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="h-full overflow-y-auto bg-gray-50 flex items-center justify-center">
         <div className="animate-pulse flex flex-col items-center gap-3 text-gray-400">
           <Building2 className="w-12 h-12" />
           <span className="text-sm">Cargando inmueble…</span>
@@ -74,7 +74,7 @@ export const PublicPropertyPage: React.FC = () => {
 
   if (error || !property) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="h-full overflow-y-auto bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
           <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-gray-700">Inmueble no disponible</h1>
@@ -103,7 +103,7 @@ export const PublicPropertyPage: React.FC = () => {
     .join(", ");
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="h-full overflow-y-auto bg-gray-50 pb-24">
       {/* Header inmobiliaria */}
       <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
         {company?.logoUrl ? (

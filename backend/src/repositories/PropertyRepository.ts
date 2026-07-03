@@ -31,12 +31,16 @@ export class PropertyRepository {
     return this.db.property.count(args);
   }
 
-  async create(args: Prisma.PropertyCreateArgs) {
-    return this.db.property.create(args);
+  create<T extends Prisma.PropertyCreateArgs>(
+    args: T,
+  ): Promise<Prisma.PropertyGetPayload<T>> {
+    return this.db.property.create(args as never) as Promise<Prisma.PropertyGetPayload<T>>;
   }
 
-  async update(args: Prisma.PropertyUpdateArgs) {
-    return this.db.property.update(args);
+  update<T extends Prisma.PropertyUpdateArgs>(
+    args: T,
+  ): Promise<Prisma.PropertyGetPayload<T>> {
+    return this.db.property.update(args as never) as Promise<Prisma.PropertyGetPayload<T>>;
   }
 
   async updateMany(args: Prisma.PropertyUpdateManyArgs) {

@@ -3,6 +3,7 @@ import { Logger } from "@/utils/logger";
 import { Prisma } from "@prisma/client";
 import { propertyRepository } from "@/repositories/PropertyRepository";
 import { VALID_AMENITIES, VALID_FEATURES } from "@/constants/propertyCatalogs";
+import { resolveImageUrls } from "@/utils/resolvePropertyImageUrls";
 
 /**
  * [REAL ESTATE] PROPERTY CRUD SERVICE
@@ -168,7 +169,7 @@ export const propertyCrudService = {
       }
     })();
 
-    const [items, total] = await Promise.all([
+    const [rawItems, total] = await Promise.all([
       propertyRepository.findMany({
         where,
         include: OWNER_INCLUDE,
@@ -178,6 +179,10 @@ export const propertyCrudService = {
       }),
       propertyRepository.count({ where }),
     ]);
+
+    const items = await Promise.all(
+      rawItems.map(async (p) => ({ ...p, images: await resolveImageUrls(p.images) })),
+    );
 
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   },
@@ -190,7 +195,7 @@ export const propertyCrudService = {
     if (!property) {
       throw new AppError("Inmueble no encontrado", 404);
     }
-    return property;
+    return { ...property, images: await resolveImageUrls(property.images) };
   },
 
   /**
@@ -328,7 +333,7 @@ export const propertyCrudService = {
       include: OWNER_INCLUDE,
     });
     Logger.info(`[Property] Updated ${updated.reference} (${id})`);
-    return updated;
+    return { ...updated, images: await resolveImageUrls(updated.images) };
   },
 
   async setPublished(id: string, companyId: string, isPublished: boolean) {
@@ -344,7 +349,7 @@ export const propertyCrudService = {
       include: OWNER_INCLUDE,
     });
     Logger.info(`[Property] ${isPublished ? "Published" : "Unpublished"} ${updated.reference}`);
-    return updated;
+    return { ...updated, images: await resolveImageUrls(updated.images) };
   },
 
   async softDelete(id: string, companyId: string, userId: string) {

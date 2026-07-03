@@ -2,6 +2,7 @@ import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { propertyRepository } from "@/repositories/PropertyRepository";
 import { uploadFile, deleteFile, MulterFile } from "@/services/UploadService";
+import { resolveImageUrls } from "@/utils/resolvePropertyImageUrls";
 
 /**
  * [REAL ESTATE] PROPERTY IMAGE SERVICE
@@ -62,7 +63,7 @@ export const propertyImageService = {
     }
 
     Logger.info(`[PropertyImage] +${created.length} imgs → ${property.reference}`);
-    return created;
+    return resolveImageUrls(created);
   },
 
   /** Elimina una imagen de la galería y de S3. Promueve nueva portada si aplica. */
@@ -148,6 +149,6 @@ export const propertyImageService = {
 
   async list(propertyId: string, companyId: string) {
     const property = await assertOwnership(propertyId, companyId);
-    return property.images;
+    return resolveImageUrls(property.images);
   },
 };

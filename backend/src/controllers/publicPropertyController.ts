@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { propertyRepository } from "@/repositories/PropertyRepository";
+import { resolveImageUrls } from "@/utils/resolvePropertyImageUrls";
 import { Logger } from "@/utils/logger";
 
 /**
@@ -29,6 +30,8 @@ export const getPublicProperty = async (req: Request, res: Response) => {
     propertyRepository
       .updateMany({ where: { id: property.id }, data: { viewsCount: { increment: 1 } } })
       .catch((err) => Logger.warn(`[PublicProperty] views++ failed: ${String(err)}`));
+
+    const signedImages = await resolveImageUrls(property.images);
 
     // Payload seguro: se omiten propietario, comisión, matrícula, catastral,
     // captación y dirección exacta si addressVisible=false.
@@ -70,7 +73,7 @@ export const getPublicProperty = async (req: Request, res: Response) => {
       amenities: property.amenities,
       videoUrl: property.videoUrl,
       virtualTourUrl: property.virtualTourUrl,
-      images: property.images.map((img) => ({
+      images: signedImages.map((img) => ({
         url: img.url,
         isCover: img.isCover,
         order: img.order,

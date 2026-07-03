@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { propertyRepository } from "@/repositories/PropertyRepository";
 import { resolveImageUrls } from "@/utils/resolvePropertyImageUrls";
 import { Logger } from "@/utils/logger";
+import { TenantContextManager } from "@/config/tenantContext";
 
 /**
  * [REAL ESTATE] PUBLIC PROPERTY CONTROLLER
@@ -14,22 +15,37 @@ export const getPublicProperty = async (req: Request, res: Response) => {
   const { publicId } = req.params;
 
   try {
-    const property = await propertyRepository.findFirst({
-      where: { publicId, isPublished: true, deletedAt: null },
-      include: {
-        images: { orderBy: { order: "asc" } },
-        company: { select: { name: true, phone: true, logoUrl: true } },
-      },
-    });
+    // [SEC] 100-YEAR FIX: esta ruta es pública a propósito (sin `protect`),
+    // así que nunca pasa por el middleware que arma el contexto de tenant
+    // (TenantContextManager.run) que exige el guard RLS de Prisma para
+    // cualquier modelo no listado en GLOBAL_MODELS — y `Property` no lo está.
+    // Sin esto, CUALQUIER consulta aquí lanzaba "SECURITY VIOLATION" (500),
+    // tumbando la ficha pública para TODO inmueble publicado. La query ya es
+    // segura sin tenant: filtra por publicId único e impredecible +
+    // isPublished=true, así que runAsSystem (mismo patrón que
+    // MessageRevocationHandler para lookups legítimos cross-tenant) es
+    // correcto aquí, no una omisión de seguridad.
+    const property = await TenantContextManager.runAsSystem(() =>
+      propertyRepository.findFirst({
+        where: { publicId, isPublished: true, deletedAt: null },
+        include: {
+          images: { orderBy: { order: "asc" } },
+          company: { select: { name: true, phone: true, logoUrl: true } },
+        },
+      }),
+    );
 
     if (!property) {
       return res.status(404).json({ status: "error", message: "Inmueble no disponible" });
     }
 
     // Incrementa contador de vistas (best-effort, no bloquea la respuesta).
-    propertyRepository
-      .updateMany({ where: { id: property.id }, data: { viewsCount: { increment: 1 } } })
-      .catch((err) => Logger.warn(`[PublicProperty] views++ failed: ${String(err)}`));
+    TenantContextManager.runAsSystem(() =>
+      propertyRepository.updateMany({
+        where: { id: property.id },
+        data: { viewsCount: { increment: 1 } },
+      }),
+    ).catch((err) => Logger.warn(`[PublicProperty] views++ failed: ${String(err)}`));
 
     const signedImages = await resolveImageUrls(property.images);
 

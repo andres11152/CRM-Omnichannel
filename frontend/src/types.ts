@@ -555,7 +555,12 @@ export type WebhookEventType =
   | "deal.lost"
   | "campaign.completed"
   | "session.connected"
-  | "session.disconnected";
+  | "session.disconnected"
+  | "property.created"
+  | "property.updated"
+  | "property.published"
+  | "property.status_changed"
+  | "property.deleted";
 export interface WebhookEndpoint {
   id: string;
   companyId: string;

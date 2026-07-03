@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import { propertyRepository } from "@/repositories/PropertyRepository";
 import { VALID_AMENITIES, VALID_FEATURES } from "@/constants/propertyCatalogs";
 import { resolveImageUrls } from "@/utils/resolvePropertyImageUrls";
+import { webhookDispatcher } from "@/services/WebhookDispatcher";
+import { WebhookEvents } from "@/types/types";
 
 /**
  * [REAL ESTATE] PROPERTY CRUD SERVICE
@@ -284,6 +286,17 @@ export const propertyCrudService = {
           include: OWNER_INCLUDE,
         });
         Logger.info(`[Property] Created ${property.reference} (${property.id})`);
+        void webhookDispatcher.dispatch(companyId, WebhookEvents.PROPERTY_CREATED, {
+          id: property.id,
+          reference: property.reference,
+          publicId: property.publicId,
+          title: property.title,
+          operation: property.operation,
+          kind: property.kind,
+          status: property.status,
+          price: property.price,
+          currency: property.currency,
+        });
         return property;
       } catch (err) {
         if (
@@ -301,7 +314,7 @@ export const propertyCrudService = {
   },
 
   async update(id: string, companyId: string, data: Record<string, unknown>) {
-    await this.findById(id, companyId); // valida existencia + tenant
+    const before = await this.findById(id, companyId); // valida existencia + tenant
 
     if ("stratum" in data) validateStratum(data.stratum as number | undefined);
     if ("features" in data || "amenities" in data) {
@@ -333,6 +346,25 @@ export const propertyCrudService = {
       include: OWNER_INCLUDE,
     });
     Logger.info(`[Property] Updated ${updated.reference} (${id})`);
+
+    void webhookDispatcher.dispatch(companyId, WebhookEvents.PROPERTY_UPDATED, {
+      id: updated.id,
+      reference: updated.reference,
+      publicId: updated.publicId,
+      title: updated.title,
+      status: updated.status,
+      price: updated.price,
+      currency: updated.currency,
+    });
+    if (before.status !== updated.status) {
+      void webhookDispatcher.dispatch(companyId, WebhookEvents.PROPERTY_STATUS_CHANGED, {
+        id: updated.id,
+        reference: updated.reference,
+        oldStatus: before.status,
+        newStatus: updated.status,
+      });
+    }
+
     return { ...updated, images: await resolveImageUrls(updated.images) };
   },
 
@@ -349,15 +381,29 @@ export const propertyCrudService = {
       include: OWNER_INCLUDE,
     });
     Logger.info(`[Property] ${isPublished ? "Published" : "Unpublished"} ${updated.reference}`);
+
+    void webhookDispatcher.dispatch(companyId, WebhookEvents.PROPERTY_PUBLISHED, {
+      id: updated.id,
+      reference: updated.reference,
+      publicId: updated.publicId,
+      isPublished: updated.isPublished,
+      publicUrl: updated.isPublished ? `/p/${updated.publicId}` : null,
+    });
+
     return { ...updated, images: await resolveImageUrls(updated.images) };
   },
 
   async softDelete(id: string, companyId: string, userId: string) {
-    await this.findById(id, companyId);
+    const property = await this.findById(id, companyId);
     await propertyRepository.update({
       where: { id },
       data: { deletedAt: new Date(), deletedBy: userId, isPublished: false },
     });
     Logger.info(`[Property] Soft-deleted ${id} by ${userId}`);
+
+    void webhookDispatcher.dispatch(companyId, WebhookEvents.PROPERTY_DELETED, {
+      id: property.id,
+      reference: property.reference,
+    });
   },
 };

@@ -13,6 +13,9 @@ import {
   listDeals,
   createDeal,
   listTickets,
+  listProperties,
+  getProperty,
+  createProperty,
 } from "@/controllers/externalApiController";
 
 /**
@@ -51,5 +54,10 @@ router.post("/deals", requireScope("deals:write"), createDeal);
 
 // --- TICKETS ---
 router.get("/tickets", requireScope("tickets:read"), listTickets);
+
+// --- PROPERTIES (Real Estate) ---
+router.get("/properties", requireScope("properties:read"), listProperties);
+router.get("/properties/:id", requireScope("properties:read"), getProperty);
+router.post("/properties", requireScope("properties:write"), createProperty);
 
 export default router;

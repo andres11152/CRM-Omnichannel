@@ -61,6 +61,11 @@ const AVAILABLE_EVENTS: WebhookEventType[] = [
   "campaign.completed",
   "session.connected",
   "session.disconnected",
+  "property.created",
+  "property.updated",
+  "property.published",
+  "property.status_changed",
+  "property.deleted",
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

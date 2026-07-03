@@ -114,6 +114,11 @@ export enum WebhookEvents {
   CAMPAIGN_COMPLETED = "campaign.completed",
   SESSION_CONNECTED = "session.connected",
   SESSION_DISCONNECTED = "session.disconnected",
+  PROPERTY_CREATED = "property.created",
+  PROPERTY_UPDATED = "property.updated",
+  PROPERTY_PUBLISHED = "property.published",
+  PROPERTY_STATUS_CHANGED = "property.status_changed",
+  PROPERTY_DELETED = "property.deleted",
 }
 
 export interface Webhook {

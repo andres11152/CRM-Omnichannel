@@ -10,6 +10,7 @@ import { dealService } from "@/services/DealService";
 import { ticketService } from "@/services/TicketService";
 import { conversationQueryService } from "@/services/ConversationQueryService";
 import { conversationMessageService } from "@/services/ConversationMessageService";
+import { propertyCrudService } from "@/services/PropertyCrudService";
 
 // Schemas
 import {
@@ -18,6 +19,8 @@ import {
   updateContactSchema,
   sendMessageSchema,
   createExternalDealSchema,
+  createExternalPropertySchema,
+  externalPropertyQuerySchema,
   idParamSchema,
 } from "@/schemas/externalApiSchema";
 
@@ -249,5 +252,66 @@ export const listTickets = catchAsync(
       data: result.data,
       meta: result.meta,
     });
+  },
+);
+
+// ============================================================================
+// PROPERTIES (Real Estate)
+// ============================================================================
+
+export const listProperties = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId) throw new AppError("Unauthorized", 401);
+
+    const query = externalPropertyQuerySchema.parse(req.query);
+
+    const result = await propertyCrudService.findAll(companyId, {
+      operation: query.operation,
+      status: query.status,
+      city: query.city,
+      q: query.search,
+      page: query.page,
+      limit: query.limit,
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: result.items,
+      meta: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  },
+);
+
+export const getProperty = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId) throw new AppError("Unauthorized", 401);
+
+    const { id } = idParamSchema.parse(req.params);
+    const property = await propertyCrudService.findById(id, companyId);
+
+    res.status(200).json({ status: "success", data: property });
+  },
+);
+
+export const createProperty = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId || req.user?.companyId;
+    if (!companyId) throw new AppError("Unauthorized", 401);
+
+    const data = createExternalPropertySchema.parse(req.body);
+    const property = await propertyCrudService.create(companyId, data);
+
+    Logger.info(`[ExternalAPI] Property created via API: ${property.id}`, {
+      companyId,
+    });
+
+    res.status(201).json({ status: "success", data: property });
   },
 );

@@ -56,6 +56,47 @@ export const createExternalDealSchema = z.object({
 });
 export type CreateExternalDealInput = z.infer<typeof createExternalDealSchema>;
 
+// --- PROPERTIES (Real Estate) ---
+export const createExternalPropertySchema = z.object({
+  operation: z.enum(["VENTA", "ARRIENDO", "ARRIENDO_VENTA", "PERMUTA"]),
+  kind: z.enum([
+    "APARTAMENTO",
+    "CASA",
+    "APARTAESTUDIO",
+    "CASA_CAMPESTRE",
+    "LOCAL_COMERCIAL",
+    "OFICINA",
+    "BODEGA",
+    "CONSULTORIO",
+    "LOTE",
+    "FINCA",
+    "PARQUEADERO",
+    "HABITACION",
+    "EDIFICIO",
+    "OTRO",
+  ]),
+  title: z.string().min(3, "Title is required"),
+  price: z.number().min(0),
+  description: z.string().optional(),
+  city: z.string().optional(),
+  neighborhood: z.string().optional(),
+  stratum: z.number().int().min(1).max(6).optional(),
+  bedrooms: z.number().int().min(0).optional(),
+  bathrooms: z.number().min(0).optional(),
+  builtArea: z.number().min(0).optional(),
+  parkingSpots: z.number().int().min(0).optional(),
+});
+export type CreateExternalPropertyInput = z.infer<typeof createExternalPropertySchema>;
+
+export const externalPropertyQuerySchema = paginationQuerySchema.extend({
+  operation: z.enum(["VENTA", "ARRIENDO", "ARRIENDO_VENTA", "PERMUTA"]).optional(),
+  status: z
+    .enum(["DISPONIBLE", "RESERVADO", "ARRENDADO", "VENDIDO", "SUSPENDIDO", "BORRADOR"])
+    .optional(),
+  city: z.string().optional(),
+});
+export type ExternalPropertyQuery = z.infer<typeof externalPropertyQuerySchema>;
+
 // --- ID PARAMS ---
 export const idParamSchema = z.object({
   id: z.string().cuid("Invalid ID format"),

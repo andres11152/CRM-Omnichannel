@@ -306,7 +306,25 @@ export const createProperty = catchAsync(
     if (!companyId) throw new AppError("Unauthorized", 401);
 
     const data = createExternalPropertySchema.parse(req.body);
-    const property = await propertyCrudService.create(companyId, data);
+    // [SEC] Mapeo explícito a CreatePropertyDTO: con 12 campos zod
+    // encadenados (varios `.int().min().max().optional()`), TypeScript no
+    // siempre preserva qué campos quedan required vs optional al pasar el
+    // resultado de `.parse()` directamente a un servicio con su propio DTO
+    // — falló en el build de Render (TS22.22/Node) aunque compilaba en local.
+    const property = await propertyCrudService.create(companyId, {
+      operation: data.operation,
+      kind: data.kind,
+      title: data.title,
+      price: data.price,
+      description: data.description,
+      city: data.city,
+      neighborhood: data.neighborhood,
+      stratum: data.stratum,
+      bedrooms: data.bedrooms,
+      bathrooms: data.bathrooms,
+      builtArea: data.builtArea,
+      parkingSpots: data.parkingSpots,
+    });
 
     Logger.info(`[ExternalAPI] Property created via API: ${property.id}`, {
       companyId,

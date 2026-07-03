@@ -160,7 +160,16 @@ export const uploadFile = async (
 
       Logger.info("[UploadService] S3 upload successful");
 
-      const url = `https://${BUCKET_NAME}.s3.amazonaws.com/${key}`;
+      // [SEC] 100-YEAR FIX: la URL pública debe respetar el endpoint real.
+      // Antes se hardcodeaba `https://<bucket>.s3.amazonaws.com/...`, lo que
+      // en local (MinIO vía S3_ENDPOINT) guardaba URLs apuntando a AWS que
+      // jamás cargaban. Con endpoint custom → path-style (MinIO); sin él →
+      // virtual-hosted regional de AWS.
+      const endpoint = process.env.S3_ENDPOINT?.replace(/\/$/, "");
+      const region = process.env.AWS_REGION || "us-east-1";
+      const url = endpoint
+        ? `${endpoint}/${BUCKET_NAME}/${key}`
+        : `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${key}`;
 
       return {
         url,

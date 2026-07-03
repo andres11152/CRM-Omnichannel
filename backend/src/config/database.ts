@@ -26,6 +26,11 @@ const GLOBAL_MODELS = [
   "Permission",
   "WhatsAppCredential",
   "Stage",
+  // Sin columna companyId propia: el aislamiento de tenant se hereda del
+  // Property padre (validado vía assertOwnership antes de cada operación).
+  // Sin este bypass, el guard inyecta companyId al create y Prisma lo
+  // rechaza con "Unknown argument companyId" (500 al subir fotos).
+  "PropertyImage",
 ];
 
 const SOFT_DELETE_MODELS = ["Contact", "Deal", "Ticket", "Campaign"];

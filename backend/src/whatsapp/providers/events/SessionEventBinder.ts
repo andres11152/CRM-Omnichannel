@@ -497,6 +497,16 @@ export function bindSessionEvents(
           sessionId, companyId, timestamp: new Date(),
           data: { revokedMessageId: String(protoKey["id"]), revokedBy: msg.key.remoteJid || "unknown", fromMe: msg.key.fromMe || false },
         });
+      } else if ((protoType === 14 || protoType === "MESSAGE_EDIT") && protoKey?.["id"] && proto["editedMessage"]) {
+        logger.info(`[SessionEventBinder] Intercepting MESSAGE_EDIT for ${protoKey["id"]} in session ${sessionId}`);
+        eventBus.publish({
+          type: WhatsAppEventType.MESSAGE_EDITED,
+          sessionId, companyId, timestamp: new Date(),
+          data: {
+            originalMessageId: String(protoKey["id"]),
+            editedMessage: proto["editedMessage"],
+          },
+        });
       } else {
         logger.debug(`[SessionEventBinder] Skipping internal protocolMessage type: ${protoType} for ${msg.key?.id}`);
       }

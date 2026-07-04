@@ -21,6 +21,7 @@ import { StatusUpdateHandler } from "./handlers/StatusUpdateHandler";
 import { PresenceHandler } from "./handlers/PresenceHandler";
 import { MessageRevocationHandler } from "./handlers/MessageRevocationHandler";
 import { MessageReactionHandler } from "./handlers/MessageReactionHandler";
+import { MessageEditHandler } from "./handlers/MessageEditHandler";
 import { InboundOrchestratorService } from "../services/InboundOrchestratorService";
 import { SessionData } from "@/types/whatsapp.types";
 
@@ -48,6 +49,7 @@ export class MessageHandler implements IMessageHandler {
   private presenceHandler: PresenceHandler;
   private revocationHandler: MessageRevocationHandler;
   private reactionHandler: MessageReactionHandler;
+  private editHandler: MessageEditHandler;
 
   // [BUILD] Background Workers
   private inboundWorker: InboundWorker;
@@ -93,6 +95,7 @@ export class MessageHandler implements IMessageHandler {
     this.statusHandler = new StatusUpdateHandler(this.sessionCache);
     this.revocationHandler = new MessageRevocationHandler(this.sessionCache);
     this.reactionHandler = new MessageReactionHandler(this.sessionCache);
+    this.editHandler = new MessageEditHandler(this.sessionCache);
     this.presenceHandler = new PresenceHandler(
       sessionManager,
       identityResolver,
@@ -145,6 +148,18 @@ export class MessageHandler implements IMessageHandler {
           event.data.revokedMessageId,
           event.data.revokedBy,
           event.data.fromMe,
+          event.sessionId,
+        );
+      },
+    );
+
+    // ✏️ Message Edits
+    this.eventBus.subscribe(
+      WhatsAppEventType.MESSAGE_EDITED,
+      async (event) => {
+        await this.editHandler.handleEdit(
+          event.data.originalMessageId,
+          event.data.editedMessage,
           event.sessionId,
         );
       },

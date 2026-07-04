@@ -68,6 +68,40 @@ export class ChatSyncBatchIngester {
       return "skipped";
     }
 
+    if (parsed.type === "edit") {
+      const editContent = parsed.content as { originalMessageId?: string } | undefined;
+      const originalMessageId = editContent?.originalMessageId;
+      const editedMessageProto = parsed.msgContent;
+      if (originalMessageId && editedMessageProto) {
+        const fakeMsg: WAMessage = {
+          key: { id: originalMessageId, fromMe: parsed.direction === MessageDirection.OUTBOUND },
+          message: editedMessageProto as import("@whiskeysockets/baileys").proto.IMessage,
+          messageTimestamp: Math.floor(Date.now() / 1000),
+        };
+        const parsedEdit = syncMessageParser.parseContent(fakeMsg);
+        if (parsedEdit?.textContent) {
+          const originalMsg = await messageRepository.findMessageByWhatsAppId(originalMessageId, companyId);
+          if (originalMsg) {
+            const existingMeta = (originalMsg.metadata as Record<string, unknown>) || {};
+            await messageRepository.update(
+              originalMsg.id,
+              {
+                content: parsedEdit.textContent,
+                metadata: {
+                  ...existingMeta,
+                  isEdited: true,
+                  editedAt: new Date().toISOString(),
+                },
+              },
+              companyId
+            );
+            Logger.info(`[ChatSync] [EDIT] Updated message ${originalMessageId} content during history sync`);
+          }
+        }
+      }
+      return "skipped";
+    }
+
     // Media Handling
     let mediaMeta: Record<string, unknown> = {};
     if (parsed.mediaType) {

@@ -353,8 +353,9 @@ export class ChatSyncIngest {
           `Resolved anchor from ${anchorSource}: msg ${oldestMsgKey.id} at ${oldestMsgTimestampMs > 0 ? new Date(oldestMsgTimestampMs).toISOString() : "0"}`
         );
 
+        const oldestMsgTimestampSec = Math.floor(oldestMsgTimestampMs / 1000);
         const fetchFn = (sock as unknown as { fetchMessageHistory: (count: number, key: import("@whiskeysockets/baileys").WAMessageKey, ts: number) => Promise<void> }).fetchMessageHistory;
-        await fetchFn.call(sock, limit, oldestMsgKey, oldestMsgTimestampMs);
+        await fetchFn.call(sock, limit, oldestMsgKey, oldestMsgTimestampSec);
       } else {
         // Fallback: Use chatModify to request sync or presenceSubscribe to wake up the chat
         Logger.info(

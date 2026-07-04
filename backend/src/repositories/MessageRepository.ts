@@ -1,5 +1,5 @@
 import { prisma } from "@/config/database";
-import { Message, Prisma, User, Conversation } from "@prisma/client";
+import { Message, Prisma, User, Conversation, MessageDirection } from "@prisma/client";
 
 export class MessageRepository {
   async findMessageByWhatsAppId(
@@ -12,6 +12,7 @@ export class MessageRepository {
     companyId: string;
     content: string;
     senderId: string;
+    direction: MessageDirection;
     metadata: Prisma.JsonValue | null;
   } | null> {
     return prisma.message.findFirst({
@@ -23,6 +24,7 @@ export class MessageRepository {
         companyId: true,
         content: true,
         senderId: true,
+        direction: true,
         metadata: true,
       },
     });

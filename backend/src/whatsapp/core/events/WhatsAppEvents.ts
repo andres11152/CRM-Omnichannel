@@ -15,6 +15,7 @@ export enum WhatsAppEventType {
   PRESENCE_UPDATE = "presence.update", // [OK] Added for Typing Indicators
   CONTACT_UPDATED = "contact.updated",
   RATE_LIMIT_EXCEEDED = "rate_limit.exceeded",
+  MESSAGE_EDITED = "message.edited",
 }
 
 export interface WhatsAppEventData {
@@ -49,6 +50,10 @@ export interface WhatsAppEventData {
   };
   [WhatsAppEventType.CONTACT_UPDATED]: { contact: Contact };
   [WhatsAppEventType.RATE_LIMIT_EXCEEDED]: { limit: number; current: number };
+  [WhatsAppEventType.MESSAGE_EDITED]: {
+    originalMessageId: string;
+    editedMessage: import("@whiskeysockets/baileys").proto.IMessage;
+  };
 }
 
 export interface WhatsAppEvent<

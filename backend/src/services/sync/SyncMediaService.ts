@@ -109,38 +109,68 @@ export class SyncMediaService {
     const rawMime = (msgObj?.mimetype as string | undefined) || "application/octet-stream";
     const ctx = mediaCtx as unknown as Parameters<typeof downloadMediaMessage>[3];
 
+    let currentMsg = msg;
+    let triedReupload = false;
+
+    const performDownload = async (): Promise<{ stream?: Readable; buffer?: Buffer }> => {
+      // 1. Try stream first
+      try {
+        const stream = await downloadMediaMessage(currentMsg, "stream", {}, ctx);
+        if (stream) return { stream: stream as Readable };
+      } catch {
+        // 2. Try buffer fallback
+        const buffer = await downloadMediaMessage(currentMsg, "buffer", {}, ctx);
+        if (buffer && buffer.length > 0) return { buffer };
+      }
+      throw new Error("No content returned from downloadMediaMessage");
+    };
+
     try {
-      // PRIMARY: Try stream
-      const stream = await downloadMediaMessage(msg, "stream", {}, ctx);
-      if (stream) {
-        const ext = mime.extension(rawMime) || "bin";
-        const filename = `sync_${whatsappMessageId}.${ext}`;
-        const uploadResult = await storageService.uploadStream(companyId, stream as Readable, filename, rawMime);
+      const downloadResult = await performDownload();
+      const ext = mime.extension(rawMime) || "bin";
+      const filename = `sync_${whatsappMessageId}.${ext}`;
+      let uploadResult;
+
+      if (downloadResult.stream) {
+        uploadResult = await storageService.uploadStream(companyId, downloadResult.stream, filename, rawMime);
+      } else if (downloadResult.buffer) {
+        uploadResult = await storageService.uploadStream(companyId, Readable.from(downloadResult.buffer), filename, rawMime);
+      }
+
+      if (uploadResult?.url) {
         return { url: uploadResult.url, mimetype: rawMime };
       }
     } catch (dlErr: unknown) {
-      // FALLBACK: Try buffer
-      try {
-        const buffer = await downloadMediaMessage(msg, "buffer", {}, ctx);
-        if (buffer && buffer.length > 0) {
-          const ext = mime.extension(rawMime) || "bin";
-          const filename = `sync_${whatsappMessageId}.${ext}`;
-          const bufferStream = Readable.from(buffer);
-          const uploadResult = await storageService.uploadStream(companyId, bufferStream, filename, rawMime);
-          return { url: uploadResult.url, mimetype: rawMime };
-        }
-      } catch (bufErr: unknown) {
-        const errorDl = dlErr instanceof Error ? dlErr.message : String(dlErr);
-        const errorBuf = bufErr instanceof Error ? bufErr.message : String(bufErr);
-        const isExpired = 
-          errorDl.includes("403") || errorDl.includes("410") || errorDl.includes("404") ||
-          errorBuf.includes("403") || errorBuf.includes("410") || errorBuf.includes("404");
+      if (mediaCtx?.reuploadRequest && !triedReupload) {
+        try {
+          Logger.info(`[SyncMedia] Primary download failed for ${whatsappMessageId}. Requesting refreshed URLs from phone...`);
+          const refreshedMsg = await mediaCtx.reuploadRequest(msg);
+          if (refreshedMsg && refreshedMsg.message) {
+            currentMsg = refreshedMsg;
+            triedReupload = true;
 
-        if (isExpired) {
-          Logger.debug(`[SyncMedia] [EXPIRED] ${whatsappMessageId} (${mediaType}) no longer on WA servers.`);
-        } else {
-          Logger.debug(`[SyncMedia] [FAILED] ${whatsappMessageId} (${mediaType}): ${errorBuf}`);
+            const retryResult = await performDownload();
+            const ext = mime.extension(rawMime) || "bin";
+            const filename = `sync_${whatsappMessageId}.${ext}`;
+            let uploadResult;
+
+            if (retryResult.stream) {
+              uploadResult = await storageService.uploadStream(companyId, retryResult.stream, filename, rawMime);
+            } else if (retryResult.buffer) {
+              uploadResult = await storageService.uploadStream(companyId, Readable.from(retryResult.buffer), filename, rawMime);
+            }
+
+            if (uploadResult?.url) {
+              return { url: uploadResult.url, mimetype: rawMime };
+            }
+          }
+        } catch (retryErr: unknown) {
+          const errorMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          Logger.warn(`[SyncMedia] Retry download failed for ${whatsappMessageId} after phone URL update: ${errorMsg}`);
         }
+      } else {
+        const errorMsg = dlErr instanceof Error ? dlErr.message : String(dlErr);
+        Logger.debug(`[SyncMedia] [FAILED] ${whatsappMessageId} (${mediaType}): ${errorMsg}`);
       }
     }
 

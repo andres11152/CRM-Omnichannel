@@ -28,7 +28,7 @@ interface WhatsAppMessageContent {
 }
 
 export interface ParsedMessage {
-  type: "message" | "reaction";
+  type: "message" | "reaction" | "edit";
   /** Group/protocol system event (join/leave/subject change) — render centered, not as a bubble. */
   isSystem?: boolean;
   textContent: string;
@@ -182,6 +182,17 @@ export class SyncMessageParser {
       // internal WhatsApp control frames and must not be stored as chat messages.
       if (protoMsg?.type === 0 || String(protoMsg?.type) === "REVOKE") {
         textContent = " Este mensaje fue eliminado";
+      } else if (protoMsg?.type === 14 || String(protoMsg?.type) === "MESSAGE_EDIT") {
+        const protoKey = protoMsg.key as import("@whiskeysockets/baileys").proto.IMessageKey | undefined;
+        return {
+          type: "edit",
+          textContent: "",
+          direction: msg.key.fromMe ? MessageDirection.OUTBOUND : MessageDirection.INBOUND,
+          msgContent: (protoMsg.editedMessage || {}) as WhatsAppMessageContent,
+          content: {
+            originalMessageId: protoKey?.id || ""
+          }
+        };
       } else {
         return null;
       }

@@ -27,18 +27,9 @@ export class SyncMediaService {
     const messageType = msg.message ? getContentType(msg.message) : undefined;
     if (!messageType) return;
 
-    let msgContent = msg.message || {};
-    // Unwrap nested messages
-    if ("ephemeralMessage" in msgContent && msgContent.ephemeralMessage?.message) {
-      msgContent = msgContent.ephemeralMessage.message;
-    }
-    if ("viewOnceMessageV2" in msgContent && msgContent.viewOnceMessageV2?.message) {
-      msgContent = msgContent.viewOnceMessageV2.message;
-    } else if ("viewOnceMessage" in msgContent && msgContent.viewOnceMessage?.message) {
-      msgContent = msgContent.viewOnceMessage.message;
-    } else if ("documentWithCaptionMessage" in msgContent && msgContent.documentWithCaptionMessage?.message) {
-      msgContent = msgContent.documentWithCaptionMessage.message;
-    }
+    const { syncMessageParser } = await import("./SyncMessageParser");
+    const msgContent = syncMessageParser.unwrapContent(msg) as Record<string, unknown> | undefined;
+    if (!msgContent) return;
 
     const baseType = existingMediaType.replace("_unavailable", "");
     const mediaProp = baseType === "audio" ? "audioMessage" : baseType + "Message";
@@ -218,9 +209,10 @@ export class SyncMediaService {
 
     // Attempt to download and upload again
     const mediaType = (meta.mediaType as string) || "document";
-    const msgContent = rawMsg.message as Record<string, unknown> | undefined;
+    const { syncMessageParser } = await import("./SyncMessageParser");
+    const msgContent = syncMessageParser.unwrapContent(rawMsg) as Record<string, unknown> | undefined;
 
-    if (!msgContent) {
+    if (!msgContent || Object.keys(msgContent).length === 0) {
       throw new Error("El mensaje crudo no tiene contenido.");
     }
 

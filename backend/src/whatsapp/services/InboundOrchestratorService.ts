@@ -407,10 +407,16 @@ export class InboundOrchestratorService {
     companyId: string
   ): Promise<MessageMetadata> {
     const quotedInfo = await this.extractQuotedInfo(msg, companyId);
+    // [Baileys 7] Detect sticker messages: stickerMessage maps to MediaType.IMAGE
+    // in the Prisma enum (no STICKER value exists), but the metadata JSON must
+    // carry "sticker" so the frontend renders them with transparent background.
+    const isSticker = content.textContent === "[STICKER]" ||
+      !!(msg.message?.stickerMessage || msg.message?.ephemeralMessage?.message?.stickerMessage);
     return {
       messageId: _id,
       media: content.mediaType ? {
-        type: content.mediaType === MediaType.IMAGE ? "image" :
+        type: isSticker ? "sticker" :
+              content.mediaType === MediaType.IMAGE ? "image" :
               content.mediaType === MediaType.VIDEO ? "video" :
               content.mediaType === MediaType.AUDIO ? "audio" : "document",
         size: content.mediaSize,
@@ -431,7 +437,8 @@ export class InboundOrchestratorService {
                 msg.message?.imageMessage?.contextInfo ||
                 msg.message?.videoMessage?.contextInfo ||
                 msg.message?.audioMessage?.contextInfo ||
-                msg.message?.documentMessage?.contextInfo;
+                msg.message?.documentMessage?.contextInfo ||
+                msg.message?.stickerMessage?.contextInfo;
     
     if (!ctx?.stanzaId) return {};
 

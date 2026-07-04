@@ -128,7 +128,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     message.content === "[AUDIO]" ? "audio" : 
     message.content === "[IMAGE]" ? "image" : 
     message.content === "[VIDEO]" ? "video" : 
-    message.content === "[DOCUMENT]" ? "document" : undefined;
+    message.content === "[DOCUMENT]" ? "document" :
+    message.content === "[STICKER]" ? "sticker" : undefined;
 
   const msgType = 
     mediaObj?.type?.toLowerCase() || 
@@ -275,6 +276,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
 
           {/* Media Content */}
+          {/* Sticker Content — transparent background, no bubble chrome, like WhatsApp */}
           {groupedMessages && groupedMessages.length > 1 ? (() => {
             const total = groupedMessages.length;
             const showCount = Math.min(total, 4);
@@ -324,7 +326,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 })}
               </div>
             );
-          })() : ((msgType === "image" || msgType === "image_unavailable") && (
+          })() : msgType === "sticker" ? (
+            mediaUrl ? (
+              <img
+                src={resolveMediaUrl(mediaUrl)}
+                alt="Sticker"
+                className="mb-1 max-w-[180px] max-h-[180px] object-contain cursor-pointer hover:scale-105 transition-transform drop-shadow-md"
+                onClick={() => onImageClick ? onImageClick(resolveMediaUrl(mediaUrl)) : window.open(resolveMediaUrl(mediaUrl), "_blank")}
+                loading="lazy"
+              />
+            ) : (
+              <UnavailableMediaFallback message={message} type="sticker" />
+            )
+          ) : ((msgType === "image" || msgType === "image_unavailable") && (
             mediaUrl ? (
               <img
                 src={resolveMediaUrl(mediaUrl)}
@@ -489,7 +503,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 (msgType === "image" && upperContent === "[IMAGEN]") ||
                 (msgType === "video" && upperContent === "[VIDEO]") ||
                 (msgType === "audio" && upperContent === "[AUDIO]") ||
-                (msgType === "document" && (upperContent === "[DOCUMENTO]" || upperContent === "[ARCHIVO]"));
+                (msgType === "document" && (upperContent === "[DOCUMENTO]" || upperContent === "[ARCHIVO]")) ||
+                (msgType === "sticker" && (upperContent === "[STICKER]" || upperContent === "[IMAGE]"));
                 
               if (isRedundant) return null;
             }
@@ -675,6 +690,7 @@ const UnavailableMediaFallback: React.FC<{ message: Message; type: string }> = (
       case "image": return "Imagen";
       case "video": return "Video";
       case "audio": return "Audio";
+      case "sticker": return "Sticker";
       default: return "Archivo";
     }
   };

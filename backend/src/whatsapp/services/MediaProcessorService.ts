@@ -145,7 +145,7 @@ export class MediaProcessorService {
             (msgObj?.caption as string) ||
             (msgObj?.text as string) ||
             (msgObj?.fileName as string) ||
-            getMediaPlaceholder(mediaType);
+            (messageType === "stickerMessage" ? "[STICKER]" : getMediaPlaceholder(mediaType));
 
           // [SEC] MAX-SIZE GUARD (50MB Limit)
           const MAX_SIZE = 50 * 1024 * 1024;
@@ -343,6 +343,7 @@ export class MediaProcessorService {
 
   public mapBaileysToMediaType(baileysType: string): MediaType {
     const type = baileysType.toLowerCase();
+    if (type.includes("sticker")) return MediaType.IMAGE;
     if (type.includes("image")) return MediaType.IMAGE;
     if (type.includes("video")) return MediaType.VIDEO;
     if (type.includes("audio")) return MediaType.AUDIO;

@@ -121,8 +121,26 @@ export class ChatSyncIngest {
 
           if (!messages || messages.length === 0) return;
 
+          // [PERF] Cap maximum history sync messages on low-memory containers (Render/Heroku)
+          // to prevent OOM. We prioritize the most recent messages.
+          let messagesToProcess = messages;
+          const MAX_MESSAGES = parseInt(process.env.MAX_HISTORY_SYNC_MESSAGES || "1500", 10);
+          if (!options?.onDemand && messages.length > MAX_MESSAGES) {
+            Logger.info(
+              `[ChatSync] [MEMORY-LIMIT] Capping history messages from ${messages.length} to ${MAX_MESSAGES} to prevent OOM.`
+            );
+            messagesToProcess = [...messages]
+              .sort((a, b) => {
+                const tsA = typeof a.messageTimestamp === "number" ? a.messageTimestamp : 0;
+                const tsB = typeof b.messageTimestamp === "number" ? b.messageTimestamp : 0;
+                return tsB - tsA; // newest first
+              })
+              .slice(0, MAX_MESSAGES)
+              .reverse(); // back to chronological
+          }
+
           // 2. Group Messages by Conversation
-          const msgsByPhone = this.jidResolver.groupMessagesByPhone(messages, store);
+          const msgsByPhone = this.jidResolver.groupMessagesByPhone(messagesToProcess, store);
 
           // 3. Process each conversation. Yield to the event loop between conversations
           // so the API stays responsive even during a large sync.
@@ -138,6 +156,15 @@ export class ChatSyncIngest {
               });
             }
             await new Promise((r) => setImmediate(r));
+            
+            // [HEAP] Proactively clean dereferenced objects on memory-constrained platforms
+            if (global.gc) {
+              try {
+                global.gc();
+              } catch (e) {
+                // Garbage collection is best-effort; ignore errors
+              }
+            }
           }
 
           Logger.info(`[ChatSync] History Ingest Complete for ${companyId}`);

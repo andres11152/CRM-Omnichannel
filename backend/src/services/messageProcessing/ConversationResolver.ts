@@ -188,7 +188,9 @@ export class ConversationResolver {
         `[ConvResolver] [SYNC] Migrating channelId: ${contactConversation.channelId} -> ${phone}`,
       );
       try {
-        return await conversationRepository.update(companyId, contactConversation.id, {});
+        return await conversationRepository.update(companyId, contactConversation.id, {
+          channelId: phone,
+        });
       } catch (error: unknown) {
         if (isPrismaError(error) && error.code === "P2002") {
           Logger.warn(`[ConvResolver] [WARNING] Migration conflict. Using existing.`);

@@ -166,24 +166,50 @@ class TicketService {
   async getTicketById(
     ticketId: string,
     companyId: string,
-    _userId: string,
+    userId: string,
     _userRole: string,
   ): Promise<TicketDTO> {
-    const ticket = await ticketRepository.findUnique({
-      where: { id: ticketId },
-      include: {
-        createdBy: true,
-        assignedTo: true,
-        queue: true,
-        conversation: {
-          include: {
-            participants: true,
-            contact: true,
-            messages: { take: 1, orderBy: { createdAt: "desc" } },
-          },
+    const include = {
+      createdBy: true,
+      assignedTo: true,
+      queue: true,
+      conversation: {
+        include: {
+          participants: true,
+          contact: true,
+          messages: { take: 1, orderBy: { createdAt: "desc" } as const },
         },
       },
+    };
+
+    let ticket = await ticketRepository.findUnique({
+      where: { id: ticketId },
+      include,
     });
+
+    // [RACE FIX] Same lazy-ticket race as updateTicket: a conversation synced
+    // in (live inbound or history sync) has no Ticket row until someone acts
+    // on it. A GET before any PATCH — e.g. opening a just-synced chat — must
+    // materialize the ticket too, or it reproduces the "ya no existe" 404
+    // on the read path instead of the write path.
+    if (!ticket) {
+      const conversation = await conversationRepository.findFirst({
+        where: { id: ticketId, companyId },
+      });
+      if (conversation) {
+        await ticketSyncService.ensureActiveTicket({
+          companyId,
+          conversationId: conversation.id,
+          agentId: userId,
+          subject: conversation.subject || "Nueva conversación",
+          description: "Ticket creado al abrir la conversación",
+        });
+        ticket = await ticketRepository.findFirst({
+          where: { conversationId: conversation.id },
+          include,
+        });
+      }
+    }
 
     if (!ticket || ticket.deletedAt) throw new AppError("Ticket not found", 404);
     if (ticket.companyId !== companyId) throw new AppError("Permission denied", 403);

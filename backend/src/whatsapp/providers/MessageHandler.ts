@@ -310,6 +310,38 @@ export class MessageHandler implements IMessageHandler {
     }
   }
 
+  /**
+   * [SEC] Persists a QUEUED DB row *before* enqueueing, mirroring
+   * WhatsAppMessaging.sendMessage's proven pattern for the manual pipeline.
+   * Without this, a failed AI/flow-bot send left zero trace anywhere:
+   * OutboundWorker's "failed" handler had nothing to mark FAILED (no dbId
+   * existed), so the message just silently vanished behind a log line —
+   * invisible to agents and impossible to diagnose from the product.
+   */
+  private async createQueuedRow(
+    content: string,
+    options: SendMessageOptions,
+    generatedId: string,
+    extraMetadata?: Record<string, unknown>,
+  ) {
+    const { chatService } = await import("@/services/ChatService");
+    return chatService.upsertMessage({
+      whatsappMessageId: generatedId,
+      companyId: options.companyId,
+      content,
+      direction: "OUTBOUND",
+      conversationId: options.conversationId,
+      senderId: options.senderId,
+      status: "QUEUED",
+      metadata: {
+        ...options.metadata,
+        ...extraMetadata,
+        isQueued: true,
+        generatedMessageId: generatedId,
+      },
+    });
+  }
+
   async sendMessage(
     to: string,
     content: string,
@@ -320,11 +352,26 @@ export class MessageHandler implements IMessageHandler {
       options,
     );
 
+    const { generateMessageID } = await import("@whiskeysockets/baileys");
+    const generatedId = generateMessageID();
+    const savedMessage = await this.createQueuedRow(content, options, generatedId);
+
     const job = await getWhatsAppQueue().outboundQueue.add(
       "send-text",
       {
         type: "text",
-        payload: { to, content, options },
+        payload: {
+          to,
+          content,
+          options: {
+            ...options,
+            metadata: {
+              ...options.metadata,
+              dbId: savedMessage.id,
+              generatedMessageId: generatedId,
+            },
+          },
+        },
       },
       {
         delay,
@@ -340,6 +387,7 @@ export class MessageHandler implements IMessageHandler {
       content,
       messageId: `job:${job.id}`,
       timestamp: new Date(),
+      dbId: savedMessage.id,
     } as MessagePayload;
   }
 
@@ -353,11 +401,30 @@ export class MessageHandler implements IMessageHandler {
       options,
     );
 
+    const { generateMessageID } = await import("@whiskeysockets/baileys");
+    const { getMediaPlaceholder } = await import("@/utils/mediaUtils");
+    const generatedId = generateMessageID();
+    const placeholderContent = media.caption || getMediaPlaceholder(media.type);
+    const savedMessage = await this.createQueuedRow(placeholderContent, options, generatedId, {
+      media: { type: media.type, url: media.url },
+    });
+
     const job = await getWhatsAppQueue().outboundQueue.add(
       "send-media",
       {
         type: "media",
-        payload: { to, media, options },
+        payload: {
+          to,
+          media,
+          options: {
+            ...options,
+            metadata: {
+              ...options.metadata,
+              dbId: savedMessage.id,
+              generatedMessageId: generatedId,
+            },
+          },
+        },
       },
       {
         delay,
@@ -373,6 +440,7 @@ export class MessageHandler implements IMessageHandler {
       content: media.caption || "Media",
       messageId: `job:${job.id}`,
       timestamp: new Date(),
+      dbId: savedMessage.id,
     } as MessagePayload;
   }
 

@@ -77,12 +77,17 @@ export class OutboundWorker {
 
           // Fatal errors: retrying will never succeed — mark as unrecoverable so
           // BullMQ skips remaining attempts and immediately fires the 'failed' event.
+          // [SEC] "no active whatsapp session" is NOT fatal: findActiveSessionForCompany
+          // returns null (and this error) during the normal auto-heal window while a
+          // zombie/reconnecting socket comes back up (SessionManager kicks off a
+          // background reconnect and returns null for the current call). Treating it
+          // as fatal permanently discarded AI/flow-bot replies on every brief reconnect
+          // blip, with zero trace (no DB row, no FAILED status, nothing in the UI).
           const FATAL_PATTERNS = [
             "not on whatsapp",
             "not-on-whatsapp",
             "invalid phone",
             "invalid number",
-            "no active whatsapp session",
             "bad jid",
             "recipient is not on whatsapp",
           ];
@@ -93,9 +98,23 @@ export class OutboundWorker {
           throw error; // Retriable — let BullMQ retry
         }
       },
-      { 
+      {
         connection: redis,
-        concurrency: 5, // Send up to 5 messages/media concurrently
+        // [SEC] Concurrency MUST be 1, mirroring messageQueueWorker.ts's fix for the
+        // exact same bug class: with concurrency>1, two jobs for the same conversation
+        // (e.g. a 3-message flow-bot reply) can be picked up by different workers and
+        // finish their async work (JID resolution, media upload) in either order,
+        // dispatching to WhatsApp out of enqueue order. A per-conversation
+        // DistributedLock does NOT fix this — see messageQueueWorker.ts's comment:
+        // the lock's retry/jitter has no FIFO guarantee, so lock+concurrency was tried
+        // and reverted for the manual pipeline. This queue is global across companies
+        // (not per-company like the manual one), so concurrency=1 serializes AI/flow
+        // sends platform-wide; acceptable because these sends already carry a
+        // deliberate 2-5s human-like delay (getOutboundDelayAndPriority) before
+        // reaching this worker. If multi-tenant throughput becomes a bottleneck,
+        // the correct fix is per-company queues like messageQueueService, not raising
+        // this number back up.
+        concurrency: 1,
       }
     );
 
@@ -108,9 +127,13 @@ export class OutboundWorker {
 
       // [FIX] Update message status to FAILED in DB so UI reflects reality.
       // Without this, messages stay as "QUEUED" forever, misleading agents.
-      if (job?.data?.payload?.options?.dbId) {
+      // [SEC] dbId lives at options.metadata.dbId, not options.dbId — that's where
+      // OutboundMessageHandler.sendMessage/sendMedia actually read it from
+      // (handlePostSend's `dbId: metadata?.dbId`). This was reading the wrong path
+      // and always finding undefined, so failed AI/flow-bot sends never got marked.
+      if (job?.data?.payload?.options?.metadata?.dbId) {
         try {
-          const dbId = job.data.payload.options.dbId as string;
+          const dbId = job.data.payload.options.metadata.dbId as string;
           const companyId = job.data.payload.options.companyId as string;
           if (companyId) {
             await runWithCompanyId(companyId, async () => {

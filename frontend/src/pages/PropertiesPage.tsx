@@ -18,6 +18,7 @@ import {
   KIND_LABELS,
   STATUS_LABELS,
   STATUS_COLORS,
+  PROPERTY_KIND_GROUPS,
   formatCOP,
 } from "@/types/property.types";
 
@@ -103,8 +104,8 @@ const PropertyCard: React.FC<{
           {property.parkingSpots != null && (
             <span className="flex items-center gap-1"><Car className="w-3.5 h-3.5" />{property.parkingSpots}</span>
           )}
-          {property.builtArea != null && (
-            <span className="flex items-center gap-1"><Ruler className="w-3.5 h-3.5" />{property.builtArea}m²</span>
+          {(property.builtArea ?? property.lotArea) != null && (
+            <span className="flex items-center gap-1"><Ruler className="w-3.5 h-3.5" />{property.builtArea ?? property.lotArea}m²</span>
           )}
           {property.stratum != null && (
             <span className="ml-auto text-[10px] font-semibold">Estrato {property.stratum}</span>
@@ -251,16 +252,18 @@ export const PropertiesPage: React.FC = () => {
             <option key={v} value={v}>{l}</option>
           ))}
         </select>
-        <select
-          className={selectCls}
-          value={filters.stratum ?? ""}
-          onChange={(e) => setFilter({ stratum: e.target.value ? Number(e.target.value) : undefined })}
-        >
-          <option value="">Estrato</option>
-          {[1, 2, 3, 4, 5, 6].map((s) => (
-            <option key={s} value={s}>Estrato {s}</option>
-          ))}
-        </select>
+        {(!filters.kind || PROPERTY_KIND_GROUPS[filters.kind] !== "COMERCIAL") && (
+          <select
+            className={selectCls}
+            value={filters.stratum ?? ""}
+            onChange={(e) => setFilter({ stratum: e.target.value ? Number(e.target.value) : undefined })}
+          >
+            <option value="">Estrato</option>
+            {[1, 2, 3, 4, 5, 6].map((s) => (
+              <option key={s} value={s}>Estrato {s}</option>
+            ))}
+          </select>
+        )}
         <select
           className={selectCls}
           value={filters.sort ?? "newest"}

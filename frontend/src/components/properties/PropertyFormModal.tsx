@@ -14,10 +14,16 @@ import {
   type Property,
   type PropertyCatalog,
   type CreatePropertyPayload,
+  type PropertyKind,
+  type PropertyAdaptiveField,
   OPERATION_LABELS,
   KIND_LABELS,
   STATUS_LABELS,
   CONDITION_LABELS,
+  POWER_TYPE_LABELS,
+  PROPERTY_KIND_GROUPS,
+  KIND_FIELDS,
+  KIND_TITLE_PLACEHOLDERS,
 } from "@/types/property.types";
 
 interface Props {
@@ -60,6 +66,33 @@ const selectCls =
 
 const num = (v: string): number | undefined => (v === "" ? undefined : Number(v));
 
+/** Tipos donde lo normal es que el inmueble esté dentro de un conjunto/edificio compartido. */
+const KINDS_TYPICALLY_IN_COMPLEX = new Set([
+  "APARTAMENTO",
+  "APARTAESTUDIO",
+  "OFICINA",
+  "LOCAL_COMERCIAL",
+  "EDIFICIO",
+]);
+
+/** Valor de reset por campo adaptativo, para limpiar lo que queda oculto al cambiar de tipo. */
+const ADAPTIVE_RESET: Record<PropertyAdaptiveField, undefined | null> = {
+  builtArea: undefined,
+  privateArea: undefined,
+  lotArea: undefined,
+  bedrooms: undefined,
+  bathrooms: undefined,
+  parkingSpots: undefined,
+  floor: undefined,
+  totalFloors: undefined,
+  yearBuilt: undefined,
+  stratum: undefined,
+  condition: null,
+  permittedUse: undefined,
+  frontage: undefined,
+  depth: undefined,
+};
+
 export const PropertyFormModal: React.FC<Props> = ({
   isOpen,
   onClose,
@@ -101,6 +134,7 @@ export const PropertyFormModal: React.FC<Props> = ({
             country: "Colombia",
             features: [],
             amenities: [],
+            isInComplex: true,
           },
     );
   }, [property, isOpen]);
@@ -120,6 +154,62 @@ export const PropertyFormModal: React.FC<Props> = ({
     () => (form.department && catalog ? catalog.cities[form.department] ?? [] : []),
     [form.department, catalog],
   );
+
+  /**
+   * Al cambiar el tipo de inmueble, limpia todos los campos que quedan ocultos
+   * para el nuevo tipo (según KIND_FIELDS) — evita guardar datos "invisibles"
+   * (p.ej. 3 habitaciones en un parqueadero) que el usuario ya no puede ver
+   * ni corregir en el formulario.
+   */
+  const handleKindChange = (kindValue: string) => {
+    const kind = kindValue as PropertyKind;
+    const newGroup = PROPERTY_KIND_GROUPS[kind];
+    const visible = new Set<PropertyAdaptiveField>(KIND_FIELDS[kind]);
+    const patch: Partial<FormState> = {
+      kind: kind as never,
+      isInComplex: KINDS_TYPICALLY_IN_COMPLEX.has(kindValue),
+    };
+    (Object.keys(ADAPTIVE_RESET) as PropertyAdaptiveField[]).forEach((field) => {
+      if (!visible.has(field)) {
+        (patch as Record<string, unknown>)[field] = ADAPTIVE_RESET[field];
+      }
+    });
+    if (newGroup !== "COMERCIAL") {
+      // permittedUse ya lo maneja el loop genérico de arriba (vía KIND_FIELDS,
+      // que incluye LOTE) — aquí solo van los campos 100% exclusivos de comercial.
+      Object.assign(patch, {
+        ceilingHeight: undefined,
+        hasLoadingDock: false,
+        hasShowcase: false,
+        isCornerLot: false,
+        hasMezzanine: false,
+        powerType: null,
+      });
+    }
+    if (newGroup === "OTROS") {
+      Object.assign(patch, { features: [], amenities: [] });
+    }
+    set(patch);
+  };
+
+  const group = form.kind ? PROPERTY_KIND_GROUPS[form.kind] : "RESIDENCIAL";
+  const isComercial = group === "COMERCIAL";
+  // LOTE/PARQUEADERO/OTRO son activos sin espacios habitables: no aplican
+  // características ni amenidades (ni del inmueble ni del conjunto).
+  const showFeaturesSection = group !== "OTROS";
+  /** ¿El tipo actual usa este campo? (matriz KIND_FIELDS) */
+  const show = (field: PropertyAdaptiveField): boolean =>
+    form.kind ? KIND_FIELDS[form.kind].includes(field) : true;
+  const featureOptions = catalog
+    ? isComercial
+      ? catalog.commercialFeatures
+      : catalog.features
+    : [];
+  const amenityOptions = catalog
+    ? isComercial
+      ? catalog.commercialAmenities
+      : catalog.amenities
+    : [];
 
   const handleSubmit = async () => {
     if (!form.title || form.title.trim().length < 3) {
@@ -176,7 +266,7 @@ export const PropertyFormModal: React.FC<Props> = ({
             <Input
               value={form.title ?? ""}
               onChange={(e) => set({ title: e.target.value })}
-              placeholder="Apartamento amplio en Chapinero"
+              placeholder={form.kind ? KIND_TITLE_PLACEHOLDERS[form.kind] : "Título del inmueble"}
             />
           </Field>
           <Field label="Tipo de negocio">
@@ -196,7 +286,7 @@ export const PropertyFormModal: React.FC<Props> = ({
             <select
               className={selectCls}
               value={form.kind}
-              onChange={(e) => set({ kind: e.target.value as never })}
+              onChange={(e) => handleKindChange(e.target.value)}
             >
               {Object.entries(KIND_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>
@@ -218,20 +308,22 @@ export const PropertyFormModal: React.FC<Props> = ({
               ))}
             </select>
           </Field>
-          <Field label="Estado físico">
-            <select
-              className={selectCls}
-              value={form.condition ?? ""}
-              onChange={(e) => set({ condition: (e.target.value || null) as never })}
-            >
-              <option value="">—</option>
-              {Object.entries(CONDITION_LABELS).map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {show("condition") && (
+            <Field label="Estado físico">
+              <select
+                className={selectCls}
+                value={form.condition ?? ""}
+                onChange={(e) => set({ condition: (e.target.value || null) as never })}
+              >
+                <option value="">—</option>
+                {Object.entries(CONDITION_LABELS).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Descripción" full>
             <textarea
               className={selectCls}
@@ -279,73 +371,218 @@ export const PropertyFormModal: React.FC<Props> = ({
           </label>
         </Section>
 
-        {/* ÁREAS Y DISTRIBUCIÓN */}
-        <Section title="Áreas y distribución">
-          <Field label="Área construida (m²)">
-            <Input
-              type="number"
-              value={form.builtArea ?? ""}
-              onChange={(e) => set({ builtArea: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Área privada (m²)">
-            <Input
-              type="number"
-              value={form.privateArea ?? ""}
-              onChange={(e) => set({ privateArea: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Habitaciones">
-            <Input
-              type="number"
-              value={form.bedrooms ?? ""}
-              onChange={(e) => set({ bedrooms: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Baños">
-            <Input
-              type="number"
-              step="0.5"
-              value={form.bathrooms ?? ""}
-              onChange={(e) => set({ bathrooms: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Parqueaderos">
-            <Input
-              type="number"
-              value={form.parkingSpots ?? ""}
-              onChange={(e) => set({ parkingSpots: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Estrato (1-6)">
-            <select
-              className={selectCls}
-              value={form.stratum ?? ""}
-              onChange={(e) => set({ stratum: num(e.target.value) })}
-            >
-              <option value="">—</option>
-              {[1, 2, 3, 4, 5, 6].map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Piso / nivel">
-            <Input
-              type="number"
-              value={form.floor ?? ""}
-              onChange={(e) => set({ floor: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Año de construcción">
-            <Input
-              type="number"
-              value={form.yearBuilt ?? ""}
-              onChange={(e) => set({ yearBuilt: num(e.target.value) })}
-            />
-          </Field>
+        {/* ÁREAS Y DISTRIBUCIÓN — cada campo aparece solo si aplica al tipo (KIND_FIELDS) */}
+        <Section title={form.kind === "LOTE" ? "Dimensiones del lote" : "Áreas y distribución"}>
+          {show("builtArea") && (
+            <Field label={form.kind === "PARQUEADERO" ? "Área (m²)" : "Área construida (m²)"}>
+              <Input
+                type="number"
+                value={form.builtArea ?? ""}
+                onChange={(e) => set({ builtArea: num(e.target.value) })}
+              />
+            </Field>
+          )}
+          {show("privateArea") && (
+            <Field label="Área privada (m²)">
+              <Input
+                type="number"
+                value={form.privateArea ?? ""}
+                onChange={(e) => set({ privateArea: num(e.target.value) })}
+              />
+            </Field>
+          )}
+          {show("lotArea") && (
+            <Field label="Área del lote (m²)">
+              <Input
+                type="number"
+                value={form.lotArea ?? ""}
+                onChange={(e) => set({ lotArea: num(e.target.value) })}
+              />
+            </Field>
+          )}
+          {/* Frente/fondo del LOTE; en comerciales se capturan en "Datos comerciales" */}
+          {show("frontage") && !isComercial && (
+            <>
+              <Field label="Frente (m)">
+                <Input
+                  type="number"
+                  value={form.frontage ?? ""}
+                  onChange={(e) => set({ frontage: num(e.target.value) })}
+                />
+              </Field>
+              <Field label="Fondo (m)">
+                <Input
+                  type="number"
+                  value={form.depth ?? ""}
+                  onChange={(e) => set({ depth: num(e.target.value) })}
+                />
+              </Field>
+            </>
+          )}
+          {/* Uso del suelo del LOTE; en comerciales va en "Datos comerciales" */}
+          {show("permittedUse") && !isComercial && (
+            <Field label="Uso del suelo permitido (POT)" full>
+              <Input
+                value={form.permittedUse ?? ""}
+                onChange={(e) => set({ permittedUse: e.target.value })}
+                placeholder="Residencial multifamiliar, comercial, industrial…"
+              />
+            </Field>
+          )}
+          {show("bedrooms") && (
+            <Field label="Habitaciones">
+              <Input
+                type="number"
+                value={form.bedrooms ?? ""}
+                onChange={(e) => set({ bedrooms: num(e.target.value) })}
+              />
+            </Field>
+          )}
+          {show("bathrooms") && (
+            <Field label="Baños">
+              <Input
+                type="number"
+                step="0.5"
+                value={form.bathrooms ?? ""}
+                onChange={(e) => set({ bathrooms: num(e.target.value) })}
+              />
+            </Field>
+          )}
+          {show("parkingSpots") && (
+            <Field label="Parqueaderos">
+              <Input
+                type="number"
+                value={form.parkingSpots ?? ""}
+                onChange={(e) => set({ parkingSpots: num(e.target.value) })}
+              />
+            </Field>
+          )}
+          {show("stratum") && (
+            <Field label="Estrato (1-6)">
+              <select
+                className={selectCls}
+                value={form.stratum ?? ""}
+                onChange={(e) => set({ stratum: num(e.target.value) })}
+              >
+                <option value="">—</option>
+                {[1, 2, 3, 4, 5, 6].map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          {show("floor") && (
+            <Field label="Piso / nivel">
+              <Input
+                type="number"
+                value={form.floor ?? ""}
+                onChange={(e) => set({ floor: num(e.target.value) })}
+              />
+            </Field>
+          )}
+          {show("totalFloors") && (
+            <Field label="Total de pisos">
+              <Input
+                type="number"
+                value={form.totalFloors ?? ""}
+                onChange={(e) => set({ totalFloors: num(e.target.value) })}
+              />
+            </Field>
+          )}
+          {show("yearBuilt") && (
+            <Field label="Año de construcción">
+              <Input
+                type="number"
+                value={form.yearBuilt ?? ""}
+                onChange={(e) => set({ yearBuilt: num(e.target.value) })}
+              />
+            </Field>
+          )}
         </Section>
+
+        {/* DATOS COMERCIALES — solo locales, oficinas, bodegas, consultorios, edificios */}
+        {isComercial && (
+          <Section title="Datos comerciales">
+            <Field label="Frente (m)">
+              <Input
+                type="number"
+                value={form.frontage ?? ""}
+                onChange={(e) => set({ frontage: num(e.target.value) })}
+              />
+            </Field>
+            <Field label="Fondo (m)">
+              <Input
+                type="number"
+                value={form.depth ?? ""}
+                onChange={(e) => set({ depth: num(e.target.value) })}
+              />
+            </Field>
+            <Field label="Altura libre (m)">
+              <Input
+                type="number"
+                value={form.ceilingHeight ?? ""}
+                onChange={(e) => set({ ceilingHeight: num(e.target.value) })}
+              />
+            </Field>
+            <Field label="Acometida eléctrica">
+              <select
+                className={selectCls}
+                value={form.powerType ?? ""}
+                onChange={(e) => set({ powerType: (e.target.value || null) as never })}
+              >
+                <option value="">—</option>
+                {Object.entries(POWER_TYPE_LABELS).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Uso del suelo permitido (POT)" full>
+              <Input
+                value={form.permittedUse ?? ""}
+                onChange={(e) => set({ permittedUse: e.target.value })}
+                placeholder="Comercial, industria liviana, servicios…"
+              />
+            </Field>
+            <div className="sm:col-span-2 flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!form.hasLoadingDock}
+                  onChange={(e) => set({ hasLoadingDock: e.target.checked })}
+                />
+                Muelle de carga
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!form.hasShowcase}
+                  onChange={(e) => set({ hasShowcase: e.target.checked })}
+                />
+                Vitrina a la calle
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!form.isCornerLot}
+                  onChange={(e) => set({ isCornerLot: e.target.checked })}
+                />
+                Esquinero
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!form.hasMezzanine}
+                  onChange={(e) => set({ hasMezzanine: e.target.checked })}
+                />
+                Entrepiso / mezzanine
+              </label>
+            </div>
+          </Section>
+        )}
 
         {/* UBICACIÓN */}
         <Section title="Ubicación">
@@ -431,13 +668,13 @@ export const PropertyFormModal: React.FC<Props> = ({
           </label>
         </Section>
 
-        {/* CARACTERÍSTICAS */}
-        {catalog && (
+        {/* CARACTERÍSTICAS — sin sentido en activos sin espacios habitables (lote, parqueadero, otro) */}
+        {catalog && showFeaturesSection && (
           <Section title="Características y amenidades">
             <div className="sm:col-span-2">
               <p className="text-xs font-semibold text-gray-500 mb-1">Del inmueble</p>
               <div className="flex flex-wrap gap-1.5">
-                {catalog.features.map((f) => (
+                {featureOptions.map((f) => (
                   <button
                     key={f}
                     type="button"
@@ -453,25 +690,40 @@ export const PropertyFormModal: React.FC<Props> = ({
                 ))}
               </div>
             </div>
-            <div className="sm:col-span-2 mt-2">
-              <p className="text-xs font-semibold text-gray-500 mb-1">Del conjunto</p>
-              <div className="flex flex-wrap gap-1.5">
-                {catalog.amenities.map((a) => (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={() => toggleArray("amenities", a)}
-                    className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-                      form.amenities?.includes(a)
-                        ? "bg-reply-brand text-white border-reply-brand"
-                        : "border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300"
-                    }`}
-                  >
-                    {a}
-                  </button>
-                ))}
+            <label className="flex items-center gap-2 text-sm sm:col-span-2 mt-2">
+              <input
+                type="checkbox"
+                checked={!!form.isInComplex}
+                onChange={(e) =>
+                  set({
+                    isInComplex: e.target.checked,
+                    ...(!e.target.checked && { amenities: [] }),
+                  })
+                }
+              />
+              Está dentro de un conjunto cerrado o edificio con zonas comunes compartidas
+            </label>
+            {form.isInComplex && (
+              <div className="sm:col-span-2 mt-2">
+                <p className="text-xs font-semibold text-gray-500 mb-1">Del conjunto</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {amenityOptions.map((a) => (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => toggleArray("amenities", a)}
+                      className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                        form.amenities?.includes(a)
+                          ? "bg-reply-brand text-white border-reply-brand"
+                          : "border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300"
+                      }`}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </Section>
         )}
 

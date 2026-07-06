@@ -46,6 +46,7 @@ const CONDITIONS = [
   "EN_CONSTRUCCION",
   "REMODELADO",
 ] as const;
+const POWER_TYPES = ["MONOFASICA", "BIFASICA", "TRIFASICA"] as const;
 
 // Campos compartidos entre create y update (sin required).
 const propertyBody = {
@@ -86,6 +87,16 @@ const propertyBody = {
   commissionPct: z.number().min(0).max(100).optional().nullable(),
   features: z.array(z.string()).optional(),
   amenities: z.array(z.string()).optional(),
+  frontage: z.number().min(0).optional().nullable(),
+  depth: z.number().min(0).optional().nullable(),
+  ceilingHeight: z.number().min(0).optional().nullable(),
+  hasLoadingDock: z.boolean().optional(),
+  hasShowcase: z.boolean().optional(),
+  isCornerLot: z.boolean().optional(),
+  hasMezzanine: z.boolean().optional(),
+  powerType: z.enum(POWER_TYPES).optional().nullable(),
+  permittedUse: z.string().max(500).optional().nullable(),
+  isInComplex: z.boolean().optional(),
   videoUrl: emptyToUndefined(
     z.string().url("Debe ser una URL válida.").optional().nullable(),
   ),

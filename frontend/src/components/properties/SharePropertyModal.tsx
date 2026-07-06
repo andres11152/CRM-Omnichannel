@@ -22,10 +22,17 @@ const publicUrl = (publicId: string) => `${window.location.origin}/p/${publicId}
 
 /** Arma el mensaje de WhatsApp con los datos clave del inmueble + enlace de la ficha pública. */
 const buildPropertyMessage = (property: Property): string => {
+  // Basado en qué campos tiene datos, no en el grupo del kind — un LOTE
+  // también tiene frente/fondo aunque no sea "comercial", por ejemplo.
   const specs: string[] = [];
+  if (property.builtArea != null) specs.push(`${property.builtArea} m² construidos`);
+  if (property.lotArea != null) specs.push(`${property.lotArea} m² de lote`);
   if (property.bedrooms != null) specs.push(`${property.bedrooms} hab.`);
   if (property.bathrooms != null) specs.push(`${property.bathrooms} baños`);
-  if (property.builtArea != null) specs.push(`${property.builtArea} m²`);
+  if (property.frontage != null) specs.push(`Frente ${property.frontage} m`);
+  if (property.depth != null) specs.push(`Fondo ${property.depth} m`);
+  if (property.ceilingHeight != null) specs.push(`Altura ${property.ceilingHeight} m`);
+  if (property.hasLoadingDock) specs.push("Muelle de carga");
   if (property.stratum != null) specs.push(`Estrato ${property.stratum}`);
 
   const location = [property.neighborhood, property.city].filter(Boolean).join(", ");

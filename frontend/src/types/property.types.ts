@@ -35,6 +35,93 @@ export type PropertyCondition =
   | "EN_CONSTRUCCION"
   | "REMODELADO";
 
+export type PropertyPowerType = "MONOFASICA" | "BIFASICA" | "TRIFASICA";
+
+export type PropertyKindGroup = "RESIDENCIAL" | "COMERCIAL" | "OTROS";
+
+/**
+ * Agrupación de `kind` para adaptar formularios/vistas (habitaciones/baños/estrato
+ * solo aplican a RESIDENCIAL; frente/fondo/altura/muelle de carga a COMERCIAL).
+ * Duplicado en `backend/src/constants/propertyCatalogs.ts` — mantener sincronizado.
+ */
+export const PROPERTY_KIND_GROUPS: Record<PropertyKind, PropertyKindGroup> = {
+  APARTAMENTO: "RESIDENCIAL",
+  CASA: "RESIDENCIAL",
+  APARTAESTUDIO: "RESIDENCIAL",
+  CASA_CAMPESTRE: "RESIDENCIAL",
+  FINCA: "RESIDENCIAL",
+  HABITACION: "RESIDENCIAL",
+  LOCAL_COMERCIAL: "COMERCIAL",
+  OFICINA: "COMERCIAL",
+  BODEGA: "COMERCIAL",
+  CONSULTORIO: "COMERCIAL",
+  EDIFICIO: "COMERCIAL",
+  LOTE: "OTROS",
+  PARQUEADERO: "OTROS",
+  OTRO: "OTROS",
+};
+
+/** Campos del formulario cuya visibilidad depende del tipo de inmueble. */
+export type PropertyAdaptiveField =
+  | "builtArea"
+  | "privateArea"
+  | "lotArea"
+  | "bedrooms"
+  | "bathrooms"
+  | "parkingSpots"
+  | "floor"
+  | "totalFloors"
+  | "yearBuilt"
+  | "stratum"
+  | "condition"
+  | "frontage"
+  | "depth"
+  | "permittedUse";
+
+/**
+ * Matriz de campos relevantes por tipo de inmueble (mercado CO).
+ * Lo que no esté aquí se oculta en el formulario y se limpia al cambiar de tipo:
+ * un parqueadero no tiene habitaciones, un lote no tiene año de construcción, etc.
+ * En tipos comerciales `frontage`/`depth`/`permittedUse` se capturan en la
+ * sección "Datos comerciales"; en LOTE se muestran dentro de "Áreas" (un lote
+ * también tiene frente, fondo y uso del suelo permitido — sin sección
+ * comercial, porque LOTE es grupo OTROS, no COMERCIAL).
+ */
+export const KIND_FIELDS: Record<PropertyKind, readonly PropertyAdaptiveField[]> = {
+  APARTAMENTO: ["builtArea", "privateArea", "bedrooms", "bathrooms", "parkingSpots", "floor", "yearBuilt", "stratum", "condition"],
+  APARTAESTUDIO: ["builtArea", "privateArea", "bedrooms", "bathrooms", "parkingSpots", "floor", "yearBuilt", "stratum", "condition"],
+  CASA: ["builtArea", "privateArea", "lotArea", "bedrooms", "bathrooms", "parkingSpots", "totalFloors", "yearBuilt", "stratum", "condition"],
+  CASA_CAMPESTRE: ["builtArea", "lotArea", "bedrooms", "bathrooms", "parkingSpots", "totalFloors", "yearBuilt", "stratum", "condition"],
+  FINCA: ["builtArea", "lotArea", "bedrooms", "bathrooms", "parkingSpots", "yearBuilt", "condition"],
+  HABITACION: ["builtArea", "bathrooms", "floor", "stratum", "condition"],
+  LOCAL_COMERCIAL: ["builtArea", "privateArea", "parkingSpots", "floor", "yearBuilt", "condition", "frontage", "depth", "permittedUse"],
+  OFICINA: ["builtArea", "privateArea", "parkingSpots", "floor", "yearBuilt", "condition", "frontage", "depth", "permittedUse"],
+  BODEGA: ["builtArea", "lotArea", "parkingSpots", "yearBuilt", "condition", "frontage", "depth", "permittedUse"],
+  CONSULTORIO: ["builtArea", "parkingSpots", "floor", "yearBuilt", "condition", "frontage", "depth", "permittedUse"],
+  EDIFICIO: ["builtArea", "lotArea", "totalFloors", "parkingSpots", "yearBuilt", "condition", "frontage", "depth", "permittedUse"],
+  LOTE: ["lotArea", "frontage", "depth", "permittedUse"],
+  PARQUEADERO: ["builtArea", "floor"],
+  OTRO: ["builtArea", "lotArea", "parkingSpots", "yearBuilt", "condition"],
+};
+
+/** Placeholder del título según el tipo, para guiar al asesor. */
+export const KIND_TITLE_PLACEHOLDERS: Record<PropertyKind, string> = {
+  APARTAMENTO: "Apartamento amplio en Chapinero",
+  CASA: "Casa de dos pisos en Cedritos",
+  APARTAESTUDIO: "Apartaestudio moderno en Palermo",
+  CASA_CAMPESTRE: "Casa campestre en Anapoima",
+  LOCAL_COMERCIAL: "Local comercial sobre vía principal",
+  OFICINA: "Oficina en el Centro Internacional",
+  BODEGA: "Bodega industrial en Fontibón",
+  CONSULTORIO: "Consultorio en torre médica",
+  LOTE: "Lote urbanizable en Rionegro",
+  FINCA: "Finca productiva en el Quindío",
+  PARQUEADERO: "Parqueadero cubierto en Chapinero",
+  HABITACION: "Habitación amoblada cerca a la universidad",
+  EDIFICIO: "Edificio rentable en El Poblado",
+  OTRO: "Describe tu inmueble",
+};
+
 export interface PropertyImage {
   id: string;
   url: string;
@@ -96,6 +183,16 @@ export interface Property {
   commissionPct?: number | null;
   features: string[];
   amenities: string[];
+  frontage?: number | null;
+  depth?: number | null;
+  ceilingHeight?: number | null;
+  hasLoadingDock: boolean;
+  hasShowcase: boolean;
+  isCornerLot: boolean;
+  hasMezzanine: boolean;
+  powerType?: PropertyPowerType | null;
+  permittedUse?: string | null;
+  isInComplex: boolean;
   videoUrl?: string | null;
   virtualTourUrl?: string | null;
   ownerContactId?: string | null;
@@ -146,8 +243,11 @@ export interface PropertyCatalog {
   statuses: PropertyStatus[];
   conditions: PropertyCondition[];
   strata: number[];
+  powerTypes: PropertyPowerType[];
   features: string[];
   amenities: string[];
+  commercialFeatures: string[];
+  commercialAmenities: string[];
   departments: string[];
   cities: Record<string, string[]>;
 }
@@ -199,6 +299,12 @@ export const CONDITION_LABELS: Record<PropertyCondition, string> = {
   SOBRE_PLANOS: "Sobre planos",
   EN_CONSTRUCCION: "En construcción",
   REMODELADO: "Remodelado",
+};
+
+export const POWER_TYPE_LABELS: Record<PropertyPowerType, string> = {
+  MONOFASICA: "Monofásica",
+  BIFASICA: "Bifásica",
+  TRIFASICA: "Trifásica",
 };
 
 export const STATUS_COLORS: Record<PropertyStatus, string> = {

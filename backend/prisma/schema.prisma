@@ -1154,6 +1154,12 @@ enum PropertyCondition {
   REMODELADO
 }
 
+enum PropertyPowerType {
+  MONOFASICA
+  BIFASICA
+  TRIFASICA
+}
+
 model Property {
   id        String  @id @default(cuid())
   companyId String
@@ -1214,6 +1220,22 @@ model Property {
   isExclusive     Boolean   @default(false)
   capturedAt      DateTime?
   commissionPct   Float?
+
+  // Datos comerciales (locales, oficinas, bodegas)
+  frontage       Float? // Frente (m)
+  depth          Float? // Fondo (m)
+  ceilingHeight  Float? // Altura libre (m) — clave en bodegas/locales
+  hasLoadingDock Boolean            @default(false) // Muelle de carga
+  hasShowcase    Boolean            @default(false) // Vitrina / aviso a la calle
+  isCornerLot    Boolean            @default(false) // Esquinero
+  hasMezzanine   Boolean            @default(false) // Entrepiso / mezzanine
+  powerType      PropertyPowerType? // Acometida eléctrica
+  permittedUse   String? // Uso comercial permitido (POT, varía por municipio)
+
+  // ¿Pertenece a un conjunto cerrado / edificio con zonas comunes compartidas?
+  // Determina si aplican amenidades de conjunto (portería, piscina, gimnasio…):
+  // una CASA puede estar en conjunto cerrado; un LOTE o FINCA nunca lo está.
+  isInComplex Boolean @default(false)
 
   // Amenidades
   features  String[] @default([]) // Del inmueble

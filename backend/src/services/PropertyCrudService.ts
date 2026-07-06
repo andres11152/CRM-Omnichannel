@@ -53,6 +53,16 @@ export interface CreatePropertyDTO {
   commissionPct?: number;
   features?: string[];
   amenities?: string[];
+  frontage?: number;
+  depth?: number;
+  ceilingHeight?: number;
+  hasLoadingDock?: boolean;
+  hasShowcase?: boolean;
+  isCornerLot?: boolean;
+  hasMezzanine?: boolean;
+  powerType?: string;
+  permittedUse?: string;
+  isInComplex?: boolean;
   videoUrl?: string;
   virtualTourUrl?: string;
   ownerContactId?: string;
@@ -223,10 +233,10 @@ export const propertyCrudService = {
     validateStratum(data.stratum);
     validateCatalogArrays(data.features, data.amenities);
 
+    // LOTE/FINCA suelen no tener builtArea; el precio por m² se basa en lotArea en ese caso.
+    const areaBasis = data.builtArea || data.lotArea;
     const pricePerM2 =
-      data.price && data.builtArea && data.builtArea > 0
-        ? round2(data.price / data.builtArea)
-        : null;
+      data.price && areaBasis && areaBasis > 0 ? round2(data.price / areaBasis) : null;
 
     // Reintenta hasta 3 veces por posible colisión de referencia bajo concurrencia.
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -276,6 +286,16 @@ export const propertyCrudService = {
             commissionPct: data.commissionPct,
             features: data.features ?? [],
             amenities: data.amenities ?? [],
+            frontage: data.frontage,
+            depth: data.depth,
+            ceilingHeight: data.ceilingHeight,
+            hasLoadingDock: data.hasLoadingDock ?? false,
+            hasShowcase: data.hasShowcase ?? false,
+            isCornerLot: data.isCornerLot ?? false,
+            hasMezzanine: data.hasMezzanine ?? false,
+            powerType: (data.powerType as never) ?? undefined,
+            permittedUse: data.permittedUse,
+            isInComplex: data.isInComplex ?? false,
             videoUrl: data.videoUrl,
             virtualTourUrl: data.virtualTourUrl,
             ownerContactId: data.ownerContactId,
@@ -333,10 +353,12 @@ export const propertyCrudService = {
     delete patch.publicId;
     if (patch.capturedAt) patch.capturedAt = new Date(patch.capturedAt as string);
 
-    if ("price" in data || "builtArea" in data) {
+    if ("price" in data || "builtArea" in data || "lotArea" in data) {
       const current = await propertyRepository.findFirst({ where: { id, companyId } });
       const price = (data.price as number) ?? current?.price;
-      const area = (data.builtArea as number) ?? current?.builtArea ?? 0;
+      const builtArea = (data.builtArea as number) ?? current?.builtArea ?? 0;
+      const lotArea = (data.lotArea as number) ?? current?.lotArea ?? 0;
+      const area = builtArea || lotArea;
       patch.pricePerM2 = price && area > 0 ? round2(price / area) : null;
     }
 

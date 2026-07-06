@@ -84,7 +84,18 @@ export const createExternalPropertySchema = z.object({
   bedrooms: z.number().int().min(0).optional(),
   bathrooms: z.number().min(0).optional(),
   builtArea: z.number().min(0).optional(),
+  lotArea: z.number().min(0).optional(),
   parkingSpots: z.number().int().min(0).optional(),
+  frontage: z.number().min(0).optional(),
+  depth: z.number().min(0).optional(),
+  ceilingHeight: z.number().min(0).optional(),
+  hasLoadingDock: z.boolean().optional(),
+  hasShowcase: z.boolean().optional(),
+  isCornerLot: z.boolean().optional(),
+  hasMezzanine: z.boolean().optional(),
+  powerType: z.enum(["MONOFASICA", "BIFASICA", "TRIFASICA"]).optional(),
+  permittedUse: z.string().max(500).optional(),
+  isInComplex: z.boolean().optional(),
 });
 export type CreateExternalPropertyInput = z.infer<typeof createExternalPropertySchema>;
 

@@ -323,7 +323,18 @@ export const createProperty = catchAsync(
       bedrooms: data.bedrooms,
       bathrooms: data.bathrooms,
       builtArea: data.builtArea,
+      lotArea: data.lotArea,
       parkingSpots: data.parkingSpots,
+      frontage: data.frontage,
+      depth: data.depth,
+      ceilingHeight: data.ceilingHeight,
+      hasLoadingDock: data.hasLoadingDock,
+      hasShowcase: data.hasShowcase,
+      isCornerLot: data.isCornerLot,
+      hasMezzanine: data.hasMezzanine,
+      powerType: data.powerType,
+      permittedUse: data.permittedUse,
+      isInComplex: data.isInComplex,
     });
 
     Logger.info(`[ExternalAPI] Property created via API: ${property.id}`, {

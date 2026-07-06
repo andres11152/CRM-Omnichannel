@@ -18,6 +18,10 @@ import {
   User,
   UserCog,
   Info,
+  Truck,
+  Zap,
+  Building,
+  Calendar,
 } from "lucide-react";
 import {
   type Property,
@@ -25,6 +29,7 @@ import {
   KIND_LABELS,
   STATUS_LABELS,
   STATUS_COLORS,
+  POWER_TYPE_LABELS,
   formatCOP,
 } from "@/types/property.types";
 import { publishProperty } from "@/services/propertyService";
@@ -79,13 +84,32 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
     property.bathrooms != null ||
     property.parkingSpots != null ||
     property.builtArea != null ||
+    property.lotArea != null ||
     property.stratum != null ||
+    property.floor != null ||
+    property.totalFloors != null ||
+    property.yearBuilt != null ||
     !!location;
+
+  // Presencia de datos, no el grupo del kind: un LOTE también captura
+  // frente/fondo/uso permitido (sección "Dimensiones del lote" del form),
+  // aunque no sea de grupo COMERCIAL — antes esto se ocultaba por error.
+  const hasExtraSpecs =
+    property.frontage != null ||
+    property.depth != null ||
+    property.ceilingHeight != null ||
+    property.hasLoadingDock ||
+    property.hasShowcase ||
+    property.isCornerLot ||
+    property.hasMezzanine ||
+    !!property.powerType ||
+    !!property.permittedUse;
 
   const hasLegalInfo = !!property.registryNumber || !!property.cadastralNumber;
   const hasOwnerInfo = !!property.ownerContact || !!property.ownerAccount || !!property.assignedTo;
   const hasAnyDetail =
     hasSpecs ||
+    hasExtraSpecs ||
     !!property.description ||
     property.features.length > 0 ||
     property.amenities.length > 0 ||
@@ -216,9 +240,32 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
               <Spec icon={<BedDouble className="w-4 h-4" />} label="Habitaciones" value={property.bedrooms} />
               <Spec icon={<Bath className="w-4 h-4" />} label="Baños" value={property.bathrooms} />
               <Spec icon={<Car className="w-4 h-4" />} label="Parqueaderos" value={property.parkingSpots} />
-              <Spec icon={<Ruler className="w-4 h-4" />} label="Área" value={property.builtArea ? `${property.builtArea} m²` : undefined} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label="Área construida" value={property.builtArea ? `${property.builtArea} m²` : undefined} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label="Área del lote" value={property.lotArea ? `${property.lotArea} m²` : undefined} />
               <Spec icon={<Layers className="w-4 h-4" />} label="Estrato" value={property.stratum} />
+              <Spec icon={<Building className="w-4 h-4" />} label="Piso / nivel" value={property.floor} />
+              <Spec icon={<Building className="w-4 h-4" />} label="Pisos totales" value={property.totalFloors} />
+              <Spec icon={<Calendar className="w-4 h-4" />} label="Año construcción" value={property.yearBuilt} />
               <Spec icon={<MapPin className="w-4 h-4" />} label="Ubicación" value={location} />
+            </div>
+          )}
+
+          {/* Datos comerciales */}
+          {hasExtraSpecs && (
+            <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <Spec icon={<Ruler className="w-4 h-4" />} label="Frente" value={property.frontage ? `${property.frontage} m` : undefined} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label="Fondo" value={property.depth ? `${property.depth} m` : undefined} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label="Altura libre" value={property.ceilingHeight ? `${property.ceilingHeight} m` : undefined} />
+              <Spec icon={<Zap className="w-4 h-4" />} label="Acometida" value={property.powerType ? POWER_TYPE_LABELS[property.powerType] : undefined} />
+              <Spec icon={<Truck className="w-4 h-4" />} label="Muelle de carga" value={property.hasLoadingDock ? "Sí" : undefined} />
+              <Spec icon={<Layers className="w-4 h-4" />} label="Vitrina" value={property.hasShowcase ? "Sí" : undefined} />
+              <Spec icon={<Layers className="w-4 h-4" />} label="Esquinero" value={property.isCornerLot ? "Sí" : undefined} />
+              <Spec icon={<Layers className="w-4 h-4" />} label="Mezzanine" value={property.hasMezzanine ? "Sí" : undefined} />
+              {property.permittedUse && (
+                <div className="col-span-2">
+                  <Spec icon={<Info className="w-4 h-4" />} label="Uso permitido" value={property.permittedUse} />
+                </div>
+              )}
             </div>
           )}
 

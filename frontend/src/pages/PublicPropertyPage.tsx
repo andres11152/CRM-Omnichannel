@@ -13,6 +13,10 @@ import {
   Rotate3D,
   ChevronLeft,
   ChevronRight,
+  Truck,
+  Zap,
+  Building,
+  Calendar,
 } from "lucide-react";
 import { getPublicProperty } from "@/services/propertyService";
 import {
@@ -20,6 +24,7 @@ import {
   OPERATION_LABELS,
   KIND_LABELS,
   CONDITION_LABELS,
+  POWER_TYPE_LABELS,
   formatCOP,
 } from "@/types/property.types";
 
@@ -198,6 +203,9 @@ export const PublicPropertyPage: React.FC = () => {
           {property.builtArea != null && (
             <SpecTile icon={<Ruler className="w-5 h-5" />} label="m² constr." value={property.builtArea} />
           )}
+          {property.lotArea != null && (
+            <SpecTile icon={<Ruler className="w-5 h-5" />} label="m² de lote" value={property.lotArea} />
+          )}
           {property.bedrooms != null && (
             <SpecTile icon={<BedDouble className="w-5 h-5" />} label="Habitaciones" value={property.bedrooms} />
           )}
@@ -210,7 +218,61 @@ export const PublicPropertyPage: React.FC = () => {
           {property.stratum != null && (
             <SpecTile icon={<Layers className="w-5 h-5" />} label="Estrato" value={property.stratum} />
           )}
+          {property.floor != null && (
+            <SpecTile icon={<Building className="w-5 h-5" />} label="Piso" value={property.floor} />
+          )}
+          {property.totalFloors != null && (
+            <SpecTile icon={<Building className="w-5 h-5" />} label="Pisos totales" value={property.totalFloors} />
+          )}
+          {property.yearBuilt != null && (
+            <SpecTile icon={<Calendar className="w-5 h-5" />} label="Año" value={property.yearBuilt} />
+          )}
         </div>
+
+        {/* Specs adicionales: frente/fondo aplican también a LOTE, no solo a comerciales */}
+        {(property.frontage != null ||
+          property.depth != null ||
+          property.ceilingHeight != null ||
+          property.hasLoadingDock ||
+          property.hasShowcase ||
+          property.isCornerLot ||
+          property.hasMezzanine ||
+          !!property.powerType) && (
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {property.frontage != null && (
+              <SpecTile icon={<Ruler className="w-5 h-5" />} label="Frente" value={`${property.frontage} m`} />
+            )}
+            {property.depth != null && (
+              <SpecTile icon={<Ruler className="w-5 h-5" />} label="Fondo" value={`${property.depth} m`} />
+            )}
+            {property.ceilingHeight != null && (
+              <SpecTile icon={<Ruler className="w-5 h-5" />} label="Altura libre" value={`${property.ceilingHeight} m`} />
+            )}
+            {property.powerType && (
+              <SpecTile icon={<Zap className="w-5 h-5" />} label="Acometida" value={POWER_TYPE_LABELS[property.powerType]} />
+            )}
+            {property.hasLoadingDock && (
+              <SpecTile icon={<Truck className="w-5 h-5" />} label="Muelle de carga" value="Sí" />
+            )}
+            {property.hasShowcase && (
+              <SpecTile icon={<Layers className="w-5 h-5" />} label="Vitrina" value="Sí" />
+            )}
+            {property.isCornerLot && (
+              <SpecTile icon={<Layers className="w-5 h-5" />} label="Esquinero" value="Sí" />
+            )}
+            {property.hasMezzanine && (
+              <SpecTile icon={<Layers className="w-5 h-5" />} label="Mezzanine" value="Sí" />
+            )}
+          </div>
+        )}
+
+        {/* Uso del suelo permitido (aplica a LOTE y a comerciales) */}
+        {property.permittedUse && (
+          <section className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <h2 className="font-bold text-gray-800 mb-1">Uso del suelo permitido</h2>
+            <p className="text-sm text-gray-600">{property.permittedUse}</p>
+          </section>
+        )}
 
         {/* Descripción */}
         {property.description && (

@@ -61,6 +61,43 @@ export const PROPERTY_AMENITIES = [
 ] as const;
 
 /**
+ * Características de inmuebles comerciales (locales, oficinas, bodegas, consultorios).
+ * No repite vitrina/muelle de carga/mezzanine: esas ya son campos booleanos dedicados
+ * (hasShowcase/hasLoadingDock/hasMezzanine) en el modelo `Property`.
+ */
+export const PROPERTY_COMMERCIAL_FEATURES = [
+  "Piso en concreto reforzado",
+  "Baño para clientes",
+  "Baño para empleados",
+  "Bodega de almacenamiento",
+  "Cocineta",
+  "Aire acondicionado central",
+  "Salida de gas natural comercial",
+  "Cableado estructurado",
+  "Fibra óptica",
+  "Ventilación industrial",
+  "Rampa de acceso",
+  "División en oficinas",
+] as const;
+
+/** Amenidades del edificio / centro comercial donde está el inmueble comercial. */
+export const PROPERTY_COMMERCIAL_AMENITIES = [
+  "Portería 24 horas",
+  "Vigilancia privada",
+  "Circuito cerrado de TV",
+  "Ascensor",
+  "Ascensor de carga",
+  "Red contra incendios",
+  "Alarma",
+  "Parqueadero de visitantes",
+  "Parqueadero de carga y descargue",
+  "Planta eléctrica",
+  "Shut de basuras",
+  "Recepción compartida",
+  "Salas de reuniones compartidas",
+] as const;
+
+/**
  * Departamentos de Colombia (32 + Bogotá D.C.).
  * Para autocompletar y validar ubicación.
  */
@@ -130,9 +167,39 @@ export const CO_MAIN_CITIES: Record<string, string[]> = {
 export type PropertyFeature = (typeof PROPERTY_FEATURES)[number];
 export type PropertyAmenity = (typeof PROPERTY_AMENITIES)[number];
 
-/** Sets O(1) para validación en el service/schema. */
-export const VALID_FEATURES: ReadonlySet<string> = new Set(PROPERTY_FEATURES);
-export const VALID_AMENITIES: ReadonlySet<string> = new Set(PROPERTY_AMENITIES);
+/** Sets O(1) para validación en el service/schema (une residencial + comercial). */
+export const VALID_FEATURES: ReadonlySet<string> = new Set([
+  ...PROPERTY_FEATURES,
+  ...PROPERTY_COMMERCIAL_FEATURES,
+]);
+export const VALID_AMENITIES: ReadonlySet<string> = new Set([
+  ...PROPERTY_AMENITIES,
+  ...PROPERTY_COMMERCIAL_AMENITIES,
+]);
+
+/**
+ * Agrupación de `kind` para adaptar formularios/vistas (habitaciones/baños/estrato
+ * solo aplican a RESIDENCIAL; frente/fondo/altura/muelle de carga a COMERCIAL).
+ * Duplicado en `frontend/src/types/property.types.ts` — mantener sincronizado.
+ */
+export const PROPERTY_KIND_GROUPS = {
+  APARTAMENTO: "RESIDENCIAL",
+  CASA: "RESIDENCIAL",
+  APARTAESTUDIO: "RESIDENCIAL",
+  CASA_CAMPESTRE: "RESIDENCIAL",
+  FINCA: "RESIDENCIAL",
+  HABITACION: "RESIDENCIAL",
+  LOCAL_COMERCIAL: "COMERCIAL",
+  OFICINA: "COMERCIAL",
+  BODEGA: "COMERCIAL",
+  CONSULTORIO: "COMERCIAL",
+  EDIFICIO: "COMERCIAL",
+  LOTE: "OTROS",
+  PARQUEADERO: "OTROS",
+  OTRO: "OTROS",
+} as const;
+
+export const PROPERTY_POWER_TYPES = ["MONOFASICA", "BIFASICA", "TRIFASICA"] as const;
 
 /** Payload que consume el frontend para armar selects/filtros. */
 export const PROPERTY_CATALOG = {
@@ -153,11 +220,15 @@ export const PROPERTY_CATALOG = {
     "EDIFICIO",
     "OTRO",
   ],
+  kindGroups: PROPERTY_KIND_GROUPS,
   statuses: ["DISPONIBLE", "RESERVADO", "ARRENDADO", "VENDIDO", "SUSPENDIDO", "BORRADOR"],
   conditions: ["NUEVO", "USADO", "SOBRE_PLANOS", "EN_CONSTRUCCION", "REMODELADO"],
   strata: [1, 2, 3, 4, 5, 6],
+  powerTypes: PROPERTY_POWER_TYPES,
   features: PROPERTY_FEATURES,
   amenities: PROPERTY_AMENITIES,
+  commercialFeatures: PROPERTY_COMMERCIAL_FEATURES,
+  commercialAmenities: PROPERTY_COMMERCIAL_AMENITIES,
   departments: CO_DEPARTMENTS,
   cities: CO_MAIN_CITIES,
 } as const;

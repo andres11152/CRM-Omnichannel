@@ -130,6 +130,52 @@ describe("PropertyCrudService", () => {
       ).rejects.toThrow("Característica no válida");
       expect(repo.create).not.toHaveBeenCalled();
     });
+
+    it("calcula pricePerM2 con lotArea cuando no hay builtArea (LOTE/FINCA)", async () => {
+      repo.findFirst.mockResolvedValue(null);
+      repo.create.mockImplementation(({ data }) =>
+        Promise.resolve(buildProperty(data)),
+      );
+
+      await propertyCrudService.create(companyId, {
+        ...baseDTO,
+        kind: "LOTE",
+        price: 200_000_000,
+        lotArea: 500,
+      });
+
+      expect(repo.create.mock.calls[0][0].data.pricePerM2).toBe(400_000);
+    });
+
+    it("crea un inmueble comercial (BODEGA) con sus atributos propios", async () => {
+      repo.findFirst.mockResolvedValue(null);
+      repo.create.mockImplementation(({ data }) =>
+        Promise.resolve(buildProperty(data)),
+      );
+
+      await propertyCrudService.create(companyId, {
+        ...baseDTO,
+        kind: "BODEGA",
+        frontage: 12,
+        depth: 30,
+        ceilingHeight: 8,
+        hasLoadingDock: true,
+        hasMezzanine: true,
+        powerType: "TRIFASICA",
+        permittedUse: "Almacenamiento e industria liviana",
+        features: ["Piso en concreto reforzado", "Bodega de almacenamiento"],
+      });
+
+      const created = repo.create.mock.calls[0][0].data;
+      expect(created.kind).toBe("BODEGA");
+      expect(created.frontage).toBe(12);
+      expect(created.depth).toBe(30);
+      expect(created.ceilingHeight).toBe(8);
+      expect(created.hasLoadingDock).toBe(true);
+      expect(created.hasMezzanine).toBe(true);
+      expect(created.powerType).toBe("TRIFASICA");
+      expect(created.permittedUse).toBe("Almacenamiento e industria liviana");
+    });
   });
 
   describe("findAll", () => {

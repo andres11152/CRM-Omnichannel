@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Modal, ModalButton } from "@/components/ui/Modal";
 import {
@@ -25,13 +26,10 @@ import {
 } from "lucide-react";
 import {
   type Property,
-  OPERATION_LABELS,
-  KIND_LABELS,
-  STATUS_LABELS,
   STATUS_COLORS,
-  POWER_TYPE_LABELS,
   formatCOP,
 } from "@/types/property.types";
+import { usePropertyLabels } from "@/hooks/usePropertyLabels";
 import { publishProperty } from "@/services/propertyService";
 import { SharePropertyModal } from "./SharePropertyModal";
 
@@ -65,6 +63,8 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
   onEdit,
   onChanged,
 }) => {
+  const { t } = useTranslation();
+  const { OPERATION_LABELS, KIND_LABELS, STATUS_LABELS, POWER_TYPE_LABELS } = usePropertyLabels();
   const [busy, setBusy] = useState(false);
   const [activeImg, setActiveImg] = useState(0);
   const [shareOpen, setShareOpen] = useState(false);
@@ -120,9 +120,13 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
     try {
       const updated = await publishProperty(property.id, !property.isPublished);
       onChanged(updated);
-      toast.success(updated.isPublished ? "Publicado" : "Despublicado");
+      toast.success(
+        updated.isPublished
+          ? t("properties_detail.publish_success", "Publicado")
+          : t("properties_detail.unpublish_success", "Despublicado"),
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
+      toast.error(err instanceof Error ? err.message : t("properties_detail.generic_error", "Error"));
     } finally {
       setBusy(false);
     }
@@ -130,7 +134,7 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
 
   const copyLink = () => {
     navigator.clipboard.writeText(publicUrl(property.publicId));
-    toast.success("Enlace público copiado");
+    toast.success(t("properties_detail.link_copied", "Enlace público copiado"));
   };
 
   return (
@@ -145,7 +149,7 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
         footer={
           <>
             <ModalButton variant="secondary" onClick={() => onEdit(property)}>
-              <Pencil className="w-4 h-4" /> Editar
+              <Pencil className="w-4 h-4" /> {t("properties_detail.edit", "Editar")}
             </ModalButton>
             <ModalButton
               variant={property.isPublished ? "danger" : "primary"}
@@ -154,11 +158,11 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
             >
               {property.isPublished ? (
                 <>
-                  <EyeOff className="w-4 h-4" /> Despublicar
+                  <EyeOff className="w-4 h-4" /> {t("properties_detail.unpublish", "Despublicar")}
                 </>
               ) : (
                 <>
-                  <Globe className="w-4 h-4" /> Publicar
+                  <Globe className="w-4 h-4" /> {t("properties_detail.publish", "Publicar")}
                 </>
               )}
             </ModalButton>
@@ -194,7 +198,7 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
           ) : (
             <div className="aspect-video rounded-xl bg-gray-100 dark:bg-gray-800 flex flex-col items-center justify-center text-gray-400 gap-1">
               <Building2 className="w-8 h-8" />
-              <span className="text-sm">Sin fotos</span>
+              <span className="text-sm">{t("properties_detail.no_photos", "Sin fotos")}</span>
             </div>
           )}
 
@@ -206,7 +210,7 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
               </span>
               {property.adminFee ? (
                 <span className="text-sm text-gray-500 ml-2">
-                  + {formatCOP(property.adminFee)} admin.
+                  + {formatCOP(property.adminFee)} {t("properties_detail.admin_suffix", "admin.")}
                 </span>
               ) : null}
             </div>
@@ -222,48 +226,52 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
 
           {/* Referencia */}
           <p className="text-xs font-mono text-gray-400">
-            Ref. {property.reference} · Creado{" "}
-            {new Date(property.createdAt).toLocaleDateString("es-CO")}
+            {t("properties_detail.ref_created", "Ref. {{reference}} · Creado {{date}}", {
+              reference: property.reference,
+              date: new Date(property.createdAt).toLocaleDateString("es-CO"),
+            })}
           </p>
 
           {!hasAnyDetail && (
             <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/50 rounded-xl p-3">
               <Info className="w-4 h-4 flex-shrink-0" />
-              Este inmueble aún no tiene detalles adicionales (área, habitaciones, ubicación,
-              descripción). Edítalo para completar la ficha.
+              {t(
+                "properties_detail.no_details_warning",
+                "Este inmueble aún no tiene detalles adicionales (área, habitaciones, ubicación, descripción). Edítalo para completar la ficha.",
+              )}
             </div>
           )}
 
           {/* Specs */}
           {hasSpecs && (
             <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <Spec icon={<BedDouble className="w-4 h-4" />} label="Habitaciones" value={property.bedrooms} />
-              <Spec icon={<Bath className="w-4 h-4" />} label="Baños" value={property.bathrooms} />
-              <Spec icon={<Car className="w-4 h-4" />} label="Parqueaderos" value={property.parkingSpots} />
-              <Spec icon={<Ruler className="w-4 h-4" />} label="Área construida" value={property.builtArea ? `${property.builtArea} m²` : undefined} />
-              <Spec icon={<Ruler className="w-4 h-4" />} label="Área del lote" value={property.lotArea ? `${property.lotArea} m²` : undefined} />
-              <Spec icon={<Layers className="w-4 h-4" />} label="Estrato" value={property.stratum} />
-              <Spec icon={<Building className="w-4 h-4" />} label="Piso / nivel" value={property.floor} />
-              <Spec icon={<Building className="w-4 h-4" />} label="Pisos totales" value={property.totalFloors} />
-              <Spec icon={<Calendar className="w-4 h-4" />} label="Año construcción" value={property.yearBuilt} />
-              <Spec icon={<MapPin className="w-4 h-4" />} label="Ubicación" value={location} />
+              <Spec icon={<BedDouble className="w-4 h-4" />} label={t("properties_detail.spec_bedrooms", "Habitaciones")} value={property.bedrooms} />
+              <Spec icon={<Bath className="w-4 h-4" />} label={t("properties_detail.spec_bathrooms", "Baños")} value={property.bathrooms} />
+              <Spec icon={<Car className="w-4 h-4" />} label={t("properties_detail.spec_parking", "Parqueaderos")} value={property.parkingSpots} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label={t("properties_detail.spec_built_area", "Área construida")} value={property.builtArea ? `${property.builtArea} m²` : undefined} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label={t("properties_detail.spec_lot_area", "Área del lote")} value={property.lotArea ? `${property.lotArea} m²` : undefined} />
+              <Spec icon={<Layers className="w-4 h-4" />} label={t("properties_detail.spec_stratum", "Estrato")} value={property.stratum} />
+              <Spec icon={<Building className="w-4 h-4" />} label={t("properties_detail.spec_floor", "Piso / nivel")} value={property.floor} />
+              <Spec icon={<Building className="w-4 h-4" />} label={t("properties_detail.spec_total_floors", "Pisos totales")} value={property.totalFloors} />
+              <Spec icon={<Calendar className="w-4 h-4" />} label={t("properties_detail.spec_year_built", "Año construcción")} value={property.yearBuilt} />
+              <Spec icon={<MapPin className="w-4 h-4" />} label={t("properties_detail.spec_location", "Ubicación")} value={location} />
             </div>
           )}
 
           {/* Datos comerciales */}
           {hasExtraSpecs && (
             <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <Spec icon={<Ruler className="w-4 h-4" />} label="Frente" value={property.frontage ? `${property.frontage} m` : undefined} />
-              <Spec icon={<Ruler className="w-4 h-4" />} label="Fondo" value={property.depth ? `${property.depth} m` : undefined} />
-              <Spec icon={<Ruler className="w-4 h-4" />} label="Altura libre" value={property.ceilingHeight ? `${property.ceilingHeight} m` : undefined} />
-              <Spec icon={<Zap className="w-4 h-4" />} label="Acometida" value={property.powerType ? POWER_TYPE_LABELS[property.powerType] : undefined} />
-              <Spec icon={<Truck className="w-4 h-4" />} label="Muelle de carga" value={property.hasLoadingDock ? "Sí" : undefined} />
-              <Spec icon={<Layers className="w-4 h-4" />} label="Vitrina" value={property.hasShowcase ? "Sí" : undefined} />
-              <Spec icon={<Layers className="w-4 h-4" />} label="Esquinero" value={property.isCornerLot ? "Sí" : undefined} />
-              <Spec icon={<Layers className="w-4 h-4" />} label="Mezzanine" value={property.hasMezzanine ? "Sí" : undefined} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label={t("properties_detail.spec_frontage", "Frente")} value={property.frontage ? `${property.frontage} m` : undefined} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label={t("properties_detail.spec_depth", "Fondo")} value={property.depth ? `${property.depth} m` : undefined} />
+              <Spec icon={<Ruler className="w-4 h-4" />} label={t("properties_detail.spec_ceiling_height", "Altura libre")} value={property.ceilingHeight ? `${property.ceilingHeight} m` : undefined} />
+              <Spec icon={<Zap className="w-4 h-4" />} label={t("properties_detail.spec_power_type", "Acometida")} value={property.powerType ? POWER_TYPE_LABELS[property.powerType] : undefined} />
+              <Spec icon={<Truck className="w-4 h-4" />} label={t("properties_detail.spec_loading_dock", "Muelle de carga")} value={property.hasLoadingDock ? t("properties_detail.yes", "Sí") : undefined} />
+              <Spec icon={<Layers className="w-4 h-4" />} label={t("properties_detail.spec_showcase", "Vitrina")} value={property.hasShowcase ? t("properties_detail.yes", "Sí") : undefined} />
+              <Spec icon={<Layers className="w-4 h-4" />} label={t("properties_detail.spec_corner_lot", "Esquinero")} value={property.isCornerLot ? t("properties_detail.yes", "Sí") : undefined} />
+              <Spec icon={<Layers className="w-4 h-4" />} label={t("properties_detail.spec_mezzanine", "Mezzanine")} value={property.hasMezzanine ? t("properties_detail.yes", "Sí") : undefined} />
               {property.permittedUse && (
                 <div className="col-span-2">
-                  <Spec icon={<Info className="w-4 h-4" />} label="Uso permitido" value={property.permittedUse} />
+                  <Spec icon={<Info className="w-4 h-4" />} label={t("properties_detail.spec_permitted_use", "Uso permitido")} value={property.permittedUse} />
                 </div>
               )}
             </div>
@@ -292,8 +300,8 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
           {/* Legal / captación */}
           {hasLegalInfo && (
             <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <Spec icon={<FileText className="w-4 h-4" />} label="Matrícula" value={property.registryNumber} />
-              <Spec icon={<FileText className="w-4 h-4" />} label="Cédula catastral" value={property.cadastralNumber} />
+              <Spec icon={<FileText className="w-4 h-4" />} label={t("properties_detail.spec_registry", "Matrícula")} value={property.registryNumber} />
+              <Spec icon={<FileText className="w-4 h-4" />} label={t("properties_detail.spec_cadastral", "Cédula catastral")} value={property.cadastralNumber} />
             </div>
           )}
 
@@ -303,7 +311,7 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
               {(property.ownerContact || property.ownerAccount) && (
                 <div className="flex items-center gap-2 text-sm">
                   <User className="w-4 h-4 text-reply-brand" />
-                  <span className="text-gray-500">Propietario:</span>
+                  <span className="text-gray-500">{t("properties_detail.owner_label", "Propietario:")}</span>
                   <span className="font-semibold text-gray-800 dark:text-gray-100">
                     {property.ownerContact?.name || property.ownerAccount?.name}
                   </span>
@@ -312,7 +320,7 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
               {property.assignedTo && (
                 <div className="flex items-center gap-2 text-sm">
                   <UserCog className="w-4 h-4 text-reply-brand" />
-                  <span className="text-gray-500">Agente:</span>
+                  <span className="text-gray-500">{t("properties_detail.agent_label", "Agente:")}</span>
                   <span className="font-semibold text-gray-800 dark:text-gray-100">
                     {property.assignedTo.name || property.assignedTo.email}
                   </span>
@@ -326,19 +334,19 @@ export const PropertyDetailDrawer: React.FC<Props> = ({
             <button
               onClick={copyLink}
               disabled={!property.isPublished}
-              title={property.isPublished ? "Copiar enlace público" : "Publica primero para compartir"}
+              title={property.isPublished ? t("properties_detail.copy_link_title", "Copiar enlace público") : t("properties_detail.publish_first_title", "Publica primero para compartir")}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40"
             >
-              <Link2 className="w-4 h-4" /> Copiar enlace
+              <Link2 className="w-4 h-4" /> {t("properties_detail.copy_link", "Copiar enlace")}
             </button>
             <button
               onClick={() => setShareOpen(true)}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-green-500 text-white hover:bg-green-600"
             >
-              <MessageCircle className="w-4 h-4" /> Enviar por WhatsApp
+              <MessageCircle className="w-4 h-4" /> {t("properties_detail.send_whatsapp", "Enviar por WhatsApp")}
             </button>
             {property.isPublished && (
-              <span className="text-xs text-gray-400 ml-auto">{property.viewsCount} vistas</span>
+              <span className="text-xs text-gray-400 ml-auto">{t("properties_detail.views_count", "{{count}} vistas", { count: property.viewsCount })}</span>
             )}
           </div>
         </div>

@@ -39,24 +39,15 @@ export class MediaDownloaderService {
         Logger.warn(`[MediaDownloader] [RETRY] downloadMediaMessage attempt ${attempt} failed: ${errorMsg}`);
 
         if (errorMsg.includes("bad decrypt") || errorMsg.includes("mac check failed")) {
-            const ts = message.messageTimestamp;
-            let tsSeconds = 0;
-            if (ts) {
-                if (typeof ts === "number") {
-                    tsSeconds = ts;
-                } else if (typeof ts === "object" && ts !== null && "toNumber" in ts && typeof (ts as unknown as Record<string, unknown>).toNumber === "function") {
-                    tsSeconds = (ts as { toNumber: () => number }).toNumber();
-                } else {
-                    tsSeconds = Number(ts);
-                }
-            }
-            const ageSeconds = tsSeconds ? Math.floor(Date.now() / 1000) - tsSeconds : 0;
-            
-            if (tsSeconds > 0 && ageSeconds > 7200) {
-                 Logger.warn(`[MediaDownloader] [HEAL] Aborting updateMediaMessage for ${messageId} (Age: ${ageSeconds}s > 2h).`);
-                 break; 
-            }
-
+            // [DOCS · Baileys 7] updateMediaMessage asks the LINKED PHONE (not WhatsApp's
+            // CDN) to re-upload media it still has cached — there's no protocol-level
+            // staleness limit on this, and it's precisely the mechanism historical/synced
+            // messages need since their original CDN link is always long gone by the time
+            // an agent looks at them. A message-age cutoff here previously aborted healing
+            // for ANY message older than 2h — i.e. virtually every history-synced message,
+            // making "retry download" permanently unable to recover old media. The circuit
+            // breaker below is the correct guard against hammering (rate-limit backoff),
+            // not message age.
             if (redisClient?.isOpen) {
                 const isCircuitOpen = await redisClient.get(`cb:heal:${sessionId}`);
                 if (isCircuitOpen) {

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Modal, ModalButton } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -7,8 +8,8 @@ import { Search, MessageCircle, UserPlus, Check, Building2 } from "lucide-react"
 import { getContacts, startConversationWithMessage, type CrmContact } from "@/services/crmService";
 import {
   type Property,
-  OPERATION_LABELS,
-  KIND_LABELS,
+  type PropertyOperation,
+  type PropertyKind,
   formatCOP,
 } from "@/types/property.types";
 
@@ -19,6 +20,35 @@ interface Props {
 }
 
 const publicUrl = (publicId: string) => `${window.location.origin}/p/${publicId}`;
+
+/**
+ * Etiquetas en español fijo para el mensaje de WhatsApp: el destinatario es un
+ * cliente/lead colombiano, así que el contenido comercial no sigue el idioma
+ * de la UI del agente (a diferencia de OPERATION_LABELS/KIND_LABELS de usePropertyLabels).
+ */
+const OPERATION_LABELS_ES: Record<PropertyOperation, string> = {
+  VENTA: "Venta",
+  ARRIENDO: "Arriendo",
+  ARRIENDO_VENTA: "Arriendo o Venta",
+  PERMUTA: "Permuta",
+};
+
+const KIND_LABELS_ES: Record<PropertyKind, string> = {
+  APARTAMENTO: "Apartamento",
+  CASA: "Casa",
+  APARTAESTUDIO: "Apartaestudio",
+  CASA_CAMPESTRE: "Casa campestre",
+  LOCAL_COMERCIAL: "Local comercial",
+  OFICINA: "Oficina",
+  BODEGA: "Bodega",
+  CONSULTORIO: "Consultorio",
+  LOTE: "Lote",
+  FINCA: "Finca",
+  PARQUEADERO: "Parqueadero",
+  HABITACION: "Habitación",
+  EDIFICIO: "Edificio",
+  OTRO: "Otro",
+};
 
 /** Arma el mensaje de WhatsApp con los datos clave del inmueble + enlace de la ficha pública. */
 const buildPropertyMessage = (property: Property): string => {
@@ -39,7 +69,7 @@ const buildPropertyMessage = (property: Property): string => {
 
   const lines = [
     `*${property.title}*`,
-    `${OPERATION_LABELS[property.operation]} · ${KIND_LABELS[property.kind]}`,
+    `${OPERATION_LABELS_ES[property.operation]} · ${KIND_LABELS_ES[property.kind]}`,
     `💰 ${formatCOP(property.price, property.currency)}${
       property.adminFee ? ` + ${formatCOP(property.adminFee)} admin.` : ""
     }`,
@@ -60,6 +90,7 @@ const buildPropertyMessage = (property: Property): string => {
 const cleanPhone = (v: string) => v.replace(/\D/g, "");
 
 export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [contacts, setContacts] = useState<CrmContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
@@ -80,7 +111,7 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
     setLoadingContacts(true);
     getContacts()
       .then((r) => setContacts(r.contacts.filter((c) => !!c.phone)))
-      .catch(() => toast.error("No se pudo cargar la lista de contactos."))
+      .catch(() => toast.error(t("properties_share.contacts_load_error", "No se pudo cargar la lista de contactos.")))
       .finally(() => setLoadingContacts(false));
   }, [isOpen]);
 
@@ -110,15 +141,17 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
       });
       toast.success(
         <span>
-          Inmueble enviado a {targetName || targetPhone} por WhatsApp.{" "}
+          {t("properties_share.sent_success", "Inmueble enviado a {{target}} por WhatsApp.", {
+            target: targetName || targetPhone,
+          })}{" "}
           <button className="underline font-semibold" onClick={() => navigate("/workspace")}>
-            Ir a Bandeja de Entrada
+            {t("properties_share.go_to_inbox", "Ir a Bandeja de Entrada")}
           </button>
         </span>,
       );
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo enviar el mensaje");
+      toast.error(err instanceof Error ? err.message : t("properties_share.send_error", "No se pudo enviar el mensaje"));
     } finally {
       setSending(false);
     }
@@ -128,7 +161,7 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Enviar por WhatsApp"
+      title={t("properties_share.title", "Enviar por WhatsApp")}
       subtitle={property.title}
       icon={<MessageCircle className="w-5 h-5 text-white" />}
       size="md"
@@ -136,7 +169,7 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
       footer={
         <>
           <ModalButton variant="secondary" onClick={onClose} disabled={sending}>
-            Cancelar
+            {t("properties_share.cancel", "Cancelar")}
           </ModalButton>
           <ModalButton
             variant="primary"
@@ -144,7 +177,7 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
             loading={sending}
             disabled={!canSend}
           >
-            <MessageCircle className="w-4 h-4" /> Enviar
+            <MessageCircle className="w-4 h-4" /> {t("properties_share.send", "Enviar")}
           </ModalButton>
         </>
       }
@@ -152,8 +185,10 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
       <div className="space-y-4">
         {!property.isPublished && (
           <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/50 rounded-lg px-3 py-2">
-            El inmueble no está publicado — se enviarán los datos, pero sin el enlace con la
-            galería completa. Publícalo antes de enviar para una mejor experiencia.
+            {t(
+              "properties_share.unpublished_warning",
+              "El inmueble no está publicado — se enviarán los datos, pero sin el enlace con la galería completa. Publícalo antes de enviar para una mejor experiencia.",
+            )}
           </p>
         )}
 
@@ -172,7 +207,7 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
                 : "text-gray-500"
             }`}
           >
-            <Building2 className="w-4 h-4" /> Contacto CRM
+            <Building2 className="w-4 h-4" /> {t("properties_share.tab_crm_contact", "Contacto CRM")}
           </button>
           <button
             onClick={() => setMode("manual")}
@@ -182,7 +217,7 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
                 : "text-gray-500"
             }`}
           >
-            <UserPlus className="w-4 h-4" /> Número nuevo
+            <UserPlus className="w-4 h-4" /> {t("properties_share.tab_new_number", "Número nuevo")}
           </button>
         </div>
 
@@ -193,16 +228,16 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar contacto por nombre o número…"
+                placeholder={t("properties_share.search_contact_placeholder", "Buscar contacto por nombre o número…")}
                 className="pl-9"
               />
             </div>
             <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
               {loadingContacts ? (
-                <div className="p-4 text-center text-sm text-gray-400">Cargando contactos…</div>
+                <div className="p-4 text-center text-sm text-gray-400">{t("properties_share.loading_contacts", "Cargando contactos…")}</div>
               ) : filteredContacts.length === 0 ? (
                 <div className="p-4 text-center text-sm text-gray-400">
-                  Sin contactos con número de WhatsApp
+                  {t("properties_share.no_whatsapp_contacts", "Sin contactos con número de WhatsApp")}
                 </div>
               ) : (
                 filteredContacts.map((c) => (
@@ -231,7 +266,7 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
           <div className="space-y-3">
             <label className="block">
               <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                Número de WhatsApp
+                {t("properties_share.field_whatsapp_number", "Número de WhatsApp")}
               </span>
               <Input
                 value={manualPhone}
@@ -242,18 +277,20 @@ export const SharePropertyModal: React.FC<Props> = ({ isOpen, onClose, property 
             </label>
             <label className="block">
               <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                Nombre (opcional)
+                {t("properties_share.field_name_optional", "Nombre (opcional)")}
               </span>
               <Input
                 value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
-                placeholder="Nombre del destinatario"
+                placeholder={t("properties_share.name_placeholder", "Nombre del destinatario")}
                 className="mt-1"
               />
             </label>
             <p className="text-xs text-gray-400">
-              Se enviará con el número de WhatsApp conectado de tu empresa y se guardará como
-              nueva conversación.
+              {t(
+                "properties_share.manual_send_note",
+                "Se enviará con el número de WhatsApp conectado de tu empresa y se guardará como nueva conversación.",
+              )}
             </p>
           </div>
         )}

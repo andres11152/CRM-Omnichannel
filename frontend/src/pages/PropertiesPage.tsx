@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Building2, Plus, Search, MapPin, BedDouble, Bath, Car, Ruler, Trash2, Globe } from "lucide-react";
 import { ModuleHeader } from "@/components/common/ModuleHeader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useModal } from "@/context/ModalContext";
+import { usePropertyLabels } from "@/hooks/usePropertyLabels";
 import { PropertyFormModal } from "@/components/properties/PropertyFormModal";
 import { PropertyDetailDrawer } from "@/components/properties/PropertyDetailDrawer";
 import {
@@ -14,9 +16,6 @@ import {
 import {
   type Property,
   type PropertyFilters,
-  OPERATION_LABELS,
-  KIND_LABELS,
-  STATUS_LABELS,
   STATUS_COLORS,
   PROPERTY_KIND_GROUPS,
   formatCOP,
@@ -30,6 +29,8 @@ const PropertyCard: React.FC<{
   onOpen: () => void;
   onDelete: () => void;
 }> = ({ property, onOpen, onDelete }) => {
+  const { t } = useTranslation();
+  const { OPERATION_LABELS, KIND_LABELS, STATUS_LABELS } = usePropertyLabels();
   const cover =
     property.images?.find((i) => i.isCover)?.url || property.images?.[0]?.url;
 
@@ -52,7 +53,7 @@ const PropertyCard: React.FC<{
           </span>
           {property.isPublished && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-1">
-              <Globe className="w-3 h-3" /> Público
+              <Globe className="w-3 h-3" /> {t("properties_page.public_badge", "Público")}
             </span>
           )}
         </div>
@@ -74,7 +75,7 @@ const PropertyCard: React.FC<{
           <button
             onClick={onDelete}
             className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
-            title="Eliminar"
+            title={t("properties_page.delete_tooltip", "Eliminar")}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -108,7 +109,9 @@ const PropertyCard: React.FC<{
             <span className="flex items-center gap-1"><Ruler className="w-3.5 h-3.5" />{property.builtArea ?? property.lotArea}m²</span>
           )}
           {property.stratum != null && (
-            <span className="ml-auto text-[10px] font-semibold">Estrato {property.stratum}</span>
+            <span className="ml-auto text-[10px] font-semibold">
+              {t("properties_page.stratum_option", "Estrato {{n}}", { n: property.stratum })}
+            </span>
           )}
         </div>
       </div>
@@ -117,6 +120,8 @@ const PropertyCard: React.FC<{
 };
 
 export const PropertiesPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { OPERATION_LABELS, KIND_LABELS, STATUS_LABELS } = usePropertyLabels();
   const { confirm } = useModal();
   const [items, setItems] = useState<Property[]>([]);
   const [total, setTotal] = useState(0);
@@ -135,7 +140,7 @@ export const PropertiesPage: React.FC = () => {
       setItems(res.items);
       setTotal(res.total);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al cargar inmuebles");
+      toast.error(err instanceof Error ? err.message : t("properties_page.load_error", "Error al cargar inmuebles"));
     } finally {
       setLoading(false);
     }
@@ -166,9 +171,13 @@ export const PropertiesPage: React.FC = () => {
 
   const handleDelete = async (property: Property) => {
     const ok = await confirm({
-      title: "Eliminar inmueble",
-      message: `¿Eliminar "${property.title}" (${property.reference})? Esta acción no se puede deshacer.`,
-      confirmText: "Eliminar",
+      title: t("properties_page.delete_title", "Eliminar inmueble"),
+      message: t(
+        "properties_page.delete_message",
+        '¿Eliminar "{{title}}" ({{reference}})? Esta acción no se puede deshacer.',
+        { title: property.title, reference: property.reference },
+      ),
+      confirmText: t("properties_page.delete_confirm", "Eliminar"),
       variant: "danger",
     });
     if (!ok) return;
@@ -176,10 +185,10 @@ export const PropertiesPage: React.FC = () => {
     setItems(items.filter((p) => p.id !== property.id)); // optimista
     try {
       await deleteProperty(property.id);
-      toast.success("Inmueble eliminado");
+      toast.success(t("properties_page.delete_success", "Inmueble eliminado"));
     } catch (err) {
       setItems(prev);
-      toast.error(err instanceof Error ? err.message : "No se pudo eliminar");
+      toast.error(err instanceof Error ? err.message : t("properties_page.delete_error", "No se pudo eliminar"));
     }
   };
 
@@ -199,14 +208,14 @@ export const PropertiesPage: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark">
       <ModuleHeader
-        title="Propiedades"
-        description="Gestión inmobiliaria enterprise"
+        title={t("properties_page.title", "Propiedades")}
+        description={t("properties_page.description", "Gestión inmobiliaria enterprise")}
         icon={<Building2 />}
         gradient="from-indigo-600 to-purple-600"
-        stats={{ label: "Publicados", value: `${publishedCount}/${total}` }}
+        stats={{ label: t("properties_page.stat_published", "Publicados"), value: `${publishedCount}/${total}` }}
         action={
           <Button onClick={openNew} variant="primary">
-            <Plus className="w-4 h-4" /> Nuevo inmueble
+            <Plus className="w-4 h-4" /> {t("properties_page.new_property", "Nuevo inmueble")}
           </Button>
         }
       />
@@ -218,7 +227,7 @@ export const PropertiesPage: React.FC = () => {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por título, referencia, dirección…"
+            placeholder={t("properties_page.search_placeholder", "Buscar por título, referencia, dirección…")}
             className="pl-9"
           />
         </div>
@@ -227,7 +236,7 @@ export const PropertiesPage: React.FC = () => {
           value={filters.operation ?? ""}
           onChange={(e) => setFilter({ operation: (e.target.value || undefined) as never })}
         >
-          <option value="">Negocio</option>
+          <option value="">{t("properties_page.filter_operation_all", "Negocio")}</option>
           {Object.entries(OPERATION_LABELS).map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
           ))}
@@ -237,7 +246,7 @@ export const PropertiesPage: React.FC = () => {
           value={filters.kind ?? ""}
           onChange={(e) => setFilter({ kind: (e.target.value || undefined) as never })}
         >
-          <option value="">Tipo</option>
+          <option value="">{t("properties_page.filter_kind_all", "Tipo")}</option>
           {Object.entries(KIND_LABELS).map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
           ))}
@@ -247,7 +256,7 @@ export const PropertiesPage: React.FC = () => {
           value={filters.status ?? ""}
           onChange={(e) => setFilter({ status: (e.target.value || undefined) as never })}
         >
-          <option value="">Estado</option>
+          <option value="">{t("properties_page.filter_status_all", "Estado")}</option>
           {Object.entries(STATUS_LABELS).map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
           ))}
@@ -258,9 +267,9 @@ export const PropertiesPage: React.FC = () => {
             value={filters.stratum ?? ""}
             onChange={(e) => setFilter({ stratum: e.target.value ? Number(e.target.value) : undefined })}
           >
-            <option value="">Estrato</option>
+            <option value="">{t("properties_page.filter_stratum_all", "Estrato")}</option>
             {[1, 2, 3, 4, 5, 6].map((s) => (
-              <option key={s} value={s}>Estrato {s}</option>
+              <option key={s} value={s}>{t("properties_page.stratum_option", "Estrato {{n}}", { n: s })}</option>
             ))}
           </select>
         )}
@@ -269,10 +278,10 @@ export const PropertiesPage: React.FC = () => {
           value={filters.sort ?? "newest"}
           onChange={(e) => setFilter({ sort: e.target.value as never })}
         >
-          <option value="newest">Más recientes</option>
-          <option value="price_asc">Precio ↑</option>
-          <option value="price_desc">Precio ↓</option>
-          <option value="oldest">Más antiguos</option>
+          <option value="newest">{t("properties_page.sort_newest", "Más recientes")}</option>
+          <option value="price_asc">{t("properties_page.sort_price_asc", "Precio ↑")}</option>
+          <option value="price_desc">{t("properties_page.sort_price_desc", "Precio ↓")}</option>
+          <option value="oldest">{t("properties_page.sort_oldest", "Más antiguos")}</option>
         </select>
       </div>
 
@@ -287,10 +296,10 @@ export const PropertiesPage: React.FC = () => {
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 py-20">
             <Building2 className="w-16 h-16 mb-4" />
-            <p className="text-lg font-semibold">No hay inmuebles</p>
-            <p className="text-sm">Crea tu primer inmueble para empezar</p>
+            <p className="text-lg font-semibold">{t("properties_page.empty_title", "No hay inmuebles")}</p>
+            <p className="text-sm">{t("properties_page.empty_subtitle", "Crea tu primer inmueble para empezar")}</p>
             <Button onClick={openNew} variant="primary" className="mt-4">
-              <Plus className="w-4 h-4" /> Nuevo inmueble
+              <Plus className="w-4 h-4" /> {t("properties_page.new_property", "Nuevo inmueble")}
             </Button>
           </div>
         ) : (

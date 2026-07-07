@@ -1,3 +1,4 @@
+import type {} from "./express";
 import { Request } from "express";
 import type { ParamsDictionary } from "express-serve-static-core";
 import type { ParsedQs } from "qs";

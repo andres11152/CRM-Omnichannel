@@ -195,7 +195,7 @@ export class InboundMessageHandler {
 
     // Guard: Check if message exists in DB BEFORE heavy orchestration
     Logger.debug(`[InboundHandler] Checking if message exists in DB: ${messageId}`);
-    const exists = await chatService.doesMessageExist(messageId);
+    const exists = await chatService.doesMessageExist(messageId, companyId);
     if (exists) {
       Logger.debug(`[InboundHandler] Skipping existing message: ${messageId}`);
       return;

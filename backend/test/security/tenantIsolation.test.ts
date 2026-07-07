@@ -198,4 +198,30 @@ describe("CRM Multi-Tenant Isolation & RLS Security Audit Tests", () => {
       expect(result.finalArgs.data.companyId).toBeUndefined();
     });
   });
+
+  describe("6. findUnique to findFirst Conversion & Compound Keys", () => {
+    it("should successfully convert findUnique to findFirst and flatten compound unique constraints", async () => {
+      const activeTenantId = "company-sandbox-456";
+
+      const result = await TenantContextManager.run(
+        { companyId: activeTenantId },
+        async () => {
+          return (await prisma.message.findUnique({
+            where: {
+              companyId_whatsappMessageId: {
+                companyId: activeTenantId,
+                whatsappMessageId: "AC1234567890",
+              },
+            },
+          })) as unknown as {
+            finalArgs: { where: { whatsappMessageId: string; companyId: string; companyId_whatsappMessageId?: unknown } };
+          };
+        }
+      );
+
+      expect(result.finalArgs.where.companyId).toBe(activeTenantId);
+      expect(result.finalArgs.where.whatsappMessageId).toBe("AC1234567890");
+      expect(result.finalArgs.where.companyId_whatsappMessageId).toBeUndefined();
+    });
+  });
 });

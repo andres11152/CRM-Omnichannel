@@ -135,8 +135,13 @@ model Message {
   metadata  Json? // For attachments, etc.
   reactions MessageReaction[]
 
-  // 🛡️ DATA INTEGRITY: Prevent duplicate processing of same WhatsApp message
-  whatsappMessageId String? @unique
+  // 🛡️ DATA INTEGRITY: Prevent duplicate processing of same WhatsApp message.
+  // Scoped per-company (NOT globally unique): WhatsApp message IDs are client-
+  // generated and can collide across two different companies' independent WA
+  // sessions in this multi-tenant SaaS. A bare global @unique here meant
+  // Company B's createMany/upsert of a colliding ID silently no-op'd or
+  // returned Company A's row instead of creating Company B's message.
+  whatsappMessageId String?
 
   // === ANALYTICS & HISTORY INDEXES ===
 
@@ -148,6 +153,8 @@ model Message {
   @@index([companyId, status, createdAt(sort: Desc)])
   // 4. Sender History
   @@index([senderId, createdAt(sort: Desc)])
+  // 5. Per-company uniqueness for WhatsApp message dedup (see comment above)
+  @@unique([companyId, whatsappMessageId])
   @@map("messages")
 }
 

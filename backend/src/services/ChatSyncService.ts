@@ -162,17 +162,29 @@ class ChatSyncService {
 
       Logger.info(`[ChatSync] [SEARCH] STORE DIAG: targetJid=${targetJid || "ALL"}`);
 
+      // Count DB messages before if doing targeted sync
+      const { messageRepository } = await import("@/repositories/MessageRepository");
+      let dbCountBefore = 0;
+      if (conversationId) {
+        const cleanPhone = WhatsAppIdUtils.cleanChannelId(conversationId);
+        dbCountBefore = await messageRepository.count({
+          where: { companyId, conversation: { channelId: cleanPhone } }
+        });
+      }
+
       let allMessages = this.ingest.extractMessagesFromStore(
         store,
         sinceDate,
         targetJid,
       );
 
+      let fetchSuccess = false;
+
       // If we are syncing a specific conversation, always request more history on-demand from WhatsApp
       // to backfill older messages, not just when memory is empty.
       if (conversationId) {
         Logger.info(`[ChatSync] Manual sync requested for ${conversationId}, fetching on-demand from WhatsApp...`);
-        const fetchSuccess = await this.ingest.fetchHistoryFromWhatsApp(
+        fetchSuccess = await this.ingest.fetchHistoryFromWhatsApp(
           companyId,
           sessionId,
           conversationId,
@@ -195,64 +207,79 @@ class ChatSyncService {
         `[ChatSync] [SEARCH] Found ${messagesFound} messages for JID: ${targetJid || "ALL"} (limit: ${limit})`,
       );
 
-      // 4. Group by conversation
-      const grouped = this.groupMessagesByConversation(limitedMessages);
-      const totalConversations = grouped.size;
+      let totalConversations = 0;
 
-      // 5. Resolve fallback sender
-      const admin = await syncRepositoryHelper.getAdminUser(companyId);
-      const fallbackSenderId = admin?.id;
-      if (!fallbackSenderId) throw new Error("No admin user found for fallback sender");
-
-      // 6. Process each conversation
-      let convIndex = 0;
-
-      for (const [channelId, msgs] of grouped.entries()) {
-        convIndex++;
-        conversationsProcessed++;
-
-        // Emit progress
-        this.emitProgress(companyId, {
-          status: "processing",
-          phase: `Processing conversation ${convIndex}/${totalConversations}`,
-          current: convIndex,
-          total: totalConversations,
-          conversationsProcessed,
-          messagesFound,
-          messagesNew,
-          messagesDuplicate,
-          errors: errors.length,
-          estimatedTimeRemaining: this.estimateTimeRemaining(
-            startTime,
-            convIndex,
-            totalConversations,
-          ),
-          currentConversation: channelId,
+      if (conversationId && fetchSuccess) {
+        // If targeted sync succeeded, the socket handler messaging-history.set
+        // has already bulk-inserted the messages. Count DB differences to find new/duplicates.
+        const cleanPhone = WhatsAppIdUtils.cleanChannelId(conversationId);
+        const dbCountAfter = await messageRepository.count({
+          where: { companyId, conversation: { channelId: cleanPhone } }
         });
+        messagesNew = Math.max(0, dbCountAfter - dbCountBefore);
+        messagesDuplicate = Math.max(0, messagesFound - messagesNew);
+        conversationsProcessed = 1;
+        totalConversations = 1;
+      } else {
+        // 4. Group by conversation
+        const grouped = this.groupMessagesByConversation(limitedMessages);
+        totalConversations = grouped.size;
 
-        // Process with TenantContext
-        await TenantContextManager.run(
-          { companyId, userId, requestId: `sync:${channelId}` },
-          async () => {
-            for (const msg of msgs) {
-              try {
-                const result = await this.ingest.processMessage(
-                  companyId,
-                  channelId,
-                  msg,
-                  dryRun,
-                  fallbackSenderId,
-                );
+        // 5. Resolve fallback sender
+        const admin = await syncRepositoryHelper.getAdminUser(companyId);
+        const fallbackSenderId = admin?.id;
+        if (!fallbackSenderId) throw new Error("No admin user found for fallback sender");
 
-                if (result === "new") messagesNew++;
-                else if (result === "duplicate") messagesDuplicate++;
-              } catch (err) {
-                const errMsg = err instanceof Error ? err.message : String(err);
-                errors.push(`[${channelId}] ${msg.key.id}: ${errMsg}`);
+        // 6. Process each conversation
+        let convIndex = 0;
+
+        for (const [channelId, msgs] of grouped.entries()) {
+          convIndex++;
+          conversationsProcessed++;
+
+          // Emit progress
+          this.emitProgress(companyId, {
+            status: "processing",
+            phase: `Processing conversation ${convIndex}/${totalConversations}`,
+            current: convIndex,
+            total: totalConversations,
+            conversationsProcessed,
+            messagesFound,
+            messagesNew,
+            messagesDuplicate,
+            errors: errors.length,
+            estimatedTimeRemaining: this.estimateTimeRemaining(
+              startTime,
+              convIndex,
+              totalConversations,
+            ),
+            currentConversation: channelId,
+          });
+
+          // Process with TenantContext
+          await TenantContextManager.run(
+            { companyId, userId, requestId: `sync:${channelId}` },
+            async () => {
+              for (const msg of msgs) {
+                try {
+                  const result = await this.ingest.processMessage(
+                    companyId,
+                    channelId,
+                    msg,
+                    dryRun,
+                    fallbackSenderId,
+                  );
+
+                  if (result === "new") messagesNew++;
+                  else if (result === "duplicate") messagesDuplicate++;
+                } catch (err) {
+                  const errMsg = err instanceof Error ? err.message : String(err);
+                  errors.push(`[${channelId}] ${msg.key.id}: ${errMsg}`);
+                }
               }
-            }
-          },
-        );
+            },
+          );
+        }
       }
 
       // 7. Emit completion

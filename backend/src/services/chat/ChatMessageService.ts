@@ -9,9 +9,9 @@ import { Logger } from "@/utils/logger";
  * Handles message persistence and automated ticketing logic.
  */
 export class ChatMessageService {
-  async doesMessageExist(whatsappMessageId: string): Promise<boolean> {
+  async doesMessageExist(whatsappMessageId: string, companyId: string): Promise<boolean> {
     const exists = await messageRepository.findUnique({
-      where: { whatsappMessageId },
+      where: { companyId_whatsappMessageId: { companyId, whatsappMessageId } },
       select: { id: true },
     });
     return !!exists;
@@ -32,7 +32,12 @@ export class ChatMessageService {
     createdAt?: Date;
   }): Promise<Prisma.MessageGetPayload<{ include: { sender: true } }>> {
     return messageRepository.upsert({
-      where: { whatsappMessageId: data.whatsappMessageId },
+      where: {
+        companyId_whatsappMessageId: {
+          companyId: data.companyId,
+          whatsappMessageId: data.whatsappMessageId,
+        },
+      },
       create: {
         companyId: data.companyId,
         content: data.content,
@@ -54,11 +59,12 @@ export class ChatMessageService {
    * Update message status (DELIVERED, READ, FAILED)
    */
   async updateMessageStatus(
-    whatsappMessageId: string, 
+    whatsappMessageId: string,
+    companyId: string,
     status: "SENT" | "DELIVERED" | "READ" | "FAILED"
   ): Promise<Prisma.BatchPayload> {
     return messageRepository.updateMany({
-      where: { whatsappMessageId },
+      where: { whatsappMessageId, companyId },
       data: { status },
     });
   }

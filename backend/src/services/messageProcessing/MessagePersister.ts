@@ -47,7 +47,7 @@ export class MessagePersister {
     } = params;
 
     // 1. DEDUPLICATION (Exact ID match or 5s window for text)
-    const isDuplicate = await this.checkDuplicate(conversationId, text, params.messageId, hasMedia);
+    const isDuplicate = await this.checkDuplicate(companyId, conversationId, text, params.messageId, hasMedia);
     if (isDuplicate) {
       Logger.debug(
         `[MessagePersister] [SKIP] Duplicate message skipped: "${text?.substring(0, 50)}"`,
@@ -89,13 +89,16 @@ export class MessagePersister {
   // ─── Private Helpers ───────────────────────────────────────────
 
   private async checkDuplicate(
+    companyId: string,
     conversationId: string,
     text: string,
     messageId?: string,
     hasMedia?: boolean,
   ): Promise<boolean> {
     if (messageId) {
-       const existing = await messageRepository.findUnique({ where: { whatsappMessageId: messageId } });
+       const existing = await messageRepository.findUnique({
+         where: { companyId_whatsappMessageId: { companyId, whatsappMessageId: messageId } },
+       });
        if (existing) return true;
     }
 

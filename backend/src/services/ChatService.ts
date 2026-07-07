@@ -103,8 +103,8 @@ export class ChatServiceFacade {
 
   // --- MESSAGE & TICKET DELEGATION ---
 
-  async doesMessageExist(whatsappMessageId: string) {
-    return chatMessageService.doesMessageExist(whatsappMessageId);
+  async doesMessageExist(whatsappMessageId: string, companyId: string) {
+    return chatMessageService.doesMessageExist(whatsappMessageId, companyId);
   }
 
   async upsertMessage(data: {
@@ -123,9 +123,10 @@ export class ChatServiceFacade {
 
   async updateMessageStatus(
     whatsappMessageId: string,
+    companyId: string,
     status: "SENT" | "DELIVERED" | "READ" | "FAILED",
   ) {
-    return chatMessageService.updateMessageStatus(whatsappMessageId, status);
+    return chatMessageService.updateMessageStatus(whatsappMessageId, companyId, status);
   }
 
   async findActiveTicket(companyId: string, conversationId: string) {

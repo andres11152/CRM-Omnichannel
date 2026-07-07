@@ -36,6 +36,7 @@ import {
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import TenantContextManager from "@/config/tenantContext";
 import { chatSyncService } from "@/services/ChatSyncService";
+import { syncMessageParser } from "@/services/sync/SyncMessageParser";
 import type { SessionStatus } from "../../core/types/whatsapp.types";
 import type { SimpleInMemoryStore } from "../SimpleStore";
 import { auditService } from "@/services/AuditService";
@@ -261,8 +262,8 @@ export function bindSessionEvents(
 
       for (const chatMsgs of messagesByChat.values()) {
         chatMsgs.sort((a, b) => {
-          const tA = Number(a.messageTimestamp || 0);
-          const tB = Number(b.messageTimestamp || 0);
+          const tA = syncMessageParser.getTimestamp(a.messageTimestamp);
+          const tB = syncMessageParser.getTimestamp(b.messageTimestamp);
           return tB - tA;
         });
         // On-demand: keep everything WhatsApp sent back. Bulk: keep the newest N.
@@ -574,7 +575,7 @@ export function bindSessionEvents(
       const historyMsgs: typeof validated.messages = [];
 
       for (const msg of validated.messages) {
-        const ts = Number(msg.messageTimestamp || 0);
+        const ts = syncMessageParser.getTimestamp(msg.messageTimestamp);
         const isFresh = ts > 0 && nowSeconds - ts < REALTIME_WINDOW_SECONDS;
         if (isFresh && msg.message) {
           realtimeMsgs.push(msg);

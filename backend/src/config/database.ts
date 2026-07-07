@@ -231,6 +231,34 @@ const createExtendedClient = () => {
 
                 if (delegate?.findFirst) {
                   const findFirstWhere = { ...(argsObj.where as Prisma.JsonObject) };
+
+                  // Flatten compound unique inputs for findFirst compatibility
+                  for (const key of Object.keys(findFirstWhere)) {
+                    const val = findFirstWhere[key];
+                    if (val && typeof val === "object" && !Array.isArray(val)) {
+                      const isFilterOperator = Object.keys(val).some((k) =>
+                        [
+                          "equals",
+                          "in",
+                          "notIn",
+                          "lt",
+                          "lte",
+                          "gt",
+                          "gte",
+                          "contains",
+                          "startsWith",
+                          "endsWith",
+                          "not",
+                          "mode",
+                        ].includes(k),
+                      );
+                      if (key.includes("_") && !isFilterOperator) {
+                        Object.assign(findFirstWhere, val);
+                        delete findFirstWhere[key];
+                      }
+                    }
+                  }
+
                   if (companyId) (findFirstWhere as Prisma.JsonObject).companyId = companyId;
                   if (isSoftDeleteModel && !includeDeleted)
                     (findFirstWhere as Prisma.JsonObject).deletedAt = null;

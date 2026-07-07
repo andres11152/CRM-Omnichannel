@@ -104,24 +104,6 @@ export const KIND_FIELDS: Record<PropertyKind, readonly PropertyAdaptiveField[]>
   OTRO: ["builtArea", "lotArea", "parkingSpots", "yearBuilt", "condition"],
 };
 
-/** Placeholder del título según el tipo, para guiar al asesor. */
-export const KIND_TITLE_PLACEHOLDERS: Record<PropertyKind, string> = {
-  APARTAMENTO: "Apartamento amplio en Chapinero",
-  CASA: "Casa de dos pisos en Cedritos",
-  APARTAESTUDIO: "Apartaestudio moderno en Palermo",
-  CASA_CAMPESTRE: "Casa campestre en Anapoima",
-  LOCAL_COMERCIAL: "Local comercial sobre vía principal",
-  OFICINA: "Oficina en el Centro Internacional",
-  BODEGA: "Bodega industrial en Fontibón",
-  CONSULTORIO: "Consultorio en torre médica",
-  LOTE: "Lote urbanizable en Rionegro",
-  FINCA: "Finca productiva en el Quindío",
-  PARQUEADERO: "Parqueadero cubierto en Chapinero",
-  HABITACION: "Habitación amoblada cerca a la universidad",
-  EDIFICIO: "Edificio rentable en El Poblado",
-  OTRO: "Describe tu inmueble",
-};
-
 export interface PropertyImage {
   id: string;
   url: string;
@@ -257,54 +239,6 @@ export type CreatePropertyPayload = Partial<Omit<Property, "id" | "images">> & {
   kind: PropertyKind;
   title: string;
   price: number;
-};
-
-/** Etiquetas en español para la UI. */
-export const OPERATION_LABELS: Record<PropertyOperation, string> = {
-  VENTA: "Venta",
-  ARRIENDO: "Arriendo",
-  ARRIENDO_VENTA: "Arriendo o Venta",
-  PERMUTA: "Permuta",
-};
-
-export const KIND_LABELS: Record<PropertyKind, string> = {
-  APARTAMENTO: "Apartamento",
-  CASA: "Casa",
-  APARTAESTUDIO: "Apartaestudio",
-  CASA_CAMPESTRE: "Casa campestre",
-  LOCAL_COMERCIAL: "Local comercial",
-  OFICINA: "Oficina",
-  BODEGA: "Bodega",
-  CONSULTORIO: "Consultorio",
-  LOTE: "Lote",
-  FINCA: "Finca",
-  PARQUEADERO: "Parqueadero",
-  HABITACION: "Habitación",
-  EDIFICIO: "Edificio",
-  OTRO: "Otro",
-};
-
-export const STATUS_LABELS: Record<PropertyStatus, string> = {
-  DISPONIBLE: "Disponible",
-  RESERVADO: "Reservado",
-  ARRENDADO: "Arrendado",
-  VENDIDO: "Vendido",
-  SUSPENDIDO: "Suspendido",
-  BORRADOR: "Borrador",
-};
-
-export const CONDITION_LABELS: Record<PropertyCondition, string> = {
-  NUEVO: "Nuevo",
-  USADO: "Usado",
-  SOBRE_PLANOS: "Sobre planos",
-  EN_CONSTRUCCION: "En construcción",
-  REMODELADO: "Remodelado",
-};
-
-export const POWER_TYPE_LABELS: Record<PropertyPowerType, string> = {
-  MONOFASICA: "Monofásica",
-  BIFASICA: "Bifásica",
-  TRIFASICA: "Trifásica",
 };
 
 export const STATUS_COLORS: Record<PropertyStatus, string> = {

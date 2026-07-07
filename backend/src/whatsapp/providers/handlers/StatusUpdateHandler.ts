@@ -96,7 +96,7 @@ export class StatusUpdateHandler {
       await TenantContextManager.run(
         { companyId: msg.companyId, userId: "system", requestId: "wa-update" },
         async () => {
-          await chatService.updateMessageStatus(whatsappMessageId, newStatus);
+          await chatService.updateMessageStatus(whatsappMessageId, msg.companyId, newStatus);
         },
       );
 

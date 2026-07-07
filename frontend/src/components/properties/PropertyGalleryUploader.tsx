@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Star, Trash2, UploadCloud, Loader2, GripVertical } from "lucide-react";
 import type { PropertyImage } from "@/types/property.types";
@@ -24,6 +25,7 @@ export const PropertyGalleryUploader: React.FC<Props> = ({
   images,
   onChange,
 }) => {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -32,16 +34,16 @@ export const PropertyGalleryUploader: React.FC<Props> = ({
     if (!files || files.length === 0) return;
     const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (arr.length === 0) {
-      toast.error("Selecciona archivos de imagen válidos");
+      toast.error(t("properties_gallery.invalid_files", "Selecciona archivos de imagen válidos"));
       return;
     }
     setUploading(true);
     try {
       const created = await uploadPropertyImages(propertyId, arr);
       onChange([...images, ...created]);
-      toast.success(`${created.length} imagen(es) subida(s)`);
+      toast.success(t("properties_gallery.upload_success", "{{count}} imagen(es) subida(s)", { count: created.length }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al subir imágenes");
+      toast.error(err instanceof Error ? err.message : t("properties_gallery.upload_error", "Error al subir imágenes"));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -55,7 +57,7 @@ export const PropertyGalleryUploader: React.FC<Props> = ({
       await deletePropertyImage(propertyId, imageId);
     } catch (err) {
       onChange(prev);
-      toast.error(err instanceof Error ? err.message : "No se pudo eliminar");
+      toast.error(err instanceof Error ? err.message : t("properties_gallery.delete_error", "No se pudo eliminar"));
     }
   };
 
@@ -64,7 +66,7 @@ export const PropertyGalleryUploader: React.FC<Props> = ({
       const updated = await setPropertyCover(propertyId, imageId);
       onChange(updated);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo fijar portada");
+      toast.error(err instanceof Error ? err.message : t("properties_gallery.cover_error", "No se pudo fijar portada"));
     }
   };
 
@@ -81,7 +83,7 @@ export const PropertyGalleryUploader: React.FC<Props> = ({
       const persisted = await reorderPropertyImages(propertyId, ids);
       onChange(persisted);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo reordenar");
+      toast.error(err instanceof Error ? err.message : t("properties_gallery.reorder_error", "No se pudo reordenar"));
     }
   };
 
@@ -107,15 +109,15 @@ export const PropertyGalleryUploader: React.FC<Props> = ({
         {uploading ? (
           <div className="flex flex-col items-center gap-2 text-reply-brand">
             <Loader2 className="w-8 h-8 animate-spin" />
-            <span className="text-sm font-medium">Subiendo imágenes…</span>
+            <span className="text-sm font-medium">{t("properties_gallery.uploading", "Subiendo imágenes…")}</span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 text-gray-500 dark:text-gray-400">
             <UploadCloud className="w-8 h-8" />
             <span className="text-sm font-medium">
-              Arrastra fotos aquí o haz clic para subir
+              {t("properties_gallery.drop_hint", "Arrastra fotos aquí o haz clic para subir")}
             </span>
-            <span className="text-xs">JPG, PNG o WebP · hasta 10MB c/u</span>
+            <span className="text-xs">{t("properties_gallery.file_types_hint", "JPG, PNG o WebP · hasta 10MB c/u")}</span>
           </div>
         )}
       </div>
@@ -137,19 +139,19 @@ export const PropertyGalleryUploader: React.FC<Props> = ({
             >
               <img
                 src={img.url}
-                alt="Foto inmueble"
+                alt={t("properties_gallery.photo_alt", "Foto inmueble")}
                 className="w-full h-full object-cover"
                 loading="lazy"
               />
               {img.isCover && (
                 <span className="absolute top-1 left-1 bg-reply-brand text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-                  Portada
+                  {t("properties_gallery.cover_badge", "Portada")}
                 </span>
               )}
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button
                   type="button"
-                  title="Fijar como portada"
+                  title={t("properties_gallery.set_cover_title", "Fijar como portada")}
                   onClick={() => handleCover(img.id)}
                   className="p-1.5 bg-white/90 rounded-full hover:bg-white text-amber-500"
                 >
@@ -157,7 +159,7 @@ export const PropertyGalleryUploader: React.FC<Props> = ({
                 </button>
                 <button
                   type="button"
-                  title="Eliminar"
+                  title={t("properties_gallery.delete_title", "Eliminar")}
                   onClick={() => handleDelete(img.id)}
                   className="p-1.5 bg-white/90 rounded-full hover:bg-white text-red-500"
                 >

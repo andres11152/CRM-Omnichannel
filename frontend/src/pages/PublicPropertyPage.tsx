@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Building2,
   MapPin,
@@ -21,12 +22,9 @@ import {
 import { getPublicProperty } from "@/services/propertyService";
 import {
   type Property,
-  OPERATION_LABELS,
-  KIND_LABELS,
-  CONDITION_LABELS,
-  POWER_TYPE_LABELS,
   formatCOP,
 } from "@/types/property.types";
+import { usePropertyLabels } from "@/hooks/usePropertyLabels";
 
 /**
  * [REAL ESTATE] Ficha pública del inmueble — /p/:publicId
@@ -46,6 +44,8 @@ const SpecTile: React.FC<{ icon: React.ReactNode; label: string; value: React.Re
 );
 
 export const PublicPropertyPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { OPERATION_LABELS, KIND_LABELS, CONDITION_LABELS, POWER_TYPE_LABELS } = usePropertyLabels();
   const { publicId } = useParams<{ publicId: string }>();
   const [property, setProperty] = useState<Property | null>(null);
   const [error, setError] = useState(false);
@@ -71,7 +71,7 @@ export const PublicPropertyPage: React.FC = () => {
       <div className="h-full overflow-y-auto bg-gray-50 flex items-center justify-center">
         <div className="animate-pulse flex flex-col items-center gap-3 text-gray-400">
           <Building2 className="w-12 h-12" />
-          <span className="text-sm">Cargando inmueble…</span>
+          <span className="text-sm">{t("properties_public.loading", "Cargando inmueble…")}</span>
         </div>
       </div>
     );
@@ -82,9 +82,9 @@ export const PublicPropertyPage: React.FC = () => {
       <div className="h-full overflow-y-auto bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
           <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-700">Inmueble no disponible</h1>
+          <h1 className="text-xl font-bold text-gray-700">{t("properties_public.not_available_title", "Inmueble no disponible")}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Este inmueble ya no está publicado o el enlace es incorrecto.
+            {t("properties_public.not_available_message", "Este inmueble ya no está publicado o el enlace es incorrecto.")}
           </p>
         </div>
       </div>
@@ -97,7 +97,11 @@ export const PublicPropertyPage: React.FC = () => {
   }).company;
 
   const waText = encodeURIComponent(
-    `Hola, me interesa el inmueble "${property.title}" (Ref. ${property.reference}) que vi en la ficha pública.`,
+    t(
+      "properties_public.whatsapp_message",
+      'Hola, me interesa el inmueble "{{title}}" (Ref. {{reference}}) que vi en la ficha pública.',
+      { title: property.title, reference: property.reference },
+    ),
   );
   const waHref = company?.phone
     ? `https://wa.me/${company.phone.replace(/\D/g, "")}?text=${waText}`
@@ -119,8 +123,8 @@ export const PublicPropertyPage: React.FC = () => {
           </div>
         )}
         <div className="min-w-0">
-          <p className="font-bold text-gray-800 text-sm truncate">{company?.name ?? "Inmobiliaria"}</p>
-          <p className="text-[11px] text-gray-400 font-mono">Ref. {property.reference}</p>
+          <p className="font-bold text-gray-800 text-sm truncate">{company?.name ?? t("properties_public.company_fallback", "Inmobiliaria")}</p>
+          <p className="text-[11px] text-gray-400 font-mono">{t("properties_public.ref_label", "Ref. {{reference}}", { reference: property.reference })}</p>
         </div>
       </header>
 
@@ -184,11 +188,11 @@ export const PublicPropertyPage: React.FC = () => {
             </span>
             {property.adminFee ? (
               <span className="text-sm text-gray-500">
-                + {formatCOP(property.adminFee)} administración
+                + {formatCOP(property.adminFee)} {t("properties_public.admin_fee_suffix", "administración")}
               </span>
             ) : null}
             {property.negotiable && (
-              <span className="text-xs font-semibold text-emerald-600">Negociable</span>
+              <span className="text-xs font-semibold text-emerald-600">{t("properties_public.negotiable", "Negociable")}</span>
             )}
           </div>
           {property.pricePerM2 ? (
@@ -201,31 +205,31 @@ export const PublicPropertyPage: React.FC = () => {
         {/* Specs */}
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
           {property.builtArea != null && (
-            <SpecTile icon={<Ruler className="w-5 h-5" />} label="m² constr." value={property.builtArea} />
+            <SpecTile icon={<Ruler className="w-5 h-5" />} label={t("properties_public.spec_built_area", "m² constr.")} value={property.builtArea} />
           )}
           {property.lotArea != null && (
-            <SpecTile icon={<Ruler className="w-5 h-5" />} label="m² de lote" value={property.lotArea} />
+            <SpecTile icon={<Ruler className="w-5 h-5" />} label={t("properties_public.spec_lot_area", "m² de lote")} value={property.lotArea} />
           )}
           {property.bedrooms != null && (
-            <SpecTile icon={<BedDouble className="w-5 h-5" />} label="Habitaciones" value={property.bedrooms} />
+            <SpecTile icon={<BedDouble className="w-5 h-5" />} label={t("properties_public.spec_bedrooms", "Habitaciones")} value={property.bedrooms} />
           )}
           {property.bathrooms != null && (
-            <SpecTile icon={<Bath className="w-5 h-5" />} label="Baños" value={property.bathrooms} />
+            <SpecTile icon={<Bath className="w-5 h-5" />} label={t("properties_public.spec_bathrooms", "Baños")} value={property.bathrooms} />
           )}
           {property.parkingSpots != null && (
-            <SpecTile icon={<Car className="w-5 h-5" />} label="Parqueadero" value={property.parkingSpots} />
+            <SpecTile icon={<Car className="w-5 h-5" />} label={t("properties_public.spec_parking", "Parqueadero")} value={property.parkingSpots} />
           )}
           {property.stratum != null && (
-            <SpecTile icon={<Layers className="w-5 h-5" />} label="Estrato" value={property.stratum} />
+            <SpecTile icon={<Layers className="w-5 h-5" />} label={t("properties_public.spec_stratum", "Estrato")} value={property.stratum} />
           )}
           {property.floor != null && (
-            <SpecTile icon={<Building className="w-5 h-5" />} label="Piso" value={property.floor} />
+            <SpecTile icon={<Building className="w-5 h-5" />} label={t("properties_public.spec_floor", "Piso")} value={property.floor} />
           )}
           {property.totalFloors != null && (
-            <SpecTile icon={<Building className="w-5 h-5" />} label="Pisos totales" value={property.totalFloors} />
+            <SpecTile icon={<Building className="w-5 h-5" />} label={t("properties_public.spec_total_floors", "Pisos totales")} value={property.totalFloors} />
           )}
           {property.yearBuilt != null && (
-            <SpecTile icon={<Calendar className="w-5 h-5" />} label="Año" value={property.yearBuilt} />
+            <SpecTile icon={<Calendar className="w-5 h-5" />} label={t("properties_public.spec_year", "Año")} value={property.yearBuilt} />
           )}
         </div>
 
@@ -240,28 +244,28 @@ export const PublicPropertyPage: React.FC = () => {
           !!property.powerType) && (
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {property.frontage != null && (
-              <SpecTile icon={<Ruler className="w-5 h-5" />} label="Frente" value={`${property.frontage} m`} />
+              <SpecTile icon={<Ruler className="w-5 h-5" />} label={t("properties_public.spec_frontage", "Frente")} value={`${property.frontage} m`} />
             )}
             {property.depth != null && (
-              <SpecTile icon={<Ruler className="w-5 h-5" />} label="Fondo" value={`${property.depth} m`} />
+              <SpecTile icon={<Ruler className="w-5 h-5" />} label={t("properties_public.spec_depth", "Fondo")} value={`${property.depth} m`} />
             )}
             {property.ceilingHeight != null && (
-              <SpecTile icon={<Ruler className="w-5 h-5" />} label="Altura libre" value={`${property.ceilingHeight} m`} />
+              <SpecTile icon={<Ruler className="w-5 h-5" />} label={t("properties_public.spec_ceiling_height", "Altura libre")} value={`${property.ceilingHeight} m`} />
             )}
             {property.powerType && (
-              <SpecTile icon={<Zap className="w-5 h-5" />} label="Acometida" value={POWER_TYPE_LABELS[property.powerType]} />
+              <SpecTile icon={<Zap className="w-5 h-5" />} label={t("properties_public.spec_power_type", "Acometida")} value={POWER_TYPE_LABELS[property.powerType]} />
             )}
             {property.hasLoadingDock && (
-              <SpecTile icon={<Truck className="w-5 h-5" />} label="Muelle de carga" value="Sí" />
+              <SpecTile icon={<Truck className="w-5 h-5" />} label={t("properties_public.spec_loading_dock", "Muelle de carga")} value={t("properties_public.yes", "Sí")} />
             )}
             {property.hasShowcase && (
-              <SpecTile icon={<Layers className="w-5 h-5" />} label="Vitrina" value="Sí" />
+              <SpecTile icon={<Layers className="w-5 h-5" />} label={t("properties_public.spec_showcase", "Vitrina")} value={t("properties_public.yes", "Sí")} />
             )}
             {property.isCornerLot && (
-              <SpecTile icon={<Layers className="w-5 h-5" />} label="Esquinero" value="Sí" />
+              <SpecTile icon={<Layers className="w-5 h-5" />} label={t("properties_public.spec_corner_lot", "Esquinero")} value={t("properties_public.yes", "Sí")} />
             )}
             {property.hasMezzanine && (
-              <SpecTile icon={<Layers className="w-5 h-5" />} label="Mezzanine" value="Sí" />
+              <SpecTile icon={<Layers className="w-5 h-5" />} label={t("properties_public.spec_mezzanine", "Mezzanine")} value={t("properties_public.yes", "Sí")} />
             )}
           </div>
         )}
@@ -269,7 +273,7 @@ export const PublicPropertyPage: React.FC = () => {
         {/* Uso del suelo permitido (aplica a LOTE y a comerciales) */}
         {property.permittedUse && (
           <section className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <h2 className="font-bold text-gray-800 mb-1">Uso del suelo permitido</h2>
+            <h2 className="font-bold text-gray-800 mb-1">{t("properties_public.permitted_use_title", "Uso del suelo permitido")}</h2>
             <p className="text-sm text-gray-600">{property.permittedUse}</p>
           </section>
         )}
@@ -277,7 +281,7 @@ export const PublicPropertyPage: React.FC = () => {
         {/* Descripción */}
         {property.description && (
           <section className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <h2 className="font-bold text-gray-800 mb-2">Descripción</h2>
+            <h2 className="font-bold text-gray-800 mb-2">{t("properties_public.description_title", "Descripción")}</h2>
             <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
               {property.description}
             </p>
@@ -289,7 +293,7 @@ export const PublicPropertyPage: React.FC = () => {
           <section className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
             {property.features.length > 0 && (
               <div>
-                <h2 className="font-bold text-gray-800 mb-2">El inmueble</h2>
+                <h2 className="font-bold text-gray-800 mb-2">{t("properties_public.property_features_title", "El inmueble")}</h2>
                 <div className="flex flex-wrap gap-1.5">
                   {property.features.map((f) => (
                     <span key={f} className="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">
@@ -301,7 +305,7 @@ export const PublicPropertyPage: React.FC = () => {
             )}
             {property.amenities.length > 0 && (
               <div>
-                <h2 className="font-bold text-gray-800 mb-2">El conjunto</h2>
+                <h2 className="font-bold text-gray-800 mb-2">{t("properties_public.complex_features_title", "El conjunto")}</h2>
                 <div className="flex flex-wrap gap-1.5">
                   {property.amenities.map((a) => (
                     <span key={a} className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">
@@ -324,7 +328,7 @@ export const PublicPropertyPage: React.FC = () => {
                 rel="noreferrer"
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 hover:border-indigo-400"
               >
-                <PlayCircle className="w-4 h-4 text-red-500" /> Ver video
+                <PlayCircle className="w-4 h-4 text-red-500" /> {t("properties_public.watch_video", "Ver video")}
               </a>
             )}
             {property.virtualTourUrl && (
@@ -334,7 +338,7 @@ export const PublicPropertyPage: React.FC = () => {
                 rel="noreferrer"
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 hover:border-indigo-400"
               >
-                <Rotate3D className="w-4 h-4 text-indigo-500" /> Tour 360°
+                <Rotate3D className="w-4 h-4 text-indigo-500" /> {t("properties_public.tour_360", "Tour 360°")}
               </a>
             )}
           </div>
@@ -344,7 +348,7 @@ export const PublicPropertyPage: React.FC = () => {
         {property.latitude != null && property.longitude != null && (
           <section className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
             <iframe
-              title="Ubicación"
+              title={t("properties_public.map_title", "Ubicación")}
               className="w-full h-64 border-0"
               loading="lazy"
               src={`https://www.google.com/maps?q=${property.latitude},${property.longitude}&z=16&output=embed`}
@@ -363,7 +367,7 @@ export const PublicPropertyPage: React.FC = () => {
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-bold shadow-lg shadow-green-500/30 transition-colors"
           >
             <MessageCircle className="w-5 h-5" />
-            Me interesa — Contactar por WhatsApp
+            {t("properties_public.whatsapp_cta", "Me interesa — Contactar por WhatsApp")}
           </a>
         </div>
       </div>

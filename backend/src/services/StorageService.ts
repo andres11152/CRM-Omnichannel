@@ -17,6 +17,39 @@ import * as path from "path";
 import os from "os";
 import { getEnv } from "@/config/env";
 
+const MAX_STREAM_UPLOAD_BYTES = 64 * 1024 * 1024; // WhatsApp's own media cap
+
+/**
+ * [DOCS · Node streams] A Readable can only be consumed once. uploadStream used to
+ * pass the SAME stream to the S3 attempt and, on failure, to the local-storage
+ * fallback — the fallback silently wrote an empty/truncated file (S3 had already
+ * drained or aborted the stream) while still reporting a successful upload. This
+ * buffers once up front so every destination gets its own fresh Readable.
+ */
+const bufferStream = (stream: Readable): Promise<Buffer> =>
+  new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    stream.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_STREAM_UPLOAD_BYTES) {
+        stream.destroy();
+        reject(new Error(`Stream exceeded max upload size of ${MAX_STREAM_UPLOAD_BYTES} bytes`));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    stream.on("end", () => {
+      const buffer = Buffer.concat(chunks);
+      if (buffer.length === 0) {
+        reject(new Error("Stream ended with 0 bytes — refusing to upload an empty file"));
+        return;
+      }
+      resolve(buffer);
+    });
+    stream.on("error", reject);
+  });
+
 // INTERFACE: The Contract
 export interface IStorageService {
   uploadFile(
@@ -124,15 +157,21 @@ class S3StorageService implements IStorageService {
     isPrivate: boolean = false,
   ): Promise<UploadResult> {
     const key = `companies/${companyId}/uploads/${Date.now()}_${filename}`;
-    let timeoutId: NodeJS.Timeout | undefined;
 
+    // [SEC] Buffer once: a Readable can only be drained once, so the SAME stream
+    // can never be reused for the S3 attempt AND the local fallback (see
+    // bufferStream's doc comment). Each destination below gets its own fresh
+    // Readable.from(buffer).
+    const buffer = await bufferStream(stream);
+
+    let timeoutId: NodeJS.Timeout | undefined;
     try {
       const upload = new Upload({
         client: this.client,
         params: {
           Bucket: this.bucket,
           Key: key,
-          Body: stream,
+          Body: Readable.from(buffer),
           ContentType: mimeType,
         },
       });
@@ -154,7 +193,7 @@ class S3StorageService implements IStorageService {
           error instanceof Error ? error.message : error
         }`
       );
-      return this.getFallback().uploadStream(companyId, stream, filename, mimeType, isPrivate);
+      return this.getFallback().uploadStream(companyId, Readable.from(buffer), filename, mimeType, isPrivate);
     }
   }
 

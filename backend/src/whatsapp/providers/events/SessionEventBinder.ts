@@ -61,6 +61,25 @@ export interface SessionEventBinderDeps {
 const STALE_NAME_RE = /^(\+unknown|Participante|ID: \d+)$/;
 
 /**
+ * [Baileys 7] `contacts.update.id` is "either in lid or jid format (preferred)" —
+ * for LID-addressed contacts the real phone JID comes in `update.phoneNumber`
+ * instead, or (if WhatsApp omitted it) from the LID↔PN map SimpleStore builds
+ * from message metadata (`key.senderPn`/`remoteJidAlt`). Without this, phone
+ * lookups below run against LID digits and never match a real User/Contact.
+ */
+function resolveRealJid(
+  id: string,
+  phoneNumber: string | undefined,
+  store: SimpleInMemoryStore,
+): string {
+  if (phoneNumber) return phoneNumber;
+  if (id.includes("@lid")) {
+    return store.getPhoneFromLid(id) || id;
+  }
+  return id;
+}
+
+/**
  * [Baileys 7] contacts.update also carries notify (pushName) and verifiedName.
  * If the User in DB has a stale name ("+unknown", "Participante", "ID: …"), heal it.
  * Fire-and-forget — errors are logged and never thrown.
@@ -92,11 +111,21 @@ async function persistContactName(
 }
 
 /**
- * Downloads a WhatsApp profile picture URL, uploads it to persistent storage,
- * updates User + Contact records in DB, and emits a Socket.IO contact.updated event.
- * Called when Baileys fires contacts.update with an imgUrl (Baileys 7 best practice).
+ * Fetches the current WhatsApp profile picture URL, uploads it to persistent
+ * storage, updates User + Contact records in DB, and emits a Socket.IO
+ * contact.updated event. Called when Baileys fires contacts.update with an imgUrl.
+ *
+ * [BUG FIX] Baileys 7's "picture" notification handler (messages-recv.js,
+ * `case 'picture':`) never puts a real URL in `imgUrl` — it hardcodes the
+ * sentinel string "changed" (or "removed" on deletion): `imgUrl: setPicture
+ * ? 'changed' : 'removed'`. Treating that literal string as a downloadable
+ * URL made every `axios.get` fail and persisted the literal text "changed"
+ * as the profile pic URL, so pictures that WERE public never rendered.
+ * The correct flow (per Baileys docs) is to treat imgUrl as a change
+ * notification and re-fetch the real URL via `sock.profilePictureUrl()`.
  */
 async function persistContactProfilePic(
+  sock: WASocket,
   jid: string,
   imgUrl: string,
   sessionId: string,
@@ -129,6 +158,22 @@ async function persistContactProfilePic(
     });
     if (!user) return;
 
+    if (imgUrl === "removed") {
+      await userRepository.update(user.id, companyId, { profilePicUrl: null });
+      if (user.phone) {
+        await contactRepository.updateMany({
+          where: { companyId, phone: user.phone },
+          data: { profilePicUrl: null },
+        });
+      }
+      gateway.emitToCompany(companyId, "contact.updated", {
+        id: user.id,
+        profilePicUrl: null,
+        phone: user.phone,
+      });
+      return;
+    }
+
     // Skip if already has a persistent non-WA URL (amazonaws, GCS, minio, local)
     const existing = user.profilePicUrl;
     if (
@@ -142,9 +187,29 @@ async function persistContactProfilePic(
       return;
     }
 
+    // `imgUrl` is just a "changed" notification — fetch the actual current URL.
+    // Try "image" quality first, then "preview" (mirrors ProfilePictureService).
+    const PP_TIMEOUT = 15_000;
+    let fetchedUrl: string | undefined;
+    try {
+      fetchedUrl = await sock.profilePictureUrl(jid, "image", PP_TIMEOUT);
+    } catch {
+      try {
+        fetchedUrl = await sock.profilePictureUrl(jid, "preview", PP_TIMEOUT);
+      } catch {
+        fetchedUrl = undefined;
+      }
+    }
+    if (!fetchedUrl) {
+      logger.info(
+        `[SessionEventBinder] [contacts.update] No profile picture available for ${phone} (session ${sessionId})`,
+      );
+      return;
+    }
+
     let profilePicUrl: string;
     try {
-      const response = await axios.get(imgUrl, {
+      const response = await axios.get(fetchedUrl, {
         responseType: "arraybuffer",
         timeout: 10000,
       });
@@ -154,8 +219,8 @@ async function persistContactProfilePic(
       const uploadResult = await storageService.uploadFile(companyId, buffer, filename, mimeType);
       profilePicUrl = uploadResult.url;
     } catch {
-      // imgUrl may already be expired; fall back to it directly
-      profilePicUrl = imgUrl;
+      // Direct WA link may still work client-side even if the server-side download failed
+      profilePicUrl = fetchedUrl;
     }
 
     await userRepository.update(user.id, companyId, { profilePicUrl });
@@ -206,17 +271,20 @@ export function bindSessionEvents(
     for (const update of updates) {
       if (!update.id) continue;
 
+      // Resolve LID → real phone JID before any phone-based DB lookup (see resolveRealJid).
+      const realJid = resolveRealJid(update.id, update.phoneNumber, store);
+
       // Heal stale names ("+unknown", "Participante", "ID: …") with real pushName.
       const displayName = update.notify || update.verifiedName;
       if (displayName) {
-        persistContactName(update.id, displayName, companyId).catch((err) =>
+        persistContactName(realJid, displayName, companyId).catch((err) =>
           logger.warn(`[SessionEventBinder] contacts.update name heal failed for ${update.id}: ${err instanceof Error ? err.message : err}`),
         );
       }
 
       // Persist new profile picture when imgUrl changes.
       if (update.imgUrl) {
-        persistContactProfilePic(update.id, update.imgUrl, sessionId, companyId).catch((err) =>
+        persistContactProfilePic(sock, realJid, update.imgUrl, sessionId, companyId).catch((err) =>
           logger.warn(`[SessionEventBinder] contacts.update pic persist failed for ${update.id}: ${err instanceof Error ? err.message : err}`),
         );
       }

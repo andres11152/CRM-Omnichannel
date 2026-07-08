@@ -118,20 +118,23 @@ export const adminService = {
   },
 
   async getCompanyUsers(companyId: string) {
-    const users = await userRepository.findMany({
-      where: {
-        role: { not: "MASTER" },
-        NOT: { email: { endsWith: "@whatsapp.user" } },
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        profilePicUrl: true,
-      },
-      orderBy: { name: "asc" },
-    }, companyId);
+    const { runAsSystem } = await import("@/context/requestContext");
+    const users = await runAsSystem(() =>
+      userRepository.findMany({
+        where: {
+          role: { not: "MASTER" },
+          NOT: { email: { endsWith: "@whatsapp.user" } },
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          profilePicUrl: true,
+        },
+        orderBy: { name: "asc" },
+      }, companyId)
+    );
 
     return users as unknown as {
       id: string;
@@ -417,26 +420,47 @@ export const adminService = {
 
     // [SEC] Use prisma directly to bypass UserRepository's automated tenant filtering (RLS)
     const { prisma: db } = await import("@/config/database");
+    // [SEC] The Prisma extension's tenant-injection (config/database.ts) unconditionally
+    // overwrites `where.companyId` with the CALLER's own companyId (the MASTER's), which
+    // clobbers the explicit `targetCompanyId` below and silently returns 0 rows for any
+    // company other than the MASTER's own. runAsSystem sets contextStorage to "__SYSTEM__",
+    // which makes the extension skip its injection entirely (see getCompanyUsers above).
+    //
+    // [PITFALL] The callback passed to runAsSystem MUST be an `async` function that
+    // `await`s the Prisma call INSIDE its own body. Prisma Client's query methods return
+    // lazy "thenables" that don't actually dispatch (and hit the extension's
+    // $allOperations hook) until something calls `.then()` on them. A plain
+    // `() => db.user.findX(...)` callback returns that thenable without ever awaiting
+    // it, so `.then()` ends up being called by the OUTER `await runAsSystem(...)`
+    // expression — by which point contextStorage.run()'s "__SYSTEM__" window has
+    // already closed and the ambient (MASTER's own) company context leaks back in.
+    // Verified empirically: the non-async form silently re-scoped these queries to
+    // the MASTER's own company, causing "No valid client users found".
+    const { runAsSystem } = await import("@/context/requestContext");
 
     let targetUser;
 
     if (userId) {
       // Impersonate specific user
-      targetUser = await db.user.findUnique({
-        where: { id: userId, companyId: targetCompanyId },
+      targetUser = await runAsSystem(async () => {
+        return await db.user.findUnique({
+          where: { id: userId, companyId: targetCompanyId },
+        });
       });
     } else {
       // Default: Find first ADMIN or AGENT
-      targetUser = await db.user.findFirst({
-        where: {
-          companyId: targetCompanyId,
-          role: { not: "MASTER" },
-          NOT: [
-            { email: { endsWith: "@whatsapp.user" } },
-            { email: "master@sentrycrm.cloud" },
-          ],
-        },
-        orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+      targetUser = await runAsSystem(async () => {
+        return await db.user.findFirst({
+          where: {
+            companyId: targetCompanyId,
+            role: { not: "MASTER" },
+            NOT: [
+              { email: { endsWith: "@whatsapp.user" } },
+              { email: "master@sentrycrm.cloud" },
+            ],
+          },
+          orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+        });
       });
     }
 

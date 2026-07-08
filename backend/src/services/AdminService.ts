@@ -119,11 +119,16 @@ export const adminService = {
 
   async getCompanyUsers(companyId: string) {
     const { runAsSystem } = await import("@/context/requestContext");
+    // [FIX] Filter by real-staff roles instead of excluding "@whatsapp.user" emails.
+    // Auto-imported WhatsApp shadow contacts always get role USER (see
+    // InboundOrchestratorService/UserResolver/sync ingesters), so role is the
+    // reliable signal — the email-suffix heuristic is fragile and, for at least
+    // one company, zeroed out the only real admin (empty impersonation picker).
+    // Same "real staff roles" allowlist already used in QueueDashboard.tsx.
     const users = await runAsSystem(() =>
       userRepository.findMany({
         where: {
-          role: { not: "MASTER" },
-          NOT: { email: { endsWith: "@whatsapp.user" } },
+          role: { in: ["ADMIN", "AGENT", "SUPERVISOR"] },
         },
         select: {
           id: true,
@@ -448,16 +453,15 @@ export const adminService = {
         });
       });
     } else {
-      // Default: Find first ADMIN or AGENT
+      // Default: Find first ADMIN or AGENT.
+      // [FIX] Same as getCompanyUsers: filter by real-staff roles, not by excluding
+      // "@whatsapp.user"/master emails — that heuristic zeroed out companies whose
+      // only real admin didn't happen to match it.
       targetUser = await runAsSystem(async () => {
         return await db.user.findFirst({
           where: {
             companyId: targetCompanyId,
-            role: { not: "MASTER" },
-            NOT: [
-              { email: { endsWith: "@whatsapp.user" } },
-              { email: "master@sentrycrm.cloud" },
-            ],
+            role: { in: ["ADMIN", "AGENT", "SUPERVISOR"] },
           },
           orderBy: [{ role: "asc" }, { createdAt: "asc" }],
         });

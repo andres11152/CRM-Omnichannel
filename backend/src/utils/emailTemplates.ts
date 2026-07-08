@@ -9,25 +9,25 @@
  */
 
 const BRAND = {
-  name: "Sentry CRM",
-  primary: "#4f46e5", // indigo-600 (default accent)
-  primaryDark: "#4338ca",
-  ink: "#0f172a",
-  body: "#334155",
-  muted: "#64748b",
-  border: "#e2e8f0",
-  bg: "#f1f5f9",
-  surface: "#ffffff",
-  green: "#00a884",
-  greenDark: "#017561",
-  danger: "#dc2626",
-  dangerDark: "#b91c1c",
-  warnBg: "#fffbeb",
-  warnBorder: "#fcd34d",
-  warnInk: "#92400e",
+  name: "Reply CRM",
+  primary: "#6366f1", // Indigo accent
+  primaryDark: "#4f46e5",
+  ink: "#f8fafc", // Light gray/white text
+  body: "#cbd5e1", // Slate 300 body text
+  muted: "#94a3b8", // Slate 400 muted text
+  border: "rgba(255, 255, 255, 0.08)", // Glassmorphic translucent border
+  bg: "#0b0f19", // Ultra dark theme background
+  surface: "#111827", // Dark gray surface
+  green: "#10b981",
+  greenDark: "#059669",
+  danger: "#ef4444",
+  dangerDark: "#dc2626",
+  warnBg: "rgba(245, 158, 11, 0.05)",
+  warnBorder: "rgba(245, 158, 11, 0.3)",
+  warnInk: "#f59e0b",
 };
 
-const FONT = "'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const FONT = "'Outfit','Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
 export const esc = (s: string): string =>
   String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -45,14 +45,14 @@ export function emailButton(url: string, label: string, color = BRAND.primary, c
   const l = esc(label);
   return `
     <!--[if mso]>
-    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${u}" style="height:50px;v-text-anchor:middle;width:300px;" arcsize="16%" strokecolor="${colorDark}" fillcolor="${color}">
-      <w:anchorlock/><center style="color:#ffffff;font-family:${FONT};font-size:16px;font-weight:700;">${l}</center>
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${u}" style="height:48px;v-text-anchor:middle;width:280px;" arcsize="20%" strokecolor="${colorDark}" fillcolor="${color}">
+      <w:anchorlock/><center style="color:#ffffff;font-family:${FONT};font-size:15px;font-weight:600;letter-spacing:0.3px;">${l}</center>
     </v:roundrect>
     <![endif]-->
     <!--[if !mso]><!-- -->
     <table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
-      <tr><td align="center" style="border-radius:10px; background-color:${color};">
-        <a href="${u}" target="_blank" style="display:inline-block; padding:15px 36px; font-family:${FONT}; font-size:16px; font-weight:700; color:#ffffff; border-radius:10px; background-color:${color};">${l}</a>
+      <tr><td align="center" style="border-radius:10px; background:linear-gradient(135deg, ${color} 0%, ${colorDark} 100%); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">
+        <a href="${u}" target="_blank" style="display:inline-block; padding:14px 32px; font-family:${FONT}; font-size:15px; font-weight:600; color:#ffffff; border-radius:10px; text-decoration:none; letter-spacing:0.3px;">${l}</a>
       </td></tr>
     </table>
     <!--<![endif]-->`;
@@ -64,14 +64,14 @@ export function emailInfoTable(rows: Array<[string, string]>): string {
     .map(
       ([k, v]) => `
       <tr>
-        <td style="padding:7px 0; font-family:${FONT}; font-size:14px; color:${BRAND.muted}; width:130px; vertical-align:top;"><strong>${esc(k)}</strong></td>
-        <td style="padding:7px 0; font-family:${FONT}; font-size:14px; color:${BRAND.body};">${v}</td>
+        <td style="padding:10px 0; font-family:${FONT}; font-size:14px; color:${BRAND.muted}; width:130px; vertical-align:top; border-bottom: 1px solid rgba(255,255,255,0.04);"><strong>${esc(k)}</strong></td>
+        <td style="padding:10px 0; font-family:${FONT}; font-size:14px; color:${BRAND.body}; border-bottom: 1px solid rgba(255,255,255,0.04);">${v}</td>
       </tr>`,
     )
     .join("");
   return `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${BRAND.bg}; border:1px solid ${BRAND.border}; border-radius:12px;">
-      <tr><td style="padding:20px 22px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${body}</table></td></tr>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:rgba(255, 255, 255, 0.02); border:1px solid ${BRAND.border}; border-radius:12px; padding: 6px 0;">
+      <tr><td style="padding:12px 20px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${body}</table></td></tr>
     </table>`;
 }
 
@@ -79,8 +79,8 @@ export function emailInfoTable(rows: Array<[string, string]>): string {
 export function emailCallout(html: string, tone: "warning" | "danger" | "muted" = "muted"): string {
   const map = {
     warning: { bg: BRAND.warnBg, border: BRAND.warnBorder, ink: BRAND.warnInk },
-    danger: { bg: "#fef2f2", border: "#fca5a5", ink: BRAND.dangerDark },
-    muted: { bg: BRAND.bg, border: BRAND.border, ink: BRAND.body },
+    danger: { bg: "rgba(239, 68, 68, 0.05)", border: "rgba(239, 68, 68, 0.25)", ink: BRAND.danger },
+    muted: { bg: "rgba(255, 255, 255, 0.02)", border: BRAND.border, ink: BRAND.body },
   }[tone];
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${map.bg}; border:1px solid ${map.border}; border-radius:12px;">
@@ -115,15 +115,16 @@ export function baseEmailLayout(p: BaseLayoutParams): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="color-scheme" content="light dark" />
-  <meta name="supported-color-schemes" content="light dark" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="supported-color-schemes" content="dark light" />
   <title>${esc(p.heading)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
   <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
   <style>
     a{text-decoration:none}
     @media only screen and (max-width:600px){
       .container{width:100% !important}
-      .px{padding-left:24px !important;padding-right:24px !important}
+      .px{padding-left:20px !important;padding-right:20px !important}
       .btn a{display:block !important}
     }
   </style>
@@ -131,37 +132,50 @@ export function baseEmailLayout(p: BaseLayoutParams): string {
 <body style="margin:0;padding:0;background-color:${BRAND.bg};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${esc(p.preheader)}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${BRAND.bg};">
-    <tr><td align="center" style="padding:32px 16px;">
-      <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
+    <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" class="container" width="580" cellpadding="0" cellspacing="0" border="0" style="width:580px;max-width:580px;">
 
-        <tr><td align="center" style="padding:8px 0 24px 0;">
-          <span style="font-family:${FONT};font-size:20px;font-weight:700;letter-spacing:.3px;color:${BRAND.ink};">
-            <span style="color:${accent};">●</span>&nbsp;${BRAND.name}
+        <!-- Brand Header -->
+        <tr><td align="center" style="padding:0 0 28px 0;">
+          <span style="font-family:${FONT};font-size:22px;font-weight:700;letter-spacing:0.8px;color:${BRAND.ink};">
+            <span style="background:linear-gradient(135deg, ${BRAND.primary} 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">●</span>&nbsp;${BRAND.name}
           </span>
         </td></tr>
 
-        <tr><td style="background-color:${BRAND.surface};border:1px solid ${BRAND.border};border-radius:16px;overflow:hidden;">
+        <!-- Main Card Wrapper -->
+        <tr><td style="background-color:${BRAND.surface}; border:1px solid ${BRAND.border}; border-radius:18px; overflow:hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);">
+          
+          <!-- Colored Accent Line -->
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td style="height:5px;line-height:5px;font-size:5px;background-color:${accent};">&nbsp;</td></tr>
+            <tr><td style="height:4px; line-height:4px; font-size:4px; background:linear-gradient(90deg, ${accent} 0%, #818cf8 100%);">&nbsp;</td></tr>
           </table>
+
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td class="px" style="padding:40px 48px 0 48px;font-family:${FONT};">
-              <h1 style="margin:0 0 16px 0;font-size:24px;line-height:1.3;font-weight:700;color:${BRAND.ink};">${esc(p.heading)}</h1>
+            <!-- Header/Heading -->
+            <tr><td class="px" style="padding:36px 40px 0 40px; font-family:${FONT};">
+              <h1 style="margin:0 0 20px 0; font-size:24px; line-height:1.25; font-weight:700; color:${BRAND.ink}; letter-spacing:-0.5px;">${esc(p.heading)}</h1>
             </td></tr>
-            <tr><td class="px" style="padding:0 48px 8px 48px;font-family:${FONT};">${p.bodyHtml}</td></tr>
-            <tr><td class="px" style="padding:24px 48px 0 48px;"><div style="height:1px;line-height:1px;font-size:1px;background-color:${BRAND.border};">&nbsp;</div></td></tr>
-            <tr><td class="px" style="padding:16px 48px 36px 48px;font-family:${FONT};">
-              <p style="margin:0;font-size:12px;line-height:1.6;color:${BRAND.muted};">${audit}</p>
+
+            <!-- Body -->
+            <tr><td class="px" style="padding:0 40px 8px 40px; font-family:${FONT};">${p.bodyHtml}</td></tr>
+
+            <!-- Micro separator line -->
+            <tr><td class="px" style="padding:24px 40px 0 40px;"><div style="height:1px; line-height:1px; font-size:1px; background-color:${BRAND.border};">&nbsp;</div></td></tr>
+
+            <!-- Audit trail -->
+            <tr><td class="px" style="padding:16px 40px 32px 40px; font-family:${FONT};">
+              <p style="margin:0; font-size:11px; line-height:1.6; color:${BRAND.muted}; letter-spacing:0.1px;">${audit}</p>
             </td></tr>
           </table>
         </td></tr>
 
-        <tr><td align="center" style="padding:24px 24px 8px 24px;font-family:${FONT};">
-          <p style="margin:0 0 4px 0;font-size:12px;line-height:1.6;color:${BRAND.muted};">
-            ¿Necesitas ayuda? Escríbenos a <a href="mailto:${esc(support)}" style="color:${accent};text-decoration:none;">${esc(support)}</a>
+        <!-- Footer -->
+        <tr><td align="center" style="padding:32px 24px 8px 24px; font-family:${FONT};">
+          <p style="margin:0 0 6px 0; font-size:12px; line-height:1.6; color:${BRAND.muted};">
+            ¿Necesitas ayuda? Contáctanos a <a href="mailto:${esc(support)}" style="color:${BRAND.primary}; text-decoration:none; font-weight:600;">${esc(support)}</a>
           </p>
-          <p style="margin:0;font-size:12px;line-height:1.6;color:${BRAND.muted};">
-            © ${year} ${BRAND.name}. Mensaje automático, por favor no respondas a este correo.
+          <p style="margin:0; font-size:11px; line-height:1.6; color:${BRAND.muted}; opacity:0.7;">
+            © ${year} ${BRAND.name}. Mensaje de seguridad automático, por favor no respondas a este correo.
           </p>
         </td></tr>
 
@@ -172,8 +186,8 @@ export function baseEmailLayout(p: BaseLayoutParams): string {
 </html>`;
 }
 
-const p = (html: string, size = 16, color = BRAND.body): string =>
-  `<p style="margin:0 0 14px 0;font-family:${FONT};font-size:${size}px;line-height:1.6;color:${color};">${html}</p>`;
+const p = (html: string, size = 15, color = BRAND.body): string =>
+  `<p style="margin:0 0 16px 0; font-family:${FONT}; font-size:${size}px; line-height:1.65; color:${color};">${html}</p>`;
 
 // ───────────────────────── 1) Password reset ─────────────────────────
 

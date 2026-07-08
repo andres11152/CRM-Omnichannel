@@ -69,36 +69,8 @@ export class ChatSyncBatchIngester {
     }
 
     if (parsed.type === "edit") {
-      const editContent = parsed.content as { originalMessageId?: string } | undefined;
-      const originalMessageId = editContent?.originalMessageId;
-      const editedMessageProto = parsed.msgContent;
-      if (originalMessageId && editedMessageProto) {
-        const fakeMsg: WAMessage = {
-          key: { id: originalMessageId, fromMe: parsed.direction === MessageDirection.OUTBOUND },
-          message: editedMessageProto as import("@whiskeysockets/baileys").proto.IMessage,
-          messageTimestamp: Math.floor(Date.now() / 1000),
-        };
-        const parsedEdit = syncMessageParser.parseContent(fakeMsg);
-        if (parsedEdit?.textContent) {
-          const originalMsg = await messageRepository.findMessageByWhatsAppId(originalMessageId, companyId);
-          if (originalMsg) {
-            const existingMeta = (originalMsg.metadata as Record<string, unknown>) || {};
-            await messageRepository.update(
-              originalMsg.id,
-              {
-                content: parsedEdit.textContent,
-                metadata: {
-                  ...existingMeta,
-                  isEdited: true,
-                  editedAt: new Date().toISOString(),
-                },
-              },
-              companyId
-            );
-            Logger.info(`[ChatSync] [EDIT] Updated message ${originalMessageId} content during history sync`);
-          }
-        }
-      }
+      const editFallbackSenderId = parsed.direction === MessageDirection.OUTBOUND ? fallbackSenderId : (customerUserId || fallbackSenderId);
+      await this.applyHistoricalEdit(companyId, conversation.id, parsed, editFallbackSenderId);
       return "skipped";
     }
 
@@ -185,8 +157,26 @@ export class ChatSyncBatchIngester {
 
     const validBatch: Prisma.MessageCreateManyInput[] = [];
     for (const msg of msgs) {
+      // [FIX] Bulk history sync never validated messages the way processMessage()
+      // does — a missing key.id (or bogus timestamp) would slip into validBatch
+      // and poison the single createMany() call for the WHOLE chat's batch below.
+      if (!syncMessageParser.isValid(msg)) continue;
+
       const parsed: ParsedMessage | null = syncMessageParser.parseContent(msg);
-      if (!parsed || parsed.type !== "message") continue;
+      if (!parsed) continue;
+
+      // [FIX] Baileys delivers an edited message in historical sync as ONLY the
+      // protocolMessage/MESSAGE_EDIT frame — there is no separate "original text"
+      // entry to fall back on (Baileys only synthesizes messages.update for LIVE
+      // edits, per process-message.js). The old code did `continue` here, which
+      // silently dropped the message forever instead of updating/creating it.
+      if (parsed.type === "edit") {
+        const fallbackSenderId = parsed.direction === MessageDirection.OUTBOUND ? adminId : (customerUserId || adminId);
+        await this.applyHistoricalEdit(companyId, conversation.id, parsed, fallbackSenderId);
+        continue;
+      }
+
+      if (parsed.type !== "message") continue;
 
       let mediaMeta: Record<string, unknown> = {};
       if (parsed.mediaType) {
@@ -290,10 +280,100 @@ export class ChatSyncBatchIngester {
     }
 
     if (validBatch.length > 0) {
-      await messageRepository.createMany({ data: validBatch, skipDuplicates: true });
+      // [FIX] createMany() is a single atomic INSERT — one malformed row (a
+      // constraint violation unrelated to duplicates, which skipDuplicates
+      // doesn't protect against) rejects the WHOLE statement, silently losing
+      // every message in this chat's batch (observed as a multi-message gap).
+      // Fall back to inserting one-by-one so a single bad row can't sink the rest.
+      try {
+        await messageRepository.createMany({ data: validBatch, skipDuplicates: true });
+      } catch (err) {
+        Logger.warn(
+          `[ChatSync] Bulk createMany failed for ${validBatch.length} messages (conversation ${conversation.id}), falling back to per-message insert:`,
+          err instanceof Error ? err.message : err,
+        );
+        for (const row of validBatch) {
+          try {
+            await messageRepository.create({ data: row });
+          } catch (rowErr) {
+            Logger.error(
+              `[ChatSync] Failed to insert individual message ${row.whatsappMessageId} during batch fallback:`,
+              rowErr instanceof Error ? rowErr.message : rowErr,
+            );
+          }
+        }
+      }
     }
 
     return conversation.id;
+  }
+
+  /**
+   * [FIX] Applies an edit discovered during BULK history sync. Mirrors
+   * processMessage()'s single-message edit path: update the original if it's
+   * already in the DB, or — since historical sync never delivers a separate
+   * "pre-edit" entry for this message — create it directly with the edited
+   * content so it isn't silently lost.
+   */
+  private async applyHistoricalEdit(
+    companyId: string,
+    conversationId: string,
+    parsed: ParsedMessage,
+    fallbackSenderId: string,
+  ): Promise<void> {
+    const editContent = parsed.content as { originalMessageId?: string } | undefined;
+    const originalMessageId = editContent?.originalMessageId;
+    const editedMessageProto = parsed.msgContent;
+    if (!originalMessageId || !editedMessageProto) return;
+
+    const fakeMsg: WAMessage = {
+      key: { id: originalMessageId, fromMe: parsed.direction === MessageDirection.OUTBOUND },
+      message: editedMessageProto as import("@whiskeysockets/baileys").proto.IMessage,
+      messageTimestamp: Math.floor(Date.now() / 1000),
+    };
+    const parsedEdit = syncMessageParser.parseContent(fakeMsg);
+    if (!parsedEdit?.textContent) return;
+
+    const originalMsg = await messageRepository.findMessageByWhatsAppId(originalMessageId, companyId);
+    if (originalMsg) {
+      const existingMeta = (originalMsg.metadata as Record<string, unknown>) || {};
+      await messageRepository.update(
+        originalMsg.id,
+        {
+          content: parsedEdit.textContent,
+          metadata: { ...existingMeta, isEdited: true, editedAt: new Date().toISOString() },
+        },
+        companyId,
+      );
+      Logger.info(`[ChatSync] [EDIT] Updated message ${originalMessageId} content during bulk history sync`);
+      return;
+    }
+
+    // Original was never synced (this IS the only historical entry for it) — create
+    // it now with the final edited content rather than losing the message entirely.
+    try {
+      await messageRepository.create({
+        data: {
+          companyId,
+          conversationId,
+          whatsappMessageId: originalMessageId,
+          content: parsedEdit.textContent,
+          channel: Channel.WHATSAPP,
+          direction: parsed.direction,
+          senderId: fallbackSenderId,
+          status: "DELIVERED",
+          metadata: {
+            origin: "history_sync",
+            isEdited: true,
+            editedAt: new Date().toISOString(),
+          } as Prisma.InputJsonValue,
+          createdAt: new Date(),
+        },
+      });
+      Logger.info(`[ChatSync] [EDIT] Created message ${originalMessageId} from edit frame during bulk history sync (original was never synced)`);
+    } catch (err) {
+      Logger.error(`[ChatSync] Failed to create message from historical edit ${originalMessageId}:`, err instanceof Error ? err.message : err);
+    }
   }
 
   async handleReaction(companyId: string, react: { key?: { id?: string }, text?: string | null }, senderId: string): Promise<void> {

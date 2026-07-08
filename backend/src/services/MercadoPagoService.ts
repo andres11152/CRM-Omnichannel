@@ -126,8 +126,127 @@ export const mercadoPagoService = {
    */
   async handleWebhook(payload: Record<string, unknown>): Promise<{ success: boolean }> {
     Logger.info("[MercadoPago] Received payment webhook notification", { payload });
-    // Process payment updates (success, pending, rejected)
-    return { success: true };
+
+    const { prisma: db } = await import("@/config/database");
+
+    try {
+      // 1. Process Merchant Order or Payment Notifications
+      // MercadoPago webhooks can send different action types
+      const action = payload.action as string;
+      const type = payload.type as string;
+
+      if (type === "subscription_preapproval" || action?.includes("subscription")) {
+        const id = (payload.data as { id?: string })?.id;
+        if (!id) return { success: true };
+
+        Logger.info(`[MercadoPago] Processing subscription update for subscription ID: ${id}`);
+        
+        // Fetch subscription status directly from MercadoPago API
+        const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || "TEST-MOCK-ACCESS-TOKEN";
+        let subStatus = "authorized";
+        let customerId = "";
+        let planId = "";
+
+        if (accessToken !== "TEST-MOCK-ACCESS-TOKEN") {
+          const response = await axios.get(
+            `https://api.mercadopago.com/v1/subscriptions/${id}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          subStatus = response.data.status;
+          customerId = response.data.payer?.id;
+          planId = response.data.plan_id;
+        }
+
+        // Find company by subscriptionId
+        const company = await companyRepository.findUnique({
+          where: { stripeSubscriptionId: id }
+        });
+
+        if (company) {
+          let updatedStatus: "ACTIVE" | "OVERDUE" | "INACTIVE" = "ACTIVE";
+          if (subStatus === "cancelled" || subStatus === "unauthorized") {
+            updatedStatus = "INACTIVE";
+          } else if (subStatus === "pending" || subStatus === "rejected") {
+            updatedStatus = "OVERDUE";
+          }
+
+          Logger.info(`[MercadoPago] Updating company ${company.id} status to ${updatedStatus} based on sub: ${id}`);
+          await companyRepository.update(company.id, {
+            status: updatedStatus,
+            isActive: updatedStatus === "ACTIVE"
+          });
+        }
+      }
+
+      if (type === "payment" || action === "payment.created" || action === "payment.updated") {
+        const paymentId = (payload.data as { id?: string })?.id;
+        if (!paymentId) return { success: true };
+
+        const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || "TEST-MOCK-ACCESS-TOKEN";
+        
+        if (accessToken !== "TEST-MOCK-ACCESS-TOKEN") {
+          // Fetch payment detail
+          const paymentResponse = await axios.get(
+            `https://api.mercadopago.com/v1/payments/${paymentId}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          
+          const status = paymentResponse.data.status;
+          const amount = Math.round(paymentResponse.data.transaction_amount * 100); // cents
+          const currency = paymentResponse.data.currency_id || "USD";
+          const customerId = paymentResponse.data.payer?.id;
+
+          if (customerId) {
+            // Find company by MP Customer ID
+            const company = await companyRepository.findUnique({
+              where: { stripeCustomerId: customerId }
+            });
+
+            if (company) {
+              const mappedStatus = status === "approved" ? "succeeded" : status === "rejected" ? "failed" : "pending";
+              
+              Logger.info(`[MercadoPago] Logging transaction for company ${company.id} (Payment: ${paymentId})`);
+              
+              // Register transaction log
+              await db.billingTransaction.create({
+                data: {
+                  companyId: company.id,
+                  description: `MercadoPago Subscription Payment - Ref: ${paymentId}`,
+                  amount,
+                  currency,
+                  status: mappedStatus,
+                  stripePaymentId: String(paymentId),
+                  billingDate: new Date(),
+                }
+              });
+
+              if (mappedStatus === "succeeded") {
+                const nextBillingDate = new Date();
+                nextBillingDate.setDate(nextBillingDate.getDate() + 30);
+
+                await companyRepository.update(company.id, {
+                  status: "ACTIVE",
+                  isActive: true,
+                  subscriptionEndsAt: nextBillingDate
+                });
+              } else if (mappedStatus === "failed") {
+                await companyRepository.update(company.id, {
+                  status: "OVERDUE"
+                });
+              }
+            }
+          }
+        }
+      }
+
+      return { success: true };
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      Logger.error(`[MercadoPago] Failed to parse webhook callback payload`, {
+        error: errorMsg,
+      });
+      return { success: false };
+    }
   }
 };
 

@@ -145,7 +145,18 @@ export class ChatSyncIngest {
           // 3. Process each conversation. Yield to the event loop between conversations
           // so the API stays responsive even during a large sync.
           for (const [phone, chatMsgs] of msgsByPhone.entries()) {
-            const conversationId = await this.batchIngester.ingestConversationBatch(companyId, phone, chatMsgs, admin.id);
+            // [FIX] One conversation's batch failing (e.g. a constraint error not
+            // caught by the batch ingester) used to propagate to this loop's caller,
+            // aborting history sync for every OTHER conversation still pending in
+            // this event. Isolate failures per-conversation instead.
+            let conversationId: string | null = null;
+            try {
+              conversationId = await this.batchIngester.ingestConversationBatch(companyId, phone, chatMsgs, admin.id);
+            } catch (convErr) {
+              Logger.error(`[ChatSync] Failed to ingest batch for ${phone} (company ${companyId}):`, {
+                error: convErr instanceof Error ? convErr.message : String(convErr),
+              });
+            }
             // On-demand backfill: tell the frontend to refetch this chat now that
             // older messages have landed in the DB (handles batches that arrive after
             // the HTTP sync request already returned).

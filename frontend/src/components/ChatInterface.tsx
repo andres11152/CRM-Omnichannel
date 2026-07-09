@@ -95,6 +95,7 @@ export const ChatInterface: React.FC<Props> = ({
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedLibraryMedia, setSelectedLibraryMedia] = useState<import("@/services/mediaService").Media | null>(null);
   const [isRecording, setIsRecording] = useState(false);
 
   // Panels & Modals visibility
@@ -190,24 +191,37 @@ export const ChatInterface: React.FC<Props> = ({
 
   // 3. EVENT HANDLERS
   const onSend = useCallback(async () => {
-    if (!inputValue.trim() && !selectedFile && !isRecording) return;
-    
+    if (!inputValue.trim() && !selectedFile && !selectedLibraryMedia && !isRecording) return;
+
     // Optimistic Reset: Clear inputs immediately for better perceived performance
     const textToSend = inputValue;
     const fileToSend = selectedFile;
+    const libraryToSend = selectedLibraryMedia;
     const replyTarget = replyingTo;
 
     setInputValue("");
     setReplyingTo(null);
     setSelectedFile(null);
+    setSelectedLibraryMedia(null);
 
     // Stop typing immediately
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     emitTyping("paused");
-    
-    await handleSendMessage(textToSend, fileToSend, replyTarget);
+
+    if (libraryToSend) {
+      // Library asset is already hosted — send as directAttachment (no re-upload)
+      const typeMap = { IMAGE: "image", AUDIO: "audio", VIDEO: "video", DOCUMENT: "document" } as const;
+      await handleSendMessage(textToSend, null, replyTarget, undefined, {
+        url: libraryToSend.url,
+        type: typeMap[libraryToSend.type] || "document",
+        name: libraryToSend.originalName || libraryToSend.filename,
+        mimetype: libraryToSend.mimeType || "application/octet-stream",
+      });
+    } else {
+      await handleSendMessage(textToSend, fileToSend, replyTarget);
+    }
     scrollToBottom();
-  }, [inputValue, selectedFile, isRecording, replyingTo, handleSendMessage, scrollToBottom]);
+  }, [inputValue, selectedFile, selectedLibraryMedia, isRecording, replyingTo, handleSendMessage, scrollToBottom]);
 
   const onSlashSelect = (reply: QuickReply) => {
     handleInputChange(reply.content);
@@ -298,6 +312,8 @@ export const ChatInterface: React.FC<Props> = ({
             setInputValue={handleInputChange}
             selectedFile={selectedFile}
             setSelectedFile={setSelectedFile}
+            selectedLibraryMedia={selectedLibraryMedia}
+            setSelectedLibraryMedia={setSelectedLibraryMedia}
             replyingTo={replyingTo}
             setReplyingTo={setReplyingTo}
             onSend={onSend}

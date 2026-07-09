@@ -14,7 +14,11 @@ import {
   Package,
   CreditCard,
   UserCheck,
-  Building2
+  Building2,
+  FolderOpen,
+  FileText,
+  Music,
+  Video
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -45,6 +49,10 @@ interface SmartComposerProps {
   disabled?: boolean;
   isRecording?: boolean;
   selectedFile?: File | null;
+
+  // Pre-uploaded attachment picked from the Media Library (no re-upload needed)
+  libraryAttachment?: { name: string; url: string; type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT"; sizeLabel?: string } | null;
+  onClearLibraryAttachment?: () => void;
 }
 
 const SmartComposerComponent: React.FC<SmartComposerProps> = ({
@@ -72,11 +80,33 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
   replyingTo,
   onClearReply,
   onKeyDown,
+  libraryAttachment,
+  onClearLibraryAttachment,
 }) => {
   const [showAIMenu, setShowAIMenu] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useTranslation();
+
+  // Real thumbnail for image files selected from disk (object URL, revoked on change)
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (selectedFile && selectedFile.type.startsWith("image/")) {
+      const url = URL.createObjectURL(selectedFile);
+      setFilePreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setFilePreviewUrl(null);
+  }, [selectedFile]);
+
+  const libraryTypeIcon = (type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT") => {
+    switch (type) {
+      case "IMAGE": return ImageIcon;
+      case "AUDIO": return Music;
+      case "VIDEO": return Video;
+      default: return FileText;
+    }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // [SEC] Allow parent to override or intercept keys (e.g., Slash Menu navigation)
@@ -155,8 +185,8 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
       {/* 2. COMPOSER BODY (Glassmorphism inspired) */}
       <div className="relative flex flex-col bg-white/80 dark:bg-[#1f2c34]/80 backdrop-blur-md rounded-[24px] border border-gray-200 dark:border-white/10 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50">
         
-        {/* PREVIEWS (Replies/Files) */}
-        {(selectedFile || replyingTo) && (
+        {/* PREVIEWS (Replies/Files/Library) */}
+        {(selectedFile || replyingTo || libraryAttachment) && (
            <div className="p-3 border-b border-gray-100 dark:border-white/5 space-y-2">
              {replyingTo && (
                <div className="flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-500/5 p-2 rounded-xl border-l-4 border-indigo-500 animate-in slide-in-from-left-2">
@@ -172,15 +202,46 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
              {selectedFile && (
                <div className="flex items-center justify-between bg-gray-50 dark:bg-white/5 p-2 rounded-xl border border-dashed border-gray-200 dark:border-white/10">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-                      <ImageIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    </div>
+                    {filePreviewUrl ? (
+                      <img src={filePreviewUrl} alt={selectedFile.name} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
+                        <ImageIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                    )}
                     <div>
                       <p className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate pr-4">{selectedFile.name}</p>
                       <p className="text-[10px] text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
                     </div>
                   </div>
                   <button onClick={onClearFile} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-500/20 rounded-full transition-colors text-red-500">
+                    <X className="w-4 h-4" />
+                  </button>
+               </div>
+             )}
+             {libraryAttachment && (
+               <div className="flex items-center justify-between bg-gray-50 dark:bg-white/5 p-2 rounded-xl border border-dashed border-pink-200 dark:border-pink-500/20">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {libraryAttachment.type === "IMAGE" ? (
+                      <img src={libraryAttachment.url} alt={libraryAttachment.name} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
+                        {(() => {
+                          const Icon = libraryTypeIcon(libraryAttachment.type);
+                          return <Icon className="w-5 h-5 text-pink-600 dark:text-pink-400" />;
+                        })()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate pr-4">{libraryAttachment.name}</p>
+                      <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                        <FolderOpen className="w-3 h-3" />
+                        {t("composer.from_library", "Biblioteca Multimedia")}
+                        {libraryAttachment.sizeLabel ? ` · ${libraryAttachment.sizeLabel}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={onClearLibraryAttachment} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-500/20 rounded-full transition-colors text-red-500">
                     <X className="w-4 h-4" />
                   </button>
                </div>
@@ -209,6 +270,7 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
                         { label: t("composer.send_property", "Enviar Inmueble"), icon: Building2, color: 'text-indigo-500', onClick: onProperty },
                         { label: t("composer.request_payment", "Solicitar Pago"), icon: CreditCard, color: 'text-green-500', onClick: onPayment },
                         { label: t("composer.request_data", "Solicitar Datos"), icon: UserCheck, color: 'text-blue-500', onClick: onRequestData },
+                        { label: t("composer.media_library", "Enviar desde Biblioteca"), icon: FolderOpen, color: 'text-pink-500', onClick: onMediaLibraryClick },
                         { label: t("composer.attach_file", "Adjuntar Archivo"), icon: Paperclip, color: 'text-gray-500', onClick: onAttachmentClick },
                       ].map((action, i) => (
                         <button
@@ -251,7 +313,7 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
           />
 
           <div className="flex items-center gap-2 mb-1">
-            {!inputValue.trim() && !selectedFile ? (
+            {!inputValue.trim() && !selectedFile && !libraryAttachment ? (
                <button 
                  onClick={onVoiceNoteClick}
                  className="p-2.5 text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 dark:text-gray-400 dark:hover:bg-white/10 rounded-full transition-all active:scale-90"

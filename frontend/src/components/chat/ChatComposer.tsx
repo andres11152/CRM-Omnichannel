@@ -1,6 +1,8 @@
 import React from "react";
 import { SmartComposer } from "../SmartComposer";
 import { AudioRecorder } from "../AudioRecorder";
+import { MediaPicker } from "../MediaPicker";
+import { Media } from "@/services/mediaService";
 import { QuickReply, Message } from "@/types";
 import { QuickReplies } from "../QuickReplies";
 import { InlineQuickReplies } from "./InlineQuickReplies";
@@ -11,6 +13,8 @@ interface ChatComposerProps {
   setInputValue: (val: string) => void;
   selectedFile: File | null;
   setSelectedFile: (file: File | null) => void;
+  selectedLibraryMedia?: Media | null;
+  setSelectedLibraryMedia?: (media: Media | null) => void;
   replyingTo: Message | null;
   setReplyingTo: (msg: Message | null) => void;
   onSend: () => void;
@@ -38,6 +42,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   setInputValue,
   selectedFile,
   setSelectedFile,
+  selectedLibraryMedia,
+  setSelectedLibraryMedia,
   replyingTo,
   setReplyingTo,
   onSend,
@@ -60,6 +66,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+      setSelectedLibraryMedia?.(null); // mutually exclusive with library attachments
     }
   };
 
@@ -73,7 +80,14 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   const [showQuickReplies, setShowQuickReplies] = React.useState(false);
   const [showSlashMenu, setShowSlashMenu] = React.useState(false);
   const [showEmojiMenu, setShowEmojiMenu] = React.useState(false);
+  const [showMediaPicker, setShowMediaPicker] = React.useState(false);
   const [slashQuery, setSlashQuery] = React.useState("");
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   // [SEC] Advanced Trigger for Quick Replies and Slash Menu
   React.useEffect(() => {
@@ -121,9 +135,16 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             replyingTo={replyingTo}
             onClearReply={() => setReplyingTo(null)}
             onAICopilotClick={onAICopilotClick || (() => {})}
-            onQuickRepliesClick={() => setShowQuickReplies((prev) => !prev)} 
-            onMediaLibraryClick={() => {}}
+            onQuickRepliesClick={() => setShowQuickReplies((prev) => !prev)}
+            onMediaLibraryClick={() => setShowMediaPicker(true)}
             onStickerClick={() => {}}
+            libraryAttachment={selectedLibraryMedia ? {
+              name: selectedLibraryMedia.originalName || selectedLibraryMedia.filename,
+              url: selectedLibraryMedia.url,
+              type: selectedLibraryMedia.type,
+              sizeLabel: formatSize(selectedLibraryMedia.size),
+            } : null}
+            onClearLibraryAttachment={() => setSelectedLibraryMedia?.(null)}
             onSchedule={onSchedule}
             onProduct={onProduct}
             onProperty={onProperty}
@@ -170,6 +191,19 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               setShowQuickReplies(false);
             }}
             onClose={() => setShowQuickReplies(false)}
+          />
+        )}
+
+        {/* MEDIA LIBRARY PICKER: send an already-uploaded asset without re-uploading */}
+        {showMediaPicker && (
+          <MediaPicker
+            title="Enviar desde Biblioteca"
+            onSelect={(media) => {
+              setSelectedLibraryMedia?.(media);
+              setSelectedFile(null); // mutually exclusive with disk attachments
+              setShowMediaPicker(false);
+            }}
+            onClose={() => setShowMediaPicker(false)}
           />
         )}
 

@@ -13,6 +13,8 @@ import {
   SenderType,
   QuickReply,
 } from "@/types";
+import { jwtDecode } from "jwt-decode";
+import { useSocketStore } from "@/stores/socketStore";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -80,7 +82,49 @@ export const ChatInterface: React.FC<Props> = ({
 
   // 2. UI STATE (Local Modals)
   const [inputValue, setInputValue] = useState("");
+  const [isWhisperMode, setIsWhisperMode] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  interface Viewer { id: string; name: string; email: string; }
+  const [activeViewers, setActiveViewers] = useState<Viewer[]>([]);
+
+  const getMyUserId = useCallback(() => {
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        return (jwtDecode<{ id: string }>(token)).id;
+      }
+    } catch (e) {}
+    return null;
+  }, []);
+
+  // Sync viewing conversation status and subscribe to active viewers list
+  useEffect(() => {
+    if (!activeContact?.id) return;
+
+    useSocketStore.getState().emit("agent:viewing_conversation", {
+      conversationId: activeContact.id,
+      isViewing: true,
+    });
+
+    const unsubscribe = useSocketStore.getState().subscribe<{ conversationId: string; viewers: Viewer[] }>(
+      "conversation:active_viewers",
+      (data) => {
+        if (data && data.conversationId === activeContact.id) {
+          setActiveViewers(data.viewers);
+        }
+      }
+    );
+
+    return () => {
+      useSocketStore.getState().emit("agent:viewing_conversation", {
+        conversationId: activeContact.id,
+        isViewing: false,
+      });
+      unsubscribe();
+      setActiveViewers([]);
+    };
+  }, [activeContact?.id]);
 
   const handleInputChange = useCallback((val: string) => {
     setInputValue(val);
@@ -216,12 +260,13 @@ export const ChatInterface: React.FC<Props> = ({
         type: typeMap[libraryToSend.type] || "document",
         name: libraryToSend.originalName || libraryToSend.filename,
         mimetype: libraryToSend.mimeType || "application/octet-stream",
-      });
+      }, isWhisperMode);
     } else {
-      await handleSendMessage(textToSend, fileToSend, replyTarget);
+      await handleSendMessage(textToSend, fileToSend, replyTarget, undefined, undefined, isWhisperMode);
     }
+    setIsWhisperMode(false);
     scrollToBottom();
-  }, [inputValue, selectedFile, selectedLibraryMedia, isRecording, replyingTo, handleSendMessage, scrollToBottom]);
+  }, [inputValue, selectedFile, selectedLibraryMedia, isRecording, replyingTo, handleSendMessage, scrollToBottom, isWhisperMode]);
 
   const onSlashSelect = (reply: QuickReply) => {
     handleInputChange(reply.content);
@@ -307,8 +352,23 @@ export const ChatInterface: React.FC<Props> = ({
 
         {/* BOTTOM: Composer */}
         {!readOnly && (
-          <ChatComposer
-            inputValue={inputValue}
+          <>
+            {activeViewers.filter(v => v.id !== getMyUserId()).length > 0 && (
+              <div className="mx-4 mb-2 p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center gap-2 animate-in slide-in-from-bottom-2 duration-300">
+                <span className="text-sm">⚠️</span>
+                <span>
+                  {activeViewers
+                    .filter(v => v.id !== getMyUserId())
+                    .map(v => v.name || v.email)
+                    .join(", ")}{" "}
+                  {activeViewers.filter(v => v.id !== getMyUserId()).length === 1
+                    ? "está viendo este chat en este momento para evitar duplicación."
+                    : "están viendo este chat en este momento para evitar duplicación."}
+                </span>
+              </div>
+            )}
+            <ChatComposer
+              inputValue={inputValue}
             setInputValue={handleInputChange}
             selectedFile={selectedFile}
             setSelectedFile={setSelectedFile}
@@ -371,7 +431,10 @@ export const ChatInterface: React.FC<Props> = ({
               setIsRecording(rec);
               emitTyping(rec ? "recording" : "paused");
             }}
+            isWhisperMode={isWhisperMode}
+            onWhisperToggle={() => setIsWhisperMode(!isWhisperMode)}
           />
+          </>
         )}
       </div>
 
@@ -439,8 +502,8 @@ export const ChatInterface: React.FC<Props> = ({
         <TransferModal
           isOpen={showTransferModal}
           onClose={() => setShowTransferModal(false)}
-          onTransfer={(targetId, type) => {
-             handleTransfer(targetId, type);
+          onTransfer={(targetId, type, note) => {
+             handleTransfer(targetId, type, note);
              setShowTransferModal(false);
           }}
           currentUserId={activeContact.assignedToId || undefined}

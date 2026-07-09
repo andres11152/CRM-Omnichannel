@@ -298,6 +298,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     replyingTo?: Message | null,
     scheduledAt?: string | Date,
     directAttachment?: { url: string; type: "image" | "video" | "audio" | "document"; name: string; mimetype: string },
+    isWhisper?: boolean,
   ) => {
     if (!content.trim() && !mediaFile && !directAttachment) return;
 
@@ -353,7 +354,8 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         metadata: {
           quotedMessageId: replyingTo?.id,
           quotedContent: replyingTo?.content,
-          tempId: `temp-${Date.now()}`
+          tempId: `temp-${Date.now()}`,
+          isWhisper: isWhisper || undefined,
         }
       };
 
@@ -431,9 +433,9 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         console.error("[Workflow] React error:", err);
       }
     },
-    handleTransfer: async (targetId: string, type: "AGENT" | "QUEUE") => {
+    handleTransfer: async (targetId: string, type: "AGENT" | "QUEUE", note?: string) => {
       try {
-        await chatService.transferTicket(ticketId, targetId, type);
+        await chatService.transferTicket(ticketId, targetId, type, note);
         toast.success(`Ticket transferido a ${type === "AGENT" ? "agente" : "cola"}`);
         // Optional: onBack() or similar if current agent loses access
       } catch (err) {

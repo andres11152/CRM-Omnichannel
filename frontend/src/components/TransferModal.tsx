@@ -11,7 +11,7 @@ interface AgentWithAI extends Agent {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onTransfer: (targetId: string, type: "AGENT" | "QUEUE") => void;
+  onTransfer: (targetId: string, type: "AGENT" | "QUEUE", note?: string) => void;
   /** [SEC] 100-Year Fix: Current user ID to exclude from transfer list */
   currentUserId?: string;
 }
@@ -28,6 +28,7 @@ export const TransferModal: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [handoverNote, setHandoverNote] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -58,7 +59,8 @@ export const TransferModal: React.FC<Props> = ({
 
   const handleConfirm = () => {
     if (selectedId) {
-      onTransfer(selectedId, activeTab === "AGENTS" ? "AGENT" : "QUEUE");
+      onTransfer(selectedId, activeTab === "AGENTS" ? "AGENT" : "QUEUE", handoverNote.trim() || undefined);
+      setHandoverNote("");
       onClose();
     }
   };
@@ -202,6 +204,19 @@ export const TransferModal: React.FC<Props> = ({
               </div>
             ))
           )}
+        </div>
+
+        {/* Handover Note */}
+        <div className="p-4 border-t border-gray-100 dark:border-reply-border-dark bg-gray-50/30 dark:bg-reply-surface-dark/10">
+          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">
+            Nota de Traspaso / Contexto (Interno)
+          </label>
+          <textarea
+            value={handoverNote}
+            onChange={(e) => setHandoverNote(e.target.value)}
+            placeholder="Escribe detalles importantes del caso para el siguiente agente..."
+            className="w-full bg-white dark:bg-reply-surface-dark border border-gray-200 dark:border-reply-border-dark focus:border-reply-green rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-white focus:outline-none resize-none h-20"
+          />
         </div>
 
       </div>

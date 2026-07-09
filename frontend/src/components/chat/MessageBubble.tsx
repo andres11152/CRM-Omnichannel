@@ -50,6 +50,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isOutbound = message.direction === "OUTBOUND" || message.sender === "agent";
   const isAgent = isOutbound;
   const isSystem = message.sender === "system";
+  const isWhisper = !!(message.metadata as Record<string, unknown> | null)?.isWhisper;
   const [showPicker, setShowPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
 
@@ -243,10 +244,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         <div
           className={`rounded-2xl px-3 py-1.5 shadow-md transition-all relative group ${
             isAgent
-              ? "rounded-br-none bg-[#00a884] text-white"
+              ? isWhisper
+                ? "rounded-br-none bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 border border-amber-200/50 dark:border-amber-900/30"
+                : "rounded-br-none bg-[#00a884] text-white"
               : "rounded-bl-none border bg-[#f1f5f9] text-[#0f172a] border-[#e2e8f0] dark:bg-[#202c33] dark:text-[#e9edef] dark:border-[#2a3942]"
           }`}
         >
+          {/* Whisper header label */}
+          {isWhisper && (
+            <div className="text-[10px] font-black text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1 uppercase tracking-wider">
+              <span>🤫 Susurro Interno</span>
+            </div>
+          )}
           {/* Group Sender Name (Inside Bubble) - ONLY for groups */}
           {!isAgent && isGroup && displaySenderName && (
             <div 
@@ -525,7 +534,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           {/* Inline timestamp + status (inside bubble, bottom-right corner — saves vertical space) */}
           <div
             className={`flex items-center justify-end gap-1 mt-0.5 -mb-0.5 select-none ${
-              isAgent ? "text-white/70" : "text-gray-400 dark:text-gray-500"
+              isAgent ? (isWhisper ? "text-amber-800/70 dark:text-amber-400/70" : "text-white/70") : "text-gray-400 dark:text-gray-500"
             }`}
           >
             <span className="text-[10px] leading-none whitespace-nowrap">

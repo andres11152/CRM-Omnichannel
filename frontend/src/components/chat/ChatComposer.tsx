@@ -30,6 +30,8 @@ interface ChatComposerProps {
   onPayment?: () => void;
   onRequestData?: () => void;
   onAICopilotClick?: (action: "summarize" | "formal" | "suggest") => void;
+  isWhisperMode?: boolean;
+  onWhisperToggle?: () => void;
 }
 
 /**
@@ -59,6 +61,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   onPayment,
   onRequestData,
   onAICopilotClick,
+  isWhisperMode = false,
+  onWhisperToggle = () => {},
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -150,6 +154,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             onProperty={onProperty}
             onPayment={onPayment}
             onRequestData={onRequestData}
+            isWhisperMode={isWhisperMode}
+            onWhisperToggle={onWhisperToggle}
             onKeyDown={(e) => {
               if (showSlashMenu && (e.key === 'Enter' || e.key === "Tab" || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 e.preventDefault();

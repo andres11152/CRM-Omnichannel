@@ -158,9 +158,12 @@ export const chatService = {
     ticketId: string,
     targetId: string,
     type: "AGENT" | "QUEUE",
+    note?: string,
   ): Promise<void> => {
     const payload =
-      type === "AGENT" ? { assignedToId: targetId } : { queueId: targetId };
+      type === "AGENT"
+        ? { assignedToId: targetId, handoverNote: note }
+        : { queueId: targetId, handoverNote: note };
     await apiClient.patch(`/tickets/${ticketId}`, payload);
   },
   reactToMessage: async (

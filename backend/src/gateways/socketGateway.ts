@@ -20,6 +20,7 @@ interface SocketData {
     role: string;
     companyId: string | null;
   };
+  activeConversationId?: string | null;
 }
 
 // Importing service for session tracking
@@ -36,6 +37,7 @@ interface ClientToServerEvents {
   join_room: (data: { conversationId: string }) => void;
   "conversation:typing": (data: { to: string; status: string }) => void;
   "session.check_status": () => void | Promise<void>;
+  "agent:viewing_conversation": (data: { conversationId: string; isViewing: boolean }) => void;
 }
 
 interface InterServerEvents {
@@ -365,6 +367,18 @@ class WebSocketGateway {
         }
       });
 
+      // [ONLINE] AGENT VIEWING CONVERSATION (Collision Prevention)
+      socket.on("agent:viewing_conversation", async (data: { conversationId: string; isViewing: boolean }) => {
+        if (!user.companyId || !data?.conversationId) return;
+        const oldId = socket.data.activeConversationId;
+        socket.data.activeConversationId = data.isViewing ? data.conversationId : null;
+        
+        await this.broadcastActiveViewers(user.companyId, data.conversationId);
+        if (oldId && oldId !== data.conversationId) {
+          await this.broadcastActiveViewers(user.companyId, oldId);
+        }
+      });
+
       // [ONLINE] TYPING INDICATOR (100-YEAR FIX)
       socket.on("conversation:typing", async (data) => {
         const { default: TenantContextManager } = await import("@/config/tenantContext");
@@ -425,6 +439,8 @@ class WebSocketGateway {
 
       socket.on("disconnect", async (reason) => {
         Logger.debug(`[Gateway] Client disconnected: ${user.id} (${reason})`);
+        
+        const activeConversationId = socket.data.activeConversationId;
 
         // [OFFLINE] DISCONNECT EVENT
         // Update DB/Redis with status 'offline' & 'lastSeen'
@@ -444,6 +460,10 @@ class WebSocketGateway {
             status: "offline",
             lastSeen: new Date().toISOString(),
           });
+          
+          if (activeConversationId) {
+            await this.broadcastActiveViewers(user.companyId, activeConversationId);
+          }
         }
       });
     });
@@ -474,6 +494,44 @@ class WebSocketGateway {
 
   public getIO() {
     return this.io;
+  }
+
+  public async broadcastActiveViewers(companyId: string, conversationId: string): Promise<void> {
+    if (!this.io) return;
+    try {
+      const companyRoom = `company:${companyId}`;
+      const sockets = await this.io.in(companyRoom).fetchSockets();
+
+      const viewersMap = new Map<string, { id: string; name: string; email: string }>();
+      const { prisma } = await import("@/config/database");
+
+      for (const s of sockets) {
+        if (s.data.activeConversationId === conversationId && s.data.user) {
+          const uid = s.data.user.id;
+          if (!viewersMap.has(uid)) {
+            const dbUser = await prisma.user.findUnique({
+              where: { id: uid },
+              select: { id: true, name: true, email: true },
+            });
+            if (dbUser) {
+              viewersMap.set(uid, {
+                id: dbUser.id,
+                name: dbUser.name,
+                email: dbUser.email,
+              });
+            }
+          }
+        }
+      }
+
+      const viewers = Array.from(viewersMap.values());
+      this.emitToCompany(companyId, "conversation:active_viewers", {
+        conversationId,
+        viewers,
+      });
+    } catch (err) {
+      Logger.error(`[Gateway] Failed to broadcast active viewers for ${conversationId}`, err);
+    }
   }
 
   // Safe emit method using Generics if possible, or unknown

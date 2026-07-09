@@ -416,14 +416,14 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
   }, []);
 
   const handleQueueTransfer = useCallback(
-    async (targetId: string, type: "AGENT" | "QUEUE") => {
+    async (targetId: string, type: "AGENT" | "QUEUE", note?: string) => {
       if (!transferringTicketId) return;
       try {
         const token = localStorage.getItem("token");
         const updateData =
           type === "AGENT"
-            ? { assignedToId: targetId, status: "IN_PROGRESS" }
-            : { queueId: targetId, assignedToId: null, status: "OPEN" };
+            ? { assignedToId: targetId, status: "IN_PROGRESS", handoverNote: note }
+            : { queueId: targetId, assignedToId: null, status: "OPEN", handoverNote: note };
 
         const res = await fetch(
           `${API_BASE_URL}/tickets/${transferringTicketId}`,

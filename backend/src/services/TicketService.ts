@@ -295,6 +295,54 @@ class TicketService {
     await ticketTransitionManager.syncConversation({ companyId: updatedTicket.companyId, conversationId: updatedTicket.conversationId }, data);
     await ticketTransitionManager.handleSpamAction(updaterId, { id: updatedTicket.id, companyId: updatedTicket.companyId, conversationId: updatedTicket.conversationId }, data);
 
+    // Hito #7: Create a handover note whisper if provided
+    if (data.handoverNote && typeof data.handoverNote === "string") {
+      const noteContent = `📋 *Nota de Traspaso*:\n${data.handoverNote}`;
+      try {
+        const { messageRepository } = await import("@/repositories/MessageRepository");
+        const { gateway } = await import("@/gateways/socketGateway");
+        const { SocketEventEmitter } = await import("./SocketEventEmitter");
+        const socketEmitter = new SocketEventEmitter(gateway);
+
+        const savedMessage = await messageRepository.create({
+          data: {
+            companyId,
+            conversationId: updatedTicket.conversationId,
+            content: noteContent,
+            direction: "OUTBOUND",
+            senderId: updaterId,
+            channel: updatedTicket.conversation.channel,
+            status: "SENT",
+            metadata: {
+              isWhisper: true,
+            },
+          },
+          include: {
+            sender: true,
+          }
+        });
+
+        const convWithRels = await conversationRepository.findFirst({
+          where: { id: updatedTicket.conversationId, companyId },
+          include: {
+            participants: true,
+            assignedTo: true,
+            contact: true,
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            }
+          }
+        });
+
+        if (convWithRels) {
+          socketEmitter.emitMessageSent(savedMessage, convWithRels, updatedTicket.id);
+        }
+      } catch (err) {
+        Logger.error(`[TicketService] Failed to create handover note whisper`, err);
+      }
+    }
+
     const rawTicketDto = toTicketDTO(updatedTicket as TicketWithRelations);
     const [ticketDto] = await this.enrichWithCrmData([rawTicketDto], companyId);
 

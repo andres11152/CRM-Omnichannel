@@ -11,8 +11,27 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ url, isAgent }
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  const cyclePlaybackRate = () => {
+    let nextRate = 1;
+    if (playbackRate === 1) nextRate = 1.5;
+    else if (playbackRate === 1.5) nextRate = 2;
+    else nextRate = 1;
+
+    setPlaybackRate(nextRate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextRate;
+    }
+  };
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate, url]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -41,6 +60,9 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ url, isAgent }
     };
 
     const handlePlay = () => {
+      if (audio) {
+        audio.playbackRate = playbackRate;
+      }
       rafRef.current = requestAnimationFrame(animate);
     };
 
@@ -60,13 +82,14 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ url, isAgent }
       audio.removeEventListener("pause", handlePause);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [url]);
+  }, [url, playbackRate]);
 
   const togglePlay = () => {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
       } else {
+        audioRef.current.playbackRate = playbackRate;
         audioRef.current.play().catch(err => console.error("Audio playback error:", err));
       }
       setIsPlaying(!isPlaying);
@@ -92,7 +115,7 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ url, isAgent }
   const currentDisplayTime = isPlaying || currentTime > 0 ? currentTime : duration;
 
   return (
-    <div className={`flex items-center gap-3 p-2 rounded-full min-w-[240px] max-w-[300px] ${isAgent ? "bg-white/10" : "bg-gray-100 dark:bg-white/5"}`}>
+    <div className={`flex items-center gap-3 p-2 rounded-full min-w-[250px] max-w-[320px] ${isAgent ? "bg-white/10" : "bg-gray-100 dark:bg-white/5"}`}>
       <audio ref={audioRef} src={url} preload="metadata" />
       
       {/* Play/Pause Button */}
@@ -121,9 +144,22 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ url, isAgent }
         </div>
       </div>
       
+      {/* Speed Control Button */}
+      <button
+        onClick={cyclePlaybackRate}
+        className={`shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded transition-all active:scale-90 border select-none ${
+          isAgent
+            ? "bg-white/10 hover:bg-white/20 border-white/20 text-white"
+            : "bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-200"
+        }`}
+        title="Velocidad de reproducción"
+      >
+        {playbackRate}x
+      </button>
+
       {/* Mic Icon (Visual Decorator) */}
       <div className={`shrink-0 mr-1 ${isAgent ? "text-white/50" : "text-gray-400"}`}>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
           <path d="M11.999 14.942c2.001 0 3.531-1.53 3.531-3.531V4.35c0-2.001-1.53-3.531-3.531-3.531S8.468 2.349 8.468 4.35v7.061c0 2.001 1.53 3.53-3.531 3.531zm6.238-3.53c0 3.531-2.942 6.002-6.237 6.002s-6.237-2.471-6.237-6.002H3.761c0 4.001 3.178 7.297 7.061 7.885v3.884h2.354v-3.884c3.884-.588 7.061-3.884 7.061-7.885h-2.002z"></path>
         </svg>
       </div>

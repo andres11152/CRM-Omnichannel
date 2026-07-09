@@ -3,6 +3,7 @@ import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { gateway } from "@/gateways/socketGateway";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
+import { prisma } from "@/config/database";
 import {
   Channel,
   Message,
@@ -91,6 +92,66 @@ export class ConversationMessageService {
           metadata: safeMetadata as Prisma.InputJsonValue,
         },
       });
+    }
+
+    // C1. Handle Whispering (bypass WhatsApp/Instagram send)
+    if (metadata?.isWhisper === true) {
+      const savedMessage = await messageRepository.create({
+        data: {
+          companyId,
+          conversationId: resolvedConv.id,
+          content: messageContent,
+          direction: "OUTBOUND",
+          senderId: userId,
+          channel: resolvedConv.channel,
+          status: "SENT",
+          metadata: {
+            ...metadata,
+            attachment,
+            type: attachment ? attachment.type : "text",
+            mediaUrl: attachment ? attachment.url : undefined,
+          } as Prisma.InputJsonValue,
+        },
+        include: {
+          sender: true,
+        }
+      });
+
+      // Get conversation with participants for socket update
+      const convWithRels = await conversationRepository.findFirst({
+        where: { id: resolvedConv.id, companyId },
+        include: {
+          participants: true,
+          assignedTo: true,
+          contact: true,
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          }
+        }
+      });
+
+      if (convWithRels) {
+        const { SocketEventEmitter } = await import("./SocketEventEmitter");
+        const socketEmitter = new SocketEventEmitter(gateway);
+        
+        const ticket = await prisma.ticket.findFirst({
+          where: { conversationId: resolvedConv.id, companyId, status: { in: ["OPEN", "IN_PROGRESS"] } }
+        });
+        
+        socketEmitter.emitMessageSent(savedMessage, convWithRels, ticket?.id || resolvedConv.id);
+      }
+
+      return {
+        id: savedMessage.id,
+        content: savedMessage.content,
+        timestamp: savedMessage.createdAt,
+        status: "SENT",
+        sender: "agent",
+        metadata: savedMessage.metadata,
+        type: attachment ? attachment.type : "text",
+        mediaUrl: attachment ? attachment.url : undefined,
+      };
     }
 
     // C. Channel routing: Instagram DMs never go through the WhatsApp JID

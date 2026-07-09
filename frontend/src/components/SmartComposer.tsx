@@ -53,6 +53,8 @@ interface SmartComposerProps {
   // Pre-uploaded attachment picked from the Media Library (no re-upload needed)
   libraryAttachment?: { name: string; url: string; type: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT"; sizeLabel?: string } | null;
   onClearLibraryAttachment?: () => void;
+  isWhisperMode?: boolean;
+  onWhisperToggle?: () => void;
 }
 
 const SmartComposerComponent: React.FC<SmartComposerProps> = ({
@@ -82,6 +84,8 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
   onKeyDown,
   libraryAttachment,
   onClearLibraryAttachment,
+  isWhisperMode = false,
+  onWhisperToggle = () => {},
 }) => {
   const [showAIMenu, setShowAIMenu] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
@@ -142,6 +146,18 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
           <span>{t("composer.quick_replies", "RESPUESTAS RÁPIDAS")}</span>
         </button>
 
+        <button
+          type="button"
+          onClick={onWhisperToggle}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all border ${
+            isWhisperMode
+              ? "bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/10 hover:bg-amber-600"
+              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
+          }`}
+        >
+          <span>🤫 {isWhisperMode ? "MODO SUSURRO" : "SUSURRAR"}</span>
+        </button>
+
         <div className="relative group/ai">
           <button
             onClick={() => setShowAIMenu(!showAIMenu)}
@@ -183,7 +199,11 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
       </div>
 
       {/* 2. COMPOSER BODY (Glassmorphism inspired) */}
-      <div className="relative flex flex-col bg-white/80 dark:bg-[#1f2c34]/80 backdrop-blur-md rounded-[24px] border border-gray-200 dark:border-white/10 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50">
+      <div className={`relative flex flex-col rounded-[24px] border shadow-sm transition-all ${
+        isWhisperMode
+          ? "bg-amber-50/70 dark:bg-amber-950/20 border-amber-500/50 focus-within:ring-2 focus-within:ring-amber-500/30 focus-within:border-amber-500"
+          : "bg-white/80 dark:bg-[#1f2c34]/80 backdrop-blur-md border-gray-200 dark:border-white/10 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50"
+      }`}>
         
         {/* PREVIEWS (Replies/Files/Library) */}
         {(selectedFile || replyingTo || libraryAttachment) && (
@@ -301,15 +321,17 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
              </button>
           </div>
 
-          <textarea
+           <textarea
             ref={textareaRef}
-            placeholder={t("composer.write_message", "Escribe un mensaje...")}
+            placeholder={isWhisperMode ? "Escribe un susurro interno (no visible para el cliente)..." : t("composer.write_message", "Escribe un mensaje...")}
             value={inputValue}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={disabled}
             rows={1}
-            className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] leading-relaxed text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 resize-none py-2 px-1 max-h-[120px] scrollbar-hide"
+            className={`flex-1 bg-transparent border-none focus:ring-0 text-[15px] leading-relaxed text-gray-800 dark:text-gray-100 resize-none py-2 px-1 max-h-[120px] scrollbar-hide ${
+              isWhisperMode ? "placeholder-amber-600/60 dark:placeholder-amber-400/40" : "placeholder-gray-400 dark:placeholder-gray-500"
+            }`}
           />
 
           <div className="flex items-center gap-2 mb-1">
@@ -324,8 +346,12 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
             ) : (
               <button 
                 onClick={onSend}
-                className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
-                title={t("composer.send", "Enviar")}
+                className={`p-2.5 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center justify-center text-white ${
+                  isWhisperMode
+                    ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                    : "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20"
+                }`}
+                title={isWhisperMode ? "Enviar susurro" : t("composer.send", "Enviar")}
               >
                 <SendHorizontal className="w-5.5 h-5.5" />
               </button>

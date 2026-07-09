@@ -29,14 +29,33 @@ export class InboundCircuitBreaker {
 
     const key = `breaker:inbound:${companyId}`;
     try {
-      const multi = redisClient.multi();
-      multi.incr(key);
+      // [PERF] This runs on the enqueue hot path (before every inbound job). If Redis is
+      // slow (not down), an unbounded await here delays EVERY message — race against a
+      // 500ms timeout and fail open, same pattern as the auth/Redis resilience fix.
+      const countPromise = (async () => {
+        // node-redis v4: multi.exec() returns the replies array directly (results[0] IS
+        // the INCR value). The old ioredis-style results[0][1] read always yielded
+        // undefined — the breaker never tripped and the key never got a TTL.
+        const results = await redisClient!.multi().incr(key).exec();
+        const n = Number(results?.[0] ?? 0);
+        if (n === 1) {
+          await redisClient!.expire(key, this.WINDOW_SECONDS);
+        }
+        return n;
+      })();
 
-      const results = await multi.exec();
-      const count = results && results[0] ? (results[0][1] as number) : 1;
+      const count = await Promise.race([
+        countPromise,
+        new Promise<null>((resolve) => {
+          const t = setTimeout(() => resolve(null), 500);
+          t.unref();
+        }),
+      ]);
 
-      if (count === 1) {
-        await redisClient.expire(key, this.WINDOW_SECONDS);
+      if (count === null) {
+        Logger.warn(`[CircuitBreaker] Redis slow (>500ms) evaluating ${companyId} — failing open (no delay).`);
+        countPromise.catch(() => {}); // Detached: don't let a late rejection go unhandled
+        return 0;
       }
 
       if (count > this.MAX_MESSAGES_PER_WINDOW) {

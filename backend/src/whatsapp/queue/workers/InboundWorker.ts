@@ -72,14 +72,16 @@ export class InboundWorker {
           throw error; // Let BullMQ handle the retry
         }
       },
-      { 
+      {
         connection: redis,
-        concurrency: 3, 
+        // Jobs are now short DB-bound work (AI/flow triggers run detached), so a higher
+        // concurrency drains bursts faster without risking event-loop saturation.
+        concurrency: Number(process.env.WA_INBOUND_CONCURRENCY) || 5,
       }
     );
 
     this.setupListeners();
-    Logger.info("[InboundWorker] [OK] Started — consuming queue 'whatsapp-inbound' (concurrency 3)");
+    Logger.info(`[InboundWorker] [OK] Started — consuming queue 'whatsapp-inbound' (concurrency ${Number(process.env.WA_INBOUND_CONCURRENCY) || 5})`);
   }
 
   private setupListeners() {
@@ -92,7 +94,18 @@ export class InboundWorker {
     });
 
     this.worker.on("completed", (job) => {
-      Logger.debug(`[InboundWorker] Job ${job.id} completed.`);
+      // Latency observability: queueWait = time sitting in Redis before a worker slot
+      // opened; processing = handler time. If inbound "feels slow", these two numbers
+      // say whether the bottleneck is worker saturation or slow processing.
+      const queueWait = job.processedOn && job.timestamp ? job.processedOn - job.timestamp : 0;
+      const processing = job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : 0;
+      if (queueWait > 2000 || processing > 5000) {
+        Logger.warn(
+          `[InboundWorker] SLOW job ${job.id}: queueWait=${queueWait}ms, processing=${processing}ms`,
+        );
+      } else {
+        Logger.debug(`[InboundWorker] Job ${job.id} completed (wait ${queueWait}ms, proc ${processing}ms).`);
+      }
     });
 
     this.worker.on("failed", (job, err) => {

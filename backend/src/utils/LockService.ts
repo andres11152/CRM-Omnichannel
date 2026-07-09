@@ -73,9 +73,20 @@ export class LockService {
   /**
    * Executes a task within a distributed lock
    */
+  /** Max time to wait for a single Redis lock command before failing open.
+   * A slow-but-alive Redis (staging incident pattern) must not stall message processing. */
+  private static readonly REDIS_OP_TIMEOUT_MS = 800;
+
+  private static timeoutSentinel(ms: number): Promise<"__REDIS_SLOW__"> {
+    return new Promise((resolve) => {
+      const t = setTimeout(() => resolve("__REDIS_SLOW__"), ms);
+      t.unref();
+    });
+  }
+
   static async withLock<T>(
-    key: string, 
-    task: () => Promise<T>, 
+    key: string,
+    task: () => Promise<T>,
     ttl: number = 30000,
     retries: number = 3,
     delay: number = 500
@@ -84,8 +95,25 @@ export class LockService {
     let lockValue: string | null = null;
 
     while (currentAttempt < retries) {
-      lockValue = await this.acquire(key, ttl);
-      if (lockValue) break;
+      const acquired = await Promise.race([
+        this.acquire(key, ttl),
+        this.timeoutSentinel(this.REDIS_OP_TIMEOUT_MS),
+      ]);
+
+      if (acquired === "__REDIS_SLOW__") {
+        // Redis is alive but slow — retrying would just stack more waits.
+        // Fail open immediately; dedup layers (doesMessageExist + DeduplicationService)
+        // protect against duplicate processing.
+        Logger.warn(
+          `[LockService] Redis slow (>${this.REDIS_OP_TIMEOUT_MS}ms) acquiring lock ${key}. Running WITHOUT distributed lock.`,
+        );
+        return await task();
+      }
+
+      if (acquired) {
+        lockValue = acquired;
+        break;
+      }
 
       currentAttempt++;
       if (currentAttempt < retries) {
@@ -110,7 +138,12 @@ export class LockService {
     try {
       return await task();
     } finally {
-      await this.release(key, lockValue);
+      // Bounded release: a slow Redis must not pin the finished job. The lock's PX TTL
+      // guarantees eventual cleanup even if the release never lands.
+      await Promise.race([
+        this.release(key, lockValue),
+        this.timeoutSentinel(this.REDIS_OP_TIMEOUT_MS),
+      ]);
     }
   }
 }

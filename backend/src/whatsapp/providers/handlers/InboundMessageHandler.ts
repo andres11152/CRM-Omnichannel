@@ -81,7 +81,10 @@ export class InboundMessageHandler {
     try {
       // [SEC] DISTRIBUTED LOCK (Redlock-lite)
       // Prevents race conditions across multiple workers/instancias
-      await LockService.withLock(`msg:${messageId}`, async () => {
+      // [PERF] Scoped by sessionId: the same WA message id appears on two sessions when
+      // two tenant companies chat with each other — a global key made them serialize
+      // (false contention, up to 1.5s of lock retries per message).
+      await LockService.withLock(`msg:${sessionId}:${messageId}`, async () => {
         await this.processIncomingMessage(rawMessage, sessionId, messageId);
       });
     } catch (error: unknown) {
@@ -276,9 +279,15 @@ export class InboundMessageHandler {
             this.socketEmitter.emitMessageReceived(savedMessage, fullConversation, ticketId);
             
             // AI Trigger Execution (SLA Aware)
+            // [PERF] Fire-and-forget: the message is already persisted and emitted to the
+            // frontend. Awaiting the flow-bot here held BOTH the msg lock and one of the
+            // few worker slots for the whole flow execution (DB + sequential sends), so a
+            // handful of bot conversations stalled ALL inbound ingestion. Detaching also
+            // prevents a flow-bot failure from re-running the job (duplicate bot replies).
+            // AsyncLocalStorage context (tenant/RLS) propagates into the detached promise.
             if (contentData.textContent && !entities.isGroup) {
               Logger.debug(`[InboundHandler] Triggering AI for ${messageId}`);
-              await this.aiTrigger.processInboundTriggers(
+              this.aiTrigger.processInboundTriggers(
                 fullConversation as ConversationWithQueue,
                 contentData.textContent,
                 companyId,
@@ -286,7 +295,11 @@ export class InboundMessageHandler {
                 entities.remoteJid,
                 entities.customerUser,
                 message.pushName
-              );
+              ).catch((err) => {
+                Logger.error(
+                  `[InboundHandler] AI/flow trigger failed for ${messageId}: ${err instanceof Error ? err.message : err}`,
+                );
+              });
             }
           }
         } else {

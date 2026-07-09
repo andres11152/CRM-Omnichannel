@@ -215,10 +215,19 @@ export class MessageHandler implements IMessageHandler {
     // worker, off the socket event loop. (Smoke test confirmed BullMQ consumes on this Redis.)
     try {
       const encodedMessage = this.serializeForQueue(message);
+      // [PERF] Deterministic jobId: Baileys emits fresh inbound messages as BOTH a
+      // `notify` AND an `append` upsert, so without this every message was enqueued
+      // TWICE — the duplicate job burned a worker slot waiting ~1.5s on the msg lock.
+      // BullMQ silently ignores an add() whose jobId already exists, deduping at the
+      // door. Scoped by sessionId because the same WA message id legitimately appears
+      // on two sessions when two tenant companies chat with each other.
+      const jobId = msgId
+        ? `${sessionId}_${msgId}`.replace(/[^A-Za-z0-9_-]/g, "")
+        : undefined;
       const job = await getWhatsAppQueue().inboundQueue.add(
         "process-message",
         { encodedMessage, sessionId, companyId },
-        { delay: delayMs },
+        { delay: delayMs, jobId },
       );
       Logger.info(`[MessageHandler] Inbound ${msgId} → enqueued to 'whatsapp-inbound' (job ${job.id})`);
     } catch (queueErr) {

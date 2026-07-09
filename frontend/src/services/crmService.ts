@@ -61,6 +61,7 @@ export const getDeals = async (filters?: {
   pipelineId?: string;
   stageId?: string;
   accountId?: string;
+  contactId?: string;
 }): Promise<{ deals: Deal[] }> => {
   const query = new URLSearchParams(
     filters as Record<string, string>,

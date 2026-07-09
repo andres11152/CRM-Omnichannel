@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   User,
   Mail,
@@ -18,14 +18,18 @@ import {
   Tag as TagIcon,
   Plus,
   X,
+  TrendingUp,
 } from "lucide-react";
 import { Contact, Tag } from "@/types";
+import { Deal } from "@/types/crm";
 import { API_BASE_URL } from "@/services/apiConfig";
+import { getDeals } from "@/services/crmService";
 import { InternalNotes } from "./InternalNotes";
 import { toast } from "sonner";
 import { ImageLightbox } from "./ImageLightbox";
 import { Avatar } from "@/components/common/Avatar";
 import { useTranslation } from "react-i18next";
+import { DealModal } from "./crm/DealModal";
 
 interface Customer360PanelProps {
   contact: Contact;
@@ -49,11 +53,17 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
   } | null>(null);
   const { t } = useTranslation();
 
+  // Deals State
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loadingDeals, setLoadingDeals] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | undefined>(undefined);
+  const [isDealModalOpen, setIsDealModalOpen] = useState(false);
+
   // Enterprise Tags State (Deprecated in favor of TagsNavbar)
   const [allTags, setAllTags] = useState<Tag[]>([]);
 
   // Fetch all available tags
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchTags = async () => {
       try {
         const token = localStorage.getItem("token");
@@ -72,7 +82,26 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
     fetchTags();
   }, []);
 
-  //  GROUP DETECTION
+  // Fetch deals for the current contact
+  const fetchDeals = async () => {
+    const contactId = contact.realContactId || contact.id;
+    if (!contactId || contactId === "new") return;
+    setLoadingDeals(true);
+    try {
+      const data = await getDeals({ contactId });
+      setDeals(data.deals || []);
+    } catch (error) {
+      console.error("[Customer360] Error fetching contact deals:", error);
+    } finally {
+      setLoadingDeals(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeals();
+  }, [contact]);
+
+  // GROUP DETECTION
   const isGroup = contact.isGroup || false;
 
   const copyToClipboard = (text: string, field: string) => {
@@ -80,6 +109,16 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
     setCopiedField(field);
     toast.success("Copiado");
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handleEditDeal = (deal: Deal) => {
+    setSelectedDeal(deal);
+    setIsDealModalOpen(true);
+  };
+
+  const handleCreateDeal = () => {
+    setSelectedDeal(undefined);
+    setIsDealModalOpen(true);
   };
 
   return (
@@ -242,6 +281,73 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
             )}
           </div>
 
+          {/* CRM Oportunidades / Negocios (Deals) Section */}
+          {!isGroup && (
+            <div className="bg-white dark:bg-reply-surface-dark rounded-xl border border-gray-100 dark:border-reply-border-dark p-4 space-y-3">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">
+                    {t("customer360.deals", "Oportunidades (CRM)")}
+                  </span>
+                </div>
+                <button
+                  onClick={handleCreateDeal}
+                  className="p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  title="Nueva oportunidad"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {loadingDeals ? (
+                <div className="text-center py-4 text-xs text-gray-400">
+                  {t("common.loading", "Cargando...")}
+                </div>
+              ) : deals.length === 0 ? (
+                <div className="text-center py-6 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl">
+                  <p className="text-xs text-gray-400 mb-2">Sin negocios activos</p>
+                  <button
+                    onClick={handleCreateDeal}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                  >
+                    Crear oportunidad
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                  {deals.map((deal) => (
+                    <div
+                      key={deal.id}
+                      onClick={() => handleEditDeal(deal)}
+                      className="p-3 bg-reply-bg/40 dark:bg-gray-800/30 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-indigo-100 dark:hover:border-indigo-900/30 hover:bg-reply-bg dark:hover:bg-gray-800/60 transition-all cursor-pointer group"
+                    >
+                      <div className="flex justify-between items-start mb-1.5">
+                        <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate max-w-[140px]">
+                          {deal.title}
+                        </h4>
+                        <span className="text-xs font-mono font-bold text-gray-700 dark:text-gray-200">
+                          {deal.currency === "COP" ? "$" : "USD "}{deal.value.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded font-black tracking-wide uppercase">
+                          {deal.stage?.name || "Etapa inicial"}
+                        </span>
+                        {deal.expectedCloseDate && (
+                          <span className="text-[9px] text-gray-400 flex items-center gap-1 font-mono">
+                            <Calendar className="w-2.5 h-2.5" />
+                            {new Date(deal.expectedCloseDate).toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Quick Actions Card */}
           <div className="bg-white dark:bg-reply-surface-dark rounded-xl border border-gray-100 dark:border-reply-border-dark p-4 space-y-3">
             <div className="flex items-center gap-2 mb-1 text-gray-400">
@@ -318,6 +424,23 @@ const Customer360PanelComponent: React.FC<Customer360PanelProps> = ({
           imageUrl={lightboxImage.url}
           alt={lightboxImage.alt}
           onClose={() => setLightboxImage(null)}
+        />
+      )}
+      
+      {/* Deal creation/editing modal */}
+      {isDealModalOpen && (
+        <DealModal
+          isOpen={isDealModalOpen}
+          onClose={() => {
+            setIsDealModalOpen(false);
+            setSelectedDeal(undefined);
+          }}
+          onSave={() => {
+            setIsDealModalOpen(false);
+            setSelectedDeal(undefined);
+            fetchDeals();
+          }}
+          deal={selectedDeal}
         />
       )}
     </div>

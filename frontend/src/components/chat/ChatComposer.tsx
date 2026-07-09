@@ -25,6 +25,7 @@ interface ChatComposerProps {
   onProperty?: () => void;
   onPayment?: () => void;
   onRequestData?: () => void;
+  onAICopilotClick?: (action: "summarize" | "formal" | "suggest") => void;
 }
 
 /**
@@ -51,6 +52,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   onProperty,
   onPayment,
   onRequestData,
+  onAICopilotClick,
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -118,7 +120,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             onClearFile={() => setSelectedFile(null)}
             replyingTo={replyingTo}
             onClearReply={() => setReplyingTo(null)}
-            onAICopilotClick={(action) => console.log('Copilot', action)}
+            onAICopilotClick={onAICopilotClick || (() => {})}
             onQuickRepliesClick={() => setShowQuickReplies((prev) => !prev)} 
             onMediaLibraryClick={() => {}}
             onStickerClick={() => {}}

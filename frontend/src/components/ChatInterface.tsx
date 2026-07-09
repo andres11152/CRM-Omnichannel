@@ -317,6 +317,39 @@ export const ChatInterface: React.FC<Props> = ({
             onProperty={() => setActiveActionModal("PROPERTY")}
             onPayment={() => setActiveActionModal("PAYMENT")}
             onRequestData={() => setActiveActionModal("DATA")}
+            onAICopilotClick={async (action) => {
+              // Build chat context for IA
+              const chatHistory = messages
+                .slice(-15)
+                .map((m) => `${m.direction === "OUTBOUND" ? "Agente" : "Cliente"}: ${m.content}`)
+                .join("\n");
+
+              const toastId = toast.loading("Consultando al Copiloto de IA...");
+              try {
+                const { api } = await import("@/lib/axios");
+                const res = await api.post("/ai/copilot", {
+                  action,
+                  text: inputValue,
+                  context: chatHistory,
+                });
+
+                if (res.data && res.data.response) {
+                  toast.success("Respuesta generada", { id: toastId });
+                  if (action === "summarize") {
+                    // Inject summary as an internal note or overlay toast. Let's make it a nice visual toast or insert into text box
+                    setInputValue((prev) => `${prev}\n\n📋 *Resumen de IA*:\n${res.data.response}`);
+                  } else {
+                    // Update writing composer input text value directly
+                    setInputValue(res.data.response);
+                  }
+                } else {
+                  toast.error("El copiloto no devolvió respuesta.", { id: toastId });
+                }
+              } catch (err) {
+                toast.error("Error al conectar con la IA. Asegúrate de configurar Gemini.", { id: toastId });
+                console.error("[AICopilot] Error processing action:", err);
+              }
+            }}
             isRecording={isRecording}
             setIsRecording={(rec) => {
               setIsRecording(rec);

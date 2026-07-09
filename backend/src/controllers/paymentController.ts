@@ -74,7 +74,7 @@ export const getPlans = catchAsync(async (req: Request, res: Response) => {
 });
 
 // POST /api/payments/webhook (MercadoPago Webhook/IPN Receiver)
-export const stripeWebhook = catchAsync(async (req: Request, res: Response) => {
+export const mercadoPagoWebhook = catchAsync(async (req: Request, res: Response) => {
   const payload = req.body;
   await mercadoPagoService.handleWebhook(payload);
   res.json({ received: true });

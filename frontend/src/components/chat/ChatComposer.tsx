@@ -22,6 +22,7 @@ interface ChatComposerProps {
   setIsRecording: (rec: boolean) => void;
   onSchedule?: () => void;
   onProduct?: () => void;
+  onProperty?: () => void;
   onPayment?: () => void;
   onRequestData?: () => void;
 }
@@ -47,6 +48,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   setIsRecording,
   onSchedule,
   onProduct,
+  onProperty,
   onPayment,
   onRequestData,
 }) => {
@@ -122,6 +124,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             onStickerClick={() => {}}
             onSchedule={onSchedule}
             onProduct={onProduct}
+            onProperty={onProperty}
             onPayment={onPayment}
             onRequestData={onRequestData}
             onKeyDown={(e) => {

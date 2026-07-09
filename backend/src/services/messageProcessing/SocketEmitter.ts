@@ -30,7 +30,7 @@ export class SocketEmitter {
     // Emit to company dashboard
     const dashboardPayload: SocketDashboardPayload = {
       id: conversation.id,
-      channel: "whatsapp",
+      channel: conversation.channel,
       subject: displayName,
       lastMessage: message.content,
       lastMessageAt: message.createdAt,

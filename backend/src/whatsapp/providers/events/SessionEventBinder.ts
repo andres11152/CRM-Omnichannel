@@ -311,9 +311,15 @@ export function bindSessionEvents(
       syncType === proto.HistorySync.HistorySyncType.ON_DEMAND;
 
     const syncFullHistory = process.env.WA_SYNC_FULL_HISTORY === "true";
+    // Per-chat cap creates PERMANENT holes in the middle of a chat's history:
+    // each history event delivers a window of messages and slicing keeps only the
+    // newest N of that window, discarding a range that backward pagination
+    // (anchored on the global oldest) can never reach again. Keep the cap as an
+    // OOM guard but high enough that it rarely bites; the global
+    // MAX_HISTORY_SYNC_MESSAGES (1500/event) remains the primary memory bound.
     const MAX_MESSAGES_PER_CHAT = process.env.WA_HISTORY_LIMIT_PER_CHAT
       ? parseInt(process.env.WA_HISTORY_LIMIT_PER_CHAT, 10)
-      : (syncFullHistory ? 500 : 200);
+      : (syncFullHistory ? 1000 : 500);
 
     const syncMessages: WAMessage[] = [];
 

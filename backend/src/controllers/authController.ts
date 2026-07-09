@@ -10,6 +10,7 @@ import { emailService } from "@/services/EmailService";
 import { passwordResetEmail } from "@/utils/emailTemplates";
 import { authCrudService } from "@/services/AuthCrudService";
 import { sessionService, SESSION_TTL } from "@/services/SessionService";
+import { auditService } from "@/services/AuditService";
 import {
   SignupSchema,
   LoginSchema,
@@ -208,6 +209,18 @@ export const login = catchAsync(
       },
     );
 
+    // [AUTH] Audit successful logins
+    void auditService.logAction({
+      companyId: user.companyId,
+      userId: user.id,
+      action: "LOGIN",
+      entity: "User",
+      entityId: user.id,
+      details: { email: user.email },
+      ipAddress: String(ipAddress),
+      userAgent: String(userAgent),
+    });
+
     // Response includes token in body for backward compatibility (mobile, Postman)
     res.status(200).json({
       status: "success",
@@ -258,6 +271,19 @@ export const logout = catchAsync(
 
     // Clear cookies
     clearAuthCookies(res);
+
+    if (req.user?.companyId) {
+      void auditService.logAction({
+        companyId: req.user.companyId,
+        userId: req.user.id,
+        action: "LOGOUT",
+        entity: "User",
+        entityId: req.user.id,
+        details: { email: req.user.email },
+        ipAddress: req.ip,
+        userAgent: req.get("User-Agent"),
+      });
+    }
 
     Logger.info("[Auth]  User logged out", { userId: req.user?.id });
 

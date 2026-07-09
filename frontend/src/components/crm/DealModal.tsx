@@ -8,6 +8,8 @@ import { useModal } from "@/context/ModalContext";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { DealProductsTab } from "./DealProductsTab";
+import { DealPropertiesTab } from "./DealPropertiesTab";
 import {
   Mail,
   Trash2,
@@ -15,6 +17,8 @@ import {
   User,
   Target,
   Inbox,
+  ShoppingBag,
+  Home,
 } from "lucide-react";
 
 interface Props {
@@ -68,7 +72,7 @@ export const DealModal: React.FC<Props> = ({
     accountId: "",
     expectedCloseDate: "",
   });
-  const [activeTab, setActiveTab] = useState<"details" | "history">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "products" | "properties" | "history">("details");
   const [pipelines, setPipelines] = useState<
     Array<{
       id: string;
@@ -270,6 +274,18 @@ export const DealModal: React.FC<Props> = ({
               className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "details" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
             >
               {t("crm.accounts.form.general_info")}
+            </button>
+            <button
+              onClick={() => setActiveTab("products")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "products" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
+            >
+              Productos
+            </button>
+            <button
+              onClick={() => setActiveTab("properties")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === "properties" ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
+            >
+              Inmuebles
             </button>
             <button
               onClick={() => setActiveTab("history")}
@@ -568,6 +584,24 @@ export const DealModal: React.FC<Props> = ({
                 </div>
               </div>
             </form>
+          ) : activeTab === "products" ? (
+            <div className="space-y-4">
+              {deal && (
+                <DealProductsTab
+                  dealId={deal.id}
+                  onProductsChanged={onSave}
+                />
+              )}
+            </div>
+          ) : activeTab === "properties" ? (
+            <div className="space-y-4">
+              {deal && (
+                <DealPropertiesTab
+                  dealId={deal.id}
+                  onPropertiesChanged={onSave}
+                />
+              )}
+            </div>
           ) : (
             <div className="space-y-6">
               {/* Actions Header for History */}

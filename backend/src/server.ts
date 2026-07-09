@@ -6,18 +6,17 @@ import "./utils/tracing";
 import dotenv from "dotenv";
 dotenv.config();
 
+import { Logger } from "@/utils/logger";
 import { initEnv } from "@/config/env";
 
 // [SEC] VALIDATE ENV IMMEDIATELY (Fail Fast)
 try {
   initEnv();
 } catch (err) {
-  // Logger might not be fully ready, but we use console as fallback
-  console.error("[ERROR] CRITICAL: Environment validation failed at startup.");
+  Logger.error("[ERROR] CRITICAL: Environment validation failed at startup.", err as Error);
   process.exit(1);
 }
 
-import { Logger } from "@/utils/logger";
 import { connectDB, prisma } from "@/config/database";
 import { connectRedis } from "@/config/redis";
 import { createServer } from "http";

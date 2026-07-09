@@ -19,6 +19,8 @@ export interface MessagePersistParams {
   media?: MessagingMediaPayload;
   contactId?: string;
   messageId?: string;
+  /** Which channel this message belongs to. Defaults to WHATSAPP for backward compatibility. */
+  channel?: Channel;
 }
 
 /**
@@ -44,10 +46,11 @@ export class MessagePersister {
       hasMedia,
       media,
       contactId,
+      channel = Channel.WHATSAPP,
     } = params;
 
     // 1. DEDUPLICATION (Exact ID match or 5s window for text)
-    const isDuplicate = await this.checkDuplicate(companyId, conversationId, text, params.messageId, hasMedia);
+    const isDuplicate = await this.checkDuplicate(companyId, conversationId, text, params.messageId, hasMedia, channel);
     if (isDuplicate) {
       Logger.debug(
         `[MessagePersister] [SKIP] Duplicate message skipped: "${text?.substring(0, 50)}"`,
@@ -66,13 +69,14 @@ export class MessagePersister {
       data: {
         companyId,
         conversationId,
-        channel: Channel.WHATSAPP,
+        channel,
         direction: isOutbound
           ? MessageDirection.OUTBOUND
           : MessageDirection.INBOUND,
         content: text,
         senderId: effectiveSenderId,
-        whatsappMessageId: params.messageId || undefined,
+        whatsappMessageId: channel === Channel.WHATSAPP ? params.messageId || undefined : undefined,
+        instagramMessageId: channel === Channel.INSTAGRAM_DM ? params.messageId || undefined : undefined,
         metadata: hasMedia
           ? { media: media as unknown as Prisma.InputJsonObject }
           : Prisma.JsonNull,
@@ -94,11 +98,17 @@ export class MessagePersister {
     text: string,
     messageId?: string,
     hasMedia?: boolean,
+    channel: Channel = Channel.WHATSAPP,
   ): Promise<boolean> {
     if (messageId) {
-       const existing = await messageRepository.findUnique({
-         where: { companyId_whatsappMessageId: { companyId, whatsappMessageId: messageId } },
-       });
+       const existing =
+         channel === Channel.INSTAGRAM_DM
+           ? await messageRepository.findUnique({
+               where: { companyId_instagramMessageId: { companyId, instagramMessageId: messageId } },
+             })
+           : await messageRepository.findUnique({
+               where: { companyId_whatsappMessageId: { companyId, whatsappMessageId: messageId } },
+             });
        if (existing) return true;
     }
 

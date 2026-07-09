@@ -11,6 +11,7 @@ import {
 } from "@/controllers/flowController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
+import { requireFeature } from "@/middleware/requireFeature";
 import {
   CreateFlowSchema,
   UpdateFlowSchema,
@@ -20,6 +21,7 @@ import {
 const router = express.Router();
 
 router.use(protect);
+router.use(requireFeature("automation_flows"));
 
 router
   .route("/")

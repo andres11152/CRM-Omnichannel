@@ -21,6 +21,10 @@ import { conversationRepository } from "@/repositories/ConversationRepository";
 import { reactionRepository } from "@/repositories/ReactionRepository";
 import { ticketSyncService } from "./TicketSyncService";
 
+// Instagram
+import { instagramSessionRepository } from "@/instagram/InstagramSessionRepository";
+import { instagramProviderService, InstagramMediaContent } from "@/instagram/InstagramProviderService";
+
 export class ConversationMessageService {
   /**
    * Primary Messaging Orchestrator (Reply from Agent)
@@ -60,7 +64,42 @@ export class ConversationMessageService {
       throw new AppError("Conversation not found", 404);
     }
 
-    // B. Determine Destination Phone / JID
+    const messageContent = content || "";
+
+    // B. Handle Scheduling (channel-agnostic: just persists a SCHEDULED row;
+    // the scheduled-send cron currently only dispatches WhatsApp — see plan notes)
+    if (scheduledAt) {
+      const safeMetadata: Metadata = {
+        ...(metadata || {}),
+        scheduledAt: typeof scheduledAt === "string" ? scheduledAt : scheduledAt.toISOString(),
+        attachment,
+        quotedMessageId,
+        quotedContent,
+        type: attachment ? attachment.type : "text",
+        mediaUrl: attachment ? attachment.url : undefined,
+      };
+
+      return await messageRepository.create({
+        data: {
+          companyId,
+          conversationId: resolvedConv.id,
+          content: messageContent,
+          direction: "OUTBOUND",
+          senderId: userId,
+          channel: channel || resolvedConv.channel,
+          status: "SCHEDULED",
+          metadata: safeMetadata as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    // C. Channel routing: Instagram DMs never go through the WhatsApp JID
+    // resolution / whatsappMessagingService path below.
+    if (resolvedConv.channel === Channel.INSTAGRAM_DM) {
+      return this.replyToInstagram(companyId, userId, resolvedConv.id, resolvedConv.channelId, messageContent, attachment, metadata, quotedMessageId, quotedContent);
+    }
+
+    // D. Determine Destination Phone / JID (WhatsApp only)
     // For groups: channelId is the group ID (e.g. 120363408109782390) which needs @g.us
     // For DMs: channelId is the phone number (e.g. 573138081081) which needs @s.whatsapp.net
     const initialTargetJid = WhatsAppIdUtils.getTargetJid(resolvedConv.channelId);
@@ -92,35 +131,8 @@ export class ConversationMessageService {
     targetPhone = WhatsAppIdUtils.getTargetJid(targetPhone);
 
     const isAudio = attachment?.type === "audio";
-    const messageContent = content || "";
 
-    // C. Handle Scheduling
-    if (scheduledAt) {
-      const safeMetadata: Metadata = {
-        ...(metadata || {}),
-        scheduledAt: typeof scheduledAt === "string" ? scheduledAt : scheduledAt.toISOString(),
-        attachment,
-        quotedMessageId,
-        quotedContent,
-        type: attachment ? attachment.type : "text",
-        mediaUrl: attachment ? attachment.url : undefined,
-      };
-
-      return await messageRepository.create({
-        data: {
-          companyId,
-          conversationId: resolvedConv.id,
-          content: messageContent,
-          direction: "OUTBOUND",
-          senderId: userId,
-          channel: channel || Channel.WHATSAPP,
-          status: "SCHEDULED",
-          metadata: safeMetadata as Prisma.InputJsonValue,
-        },
-      });
-    }
-
-    // D. Direct Send (WhatsApp)
+    // E. Direct Send (WhatsApp)
     const options: SendMessageOptions = {
       companyId,
       conversationId: resolvedConv.id,
@@ -157,6 +169,75 @@ export class ConversationMessageService {
         type: attachment ? attachment.type : "text",
         mediaUrl: attachment ? attachment.url : undefined,
       },
+      type: attachment ? attachment.type : "text",
+      mediaUrl: attachment ? attachment.url : undefined,
+    };
+  }
+
+  /**
+   * Instagram DM send path (Reply from Agent).
+   * Mirrors the shape of the WhatsApp direct-send branch above, but routes
+   * through the Instagram Messaging API instead of Baileys/Meta WhatsApp.
+   */
+  private async replyToInstagram(
+    companyId: string,
+    userId: string,
+    conversationId: string,
+    igsid: string | null,
+    messageContent: string,
+    attachment: Attachment | undefined,
+    metadata: Metadata | undefined,
+    quotedMessageId: string | undefined,
+    quotedContent: string | undefined,
+  ): Promise<{ id: string; content: string; timestamp?: Date; status?: string; sender?: string; metadata?: unknown; type?: string; mediaUrl?: string }> {
+    if (!igsid) {
+      throw new AppError("No se pudo determinar el destinatario de Instagram.", 400);
+    }
+
+    const sessions = await instagramSessionRepository.findByCompany(companyId);
+    const session = sessions.find((s) => s.status === "CONNECTED") || sessions[0];
+    if (!session) {
+      throw new AppError("No hay una sesión de Instagram conectada para esta empresa.", 400);
+    }
+
+    const mediaContent: InstagramMediaContent | null = attachment
+      ? { type: attachment.type === "document" ? "file" : (attachment.type as "image" | "video" | "audio"), url: attachment.url }
+      : null;
+
+    const sendResult = await instagramProviderService.sendMessage(
+      session.igBusinessAccountId,
+      igsid,
+      mediaContent || messageContent,
+    );
+
+    const savedMessage = await messageRepository.create({
+      data: {
+        companyId,
+        conversationId,
+        content: messageContent,
+        direction: "OUTBOUND",
+        senderId: userId,
+        channel: Channel.INSTAGRAM_DM,
+        status: "SENT",
+        instagramMessageId: sendResult.messageId,
+        metadata: {
+          ...metadata,
+          quotedMessageId,
+          quotedContent,
+          attachment,
+          type: attachment ? attachment.type : "text",
+          mediaUrl: attachment ? attachment.url : undefined,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return {
+      id: savedMessage.id,
+      content: savedMessage.content,
+      timestamp: savedMessage.createdAt,
+      status: "SENT",
+      sender: "agent",
+      metadata: savedMessage.metadata,
       type: attachment ? attachment.type : "text",
       mediaUrl: attachment ? attachment.url : undefined,
     };

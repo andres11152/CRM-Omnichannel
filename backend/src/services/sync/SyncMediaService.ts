@@ -13,6 +13,132 @@ type MediaCtx = {
 };
 
 export class SyncMediaService {
+  // Serial background chain for post-sync media hydration. One conversation's
+  // media downloads run at a time (each download already round-trips to the
+  // linked phone via reuploadRequest), so bursts of history batches can never
+  // stampede the phone or the event loop.
+  private hydrationChain: Promise<void> = Promise.resolve();
+  private hydratingConversations = new Set<string>();
+
+  /**
+   * 🩹 POST-SYNC MEDIA HYDRATION (background)
+   *
+   * History ingest deliberately persists media as `<type>_unavailable` + `_raw`
+   * (downloading inline would block the event loop for the whole batch). Before
+   * this, media stayed "no disponible" until the agent clicked "Reintentar
+   * Descarga" on EVERY message. This schedules the same recovery the retry
+   * button performs (downloadMediaMessage + official updateMediaMessage
+   * healing) automatically for the newest N media messages of the conversation,
+   * then notifies the frontend so the chat re-renders with real media.
+   */
+  scheduleHydration(companyId: string, conversationId: string, limit = 15): void {
+    const key = `${companyId}:${conversationId}`;
+    if (this.hydratingConversations.has(key)) return;
+    this.hydratingConversations.add(key);
+
+    this.hydrationChain = this.hydrationChain
+      .catch(() => {})
+      .then(async () => {
+        try {
+          const healed = await this.hydrateConversationMedia(companyId, conversationId, limit);
+          if (healed > 0) {
+            const { gateway } = await import("@/gateways/socketGateway");
+            gateway.emitToCompany(companyId, "conversation:history_synced", {
+              conversationId,
+              newMessages: 0,
+              mediaHydrated: healed,
+            });
+          }
+        } catch (err) {
+          Logger.warn(
+            `[SyncMedia] Background hydration failed for conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        } finally {
+          this.hydratingConversations.delete(key);
+        }
+      });
+  }
+
+  /**
+   * Downloads pending `_unavailable` media for a conversation (newest first).
+   * Returns how many messages were healed.
+   */
+  async hydrateConversationMedia(companyId: string, conversationId: string, limit: number): Promise<number> {
+    const { whatsappService } = await import("@/whatsapp/WhatsAppService");
+    const { syncMessageParser } = await import("./SyncMessageParser");
+
+    const activeSession = await whatsappService.getSessionManager().findActiveSessionForCompany(companyId);
+    if (!activeSession) return 0;
+
+    const sock = activeSession.socket as unknown as {
+      updateMediaMessage: (m: WAMessage) => Promise<WAMessage>;
+      logger: unknown;
+    };
+    const mediaCtx: MediaCtx = {
+      reuploadRequest: (m: WAMessage) => sock.updateMediaMessage(m),
+      logger: sock.logger,
+    };
+
+    const pending = await messageRepository.findMany({
+      where: {
+        companyId,
+        conversationId,
+        metadata: { path: ["media", "type"], string_ends_with: "_unavailable" },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { id: true, whatsappMessageId: true, metadata: true },
+    });
+
+    if (pending.length === 0) return 0;
+    Logger.info(`[SyncMedia] Hydrating ${pending.length} pending media for conversation ${conversationId}`);
+
+    let healed = 0;
+    for (const message of pending) {
+      const meta = message.metadata as Prisma.JsonObject | null;
+      const mediaObj = meta?.media as Prisma.JsonObject | undefined;
+      const rawSerialized = mediaObj?._raw as string | undefined;
+      if (!rawSerialized || !message.whatsappMessageId) continue;
+
+      try {
+        const rawMsg = JSON.parse(rawSerialized, BufferJSON.reviver) as WAMessage;
+        if (!rawMsg?.message) continue;
+
+        const mediaType = (meta?.mediaType as string) || "document";
+        const msgContent = syncMessageParser.unwrapContent(rawMsg) as Record<string, unknown> | undefined;
+        if (!msgContent) continue;
+
+        const result = await this.downloadAndUpload({
+          companyId,
+          whatsappMessageId: message.whatsappMessageId,
+          msg: rawMsg,
+          mediaType,
+          msgContent,
+          mediaCtx,
+        });
+
+        if (result.url) {
+          const updatedMedia = { ...mediaObj, type: mediaType, url: result.url, mimetype: result.mimetype };
+          await messageRepository.update(message.id, {
+            metadata: { ...meta, media: updatedMedia } as Prisma.InputJsonValue,
+          });
+          healed++;
+        }
+      } catch (err) {
+        Logger.debug(
+          `[SyncMedia] Hydration skip for ${message.whatsappMessageId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+
+      // Gentle pacing between phone round-trips
+      await new Promise((r) => setTimeout(r, 250));
+    }
+
+    if (healed > 0) {
+      Logger.info(`[SyncMedia] 🩹 Hydrated ${healed}/${pending.length} media for conversation ${conversationId}`);
+    }
+    return healed;
+  }
   /**
    * 🩹 MEDIA HEALING
    * If a message has unavailable media (expired keys), attempts to download it.

@@ -106,16 +106,18 @@ export const GetCompanyFeatureFlagsValidator = z.object({
 export const UpdateCompanyFeatureFlagsValidator = z.object({
   params: z.object({ companyId: z.string().min(1) }),
   body: z.object({
-    advanced_ai: z.boolean().optional(),
-    email_module: z.boolean().optional(),
-    bulk_marketing: z.boolean().optional(),
-    api_access: z.boolean().optional(),
-    group_sync: z.boolean().optional(),
-    kanban_deals: z.boolean().optional(),
-    voice_messages: z.boolean().optional(),
-    automation_flows: z.boolean().optional(),
-    team_collaboration: z.boolean().optional(),
-  }).partial(),
+    flags: z.object({
+      advanced_ai: z.boolean().optional(),
+      email_module: z.boolean().optional(),
+      bulk_marketing: z.boolean().optional(),
+      api_access: z.boolean().optional(),
+      group_sync: z.boolean().optional(),
+      kanban_deals: z.boolean().optional(),
+      voice_messages: z.boolean().optional(),
+      automation_flows: z.boolean().optional(),
+      team_collaboration: z.boolean().optional(),
+    }).partial(),
+  }),
 });
 
 export const ToggleTemplateGlobalValidator = z.object({

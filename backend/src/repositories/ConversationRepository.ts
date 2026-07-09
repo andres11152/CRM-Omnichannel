@@ -1,4 +1,4 @@
-import { Conversation, Prisma, ConversationStatus } from "@prisma/client";
+import { Channel, Conversation, Prisma, ConversationStatus } from "@prisma/client";
 import { prisma, ExtendedPrismaClient } from "@/config/database";
 import { Logger } from "@/utils/logger";
 
@@ -289,25 +289,35 @@ export class ConversationRepository {
     userId: string;
     sessionId?: string;
     contactId?: string;
+    /** Which channel this conversation belongs to. Defaults to WHATSAPP for backward compatibility. */
+    channel?: Channel;
   }): Promise<Conversation> {
-    const { companyId, phone, subject, userId, sessionId, contactId } = params;
+    const { companyId, phone, subject, userId, sessionId, contactId, channel = Channel.WHATSAPP } = params;
 
     return this.db.$transaction(async (tx) => {
       // 1. Check existing
       let conversation = await tx.conversation.findFirst({
-        where: { companyId, channelId: phone },
+        where: { companyId, channelId: phone, channel },
       });
 
       if (conversation) return conversation;
 
-      // 2. Queue Assignment
+      // 2. Queue Assignment (source depends on which channel's session this is)
       let queueId: string | null = null;
       if (sessionId) {
-        const session = await tx.whatsAppSession.findUnique({
-          where: { sessionId },
-          select: { defaultQueueId: true },
-        });
-        queueId = session?.defaultQueueId || null;
+        if (channel === Channel.INSTAGRAM_DM) {
+          const igSession = await tx.instagramSession.findUnique({
+            where: { igBusinessAccountId: sessionId },
+            select: { defaultQueueId: true },
+          });
+          queueId = igSession?.defaultQueueId || null;
+        } else {
+          const session = await tx.whatsAppSession.findUnique({
+            where: { sessionId },
+            select: { defaultQueueId: true },
+          });
+          queueId = session?.defaultQueueId || null;
+        }
       }
 
       // 3. Create Conversation
@@ -315,6 +325,7 @@ export class ConversationRepository {
         data: {
           companyId,
           channelId: phone,
+          channel,
           subject,
           status: "OPEN",
           participants: { connect: [{ id: userId }] },
@@ -335,7 +346,7 @@ export class ConversationRepository {
           companyId,
           ticketNumber: (lastTicket?.ticketNumber || 0) + 1,
           subject,
-          description: "Chat iniciado en WhatsApp",
+          description: channel === Channel.INSTAGRAM_DM ? "Chat iniciado en Instagram" : "Chat iniciado en WhatsApp",
           status: "OPEN",
           priority: "MEDIUM",
           createdById: userId,

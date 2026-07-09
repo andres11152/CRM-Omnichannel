@@ -1,4 +1,4 @@
-import { Conversation, Prisma } from "@prisma/client";
+import { Channel, Conversation, Prisma } from "@prisma/client";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { Logger } from "@/utils/logger";
 import type { IdentityResult } from "@/utils/contactStrategy";
@@ -27,6 +27,8 @@ export interface ConversationResolverParams {
   contactId?: string;
   userId: string;
   originalLid?: string;
+  /** Which channel this conversation belongs to. Defaults to WHATSAPP for backward compatibility. */
+  channel?: Channel;
 }
 
 /**
@@ -72,29 +74,32 @@ export class ConversationResolver {
       contactId,
       userId,
       originalLid,
+      channel = Channel.WHATSAPP,
     } = params;
 
     const phone = this.normalizeChannelId(params.phone);
 
-    // 1. PRIMARY LOOKUP: Search by normalized phone
+    // 1. PRIMARY LOOKUP: Search by normalized phone (scoped to this channel so
+    // e.g. an Instagram IGSID can never match a WhatsApp conversation)
     let conversation = await conversationRepository.findFirst({
-      where: { companyId, channelId: phone },
+      where: { companyId, channelId: phone, channel },
       orderBy: { createdAt: "desc" },
     });
 
-    // 2. LEGACY MIGRATION: Check for old LID-based conversation
+    // 2. LEGACY MIGRATION: Check for old LID-based conversation (WhatsApp only)
     if (!conversation && originalLid) {
       conversation = await this.migrateLidConversation(
         companyId,
         phone,
         originalLid,
         identity,
+        channel,
       );
     }
 
     // 3. FAILSAFE: Search by Contact ID (the "Wrong Number" fix)
     if (!conversation && contactId) {
-      conversation = await this.findByContactId(companyId, phone, contactId);
+      conversation = await this.findByContactId(companyId, phone, contactId, channel);
     }
 
     // 4. CREATE NEW or UPDATE EXISTING
@@ -106,6 +111,7 @@ export class ConversationResolver {
         sessionId,
         contactId,
         userId,
+        channel,
       );
     } else {
       conversation = await this.updateExisting(
@@ -131,13 +137,14 @@ export class ConversationResolver {
     phone: string,
     originalLid: string,
     identity: IdentityResult,
+    channel: Channel,
   ): Promise<Conversation | null> {
     Logger.info(
       `[ConvResolver] [SEARCH] Searching for legacy LID conversation: ${originalLid}`,
     );
 
     const legacyConversation = await conversationRepository.findFirst({
-      where: { companyId, channelId: originalLid },
+      where: { companyId, channelId: originalLid, channel },
     });
 
     if (!legacyConversation) return null;
@@ -160,7 +167,7 @@ export class ConversationResolver {
           `[ConvResolver] [WARNING] Already migrated by another process. Re-fetching...`,
         );
         return conversationRepository.findFirst({
-          where: { companyId, channelId: phone },
+          where: { companyId, channelId: phone, channel },
         });
       }
       throw error;
@@ -171,13 +178,14 @@ export class ConversationResolver {
     companyId: string,
     phone: string,
     contactId: string,
+    channel: Channel,
   ): Promise<Conversation | null> {
     Logger.info(
       `[ConvResolver] [SEARCH] Failsafe: Searching by Contact ID: ${contactId}`,
     );
 
     const contactConversation = await conversationRepository.findFirst({
-      where: { companyId, contactId },
+      where: { companyId, contactId, channel },
       orderBy: { updatedAt: "desc" },
     });
 
@@ -195,7 +203,7 @@ export class ConversationResolver {
         if (isPrismaError(error) && error.code === "P2002") {
           Logger.warn(`[ConvResolver] [WARNING] Migration conflict. Using existing.`);
           return conversationRepository.findFirst({
-            where: { companyId, channelId: phone },
+            where: { companyId, channelId: phone, channel },
           });
         }
         throw error;
@@ -212,6 +220,7 @@ export class ConversationResolver {
     sessionId: string,
     contactId: string | undefined,
     userId: string,
+    channel: Channel,
   ): Promise<Conversation> {
     Logger.info(`[ConvResolver] [NEW] Creating new conversation for: ${phone}`);
 
@@ -223,6 +232,7 @@ export class ConversationResolver {
       userId,
       sessionId,
       contactId,
+      channel,
     });
   }
 

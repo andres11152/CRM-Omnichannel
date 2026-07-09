@@ -223,7 +223,7 @@ export class AnalyticsService {
         entity: "Billing",
         description: `Pago procesado: ${tr.description} (${tr.amount / 100} ${tr.currency})`,
         timestamp: tr.createdAt.toISOString(),
-        user: { name: "Stripe Gateway" },
+        user: { name: "MercadoPago Gateway" },
         company: { name: tr.company?.name || "N/A" },
         metadata: { severity: tr.status === "succeeded" ? "success" : "error" },
       });

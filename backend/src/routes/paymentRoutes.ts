@@ -4,7 +4,7 @@ import {
   createPortalSession,
   subscribeCard,
   getPlans,
-  stripeWebhook,
+  mercadoPagoWebhook,
 } from "@/controllers/paymentController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
@@ -45,9 +45,8 @@ router.get(
   getPlans,
 );
 
-// We don't apply JSON body validation to Stripe Webhook here;
-// it uses express.raw() at the global app level to verify the signature.
-router.post("/webhook", stripeWebhook);
+// We don't apply JSON body validation to MercadoPago Webhook here;
+router.post("/webhook", mercadoPagoWebhook);
 
 export default router;
 

@@ -32,6 +32,7 @@
     "contacts": "Contacts",
     "accounts": "Accounts",
     "deals": "Deals",
+    "properties": "Properties",
     "activities": "Activities",
     "products": "Catalog",
     "marketing": "Campaigns",
@@ -53,6 +54,79 @@
     "feature-flags": "Feature Flags",
     "marketplace": "Master Marketplace",
     "developers": "API & Devs"
+  },
+  "plans_mgmt": {
+    "title": "Plans Management",
+    "description": "Define limits and features of each subscription plan.",
+    "back": "Back to Dashboard",
+    "available_plans": "Available Plans",
+    "no_plans": "No plans created yet.",
+    "create_plan": "Create New Plan",
+    "new_plan": "New Plan",
+    "plan_name": "Plan Name",
+    "price": "Price (USD)",
+    "stripe_price_id": "MercadoPago Plan ID",
+    "limits_features": "Limits & Features",
+    "add_feature": "+ Add Feature",
+    "available": "Available",
+    "general_config": "General Config",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "resource_limits": "Resource Limits (Quotas)",
+    "unlimited": "Unlimited",
+    "limited": "Limited",
+    "delete_plan": "Delete Plan",
+    "save_changes": "Save Changes",
+    "no_selection_title": "No plan selected",
+    "no_selection_desc": "Select a plan from the list or create a new one to start editing.",
+    "saving": "Saving...",
+    "deleting": "Deleting...",
+    "features": {
+      "max_users": {
+        "label": "Maximum Users/Agents",
+        "description": "Total allowed team members."
+      },
+      "max_queues": {
+        "label": "Support Queues",
+        "description": "Number of departments or routing queues."
+      },
+      "max_whatsapp_sessions": {
+        "label": "WhatsApp Channels",
+        "description": "Limit of active linked phone numbers."
+      },
+      "enable_ai": {
+        "label": "AI Agents Automation",
+        "description": "Access to smart assistants and autonomous replies."
+      },
+      "enable_api": {
+        "label": "API Access",
+        "description": "Allows external REST integrations and Webhooks."
+      },
+      "max_ai_assistants": {
+        "label": "Maximum AI Assistants",
+        "description": "Amount of configurable AI assistant personas."
+      },
+      "max_workflows": {
+        "label": "Active Workflows",
+        "description": "Simultaneous marketing automations."
+      },
+      "storage_limit_gb": {
+        "label": "Storage (GB)",
+        "description": "Disk space allocation for media files."
+      },
+      "max_contacts": {
+        "label": "Maximum Contacts",
+        "description": "Maximum number of contacts allowed in CRM."
+      },
+      "max_companies": {
+        "label": "Maximum Companies",
+        "description": "Maximum number of organizations allowed (Multi-tenant)."
+      },
+      "can_remove_branding": {
+        "label": "White-Label Experience",
+        "description": "Remove Sentry branding for your own brand experience."
+      }
+    }
   },
   "auth": {
     "login_title": "Sign In",

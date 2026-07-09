@@ -202,7 +202,7 @@ class S3StorageService implements IStorageService {
     _mimeType: string,
   ): Promise<UploadResult> {
     return { 
-      url: key, 
+      url: `/${key}`, 
       key, 
       provider: "s3" 
     };

@@ -3,6 +3,7 @@ import { protect } from "@/middleware/authMiddleware";
 import { externalApiLimiter } from "@/middleware/advancedRateLimiter";
 import { apiAccessLogger } from "@/middleware/apiAccessLogger";
 import { requireScope } from "@/middleware/requireScope";
+import { requireFeature } from "@/middleware/requireFeature";
 import {
   listContacts,
   getContact,
@@ -34,7 +35,7 @@ import {
 const router = Router();
 
 // All external routes require API Key authentication + strict rate limiting + access logging
-router.use(externalApiLimiter, protect, apiAccessLogger);
+router.use(externalApiLimiter, protect, requireFeature("api_access"), apiAccessLogger);
 
 // --- CONTACTS ---
 router.get("/contacts", requireScope("contacts:read"), listContacts);

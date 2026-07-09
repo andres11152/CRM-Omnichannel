@@ -30,6 +30,8 @@ import { ResolveTicketModal } from "./ResolveTicketModal";
 import { ImageLightbox, LightboxImage } from "./chat/ImageLightbox";
 import { ActivityModal } from "./crm/ActivityModal";
 import { useResizable } from "@/hooks/useResizable";
+import { buildPropertyMessage } from "@/utils/propertyMessage";
+import type { Property } from "@/types/property.types";
 
 // Modular Hooks
 import { useChatWorkflow } from "@/hooks/useChatWorkflow";
@@ -123,7 +125,7 @@ export const ChatInterface: React.FC<Props> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
-  const [activeActionModal, setActiveActionModal] = useState<"SCHEDULE" | "PRODUCT" | "PAYMENT" | "DATA" | null>(null);
+  const [activeActionModal, setActiveActionModal] = useState<"SCHEDULE" | "PRODUCT" | "PROPERTY" | "PAYMENT" | "DATA" | null>(null);
 
   // CRM Activity Modals (Task / Meeting from 360 Panel)
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -312,6 +314,7 @@ export const ChatInterface: React.FC<Props> = ({
             // Advanced Action Menus
             onSchedule={() => setActiveActionModal("SCHEDULE")}
             onProduct={() => setActiveActionModal("PRODUCT")}
+            onProperty={() => setActiveActionModal("PROPERTY")}
             onPayment={() => setActiveActionModal("PAYMENT")}
             onRequestData={() => setActiveActionModal("DATA")}
             isRecording={isRecording}
@@ -431,6 +434,24 @@ export const ChatInterface: React.FC<Props> = ({
               url: p.imageUrl,
               type: "image",
               name: p.name,
+              mimetype: "image/jpeg",
+            });
+          } else {
+            // Fallback: No image, send as formatted text
+            handleSendMessage(caption, null, replyingTo);
+          }
+          setActiveActionModal(null);
+        }}
+        onProperty={(property: Property) => {
+          const caption = buildPropertyMessage(property);
+          const cover = property.images.find((img) => img.isCover) || property.images[0];
+
+          if (cover) {
+            // Send as image message with caption (Enterprise)
+            handleSendMessage(caption, null, replyingTo, undefined, {
+              url: cover.url,
+              type: "image",
+              name: property.title,
               mimetype: "image/jpeg",
             });
           } else {

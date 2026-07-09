@@ -13,7 +13,8 @@ import {
   Calendar,
   Package,
   CreditCard,
-  UserCheck
+  UserCheck,
+  Building2
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -32,6 +33,7 @@ interface SmartComposerProps {
   // Action Menu Props
   onSchedule?: () => void;
   onProduct?: () => void;
+  onProperty?: () => void;
   onRequestData?: () => void;
   onPayment?: () => void;
 
@@ -59,6 +61,7 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
 
   onSchedule,
   onProduct,
+  onProperty,
   onRequestData,
   onPayment,
 
@@ -176,6 +179,7 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
                       {[
                         { label: t("composer.schedule_send", "Programar Envío"), icon: Calendar, color: 'text-purple-500', onClick: onSchedule },
                         { label: t("composer.send_product", "Enviar Producto"), icon: Package, color: 'text-orange-500', onClick: onProduct },
+                        { label: t("composer.send_property", "Enviar Inmueble"), icon: Building2, color: 'text-indigo-500', onClick: onProperty },
                         { label: t("composer.request_payment", "Solicitar Pago"), icon: CreditCard, color: 'text-green-500', onClick: onPayment },
                         { label: t("composer.request_data", "Solicitar Datos"), icon: UserCheck, color: 'text-blue-500', onClick: onRequestData },
                         { label: t("composer.attach_file", "Adjuntar Archivo"), icon: Paperclip, color: 'text-gray-500', onClick: onAttachmentClick },

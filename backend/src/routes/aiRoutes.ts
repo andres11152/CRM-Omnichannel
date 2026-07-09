@@ -12,6 +12,7 @@ import {
 import { protect } from "@/middleware/authMiddleware";
 import { checkPlanLimit } from "@/middleware/planLimitsMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
+import { requireFeature } from "@/middleware/requireFeature";
 import {
   UpdateAIConfigSchema,
   CreateAssistantSchema,
@@ -24,6 +25,7 @@ import {
 const router = Router();
 
 router.use(protect);
+router.use(requireFeature("advanced_ai"));
 
 // Config (API Keys)
 router.get("/config", getAIConfig);

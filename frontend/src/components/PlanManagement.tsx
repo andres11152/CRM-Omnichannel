@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Plan, PlanConfig } from "@/types";
 import { adminService } from "@/services/adminService";
 import { ModuleHeader } from "./common/ModuleHeader";
@@ -9,15 +10,15 @@ import { useModal } from "@/context/ModalContext";
 const FEATURE_META: Record<
   string,
   {
-    label: string;
-    description: string;
+    labelKey: string;
+    descKey: string;
     icon: React.ReactNode;
     type: "number" | "boolean";
   }
 > = {
   max_users: {
-    label: "Usuarios/Agentes Mximos",
-    description: "Cantidad total de miembros del equipo permitidos.",
+    labelKey: "plans_mgmt.features.max_users.label",
+    descKey: "plans_mgmt.features.max_users.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -36,8 +37,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   max_queues: {
-    label: "Colas de Atención",
-    description: "Número de departamentos o flujos de enrutamiento.",
+    labelKey: "plans_mgmt.features.max_queues.label",
+    descKey: "plans_mgmt.features.max_queues.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -56,8 +57,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   max_whatsapp_sessions: {
-    label: "Canales de WhatsApp",
-    description: "Límite de números de teléfono activos para la empresa.",
+    labelKey: "plans_mgmt.features.max_whatsapp_sessions.label",
+    descKey: "plans_mgmt.features.max_whatsapp_sessions.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -76,8 +77,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   enable_ai: {
-    label: "AI Agent Automation",
-    description: "Acceso a asistentes inteligentes y respuestas autónomas.",
+    labelKey: "plans_mgmt.features.enable_ai.label",
+    descKey: "plans_mgmt.features.enable_ai.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -96,8 +97,8 @@ const FEATURE_META: Record<
     type: "boolean",
   },
   enable_api: {
-    label: "Acceso a API",
-    description: "Permite integraciones externas y Webhooks.",
+    labelKey: "plans_mgmt.features.enable_api.label",
+    descKey: "plans_mgmt.features.enable_api.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -116,8 +117,8 @@ const FEATURE_META: Record<
     type: "boolean",
   },
   max_ai_assistants: {
-    label: "Asistentes IA Mximos",
-    description: "Cantidad de personalidades de IA configurables.",
+    labelKey: "plans_mgmt.features.max_ai_assistants.label",
+    descKey: "plans_mgmt.features.max_ai_assistants.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -136,8 +137,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   max_workflows: {
-    label: "Workflows Activos",
-    description: "Automatizaciones de marketing simultneas.",
+    labelKey: "plans_mgmt.features.max_workflows.label",
+    descKey: "plans_mgmt.features.max_workflows.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -156,8 +157,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   storage_limit_gb: {
-    label: "Almacenamiento (GB)",
-    description: "Espacio en disco para archivos multimedia.",
+    labelKey: "plans_mgmt.features.storage_limit_gb.label",
+    descKey: "plans_mgmt.features.storage_limit_gb.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -176,8 +177,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   max_contacts: {
-    label: "Contactos Mximos",
-    description: "Número mximo de personas permitidas en el CRM.",
+    labelKey: "plans_mgmt.features.max_contacts.label",
+    descKey: "plans_mgmt.features.max_contacts.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -196,8 +197,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   max_companies: {
-    label: "Empresas Mximas",
-    description: "Número mximo de organizaciones permitidas (Multi-tenant).",
+    labelKey: "plans_mgmt.features.max_companies.label",
+    descKey: "plans_mgmt.features.max_companies.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -216,8 +217,8 @@ const FEATURE_META: Record<
     type: "number",
   },
   can_remove_branding: {
-    label: "White-Label Experience",
-    description: "Elimina el branding de Sentry para una experiencia de marca propia.",
+    labelKey: "plans_mgmt.features.can_remove_branding.label",
+    descKey: "plans_mgmt.features.can_remove_branding.description",
     icon: (
       <svg
         className="w-6 h-6"
@@ -242,6 +243,7 @@ interface Props {
 }
 
 export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
+  const { t } = useTranslation();
   const { confirm } = useModal();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
@@ -418,12 +420,11 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
   const availableFeaturesToAdd = Object.keys(FEATURE_META).filter(
     (f) => !currentFeatures.includes(f),
   );
-
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark">
       <ModuleHeader
-        title="Gestión de Planes"
-        description="Define límites y características de cada plan de suscripción."
+        title={t("plans_mgmt.title", "Gestión de Planes")}
+        description={t("plans_mgmt.description", "Define límites y características de cada plan de suscripción.")}
         icon={
           <svg
             className="w-8 h-8 text-white"
@@ -458,7 +459,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                 d="M10 19l-7-7m0 0l7-7m-7 7h18"
               />
             </svg>
-            Volver al Panel
+            {t("plans_mgmt.back", "Volver al Panel")}
           </button>
         }
       />
@@ -474,7 +475,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
             <div className="w-80 flex flex-col bg-white dark:bg-reply-panel-dark rounded-xl border border-gray-200 dark:border-reply-border-dark shadow-lg overflow-hidden">
               <div className="p-4 border-b border-gray-200 dark:border-reply-border-dark bg-reply-bg dark:bg-reply-surface-dark">
                 <h3 className="font-bold text-gray-700 dark:text-gray-200">
-                  Planes Disponibles
+                  {t("plans_mgmt.available_plans", "Planes Disponibles")}
                 </h3>
               </div>
 
@@ -510,7 +511,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
 
                 {plans.length === 0 && (
                   <div className="text-center py-8 text-gray-400 text-sm italic">
-                    No hay planes creados.
+                    {t("plans_mgmt.no_plans", "No hay planes creados.")}
                   </div>
                 )}
               </div>
@@ -533,7 +534,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                       d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                     />
                   </svg>
-                  Crear Nuevo Plan
+                  {t("plans_mgmt.create_plan", "Crear Nuevo Plan")}
                 </button>
               </div>
             </div>
@@ -547,7 +548,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-8">
                       <div className="md:col-span-5">
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">
-                          Nombre del Plan
+                          {t("plans_mgmt.plan_name", "Nombre del Plan")}
                         </label>
                         <input
                           type="text"
@@ -561,7 +562,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                       </div>
                       <div className="md:col-span-3">
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">
-                          Precio (USD)
+                          {t("plans_mgmt.price", "Precio (USD)")}
                         </label>
                         <div className="relative">
                           <span className="absolute left-3 top-3 text-gray-500 dark:text-gray-400">
@@ -577,7 +578,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                       </div>
                       <div className="md:col-span-4">
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">
-                          Stripe Price ID
+                          {t("plans_mgmt.stripe_price_id", "Stripe Price ID")}
                         </label>
                         <input
                           type="text"
@@ -595,7 +596,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                     <div className="mb-6">
                       <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-gray-800 dark:text-white text-lg flex items-center gap-2">
-                          Límites y Features
+                          {t("plans_mgmt.limits_features", "Límites y Features")}
                           <span className="text-xs font-normal text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
                             {currentFeatures.length}
                           </span>
@@ -604,11 +605,11 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                         {availableFeaturesToAdd.length > 0 && (
                           <div className="relative group z-10">
                             <button className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-2 border border-indigo-200 dark:border-indigo-800">
-                              <span>+ Añadir Característica</span>
+                              <span>{t("plans_mgmt.add_feature", "+ Añadir Característica")}</span>
                             </button>
                             <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-reply-surface-dark rounded-xl shadow-2xl border border-gray-200 dark:border-reply-border-dark p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform origin-top-right">
                               <div className="text-xs font-bold text-gray-400 uppercase px-2 py-1 mb-1">
-                                Disponibles
+                                {t("plans_mgmt.available", "Disponibles")}
                               </div>
                               {availableFeaturesToAdd.map((key) => (
                                 <button
@@ -621,10 +622,10 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                   </div>
                                   <div>
                                     <p className="font-bold text-sm text-gray-800 dark:text-gray-200">
-                                      {FEATURE_META[key]?.label}
+                                      {t(FEATURE_META[key]?.labelKey)}
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-500 line-clamp-1">
-                                      {FEATURE_META[key]?.description}
+                                      {t(FEATURE_META[key]?.descKey)}
                                     </p>
                                   </div>
                                 </button>
@@ -637,7 +638,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                       {/* Standard Config Section */}
                       <div className="mb-8">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-100 dark:border-reply-border-dark pb-2">
-                          Configuración General
+                          {t("plans_mgmt.general_config", "Configuración General")}
                         </h3>
                         <div className="grid grid-cols-1 gap-4">
                           {currentFeatures
@@ -656,8 +657,8 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                 formData.config as Record<string, unknown>
                               )[key];
                               const meta = FEATURE_META[key];
-                              const label = meta.label;
-                              const description = meta.description;
+                              const label = t(meta.labelKey);
+                              const description = t(meta.descKey);
                               const icon = meta?.icon || (
                                 <span className="text-2xl">️</span>
                               );
@@ -703,10 +704,10 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                           }`}
                                         >
                                           <option value="true">
-                                            Habilitado
+                                            {t("plans_mgmt.enabled", "Habilitado")}
                                           </option>
                                           <option value="false">
-                                            Deshabilitado
+                                            {t("plans_mgmt.disabled", "Deshabilitado")}
                                           </option>
                                         </select>
                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-current">
@@ -768,7 +769,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                       {/* Resource Limits (Quotas) Section */}
                       <div>
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-100 dark:border-reply-border-dark pb-2">
-                          Límites de Recursos (Quotas)
+                          {t("plans_mgmt.resource_limits", "Límites de Recursos (Quotas)")}
                         </h3>
                         <div className="grid grid-cols-1 gap-4">
                           {[
@@ -777,17 +778,6 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                             "max_companies",
                             "max_workflows",
                           ].map((key) => {
-                            // If key is not in config, we can optionally skip or render default.
-                            // User asked to "Add the inputs". So we render them if they exist in FEATURE_META, assuming we want to enable them.
-                            // But typically we iterate currentFeatures. Let's merge logical existence.
-                            // If it's missing from config, we treat it as unconfigured?
-                            // To follow the visual instruction, I'll iterate existing quotas in config OR force them if I must.
-                            // Let's simplify: iterate specific keys, if not in config, add to config with default -1?
-                            // No, side effects in render are bad.
-                            // Best approach: Filter currentFeatures for these keys.
-                            // IF key is missing, user has to "Add Feature".
-                            // BUT user said "Add inputs...". I'll assume they might be added via the "Add Feature" UI,
-                            // OR I should just iterate them if they are in config.
                             if (
                               !(
                                 formData.config as Record<string, unknown>
@@ -812,14 +802,14 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
 
                                 <div className="flex-1 min-w-0">
                                   <h4 className="font-bold text-gray-800 dark:text-gray-200 text-base mb-0.5 leading-tight">
-                                    {meta?.label}
+                                    {t(meta?.labelKey)}
                                   </h4>
                                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {meta?.description}
+                                    {t(meta?.descKey)}
                                   </p>
                                   {key === "storage_limit_gb" && (
                                     <p className="text-[10px] text-indigo-500 font-medium mt-1">
-                                       1 GB ≈ 500 imgenes de alta calidad
+                                      1 GB ≈ 500 imágenes de alta calidad
                                     </p>
                                   )}
                                 </div>
@@ -830,7 +820,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                                     <span
                                       className={`text-[10px] font-bold uppercase tracking-wider ${isUnlimited ? "text-green-600 dark:text-green-400" : "text-gray-400"}`}
                                     >
-                                      {isUnlimited ? "Ilimitado" : "Limitado"}
+                                      {isUnlimited ? t("plans_mgmt.unlimited", "Ilimitado") : t("plans_mgmt.limited", "Limitado")}
                                     </span>
                                     <button
                                       type="button"
@@ -870,7 +860,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
 
                                 <button
                                   onClick={() => removeFeature(key)}
-                                  className="absolute -top-2 -right-2 bg-white dark:bg-reply-border-dark text-gray-400 hover:text-red-500 p-1 rounded-full shadow-md border border-gray-200 dark:border-gray-600 opacity-0 group-hover:opacity-100 transition-all transform hover:scale-110 z-10"
+                                  className="absolute -top-2 -right-2 bg-white dark:bg-reply-border-dark text-gray-400 hover:text-red-500 p-1 rounded-full shadow-md border border-gray-200 dark:gray-600 opacity-0 group-hover:opacity-100 transition-all transform hover:scale-110 z-10"
                                   title="Eliminar característica"
                                 >
                                   <svg
@@ -902,7 +892,7 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                       disabled={isDeleting}
                       className="bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/40 px-6 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 disabled:opacity-50"
                     >
-                      {isDeleting ? "Eliminando..." : "Eliminar Plan"}
+                      {isDeleting ? t("plans_mgmt.deleting", "Eliminando...") : t("plans_mgmt.delete_plan", "Eliminar Plan")}
                     </button>
 
                     <button
@@ -931,10 +921,10 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                             ></path>
                           </svg>
-                          Guardando...
+                          {t("plans_mgmt.saving", "Guardando...")}
                         </>
                       ) : (
-                        "Guardar Cambios"
+                        t("plans_mgmt.save_changes", "Guardar Cambios")
                       )}
                     </button>
                   </div>
@@ -957,11 +947,10 @@ export const PlanManagement: React.FC<Props> = ({ onNavigateToDashboard }) => {
                     </svg>
                   </div>
                   <h3 className="text-xl font-bold text-gray-600 dark:text-gray-300 mb-2">
-                    Ningún plan seleccionado
+                    {t("plans_mgmt.no_selection_title", "Ningún plan seleccionado")}
                   </h3>
                   <p className="max-w-xs mx-auto">
-                    Selecciona un plan de la lista o crea uno nuevo para
-                    comenzar a editar.
+                    {t("plans_mgmt.no_selection_desc", "Selecciona un plan de la lista o crea uno nuevo para comenzar a editar.")}
                   </p>
                 </div>
               )}

@@ -26,6 +26,7 @@ import { superAdminGuard } from "@/middleware/superAdminMiddleware";
 import { createQueueDashboardRouter } from "@/routes/queueDashboardRoute";
 import { validate } from "@/middleware/validationMiddleware";
 import { metaIncomingWebhookSchema } from "@/schemas/webhookSchemas";
+import { auditLog } from "@/middleware/auditMiddleware";
 
 // Route Imports
 import onboardingRouter from "@/routes/onboardingRoutes";
@@ -43,6 +44,7 @@ import conversationRouter from "@/routes/conversationRoutes";
 import webhookRouter from "@/routes/webhookRoutes";
 import integrationRouter from "@/routes/integrationRoutes";
 import whatsappRouter from "@/routes/whatsappRoutes";
+import instagramRouter from "@/routes/instagramRoutes";
 import templateRouter from "@/routes/templateRoutes";
 import { contactRouter } from "@/routes/contactRoutes";
 import mediaRouter from "@/routes/mediaRoutes";
@@ -61,6 +63,7 @@ import googleAuthRouter from "@/routes/googleAuthRoutes";
 import companyRouter from "@/routes/companyRoutes";
 import analyticsRouter from "@/routes/analyticsRoutes";
 import productRouter from "@/routes/productRoutes";
+import dealProductRouter from "@/routes/dealProductRoutes";
 import propertyRouter from "@/routes/propertyRoutes";
 import publicPropertyRouter from "@/routes/publicPropertyRoutes";
 import emailRouter from "@/routes/emailRoutes";
@@ -205,11 +208,11 @@ router.use(
 );
 
 // Core Modules
-router.use("/api/users", userRateLimiter, protect, userRouter);
-router.use("/api/roles", apiLimiter, protect, rolesRouter);
-router.use("/api/company", apiLimiter, protect, companyRouter);
+router.use("/api/users", userRateLimiter, protect, auditLog("User"), userRouter);
+router.use("/api/roles", apiLimiter, protect, auditLog("Role"), rolesRouter);
+router.use("/api/company", apiLimiter, protect, auditLog("Company"), companyRouter);
 router.use("/api/usage", apiLimiter, protect, usageRouter);
-router.use("/api/api-keys", apiLimiter, protect, apiKeyRouter);
+router.use("/api/api-keys", apiLimiter, protect, auditLog("ApiKey"), apiKeyRouter);
 router.use("/api/routing-config", apiLimiter, protect, routingRouter);
 router.use("/api/webhooks", webhookRouter);
 router.use("/api/integrations", apiLimiter, protect, integrationRouter);
@@ -223,6 +226,7 @@ router.use("/api/notifications", apiLimiter, protect, notificationsRouter);
 
 // Communication Modules
 router.use("/api/whatsapp", apiLimiter, protect, whatsappRouter);
+router.use("/api/instagram", apiLimiter, protect, instagramRouter);
 router.use("/api/emails", apiLimiter, emailRouter);
 router.use("/api/conversations", apiLimiter, protect, conversationRouter);
 router.use("/api/contacts", apiLimiter, protect, contactRouter);
@@ -238,7 +242,8 @@ router.use("/api/quick-replies", apiLimiter, protect, quickReplyRouter);
 
 // CRM Core
 router.use("/api/accounts", apiLimiter, protect, accountRouter);
-router.use("/api/deals", apiLimiter, protect, dealRouter);
+router.use("/api/deals", apiLimiter, protect, auditLog("Deal"), dealRouter);
+router.use("/api/deals", apiLimiter, protect, auditLog("DealProduct"), dealProductRouter);
 router.use("/api/pipelines", apiLimiter, protect, pipelineRouter);
 // Note: Stage router is usually nested, but keeping direct mapping for legacy support if needed
 // Or fix pipelineRouter to mount it. Assuming direct use for now based on server.ts
@@ -249,8 +254,8 @@ router.use(
   stageRouter,
 );
 router.use("/api/activities", apiLimiter, protect, activityRouter);
-router.use("/api/products", apiLimiter, protect, productRouter);
-router.use("/api/properties", apiLimiter, protect, propertyRouter);
+router.use("/api/products", apiLimiter, protect, auditLog("Product"), productRouter);
+router.use("/api/properties", apiLimiter, protect, auditLog("Property"), propertyRouter);
 // Ficha pública de inmuebles (sin protect — compartible por WhatsApp)
 router.use("/public/properties", apiLimiter, publicPropertyRouter);
 router.use("/api/payments", paymentRouter);

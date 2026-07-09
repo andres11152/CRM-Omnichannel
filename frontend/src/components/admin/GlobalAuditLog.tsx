@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { Modal } from "@/components/ui/Modal";
 
 export const GlobalAuditLog: React.FC = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -30,6 +31,7 @@ export const GlobalAuditLog: React.FC = () => {
     limit: 20,
     offset: 0
   });
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -225,6 +227,7 @@ export const GlobalAuditLog: React.FC = () => {
                         <Button 
                           variant="ghost" 
                           size="sm" 
+                          onClick={() => setSelectedLog(log)}
                           className="text-reply-brand hover:text-reply-brand-dark p-0 h-auto hover:bg-transparent font-bold text-xs flex items-center gap-1"
                         >
                           <Info className="w-3.5 h-3.5" />
@@ -245,6 +248,53 @@ export const GlobalAuditLog: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      {/* Payload Viewer Modal */}
+      <Modal
+        isOpen={!!selectedLog}
+        onClose={() => setSelectedLog(null)}
+        title="Detalles de Auditoría / Payload JSON"
+        icon={<Terminal className="w-5 h-5 text-indigo-500" />}
+        size="lg"
+      >
+        {selectedLog && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-reply-border dark:border-reply-border-dark">
+              <div>
+                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">Entidad</span>
+                <span className="font-semibold text-reply-text-primary dark:text-reply-text-primary-dark text-sm">{selectedLog.entity}</span>
+              </div>
+              <div>
+                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">ID de Entidad</span>
+                <span className="font-mono text-reply-text-primary dark:text-reply-text-primary-dark text-sm">{selectedLog.entityId}</span>
+              </div>
+              <div>
+                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">Acción</span>
+                <span className="font-bold text-reply-text-primary dark:text-reply-text-primary-dark text-sm">{selectedLog.action}</span>
+              </div>
+              <div>
+                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">Usuario Operador</span>
+                <span className="font-semibold text-reply-text-primary dark:text-reply-text-primary-dark text-sm">{selectedLog.userName}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
+                Payload / Detalles Técnicos
+              </label>
+              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl font-mono text-xs overflow-x-auto max-h-[350px] border border-slate-800">
+                <pre>{JSON.stringify(selectedLog.details, null, 2)}</pre>
+              </div>
+            </div>
+            
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setSelectedLog(null)}>
+                Cerrar Detalle
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

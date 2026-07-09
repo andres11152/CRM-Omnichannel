@@ -159,7 +159,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({
               </div>
               <div>
                 <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Link de Pago</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">Generar cobro Stripe/Nequi</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">Generar cobro MercadoPago/Nequi</div>
               </div>
             </button>
 

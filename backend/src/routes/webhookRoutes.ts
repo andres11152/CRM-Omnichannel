@@ -44,6 +44,15 @@ import {
 router.get("/meta", verifyGlobalMeta);
 router.post("/meta", handleMetaWebhookEvent);
 
+// Global multi-tenant Instagram DM webhooks
+import {
+  verifyInstagramWebhook,
+  handleInstagramWebhookEvent,
+} from "@/controllers/instagramWebhookController";
+
+router.get("/instagram", verifyInstagramWebhook);
+router.post("/instagram", handleInstagramWebhookEvent);
+
 // ── Protected management endpoints ──────────────────────────────────────────
 
 router.use("/", protect);

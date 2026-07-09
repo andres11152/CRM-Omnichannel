@@ -207,15 +207,20 @@ export const ProfileSettings: React.FC = () => {
                 {/* Avatar Section */}
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-32 h-32 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-3xl font-bold text-indigo-600 dark:text-indigo-400 border-4 border-white dark:border-[#111b21] shadow-xl overflow-hidden relative group">
-                    {userForm.profilePicUrl ? (
-                      <img
-                        src={userForm.profilePicUrl}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      userForm.name.charAt(0).toUpperCase()
-                    )}
+                    {(() => {
+                      const pic = userForm.profilePicUrl;
+                      if (!pic) return userForm.name.charAt(0).toUpperCase();
+                      // If relative local proxy path, append base backend URL
+                      const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
+                      const srcUrl = pic.startsWith("/") ? `${backendUrl}${pic}` : pic;
+                      return (
+                        <img
+                          src={srcUrl}
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
+                      );
+                    })()}
 
                     <div
                       className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"

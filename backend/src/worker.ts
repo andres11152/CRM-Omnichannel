@@ -25,16 +25,16 @@ import "./utils/tracing";
 import dotenv from "dotenv";
 dotenv.config();
 
+import { Logger } from "@/utils/logger";
 import { initEnv } from "@/config/env";
 
 try {
   initEnv();
 } catch (err) {
-  console.error("[ERROR] CRITICAL: Environment validation failed in worker.");
+  Logger.error("[ERROR] CRITICAL: Environment validation failed in worker.", err as Error);
   process.exit(1);
 }
 
-import { Logger } from "@/utils/logger";
 import { connectDB, prisma } from "@/config/database";
 import { connectRedis } from "@/config/redis";
 import { memoryMonitor } from "@/utils/resourceManager";

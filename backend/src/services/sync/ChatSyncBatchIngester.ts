@@ -85,6 +85,17 @@ export class ChatSyncBatchIngester {
         msgContent: parsed.msgContent as Record<string, unknown>
       });
 
+      // [MEDIA RETRY] When the inline download fails, persist the raw proto (same as
+      // ingestConversationBatch) so the on-demand retry / background hydration can
+      // rebuild the WAMessage later. Without _raw, retry died with "mensaje muy
+      // antiguo" as soon as the message left the in-memory store (cap 150).
+      let rawSerialized: string | undefined;
+      if (!url) {
+        try {
+          rawSerialized = JSON.stringify({ key: msg.key, message: msg.message }, BufferJSON.replacer);
+        } catch { /* best-effort */ }
+      }
+
       mediaMeta = {
         mediaType: parsed.mediaType,
         mediaCaption: parsed.mediaCaption,
@@ -94,7 +105,8 @@ export class ChatSyncBatchIngester {
           url: url || "",
           mimetype,
           name: parsed.mediaFilename || (parsed.mediaType === "audio" ? "Nota de voz" : "Adjunto"),
-          size: 0
+          size: 0,
+          ...(rawSerialized ? { _raw: rawSerialized } : {}),
         }
       };
     }

@@ -50,6 +50,8 @@ model Conversation {
 
   // ID of the specific channel/session (e.g. WhatsApp phone number or Session ID)
   channelId String?
+  // Which channel this conversation belongs to (disambiguates channelId across providers)
+  channel   Channel @default(WHATSAPP)
 
   // 🏢 GROUP CHAT SUPPORT (Enterprise CRM Feature)
   // Distinguishes between individual DMs and group conversations
@@ -94,8 +96,10 @@ model Conversation {
   // === HIGH-PERFORMANCE COMPOSITE INDEXES ===
 
   // 🛡️ DATA INTEGRITY
-  // Ensure ONE conversation per phone number per company
-  @@unique([companyId, channelId], name: "conversation_unique_channel")
+  // Ensure ONE conversation per phone number per company per channel
+  // (channel disambiguates channelId across providers, e.g. WhatsApp phone
+  // vs Instagram-Scoped ID, preventing cross-channel collisions)
+  @@unique([companyId, channelId, channel], name: "conversation_unique_channel")
   // 1. Agent Dashboard: "My Open Conversations" (Most frequent query)
   // Index Scan -> Instant results
   @@index([companyId, assignedToId, status, updatedAt(sort: Desc)])
@@ -143,8 +147,16 @@ model Message {
   // returned Company A's row instead of creating Company B's message.
   whatsappMessageId String?
 
+  // Same idempotency guard as whatsappMessageId above, scoped to Instagram
+  // Direct messages (Instagram-assigned message id from the Messaging API).
+  instagramMessageId String?
+
   // === ANALYTICS & HISTORY INDEXES ===
 
+  // 5. Per-company uniqueness for WhatsApp message dedup (see comment above)
+  @@unique([companyId, whatsappMessageId])
+  // 6. Per-company uniqueness for Instagram message dedup
+  @@unique([companyId, instagramMessageId])
   // 1. Chat History Load: "Get last 50 messages for this chat"
   @@index([conversationId, createdAt(sort: Desc)])
   // 2. Global Analytics: "Messages per day per company" (No JOIN needed!)
@@ -153,8 +165,6 @@ model Message {
   @@index([companyId, status, createdAt(sort: Desc)])
   // 4. Sender History
   @@index([senderId, createdAt(sort: Desc)])
-  // 5. Per-company uniqueness for WhatsApp message dedup (see comment above)
-  @@unique([companyId, whatsappMessageId])
   @@map("messages")
 }
 
@@ -175,20 +185,22 @@ model MessageReaction {
 }
 
 model Contact {
-  id            String   @id @default(cuid())
-  companyId     String
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name          String
-  email         String?
-  phone         String?
-  avatarUrl     String?
-  tags          String[]
-  notes         String?
-  customFields  Json?
-  profilePicUrl String?
-  about         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String   @id @default(cuid())
+  companyId         String
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name              String
+  email             String?
+  phone             String?
+  instagramUserId   String? // Instagram-Scoped ID (IGSID) of the sender
+  instagramUsername String? // Display handle, informational only
+  avatarUrl         String?
+  tags              String[]
+  notes             String?
+  customFields      Json?
+  profilePicUrl     String?
+  about             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // 🗑️ SOFT DELETE
   deletedAt DateTime?
@@ -214,8 +226,11 @@ model Contact {
 
   // 🛡️ INTEGRITY
   @@unique([companyId, phone])
+  @@unique([companyId, instagramUserId])
   // 1. Fast Phone Lookup (WhatsApp Webhook critical path)
   @@index([companyId, phone])
+  // 1b. Fast Instagram IGSID Lookup (Instagram Webhook critical path)
+  @@index([companyId, instagramUserId])
   // 2. Fast Email Lookup
   @@index([companyId, email])
   // 3. Recent Contacts View (Dashboard / List)
@@ -277,29 +292,31 @@ model Company {
   defaultSenderName  String?
 
   // Relaciones
-  users            User[]
-  agentSessions    AgentSession[]
-  tickets          Ticket[]
-  apiKeys          ApiKey[]
-  conversations    Conversation[]
-  whatsappSessions WhatsAppSession[]
-  departments      Department[]
-  queues           Queue[]
-  campaigns        Campaign[]
-  tags             Tag[]
-  workflows        Workflow[]
-  media            Media[]
-  accounts         Account[]
-  deals            Deal[]
-  activities       Activity[]
-  contacts         Contact[]
-  messageTemplates MessageTemplate[]
-  aiConfig         AIConfig?
-  aiAssistants     AIAssistant[]
-  quickReplies     QuickReply[]
-  pipelines        Pipeline[] // CRM Pipelines
-  products         Product[] // Product Catalog
-  properties       Property[] // Real Estate Module
+  users             User[]
+  agentSessions     AgentSession[]
+  tickets           Ticket[]
+  apiKeys           ApiKey[]
+  conversations     Conversation[]
+  whatsappSessions  WhatsAppSession[]
+  instagramSessions InstagramSession[]
+  departments       Department[]
+  queues            Queue[]
+  campaigns         Campaign[]
+  tags              Tag[]
+  workflows         Workflow[]
+  media             Media[]
+  accounts          Account[]
+  deals             Deal[]
+  activities        Activity[]
+  contacts          Contact[]
+  messageTemplates  MessageTemplate[]
+  aiConfig          AIConfig?
+  aiAssistants      AIAssistant[]
+  quickReplies      QuickReply[]
+  pipelines         Pipeline[] // CRM Pipelines
+  products          Product[] // Product Catalog
+  properties        Property[] // Real Estate Module
+  dealProducts      DealProduct[]
 
   // Chatbot Flows
   // Link to 'workflows' is the single source of truth (line 251)
@@ -500,11 +517,11 @@ model WhatsAppSession {
   notifiedAt DateTime? // Last time we notified about disconnection
 
   // Provider configuration
-  provider      WhatsAppProvider @default(BAILEYS)
-  metaAccessToken     String?
-  metaPhoneNumberId   String?
-  metaBusinessId      String?
-  metaVerifyToken     String?
+  provider          WhatsAppProvider @default(BAILEYS)
+  metaAccessToken   String?
+  metaPhoneNumberId String?
+  metaBusinessId    String?
+  metaVerifyToken   String?
 
   // Custom Default Queue for this Session
   defaultQueueId String?
@@ -517,6 +534,30 @@ model WhatsAppSession {
   // For: Get sessions by company and status
   @@index([companyId, status, createdAt(sort: Desc)])
   @@map("whatsapp_sessions")
+}
+
+model InstagramSession {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  igBusinessAccountId String  @unique // Instagram-Scoped Business Account ID (IG User ID)
+  pageId              String // Linked Facebook Page ID (required by the Send API)
+  accessToken         String // Page access token with instagram_manage_messages scope
+  verifyToken         String // Webhook verify token (shown to admin to paste into Meta App dashboard)
+  username            String? // Display handle, informational only
+
+  status String @default("DISCONNECTED") // CONNECTED, DISCONNECTED
+
+  // Custom Default Queue for this Session
+  defaultQueueId String?
+  defaultQueue   Queue?  @relation(fields: [defaultQueueId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@map("instagram_sessions")
 }
 
 model WhatsAppCredential {
@@ -784,8 +825,9 @@ model Queue {
   aiAssistantId String?
   aiAssistant   AIAssistant? @relation(fields: [aiAssistantId], references: [id])
 
-  conversations      Conversation[]
-  defaultForSessions WhatsAppSession[]
+  conversations               Conversation[]
+  defaultForSessions          WhatsAppSession[]
+  defaultForInstagramSessions InstagramSession[]
 
   // === PERFORMANCE INDEXES ===
   // For: Get queues by company (common query)
@@ -1017,8 +1059,9 @@ model Deal {
   assignedToId String?
   assignedTo   User?   @relation("AssignedDeals", fields: [assignedToId], references: [id])
 
-  activities Activity[]
-  properties Property[]
+  activities   Activity[]
+  properties   Property[]
+  dealProducts DealProduct[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1109,11 +1152,35 @@ model Product {
   imageUrl    String?
   status      ProductStatus @default(active)
 
+  dealProducts DealProduct[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([companyId, status])
   @@map("products")
+}
+
+model DealProduct {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  dealId    String
+  deal      Deal    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  quantity  Int   @default(1)
+  unitPrice Float // Captures the price at transaction time
+  discount  Float @default(0) // Percentage discount (0-100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([dealId])
+  @@index([productId])
+  @@map("deal_products")
 }
 
 // ============================================
@@ -1249,8 +1316,8 @@ model Property {
   amenities String[] @default([]) // Del conjunto
 
   // Media
-  images        PropertyImage[]
-  videoUrl      String?
+  images         PropertyImage[]
+  videoUrl       String?
   virtualTourUrl String?
 
   // Vínculos CRM

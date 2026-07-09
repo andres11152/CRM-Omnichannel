@@ -106,6 +106,7 @@ export const PropertyFormModal: React.FC<Props> = ({
   } = usePropertyLabels();
   const [catalog, setCatalog] = useState<PropertyCatalog | null>(null);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
+  const [deals, setDeals] = useState<{ id: string; title: string }[]>([]);
   const [current, setCurrent] = useState<Property | null>(property);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({});
@@ -128,6 +129,12 @@ export const PropertyFormModal: React.FC<Props> = ({
         toast.error(
           t("properties_form.contacts_load_error", "No se pudo cargar la lista de contactos para asignar propietario."),
         ),
+      );
+    import("@/services/crmService")
+      .then((m) => m.getDeals())
+      .then((r) => setDeals(r.deals.map((d) => ({ id: d.id, title: d.title }))))
+      .catch(() =>
+        toast.error("No se pudieron cargar las oportunidades para la asociación."),
       );
   }, [isOpen]);
 
@@ -755,6 +762,20 @@ export const PropertyFormModal: React.FC<Props> = ({
               {contacts.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Oportunidad / Negocio (CRM)">
+            <select
+              className={selectCls}
+              value={form.dealId ?? ""}
+              onChange={(e) => set({ dealId: e.target.value || null })}
+            >
+              <option value="">{t("properties_form.unassigned", "— Sin asignar —")}</option>
+              {deals.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.title}
                 </option>
               ))}
             </select>

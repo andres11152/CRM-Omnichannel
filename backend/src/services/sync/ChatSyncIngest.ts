@@ -310,7 +310,13 @@ export class ChatSyncIngest {
     companyId: string,
     sessionId: string,
     channelId: string,
-    limit: number = 100
+    limit: number = 100,
+    opts?: {
+      /** Max ms to block the CALLER waiting for page 1. Callers inside an HTTP request
+       * (manual sync) must respond before the frontend's 15s axios timeout; the full
+       * wait + deeper pagination always continues in background so nothing is lost. */
+      firstPageWaitMs?: number;
+    }
   ): Promise<boolean> {
     try {
       const { whatsappService } = await import("@/whatsapp");
@@ -403,10 +409,10 @@ export class ChatSyncIngest {
       const STABLE_MS = 2500;
       const MAX_STABILIZE_MS = 10000;
 
-      const waitForBatch = async (preCount: number, stabilize: boolean): Promise<number> => {
+      const waitForBatch = async (preCount: number, stabilize: boolean, maxWaitMs: number = MAX_WAIT_MS): Promise<number> => {
         const startWait = Date.now();
         let lastCount = preCount;
-        while (Date.now() - startWait < MAX_WAIT_MS) {
+        while (Date.now() - startWait < maxWaitMs) {
           await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
           lastCount = await countInDb();
           if (lastCount > preCount) break;
@@ -431,6 +437,11 @@ export class ChatSyncIngest {
 
       const fetchFn = (sock as unknown as { fetchMessageHistory: (count: number, key: import("@whiskeysockets/baileys").WAMessageKey, ts: number) => Promise<void> }).fetchMessageHistory;
 
+      // [Baileys 7 · CRITICAL] fetchMessageHistory's 3rd argument is forwarded VERBATIM
+      // into historySyncOnDemandRequest.oldestMsgTimestampMs (see baileys
+      // lib/Socket/messages-recv.js) — it must be MILLISECONDS. The previous code passed
+      // seconds (tsMs/1000), so the phone was asked for history older than ~1970 and
+      // answered with nothing: this is why manual/on-demand sync "no funciona".
       const fetchPage = async (pageLabel: string, count: number, stabilize: boolean): Promise<number> => {
         const anchor = await resolveAnchor();
         const preDbCount = await countInDb();
@@ -438,41 +449,68 @@ export class ChatSyncIngest {
           `[ChatSync] On-demand ${pageLabel}: requesting ${count} messages for ${targetJid}. ` +
           `Anchor from ${anchor.source}: msg ${anchor.key.id} at ${anchor.tsMs > 0 ? new Date(anchor.tsMs).toISOString() : "0"}`
         );
-        await fetchFn.call(sock, count, anchor.key, Math.floor(anchor.tsMs / 1000));
+        await fetchFn.call(sock, count, anchor.key, anchor.tsMs);
         return waitForBatch(preDbCount, stabilize);
       };
 
       // [COMPLETENESS] A single fetchMessageHistory returns ONE page (the phone decides
       // its size, typically ~50 msgs). The old code fired one request and returned at the
       // first arrival, so "sincronizar" barely scratched the history ("omite mensajes").
-      // Page 1 runs synchronously (fast HTTP response, same latency as before); the
-      // remaining pages paginate backwards IN BACKGROUND until the requested limit is
+      // Page 1 blocks the caller only up to firstPageWaitMs (bounded for HTTP callers);
+      // the remaining pages paginate backwards IN BACKGROUND until the requested limit is
       // covered or the phone has no more. Each background batch is ingested through the
       // ON_DEMAND messaging-history.set path, which emits conversation:history_synced —
       // the frontend already refetches the chat on that event.
       const MAX_PAGES = 5;
-      const firstGained = await fetchPage("page 1", limit, false);
+      const firstPageWaitMs = Math.min(opts?.firstPageWaitMs ?? MAX_WAIT_MS, MAX_WAIT_MS);
+
+      const anchor1 = await resolveAnchor();
+      const page1PreCount = await countInDb();
+      Logger.info(
+        `[ChatSync] On-demand page 1: requesting ${limit} messages for ${targetJid}. ` +
+        `Anchor from ${anchor1.source}: msg ${anchor1.key.id} at ${anchor1.tsMs > 0 ? new Date(anchor1.tsMs).toISOString() : "0"}`
+      );
+      await fetchFn.call(sock, limit, anchor1.key, anchor1.tsMs);
+      const firstGained = await waitForBatch(page1PreCount, false, firstPageWaitMs);
+
+      const paginateRemaining = async (initialGained: number) => {
+        // Let the previous batch fully land before re-anchoring
+        await new Promise((r) => setTimeout(r, STABLE_MS));
+        let totalGained = initialGained;
+        for (let page = 2; page <= MAX_PAGES && totalGained < limit; page++) {
+          const gained = await fetchPage(`page ${page}/${MAX_PAGES} (background)`, Math.max(50, limit - totalGained), true);
+          if (gained <= 0) {
+            Logger.info(`[ChatSync] On-demand background pagination finished for ${targetJid}: no more messages from phone.`);
+            break;
+          }
+          totalGained += gained;
+          Logger.info(`[ChatSync] On-demand background page landed ${gained} messages (${totalGained}/${limit}) for ${targetJid}`);
+        }
+      };
 
       if (firstGained > 0 && firstGained < limit) {
+        paginateRemaining(firstGained).catch((err) => {
+          Logger.warn(`[ChatSync] Background pagination failed for ${targetJid}: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      } else if (firstGained === 0 && firstPageWaitMs < MAX_WAIT_MS) {
+        // Bounded wait expired before the phone answered (routine on a locked phone).
+        // Keep waiting in background for the remainder of the full window: the batch is
+        // ingested by messaging-history.set regardless of this waiter, and this
+        // continuation ensures deeper pages still get requested — no history left behind.
         (async () => {
-          // Let page 1's batch fully land before re-anchoring
-          await new Promise((r) => setTimeout(r, STABLE_MS));
-          let totalGained = firstGained;
-          for (let page = 2; page <= MAX_PAGES && totalGained < limit; page++) {
-            const gained = await fetchPage(`page ${page}/${MAX_PAGES} (background)`, Math.max(50, limit - totalGained), true);
-            if (gained <= 0) {
-              Logger.info(`[ChatSync] On-demand background pagination finished for ${targetJid}: no more messages from phone.`);
-              break;
-            }
-            totalGained += gained;
-            Logger.info(`[ChatSync] On-demand background page landed ${gained} messages (${totalGained}/${limit}) for ${targetJid}`);
+          const lateGained = await waitForBatch(page1PreCount, true, MAX_WAIT_MS - firstPageWaitMs);
+          if (lateGained > 0) {
+            Logger.info(`[ChatSync] Late page-1 batch landed ${lateGained} messages for ${targetJid} — continuing pagination.`);
+            if (lateGained < limit) await paginateRemaining(lateGained);
+          } else {
+            Logger.info(`[ChatSync] On-demand fetch: no messages arrived from phone for ${targetJid} within the full window.`);
           }
         })().catch((err) => {
-          Logger.warn(`[ChatSync] Background pagination failed for ${targetJid}: ${err instanceof Error ? err.message : String(err)}`);
+          Logger.warn(`[ChatSync] Background late-batch continuation failed for ${targetJid}: ${err instanceof Error ? err.message : String(err)}`);
         });
       }
 
-      Logger.info(`[ChatSync] On-demand fetch (page 1) completed: ${firstGained} new messages for ${targetJid}`);
+      Logger.info(`[ChatSync] On-demand fetch (page 1) completed: ${firstGained} new messages for ${targetJid} (waited ≤${firstPageWaitMs}ms)`);
       // Return true even if no new messages arrived in DB —
       // the history might have been ingested directly to DB via messaging-history.set
       return true;

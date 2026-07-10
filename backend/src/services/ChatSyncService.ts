@@ -66,6 +66,10 @@ export interface ChatSyncResult {
   messagesNew: number;
   messagesDuplicate: number;
   errors: string[];
+  /** True when the on-demand request was sent to the phone but its batch hadn't landed
+   * by response time — messages may still arrive via messaging-history.set, which emits
+   * conversation:history_synced so the frontend refetches automatically. */
+  pending?: boolean;
 }
 
 // ========================
@@ -188,7 +192,11 @@ class ChatSyncService {
           companyId,
           sessionId,
           conversationId,
-          limit
+          limit,
+          // Manual sync runs inside an HTTP request (frontend axios aborts at 15s).
+          // Bound the synchronous wait; late batches keep arriving in background and
+          // reach the UI via conversation:history_synced.
+          { firstPageWaitMs: 8000 }
         );
         if (fetchSuccess) {
           allMessages = this.ingest.extractMessagesFromStore(
@@ -310,6 +318,8 @@ class ChatSyncService {
         messagesNew,
         messagesDuplicate,
         errors,
+        // Manual sync: the phone's batch may land after this response (bounded wait).
+        pending: !!conversationId && fetchSuccess && messagesNew === 0,
       };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -337,7 +347,7 @@ class ChatSyncService {
         errors: [...errors, errMsg],
       };
     } finally {
-      this.activeSyncs.set(lockKey, false);
+      this.activeSyncs.delete(lockKey);
     }
   }
 

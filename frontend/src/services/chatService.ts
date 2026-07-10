@@ -133,13 +133,17 @@ export const toggleGroupSync = async (
  */
 export const syncFullHistory = async (
   ticketId: string,
-): Promise<{ newMessages: number; duplicates: number }> => {
-  const res = await apiClient.post(`/conversations/${ticketId}/sync`);
-  const payload = (res as { data?: { newMessages?: number; duplicates?: number } }).data
-    || (res as { newMessages?: number; duplicates?: number });
+): Promise<{ newMessages: number; duplicates: number; pending: boolean }> => {
+  // The server bounds its synchronous wait for the phone to ~8s, but the global
+  // apiClient timeout is 15s — give this call explicit headroom so it never fails
+  // by client timeout while the phone is still answering.
+  const res = await apiClient.post(`/conversations/${ticketId}/sync`, {}, { timeout: 30000 });
+  const payload = (res as { data?: { newMessages?: number; duplicates?: number; pending?: boolean } }).data
+    || (res as { newMessages?: number; duplicates?: number; pending?: boolean });
   return {
     newMessages: payload?.newMessages ?? 0,
     duplicates: payload?.duplicates ?? 0,
+    pending: payload?.pending ?? false,
   };
 };
 

@@ -387,9 +387,13 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       toast.dismiss(loadingToast);
       if (result.newMessages > 0) {
         toast.success(`${result.newMessages} mensajes importados`);
+      } else if (result.pending) {
+        // The request reached the phone but its batch hadn't landed at response time
+        // (a locked phone routinely takes >8s). The backend keeps waiting in background
+        // and conversation:history_synced (handled above) refreshes the chat when it lands.
+        toast.info("Solicitud enviada al teléfono — los mensajes aparecerán automáticamente en unos segundos");
       } else {
-        // Late on-demand batches may still arrive via conversation:history_synced (handled
-        // above). Be honest: nothing was available synchronously.
+        // Be honest: nothing was available synchronously.
         toast.info("No hay mensajes nuevos por ahora");
       }
     } catch (err) {

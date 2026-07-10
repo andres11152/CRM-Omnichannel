@@ -285,7 +285,10 @@ export const syncFullHistory = catchAsync(
       data: {
         newMessages: result.messagesNew,
         duplicates: result.messagesDuplicate,
-        errors: result.errors
+        errors: result.errors,
+        // The phone's history batch may still be in flight (bounded server-side wait);
+        // it lands via messaging-history.set → conversation:history_synced.
+        pending: result.pending ?? false,
       }
     });
   }

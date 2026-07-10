@@ -38,6 +38,15 @@ export class InboundOrchestratorService {
     companyId: string,
     sessionPhone?: string,
   ): Promise<OrchestratedEntities | null> {
+    // [DUP-FIX] Capture whether the RAW jid was a LID before resolveMessageJid
+    // (below) potentially rewrites it to a real phone JID. See the matching
+    // "[DUP-FIX]" comment further down for why this is needed.
+    const rawJidForLidCheck = WhatsAppIdUtils.getCleanJid(message.key.remoteJid);
+    const originalLidDigits =
+      rawJidForLidCheck && WhatsAppIdUtils.isLid(rawJidForLidCheck)
+        ? rawJidForLidCheck.split("@")[0].split(":")[0]
+        : null;
+
     // 1. Identity Resolution
     const { cleanRemoteJid, remoteJid } = await this.identityResolver.resolveMessageJid(
       message,
@@ -213,6 +222,23 @@ export class InboundOrchestratorService {
         message,
         isFromMe,
       ) as (Conversation & { participants: User[] }) | null;
+    }
+
+    // [DUP-FIX] The message's LID resolved to a real phone NOW, but an earlier message
+    // from this same contact may have arrived while the LID was still unresolved (cold
+    // cache, LID circuit breaker open, WhatsApp round-trip timeout under load) and got a
+    // phantom conversation created with channelId = raw LID digits (see the "!conversation"
+    // create-branch below). Without this check, every subsequently-resolved message from
+    // that contact creates ANOTHER conversation keyed by the phone number instead of
+    // reusing/renaming the phantom one — the exact "duplicated chats after replying from
+    // the phone" bug. Only relevant once (self-heals): once migrated, later messages find
+    // the phone-keyed conversation directly via chatService.findConversation below.
+    if (!conversation && originalLidDigits && !WhatsAppIdUtils.isLid(cleanRemoteJid)) {
+      conversation = await this.migrateLegacyLidConversation(
+        companyId,
+        originalLidDigits,
+        chatUniqueId,
+      );
     }
 
     if (!conversation) {
@@ -466,5 +492,52 @@ export class InboundOrchestratorService {
     }
 
     return info;
+  }
+
+  /**
+   * [DUP-FIX] Renames a phantom conversation (created earlier under raw LID digits,
+   * because resolution hadn't succeeded yet at that time) to the now-known phone
+   * channelId, instead of leaving it orphaned while a second, phone-keyed
+   * conversation gets created for the same contact.
+   */
+  private async migrateLegacyLidConversation(
+    companyId: string,
+    originalLidDigits: string,
+    phoneChannelId: string,
+  ): Promise<(Conversation & { participants: User[] }) | null> {
+    // Empty userEmail so this can only match by exact channelId — not by an
+    // unrelated participant's email (chatService.findConversation ORs the two).
+    const legacy = await chatService.findConversation(companyId, originalLidDigits, "");
+    if (!legacy || legacy.channelId !== originalLidDigits) return null;
+
+    Logger.info(
+      `[Orchestrator] [DUP-FIX] Migrating legacy LID-keyed conversation ${legacy.id}: ${originalLidDigits} → ${phoneChannelId}`,
+    );
+
+    try {
+      await chatService.updateConversation(companyId, legacy.id, {
+        channelId: phoneChannelId,
+      });
+    } catch (err: unknown) {
+      // Unique constraint: a phone-keyed conversation was created concurrently by
+      // another in-flight message for this same contact. Use it instead of throwing
+      // — never let a dedup attempt block message processing.
+      const isUniqueConflict =
+        typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "P2002";
+      if (!isUniqueConflict) {
+        Logger.warn(
+          `[Orchestrator] Legacy LID migration failed for ${originalLidDigits} → ${phoneChannelId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+      }
+      Logger.warn(
+        `[Orchestrator] Legacy LID migration conflict for ${originalLidDigits} → ${phoneChannelId} (concurrent creation), re-fetching existing.`,
+      );
+      const existing = await chatService.findConversation(companyId, phoneChannelId, "");
+      if (!existing) return null;
+      return (await chatService.getFullConversation(companyId, existing.id)) as (Conversation & { participants: User[] }) | null;
+    }
+
+    return (await chatService.getFullConversation(companyId, legacy.id)) as (Conversation & { participants: User[] }) | null;
   }
 }

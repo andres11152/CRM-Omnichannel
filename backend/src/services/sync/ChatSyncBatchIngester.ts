@@ -70,7 +70,13 @@ export class ChatSyncBatchIngester {
 
     if (parsed.type === "edit") {
       const editFallbackSenderId = parsed.direction === MessageDirection.OUTBOUND ? fallbackSenderId : (customerUserId || fallbackSenderId);
-      await this.applyHistoricalEdit(companyId, conversation.id, parsed, editFallbackSenderId);
+      await this.applyHistoricalEdit(
+        companyId,
+        conversation.id,
+        parsed,
+        editFallbackSenderId,
+        syncMessageParser.getTimestamp(msg.messageTimestamp),
+      );
       return "skipped";
     }
 
@@ -184,7 +190,13 @@ export class ChatSyncBatchIngester {
       // silently dropped the message forever instead of updating/creating it.
       if (parsed.type === "edit") {
         const fallbackSenderId = parsed.direction === MessageDirection.OUTBOUND ? adminId : (customerUserId || adminId);
-        await this.applyHistoricalEdit(companyId, conversation.id, parsed, fallbackSenderId);
+        await this.applyHistoricalEdit(
+          companyId,
+          conversation.id,
+          parsed,
+          fallbackSenderId,
+          syncMessageParser.getTimestamp(msg.messageTimestamp),
+        );
         continue;
       }
 
@@ -332,16 +344,29 @@ export class ChatSyncBatchIngester {
     conversationId: string,
     parsed: ParsedMessage,
     fallbackSenderId: string,
+    // Unix SECONDS of the edit frame itself (msg.messageTimestamp). Historical:
+    // this is when the edit happened on the phone, NOT when the sync ran.
+    frameTimestampSec?: number,
   ): Promise<void> {
     const editContent = parsed.content as { originalMessageId?: string } | undefined;
     const originalMessageId = editContent?.originalMessageId;
     const editedMessageProto = parsed.msgContent;
     if (!originalMessageId || !editedMessageProto) return;
 
+    // [DASHBOARD FIX] Stamping these rows with `new Date()` made every old chat whose
+    // only surviving history entry was an edit frame look "active today": ~10 dormant
+    // chats surfaced in the dashboard's active-conversations count after each history
+    // sync. WhatsApp only allows editing within minutes of sending, so the frame's own
+    // timestamp is a faithful stand-in for the original message time.
+    const editDate =
+      frameTimestampSec && frameTimestampSec > 946684800
+        ? new Date(frameTimestampSec * 1000)
+        : new Date();
+
     const fakeMsg: WAMessage = {
       key: { id: originalMessageId, fromMe: parsed.direction === MessageDirection.OUTBOUND },
       message: editedMessageProto as import("@whiskeysockets/baileys").proto.IMessage,
-      messageTimestamp: Math.floor(Date.now() / 1000),
+      messageTimestamp: Math.floor(editDate.getTime() / 1000),
     };
     const parsedEdit = syncMessageParser.parseContent(fakeMsg);
     if (!parsedEdit?.textContent) return;
@@ -353,7 +378,7 @@ export class ChatSyncBatchIngester {
         originalMsg.id,
         {
           content: parsedEdit.textContent,
-          metadata: { ...existingMeta, isEdited: true, editedAt: new Date().toISOString() },
+          metadata: { ...existingMeta, isEdited: true, editedAt: editDate.toISOString() },
         },
         companyId,
       );
@@ -377,9 +402,9 @@ export class ChatSyncBatchIngester {
           metadata: {
             origin: "history_sync",
             isEdited: true,
-            editedAt: new Date().toISOString(),
+            editedAt: editDate.toISOString(),
           } as Prisma.InputJsonValue,
-          createdAt: new Date(),
+          createdAt: editDate,
         },
       });
       Logger.info(`[ChatSync] [EDIT] Created message ${originalMessageId} from edit frame during bulk history sync (original was never synced)`);

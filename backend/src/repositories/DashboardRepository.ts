@@ -61,9 +61,12 @@ export class DashboardRepository {
     // active alongside the 2 that actually were. Synced messages preserve their
     // original WhatsApp timestamp in createdAt (ChatSyncBatchIngester), so the
     // message-based filter stays truthful even right after an import.
+    // Groups are excluded to mirror countActiveTickets: the linked phone's
+    // personal/business groups produce constant traffic that isn't CRM activity.
     return this.db.conversation.count({
       where: {
         companyId,
+        isGroup: false,
         messages: { some: { createdAt: { gte: since } } },
       },
     });

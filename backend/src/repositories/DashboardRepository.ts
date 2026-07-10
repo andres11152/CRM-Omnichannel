@@ -54,8 +54,18 @@ export class DashboardRepository {
   }
 
   async countActiveConversations(companyId: string, since: Date) {
+    // "Active" = the conversation has real message traffic in the window.
+    // Filtering by the conversation's own updatedAt inflated this to "all chats"
+    // after a WhatsApp history sync: the bulk ingest touches every imported
+    // conversation's updatedAt in one pass, so ~160 dormant chats showed up as
+    // active alongside the 2 that actually were. Synced messages preserve their
+    // original WhatsApp timestamp in createdAt (ChatSyncBatchIngester), so the
+    // message-based filter stays truthful even right after an import.
     return this.db.conversation.count({
-      where: { companyId, updatedAt: { gte: since } },
+      where: {
+        companyId,
+        messages: { some: { createdAt: { gte: since } } },
+      },
     });
   }
 

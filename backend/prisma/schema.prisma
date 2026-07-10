@@ -349,6 +349,8 @@ model Company {
   notifications      Notification[]
   transactions       BillingTransaction[]
   workflowExecutions WorkflowExecution[]
+  meetingTypes       MeetingType[]
+  availabilities     Availability[]
 
   @@map("companies")
 }
@@ -442,6 +444,9 @@ model User {
   // RBAC - Custom Role
   customRoleId String?
   customRole   Role?   @relation("UserRole", fields: [customRoleId], references: [id], onDelete: SetNull)
+
+  meetingTypes MeetingType[]
+  availability Availability?
 
   // For: Email lookup is already covered by @unique
 
@@ -1821,4 +1826,42 @@ model BillingTransaction {
   // 2. Tenant billing history
   @@index([companyId, billingDate(sort: Desc)])
   @@map("billing_transactions")
+}
+
+model MeetingType {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name         String
+  slug         String
+  description  String?
+  duration     Int      @default(30)
+  isActive     Boolean  @default(true)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, slug])
+  @@index([companyId])
+  @@map("meeting_types")
+}
+
+model Availability {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  timezone  String   @default("America/Bogota")
+  rules     Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@map("availabilities")
 }

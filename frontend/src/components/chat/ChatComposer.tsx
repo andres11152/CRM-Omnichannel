@@ -165,8 +165,16 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         ) : (
           <div className="bg-gray-50/50 dark:bg-white/5 rounded-[24px] p-1 border border-indigo-500/30">
             <AudioRecorder
-              onSend={(blob) => {
-                const file = new File([blob], "voice-note.webm", { type: blob.type });
+              onSend={(blob, name) => {
+                // Sanitize a user-given name into a safe filename; fall back
+                // to the generic one when left blank (fast-send path).
+                const safeName = name
+                  ?.trim()
+                  .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+                  .replace(/\s+/g, "_")
+                  .slice(0, 100);
+                const filename = safeName ? `${safeName}.webm` : "voice-note.webm";
+                const file = new File([blob], filename, { type: blob.type });
                 onAudioStop(file);
                 setIsRecording(false);
               }}

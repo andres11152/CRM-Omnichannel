@@ -4,11 +4,12 @@ import {
   getMedia,
   uploadMedia,
   deleteMedia,
+  updateMedia,
   Media,
 } from "@/services/mediaService";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { MediaCategory } from "../constants/mediaCategories";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Pencil } from "lucide-react";
 import { Modal, ModalButton } from "./ui/Modal";
 
 interface MediaLibraryProps {
@@ -31,6 +32,11 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   const [mediaToDelete, setMediaToDelete] = useState<string[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+
+  // Rename (e.g. give a recorded voice note a specific, reusable name)
+  const [renamingMedia, setRenamingMedia] = useState<Media | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
 
   useEffect(() => {
     loadMedia();
@@ -167,6 +173,35 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   const copyUrl = (url: string) => {
     navigator.clipboard.writeText(url);
     toast.success("URL copiada");
+  };
+
+  const openRename = (item: Media) => {
+    setRenamingMedia(item);
+    setRenameDraft(item.originalName);
+  };
+
+  const confirmRename = async () => {
+    if (!renamingMedia || !renameDraft.trim()) return;
+    setIsRenaming(true);
+    try {
+      const updated = await updateMedia(renamingMedia.id, {
+        originalName: renameDraft.trim(),
+      });
+      setMedia((prev) =>
+        prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+      );
+      setSelectedMedia((prev) =>
+        prev && prev.id === updated.id ? { ...prev, ...updated } : prev,
+      );
+      toast.success("Archivo renombrado");
+      setRenamingMedia(null);
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : "Error al renombrar",
+      );
+    } finally {
+      setIsRenaming(false);
+    }
   };
 
   // Drag & Drop handlers
@@ -538,6 +573,16 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          openRename(item);
+                        }}
+                        className="p-2 bg-white/20 hover:bg-white text-white hover:text-purple-600 rounded-full backdrop-blur-md transition-all transform hover:scale-110"
+                        title="Renombrar"
+                      >
+                        <Pencil className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleDelete(item.id);
                         }}
                         className="p-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full backdrop-blur-md transition-all transform hover:scale-110"
@@ -679,6 +724,13 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openRename(selectedMedia)}
+                  className="p-2 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition-colors"
+                  title="Renombrar"
+                >
+                  <Pencil className="w-5 h-5" />
+                </button>
                 <button
                   onClick={() => copyUrl(selectedMedia.url)}
                   className="p-2 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition-colors"
@@ -855,6 +907,50 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
               ? "El archivo desaparecerá"
               : "Los archivos desaparecerán"} de tu biblioteca y de cualquier chat donde se hayan compartido.
           </p>
+        </div>
+      </Modal>
+      {/* Rename Modal */}
+      <Modal
+        isOpen={!!renamingMedia}
+        onClose={() => setRenamingMedia(null)}
+        title="Renombrar Archivo"
+        size="sm"
+        busy={isRenaming}
+        footer={
+          <>
+            <ModalButton
+              variant="secondary"
+              onClick={() => setRenamingMedia(null)}
+            >
+              Cancelar
+            </ModalButton>
+            <ModalButton
+              variant="primary"
+              onClick={confirmRename}
+              loading={isRenaming}
+            >
+              Guardar
+            </ModalButton>
+          </>
+        }
+      >
+        <div className="space-y-2">
+          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+            Nombre
+          </label>
+          <input
+            type="text"
+            value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && confirmRename()}
+            autoFocus
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+          />
+          {renamingMedia?.type === "AUDIO" && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Este nombre te ayudará a identificar la nota de voz al reutilizarla en cualquier chat o chatbot.
+            </p>
+          )}
         </div>
       </Modal>
     </div>

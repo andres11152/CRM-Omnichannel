@@ -1066,6 +1066,13 @@
       "send_email": "Enviar Correo",
       "history": "Historial de Actividades",
       "mark_completed": "Marcar como completada",
+      "unassigned": "Sin asignar",
+      "no_email_warning": "Este contacto no tiene email. Agrega uno para enviar la invitación de calendario.",
+      "sync_notice": "Esta reunión se sincronizará automáticamente con Google Calendar",
+      "no_more_agents": "No hay más agentes disponibles",
+      "select_contact_none": "Ninguno",
+      "select_company_none": "Ninguna",
+      "select_deal_none": "Ninguno",
       "types": {
         "note": "Nota",
         "call": "Llamada",
@@ -1458,5 +1465,34 @@
     "map_title": "Ubicación",
     "whatsapp_cta": "Me interesa — Contactar por WhatsApp",
     "whatsapp_message": "Hola, me interesa el inmueble \"{{title}}\" (Ref. {{reference}}) que vi en la ficha pública."
+  },
+  "activities_page": {
+    "title": "Actividades",
+    "description": "Gestiona tus tareas y recordatorios",
+    "stat_pending": "Pendientes",
+    "new_activity": "Nueva Actividad",
+    "search_placeholder": "Buscar por asunto, descripción o responsable...",
+    "pending_tasks": "{{count}} Tareas Pendientes",
+    "empty_title": "Todo bajo control",
+    "empty_desc": "No tienes actividades pendientes por el momento. ¡Buen trabajo!",
+    "no_matches_title": "Sin coincidencias",
+    "no_matches_desc": "No encontramos actividades que coincidan con tu búsqueda \"{{term}}\".",
+    "table": {
+      "activity": "Actividad / Asunto",
+      "type": "Tipo de Tarea",
+      "due": "Vencimiento Estimado",
+      "assignee": "Responsable",
+      "actions": "Gestión"
+    },
+    "no_description": "Sin descripción adicional.",
+    "no_date": "Sin fecha",
+    "no_deadline": "Sin plazo",
+    "due_label": "Vencimiento",
+    "assignee_label": "Responsable",
+    "confirm_delete": "¿Estás seguro de eliminar esta actividad?",
+    "confirm_delete_desc": "Esta acción no se puede deshacer",
+    "deleting": "Eliminando…",
+    "deleted": "Actividad eliminada",
+    "delete_error": "Error al eliminar actividad"
   }
 }

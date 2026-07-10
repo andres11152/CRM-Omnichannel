@@ -14,6 +14,7 @@ import { GeneralTab } from "./settings/GeneralTab";
 import { BusinessHoursTab } from "./settings/BusinessHoursTab";
 import { SecurityTab } from "./settings/SecurityTab";
 import { EmailTab } from "./settings/EmailTab";
+import { SchedulerConfig } from "./SchedulerConfig";
 
 // ────────────────────────────────────────────────
 // LAZY INLINE TABS (Automation, Email, Billing)
@@ -276,6 +277,9 @@ export const CompanySettings: React.FC = () => {
       case "permissions":
         return <PermissionsPanel />;
 
+      case "scheduler":
+        return <SchedulerConfig />;
+
       default:
         return null;
     }
@@ -303,6 +307,7 @@ export const CompanySettings: React.FC = () => {
           <NavButton active={activeTab === "email"} onClick={() => setActiveTab("email")} icon={<path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />} label={t("company_settings.nav.email", "Email")} fullLabel={t("company_settings.nav.email_full", "Email / SMTP")} />
           <NavButton active={activeTab === "security"} onClick={() => setActiveTab("security")} icon={<path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />} label={t("company_settings.nav.security", "Seguridad")} />
           <NavButton active={activeTab === "billing"} onClick={() => setActiveTab("billing")} icon={<path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />} label={t("company_settings.nav.billing", "Facturación")} />
+          <NavButton active={activeTab === "scheduler"} onClick={() => setActiveTab("scheduler")} icon={<path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />} label="Citas" fullLabel="Agendador de Citas" />
           <NavButton active={activeTab === "sound"} onClick={() => setActiveTab("sound")} icon={<path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />} label={t("company_settings.nav.sound", "Sonido")} />
           <NavButton active={activeTab === "permissions"} onClick={() => setActiveTab("permissions")} icon={<path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />} label={t("company_settings.nav.roles", "Roles")} fullLabel={t("company_settings.nav.roles_full", "Roles y Permisos")} />
         </div>

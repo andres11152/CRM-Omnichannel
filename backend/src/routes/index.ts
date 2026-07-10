@@ -74,6 +74,7 @@ import notificationsRouter from "@/routes/notificationsRoutes";
 import paymentRouter from "@/routes/paymentRoutes";
 import externalApiRouter from "@/routes/externalApiRoutes";
 import routingRouter from "@/routes/routingRoutes";
+import schedulerRouter from "@/routes/schedulerRoutes";
 
 const router = Router();
 
@@ -276,5 +277,8 @@ router.use("/api/search", apiLimiter, protect, searchRouter);
 
 // External Auth
 router.use("/api/google", apiLimiter, googleAuthRouter);
+
+// Scheduler
+router.use("/api/scheduler", apiLimiter, schedulerRouter);
 
 export default router;

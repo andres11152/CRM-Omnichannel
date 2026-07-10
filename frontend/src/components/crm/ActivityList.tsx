@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Activity } from "@/types/crm";
 import {
   getActivities,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 
 export const ActivityList: React.FC = () => {
+  const { t } = useTranslation();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,24 +50,24 @@ export const ActivityList: React.FC = () => {
   }, []);
 
   const handleDelete = (id: string) => {
-    toast("¿Ests seguro de eliminar esta actividad?", {
-      description: "Esta acción no se puede deshacer",
+    toast(t("activities_page.confirm_delete"), {
+      description: t("activities_page.confirm_delete_desc"),
       action: {
-        label: "Eliminar",
+        label: t("common.delete"),
         onClick: async () => {
-          const toastId = toast.loading("Eliminando…");
+          const toastId = toast.loading(t("activities_page.deleting"));
           try {
             await deleteActivity(id);
-            toast.success("Actividad eliminada", { id: toastId });
+            toast.success(t("activities_page.deleted"), { id: toastId });
             await fetchActivities();
           } catch (error) {
             console.error("Error deleting activity:", error);
-            toast.error("Error al eliminar actividad", { id: toastId });
+            toast.error(t("activities_page.delete_error"), { id: toastId });
           }
         },
       },
       cancel: {
-        label: "Cancelar",
+        label: t("common.cancel"),
         onClick: () => {},
       },
       duration: 5000,
@@ -114,14 +116,7 @@ export const ActivityList: React.FC = () => {
   };
 
   const getTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      NOTE: "Nota",
-      CALL: "Llamada",
-      EMAIL: "Email",
-      MEETING: "Reunión",
-      TASK: "Tarea",
-    };
-    return labels[type] || type;
+    return t(`crm.activities.types.${type.toLowerCase()}`, type);
   };
 
   const filteredActivities = activities.filter(
@@ -139,12 +134,12 @@ export const ActivityList: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark overflow-hidden">
       <ModuleHeader
-        title="Actividades"
-        description="Gestiona tus tareas y recordatorios"
+        title={t("activities_page.title")}
+        description={t("activities_page.description")}
         icon={<Calendar className="w-8 h-8 text-white" />}
         gradient="from-orange-600 to-amber-600 dark:from-orange-800 dark:to-amber-800"
         stats={{
-          label: "Pendientes",
+          label: t("activities_page.stat_pending"),
           value: activities.filter((a) => a.status === "PENDING").length,
         }}
         action={
@@ -165,7 +160,7 @@ export const ActivityList: React.FC = () => {
                 d="M12 4v16m8-8H4"
               />
             </svg>
-            Nueva Actividad
+            {t("activities_page.new_activity")}
           </button>
         }
       />
@@ -180,7 +175,7 @@ export const ActivityList: React.FC = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por asunto, descripción o responsable..."
+                placeholder={t("activities_page.search_placeholder")}
                 className="w-full pl-12 pr-6 py-4 bg-white dark:bg-reply-panel-dark border border-gray-100 dark:border-reply-border-dark rounded-2xl shadow-sm focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none font-medium text-gray-900 dark:text-white"
               />
             </div>
@@ -188,8 +183,9 @@ export const ActivityList: React.FC = () => {
             <div className="flex items-center gap-3">
               <div className="px-4 py-2 bg-white dark:bg-reply-panel-dark rounded-2xl border border-gray-100 dark:border-reply-border-dark shadow-sm text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                {activities.filter((a) => a.status === "PENDING").length} Tareas
-                Pendientes
+                {t("activities_page.pending_tasks", {
+                  count: activities.filter((a) => a.status === "PENDING").length,
+                })}
               </div>
             </div>
           </div>
@@ -210,10 +206,10 @@ export const ActivityList: React.FC = () => {
                 <Calendar className="w-10 h-10 text-gray-300" />
               </div>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                Todo bajo control
+                {t("activities_page.empty_title")}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
-                No tienes actividades pendientes por el momento. ¡Buen trabajo!
+                {t("activities_page.empty_desc")}
               </p>
             </div>
           ) : filteredActivities.length === 0 ? (
@@ -222,11 +218,10 @@ export const ActivityList: React.FC = () => {
                 <Search className="w-10 h-10 text-gray-300" />
               </div>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                Sin coincidencias
+                {t("activities_page.no_matches_title")}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-base">
-                No encontramos actividades que coincidan con tu búsqueda "
-                {searchTerm}".
+                {t("activities_page.no_matches_desc", { term: searchTerm })}
               </p>
             </div>
           ) : (
@@ -267,7 +262,7 @@ export const ActivityList: React.FC = () => {
                     <div className="space-y-4 mb-6 bg-reply-bg/50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100 dark:border-reply-border-dark">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-gray-400 font-bold uppercase tracking-tighter">
-                          Vencimiento
+                          {t("activities_page.due_label")}
                         </span>
                         <span
                           className={`font-black ${new Date(activity.dueDate || "") < new Date() && activity.status !== "COMPLETED" ? "text-red-500" : "text-gray-900 dark:text-white"}`}
@@ -279,15 +274,15 @@ export const ActivityList: React.FC = () => {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })
-                            : "Sin fecha"}
+                            : t("activities_page.no_date")}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-gray-400 font-bold uppercase tracking-tighter">
-                          Responsable
+                          {t("activities_page.assignee_label")}
                         </span>
                         <span className="text-gray-900 dark:text-white font-black">
-                          {activity.assignedTo?.name || "Unassigned"}
+                          {activity.assignedTo?.name || t("crm.activities.unassigned")}
                         </span>
                       </div>
                     </div>
@@ -297,7 +292,7 @@ export const ActivityList: React.FC = () => {
                         onClick={() => handleEdit(activity)}
                         className="flex-1 py-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-reply-border-dark hover:bg-reply-bg dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-[1.25rem] font-bold text-sm transition-all shadow-sm"
                       >
-                        Editar
+                        {t("common.edit")}
                       </button>
                       <button
                         onClick={() => handleDelete(activity.id)}
@@ -316,11 +311,11 @@ export const ActivityList: React.FC = () => {
                   <thead>
                     <tr className="bg-reply-bg/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
                       <th className="px-8 py-8 w-16"></th>
-                      <th className="px-6 py-8">Actividad / Asunto</th>
-                      <th className="px-6 py-8">Tipo de Tarea</th>
-                      <th className="px-6 py-8">Vencimiento Estimado</th>
-                      <th className="px-6 py-8">Responsable</th>
-                      <th className="px-8 py-8 text-right">Gestión</th>
+                      <th className="px-6 py-8">{t("activities_page.table.activity")}</th>
+                      <th className="px-6 py-8">{t("activities_page.table.type")}</th>
+                      <th className="px-6 py-8">{t("activities_page.table.due")}</th>
+                      <th className="px-6 py-8">{t("activities_page.table.assignee")}</th>
+                      <th className="px-8 py-8 text-right">{t("activities_page.table.actions")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
@@ -350,7 +345,7 @@ export const ActivityList: React.FC = () => {
                             </div>
                             <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest truncate max-w-[200px]">
                               {activity.description ||
-                                "Sin descripción adicional."}
+                                t("activities_page.no_description")}
                             </div>
                           </div>
                         </td>
@@ -386,7 +381,7 @@ export const ActivityList: React.FC = () => {
                                     [],
                                     { hour: "2-digit", minute: "2-digit" },
                                   )
-                                : "Sin plazo"}
+                                : t("activities_page.no_deadline")}
                             </div>
                           </div>
                         </td>
@@ -398,7 +393,7 @@ export const ActivityList: React.FC = () => {
                                 .toUpperCase() || "?"}
                             </div>
                             <div className="text-sm font-bold text-gray-600 dark:text-gray-300">
-                              {activity.assignedTo?.name || "Sin asignar"}
+                              {activity.assignedTo?.name || t("crm.activities.unassigned")}
                             </div>
                           </div>
                         </td>

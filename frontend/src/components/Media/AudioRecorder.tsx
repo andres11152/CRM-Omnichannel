@@ -18,6 +18,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [voiceName, setVoiceName] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -91,6 +92,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     setAudioUrl(null);
     setRecordingTime(0);
     setError(null);
+    setVoiceName("");
   };
 
   const handleUpload = async () => {
@@ -101,8 +103,14 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
     try {
       const formData = new FormData();
-      // Nombre de archivo con timestamp
-      const filename = `voice_note_${Date.now()}.webm`;
+      // User-given name (sanitized) so this recording is easy to find and
+      // reuse later from the Media Library; falls back to a timestamp.
+      const safeName = voiceName
+        .trim()
+        .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+        .replace(/\s+/g, "_")
+        .slice(0, 100);
+      const filename = safeName ? `${safeName}.webm` : `voice_note_${Date.now()}.webm`;
       formData.append("file", audioBlob, filename);
       formData.append("type", "AUDIO");
       formData.append("category", "media-library"); // Mark as library asset for automations
@@ -161,6 +169,18 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
           <X size={16} />
           {error}
         </div>
+      )}
+
+      {audioBlob && !isUploading && (
+        <input
+          type="text"
+          value={voiceName}
+          onChange={(e) => setVoiceName(e.target.value)}
+          placeholder="Nombre para la Biblioteca (ej: Bienvenida VIP)"
+          maxLength={150}
+          autoFocus
+          className="w-full max-w-sm mb-6 px-4 py-2.5 text-sm bg-white dark:bg-reply-panel-dark border border-gray-200 dark:border-gray-700 rounded-xl text-gray-800 dark:text-white placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-500 outline-none text-center"
+        />
       )}
 
       {/* CONTROLES */}

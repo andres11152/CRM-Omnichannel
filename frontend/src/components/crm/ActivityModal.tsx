@@ -180,9 +180,14 @@ export const ActivityModal: React.FC<Props> = ({
     try {
       const payload = {
         ...formData,
+        dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : undefined,
+        accountId: formData.accountId || undefined,
+        dealId: formData.dealId || undefined,
+        contactId: formData.contactId || undefined,
+        assignedToId: formData.assignedToId || undefined,
         status: (markAsCompleted ? "COMPLETED" : "PENDING") as
           | "PENDING"
-          | "COMPLETED", // Auto-inject status with explicit typing
+          | "COMPLETED",
       };
 
       if (activity) {
@@ -265,10 +270,7 @@ export const ActivityModal: React.FC<Props> = ({
               {!preselectedContact.email && isMeeting && (
                 <div className="mt-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-2.5 rounded-lg text-xs text-red-600 dark:text-red-400 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <p>
-                    Este contacto no tiene email. Agrega uno para enviar la
-                    invitación de calendario.
-                  </p>
+                  <p>{t("crm.activities.no_email_warning")}</p>
                 </div>
               )}
             </div>
@@ -402,7 +404,7 @@ export const ActivityModal: React.FC<Props> = ({
             {isMeeting && formData.dueDate && (
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
                 <Info className="w-4 h-4" />
-                Esta reunión se sincronizar automticamente con Google Calendar
+                {t("crm.activities.sync_notice")}
               </p>
             )}
           </div>
@@ -422,7 +424,7 @@ export const ActivityModal: React.FC<Props> = ({
                 disabled={!activity}
                 className={`w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent font-medium transition-all ${!activity ? "opacity-70 cursor-not-allowed bg-gray-100 dark:bg-gray-900" : ""}`}
               >
-                <option value="">Sin asignar</option>
+                <option value="">{t("crm.activities.unassigned")}</option>
                 {users.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.name} ({user.email})
@@ -480,7 +482,7 @@ export const ActivityModal: React.FC<Props> = ({
                       !u.name.toLowerCase().includes("admin"),
                   ).length === 0 && (
                     <p className="text-xs text-gray-500 italic p-1">
-                      No hay ms agentes disponibles
+                      {t("crm.activities.no_more_agents")}
                     </p>
                   )}
                 </div>
@@ -504,7 +506,7 @@ export const ActivityModal: React.FC<Props> = ({
                   disabled={!!preselectedContact}
                   className={`w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all ${!!preselectedContact ? "opacity-70 cursor-not-allowed bg-gray-100 dark:bg-gray-900" : ""}`}
                 >
-                  <option value="">Ninguno</option>
+                  <option value="">{t("crm.activities.select_contact_none")}</option>
                   {contacts.map(
                     (contact: { id: string; name: string; email?: string }) => (
                       <option key={contact.id} value={contact.id}>
@@ -529,7 +531,7 @@ export const ActivityModal: React.FC<Props> = ({
                     }
                     className="w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
                   >
-                    <option value="">Ninguna</option>
+                    <option value="">{t("crm.activities.select_company_none")}</option>
                     {accounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
                         {acc.name}
@@ -549,7 +551,7 @@ export const ActivityModal: React.FC<Props> = ({
                     }
                     className="w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
                   >
-                    <option value="">Ninguno</option>
+                    <option value="">{t("crm.activities.select_deal_none")}</option>
                     {deals.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.title}

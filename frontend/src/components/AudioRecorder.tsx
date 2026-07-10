@@ -2,7 +2,10 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Trash2, Send, Pause, Play, Square } from "lucide-react";
 
 interface AudioRecorderProps {
-  onSend: (blob: Blob) => void;
+  /** name: optional, user-entered during preview — lets a voice note be
+   * saved to the Media Library under a specific, reusable name instead of
+   * a generic "voice-note.webm". */
+  onSend: (blob: Blob, name?: string) => void;
   onCancel: () => void;
 }
 
@@ -29,6 +32,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
+  const [voiceName, setVoiceName] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -270,7 +274,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   /** Send button while recording: stop and send immediately (fast path) */
   const handleSendNow = () => {
     if (phase === "preview") {
-      if (previewBlobRef.current) onSend(previewBlobRef.current);
+      if (previewBlobRef.current)
+        onSend(previewBlobRef.current, voiceName.trim() || undefined);
       return;
     }
     finalizeRecording((blob) => onSend(blob));
@@ -305,7 +310,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
   if (phase === "preview") {
     return (
-      <div className="flex items-center w-full px-2 py-1 animate-in fade-in slide-in-from-bottom-1 duration-200">
+      <div className="flex flex-col w-full px-2 py-1 gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-200">
+      <div className="flex items-center w-full">
         {/* DISCARD */}
         <button
           onClick={handleDiscard}
@@ -364,6 +370,19 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         >
           <Send className="w-5 h-5 ml-0.5" />
         </button>
+      </div>
+
+      {/* OPTIONAL NAME: saved to the Media Library under this name so the
+          note can be found and reused later in any chat or chatbot flow. */}
+      <input
+        type="text"
+        value={voiceName}
+        onChange={(e) => setVoiceName(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleSendNow()}
+        placeholder="Nombre para reutilizar en la Biblioteca (opcional)"
+        maxLength={150}
+        className="ml-14 mr-3 px-3 py-1.5 text-xs bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 rounded-full text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500/50 outline-none"
+      />
       </div>
     );
   }

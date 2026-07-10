@@ -122,6 +122,7 @@ export const deleteMedia = async (id: string): Promise<void> => {
 export const updateMedia = async (
   id: string,
   data: {
+    originalName?: string;
     category?: string;
     description?: string;
     tags?: string[];

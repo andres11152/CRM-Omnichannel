@@ -148,6 +148,7 @@ export type SettingsTab =
   | "email"
   | "security"
   | "billing"
+  | "scheduler"
   | "sound"
   | "permissions";
 

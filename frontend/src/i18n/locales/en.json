@@ -1066,6 +1066,13 @@
       "send_email": "Send Email",
       "history": "Activity History",
       "mark_completed": "Mark as completed",
+      "unassigned": "Unassigned",
+      "no_email_warning": "This contact has no email. Add one to send the calendar invite.",
+      "sync_notice": "This meeting will automatically sync with Google Calendar",
+      "no_more_agents": "No more agents available",
+      "select_contact_none": "None",
+      "select_company_none": "None",
+      "select_deal_none": "None",
       "types": {
         "note": "Note",
         "call": "Call",
@@ -1458,5 +1465,34 @@
     "map_title": "Location",
     "whatsapp_cta": "I'm interested — Contact via WhatsApp",
     "whatsapp_message": "Hi, I'm interested in the property \"{{title}}\" (Ref. {{reference}}) that I saw on the listing page."
+  },
+  "activities_page": {
+    "title": "Activities",
+    "description": "Manage your tasks and reminders",
+    "stat_pending": "Pending",
+    "new_activity": "New Activity",
+    "search_placeholder": "Search by subject, description or assignee...",
+    "pending_tasks": "{{count}} Pending Tasks",
+    "empty_title": "All caught up",
+    "empty_desc": "You have no pending activities right now. Great job!",
+    "no_matches_title": "No matches found",
+    "no_matches_desc": "We couldn't find any activities matching your search \"{{term}}\".",
+    "table": {
+      "activity": "Activity / Subject",
+      "type": "Task Type",
+      "due": "Estimated Due Date",
+      "assignee": "Assignee",
+      "actions": "Actions"
+    },
+    "no_description": "No additional description.",
+    "no_date": "No date",
+    "no_deadline": "No deadline",
+    "due_label": "Due Date",
+    "assignee_label": "Assignee",
+    "confirm_delete": "Are you sure you want to delete this activity?",
+    "confirm_delete_desc": "This action cannot be undone",
+    "deleting": "Deleting…",
+    "deleted": "Activity deleted",
+    "delete_error": "Error deleting activity"
   }
 }

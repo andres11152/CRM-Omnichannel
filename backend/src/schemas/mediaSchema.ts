@@ -68,6 +68,12 @@ export const UpdateMediaSchema = z.object({
   }),
   body: z
     .object({
+      originalName: z
+        .string()
+        .min(1, "El nombre no puede estar vacío")
+        .max(150, "Name too long (max 150 characters)")
+        .trim()
+        .optional(),
       category: z.string().max(50, "Category too long").trim().optional(),
       description: z
         .string()

@@ -158,14 +158,19 @@ export const getMediaById = async (req: AuthenticatedRequest, res: Response): Pr
 export const updateMedia = async (req: AuthenticatedRequest, res: Response): Promise<Response | void> => {
   const { id } = req.params;
   const companyId = req.user?.companyId;
-  const { description, category, tags } = req.body as { description?: string; category?: string; tags?: string[] };
+  const { originalName, description, category, tags } = req.body as {
+    originalName?: string;
+    description?: string;
+    category?: string;
+    tags?: string[];
+  };
 
   if (!companyId) return res.status(403).json({ error: "No company context" });
 
   try {
     const media = await mediaRepository.update({
       where: { id, companyId },
-      data: { description, category, tags },
+      data: { originalName, description, category, tags },
     });
     return res.json(media);
   } catch (error: unknown) {

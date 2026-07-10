@@ -264,4 +264,68 @@ export class GoogleCalendarService {
       );
     }
   }
+
+  /**
+   * Fetch busy slots for a given date range
+   */
+  static async getBusySlots(
+    userId: string,
+    timeMin: Date,
+    timeMax: Date,
+  ): Promise<{ start: string; end: string }[]> {
+    let user;
+    try {
+      user = await userRepository.findFirst({
+        where: { id: userId },
+        select: {
+          id: true,
+          companyId: true,
+          googleCalendarToken: true,
+          googleCalendarRefreshToken: true,
+        },
+      });
+
+      if (!user?.googleCalendarRefreshToken) {
+        return [];
+      }
+
+      oauth2Client.setCredentials({
+        access_token: user.googleCalendarToken,
+        refresh_token: user.googleCalendarRefreshToken,
+      });
+
+      const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+      const response = await calendar.freebusy.query({
+        requestBody: {
+          timeMin: timeMin.toISOString(),
+          timeMax: timeMax.toISOString(),
+          items: [{ id: "primary" }],
+        },
+      });
+
+      // If token was refreshed, update it
+      const newAccessToken = oauth2Client.credentials.access_token;
+      if (
+        newAccessToken &&
+        newAccessToken !== user.googleCalendarToken &&
+        user.companyId
+      ) {
+        await userRepository.update(userId, user.companyId, {
+          googleCalendarToken: newAccessToken,
+        });
+      }
+
+      const busy = response.data.calendars?.primary?.busy || [];
+      return busy
+        .map((b) => ({
+          start: b.start || "",
+          end: b.end || "",
+        }))
+        .filter((b) => b.start && b.end);
+    } catch (error: unknown) {
+      Logger.error(`[GoogleCalendar] Failed to fetch busy slots:`, getErrorMessage(error));
+      return [];
+    }
+  }
 }

@@ -83,6 +83,17 @@ const baseTicketFields = {
     .optional()
     .or(z.literal(""))
     .transform((val) => (val === "" ? undefined : val)),
+
+  // Note attached when transferring a ticket to another agent/queue.
+  // TicketService.updateTicket posts this as an internal whisper message
+  // in the conversation so the receiving agent sees the handoff context.
+  handoverNote: z
+    .string()
+    .max(2000, "Handover note is too long (max 2000 characters)")
+    .trim()
+    .optional()
+    .or(z.literal(""))
+    .transform((val) => (val === "" ? undefined : val)),
 };
 
 /**
@@ -118,6 +129,7 @@ export const UpdateTicketSchema = z.object({
       queueId: baseTicketFields.queueId,
       resolutionType: baseTicketFields.resolutionType,
       resolutionNotes: baseTicketFields.resolutionNotes,
+      handoverNote: baseTicketFields.handoverNote,
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: "At least one field must be provided for update",

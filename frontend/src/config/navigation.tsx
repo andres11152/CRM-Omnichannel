@@ -48,6 +48,20 @@ export interface NavItem {
   agentOnly?: boolean;
   disabled?: boolean;
   badge?: string;
+  // Company-level feature flag gating this module server-side (see
+  // backend/src/middleware/requireFeature.ts). When set and the flag is
+  // off for the tenant, MainLayout greys the item out instead of letting
+  // the user click into a page that will just 403.
+  requiredFlag?:
+    | "advanced_ai"
+    | "email_module"
+    | "bulk_marketing"
+    | "api_access"
+    | "group_sync"
+    | "kanban_deals"
+    | "voice_messages"
+    | "automation_flows"
+    | "team_collaboration";
 }
 
 // Helper to render icon consistently with stroke width
@@ -139,6 +153,7 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/chatbot/flujos",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={Bot} />,
+    requiredFlag: "automation_flows",
   },
   {
     id: "queue",
@@ -160,6 +175,7 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/ai",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={BrainCircuit} />,
+    requiredFlag: "advanced_ai",
   },
   {
     id: "team",

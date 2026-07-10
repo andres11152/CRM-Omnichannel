@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { useFeatureFlagStore } from "@/stores/featureFlagStore";
 import {
   getAIConfig,
   updateAIConfig,
@@ -30,6 +31,7 @@ import {
   Eye,
   EyeOff,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 
 interface Props {
@@ -42,6 +44,12 @@ export const AIAgentConfig: React.FC<Props> = () => {
   >("assistants");
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
+  const {
+    hasFeature,
+    isLoaded: flagsLoaded,
+    loadFlags,
+  } = useFeatureFlagStore();
+  const aiEnabled = hasFeature("advanced_ai");
 
   // Credentials State
   const [creds, setCreds] = useState({ openaiKey: "", geminiKey: "" });
@@ -69,6 +77,7 @@ export const AIAgentConfig: React.FC<Props> = () => {
   });
 
   useEffect(() => {
+    loadFlags();
     loadData();
   }, []);
 
@@ -161,6 +170,34 @@ export const AIAgentConfig: React.FC<Props> = () => {
       toast.error(msg);
     }
   };
+
+  // Company doesn't have the advanced_ai flag — show a locked state instead
+  // of a settings page that silently 403s on every save/load. Wait for
+  // flagsLoaded so we don't flash this before the check resolves.
+  if (flagsLoaded && !aiEnabled) {
+    return (
+      <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark transition-colors duration-200">
+        <ModuleHeader
+          title={t("ai_config.title", "Gestión de Agentes IA")}
+          description={t("ai_config.description", "Configura tus cerebros artificiales, credenciales y bases de conocimiento.")}
+          icon={<BrainCircuit className="w-8 h-8 text-white relative z-10" />}
+          gradient="from-reply-brand to-reply-brand-dark"
+        />
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 dark:text-gray-600 p-10">
+          <Lock className="w-16 h-16 opacity-20" />
+          <p className="text-lg font-medium text-gray-600 dark:text-gray-300">
+            {t("ai_config.locked.title", "Funcionalidad no disponible")}
+          </p>
+          <p className="text-sm max-w-md text-center">
+            {t(
+              "ai_config.locked.description",
+              "El módulo de Agentes IA no está activo para tu empresa. Contacta a soporte para habilitarlo.",
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark transition-colors duration-200">

@@ -105,6 +105,7 @@ class TicketService {
     const where: Prisma.TicketWhereInput = {
       companyId: data.companyId,
       deletedAt: null,
+      conversation: { is: { isGroup: false } },
     };
 
     if (data.status) where.status = data.status as TicketStatus;
@@ -196,7 +197,7 @@ class TicketService {
       const conversation = await conversationRepository.findFirst({
         where: { id: ticketId, companyId },
       });
-      if (conversation) {
+      if (conversation && !conversation.isGroup) {
         await ticketSyncService.ensureActiveTicket({
           companyId,
           conversationId: conversation.id,
@@ -247,7 +248,7 @@ class TicketService {
       const conversation = await conversationRepository.findFirst({
         where: { id: ticketId, companyId },
       });
-      if (conversation) {
+      if (conversation && !conversation.isGroup) {
         await ticketSyncService.ensureActiveTicket({
           companyId,
           conversationId: conversation.id,

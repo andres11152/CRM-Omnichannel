@@ -15,6 +15,19 @@ export interface ApiResponse<T = unknown> {
   results?: number; // Optional count for list endpoints
 }
 
+// Error rejected by the response interceptor below. Carries the original
+// HTTP status code so callers can branch (e.g. 403 "feature disabled" vs
+// 500 "server error") without re-parsing the message string.
+export interface ApiError extends Error {
+  status?: number;
+}
+
+const makeApiError = (message: string, status?: number): ApiError => {
+  const err = new Error(message) as ApiError;
+  err.status = status;
+  return err;
+};
+
 // Base URL configuration
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
@@ -181,8 +194,9 @@ api.interceptors.response.use(
     if (response?.status === 429) {
       console.error("[Axios] 429 Rate Limit Reached");
       return Promise.reject(
-        new Error(
+        makeApiError(
           "Has superado el límite de solicitudes. Por favor espera unos segundos.",
+          429,
         ),
       );
     }
@@ -191,12 +205,13 @@ api.interceptors.response.use(
     if (response && response.status >= 500) {
       console.error("[Axios] 500 Server Error:", errorMessage);
       return Promise.reject(
-        new Error(
+        makeApiError(
           "Error interno del servidor. Nuestro equipo ha sido notificado.",
+          response.status,
         ),
       );
     }
 
-    return Promise.reject(new Error(errorMessage));
+    return Promise.reject(makeApiError(errorMessage, response?.status));
   },
 );

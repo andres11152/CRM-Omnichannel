@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { FlowNode } from "@/types";
 import { API_BASE_URL } from "@/services/apiConfig";
+import { useFeatureFlagStore } from "@/stores/featureFlagStore";
 
 // Properties Panels
 import { AINodeProperties } from "./PropertiesPanels/AINodeProperties";
@@ -45,6 +46,15 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
   }, [node.type]);
 
   const fetchAIAgents = async () => {
+    // Skip the call entirely once we know the tenant doesn't have the
+    // advanced_ai flag, instead of hitting the API and catching the 403.
+    const { isLoaded: flagsLoaded, hasFeature } =
+      useFeatureFlagStore.getState();
+    if (flagsLoaded && !hasFeature("advanced_ai")) {
+      setAiAgents([]);
+      return;
+    }
+
     setLoadingAgents(true);
     setFetchError(false);
     try {

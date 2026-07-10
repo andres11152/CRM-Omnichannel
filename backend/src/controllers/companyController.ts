@@ -4,6 +4,7 @@ import { catchAsync } from "@/utils/catchAsync";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { companySettingsService } from "@/services/CompanySettingsService";
+import { featureFlagService } from "@/services/admin/FeatureFlagService";
 
 /**
  *  COMPANY CONTROLLER
@@ -11,6 +12,26 @@ import { companySettingsService } from "@/services/CompanySettingsService";
  * HTTP orchestrator for company/tenant settings.
  * All data access delegated to companySettingsService (SRP).
  */
+
+/**
+ * Self-service read of the CURRENT user's own company feature flags.
+ * Unlike /admin/companies/:companyId/feature-flags (superAdminGuard-only),
+ * this lets any authenticated user learn which modules are enabled for
+ * their tenant so the frontend can grey out disabled modules up front
+ * instead of calling gated endpoints and reacting to 403s.
+ */
+export const getMyFeatureFlags = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.user?.companyId;
+
+    if (!companyId) {
+      throw new AppError("Usuario no tiene compañía asignada", 400);
+    }
+
+    const flags = await featureFlagService.getCompanyFlags(companyId);
+    res.status(200).json(flags);
+  },
+);
 
 export const getCompanySettings = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {

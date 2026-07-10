@@ -1,4 +1,5 @@
 import { api } from "./apiClient";
+import { useFeatureFlagStore } from "@/stores/featureFlagStore";
 
 // ==================== TYPES & INTERFACES ====================
 
@@ -145,8 +146,21 @@ export const teamService = {
    * Fetches AI assistants configured for the company
    */
   async getAIAssistants(): Promise<AIAssistant[]> {
+    // Skip the call entirely once we know the tenant doesn't have the
+    // advanced_ai flag — this endpoint is re-fetched on every socket-driven
+    // team refresh, so without this guard it 403s repeatedly forever.
+    const { isLoaded, hasFeature } = useFeatureFlagStore.getState();
+    if (isLoaded && !hasFeature("advanced_ai")) {
+      return [];
+    }
+
     try {
-      const response = await api.get<AIAssistant[]>("/ai/assistants");
+      // skipErrorToast: this call is always best-effort (feature flag may
+      // not have loaded yet on first mount, so the guard above can't be
+      // relied on alone) — a 403 here must never surface a raw toast.
+      const response = await api.get<AIAssistant[]>("/ai/assistants", {
+        skipErrorToast: true,
+      });
       return response || [];
     } catch (error) {
       // AI assistants are optional

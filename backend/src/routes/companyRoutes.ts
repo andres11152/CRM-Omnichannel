@@ -4,6 +4,7 @@ import {
   updateCompanySettings,
   importWhatsAppContacts,
   deleteAllContactsNuclear,
+  getMyFeatureFlags,
 } from "@/controllers/companyController";
 import { getEmailConfig } from "@/controllers/companyEmailConfigController";
 import { protect } from "@/middleware/authMiddleware";
@@ -14,6 +15,7 @@ const router = Router();
 
 router.use(protect);
 
+router.get("/feature-flags", getMyFeatureFlags);
 router.get("/settings", getCompanySettings);
 router.patch(
   "/settings",

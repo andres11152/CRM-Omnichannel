@@ -14,6 +14,7 @@ import {
   Department,
 } from "@/services/departmentService";
 import { getAssistants } from "@/services/aiService";
+import { useFeatureFlagStore } from "@/stores/featureFlagStore";
 import QueuesConfig from "./QueuesConfig";
 import { socketService } from "@/services/socketService";
 // Re-export fix check
@@ -121,7 +122,24 @@ export const QueueDashboard: React.FC = () => {
           console.error("Error decoding token for user ID", e);
         }
 
-        const assistantsList = await getAssistants();
+        // AI assistants are an optional add-on (advanced_ai feature flag).
+        // Companies without it get a 403 here — that's expected, not fatal,
+        // so it must not short-circuit the ticket-load calc / agent filtering below.
+        // Skip the call entirely once we know the flag is off, instead of
+        // hitting the API and catching the 403 every time.
+        let assistantsList: Awaited<ReturnType<typeof getAssistants>> = [];
+        const { isLoaded: flagsLoaded, hasFeature } =
+          useFeatureFlagStore.getState();
+        if (!flagsLoaded || hasFeature("advanced_ai")) {
+          try {
+            assistantsList = await getAssistants();
+          } catch (error) {
+            console.warn(
+              "AI assistants unavailable (advanced_ai feature likely disabled for this company)",
+              error,
+            );
+          }
+        }
         setAssistants(assistantsList);
 
         // Fetch ALL active tickets to calculate real load
@@ -219,8 +237,8 @@ export const QueueDashboard: React.FC = () => {
 
         setAgents(finalAgents);
       } catch (error) {
-        console.error("Error loading assistants", error);
-        // If AI loading fails, just show human agents with safe defaults
+        console.error("Error loading queue dashboard agents", error);
+        // Unexpected failure in the pipeline — show human agents with safe defaults
         let currentUserId = "";
         try {
           const token = localStorage.getItem("token");

@@ -1,4 +1,5 @@
 import { api } from "@/lib/axios";
+import type { ApiError } from "@/lib/axios";
 
 /** AI Assistant Input DTO (replaces `any`) */
 export interface AssistantInput {
@@ -12,8 +13,15 @@ export interface AssistantInput {
 }
 
 export const getAIConfig = async () => {
-  const res = await api.get("/ai/config");
-  return res.data;
+  try {
+    const res = await api.get("/ai/config");
+    return res.data;
+  } catch (error) {
+    if ((error as ApiError).status === 403) {
+      return { openaiKey: "", geminiKey: "" };
+    }
+    throw error;
+  }
 };
 
 export const updateAIConfig = async (data: {
@@ -25,8 +33,15 @@ export const updateAIConfig = async (data: {
 };
 
 export const getAssistants = async () => {
-  const res = await api.get("/ai/assistants");
-  return res.data;
+  try {
+    const res = await api.get("/ai/assistants");
+    return res.data;
+  } catch (error) {
+    if ((error as ApiError).status === 403) {
+      return [];
+    }
+    throw error;
+  }
 };
 
 export const createAssistant = async (data: AssistantInput) => {

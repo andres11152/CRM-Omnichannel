@@ -55,6 +55,7 @@ export class TicketRepository extends BaseRepository {
         assignedToId: { in: agentIds },
         companyId,
         status: { in: ["OPEN", "IN_PROGRESS"] },
+        conversation: { is: { isGroup: false } },
       },
       _count: {
         id: true,

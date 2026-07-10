@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { DropResult } from "@hello-pangea/dnd";
 import { Toaster, toast } from "sonner";
 import { useAuthStore } from "@/stores/authStore";
+import { useFeatureFlagStore } from "@/stores/featureFlagStore";
 import { NAV_ITEMS } from "@/config/navigation";
 import { useSocketInit } from "@/hooks/useSocketInit";
 import { updateUserPreferences } from "@/services/userService";
@@ -17,6 +18,7 @@ import { NotificationBell } from "@/components/ui/NotificationBell";
 
 export const MainLayout = () => {
   const { user, logout, updateUser } = useAuthStore();
+  const { loadFlags, hasFeature, isLoaded: flagsLoaded } = useFeatureFlagStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -27,6 +29,12 @@ export const MainLayout = () => {
 
   // Real-time notifications
   useSocketInit();
+
+  // Load this tenant's feature flags once so gated modules (e.g. Agentes IA)
+  // grey out up front instead of the user clicking in and hitting a 403.
+  useEffect(() => {
+    loadFlags();
+  }, [loadFlags]);
 
   useEffect(() => {
     const allIds = NAV_ITEMS.map((i) => i.id);
@@ -99,8 +107,16 @@ export const MainLayout = () => {
         if (!allowed.includes(userRole)) return false;
 
         return true;
+      })
+      .map((item) => {
+        // Grey out modules gated by a company feature flag that's off for
+        // this tenant, instead of letting the user click in and 403.
+        if (item.requiredFlag && flagsLoaded && !hasFeature(item.requiredFlag)) {
+          return { ...item, disabled: true, badge: "Bloqueado" };
+        }
+        return item;
       });
-  }, [sidebarOrder, user]);
+  }, [sidebarOrder, user, flagsLoaded, hasFeature]);
 
   return (
     <div

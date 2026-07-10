@@ -1,6 +1,15 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from "axios";
 import { toast } from "sonner";
 
+// Extend the request config with an opt-out for the global error toast
+// below. Use this for calls the caller already handles/expects to fail
+// (e.g. an optional feature gated behind a company feature flag) so the
+// interceptor doesn't surface a raw backend error message the user can't
+// act on.
+export interface ApiRequestConfig extends AxiosRequestConfig {
+  skipErrorToast?: boolean;
+}
+
 // ==================== CONFIG ====================
 
 // Use relative path in development (Vite proxy handles the rest)
@@ -52,6 +61,10 @@ apiClient.interceptors.response.use(
     return response.data;
   },
   (error: AxiosError) => {
+    const skipErrorToast = Boolean(
+      (error.config as ApiRequestConfig | undefined)?.skipErrorToast,
+    );
+
     // Error handling
     if (error.response) {
       const status = error.response.status;
@@ -80,9 +93,11 @@ apiClient.interceptors.response.use(
 
         case 403:
           // Forbidden
-          toast.error(
-            data.message || "No tienes permisos para realizar esta acción.",
-          );
+          if (!skipErrorToast) {
+            toast.error(
+              data.message || "No tienes permisos para realizar esta acción.",
+            );
+          }
           break;
 
         case 404:
@@ -90,14 +105,16 @@ apiClient.interceptors.response.use(
           break;
 
         case 500:
-          toast.error(
-            "Error del servidor. Por favor, intenta de nuevo ms tarde.",
-          );
+          if (!skipErrorToast) {
+            toast.error(
+              "Error del servidor. Por favor, intenta de nuevo ms tarde.",
+            );
+          }
           break;
 
         default:
           // Generic error
-          if (data.message) {
+          if (data.message && !skipErrorToast) {
             toast.error(data.message);
           }
       }
@@ -110,7 +127,9 @@ apiClient.interceptors.response.use(
       });
     } else if (error.request) {
       // Network error
-      toast.error("Error de conexión. Verifica tu internet.");
+      if (!skipErrorToast) {
+        toast.error("Error de conexión. Verifica tu internet.");
+      }
       return Promise.reject({
         status: 0,
         message: "Network error",
@@ -133,14 +152,14 @@ apiClient.interceptors.response.use(
  * Type-safe API client interface
  */
 export const api = {
-  get: <T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> => {
+  get: <T = unknown>(url: string, config?: ApiRequestConfig): Promise<T> => {
     return apiClient.get(url, config);
   },
 
   post: <T = unknown>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig,
+    config?: ApiRequestConfig,
   ): Promise<T> => {
     return apiClient.post(url, data, config);
   },
@@ -148,7 +167,7 @@ export const api = {
   put: <T = unknown>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig,
+    config?: ApiRequestConfig,
   ): Promise<T> => {
     return apiClient.put(url, data, config);
   },
@@ -156,14 +175,14 @@ export const api = {
   patch: <T = unknown>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig,
+    config?: ApiRequestConfig,
   ): Promise<T> => {
     return apiClient.patch(url, data, config);
   },
 
   delete: <T = unknown>(
     url: string,
-    config?: AxiosRequestConfig,
+    config?: ApiRequestConfig,
   ): Promise<T> => {
     return apiClient.delete(url, config);
   },

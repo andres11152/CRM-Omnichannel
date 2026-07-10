@@ -1,5 +1,6 @@
 import { AppError } from "@/utils/AppError";
 import { departmentRepository } from "@/repositories/DepartmentRepository";
+import { queueRepository } from "@/repositories/QueueRepository";
 
 /**
  * [BUILD] DEPARTMENT CRUD SERVICE
@@ -70,6 +71,21 @@ export const departmentService = {
 
     if (!department) {
       throw new AppError("Department not found", 404);
+    }
+
+    // Queue.departmentId has no cascade/set-null, so deleting a department
+    // still referenced by a queue would otherwise fail with a raw FK
+    // constraint error. Guard with a friendly message instead.
+    const queueInUse = await queueRepository.findFirst(
+      { where: { departmentId: id } },
+      companyId,
+    );
+
+    if (queueInUse) {
+      throw new AppError(
+        "No se puede eliminar el departamento porque tiene colas asociadas. Reasigna o elimina esas colas primero.",
+        400,
+      );
     }
 
     await departmentRepository.delete(id);

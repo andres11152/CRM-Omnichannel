@@ -20,6 +20,14 @@ export const createDepartment = async (name: string): Promise<Department> => {
   return res.data.data || res.data;
 };
 
+export const updateDepartment = async (
+  id: string,
+  name: string,
+): Promise<Department> => {
+  const res = await api.put(`/departments/${id}`, { name });
+  return res.data.data || res.data;
+};
+
 export const deleteDepartment = async (id: string): Promise<void> => {
   await api.delete(`/departments/${id}`);
 };

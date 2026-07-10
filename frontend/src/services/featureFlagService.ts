@@ -21,5 +21,15 @@ export const featureFlagService = {
   async updateCompanyFlags(companyId: string, flags: Partial<FeatureFlags>): Promise<FeatureFlags> {
     const res = await api.patch<FeatureFlags>(`/admin/companies/${companyId}/feature-flags`, { flags });
     return res.data;
-  }
+  },
+
+  /**
+   * Self-service read of the CURRENT user's own company flags.
+   * Unlike getCompanyFlags (master-admin only), any authenticated user can
+   * call this — it's how the app decides what to grey out for its own tenant.
+   */
+  async getMyFlags(): Promise<FeatureFlags> {
+    const res = await api.get<FeatureFlags>("/company/feature-flags");
+    return res.data;
+  },
 };

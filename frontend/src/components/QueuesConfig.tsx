@@ -14,9 +14,12 @@ import {
 import {
   getDepartments,
   createDepartment,
+  updateDepartment,
+  deleteDepartment,
   Department,
 } from "@/services/departmentService";
 import { getAssistants } from "@/services/aiService";
+import { useFeatureFlagStore } from "@/stores/featureFlagStore";
 
 const EMPTY_FORM: CreateQueueDTO = {
   name: "",
@@ -32,6 +35,12 @@ const QueuesConfig: React.FC = () => {
   const [assistants, setAssistants] = useState<Array<{ id: string; name: string }>>([]);
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
+  const {
+    hasFeature,
+    isLoaded: flagsLoaded,
+    loadFlags,
+  } = useFeatureFlagStore();
+  const aiEnabled = !flagsLoaded || hasFeature("advanced_ai");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingQueue, setEditingQueue] = useState<QueueConfig | null>(null);
@@ -41,28 +50,54 @@ const QueuesConfig: React.FC = () => {
   const [isCreatingDept, setIsCreatingDept] = useState(false);
   const [newDeptName, setNewDeptName] = useState("");
 
+  // Rename-in-place for the department currently selected in the form
+  const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
+  const [deptNameDraft, setDeptNameDraft] = useState("");
+  const [isSavingDept, setIsSavingDept] = useState(false);
+
   // Inline delete confirmation — no confirm() dialog
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingDeleteDeptId, setPendingDeleteDeptId] = useState<string | null>(null);
 
   useEffect(() => {
+    loadFlags();
     loadData();
   }, []);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [queuesData, deptsData, assistantsData] = await Promise.all([
+      const [queuesData, deptsData] = await Promise.all([
         getQueues(),
         getDepartments(),
-        getAssistants(),
       ]);
       setQueues(queuesData);
       setDepartments(deptsData);
-      setAssistants(assistantsData);
     } catch {
       toast.error(t("queues_config.toasts.err_load", "Error al cargar la configuración."));
     } finally {
       setIsLoading(false);
+    }
+
+    // AI assistants are an optional add-on (advanced_ai feature flag) — a 403
+    // here just means the company doesn't have it, and must not block queues
+    // or departments from loading. Skip the call entirely once we know the
+    // flag is off, instead of hitting the API and catching the 403.
+    const { isLoaded: flagsLoadedNow, hasFeature: hasFeatureNow } =
+      useFeatureFlagStore.getState();
+    if (flagsLoadedNow && !hasFeatureNow("advanced_ai")) {
+      setAssistants([]);
+      return;
+    }
+    try {
+      const assistantsData = await getAssistants();
+      setAssistants(assistantsData);
+    } catch (error) {
+      console.warn(
+        "AI assistants unavailable (advanced_ai feature likely disabled for this company)",
+        error,
+      );
+      setAssistants([]);
     }
   };
 
@@ -88,6 +123,9 @@ const QueuesConfig: React.FC = () => {
     }
     setIsCreatingDept(false);
     setNewDeptName("");
+    setEditingDeptId(null);
+    setDeptNameDraft("");
+    setPendingDeleteDeptId(null);
     setIsModalOpen(true);
   };
 
@@ -96,6 +134,9 @@ const QueuesConfig: React.FC = () => {
     setEditingQueue(null);
     setIsCreatingDept(false);
     setNewDeptName("");
+    setEditingDeptId(null);
+    setDeptNameDraft("");
+    setPendingDeleteDeptId(null);
   };
 
   const patch = (fields: Partial<CreateQueueDTO>) =>
@@ -164,6 +205,55 @@ const QueuesConfig: React.FC = () => {
       toast.success(t("queues_config.toasts.dept_success", "Departamento creado"));
     } catch {
       toast.error(t("queues_config.toasts.err_dept", "Error al crear departamento"));
+    }
+  };
+
+  const handleStartEditDepartment = () => {
+    const dept = departments.find((d) => d.id === formData.departmentId);
+    if (!dept) return;
+    setEditingDeptId(dept.id);
+    setDeptNameDraft(dept.name);
+  };
+
+  const handleCancelEditDepartment = () => {
+    setEditingDeptId(null);
+    setDeptNameDraft("");
+  };
+
+  const handleSaveEditDepartment = async () => {
+    if (!editingDeptId || !deptNameDraft.trim()) return;
+    setIsSavingDept(true);
+    try {
+      const updated = await updateDepartment(editingDeptId, deptNameDraft.trim());
+      setDepartments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      setEditingDeptId(null);
+      setDeptNameDraft("");
+      toast.success(t("queues_config.toasts.dept_update_success", "Departamento actualizado"));
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("queues_config.toasts.err_dept_update", "Error al actualizar departamento"),
+      );
+    } finally {
+      setIsSavingDept(false);
+    }
+  };
+
+  const handleDeleteDepartment = async (id: string) => {
+    try {
+      await deleteDepartment(id);
+      setDepartments((prev) => prev.filter((d) => d.id !== id));
+      if (formData.departmentId === id) patch({ departmentId: null });
+      setPendingDeleteDeptId(null);
+      toast.success(t("queues_config.toasts.dept_delete_success", "Departamento eliminado"));
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("queues_config.toasts.err_dept_delete", "Error al eliminar departamento"),
+      );
+      setPendingDeleteDeptId(null);
     }
   };
 
@@ -379,27 +469,7 @@ const QueuesConfig: React.FC = () => {
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
               {t("queues_config.modal.department", "Departamento")}
             </label>
-            {!isCreatingDept ? (
-              <div className="flex gap-2">
-                <select
-                  value={formData.departmentId || ""}
-                  onChange={(e) => patch({ departmentId: e.target.value || null })}
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                >
-                  <option value="">{t("queues_config.modal.no_dept_option", "Sin departamento (General)")}</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => setIsCreatingDept(true)}
-                  className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium border border-gray-300 dark:border-reply-border-dark"
-                  title={t("queues_config.modal.new_dept", "Nuevo Departamento")}
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
+            {isCreatingDept ? (
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -423,6 +493,93 @@ const QueuesConfig: React.FC = () => {
                   {t("common.cancel", "✕")}
                 </button>
               </div>
+            ) : editingDeptId ? (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={deptNameDraft}
+                  onChange={(e) => setDeptNameDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveEditDepartment()}
+                  placeholder={t("queues_config.modal.dept_placeholder", "Nombre del departamento...")}
+                  className="flex-1 px-3 py-2 border border-indigo-300 dark:border-indigo-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  autoFocus
+                  disabled={isSavingDept}
+                />
+                <button
+                  onClick={handleSaveEditDepartment}
+                  disabled={isSavingDept}
+                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
+                >
+                  {t("common.save", "Guardar")}
+                </button>
+                <button
+                  onClick={handleCancelEditDepartment}
+                  disabled={isSavingDept}
+                  className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  {t("common.cancel", "✕")}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <select
+                    value={formData.departmentId || ""}
+                    onChange={(e) => patch({ departmentId: e.target.value || null })}
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  >
+                    <option value="">{t("queues_config.modal.no_dept_option", "Sin departamento (General)")}</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  {formData.departmentId && (
+                    <>
+                      <button
+                        onClick={handleStartEditDepartment}
+                        className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-300 dark:border-reply-border-dark"
+                        title={t("queues_config.modal.edit_dept", "Editar Departamento")}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setPendingDeleteDeptId(formData.departmentId)}
+                        className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border border-gray-300 dark:border-reply-border-dark"
+                        title={t("queues_config.modal.delete_dept", "Eliminar Departamento")}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setIsCreatingDept(true)}
+                    className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium border border-gray-300 dark:border-reply-border-dark"
+                    title={t("queues_config.modal.new_dept", "Nuevo Departamento")}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                {pendingDeleteDeptId && pendingDeleteDeptId === formData.departmentId && (
+                  <div className="mt-2 flex items-center gap-2 text-xs bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded-lg px-3 py-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                    <span className="text-red-600 dark:text-red-400 font-medium flex-1">
+                      {t("queues_config.confirm_delete_dept", "¿Eliminar este departamento? Esta acción no se puede deshacer.")}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteDepartment(pendingDeleteDeptId)}
+                      className="text-xs font-bold px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+                    >
+                      {t("common.yes", "Sí")}
+                    </button>
+                    <button
+                      onClick={() => setPendingDeleteDeptId(null)}
+                      className="text-xs font-medium px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      {t("common.cancel", "No")}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -439,7 +596,10 @@ const QueuesConfig: React.FC = () => {
               >
                 <option value="MANUAL">{t("queues_config.types.manual", "Manual")}</option>
                 <option value="ROUND_ROBIN">{t("queues_config.modal.assignment_auto", "Automática (Round Robin)")}</option>
-                <option value="AI">{t("queues_config.types.ai", "IA Automation")}</option>
+                <option value="AI" disabled={!aiEnabled}>
+                  {t("queues_config.types.ai", "IA Automation")}
+                  {!aiEnabled ? " 🔒" : ""}
+                </option>
               </select>
             </div>
 
@@ -458,13 +618,30 @@ const QueuesConfig: React.FC = () => {
                     type: val ? "AI" : (formData.type === "AI" ? "MANUAL" : formData.type),
                   });
                 }}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                disabled={!aiEnabled}
+                title={
+                  aiEnabled
+                    ? undefined
+                    : t(
+                        "queues_config.modal.ai_locked",
+                        "Funcionalidad no disponible para tu empresa. Contacta a soporte para habilitarla.",
+                      )
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-reply-border-dark text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-800"
               >
                 <option value="">{t("queues_config.none", "Ninguno")}</option>
                 {assistants.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
+              {!aiEnabled && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  {t(
+                    "queues_config.modal.ai_locked_hint",
+                    "Módulo de IA no activo para tu empresa.",
+                  )}
+                </p>
+              )}
             </div>
           </div>
 

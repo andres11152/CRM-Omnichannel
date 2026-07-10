@@ -2,6 +2,7 @@ import { TicketRepository } from "@/repositories/TicketRepository";
 import { TicketStatus } from "@prisma/client";
 import { Logger } from "@/utils/logger";
 import { DistributedLock } from "@/utils/distributedLock";
+import { conversationRepository } from "@/repositories/ConversationRepository";
 
 const ticketRepository = new TicketRepository();
 
@@ -24,6 +25,14 @@ export class TicketSyncService {
     await DistributedLock.run(
       lockKey,
       async () => {
+        const conv = await conversationRepository.findFirst({
+          where: { id: conversationId, companyId }
+        });
+        if (conv?.isGroup) {
+          Logger.info(`[TicketSyncService] Skipped ticket creation for group conversation ${conversationId}`);
+          return;
+        }
+
         const existingTicket = await ticketRepository.findByConversationId(
           companyId,
           conversationId,

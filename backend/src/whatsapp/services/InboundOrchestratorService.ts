@@ -352,7 +352,7 @@ export class InboundOrchestratorService {
     });
 
     let ticketId: string | undefined;
-    if (!isOutbound && customerUser) {
+    if (!isOutbound && customerUser && !isGroup) {
       try {
         const ticket = await chatService.ensureTicket(
           companyId,

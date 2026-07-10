@@ -1,11 +1,11 @@
 import { Response, NextFunction } from "express";
 import { AppError } from "@/utils/AppError";
 import { AuthenticatedRequest } from "@/types/types";
-import { dealProductService } from "@/services/DealProductService";
+import { dealProductService, CreateDealProductDTO } from "@/services/DealProductService";
 
 class DealProductController {
   getProductsForDeal = async (
-    req: AuthenticatedRequest,
+    req: AuthenticatedRequest<{ id: string }>,
     res: Response,
     next: NextFunction
   ) => {
@@ -29,7 +29,7 @@ class DealProductController {
   };
 
   addProductToDeal = async (
-    req: AuthenticatedRequest,
+    req: AuthenticatedRequest<{ id: string }, unknown, CreateDealProductDTO>,
     res: Response,
     next: NextFunction
   ) => {
@@ -44,7 +44,7 @@ class DealProductController {
       const dealProduct = await dealProductService.addProductToDeal(
         companyId,
         dealId,
-        req.body as unknown as any
+        req.body
       );
 
       res.status(201).json({
@@ -57,7 +57,11 @@ class DealProductController {
   };
 
   updateDealProduct = async (
-    req: AuthenticatedRequest,
+    req: AuthenticatedRequest<
+      { id: string; dealProductId: string },
+      unknown,
+      { quantity?: number; discount?: number; unitPrice?: number }
+    >,
     res: Response,
     next: NextFunction
   ) => {
@@ -85,7 +89,7 @@ class DealProductController {
   };
 
   removeProductFromDeal = async (
-    req: AuthenticatedRequest,
+    req: AuthenticatedRequest<{ id: string; dealProductId: string }>,
     res: Response,
     next: NextFunction
   ) => {

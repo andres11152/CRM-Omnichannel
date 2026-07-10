@@ -34,6 +34,10 @@ export interface TicketDTO {
   conversationId: string | null;
   lastMessage: string;
   lastMessageAt: Date;
+  // Direction of the last message — lets the UI distinguish "customer is
+  // waiting for a reply" (INBOUND) from "we already answered" (OUTBOUND),
+  // instead of treating every ticket as perpetually awaiting response.
+  lastMessageDirection: "INBOUND" | "OUTBOUND" | null;
   channel: string;
   tags: string[];
 
@@ -285,6 +289,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     conversationId: ticket.conversationId,
     lastMessage: lastMessageContent,
     lastMessageAt: lastMessageTime,
+    lastMessageDirection: (lastMsg?.direction as "INBOUND" | "OUTBOUND" | undefined) ?? null,
     channel: "WhatsApp",
     tags: conversation?.tags || [],
 

@@ -811,7 +811,8 @@
     "hide_list": "Ocultar lista",
     "show_list": "Mostrar lista",
     "resolve": "RESOLVER",
-    "no_messages": "Sin mensajes"
+    "no_messages": "Sin mensajes",
+    "waiting_for_reply": "Tiempo esperando respuesta del agente"
   },
   "sidebar": {
     "light_mode": "Modo Claro",

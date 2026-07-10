@@ -21,7 +21,12 @@ interface ChatHeaderEnhancedProps {
   isCopied: boolean;
   socketStatus: "connected" | "disconnected";
   onForceReconnect: () => void;
-  ticketCreatedAt?: Date;
+  /** Timestamp of the last message in this conversation (either direction). */
+  lastMessageAt?: Date;
+  /** Direction of the last message — INBOUND means the customer is waiting
+   * for a reply and the SLA timer should run; OUTBOUND means we already
+   * answered, so there's nothing to count down. */
+  lastMessageDirection?: "INBOUND" | "OUTBOUND" | null;
   responseTimeSLA?: number;
   onAssignTo?: (agentId: string) => void;
   onChangePriority?: (priority: "LOW" | "MEDIUM" | "HIGH") => void;
@@ -50,7 +55,8 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
   isCopied,
   socketStatus,
   onForceReconnect,
-  ticketCreatedAt,
+  lastMessageAt,
+  lastMessageDirection,
   responseTimeSLA = 15,
   onAssignTo,
   onChangePriority,
@@ -75,12 +81,25 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
   const [timeElapsed, setTimeElapsed] = useState(0);
   const { t } = useTranslation();
 
-  useEffect(() => {
-    if (!ticketCreatedAt) return;
+  // [ENTERPRISE] "Waiting for reply" timer. Only meaningful while the customer's
+  // last message is unanswered (lastMessageDirection === "INBOUND") — it used to
+  // anchor on the ticket's original creation date regardless of direction, so any
+  // conversation older than a few minutes showed a permanently red, ever-growing
+  // number even right after an agent replied. Anchoring on lastMessageAt + hiding
+  // the badge once we've answered makes the number (and its color) actually mean
+  // "time waiting for a response" again.
+  const isAwaitingReply = lastMessageDirection === "INBOUND" && !!lastMessageAt;
 
-    const interval = setInterval(() => {
+  useEffect(() => {
+    if (!isAwaitingReply || !lastMessageAt) {
+      setTimeElapsed(0);
+      setSlaStatus("ok");
+      return;
+    }
+
+    const tick = () => {
       const elapsed = Math.floor(
-        (Date.now() - new Date(ticketCreatedAt).getTime()) / 60000,
+        (Date.now() - new Date(lastMessageAt).getTime()) / 60000,
       );
       setTimeElapsed(elapsed);
 
@@ -91,10 +110,13 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
       } else {
         setSlaStatus("ok");
       }
-    }, 10000);
+    };
+
+    tick(); // Compute immediately instead of waiting up to 10s for the first tick
+    const interval = setInterval(tick, 10000);
 
     return () => clearInterval(interval);
-  }, [ticketCreatedAt, responseTimeSLA]);
+  }, [isAwaitingReply, lastMessageAt, responseTimeSLA]);
 
   const getSLAColor = () => {
     switch (slaStatus) {
@@ -105,6 +127,18 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
       case "critical":
         return "bg-red-500 border-red-400 animate-pulse";
     }
+  };
+
+  // Enterprise-friendly formatting: "45m" while under an hour, "3h 12m" beyond
+  // that — a raw four-digit minute count (e.g. "1049m") reads as broken/noise.
+  const formatElapsed = (minutes: number): string => {
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours < 24) return `${hours}h ${mins}m`;
+    const days = Math.floor(hours / 24);
+    const remHours = hours % 24;
+    return `${days}d ${remHours}h`;
   };
 
   const getPriorityColor = (priority: string) => {
@@ -500,12 +534,18 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
         {/* RIGHT: Actions Toolbar */}
         <div className="flex items-center gap-1 sm:gap-2 pl-2">
           <div className="flex items-center gap-2 hidden lg:flex">
-            {/* SLA Timer (Enterprise Refined) */}
-            {ticketCreatedAt && (
-              <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/50 px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 h-9 shrink-0">
+            {/* SLA Timer: only shown while the customer's last message is unanswered */}
+            {isAwaitingReply && (
+              <div
+                className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/50 px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 h-9 shrink-0"
+                title={t(
+                  "chat.waiting_for_reply",
+                  "Tiempo esperando respuesta del agente",
+                )}
+              >
                 <div className={`w-2 h-2 rounded-full animate-pulse ${getSLAColor()}`}></div>
                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 tracking-tight">
-                  {timeElapsed}m
+                  {formatElapsed(timeElapsed)}
                 </span>
               </div>
             )}

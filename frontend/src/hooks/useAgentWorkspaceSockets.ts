@@ -178,6 +178,7 @@ export const useAgentWorkspaceSockets = ({
             status: "OPEN",
             channel: Channel.WHATSAPP,
             lastMessage: newTicketLastMessage,
+            lastMessageDirection: payload.direction || "INBOUND",
             // Ensure Date object compatibility
             lastMessageAt: new Date(
               payload.lastMessageAt || Date.now(),
@@ -246,6 +247,7 @@ export const useAgentWorkspaceSockets = ({
           ...ticket,
           lastMessage: incomingMessage,
           lastMessageAt: newDate,
+          lastMessageDirection: payload.direction || ticket.lastMessageDirection,
           unreadCount: newUnreadCount,
           contact: {
             ...ticket.contact,

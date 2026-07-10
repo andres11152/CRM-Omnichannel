@@ -205,6 +205,7 @@ export function ticketToContact(ticket: Ticket): Contact {
     priority: ticket.priority,
     ticketId: ticket.id,
     ticketCreatedAt: ticket.createdAt,
+    lastMessageDirection: ticket.lastMessageDirection,
   };
 }
 
@@ -854,6 +855,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
             priority: activeTicket.priority,
             ticketId: activeTicket.id,
             ticketCreatedAt: activeTicket.createdAt,
+            lastMessageDirection: activeTicket.lastMessageDirection,
           }
         : null,
     [activeTicket],

@@ -187,6 +187,9 @@ export interface Contact {
   // Ticket-specific metadata for UI
   priority?: string;
   ticketCreatedAt?: Date | string;
+  // Direction of the last message — INBOUND means the customer is waiting
+  // for a reply; OUTBOUND means we already answered.
+  lastMessageDirection?: "INBOUND" | "OUTBOUND" | null;
 }
 
 // NEW: Represents the conversation/case
@@ -258,6 +261,9 @@ export interface Ticket {
 
   lastMessage: string;
   lastMessageAt: string; // ISO Date
+  // Direction of the last message — INBOUND means the customer is waiting
+  // for a reply; OUTBOUND means we already answered.
+  lastMessageDirection?: "INBOUND" | "OUTBOUND" | null;
   createdAt: string; // ISO Date
   updatedAt: string;
   resolvedAt?: string | null;

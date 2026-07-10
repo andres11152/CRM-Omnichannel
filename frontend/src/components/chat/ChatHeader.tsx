@@ -63,7 +63,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       isCopied={isCopied}
       onTagsClick={() => {}} // Not used in this version
       onForceReconnect={() => window.location.reload()}
-      ticketCreatedAt={displayContact.ticketCreatedAt ? new Date(displayContact.ticketCreatedAt) : undefined}
+      lastMessageAt={displayContact.lastMessageTime ? new Date(displayContact.lastMessageTime) : undefined}
+      lastMessageDirection={displayContact.lastMessageDirection}
       currentPriority={displayContact.priority as "LOW" | "MEDIUM" | "HIGH" | undefined}
       onChangePriority={onChangePriority}
       isCustomer360Visible={isCustomer360Visible}

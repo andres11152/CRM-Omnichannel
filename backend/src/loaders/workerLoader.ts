@@ -17,6 +17,20 @@ import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionReposit
 /** Track which companies have had their message worker started */
 const initializedWorkers = new Set<string>();
 
+// [QUEUED-FIX] When messageQueueService evicts an idle queue, the processor that
+// startWorker() attached dies with the closed queue object. Clear the tracker so
+// the next enqueue's ensureWorkerForCompany() actually restarts the worker on the
+// recreated queue — otherwise jobs pile up in QUEUED with no consumer.
+import("@/services/queue/messageQueueService")
+  .then(({ messageQueueService }) => {
+    messageQueueService.onQueueEvicted((companyId) => {
+      initializedWorkers.delete(companyId);
+    });
+  })
+  .catch((err) => {
+    Logger.error("[Loader] Failed to register queue-eviction listener", err);
+  });
+
 /**
  * Initialize a message queue worker for a single company (idempotent).
  * Can be called from anywhere: session connect, webhook, or manual trigger.

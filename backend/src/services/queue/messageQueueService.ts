@@ -55,6 +55,9 @@ class MessageQueueService {
   private sharedClient: IORedis | null = null;
   private sharedSubscriber: IORedis | null = null;
   private evictionInterval: NodeJS.Timeout | null = null;
+  // Consumers register here to learn when their queue object was closed by the
+  // idle-eviction loop, so they can reset their "worker already running" state.
+  private evictionListeners: Array<(companyId: string) => void> = [];
 
   constructor() {
     this.initSharedRedis();
@@ -115,29 +118,72 @@ class MessageQueueService {
   }
 
   /**
+   * Register a callback fired when a company's queue is evicted (closed).
+   * [QUEUED-FIX] Eviction closes the Bull queue OBJECT the worker's processor was
+   * attached to. The worker trackers (workerLoader.initializedWorkers and
+   * MessageQueueWorker.activeWorkers) MUST reset on eviction; otherwise the next
+   * enqueue creates a fresh queue object, ensureWorkerForCompany early-returns
+   * ("already running"), no processor is ever attached to the new object, and the
+   * job — plus its DB row — sits in "EN COLA"/QUEUED forever (until a restart).
+   * This was the intermittent messages-stuck-in-queue bug: it only hit companies
+   * whose first send came after a ≥30-minute idle window.
+   */
+  public onQueueEvicted(listener: (companyId: string) => void): void {
+    this.evictionListeners.push(listener);
+  }
+
+  /**
    * [SEC] SCALE FIX: Periodically evict idle queues.
    * If a company hasn't sent messages in 30 minutes, close its queue
    * to free Redis connections and memory.
    */
   private startEvictionLoop(): void {
     this.evictionInterval = setInterval(() => {
-      const now = Date.now();
-      const evicted: string[] = [];
+      void this.evictIdleQueues();
+    }, 5 * 60 * 1000); // Check every 5 minutes
+  }
 
-      for (const [companyId, entry] of this.queues.entries()) {
-        if (now - entry.lastUsed > IDLE_QUEUE_TTL_MS) {
-          entry.queue.close().catch(() => {});
-          this.queues.delete(companyId);
-          evicted.push(companyId);
+  private async evictIdleQueues(): Promise<void> {
+    const now = Date.now();
+    const evicted: string[] = [];
+
+    for (const [companyId, entry] of this.queues.entries()) {
+      if (now - entry.lastUsed <= IDLE_QUEUE_TTL_MS) continue;
+
+      // [QUEUED-FIX] Never close a queue that still has undelivered work (waiting,
+      // delayed-retry, or mid-flight jobs) — closing it would orphan those jobs in
+      // Redis with no consumer until the next enqueue recreates the queue.
+      try {
+        const counts = await entry.queue.getJobCounts();
+        const pending =
+          (counts.waiting || 0) + (counts.active || 0) + (counts.delayed || 0);
+        if (pending > 0) {
+          entry.lastUsed = now; // Still busy — reset the idle clock
+          continue;
+        }
+      } catch {
+        continue; // Can't verify — err on the side of keeping the queue alive
+      }
+
+      entry.queue.close().catch(() => {});
+      this.queues.delete(companyId);
+      evicted.push(companyId);
+    }
+
+    if (evicted.length > 0) {
+      Logger.info(
+        `[MessageQueue] [CLEAN] Evicted ${evicted.length} idle queues: ${evicted.join(", ")}`,
+      );
+      for (const companyId of evicted) {
+        for (const listener of this.evictionListeners) {
+          try {
+            listener(companyId);
+          } catch (err) {
+            Logger.warn(`[MessageQueue] Eviction listener failed for ${companyId}:`, err);
+          }
         }
       }
-
-      if (evicted.length > 0) {
-        Logger.info(
-          `[MessageQueue] [CLEAN] Evicted ${evicted.length} idle queues: ${evicted.join(", ")}`,
-        );
-      }
-    }, 5 * 60 * 1000); // Check every 5 minutes
+    }
   }
 
   /**

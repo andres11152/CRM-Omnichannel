@@ -42,6 +42,13 @@ class MessageQueueWorker {
 
   constructor(whatsappService: WhatsAppService) {
     this.whatsappService = whatsappService;
+    // [QUEUED-FIX] The idle-eviction loop CLOSES the Bull queue object our
+    // processor was attached to. Reset the tracker so the next startWorker()
+    // attaches a fresh processor to the recreated queue instead of early-returning
+    // "Already running" — which left jobs (and their DB rows) in QUEUED forever.
+    messageQueueService.onQueueEvicted((companyId) => {
+      this.activeWorkers.delete(companyId);
+    });
   }
 
   /**

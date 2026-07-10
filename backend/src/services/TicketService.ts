@@ -19,6 +19,7 @@ import { ticketTransitionManager } from "./tickets/TicketTransitionManager";
 import { ticketNotificationService } from "./tickets/TicketNotificationService";
 import { webhookDispatcher } from "@/services/WebhookDispatcher";
 import { WebhookEvents } from "@/types/types";
+import { profilePicHealScheduler } from "./ProfilePicHealScheduler";
 
 class TicketService {
   /**
@@ -153,6 +154,18 @@ class TicketService {
     const dtos = tickets.map((t) => toTicketDTO(t as TicketWithRelations));
     const enriched = await this.enrichWithCrmData(dtos, data.companyId);
 
+    // [ENTERPRISE] Background-heal missing WhatsApp profile pictures for this
+    // page. Contacts imported via history sync never had fetchAndPersist called
+    // for them (only live inbound messages and opening a single conversation
+    // do) — without this, the inbox list shows a blank avatar for every
+    // history-synced chat until an agent opens each one individually.
+    const missingPicTargets = enriched
+      .filter((t) => !t.isGroup && !t.contact.profilePicUrl)
+      .map((t) => ({ userId: t.contact.id, channelId: t.contact.channelId }));
+    if (missingPicTargets.length > 0) {
+      profilePicHealScheduler.scheduleBulk(data.companyId, missingPicTargets);
+    }
+
     return {
       data: enriched,
       meta: {
@@ -217,6 +230,17 @@ class TicketService {
 
     const dto = toTicketDTO(ticket as TicketWithRelations);
     const [enriched] = await this.enrichWithCrmData([dto], companyId);
+
+    // [ENTERPRISE] This is the endpoint the workspace actually calls to open a
+    // chat (GET /tickets/:id) — it never shared ConversationQueryService's
+    // profile-pic heal, so opening a history-synced contact's conversation
+    // never attempted to fetch their real WhatsApp photo either.
+    if (!enriched.isGroup && !enriched.contact.profilePicUrl) {
+      profilePicHealScheduler.scheduleBulk(companyId, [
+        { userId: enriched.contact.id, channelId: enriched.contact.channelId },
+      ]);
+    }
+
     return enriched;
   }
 

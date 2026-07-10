@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Contact, Channel, Tag } from "@/types";
@@ -16,6 +16,7 @@ import {
   Plus,
   Minus,
   MessageSquare,
+  X,
 } from "lucide-react";
 import { ContactTimelineView } from "./crm/ContactTimelineView";
 import { Avatar } from "@/components/common/Avatar";
@@ -256,6 +257,7 @@ const ContactListComponent: React.FC<Props> = ({
     null,
   );
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState("");
 
   const menuRef = React.useRef<HTMLDivElement>(null);
 
@@ -340,6 +342,52 @@ const ContactListComponent: React.FC<Props> = ({
   };
 
   const activeContact = contacts.find((c) => c.id === activeContactId);
+
+  // Diacritic-insensitive matcher so "Muñoz" is found typing "munoz" and
+  // vice versa (Spanish-heavy dataset). Matches across every visible field
+  // of the row: name, phone/channelId, last message, queue, and agent.
+  const normalizeText = (value: string): string =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "");
+
+  const matchesSearch = React.useCallback(
+    (contact: Contact, needle: string): boolean => {
+      const haystack = normalizeText(
+        [
+          contact.name,
+          contact.phone,
+          contact.channelId,
+          contact.lastMessage,
+          contact.queueName,
+          contact.assignedAgentName,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+      return haystack.includes(needle);
+    },
+    [],
+  );
+
+  const normalizedSearch = normalizeText(searchTerm.trim());
+  const filteredContacts = useMemo(
+    () =>
+      normalizedSearch
+        ? contacts.filter((c) => matchesSearch(c, normalizedSearch))
+        : contacts,
+    [contacts, normalizedSearch, matchesSearch],
+  );
+  const filteredGroups = useMemo(
+    () =>
+      normalizedSearch
+        ? (groups || []).filter((c) => matchesSearch(c, normalizedSearch))
+        : groups || [],
+    [groups, normalizedSearch, matchesSearch],
+  );
+  const hasNoResults =
+    !!normalizedSearch && filteredContacts.length === 0 && filteredGroups.length === 0;
 
   return (
     <>
@@ -520,31 +568,60 @@ const ContactListComponent: React.FC<Props> = ({
         {/* Search */}
         <div className="p-3 bg-white dark:bg-reply-surface-dark border-b border-gray-100 dark:border-reply-border-dark">
           <div className="bg-gray-100 dark:bg-reply-panel-dark rounded-lg px-4 py-2 flex items-center gap-3 border border-transparent focus-within:border-green-500 dark:focus-within:border-green-500 transition-all">
-            <Search className="w-4 h-4 text-gray-400" />
+            <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setSearchTerm("");
+              }}
               placeholder={t("contact_list.search_placeholder", "Buscar o iniciar chat...")}
               className="bg-transparent text-sm w-full focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white font-medium"
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                title={t("common.cancel", "Cancelar")}
+                className="shrink-0 p-0.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* List */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
+          {/* Empty search state */}
+          {hasNoResults && (
+            <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+                <Search className="w-5 h-5 text-gray-400" />
+              </div>
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                {t("contact_list.no_contacts", "No se encontraron contactos")}
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 break-all">
+                "{searchTerm}"
+              </p>
+            </div>
+          )}
+
           {/* Section: Direct Messages */}
-          {groups && groups.length > 0 && contacts.length > 0 && (
+          {filteredGroups.length > 0 && filteredContacts.length > 0 && (
             <div className="px-4 py-2.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider bg-indigo-50/50 dark:bg-indigo-900/10 backdrop-blur sticky top-0 z-10 border-b border-indigo-100/50 dark:border-indigo-900/20 flex items-center gap-2">
               <div className="w-4 h-4 rounded bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center">
                 <MessageSquare className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <span>{t("contact_list.direct_messages", "Mensajes Directos")}</span>
               <span className="ml-auto bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
-                {contacts.length}
+                {filteredContacts.length}
               </span>
             </div>
           )}
 
-          {contacts.map((contact) => {
+          {filteredContacts.map((contact) => {
             const isActive = activeContactId === contact.id;
             const isDeleting = deletingId === contact.id;
 
@@ -750,7 +827,7 @@ const ContactListComponent: React.FC<Props> = ({
           })}
 
           {/* Section: Groups */}
-          {groups && groups.length > 0 && (
+          {filteredGroups.length > 0 && (
             <>
               <div className="px-4 py-2.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider bg-emerald-50/50 dark:bg-emerald-900/10 backdrop-blur sticky top-0 z-10 border-y border-emerald-100/50 dark:border-emerald-900/20 flex items-center gap-2">
                 <div className="w-4 h-4 rounded bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center">
@@ -758,10 +835,10 @@ const ContactListComponent: React.FC<Props> = ({
                 </div>
                 <span>{t("contact_list.work_groups", "Grupos de Trabajo")}</span>
                 <span className="ml-auto bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
-                  {groups.length}
+                  {filteredGroups.length}
                 </span>
               </div>
-              {groups.map((contact) => {
+              {filteredGroups.map((contact) => {
                 const isActive = activeContactId === contact.id;
                 const isDeleting = deletingId === contact.id;
                 return (

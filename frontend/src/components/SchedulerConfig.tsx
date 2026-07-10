@@ -10,6 +10,8 @@ import {
   createMeetingType,
   updateMeetingType,
   deleteMeetingType,
+  getOutlookStatus,
+  disconnectOutlook,
   MeetingType,
   AvailabilityRule,
 } from "@/services/schedulerService";
@@ -66,10 +68,35 @@ export const SchedulerConfig: React.FC = () => {
   // UI States
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const [isOutlookConnected, setIsOutlookConnected] = useState(false);
 
   useEffect(() => {
     loadData();
+    handleOAuthCallbacks();
   }, []);
+
+  const handleOAuthCallbacks = () => {
+    const params = new URLSearchParams(window.location.search);
+    const google = params.get("calendar");
+    const outlook = params.get("outlook");
+    const error = params.get("error");
+
+    if (google === "connected") {
+      toast.success("Google Calendar conectado con éxito.");
+    } else if (outlook === "connected") {
+      toast.success("Outlook Calendar conectado con éxito.");
+    } else if (error || outlook === "error") {
+      toast.error("Error al conectar el calendario.");
+    }
+
+    if (google || outlook || error) {
+      params.delete("calendar");
+      params.delete("outlook");
+      params.delete("error");
+      const clean = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+      window.history.replaceState({}, "", clean);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -87,10 +114,14 @@ export const SchedulerConfig: React.FC = () => {
       const types = await getMeetingTypes();
       setMeetingTypes(types);
 
-      // 3. Check Google Calendar Status (endpoint protegido y dedicado)
+      // 3. Check Google Calendar Status
       const statusRes = await api.get("/google/status");
       const statusData = statusRes.data.data || statusRes.data;
       setIsGoogleConnected(!!statusData.connected);
+
+      // 4. Check Outlook Calendar Status
+      const outlookStatus = await getOutlookStatus();
+      setIsOutlookConnected(!!outlookStatus.connected);
     } catch (error) {
       console.error("Error loading scheduling config:", error);
       toast.error("Error al cargar la configuración de citas.");
@@ -124,6 +155,32 @@ export const SchedulerConfig: React.FC = () => {
     } catch (error) {
       console.error("Failed to disconnect Google Calendar:", error);
       toast.error("Error al desvincular Google Calendar");
+    }
+  };
+
+  const handleConnectOutlook = async () => {
+    try {
+      const res = await api.get(`/outlook/auth?userId=${user?.id}`);
+      const url = (res.data?.data?.url || res.data?.url) as string | undefined;
+      if (url) {
+        window.location.href = url;
+      } else {
+        toast.error("No se pudo iniciar la conexión con Outlook");
+      }
+    } catch (error) {
+      console.error("Failed to start Outlook Calendar connect:", error);
+      toast.error("Error al conectar Outlook Calendar");
+    }
+  };
+
+  const handleDisconnectOutlook = async () => {
+    try {
+      await disconnectOutlook();
+      setIsOutlookConnected(false);
+      toast.success("Outlook Calendar desvinculado");
+    } catch (error) {
+      console.error("Failed to disconnect Outlook Calendar:", error);
+      toast.error("Error al desvincular Outlook Calendar");
     }
   };
 
@@ -281,44 +338,86 @@ export const SchedulerConfig: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto p-4 md:p-8">
-      {/* Google Calendar Connection Status Banner */}
-      <Card className="p-6 border-l-4 border-l-indigo-600 shadow-md">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-2xl">
-              <Calendar className="w-8 h-8" />
+      {/* Calendars Connection Status Banners Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Google Calendar Connection Status Banner */}
+        <Card className="p-6 border-l-4 border-l-indigo-600 shadow-md">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-2xl">
+                <Calendar className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 dark:text-white">
+                  Sincronización con Google Calendar
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-semibold mt-0.5">
+                  {isGoogleConnected
+                    ? "Conectado. Sincronizando horarios."
+                    : "Conecta tu calendario de Google para evitar reservas duplicadas."}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-bold text-gray-900 dark:text-white">
-                Sincronización con Google Calendar
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-semibold mt-0.5">
-                {isGoogleConnected
-                  ? "Conectado. Buscaremos conflictos de horarios automáticamente."
-                  : "Conecta tu calendario de Google para evitar reservas duplicadas."}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {isGoogleConnected && (
-              <button
-                onClick={handleDisconnectGoogle}
-                className="text-sm text-rose-600 hover:text-rose-700 font-bold"
+            <div className="flex items-center gap-3">
+              {isGoogleConnected && (
+                <button
+                  onClick={handleDisconnectGoogle}
+                  className="text-sm text-rose-600 hover:text-rose-700 font-bold"
+                >
+                  Desconectar
+                </button>
+              )}
+              <Button
+                onClick={handleConnectGoogle}
+                variant={isGoogleConnected ? "secondary" : "primary"}
+                className="flex items-center gap-2"
               >
-                Desconectar
-              </button>
-            )}
-            <Button
-              onClick={handleConnectGoogle}
-              variant={isGoogleConnected ? "secondary" : "primary"}
-              className="flex items-center gap-2"
-            >
-              {isGoogleConnected ? "Reconectar Calendario" : "Conectar Calendario"}
-              <ExternalLink className="w-4 h-4" />
-            </Button>
+                {isGoogleConnected ? "Reconectar" : "Conectar"}
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+
+        {/* Outlook Calendar Connection Status Banner */}
+        <Card className="p-6 border-l-4 border-l-blue-600 shadow-md">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-2xl">
+                <Calendar className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 dark:text-white">
+                  Sincronización con Outlook Calendar
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-semibold mt-0.5">
+                  {isOutlookConnected
+                    ? "Conectado. Sincronizando horarios."
+                    : "Conecta tu calendario de Outlook para evitar reservas duplicadas."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {isOutlookConnected && (
+                <button
+                  onClick={handleDisconnectOutlook}
+                  className="text-sm text-rose-600 hover:text-rose-700 font-bold"
+                >
+                  Desconectar
+                </button>
+              )}
+              <Button
+                onClick={handleConnectOutlook}
+                variant={isOutlookConnected ? "secondary" : "primary"}
+                className="flex items-center gap-2"
+              >
+                {isOutlookConnected ? "Reconectar" : "Conectar"}
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Availability rules (Left 2/3 on desktop) */}

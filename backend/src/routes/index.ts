@@ -60,6 +60,7 @@ import aiRouter from "@/routes/aiRoutes";
 import quickReplyRouter from "@/routes/quickReplyRoutes";
 import usageRouter from "@/routes/usageRoutes";
 import googleAuthRouter from "@/routes/googleAuthRoutes";
+import outlookAuthRouter from "@/routes/outlookAuthRoutes";
 import companyRouter from "@/routes/companyRoutes";
 import analyticsRouter from "@/routes/analyticsRoutes";
 import productRouter from "@/routes/productRoutes";
@@ -277,6 +278,7 @@ router.use("/api/search", apiLimiter, protect, searchRouter);
 
 // External Auth
 router.use("/api/google", apiLimiter, googleAuthRouter);
+router.use("/api/outlook", apiLimiter, outlookAuthRouter);
 
 // Scheduler
 router.use("/api/scheduler", apiLimiter, schedulerRouter);

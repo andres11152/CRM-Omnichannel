@@ -104,3 +104,18 @@ export const updateMeetingType = async (id: string, data: Partial<Omit<MeetingTy
 export const deleteMeetingType = async (id: string): Promise<void> => {
   await api.delete(`/scheduler/meeting-types/${id}`);
 };
+
+/**
+ * Protected: Get Outlook connection status
+ */
+export const getOutlookStatus = async (): Promise<{ connected: boolean }> => {
+  const res = await api.get("/outlook/status");
+  return res.data.data || res.data;
+};
+
+/**
+ * Protected: Disconnect Outlook Calendar
+ */
+export const disconnectOutlook = async (): Promise<void> => {
+  await api.post("/outlook/disconnect");
+};

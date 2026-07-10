@@ -5,6 +5,7 @@ import { userRepository } from "@/repositories/UserRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { companyRepository } from "@/repositories/CompanyRepository";
 import { GoogleCalendarService } from "./GoogleCalendarService";
+import { OutlookCalendarService } from "./OutlookCalendarService";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
 import { Prisma } from "@prisma/client";
@@ -184,6 +185,13 @@ export class SchedulerService {
       lastSlotEnd
     );
 
+    // 5b. Fetch Outlook Calendar conflicts
+    const outlookConflicts = await OutlookCalendarService.getBusySlots(
+      agent.id,
+      firstSlotStart,
+      lastSlotEnd
+    );
+
     // 6. Filter out busy slots
     const availableSlots = potentialSlots.filter((slot) => {
       // Check local overlap
@@ -212,7 +220,20 @@ export class SchedulerService {
         );
       });
 
-      return !hasGoogleConflict;
+      if (hasGoogleConflict) return false;
+
+      // Check Outlook Calendar overlap
+      const hasOutlookConflict = outlookConflicts.some((busy) => {
+        const busyStart = new Date(busy.start).getTime();
+        const busyEnd = new Date(busy.end).getTime();
+
+        return (
+          (slot.start.getTime() >= busyStart && slot.start.getTime() < busyEnd) ||
+          (slot.end.getTime() > busyStart && slot.end.getTime() <= busyEnd)
+        );
+      });
+
+      return !hasOutlookConflict;
     });
 
     return availableSlots.map((slot) => slot.start.toISOString());
@@ -307,6 +328,27 @@ export class SchedulerService {
         }
       } catch (err) {
         Logger.error(`[Scheduler] Failed to sync booking with Google Calendar for agent ${agent.id}:`, err);
+      }
+    }
+
+    // 5b. Create Event in Outlook Calendar
+    if (agent.outlookCalendarRefreshToken) {
+      try {
+        const outlookEventId = await OutlookCalendarService.createMeetingEvent(agent.id, {
+          subject: activity.subject,
+          description: activity.description || "",
+          dueDate: start,
+          participantIds: [agent.id],
+        });
+
+        if (outlookEventId) {
+          await activityRepository.update({
+            where: { id: activity.id },
+            data: { outlookEventId },
+          });
+        }
+      } catch (err) {
+        Logger.error(`[Scheduler] Failed to sync booking with Outlook Calendar for agent ${agent.id}:`, err);
       }
     }
 

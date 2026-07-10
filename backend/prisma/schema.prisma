@@ -431,6 +431,10 @@ model User {
   googleCalendarToken        String? // Access token
   googleCalendarRefreshToken String? // Refresh token for long-term access
 
+  // Outlook Calendar Integration
+  outlookCalendarToken        String?
+  outlookCalendarRefreshToken String?
+
   // Password Reset
   resetPasswordToken   String?
   resetPasswordExpires DateTime?
@@ -1096,6 +1100,7 @@ model Activity {
   dueDate     DateTime?
 
   googleEventId String? // Store Google Calendar Event ID
+  outlookEventId String? // Store Outlook Calendar Event ID
 
   // Relations (Polymorphic-ish)
   accountId String?

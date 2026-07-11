@@ -14,6 +14,8 @@ import {
   SessionIdParamSchema,
   UpdateSessionSchema,
   RequestPairingCodeSchema,
+  UpdateProfileNameSchema,
+  UpdateProfilePictureSchema,
 } from "@/schemas/whatsappSchema";
 
 const router = Router();
@@ -49,6 +51,16 @@ router.post(
   "/sessions/:sessionId/reconnect",
   validate(SessionIdParamSchema),
   whatsappController.reconnectSession,
+);
+router.patch(
+  "/sessions/:sessionId/profile-name",
+  validate(UpdateProfileNameSchema),
+  whatsappController.updateProfileName,
+);
+router.patch(
+  "/sessions/:sessionId/profile-picture",
+  validate(UpdateProfilePictureSchema),
+  whatsappController.updateProfilePicture,
 );
 
 // [SYNC] CHAT SYNC ROUTES

@@ -7,6 +7,7 @@ import {
   groupContactService,
   AddParticipantParams,
 } from "@/services/GroupContactService";
+import { groupManagementService } from "@/services/GroupManagementService";
 
 /**
  * [AUTH] GROUP CONTACTS CONTROLLER
@@ -201,5 +202,111 @@ export const addAllValidParticipantsToCRM = catchAsync(
       message: `Added ${result.successful} of ${result.total} participants`,
       data: result,
     });
+  },
+);
+
+/**
+ * PATCH /api/conversations/:id/group/participants
+ * Add/remove/promote/demote real WhatsApp group participants (not CRM import).
+ * Body: { phones: string[], action: "add" | "remove" | "promote" | "demote" }
+ * Gated by WA_ENABLE_GROUP_MANAGEMENT — throws a clear error if disabled.
+ */
+export const updateGroupParticipants = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const conversationId = req.params.id;
+    const { phones, action } = req.body as unknown as { phones: string[]; action: "add" | "remove" | "promote" | "demote" };
+
+    const result = await groupManagementService.updateParticipants(companyId, conversationId, phones, action);
+
+    res.status(HTTP_STATUS.OK).json({ status: "success", data: result });
+  },
+);
+
+/**
+ * PATCH /api/conversations/:id/group/subject
+ */
+export const updateGroupSubject = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const conversationId = req.params.id;
+    const { subject } = req.body as unknown as { subject: string };
+
+    await groupManagementService.updateSubject(companyId, conversationId, subject);
+
+    res.status(HTTP_STATUS.OK).json({ status: "success" });
+  },
+);
+
+/**
+ * PATCH /api/conversations/:id/group/description
+ */
+export const updateGroupDescription = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const conversationId = req.params.id;
+    const { description } = req.body as unknown as { description: string };
+
+    await groupManagementService.updateDescription(companyId, conversationId, description);
+
+    res.status(HTTP_STATUS.OK).json({ status: "success" });
+  },
+);
+
+/**
+ * PATCH /api/conversations/:id/group/settings
+ * Body: { setting: "announcement" | "not_announcement" | "locked" | "unlocked" }
+ */
+export const updateGroupSetting = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const conversationId = req.params.id;
+    const { setting } = req.body as unknown as { setting: "announcement" | "not_announcement" | "locked" | "unlocked" };
+
+    await groupManagementService.updateSetting(companyId, conversationId, setting);
+
+    res.status(HTTP_STATUS.OK).json({ status: "success" });
+  },
+);
+
+/**
+ * GET /api/conversations/:id/group/invite-code
+ */
+export const getGroupInviteCode = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const conversationId = req.params.id;
+
+    const inviteLink = await groupManagementService.getInviteCode(companyId, conversationId);
+
+    res.status(HTTP_STATUS.OK).json({ status: "success", data: { inviteLink } });
+  },
+);
+
+/**
+ * POST /api/conversations/:id/group/invite-code/revoke
+ */
+export const revokeGroupInviteCode = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const conversationId = req.params.id;
+
+    const inviteLink = await groupManagementService.revokeInviteCode(companyId, conversationId);
+
+    res.status(HTTP_STATUS.OK).json({ status: "success", data: { inviteLink } });
+  },
+);
+
+/**
+ * POST /api/conversations/:id/group/leave
+ */
+export const leaveGroup = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const conversationId = req.params.id;
+
+    await groupManagementService.leaveGroup(companyId, conversationId);
+
+    res.status(HTTP_STATUS.OK).json({ status: "success" });
   },
 );

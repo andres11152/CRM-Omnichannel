@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { fetchAPI } from "@/services/apiConfig";
-import { 
-  Users, 
-  X, 
-  Search, 
-  UserPlus, 
-  CheckCircle2, 
-  ShieldCheck, 
+import {
+  Users,
+  X,
+  Search,
+  UserPlus,
+  CheckCircle2,
+  ShieldCheck,
   ShieldAlert,
   Info,
   RefreshCcw,
@@ -15,9 +15,15 @@ import {
   CheckSquare,
   Square,
   Download,
-  MinusSquare
+  MinusSquare,
+  UserMinus,
+  ShieldOff,
+  Link2,
+  LogOut,
+  Copy
 } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 
 interface GroupParticipant {
   jid: string;
@@ -276,6 +282,99 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
     }
   };
 
+  // [SEC] Real WhatsApp group mutations — gated server-side by
+  // WA_ENABLE_GROUP_MANAGEMENT (default off). If disabled, these calls fail
+  // with a clear error surfaced via toast, same as any other failed action.
+  const handleRemoveParticipant = async (participant: GroupParticipant) => {
+    if (!participant.phone) {
+      toast.error("No se puede quitar: número no disponible (LID oculto)");
+      return;
+    }
+    try {
+      setProcessing(true);
+      await fetchAPI(`/conversations/${conversationId}/group/participants`, {
+        method: "PATCH",
+        body: JSON.stringify({ phones: [participant.phone], action: "remove" }),
+      });
+      toast.success(`${participant.displayName} fue quitado del grupo`);
+      setData((prev) =>
+        prev
+          ? { ...prev, participants: prev.participants.filter((p) => p.jid !== participant.jid), participantCount: prev.participantCount - 1 }
+          : null,
+      );
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Error al quitar del grupo";
+      toast.error(msg);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleToggleAdmin = async (participant: GroupParticipant) => {
+    if (!participant.phone) {
+      toast.error("No se puede modificar: número no disponible (LID oculto)");
+      return;
+    }
+    const action = participant.isAdmin ? "demote" : "promote";
+    try {
+      setProcessing(true);
+      await fetchAPI(`/conversations/${conversationId}/group/participants`, {
+        method: "PATCH",
+        body: JSON.stringify({ phones: [participant.phone], action }),
+      });
+      toast.success(participant.isAdmin ? `${participant.displayName} ya no es admin` : `${participant.displayName} ahora es admin`);
+      setData((prev) =>
+        prev
+          ? { ...prev, participants: prev.participants.map((p) => (p.jid === participant.jid ? { ...p, isAdmin: !p.isAdmin } : p)) }
+          : null,
+      );
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Error al actualizar el rol";
+      toast.error(msg);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [loadingInvite, setLoadingInvite] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
+  const handleGetInviteLink = async () => {
+    try {
+      setLoadingInvite(true);
+      const res = await fetchAPI<{ data: { inviteLink: string } }>(`/conversations/${conversationId}/group/invite-code`);
+      setInviteLink(res.data.inviteLink);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Error al obtener el enlace de invitación";
+      toast.error(msg);
+    } finally {
+      setLoadingInvite(false);
+    }
+  };
+
+  const handleCopyInviteLink = () => {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    toast.success("Enlace copiado");
+  };
+
+  const handleLeaveGroup = async () => {
+    try {
+      setLeaving(true);
+      await fetchAPI(`/conversations/${conversationId}/group/leave`, { method: "POST" });
+      toast.success("Saliste del grupo");
+      setShowLeaveConfirm(false);
+      onClose();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Error al salir del grupo";
+      toast.error(msg);
+    } finally {
+      setLeaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-full w-96 flex flex-col items-center justify-center p-8 bg-white dark:bg-reply-panel-dark border-l border-gray-200 dark:border-white/5 animate-in fade-in duration-300">
@@ -530,9 +629,9 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Quick Add Button (only if not selected — row click handles selection) */}
-                  {isSelectable && !isSelected && (
-                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Row Actions: CRM import + real WhatsApp group actions */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {isSelectable && !isSelected && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -544,13 +643,68 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
                       >
                         <UserPlus className="w-4 h-4" />
                       </button>
-                    </div>
-                  )}
+                    )}
+                    {!p.isSuperAdmin && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleAdmin(p);
+                          }}
+                          disabled={processing}
+                          className="p-2 bg-gray-50 dark:bg-white/5 text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl transition-all active:scale-95"
+                          title={p.isAdmin ? "Quitar admin" : "Hacer admin"}
+                        >
+                          {p.isAdmin ? <ShieldOff className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveParticipant(p);
+                          }}
+                          disabled={processing}
+                          className="p-2 bg-gray-50 dark:bg-white/5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all active:scale-95"
+                          title="Quitar del grupo"
+                        >
+                          <UserMinus className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
+      </div>
+
+      {/* Group Settings: invite link + leave (real WhatsApp group actions) */}
+      <div className="p-4 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/5 space-y-2">
+        {inviteLink ? (
+          <div className="flex items-center gap-2 p-2 bg-white dark:bg-white/5 rounded-lg border border-gray-100 dark:border-white/10">
+            <Link2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span className="text-[10px] text-gray-600 dark:text-gray-300 truncate flex-1 font-mono">{inviteLink}</span>
+            <button onClick={handleCopyInviteLink} className="p-1 text-gray-400 hover:text-indigo-600 transition-colors" title="Copiar">
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleGetInviteLink}
+            disabled={loadingInvite}
+            className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loadingInvite ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+            Obtener enlace de invitación
+          </button>
+        )}
+        <button
+          onClick={() => setShowLeaveConfirm(true)}
+          className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          Salir del grupo
+        </button>
       </div>
 
       {/* Footer Info */}
@@ -562,6 +716,18 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           Selecciona los contactos que deseas importar. La sincronización automática está {data.syncEnabled ? "activa" : "desactivada"} — solo los contactos importados manualmente se guardan en tu agenda.
         </p>
       </div>
+
+      <ConfirmationModal
+        isOpen={showLeaveConfirm}
+        title="Salir del grupo"
+        message="El número de WhatsApp conectado saldrá de este grupo. Esta acción no se puede deshacer desde aquí — alguien tendría que volver a invitarlo."
+        confirmText="Salir"
+        cancelText="Cancelar"
+        variant="danger"
+        isLoading={leaving}
+        onConfirm={handleLeaveGroup}
+        onCancel={() => setShowLeaveConfirm(false)}
+      />
     </div>
   );
 };

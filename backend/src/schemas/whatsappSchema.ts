@@ -37,6 +37,61 @@ export const RequestPairingCodeSchema = z.object({
 });
 
 /**
+ * PATCH /sessions/:sessionId/profile-name
+ */
+export const UpdateProfileNameSchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(1, "El nombre no puede estar vacío").max(25, "Máximo 25 caracteres"),
+  }),
+});
+
+/**
+ * PATCH /sessions/:sessionId/profile-picture
+ */
+export const UpdateProfilePictureSchema = z.object({
+  body: z.object({
+    imageUrl: z.string().url("URL de imagen inválida"),
+  }),
+});
+
+// ────────────────────────────────────────────────
+// GROUP MANAGEMENT (gated by WA_ENABLE_GROUP_MANAGEMENT server-side)
+// ────────────────────────────────────────────────
+
+export const UpdateGroupParticipantsSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: z.object({
+    phones: z.array(z.string().min(5)).min(1, "At least one phone is required").max(100, "Maximum 100 participants per request"),
+    action: z.enum(["add", "remove", "promote", "demote"]),
+  }),
+});
+
+export const UpdateGroupSubjectSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: z.object({
+    subject: z.string().trim().min(1, "El nombre del grupo no puede estar vacío").max(100, "Máximo 100 caracteres"),
+  }),
+});
+
+export const UpdateGroupDescriptionSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: z.object({
+    description: z.string().trim().max(2048, "Máximo 2048 caracteres"),
+  }),
+});
+
+export const UpdateGroupSettingSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: z.object({
+    setting: z.enum(["announcement", "not_announcement", "locked", "unlocked"]),
+  }),
+});
+
+export const GroupIdParamSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+});
+
+/**
  * PATCH /sessions/:sessionId — update defaultQueue
  */
 export const UpdateSessionSchema = z.object({

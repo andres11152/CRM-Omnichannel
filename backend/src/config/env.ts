@@ -99,6 +99,15 @@ const EnvSchema = z.object({
     .default(false)
     .describe("Full history sync on new pairing"),
 
+  // [SEC] Opt-in kill switch: group mutations (add/remove/promote participants,
+  // subject/description/settings, invite links, leave) touch REAL, live WhatsApp
+  // groups with real people — a bug here has consequences outside this app.
+  // Defaults OFF; enable only after testing against a disposable test group.
+  WA_ENABLE_GROUP_MANAGEMENT: z.coerce
+    .boolean()
+    .default(false)
+    .describe("Enable WhatsApp group mutation actions (add/remove/promote participants, settings, invite links, leave)"),
+
   META_VERIFY_TOKEN: z.string().optional().describe("WhatsApp Meta Webhook verify token"),
 
   // ==================== CORS ====================

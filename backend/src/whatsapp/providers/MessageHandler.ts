@@ -22,6 +22,8 @@ import { PresenceHandler } from "./handlers/PresenceHandler";
 import { MessageRevocationHandler } from "./handlers/MessageRevocationHandler";
 import { MessageReactionHandler } from "./handlers/MessageReactionHandler";
 import { MessageEditHandler } from "./handlers/MessageEditHandler";
+import { GroupManagementHandler } from "./handlers/GroupManagementHandler";
+import { GroupParticipantAction, GroupSettingValue } from "../core/types/whatsapp.types";
 import { InboundOrchestratorService } from "../services/InboundOrchestratorService";
 import { SessionData } from "@/types/whatsapp.types";
 
@@ -50,6 +52,7 @@ export class MessageHandler implements IMessageHandler {
   private revocationHandler: MessageRevocationHandler;
   private reactionHandler: MessageReactionHandler;
   private editHandler: MessageEditHandler;
+  private groupManagementHandler: GroupManagementHandler;
 
   // [BUILD] Background Workers
   private inboundWorker: InboundWorker;
@@ -64,6 +67,7 @@ export class MessageHandler implements IMessageHandler {
 
     // Wire up outbound first (needed by AITriggerService)
     this.outboundHandler = new OutboundMessageHandler(sessionManager);
+    this.groupManagementHandler = new GroupManagementHandler(sessionManager);
 
     // AITriggerService uses outbound methods via delegation
     const aiTrigger = new AITriggerService({
@@ -512,5 +516,46 @@ export class MessageHandler implements IMessageHandler {
     mod: ChatModification,
   ): Promise<void> {
     return this.outboundHandler.modifyChat(to, companyId, mod);
+  }
+
+  async updateOwnProfileName(companyId: string, name: string): Promise<void> {
+    return this.outboundHandler.updateOwnProfileName(companyId, name);
+  }
+
+  async updateOwnProfilePicture(companyId: string, imageUrl: string): Promise<void> {
+    return this.outboundHandler.updateOwnProfilePicture(companyId, imageUrl);
+  }
+
+  async updateGroupParticipants(
+    companyId: string,
+    groupId: string,
+    participantPhones: string[],
+    action: GroupParticipantAction,
+  ): Promise<{ jid: string; status: string }[]> {
+    return this.groupManagementHandler.updateParticipants(companyId, groupId, participantPhones, action);
+  }
+
+  async updateGroupSubject(companyId: string, groupId: string, subject: string): Promise<void> {
+    return this.groupManagementHandler.updateSubject(companyId, groupId, subject);
+  }
+
+  async updateGroupDescription(companyId: string, groupId: string, description: string): Promise<void> {
+    return this.groupManagementHandler.updateDescription(companyId, groupId, description);
+  }
+
+  async updateGroupSetting(companyId: string, groupId: string, setting: GroupSettingValue): Promise<void> {
+    return this.groupManagementHandler.updateSetting(companyId, groupId, setting);
+  }
+
+  async getGroupInviteCode(companyId: string, groupId: string): Promise<string> {
+    return this.groupManagementHandler.getInviteCode(companyId, groupId);
+  }
+
+  async revokeGroupInviteCode(companyId: string, groupId: string): Promise<string> {
+    return this.groupManagementHandler.revokeInviteCode(companyId, groupId);
+  }
+
+  async leaveGroup(companyId: string, groupId: string): Promise<void> {
+    return this.groupManagementHandler.leaveGroup(companyId, groupId);
   }
 }

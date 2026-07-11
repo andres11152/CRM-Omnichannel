@@ -266,6 +266,59 @@ export class WhatsAppMessaging {
   }
 
   // ────────────────────────────────────────────────
+  // OWN PROFILE (name / picture)
+  // ────────────────────────────────────────────────
+
+  async updateOwnProfileName(companyId: string, name: string): Promise<void> {
+    return this.messageHandler.updateOwnProfileName(companyId, name);
+  }
+
+  async updateOwnProfilePicture(companyId: string, imageUrl: string): Promise<void> {
+    return this.messageHandler.updateOwnProfilePicture(companyId, imageUrl);
+  }
+
+  // ────────────────────────────────────────────────
+  // GROUP MANAGEMENT (gated behind WA_ENABLE_GROUP_MANAGEMENT)
+  // ────────────────────────────────────────────────
+
+  async updateGroupParticipants(
+    companyId: string,
+    groupId: string,
+    participantPhones: string[],
+    action: "add" | "remove" | "promote" | "demote",
+  ): Promise<{ jid: string; status: string }[]> {
+    return this.messageHandler.updateGroupParticipants(companyId, groupId, participantPhones, action);
+  }
+
+  async updateGroupSubject(companyId: string, groupId: string, subject: string): Promise<void> {
+    return this.messageHandler.updateGroupSubject(companyId, groupId, subject);
+  }
+
+  async updateGroupDescription(companyId: string, groupId: string, description: string): Promise<void> {
+    return this.messageHandler.updateGroupDescription(companyId, groupId, description);
+  }
+
+  async updateGroupSetting(
+    companyId: string,
+    groupId: string,
+    setting: "announcement" | "not_announcement" | "locked" | "unlocked",
+  ): Promise<void> {
+    return this.messageHandler.updateGroupSetting(companyId, groupId, setting);
+  }
+
+  async getGroupInviteCode(companyId: string, groupId: string): Promise<string> {
+    return this.messageHandler.getGroupInviteCode(companyId, groupId);
+  }
+
+  async revokeGroupInviteCode(companyId: string, groupId: string): Promise<string> {
+    return this.messageHandler.revokeGroupInviteCode(companyId, groupId);
+  }
+
+  async leaveGroup(companyId: string, groupId: string): Promise<void> {
+    return this.messageHandler.leaveGroup(companyId, groupId);
+  }
+
+  // ────────────────────────────────────────────────
   // SEND TEMPLATE (Enhanced with Media Header)
   // ────────────────────────────────────────────────
 

@@ -21,6 +21,13 @@ import {
   addParticipantToCRM,
   addBulkParticipantsToCRM,
   addAllValidParticipantsToCRM,
+  updateGroupParticipants,
+  updateGroupSubject,
+  updateGroupDescription,
+  updateGroupSetting,
+  getGroupInviteCode,
+  revokeGroupInviteCode,
+  leaveGroup,
 } from "../controllers/groupContactController";
 import { protect } from "../middleware/authMiddleware";
 import { validate } from "../middleware/validationMiddleware";
@@ -42,6 +49,11 @@ import {
   AddParticipantToCRMSchema,
   AddBulkParticipantsSchema,
   ConversationIdParamSchema,
+  UpdateGroupParticipantsSchema,
+  UpdateGroupSubjectSchema,
+  UpdateGroupDescriptionSchema,
+  UpdateGroupSettingSchema,
+  GroupIdParamSchema,
 } from "../schemas/whatsappSchema";
 
 const router = express.Router();
@@ -67,6 +79,30 @@ router
 router
   .route("/:id/participants/add-all")
   .post(validate(GetGroupParticipantsSchema), addAllValidParticipantsToCRM);
+
+// [SEC] Real WhatsApp group mutations (not CRM import) — gated server-side
+// by WA_ENABLE_GROUP_MANAGEMENT (default off, see GroupManagementHandler.ts)
+router
+  .route("/:id/group/participants")
+  .patch(validate(UpdateGroupParticipantsSchema), updateGroupParticipants);
+router
+  .route("/:id/group/subject")
+  .patch(validate(UpdateGroupSubjectSchema), updateGroupSubject);
+router
+  .route("/:id/group/description")
+  .patch(validate(UpdateGroupDescriptionSchema), updateGroupDescription);
+router
+  .route("/:id/group/settings")
+  .patch(validate(UpdateGroupSettingSchema), updateGroupSetting);
+router
+  .route("/:id/group/invite-code")
+  .get(validate(GroupIdParamSchema), getGroupInviteCode);
+router
+  .route("/:id/group/invite-code/revoke")
+  .post(validate(GroupIdParamSchema), revokeGroupInviteCode);
+router
+  .route("/:id/group/leave")
+  .post(validate(GroupIdParamSchema), leaveGroup);
 
 router.route("/:id").get(validate(ConversationIdParamSchema), getConversation);
 router

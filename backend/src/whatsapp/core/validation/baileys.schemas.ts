@@ -119,6 +119,36 @@ export const PresenceUpdateSchema = z
 export type ValidatedPresenceUpdate = z.infer<typeof PresenceUpdateSchema>;
 
 // ────────────────────────────────────────────────
+// CALL EVENT (call)
+// ────────────────────────────────────────────────
+
+export const CallEventSchema = z
+  .object({
+    chatId: z.string().min(1, "Chat ID is required"),
+    from: z.string().min(1, "From JID is required"),
+    id: z.string().min(1, "Call ID is required"),
+    status: z.enum([
+      "offer",
+      "ringing",
+      "preaccept",
+      "transport",
+      "relaylatency",
+      "timeout",
+      "reject",
+      "accept",
+      "terminate",
+    ]),
+    isGroup: z.boolean().optional(),
+    isVideo: z.boolean().optional(),
+    offline: z.boolean().optional(),
+  })
+  .passthrough();
+
+export const CallEventBatchSchema = z.array(CallEventSchema).min(1);
+
+export type ValidatedCallEvent = z.infer<typeof CallEventSchema>;
+
+// ────────────────────────────────────────────────
 // HISTORY SYNC (messaging-history.set)
 // ────────────────────────────────────────────────
 

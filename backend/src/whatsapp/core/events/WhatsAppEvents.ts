@@ -16,6 +16,7 @@ export enum WhatsAppEventType {
   CONTACT_UPDATED = "contact.updated",
   RATE_LIMIT_EXCEEDED = "rate_limit.exceeded",
   MESSAGE_EDITED = "message.edited",
+  CALL_RECEIVED = "call.received", // Incoming WhatsApp call (auto-rejected — see SessionEventBinder)
 }
 
 export interface WhatsAppEventData {
@@ -53,6 +54,12 @@ export interface WhatsAppEventData {
   [WhatsAppEventType.MESSAGE_EDITED]: {
     originalMessageId: string;
     editedMessage: import("@whiskeysockets/baileys").proto.IMessage;
+  };
+  [WhatsAppEventType.CALL_RECEIVED]: {
+    callId: string;
+    from: string;
+    isVideo: boolean;
+    isGroup: boolean;
   };
 }
 

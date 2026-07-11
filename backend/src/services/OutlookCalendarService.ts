@@ -35,7 +35,7 @@ export class OutlookCalendarService {
   /**
    * Build consent URL
    */
-  static getAuthUrl(userId: string): string {
+  static getAuthUrl(state: string): string {
     const scopes = ["offline_access", "User.Read", "Calendars.ReadWrite"];
     const params = new URLSearchParams({
       client_id: this.clientId,
@@ -43,7 +43,7 @@ export class OutlookCalendarService {
       redirect_uri: this.redirectUri,
       response_mode: "query",
       scope: scopes.join(" "),
-      state: userId,
+      state,
     });
     return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
   }

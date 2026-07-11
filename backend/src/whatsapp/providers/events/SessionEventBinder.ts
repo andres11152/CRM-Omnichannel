@@ -31,6 +31,7 @@ import {
   MessageUpdateSchema,
   PresenceUpdateSchema,
   HistorySyncSchema,
+  CallEventBatchSchema,
   validateBaileysEvent,
 } from "../../core/validation/baileys.schemas";
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
@@ -715,6 +716,32 @@ export function bindSessionEvents(
         type: WhatsAppEventType.PRESENCE_UPDATE,
         sessionId, companyId, timestamp: new Date(),
         data: validated as WhatsAppEventData[WhatsAppEventType.PRESENCE_UPDATE],
+      });
+    }
+  });
+
+  // Incoming WhatsApp calls: this CRM's WhatsApp number is a text-only agent
+  // line, not staffed to answer calls — leaving them ringing indefinitely
+  // ties up the connection and confuses callers. Auto-reject on the initial
+  // "offer" only (later statuses like "ringing"/"timeout" for the same call
+  // would otherwise trigger redundant/invalid reject attempts).
+  sock.ev.on("call", (rawEvents: unknown) => {
+    const validated = validateBaileysEvent(CallEventBatchSchema, rawEvents, "call", { sessionId, companyId });
+    if (!validated) return;
+
+    for (const call of validated) {
+      if (call.status !== "offer") continue;
+
+      logger.info({ sessionId, companyId, callId: call.id }, `[Call] Incoming ${call.isVideo ? "video" : "voice"} call from ${call.from} — auto-rejecting`);
+
+      sock.rejectCall(call.id, call.from).catch((err) => {
+        logger.warn({ sessionId, companyId, error: err instanceof Error ? err.message : String(err) }, `[Call] Failed to reject call ${call.id} from ${call.from}`);
+      });
+
+      eventBus.publish({
+        type: WhatsAppEventType.CALL_RECEIVED,
+        sessionId, companyId, timestamp: new Date(),
+        data: { callId: call.id, from: call.from, isVideo: !!call.isVideo, isGroup: !!call.isGroup },
       });
     }
   });

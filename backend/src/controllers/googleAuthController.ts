@@ -97,10 +97,14 @@ export const googleAuthController = {
       stateData = { action: "login", companyName, slug };
     }
 
+    const state = jwt.sign(stateData, STATE_SECRET, {
+      expiresIn: "10m",
+    });
+
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: "offline",
       scope: SCOPES,
-      state: JSON.stringify(stateData),
+      state,
       prompt: "consent",
     });
 
@@ -118,18 +122,8 @@ export const googleAuthController = {
     }
 
     try {
-      // El flujo de calendario usa un `state` firmado (JWT); el de login usa
-      // JSON plano. Intentamos verificar la firma primero.
-      let stateData: StateData;
-      try {
-        stateData = jwt.verify(state, STATE_SECRET) as StateData;
-      } catch {
-        try {
-          stateData = JSON.parse(state);
-        } catch {
-          return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
-        }
-      }
+      // Exigir estrictamente que el state sea un JWT firmado válido
+      const stateData = jwt.verify(state, STATE_SECRET) as StateData;
 
       const { tokens } = await oauth2Client.getToken(code);
       oauth2Client.setCredentials(tokens);

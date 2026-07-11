@@ -2,7 +2,7 @@ import { Logger } from "@/utils/logger";
 import { Response } from "express";
 import type { ParamsDictionary } from "express-serve-static-core";
 // ️ REFACTOR: Unified Service (Split Brain Fix)
-import { whatsappService } from "@/whatsapp";
+import { whatsappService, whatsappMessagingService } from "@/whatsapp";
 import { planLimitsService } from "@/services/PlanLimitsService";
 import { catchAsync } from "@/utils/catchAsync";
 import { AuthenticatedRequest } from "@/types/types";
@@ -171,5 +171,27 @@ export const requestPairingCode = catchAsync(
       status: "success",
       data: { sessionId, code },
     });
+  },
+);
+
+export const updateProfileName = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const { name } = req.body;
+
+    await whatsappMessagingService.updateOwnProfileName(companyId, name);
+
+    res.status(200).json({ status: "success" });
+  },
+);
+
+export const updateProfilePicture = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const companyId = req.companyId!;
+    const { imageUrl } = req.body;
+
+    await whatsappMessagingService.updateOwnProfilePicture(companyId, imageUrl);
+
+    res.status(200).json({ status: "success" });
   },
 );

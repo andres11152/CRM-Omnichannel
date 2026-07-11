@@ -40,9 +40,10 @@ import {
   verifyMetaWebhook as verifyGlobalMeta,
   handleMetaWebhookEvent,
 } from "@/controllers/metaWebhookController";
+import { verifyMetaWebhookSignature } from "@/middleware/webhookVerifyMiddleware";
 
 router.get("/meta", verifyGlobalMeta);
-router.post("/meta", handleMetaWebhookEvent);
+router.post("/meta", verifyMetaWebhookSignature, handleMetaWebhookEvent);
 
 // Global multi-tenant Instagram DM webhooks
 import {
@@ -51,7 +52,7 @@ import {
 } from "@/controllers/instagramWebhookController";
 
 router.get("/instagram", verifyInstagramWebhook);
-router.post("/instagram", handleInstagramWebhookEvent);
+router.post("/instagram", verifyMetaWebhookSignature, handleInstagramWebhookEvent);
 
 // ── Protected management endpoints ──────────────────────────────────────────
 

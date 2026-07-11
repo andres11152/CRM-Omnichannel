@@ -4,6 +4,7 @@ import {
   MediaPayload,
 } from "../types/whatsapp.types";
 import { proto, ChatModification } from "@whiskeysockets/baileys";
+import { GroupParticipantAction, GroupSettingValue } from "../types/whatsapp.types";
 
 export interface IMessageHandler {
   handleIncoming(
@@ -55,4 +56,18 @@ export interface IMessageHandler {
     companyId: string,
     mod: ChatModification,
   ): Promise<void>;
+  updateOwnProfileName(companyId: string, name: string): Promise<void>;
+  updateOwnProfilePicture(companyId: string, imageUrl: string): Promise<void>;
+  updateGroupParticipants(
+    companyId: string,
+    groupId: string,
+    participantPhones: string[],
+    action: GroupParticipantAction,
+  ): Promise<{ jid: string; status: string }[]>;
+  updateGroupSubject(companyId: string, groupId: string, subject: string): Promise<void>;
+  updateGroupDescription(companyId: string, groupId: string, description: string): Promise<void>;
+  updateGroupSetting(companyId: string, groupId: string, setting: GroupSettingValue): Promise<void>;
+  getGroupInviteCode(companyId: string, groupId: string): Promise<string>;
+  revokeGroupInviteCode(companyId: string, groupId: string): Promise<string>;
+  leaveGroup(companyId: string, groupId: string): Promise<void>;
 }

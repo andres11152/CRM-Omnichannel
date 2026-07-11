@@ -48,6 +48,9 @@ export interface MediaPayload {
   };
 }
 
+export type GroupParticipantAction = "add" | "remove" | "promote" | "demote";
+export type GroupSettingValue = "announcement" | "not_announcement" | "locked" | "unlocked";
+
 export interface SessionStatus {
   sessionId: string;
   companyId?: string;

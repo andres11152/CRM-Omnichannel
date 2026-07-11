@@ -451,6 +451,54 @@ export class OutboundMessageHandler {
     }
   }
 
+  async updateOwnProfileName(companyId: string, name: string): Promise<void> {
+    const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+    const sock = activeSession.socket;
+    if (!sock) {
+      throw new Error(`Session ${activeSession.sessionId} has no active socket`);
+    }
+
+    try {
+      await sock.updateProfileName(name);
+      Logger.info(`[Profile] Updated WhatsApp profile name for company ${companyId}`);
+    } catch (error) {
+      Logger.error(
+        `[Profile] Failed to update profile name for company ${companyId}: ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  async updateOwnProfilePicture(companyId: string, imageUrl: string): Promise<void> {
+    const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+    const sock = activeSession.socket;
+    if (!sock) {
+      throw new Error(`Session ${activeSession.sessionId} has no active socket`);
+    }
+    const ownJid = sock.user?.id;
+    if (!ownJid) {
+      throw new Error(`Session ${activeSession.sessionId} has no resolved own JID yet`);
+    }
+
+    try {
+      await sock.updateProfilePicture(ownJid, { url: imageUrl });
+      Logger.info(`[Profile] Updated WhatsApp profile picture for company ${companyId}`);
+    } catch (error) {
+      Logger.error(
+        `[Profile] Failed to update profile picture for company ${companyId}: ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
   private injectJidIntoLastMessages(mod: ChatModification, jid: string): ChatModification {
     if ("lastMessages" in mod && Array.isArray(mod.lastMessages)) {
       return {

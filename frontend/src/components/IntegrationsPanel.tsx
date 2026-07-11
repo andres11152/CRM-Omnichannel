@@ -41,6 +41,7 @@ export const IntegrationsPanel: React.FC = () => {
   );
   const [queues, setQueues] = useState<Queue[]>([]);
   const [reconnectingIds, setReconnectingIds] = useState<Set<string>>(new Set());
+  const [profileNameDrafts, setProfileNameDrafts] = useState<Record<string, string>>({});
 
   // Review mode checking to hide Baileys integration from Meta auditors (supporting Search, Hash, and LocalStorage)
   const [reviewModeActive, setReviewModeActive] = useState<boolean>(() => {
@@ -622,6 +623,29 @@ export const IntegrationsPanel: React.FC = () => {
     }
   };
 
+  const handleUpdateProfileName = async (sessionId: string, name: string) => {
+    if (!name.trim()) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/whatsapp/sessions/${sessionId}/profile-name`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Error al actualizar el nombre de perfil");
+      }
+      toast.success("Nombre de perfil de WhatsApp actualizado");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error al actualizar el nombre de perfil";
+      toast.error(msg);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col bg-reply-bg dark:bg-reply-bg-dark transition-colors duration-200">
       <ModuleHeader
@@ -846,6 +870,33 @@ export const IntegrationsPanel: React.FC = () => {
                         ))}
                       </select>
                     </div>
+
+                    {session.status === "CONNECTED" && (
+                      <div className="mb-4">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                          Nombre de Perfil de WhatsApp
+                        </label>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            maxLength={25}
+                            placeholder="Ej: Soporte Sentry CRM"
+                            value={profileNameDrafts[session.sessionId] ?? ""}
+                            onChange={(e) =>
+                              setProfileNameDrafts((prev) => ({ ...prev, [session.sessionId]: e.target.value }))
+                            }
+                            className="flex-1 text-xs p-2 rounded-lg border border-gray-200 dark:border-reply-border-dark bg-reply-bg dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                          />
+                          <button
+                            onClick={() => handleUpdateProfileName(session.sessionId, profileNameDrafts[session.sessionId] || "")}
+                            disabled={!profileNameDrafts[session.sessionId]?.trim()}
+                            className="px-3 py-2 text-xs font-semibold text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors border border-green-100 dark:border-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Guardar
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-reply-border-dark">
                       <button

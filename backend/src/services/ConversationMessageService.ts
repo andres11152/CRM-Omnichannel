@@ -3,7 +3,7 @@ import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { gateway } from "@/gateways/socketGateway";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
-import { prisma } from "@/config/database";
+
 import {
   Channel,
   Message,
@@ -20,6 +20,7 @@ import {
 import { messageRepository } from "@/repositories/MessageRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { reactionRepository } from "@/repositories/ReactionRepository";
+import { ticketRepository } from "@/repositories/TicketRepository";
 import { ticketSyncService } from "./TicketSyncService";
 
 // Instagram
@@ -141,9 +142,9 @@ export class ConversationMessageService {
         const { SocketEventEmitter } = await import("./SocketEventEmitter");
         const socketEmitter = new SocketEventEmitter(gateway);
         
-        const ticket = await prisma.ticket.findFirst({
-          where: { conversationId: resolvedConv.id, companyId, status: { in: ["OPEN", "IN_PROGRESS"] } }
-        });
+        const ticket = await ticketRepository.findFirst({
+          where: { conversationId: resolvedConv.id, status: { in: ["OPEN", "IN_PROGRESS"] } }
+        }, companyId);
         
         socketEmitter.emitMessageSent(savedMessage, convWithRels, ticket?.id || resolvedConv.id);
       }

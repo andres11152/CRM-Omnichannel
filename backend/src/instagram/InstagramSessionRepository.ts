@@ -1,6 +1,7 @@
 import { prisma } from "@/config/database";
 import { InstagramSession, Prisma } from "@prisma/client";
 import { runAsSystem } from "@/context/requestContext";
+import { AppError } from "@/utils/AppError";
 
 export class InstagramSessionRepository {
   async findByCompany(companyId: string): Promise<InstagramSession[]> {
@@ -17,7 +18,14 @@ export class InstagramSessionRepository {
   }
 
   async create(data: Prisma.InstagramSessionCreateInput): Promise<InstagramSession> {
-    return prisma.instagramSession.create({ data });
+    try {
+      return await prisma.instagramSession.create({ data });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new AppError("Esta cuenta de Instagram ya está conectada a otra empresa o sesión.", 409);
+      }
+      throw error;
+    }
   }
 
   async update(

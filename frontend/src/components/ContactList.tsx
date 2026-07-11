@@ -17,6 +17,9 @@ import {
   Minus,
   MessageSquare,
   X,
+  Pin,
+  BellOff,
+  Archive,
 } from "lucide-react";
 import { ContactTimelineView } from "./crm/ContactTimelineView";
 import { Avatar } from "@/components/common/Avatar";
@@ -226,6 +229,9 @@ interface Props {
   // New Props for Menu
   filterUnread?: boolean;
   onToggleFilterUnread?: () => void;
+  showArchived?: boolean;
+  archivedCount?: number;
+  onToggleShowArchived?: () => void;
   sortOrder?: "date_desc" | "date_asc";
   onChangeSortOrder?: (order: "date_desc" | "date_asc") => void;
   viewMode?: "compact" | "comfortable";
@@ -245,6 +251,9 @@ const ContactListComponent: React.FC<Props> = ({
   allTags = [],
   filterUnread = false,
   onToggleFilterUnread,
+  showArchived = false,
+  archivedCount = 0,
+  onToggleShowArchived,
   sortOrder = "date_desc",
   onChangeSortOrder,
   viewMode = "comfortable",
@@ -591,8 +600,45 @@ const ContactListComponent: React.FC<Props> = ({
           </div>
         </div>
 
+        {/* Archived folder toggle (WhatsApp-style) — shown when there are
+            archived chats, or while viewing the archive so you can exit it. */}
+        {onToggleShowArchived && (showArchived || archivedCount > 0) && (
+          <button
+            onClick={onToggleShowArchived}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 dark:border-reply-border-dark transition-colors ${
+              showArchived
+                ? "bg-green-50 dark:bg-green-900/15 text-green-700 dark:text-green-400"
+                : "hover:bg-gray-50 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300"
+            }`}
+          >
+            <Archive className={`w-4 h-4 shrink-0 ${showArchived ? "text-green-600 dark:text-green-400" : "text-gray-400"}`} />
+            <span className="text-sm font-semibold flex-1 text-left">
+              {showArchived
+                ? t("contact_list.back_to_chats", "Volver a los chats")
+                : t("contact_list.archived", "Archivados")}
+            </span>
+            {!showArchived && archivedCount > 0 && (
+              <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500">
+                {archivedCount}
+              </span>
+            )}
+          </button>
+        )}
+
         {/* List */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
+          {/* Archive empty state */}
+          {showArchived && filteredContacts.length === 0 && filteredGroups.length === 0 && !hasNoResults && (
+            <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+                <Archive className="w-5 h-5 text-gray-400" />
+              </div>
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                {t("contact_list.no_archived", "No hay chats archivados")}
+              </p>
+            </div>
+          )}
+
           {/* Empty search state */}
           {hasNoResults && (
             <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
@@ -713,6 +759,18 @@ const ContactListComponent: React.FC<Props> = ({
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {contact.mutedUntil && (
+                        <BellOff
+                          className="w-3 h-3 text-gray-400 dark:text-gray-500"
+                          aria-label={t("contact_list.muted", "Silenciado")}
+                        />
+                      )}
+                      {contact.isPinned && (
+                        <Pin
+                          className="w-3 h-3 text-gray-500 dark:text-gray-400 fill-current"
+                          aria-label={t("contact_list.pinned", "Fijado")}
+                        />
+                      )}
                       { (contact.unreadCount ?? 0) > 0 && (
                         <span className="bg-green-500 dark:bg-green-600 text-white text-[9px] font-bold px-1.5 min-w-[1rem] h-4 rounded-full flex items-center justify-center shadow-sm">
                           {contact.unreadCount}

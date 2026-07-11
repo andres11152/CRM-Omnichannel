@@ -64,15 +64,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   // (WhatsApp/Baileys restriction — mirrored here so the buttons only appear when valid).
   const canEditOrDelete = isAgent && !isSystem && !isRevoked;
   const canStar = !isSystem && !isRevoked && !!onStar;
-  // Static literal class names (not runtime-interpolated) so Tailwind's JIT
-  // content scanner picks them up — see overlay button count per branch below.
-  const overlayOffsetClass = isAgent
-    ? canEditOrDelete
-      ? "-left-36"
-      : "-left-14"
-    : canStar
-      ? "-right-20"
-      : "-right-14";
   const isWhisper = !!(message.metadata as Record<string, unknown> | null)?.isWhisper;
   const [showPicker, setShowPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
@@ -207,57 +198,62 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           isAgent ? "items-end" : "items-start"
         } relative`}
       >
-        {/* Action Overlay (Floating) */}
+        {/* Action Overlay — single compact pill floating just above the bubble's
+            top edge (Slack/Telegram pattern). Anchored to the message's own side
+            so it never overlaps the bubble text, and scales cleanly regardless of
+            how many actions are visible. */}
         {!isSystem && !isEditing && (
           <div
-            className={`absolute top-0 ${overlayOffsetClass} hidden group-hover/row:flex items-center gap-1 z-20 transition-all opacity-0 group-hover/row:opacity-100 p-1 animate-in slide-in-from-${isAgent ? 'right' : 'left'}-2 duration-200`}
+            className={`absolute -top-3.5 ${isAgent ? "right-1" : "left-1"} hidden group-hover/row:flex items-center gap-0.5 z-20 opacity-0 group-hover/row:opacity-100 transition-all duration-150 animate-in fade-in slide-in-from-bottom-1 bg-white dark:bg-[#233138] rounded-full shadow-md border border-gray-100 dark:border-white/10 p-0.5`}
           >
+            {canStar && (
+              <button
+                onClick={() => onStar && onStar(message.id, !isStarred)}
+                className={`p-1.5 rounded-full transition-colors active:scale-90 ${
+                  isStarred
+                    ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/20"
+                    : "text-gray-400 hover:text-amber-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-amber-400 dark:hover:bg-white/10"
+                }`}
+                title={isStarred ? "Quitar destacado" : "Destacar mensaje"}
+              >
+                <Star className={`w-3.5 h-3.5 ${isStarred ? "fill-amber-500" : ""}`} />
+              </button>
+            )}
+            <button
+              onClick={() => setShowPicker(!showPicker)}
+              className="p-1.5 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-white/10 transition-colors active:scale-90"
+              title="Reaccionar"
+            >
+              <Smile className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onReply && onReply(message)}
+              className="p-1.5 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-white/10 transition-colors active:scale-90"
+              title="Responder"
+            >
+              <Reply className="w-3.5 h-3.5" />
+            </button>
             {canEditOrDelete && onEdit && (
               <button
                 onClick={() => {
                   setEditValue(message.content);
                   setIsEditing(true);
                 }}
-                className="p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-indigo-50 dark:hover:bg-indigo-500/20 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90"
+                className="p-1.5 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-white/10 transition-colors active:scale-90"
                 title="Editar mensaje"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="w-3.5 h-3.5" />
               </button>
             )}
             {canEditOrDelete && onDelete && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-red-50 dark:hover:bg-red-500/20 text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90"
+                className="p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-red-500/20 transition-colors active:scale-90"
                 title="Eliminar para todos"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
-            {canStar && (
-              <button
-                onClick={() => onStar && onStar(message.id, !isStarred)}
-                className={`p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-amber-50 dark:hover:bg-amber-500/20 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90 ${
-                  isStarred ? "text-amber-500" : "text-gray-400 hover:text-amber-500 dark:text-gray-500 dark:hover:text-amber-400"
-                }`}
-                title={isStarred ? "Quitar destacado" : "Destacar mensaje"}
-              >
-                <Star className={`w-4 h-4 ${isStarred ? "fill-amber-500" : ""}`} />
-              </button>
-            )}
-            <button
-              onClick={() => setShowPicker(!showPicker)}
-              className="p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-indigo-50 dark:hover:bg-indigo-500/20 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90"
-              title="Reaccionar"
-            >
-              <Smile className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onReply && onReply(message)}
-              className="p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-indigo-50 dark:hover:bg-indigo-500/20 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90"
-              title="Responder"
-            >
-              <Reply className="w-4 h-4" />
-            </button>
           </div>
         )}
 

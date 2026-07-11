@@ -233,6 +233,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
   // ── Filter State ──
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [filterUnread, setFilterUnread] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>("date_desc");
   const [viewMode, setViewMode] = useState<ViewMode>("comfortable");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -903,6 +904,11 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
       }
     }
 
+    // Archived folder: when the "Archivados" toggle is on, show ONLY archived
+    // chats; otherwise hide archived chats from every normal view (they live in
+    // the archive folder, mirroring WhatsApp).
+    result = result.filter((t) => (showArchived ? t.isArchived : !t.isArchived));
+
     // Apply filters
     if (filterUnread) {
       result = result.filter((t) => t.unreadCount > 0);
@@ -914,8 +920,10 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
       });
     }
 
-    // Sort (create new array to avoid mutation)
+    // Sort: pinned chats always float to the top (WhatsApp behavior), then by
+    // the selected date order within each group.
     return [...result].sort((a, b) => {
+      if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
       const dateA = new Date(a.lastMessageAt).getTime();
       const dateB = new Date(b.lastMessageAt).getTime();
       if (isNaN(dateA)) return 1;
@@ -924,8 +932,17 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
     });
   }, [
     activeTab, myTickets, queueTickets, curatedTickets, tickets,
-    isAdminRole, currentUserId, filterUnread, selectedTags, sortOrder,
+    isAdminRole, currentUserId, filterUnread, showArchived, selectedTags, sortOrder,
   ]);
+
+  // Count of archived, still-active chats — badge for the "Archivados" folder toggle.
+  const archivedCount = useMemo(
+    () =>
+      curatedTickets.filter(
+        (t) => t.isArchived && t.status !== "CLOSED" && t.status !== "RESOLVED",
+      ).length,
+    [curatedTickets],
+  );
 
   // Convert to contacts (memoized)
   const contacts = useMemo(
@@ -946,14 +963,17 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         (t) =>
           (t.isGroup || t.contact?.isGroup) &&
           t.status !== "CLOSED" &&
-          t.status !== "RESOLVED",
+          t.status !== "RESOLVED" &&
+          // Respect the archive folder: hide archived groups from the normal
+          // view and show only archived ones inside the folder.
+          (showArchived ? t.isArchived : !t.isArchived),
       );
       groups = allActiveGroupTickets.map(ticketToContact);
     } else {
       groups = contacts.filter((c) => c.isGroup);
     }
     return { directContacts: direct, groupContacts: groups };
-  }, [activeTab, contacts, isAdminRole, curatedTickets]);
+  }, [activeTab, contacts, isAdminRole, curatedTickets, showArchived]);
 
   // Active ticket/contact resolution (memoized)
   const activeTicket = useMemo(
@@ -1034,6 +1054,8 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
     // Filter state
     allTags,
     filterUnread,
+    showArchived,
+    archivedCount,
     sortOrder,
     viewMode,
     selectedTags,
@@ -1057,6 +1079,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
     setIsNewChatModalOpen,
     setIsTransferModalOpen,
     setFilterUnread,
+    setShowArchived,
     setSortOrder,
     setViewMode,
 

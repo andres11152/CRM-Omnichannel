@@ -781,7 +781,12 @@
     "queue": "Cola",
     "work_groups": "Grupos de Trabajo",
     "loading": "Cargando tickets...",
-    "no_contacts": "No se encontraron contactos"
+    "no_contacts": "No se encontraron contactos",
+    "pinned": "Fijado",
+    "muted": "Silenciado",
+    "archived": "Archivados",
+    "back_to_chats": "Volver a los chats",
+    "no_archived": "No hay chats archivados"
   },
   "chat": {
     "priority_updated": "Prioridad actualizada a ",

@@ -115,6 +115,11 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
               onToggleFilterUnread={() =>
                 workspace.setFilterUnread(!workspace.filterUnread)
               }
+              showArchived={workspace.showArchived}
+              archivedCount={workspace.archivedCount}
+              onToggleShowArchived={() =>
+                workspace.setShowArchived(!workspace.showArchived)
+              }
               sortOrder={workspace.sortOrder}
               onChangeSortOrder={workspace.setSortOrder}
               viewMode={workspace.viewMode}

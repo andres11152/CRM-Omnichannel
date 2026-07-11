@@ -781,7 +781,12 @@
     "queue": "Queue",
     "work_groups": "Work Groups",
     "loading": "Loading tickets...",
-    "no_contacts": "No contacts found"
+    "no_contacts": "No contacts found",
+    "pinned": "Pinned",
+    "muted": "Muted",
+    "archived": "Archived",
+    "back_to_chats": "Back to chats",
+    "no_archived": "No archived chats"
   },
   "chat": {
     "priority_updated": "Priority updated to ",

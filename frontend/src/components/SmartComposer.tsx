@@ -142,20 +142,22 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
   return (
     <div className="flex flex-col w-full animate-in fade-in duration-300">
       
-      {/* 1. TOP ACTIONS (Quick Replies, AI, etc.) */}
-      <div className="flex items-center gap-2 px-1 mb-2">
+      {/* 1. TOP ACTIONS (Quick Replies, AI, etc.) — single-line row that scrolls
+          horizontally on narrow screens instead of wrapping (which made the
+          pills grow to 2 lines and the whole bar too tall on mobile). */}
+      <div className="flex items-center gap-1.5 px-1 mb-2 overflow-x-auto no-scrollbar">
         <button
           onClick={onQuickRepliesClick}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50/50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all border border-indigo-100 dark:border-indigo-500/20"
+          className="shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50/50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all border border-indigo-100 dark:border-indigo-500/20"
         >
-          <Zap className="w-3.5 h-3.5" />
+          <Zap className="w-3 h-3" />
           <span>{t("composer.quick_replies", "RESPUESTAS RÁPIDAS")}</span>
         </button>
 
         <button
           type="button"
           onClick={onWhisperToggle}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all border ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all border ${
             isWhisperMode
               ? "bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/10 hover:bg-amber-600"
               : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -164,13 +166,13 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
           <span>🤫 {isWhisperMode ? "MODO SUSURRO" : "SUSURRAR"}</span>
         </button>
 
-        <div className="relative group/ai">
+        <div className="relative group/ai shrink-0">
           <button
             onClick={() => setShowAIMenu(!showAIMenu)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-[11px] font-bold border border-transparent shadow-md shadow-indigo-500/10 transition-all hover:scale-[1.02] active:scale-95"
+            className="shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-[10px] font-bold border border-transparent shadow-md shadow-indigo-500/10 transition-all hover:scale-[1.02] active:scale-95"
             title={t("composer.ai_copilot", "AI COPILOT")}
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-3 h-3" />
             <span>{t("composer.ai_copilot", "AI COPILOT")}</span>
             <ChevronDown className="w-3 h-3" />
           </button>

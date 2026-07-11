@@ -125,6 +125,23 @@ export class WhatsAppSocketFactory {
       },
     });
 
+    // [PROFILE-PIC FIX] Baileys v7 gates every profilePictureUrl() IQ behind a
+    // per-contact "tcToken" (privacy token) built via buildTcTokenFromJid →
+    // getLIDForPN. That path is a known upstream bug (WhiskeySockets/Baileys
+    // #2498): the tcToken query silently hangs / returns not-authorized, so
+    // EVERY contact profile-picture fetch times out and comes back undefined —
+    // the whole inbox shows blank avatars. Worse for us: we run with
+    // `fireInitQueries: false`, so Baileys never fetches the server AB props
+    // that could flip `profilePicPrivacyToken`, leaving it stuck at its
+    // hardcoded `true` default forever. Setting it to false here makes
+    // profilePictureUrl issue the simple (pre-v7) `<picture query='url'>` IQ
+    // with no tcToken — the reliable path that actually returns public photos.
+    // WhatsApp still enforces the contact's own privacy server-side, so a
+    // "My Contacts only" photo correctly returns undefined (not a leak); we
+    // just stop breaking the "Everyone" (public) photos, which is the whole
+    // point. See ProfilePictureService / persistContactProfilePic consumers.
+    sock.serverProps.profilePicPrivacyToken = false;
+
     return sock;
   }
 }

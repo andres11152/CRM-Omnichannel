@@ -304,21 +304,21 @@ export class ConversationRepository {
 
       // 2. Queue Assignment (source depends on which channel's session this is)
       let queueId: string | null = null;
-      if (sessionId) {
-        if (channel === Channel.INSTAGRAM_DM) {
-          const igSession = await tx.instagramSession.findUnique({
-            where: { igBusinessAccountId: sessionId },
-            select: { defaultQueueId: true },
-          });
-          queueId = igSession?.defaultQueueId || null;
-        } else {
-          const session = await tx.whatsAppSession.findUnique({
-            where: { sessionId },
-            select: { defaultQueueId: true },
-          });
-          queueId = session?.defaultQueueId || null;
-        }
+      if (sessionId && channel === Channel.INSTAGRAM_DM) {
+        const igSession = await tx.instagramSession.findUnique({
+          where: { igBusinessAccountId: sessionId },
+          select: { defaultQueueId: true },
+        });
+        queueId = igSession?.defaultQueueId || null;
+      } else if (sessionId && channel === Channel.WHATSAPP) {
+        const session = await tx.whatsAppSession.findUnique({
+          where: { sessionId },
+          select: { defaultQueueId: true },
+        });
+        queueId = session?.defaultQueueId || null;
       }
+      // EMAIL (and any other channel) has no per-session queue mapping yet →
+      // ticket lands unassigned/unqueued, same as an unrouted WhatsApp chat.
 
       // 3. Create Conversation
       conversation = await tx.conversation.create({
@@ -346,7 +346,12 @@ export class ConversationRepository {
           companyId,
           ticketNumber: (lastTicket?.ticketNumber || 0) + 1,
           subject,
-          description: channel === Channel.INSTAGRAM_DM ? "Chat iniciado en Instagram" : "Chat iniciado en WhatsApp",
+          description:
+            channel === Channel.INSTAGRAM_DM
+              ? "Chat iniciado en Instagram"
+              : channel === Channel.EMAIL
+                ? "Correo recibido"
+                : "Chat iniciado en WhatsApp",
           status: "OPEN",
           priority: "MEDIUM",
           createdById: userId,

@@ -69,6 +69,7 @@ model Conversation {
   messages Message[]
   tags     String[]
   tickets  Ticket[]
+  emails   Email[]
 
   queueId String?
   queue   Queue?  @relation(fields: [queueId], references: [id])
@@ -157,12 +158,19 @@ model Message {
   // Direct messages (Instagram-assigned message id from the Messaging API).
   instagramMessageId String?
 
+  // Same idempotency guard, scoped to email (the RFC 5322 Message-ID header of
+  // the ingested mail) — prevents the IMAP poller from re-ingesting the same
+  // email as a duplicate Message on overlapping fetch windows.
+  emailMessageId String?
+
   // === ANALYTICS & HISTORY INDEXES ===
 
   // 5. Per-company uniqueness for WhatsApp message dedup (see comment above)
   @@unique([companyId, whatsappMessageId])
   // 6. Per-company uniqueness for Instagram message dedup
   @@unique([companyId, instagramMessageId])
+  // 6b. Per-company uniqueness for email message dedup
+  @@unique([companyId, emailMessageId])
   // 1. Chat History Load: "Get last 50 messages for this chat"
   @@index([conversationId, createdAt(sort: Desc)])
   // 2. Global Analytics: "Messages per day per company" (No JOIN needed!)
@@ -296,6 +304,19 @@ model Company {
   smtpSecure         Boolean @default(true)
   defaultSenderEmail String?
   defaultSenderName  String?
+
+  // IMAP Configuration (inbound email → tickets). Mirrors the SMTP block above.
+  // When emailInboundEnabled + creds are set, the email poller ingests new mail
+  // as EMAIL-channel conversations/tickets (see EmailInboundService).
+  imapHost            String?
+  imapPort            Int?
+  imapUser            String?
+  imapPassword        String? // Encrypted (same mechanism as smtpPassword)
+  imapSecure          Boolean  @default(true)
+  emailInboundEnabled Boolean  @default(false)
+  // Incremental fetch cursor so the poller never reprocesses old mail.
+  imapLastSeenUid     Int?
+  imapLastSeenAt      DateTime?
 
   // Relaciones
   users             User[]
@@ -1612,6 +1633,16 @@ model Email {
   ticketId String?
   ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
+  // Links this raw Email row to its EMAIL-channel Conversation (so the full
+  // HTML body / attachments are preserved alongside the lightweight Message
+  // shown in the agent chat thread).
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  // RFC 5322 In-Reply-To header of the inbound mail — set on outbound replies
+  // so the recipient's mail client threads the conversation correctly.
+  inReplyTo String?
+
   // Attachments (JSON array of Media IDs or URLs)
   attachments Json? // [{ filename: 'doc.pdf', url: 's3://...' }]
 
@@ -1632,6 +1663,7 @@ model Email {
   @@index([companyId, createdAt(sort: Desc)]) // Timeline queries
   @@index([contactId, createdAt(sort: Desc)]) // Contact timeline
   @@index([ticketId, createdAt(sort: Desc)]) // Ticket timeline
+  @@index([conversationId, createdAt(sort: Desc)]) // Conversation → emails
   @@index([status]) // Status filtering
   @@index([messageId]) // Webhook lookups
   @@map("emails")

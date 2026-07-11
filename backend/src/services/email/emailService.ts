@@ -134,10 +134,14 @@ export class EmailService {
           replyTo: dto.replyTo,
           type: EmailType.OUTBOUND,
           status: EmailStatus.SENT,
+          inReplyTo: dto.inReplyTo,
           contact: dto.contactId
             ? { connect: { id: dto.contactId } }
             : undefined,
           ticket: dto.ticketId ? { connect: { id: dto.ticketId } } : undefined,
+          conversation: dto.conversationId
+            ? { connect: { id: dto.conversationId } }
+            : undefined,
           attachments: dto.attachments
             ? (sanitizeForJson(dto.attachments) as Prisma.InputJsonValue)
             : undefined,
@@ -204,8 +208,12 @@ export class EmailService {
           bodyText: dto.bodyText,
           type: EmailType.INBOUND,
           status: EmailStatus.DELIVERED,
+          inReplyTo: dto.inReplyTo,
           contact: contact ? { connect: { id: contact.id } } : undefined,
           ticket: dto.ticketId ? { connect: { id: dto.ticketId } } : undefined,
+          conversation: dto.conversationId
+            ? { connect: { id: dto.conversationId } }
+            : undefined,
           attachments: dto.attachments
             ? (sanitizeForJson(dto.attachments) as Prisma.InputJsonValue)
             : undefined,

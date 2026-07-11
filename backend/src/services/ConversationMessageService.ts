@@ -27,6 +27,11 @@ import { ticketSyncService } from "./TicketSyncService";
 import { instagramSessionRepository } from "@/instagram/InstagramSessionRepository";
 import { instagramProviderService, InstagramMediaContent } from "@/instagram/InstagramProviderService";
 
+// Email
+import { emailService } from "@/services/email/emailService";
+import { emailRepository } from "@/repositories/EmailRepository";
+import { companySettingsService } from "@/services/CompanySettingsService";
+
 import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { ConversationQueryService } from "@/services/ConversationQueryService";
 
@@ -165,6 +170,11 @@ export class ConversationMessageService {
     // resolution / whatsappMessagingService path below.
     if (resolvedConv.channel === Channel.INSTAGRAM_DM) {
       return this.replyToInstagram(companyId, userId, resolvedConv.id, resolvedConv.channelId, messageContent, attachment, metadata, quotedMessageId, quotedContent);
+    }
+
+    // C2. Email replies go out via the company's SMTP, not Baileys.
+    if (resolvedConv.channel === Channel.EMAIL) {
+      return this.replyToEmail(companyId, userId, resolvedConv.id, resolvedConv.channelId, resolvedConv.subject, resolvedConv.contact?.email || null, messageContent, metadata);
     }
 
     // D. Determine Destination Phone / JID (WhatsApp only)

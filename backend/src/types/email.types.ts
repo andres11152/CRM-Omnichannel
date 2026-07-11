@@ -134,6 +134,10 @@ export interface CreateEmailDTO {
   // Relations
   contactId?: string;
   ticketId?: string;
+  /** Links the Email row to its EMAIL-channel Conversation (omnichannel inbox). */
+  conversationId?: string;
+  /** RFC 5322 In-Reply-To — set on outbound replies so clients thread correctly. */
+  inReplyTo?: string;
 
   // Attachments
   attachments?: EmailAttachment[];

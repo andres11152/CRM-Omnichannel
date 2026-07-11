@@ -77,6 +77,7 @@ export class MessagePersister {
         senderId: effectiveSenderId,
         whatsappMessageId: channel === Channel.WHATSAPP ? params.messageId || undefined : undefined,
         instagramMessageId: channel === Channel.INSTAGRAM_DM ? params.messageId || undefined : undefined,
+        emailMessageId: channel === Channel.EMAIL ? params.messageId || undefined : undefined,
         metadata: hasMedia
           ? { media: media as unknown as Prisma.InputJsonObject }
           : Prisma.JsonNull,
@@ -101,14 +102,20 @@ export class MessagePersister {
     channel: Channel = Channel.WHATSAPP,
   ): Promise<boolean> {
     if (messageId) {
-       const existing =
-         channel === Channel.INSTAGRAM_DM
-           ? await messageRepository.findUnique({
-               where: { companyId_instagramMessageId: { companyId, instagramMessageId: messageId } },
-             })
-           : await messageRepository.findUnique({
-               where: { companyId_whatsappMessageId: { companyId, whatsappMessageId: messageId } },
-             });
+       let existing;
+       if (channel === Channel.INSTAGRAM_DM) {
+         existing = await messageRepository.findUnique({
+           where: { companyId_instagramMessageId: { companyId, instagramMessageId: messageId } },
+         });
+       } else if (channel === Channel.EMAIL) {
+         existing = await messageRepository.findUnique({
+           where: { companyId_emailMessageId: { companyId, emailMessageId: messageId } },
+         });
+       } else {
+         existing = await messageRepository.findUnique({
+           where: { companyId_whatsappMessageId: { companyId, whatsappMessageId: messageId } },
+         });
+       }
        if (existing) return true;
     }
 

@@ -42,6 +42,16 @@ export class EmailRepository {
     return prisma.email.findFirst({ where: { companyId, messageId } });
   }
 
+  /** Most recent INBOUND email of a conversation — used to set the In-Reply-To
+   * header on an agent reply so the customer's mail client threads it. */
+  async findLatestInboundByConversation(companyId: string, conversationId: string) {
+    return prisma.email.findFirst({
+      where: { companyId, conversationId, type: "INBOUND" },
+      orderBy: { createdAt: "desc" },
+      select: { messageId: true, subject: true },
+    });
+  }
+
   async findByMessageIdSystem(messageId: string) {
     return prisma.email.findFirst({ where: { messageId } });
   }

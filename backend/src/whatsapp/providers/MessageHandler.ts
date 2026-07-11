@@ -502,6 +502,16 @@ export class MessageHandler implements IMessageHandler {
     return this.outboundHandler.revokeOutboundMessage(to, messageId, companyId);
   }
 
+  async pinMessage(
+    to: string,
+    messageId: string,
+    fromMe: boolean,
+    pin: boolean,
+    companyId: string,
+  ): Promise<void> {
+    return this.outboundHandler.pinMessage(to, messageId, fromMe, pin, companyId);
+  }
+
   async updateBlockStatus(
     to: string,
     action: "block" | "unblock",

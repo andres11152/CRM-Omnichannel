@@ -5,7 +5,7 @@ import { chatService } from "@/services/chatService";
 import { messageCacheService } from "@/services/messageCacheService";
 import { analyzeSentiment } from "@/services/geminiService";
 import { toast } from "sonner";
-import { useMessages, useSendMessage, addMessageToCache, useReactToMessage, useEditMessage, useRevokeMessage, useStarMessage, CHAT_KEYS } from "./useChat";
+import { useMessages, useSendMessage, addMessageToCache, useReactToMessage, useEditMessage, useRevokeMessage, useStarMessage, usePinMessage, CHAT_KEYS } from "./useChat";
 import { useQueryClient } from "@tanstack/react-query";
 import { uploadMedia } from "@/services/mediaService";
 
@@ -36,6 +36,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
   const editMessageMutation = useEditMessage(ticketId);
   const revokeMessageMutation = useRevokeMessage(ticketId);
   const starMessageMutation = useStarMessage(ticketId);
+  const pinMessageMutation = usePinMessage(ticketId);
 
   const [isTyping, setIsTyping] = useState(false);
   const [isRemoteTyping, setIsRemoteTyping] = useState(false);
@@ -81,30 +82,32 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     }
   }, [messages, isRemoteTyping, scrollToBottom]);
 
-  // Detect pinned messages from DB metadata on load
+  // Derive the pinned-message banner from message metadata. Must also CLEAR the
+  // banner when nothing is pinned (e.g. after an optimistic unpin), so this
+  // always mirrors the current messages rather than only ever setting a pin.
   useEffect(() => {
-    if (messages.length > 0) {
-      const pinned = messages.find(
-        (m) => (m.metadata as Record<string, unknown>)?.isPinned === true
-      );
-      if (pinned) {
-        const sender = pinned.sender;
-        let senderId = pinned.senderId;
+    const pinned = messages.find(
+      (m) => (m.metadata as Record<string, unknown>)?.isPinned === true
+    );
+    if (pinned) {
+      const sender = pinned.sender;
+      let senderId = pinned.senderId;
 
-        if (!senderId) {
-          if (sender && typeof sender === "object") {
-            senderId = sender.id;
-          } else if (typeof sender === "string") {
-            senderId = sender;
-          }
+      if (!senderId) {
+        if (sender && typeof sender === "object") {
+          senderId = sender.id;
+        } else if (typeof sender === "string") {
+          senderId = sender;
         }
-
-        setPinnedMessage({
-          id: pinned.id,
-          content: pinned.content,
-          senderId,
-        });
       }
+
+      setPinnedMessage({
+        id: pinned.id,
+        content: pinned.content,
+        senderId,
+      });
+    } else {
+      setPinnedMessage(null);
     }
   }, [messages]);
 
@@ -505,6 +508,14 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         await starMessageMutation.mutateAsync({ messageId, starred });
       } catch (err) {
         console.error("[Workflow] Star error:", err);
+      }
+    },
+    handlePinMessage: async (messageId: string, pinned: boolean) => {
+      try {
+        await pinMessageMutation.mutateAsync({ messageId, pinned });
+        toast.success(pinned ? "Mensaje fijado" : "Mensaje desfijado");
+      } catch (err) {
+        console.error("[Workflow] Pin error:", err);
       }
     },
     handleTransfer: async (targetId: string, type: "AGENT" | "QUEUE", note?: string) => {

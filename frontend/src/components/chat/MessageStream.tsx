@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Message, SenderType } from "@/types";
 import { MessageBubble } from "./MessageBubble";
 import { Clock, Pin, ChevronDown } from "lucide-react";
@@ -14,6 +15,7 @@ interface MessageStreamProps {
   onEditMessage?: (id: string, content: string) => void;
   onDeleteMessage?: (id: string) => void;
   onStarMessage?: (id: string, starred: boolean) => void;
+  onPinMessage?: (id: string, pinned: boolean) => void;
   onReply: (msg: Message) => void;
   onImageClick?: (url: string) => void;
   isGroup?: boolean;
@@ -80,11 +82,13 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   onEditMessage,
   onDeleteMessage,
   onStarMessage,
+  onPinMessage,
   onReply,
   onImageClick,
   isGroup,
   pinnedMessage,
 }) => {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
@@ -243,14 +247,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-0.5">
-                  Pinned Message
+                  {t("chat.pinned_message", "Mensaje Fijado")}
                 </p>
                 <p className="text-[12px] text-gray-700 dark:text-gray-300 font-medium truncate leading-tight">
                   {pinnedMessage.content || 'Multimedia'}
                 </p>
               </div>
               <div className="text-[10px] text-gray-400 dark:text-gray-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                Tap to view ↓
+                {t("chat.tap_to_view", "Ver ↓")}
               </div>
             </div>
           </div>
@@ -281,6 +285,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                 onEdit={onEditMessage}
                 onDelete={onDeleteMessage}
                 onStar={onStarMessage}
+                onPin={onPinMessage}
                 onReply={() => onReply(item.type === 'single' ? item.message : item.messages[0])}
                 onImageClick={onImageClick}
               />

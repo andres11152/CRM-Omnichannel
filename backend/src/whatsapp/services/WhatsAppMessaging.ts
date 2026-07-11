@@ -241,6 +241,16 @@ export class WhatsAppMessaging {
     return this.messageHandler.revokeOutboundMessage(to, messageId, companyId);
   }
 
+  async pinMessage(
+    to: string,
+    messageId: string,
+    fromMe: boolean,
+    pin: boolean,
+    companyId: string,
+  ): Promise<void> {
+    return this.messageHandler.pinMessage(to, messageId, fromMe, pin, companyId);
+  }
+
   // ────────────────────────────────────────────────
   // BLOCK / UNBLOCK CONTACT
   // ────────────────────────────────────────────────

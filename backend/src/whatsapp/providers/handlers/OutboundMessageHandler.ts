@@ -385,6 +385,51 @@ export class OutboundMessageHandler {
     }
   }
 
+  /**
+   * Pin/unpin a message "for everyone" in the chat (the banner-at-top feature).
+   * Works on any message regardless of direction, so `fromMe` must reflect the
+   * original message's direction. Baileys PinInChat.Type: 1 = pin, 2 = unpin;
+   * `time` is the pin duration (7 days here, matching WhatsApp's default).
+   */
+  async pinMessage(
+    to: string,
+    messageId: string,
+    fromMe: boolean,
+    pin: boolean,
+    companyId: string,
+  ): Promise<void> {
+    const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+
+    const sock = activeSession.socket;
+    if (!sock) {
+      throw new Error(`Session ${activeSession.sessionId} has no active socket`);
+    }
+
+    const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
+
+    try {
+      await sock.sendMessage(
+        jid,
+        {
+          pin: { remoteJid: jid, fromMe, id: messageId },
+          type: pin ? 1 : 2, // proto.PinInChat.Type: PIN_FOR_ALL / UNPIN_FOR_ALL
+          time: 604800, // 7 days
+        },
+        {},
+      );
+      Logger.debug(`[PinMessage] ${pin ? "Pinned" : "Unpinned"} ${messageId} (jid=${jid})`);
+    } catch (error) {
+      Logger.error(
+        `[PinMessage] Failed to ${pin ? "pin" : "unpin"} ${messageId} (jid=${jid}): ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
   async updateBlockStatus(
     to: string,
     action: "block" | "unblock",

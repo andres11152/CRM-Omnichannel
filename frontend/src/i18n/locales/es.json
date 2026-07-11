@@ -825,7 +825,9 @@
     "show_list": "Mostrar lista",
     "resolve": "RESOLVER",
     "no_messages": "Sin mensajes",
-    "waiting_for_reply": "Tiempo esperando respuesta del agente"
+    "waiting_for_reply": "Tiempo esperando respuesta del agente",
+    "pinned_message": "Mensaje Fijado",
+    "tap_to_view": "Ver ↓"
   },
   "sidebar": {
     "light_mode": "Modo Claro",

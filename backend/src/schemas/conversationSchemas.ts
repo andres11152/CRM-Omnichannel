@@ -98,6 +98,16 @@ export const SetMessageStarredSchema = z.object({
   }),
 });
 
+export const SetMessagePinnedSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Conversation ID is required."),
+    messageId: z.string().min(1, "Message ID is required."),
+  }),
+  body: z.object({
+    pinned: z.boolean(),
+  }),
+});
+
 export const SetConversationMutedSchema = z.object({
   params: z.object({
     id: z.string().min(1, "Conversation ID is required."),

@@ -15,6 +15,7 @@ import {
   editMessage,
   revokeMessage,
   setMessageStarred,
+  setMessagePinned,
 } from "../controllers/conversationController";
 import {
   getGroupParticipants,
@@ -43,6 +44,7 @@ import {
   EditMessageSchema,
   RevokeMessageSchema,
   SetMessageStarredSchema,
+  SetMessagePinnedSchema,
 } from "../schemas/conversationSchemas";
 import {
   GetGroupParticipantsSchema,
@@ -143,5 +145,9 @@ router
 router
   .route("/:id/messages/:messageId/star")
   .patch(validate(SetMessageStarredSchema), setMessageStarred);
+
+router
+  .route("/:id/messages/:messageId/pin")
+  .patch(validate(SetMessagePinnedSchema), setMessagePinned);
 
 export default router;

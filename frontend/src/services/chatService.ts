@@ -211,4 +211,14 @@ export const chatService = {
       { starred },
     );
   },
+  setMessagePinned: async (
+    conversationId: string,
+    messageId: string,
+    pinned: boolean,
+  ): Promise<void> => {
+    await apiClient.patch(
+      `/conversations/${conversationId}/messages/${messageId}/pin`,
+      { pinned },
+    );
+  },
 };

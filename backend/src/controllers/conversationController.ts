@@ -337,6 +337,23 @@ export const setMessageStarred = catchAsync(
   },
 );
 
+export const setMessagePinned = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+    const { id: conversationId, messageId } = req.params;
+    const { pinned } = req.body;
+
+    const result = await conversationService.setMessagePinned(
+      req.companyId,
+      conversationId,
+      messageId,
+      pinned,
+    );
+
+    res.status(200).json({ status: "success", data: result });
+  },
+);
+
 export const syncFullHistory = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     if (!req.companyId || !req.user) throw new AppError("Not authorized", 401);

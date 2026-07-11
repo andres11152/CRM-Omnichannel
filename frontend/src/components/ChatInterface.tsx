@@ -85,6 +85,7 @@ export const ChatInterface: React.FC<Props> = ({
     handleEditMessage,
     handleDeleteMessage,
     handleStarMessage,
+    handlePinMessage,
     handleShareLocation,
     handleTransfer,
     scrollToBottom,
@@ -391,6 +392,7 @@ export const ChatInterface: React.FC<Props> = ({
           onEditMessage={handleEditMessage}
           onDeleteMessage={handleDeleteMessage}
           onStarMessage={handleStarMessage}
+          onPinMessage={handlePinMessage}
           onReply={setReplyingTo}
           onImageClick={handleImageClick}
           pinnedMessage={pinnedMessage}

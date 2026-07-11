@@ -583,6 +583,52 @@ export const useStarMessage = (ticketId: string) => {
 };
 
 /**
+ * CUSTOM HOOK: usePinMessage
+ * Pins/unpins a message "for everyone" (banner-at-top). WhatsApp keeps only
+ * one pinned message per chat, so pinning a new one optimistically clears the
+ * flag off any other message in the cache.
+ */
+export const usePinMessage = (ticketId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ messageId, pinned }: { messageId: string; pinned: boolean }) =>
+      chatService.setMessagePinned(ticketId, messageId, pinned),
+
+    onMutate: async ({ messageId, pinned }) => {
+      await queryClient.cancelQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+      const previousMessages = queryClient.getQueryData<Message[]>(CHAT_KEYS.messages(ticketId));
+
+      queryClient.setQueryData<Message[]>(CHAT_KEYS.messages(ticketId), (old = []) =>
+        old.map((m) => {
+          if (m.id === messageId) {
+            return { ...m, metadata: { ...(m.metadata || {}), isPinned: pinned } };
+          }
+          // Enforce single-pin: clear any other pinned message when pinning a new one.
+          if (pinned && (m.metadata as Record<string, unknown> | undefined)?.isPinned) {
+            return { ...m, metadata: { ...(m.metadata || {}), isPinned: false } };
+          }
+          return m;
+        }),
+      );
+
+      return { previousMessages };
+    },
+
+    onError: (_err, _variables, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
+      }
+      toast.error("Error al fijar el mensaje");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+    },
+  });
+};
+
+/**
  * CUSTOM HOOK: usePickNextTicket
  * Handles picking next available ticket
  */

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Message } from "@/types";
 import EmojiPicker, { Theme } from "emoji-picker-react";
-import { Plus, Smile, Reply, FileText, Download, Pencil, Trash2, X, Check, Star, MapPin, User as UserIcon, ExternalLink } from "lucide-react";
+import { Plus, Smile, Reply, FileText, Download, Pencil, Trash2, X, Check, Star, MapPin, User as UserIcon, ExternalLink, Pin } from "lucide-react";
 import { VoiceNotePlayer } from "./VoiceNotePlayer";
 import { jwtDecode } from "jwt-decode";
 import { api } from "@/lib/axios";
@@ -31,6 +31,7 @@ interface MessageBubbleProps {
   onEdit?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string) => void;
   onStar?: (messageId: string, starred: boolean) => void;
+  onPin?: (messageId: string, pinned: boolean) => void;
   onQuoteClick?: () => void | null;
   onImageClick?: (mediaUrl: string) => void;
   isGroup?: boolean;
@@ -49,6 +50,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   onEdit,
   onDelete,
   onStar,
+  onPin,
   onQuoteClick,
   onImageClick,
   isGroup,
@@ -60,6 +62,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isRevoked = message.status === "REVOKED";
   const isEdited = !!(message.metadata as Record<string, unknown> | null)?.isEdited;
   const isStarred = !!(message.metadata as Record<string, unknown> | null)?.starred;
+  const isPinned = !!(message.metadata as Record<string, unknown> | null)?.isPinned;
   // Only the agent's own delivered outbound messages can be edited/deleted-for-everyone
   // (WhatsApp/Baileys restriction — mirrored here so the buttons only appear when valid).
   const canEditOrDelete = isAgent && !isSystem && !isRevoked;
@@ -206,6 +209,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           <div
             className={`absolute -top-3.5 ${isAgent ? "right-1" : "left-1"} hidden group-hover/row:flex items-center gap-0.5 z-20 opacity-0 group-hover/row:opacity-100 transition-all duration-150 animate-in fade-in slide-in-from-bottom-1 bg-white dark:bg-[#233138] rounded-full shadow-md border border-gray-100 dark:border-white/10 p-0.5`}
           >
+            {onPin && !isRevoked && (
+              <button
+                onClick={() => onPin(message.id, !isPinned)}
+                className={`p-1.5 rounded-full transition-colors active:scale-90 ${
+                  isPinned
+                    ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/20"
+                    : "text-gray-400 hover:text-emerald-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-emerald-400 dark:hover:bg-white/10"
+                }`}
+                title={isPinned ? "Desfijar mensaje" : "Fijar mensaje"}
+              >
+                <Pin className={`w-3.5 h-3.5 ${isPinned ? "fill-emerald-500" : ""}`} />
+              </button>
+            )}
             {canStar && (
               <button
                 onClick={() => onStar && onStar(message.id, !isStarred)}
@@ -946,6 +962,10 @@ export const MessageBubble = React.memo(
     if (
       (prev.metadata as Record<string, unknown> | undefined)?.isEdited !==
       (next.metadata as Record<string, unknown> | undefined)?.isEdited
+    ) return false;
+    if (
+      (prev.metadata as Record<string, unknown> | undefined)?.isPinned !==
+      (next.metadata as Record<string, unknown> | undefined)?.isPinned
     ) return false;
     
     if (Math.abs(new Date(prev.timestamp).getTime() - new Date(next.timestamp).getTime()) > 1000) {

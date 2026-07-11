@@ -134,4 +134,13 @@ export const conversationService = {
   ) {
     return conversationMessageService.setStarred(companyId, conversationId, messageId, starred);
   },
+
+  async setMessagePinned(
+    companyId: string,
+    conversationId: string,
+    messageId: string,
+    pinned: boolean,
+  ) {
+    return conversationMessageService.pinMessage(companyId, conversationId, messageId, pinned);
+  },
 };

@@ -46,6 +46,13 @@ export interface IMessageHandler {
     messageId: string,
     companyId: string,
   ): Promise<void>;
+  pinMessage(
+    to: string,
+    messageId: string,
+    fromMe: boolean,
+    pin: boolean,
+    companyId: string,
+  ): Promise<void>;
   updateBlockStatus(
     to: string,
     action: "block" | "unblock",

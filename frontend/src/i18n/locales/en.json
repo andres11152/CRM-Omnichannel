@@ -825,7 +825,9 @@
     "show_list": "Show list",
     "resolve": "RESOLVE",
     "no_messages": "No messages",
-    "waiting_for_reply": "Time waiting for agent reply"
+    "waiting_for_reply": "Time waiting for agent reply",
+    "pinned_message": "Pinned Message",
+    "tap_to_view": "View ↓"
   },
   "sidebar": {
     "light_mode": "Light Mode",

@@ -706,6 +706,83 @@ export class ConversationMessageService {
 
     return { starred, whatsappSynced };
   }
+
+  /** Pin/unpin a message "for everyone" — the banner-at-top feature. WhatsApp
+   * only supports ONE pinned message per chat, so pinning a new one first
+   * clears the isPinned flag off any previously-pinned message in the same
+   * conversation. Mirrors the metadata shape used by the inbound pin handler
+   * (StatusUpdateHandler.handlePinEvent) so both paths render identically. */
+  async pinMessage(
+    companyId: string,
+    conversationId: string,
+    messageId: string,
+    pin: boolean,
+  ): Promise<{ isPinned: boolean; whatsappSynced: boolean }> {
+    const conv = await this.resolveConversation(companyId, conversationId);
+    const msg = await messageRepository.findFirst({
+      where: { id: messageId, companyId, conversationId: conv.id },
+    });
+    if (!msg) throw new AppError("Message not found", 404);
+    if (!msg.whatsappMessageId) {
+      throw new AppError("Message was never delivered/received via WhatsApp", 400);
+    }
+
+    const fromMe = msg.direction === MessageDirection.OUTBOUND;
+    let whatsappSynced = true;
+    try {
+      const targetPhone = await this.resolveTargetPhone(companyId, conv);
+      await whatsappMessagingService.pinMessage(targetPhone, msg.whatsappMessageId, fromMe, pin, companyId);
+    } catch (error) {
+      whatsappSynced = false;
+      Logger.warn(
+        `[ConversationMessageService] WhatsApp pin sync failed for message ${msg.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    // WhatsApp = one pinned message per chat: clear any prior pin first.
+    if (pin) {
+      const prevPinned = await messageRepository.findMany({
+        where: {
+          companyId,
+          conversationId: conv.id,
+          id: { not: msg.id },
+          metadata: { path: ["isPinned"], equals: true },
+        },
+      });
+      for (const prev of prevPinned) {
+        const prevMeta = (prev.metadata as Record<string, unknown>) || {};
+        await messageRepository.update(
+          prev.id,
+          { metadata: { ...prevMeta, isPinned: false, pinnedAt: null } },
+          companyId,
+        );
+      }
+    }
+
+    const existingMeta = (msg.metadata as Record<string, unknown>) || {};
+    await messageRepository.update(
+      msg.id,
+      {
+        metadata: {
+          ...existingMeta,
+          isPinned: pin,
+          pinnedAt: pin ? new Date().toISOString() : null,
+        },
+      },
+      companyId,
+    );
+
+    this.socketEmitter.emitMessagePinned(
+      msg.id,
+      conv.id,
+      companyId,
+      pin,
+      msg.content || "",
+      msg.senderId || "",
+    );
+
+    return { isPinned: pin, whatsappSynced };
+  }
 }
 
 export const conversationMessageService = new ConversationMessageService();

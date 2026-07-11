@@ -193,6 +193,37 @@ export const ImportContactsSchema = z.object({
 });
 
 /**
+ * SET BLOCK STATUS SCHEMA
+ * Validates the block/unblock toggle for a contact
+ */
+export const SetContactBlockStatusSchema = z.object({
+  params: z.object({
+    id: z.string().cuid("Invalid contact ID format"),
+  }),
+  body: z.object({
+    blocked: z.boolean(),
+    reason: z.string().max(200, "Reason is too long").optional(),
+  }),
+});
+
+/**
+ * SET BLOCK STATUS BY PHONE SCHEMA
+ * Validates the block/unblock toggle when only a phone number is known
+ * (e.g. from the chat header, where the conversation may not have a
+ * linked Contact row yet)
+ */
+export const SetContactBlockStatusByPhoneSchema = z.object({
+  body: z.object({
+    phone: z.string().min(5, "Phone too short").max(20, "Phone too long"),
+    blocked: z.boolean(),
+    reason: z.string().max(200, "Reason is too long").optional(),
+  }),
+});
+// NOTE: mounted at PATCH /contacts/by-phone/block-status — a distinct path
+// segment (not /contacts/block-status) so it can't ever be shadowed by the
+// generic `PATCH /contacts/:id` route regardless of registration order.
+
+/**
  * Type exports for TypeScript inference
  */
 export type CreateContactInput = z.infer<typeof CreateContactSchema>["body"];

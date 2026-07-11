@@ -20,6 +20,7 @@ import {
   MediaPayload,
 } from "../core/types/whatsapp.types";
 import { Prisma } from "@prisma/client";
+import { ChatModification } from "@whiskeysockets/baileys";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 import { messageTemplateRepository } from "@/repositories/MessageTemplateRepository";
 import { AppError } from "@/utils/AppError";
@@ -221,6 +222,47 @@ export class WhatsAppMessaging {
     fromMe?: boolean,
   ): Promise<void> {
     return this.messageHandler.sendReaction(to, messageId, reaction, companyId, fromMe);
+  }
+
+  // ────────────────────────────────────────────────
+  // EDIT / REVOKE OWN SENT MESSAGE
+  // ────────────────────────────────────────────────
+
+  async editMessage(
+    to: string,
+    messageId: string,
+    newContent: string,
+    companyId: string,
+  ): Promise<void> {
+    return this.messageHandler.editOutboundMessage(to, messageId, newContent, companyId);
+  }
+
+  async revokeMessage(to: string, messageId: string, companyId: string): Promise<void> {
+    return this.messageHandler.revokeOutboundMessage(to, messageId, companyId);
+  }
+
+  // ────────────────────────────────────────────────
+  // BLOCK / UNBLOCK CONTACT
+  // ────────────────────────────────────────────────
+
+  async blockContact(to: string, companyId: string): Promise<void> {
+    return this.messageHandler.updateBlockStatus(to, "block", companyId);
+  }
+
+  async unblockContact(to: string, companyId: string): Promise<void> {
+    return this.messageHandler.updateBlockStatus(to, "unblock", companyId);
+  }
+
+  // ────────────────────────────────────────────────
+  // CHAT MODIFY (Archive / Pin / Mute)
+  // ────────────────────────────────────────────────
+
+  async modifyChat(
+    to: string,
+    companyId: string,
+    mod: ChatModification,
+  ): Promise<void> {
+    return this.messageHandler.modifyChat(to, companyId, mod);
   }
 
   // ────────────────────────────────────────────────

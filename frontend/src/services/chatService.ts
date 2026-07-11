@@ -3,13 +3,16 @@ import { Message, Conversation } from "../types";
 
 export interface SendMessageInput {
   content: string;
-  type?: "text" | "image" | "video" | "audio" | "document";
+  type?: "text" | "image" | "video" | "audio" | "document" | "location" | "contact";
   mediaUrl?: string;
   attachment?: {
     name: string;
     type: string;
     url: string;
     mimetype?: string;
+    // Location: latitude/longitude (+ optional locationName/address).
+    // Contact: phone (+ optional contactName).
+    [key: string]: unknown;
   };
   metadata?: Record<string, unknown>;
   quotedMessageId?: string;
@@ -178,6 +181,34 @@ export const chatService = {
     await apiClient.post(
       `/conversations/${conversationId}/messages/${messageId}/react`,
       { reaction },
+    );
+  },
+  editMessage: async (
+    conversationId: string,
+    messageId: string,
+    content: string,
+  ): Promise<void> => {
+    await apiClient.patch(
+      `/conversations/${conversationId}/messages/${messageId}`,
+      { content },
+    );
+  },
+  deleteMessageForEveryone: async (
+    conversationId: string,
+    messageId: string,
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/conversations/${conversationId}/messages/${messageId}`,
+    );
+  },
+  setMessageStarred: async (
+    conversationId: string,
+    messageId: string,
+    starred: boolean,
+  ): Promise<void> => {
+    await apiClient.patch(
+      `/conversations/${conversationId}/messages/${messageId}/star`,
+      { starred },
     );
   },
 };

@@ -93,6 +93,12 @@ model Conversation {
   // Determines if participants of this group should be auto-indexed into CRM
   syncEnabled Boolean @default(false)
 
+  // 📥 INBOX ORGANIZATION (mirrors Baileys chatModify — archive/pin/mute)
+  isArchived Boolean   @default(false)
+  isPinned   Boolean   @default(false)
+  // null = not muted; a timestamp = muted until that time (Baileys mute semantics)
+  mutedUntil DateTime?
+
   // === HIGH-PERFORMANCE COMPOSITE INDEXES ===
 
   // 🛡️ DATA INTEGRITY

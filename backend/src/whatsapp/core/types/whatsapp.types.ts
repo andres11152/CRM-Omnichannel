@@ -34,6 +34,18 @@ export interface MediaPayload {
   mimetype: string;
   filename?: string;
   caption?: string;
+  // Only set when type === "location" — no url/file involved.
+  location?: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+    address?: string;
+  };
+  // Only set when type === "contact" — no url/file involved.
+  contact?: {
+    name: string;
+    phone: string;
+  };
 }
 
 export interface SessionStatus {

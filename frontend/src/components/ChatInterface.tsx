@@ -46,6 +46,10 @@ interface Props {
   onResolve?: (category: string) => void;
   onContactUpdate?: (contact: Contact) => void;
   onTicketUpdate?: (id: string, updates: Record<string, unknown>) => void;
+  onSetContactBlockStatus?: (phone: string, blocked: boolean) => void;
+  onSetArchived?: (ticketId: string, archived: boolean) => void;
+  onSetPinned?: (ticketId: string, pinned: boolean) => void;
+  onSetMuted?: (ticketId: string, mutedUntil: string | null) => void;
 }
 
 /**
@@ -62,6 +66,10 @@ export const ChatInterface: React.FC<Props> = ({
   onResolve,
   onContactUpdate,
   onTicketUpdate,
+  onSetContactBlockStatus,
+  onSetArchived,
+  onSetPinned,
+  onSetMuted,
 }) => {
   // 1. DATA & WORKFLOW HOOK
   const {
@@ -74,6 +82,10 @@ export const ChatInterface: React.FC<Props> = ({
     handleSendMessage,
     syncHistory,
     handleReact,
+    handleEditMessage,
+    handleDeleteMessage,
+    handleStarMessage,
+    handleShareLocation,
     handleTransfer,
     scrollToBottom,
     emitTyping,
@@ -170,7 +182,7 @@ export const ChatInterface: React.FC<Props> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
-  const [activeActionModal, setActiveActionModal] = useState<"SCHEDULE" | "PRODUCT" | "PROPERTY" | "PAYMENT" | "DATA" | null>(null);
+  const [activeActionModal, setActiveActionModal] = useState<"SCHEDULE" | "PRODUCT" | "PROPERTY" | "PAYMENT" | "DATA" | "CONTACT" | null>(null);
 
   // CRM Activity Modals (Task / Meeting from 360 Panel)
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -306,6 +318,37 @@ export const ChatInterface: React.FC<Props> = ({
           showParticipants={() => setShowParticipants(true)}
           isCustomer360Visible={is360Visible}
           onChangePriority={handlePriorityChange}
+          onToggleBlockContact={
+            onSetContactBlockStatus && activeContact.phone
+              ? () =>
+                  onSetContactBlockStatus(
+                    activeContact.phone!,
+                    !activeContact.isBlocked,
+                  )
+              : undefined
+          }
+          onToggleArchived={
+            onSetArchived && activeContact.ticketId
+              ? () =>
+                  onSetArchived(activeContact.ticketId!, !activeContact.isArchived)
+              : undefined
+          }
+          onTogglePinned={
+            onSetPinned && activeContact.ticketId
+              ? () => onSetPinned(activeContact.ticketId!, !activeContact.isPinned)
+              : undefined
+          }
+          onToggleMuted={
+            onSetMuted && activeContact.ticketId
+              ? () =>
+                  onSetMuted(
+                    activeContact.ticketId!,
+                    activeContact.mutedUntil
+                      ? null
+                      : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+                  )
+              : undefined
+          }
         />
 
         {/* ENTERPRISE TAGS NAVBAR: Space-efficient horizontal scroll */}
@@ -345,6 +388,9 @@ export const ChatInterface: React.FC<Props> = ({
              el?.scrollIntoView({ behavior: 'smooth' });
           }}
           onReact={handleReact}
+          onEditMessage={handleEditMessage}
+          onDeleteMessage={handleDeleteMessage}
+          onStarMessage={handleStarMessage}
           onReply={setReplyingTo}
           onImageClick={handleImageClick}
           pinnedMessage={pinnedMessage}
@@ -393,6 +439,8 @@ export const ChatInterface: React.FC<Props> = ({
             onProperty={() => setActiveActionModal("PROPERTY")}
             onPayment={() => setActiveActionModal("PAYMENT")}
             onRequestData={() => setActiveActionModal("DATA")}
+            onShareLocation={handleShareLocation}
+            onContact={() => setActiveActionModal("CONTACT")}
             onAICopilotClick={async (action) => {
               // Build chat context for IA
               const chatHistory = messages
@@ -585,6 +633,17 @@ export const ChatInterface: React.FC<Props> = ({
         onRequestData={(fields) => {
           const list = fields.map(f => `• ${f}`).join("\n");
           handleSendMessage(`${t("chat.data_request", "*SOLICITUD DE DATOS*")}\n\n${t("chat.data_request_msg_start", "Para continuar con el proceso, requerimos la siguiente información:")}\n\n${list}\n\n${t("chat.data_request_msg_end", "Quedamos atentos a tu respuesta.")}`, null, replyingTo);
+          setActiveActionModal(null);
+        }}
+        onContact={(contact) => {
+          handleSendMessage("", null, replyingTo, undefined, {
+            url: "",
+            type: "contact",
+            name: contact.name,
+            mimetype: "text/vcard",
+            contactName: contact.name,
+            phone: contact.phone || "",
+          });
           setActiveActionModal(null);
         }}
       />

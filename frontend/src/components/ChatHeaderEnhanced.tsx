@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { Ban, Archive, ArchiveRestore, Pin, PinOff, BellOff, Bell } from "lucide-react";
 import { Contact, Tag } from "@/types";
 import { Avatar } from "@/components/common/Avatar";
 
@@ -41,6 +42,10 @@ interface ChatHeaderEnhancedProps {
   availableTags?: Pick<Tag, "id" | "name" | "color">[]; // Receives tag definitions
   isTyping?: boolean;
   onSyncHistory?: () => void;
+  onToggleBlockContact?: () => void;
+  onToggleArchived?: () => void;
+  onTogglePinned?: () => void;
+  onToggleMuted?: () => void;
 }
 
 const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
@@ -71,6 +76,10 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
   availableTags = [],
   isTyping = false,
   onSyncHistory,
+  onToggleBlockContact,
+  onToggleArchived,
+  onTogglePinned,
+  onToggleMuted,
 }) => {
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const isTightMode = isChatListVisible && isCustomer360Visible; // Detect "Tight Mode" (Both Panels Open)
@@ -340,6 +349,53 @@ const ChatHeaderEnhancedComponent: React.FC<ChatHeaderEnhancedProps> = ({
         label: t("chat.edit_contact", "Editar Contacto"),
         onClick: onEditContact,
         visible: true,
+      },
+      {
+        icon: contact.isPinned ? (
+          <PinOff className="w-4 h-4" />
+        ) : (
+          <Pin className="w-4 h-4" />
+        ),
+        label: contact.isPinned
+          ? t("chat.unpin_chat", "Desfijar Chat")
+          : t("chat.pin_chat", "Fijar Chat"),
+        onClick: onTogglePinned,
+        visible: !!onTogglePinned,
+      },
+      {
+        icon: contact.mutedUntil ? (
+          <Bell className="w-4 h-4" />
+        ) : (
+          <BellOff className="w-4 h-4" />
+        ),
+        label: contact.mutedUntil
+          ? t("chat.unmute_chat", "Reactivar Notificaciones")
+          : t("chat.mute_chat", "Silenciar Chat"),
+        onClick: onToggleMuted,
+        visible: !!onToggleMuted,
+      },
+      {
+        icon: contact.isArchived ? (
+          <ArchiveRestore className="w-4 h-4" />
+        ) : (
+          <Archive className="w-4 h-4" />
+        ),
+        label: contact.isArchived
+          ? t("chat.unarchive_chat", "Desarchivar Chat")
+          : t("chat.archive_chat", "Archivar Chat"),
+        onClick: onToggleArchived,
+        visible: !!onToggleArchived,
+      },
+      {
+        icon: <Ban className="w-4 h-4" />,
+        label: contact.isBlocked
+          ? t("chat.unblock_contact", "Desbloquear Contacto")
+          : t("chat.block_contact", "Bloquear Contacto"),
+        onClick: onToggleBlockContact,
+        visible: !!onToggleBlockContact && !contact.isGroup,
+        className: contact.isBlocked
+          ? ""
+          : "text-red-600 dark:text-red-400",
       },
     ];
 

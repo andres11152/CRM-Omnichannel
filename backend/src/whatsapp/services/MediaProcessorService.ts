@@ -21,8 +21,21 @@ import { audioConverterService } from "./media/AudioConverterService";
 
 export interface PreparedMediaResult {
   content: AnyMessageContent;
-  metaType: "image" | "video" | "audio" | "document";
+  metaType: "image" | "video" | "audio" | "document" | "location" | "contact";
   tempFilePath: string | null;
+}
+
+/** Builds a minimal WhatsApp-compatible vCard (the `waid` TEL param is what
+ * makes WhatsApp clients render a "Message"/"Add to contacts" action). */
+function buildVCard(name: string, phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    `FN:${name}`,
+    `TEL;type=CELL;waid=${digits}:${phone}`,
+    "END:VCARD",
+  ].join("\n");
 }
 
 /**
@@ -208,6 +221,46 @@ export class MediaProcessorService {
   async prepareOutboundContent(
     media: MediaPayload,
   ): Promise<PreparedMediaResult> {
+    // Location/contact are pure data, not files — skip all URL/disk resolution
+    // below (which assumes a real media.url) and build content directly.
+    if (media.type === "location") {
+      if (!media.location) {
+        throw new Error("Location data missing for location message");
+      }
+      return {
+        content: {
+          location: {
+            degreesLatitude: media.location.latitude,
+            degreesLongitude: media.location.longitude,
+            name: media.location.name,
+            address: media.location.address,
+          },
+        },
+        metaType: "location",
+        tempFilePath: null,
+      };
+    }
+    if (media.type === "contact") {
+      if (!media.contact) {
+        throw new Error("Contact data missing for contact message");
+      }
+      return {
+        content: {
+          contacts: {
+            displayName: media.contact.name,
+            contacts: [
+              {
+                displayName: media.contact.name,
+                vcard: buildVCard(media.contact.name, media.contact.phone),
+              },
+            ],
+          },
+        },
+        metaType: "contact",
+        tempFilePath: null,
+      };
+    }
+
     let tempFilePath: string | null = null;
     let resolvedUrl = media.url || "";
 

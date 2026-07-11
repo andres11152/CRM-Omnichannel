@@ -471,6 +471,118 @@ export const useReactToMessage = (ticketId: string) => {
 };
 
 /**
+ * CUSTOM HOOK: useEditMessage
+ * Edits an already-sent outbound message's content
+ */
+export const useEditMessage = (ticketId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ messageId, content }: { messageId: string; content: string }) =>
+      chatService.editMessage(ticketId, messageId, content),
+
+    onMutate: async ({ messageId, content }) => {
+      await queryClient.cancelQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+      const previousMessages = queryClient.getQueryData<Message[]>(CHAT_KEYS.messages(ticketId));
+
+      queryClient.setQueryData<Message[]>(CHAT_KEYS.messages(ticketId), (old = []) =>
+        old.map((m) => (m.id === messageId ? { ...m, content } : m)),
+      );
+
+      return { previousMessages };
+    },
+
+    onError: (_err, _variables, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
+      }
+      toast.error("Error al editar el mensaje");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+    },
+  });
+};
+
+/**
+ * CUSTOM HOOK: useRevokeMessage
+ * Deletes an already-sent outbound message "for everyone"
+ */
+export const useRevokeMessage = (ticketId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (messageId: string) => chatService.deleteMessageForEveryone(ticketId, messageId),
+
+    onMutate: async (messageId: string) => {
+      await queryClient.cancelQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+      const previousMessages = queryClient.getQueryData<Message[]>(CHAT_KEYS.messages(ticketId));
+
+      queryClient.setQueryData<Message[]>(CHAT_KEYS.messages(ticketId), (old = []) =>
+        old.map((m) =>
+          m.id === messageId
+            ? { ...m, content: " Este mensaje fue eliminado", status: "REVOKED" as const }
+            : m,
+        ),
+      );
+
+      return { previousMessages };
+    },
+
+    onError: (_err, _variables, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
+      }
+      toast.error("Error al eliminar el mensaje");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+    },
+  });
+};
+
+/**
+ * CUSTOM HOOK: useStarMessage
+ * Toggles a message's starred state
+ */
+export const useStarMessage = (ticketId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ messageId, starred }: { messageId: string; starred: boolean }) =>
+      chatService.setMessageStarred(ticketId, messageId, starred),
+
+    onMutate: async ({ messageId, starred }) => {
+      await queryClient.cancelQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+      const previousMessages = queryClient.getQueryData<Message[]>(CHAT_KEYS.messages(ticketId));
+
+      queryClient.setQueryData<Message[]>(CHAT_KEYS.messages(ticketId), (old = []) =>
+        old.map((m) =>
+          m.id === messageId
+            ? { ...m, metadata: { ...(m.metadata || {}), starred } }
+            : m,
+        ),
+      );
+
+      return { previousMessages };
+    },
+
+    onError: (_err, _variables, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
+      }
+      toast.error("Error al destacar el mensaje");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
+    },
+  });
+};
+
+/**
  * CUSTOM HOOK: usePickNextTicket
  * Handles picking next available ticket
  */

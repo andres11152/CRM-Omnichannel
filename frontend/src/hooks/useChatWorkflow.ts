@@ -5,7 +5,7 @@ import { chatService } from "@/services/chatService";
 import { messageCacheService } from "@/services/messageCacheService";
 import { analyzeSentiment } from "@/services/geminiService";
 import { toast } from "sonner";
-import { useMessages, useSendMessage, addMessageToCache, useReactToMessage, CHAT_KEYS } from "./useChat";
+import { useMessages, useSendMessage, addMessageToCache, useReactToMessage, useEditMessage, useRevokeMessage, useStarMessage, CHAT_KEYS } from "./useChat";
 import { useQueryClient } from "@tanstack/react-query";
 import { uploadMedia } from "@/services/mediaService";
 
@@ -33,6 +33,9 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
   const { data: messages = [], isLoading: isLoadingMessages } = useMessages(ticketId);
   const sendMessageMutation = useSendMessage(ticketId);
   const reactMutation = useReactToMessage(ticketId);
+  const editMessageMutation = useEditMessage(ticketId);
+  const revokeMessageMutation = useRevokeMessage(ticketId);
+  const starMessageMutation = useStarMessage(ticketId);
 
   const [isTyping, setIsTyping] = useState(false);
   const [isRemoteTyping, setIsRemoteTyping] = useState(false);
@@ -297,17 +300,17 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     mediaFile?: File | null,
     replyingTo?: Message | null,
     scheduledAt?: string | Date,
-    directAttachment?: { url: string; type: "image" | "video" | "audio" | "document"; name: string; mimetype: string },
+    directAttachment?: { url: string; type: "image" | "video" | "audio" | "document" | "location" | "contact"; name: string; mimetype: string; [key: string]: unknown },
     isWhisper?: boolean,
   ) => {
     if (!content.trim() && !mediaFile && !directAttachment) return;
 
     try {
       setIsTyping(true);
-      
+
       let mediaUrl: string | undefined;
-      let detectedType: "text" | "image" | "audio" | "video" | "document" = "text";
-      let attachment: { url: string; type: string; name: string; mimetype: string } | undefined;
+      let detectedType: "text" | "image" | "audio" | "video" | "document" | "location" | "contact" = "text";
+      let attachment: { url: string; type: string; name: string; mimetype: string; [key: string]: unknown } | undefined;
 
       // Priority 1: Direct attachment (product images, already uploaded)
       if (directAttachment) {
@@ -435,6 +438,73 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         // el toast; solo evitamos que el rechazo quede sin capturar (unhandled
         // promise rejection) ya que MessageBubble no espera esta promesa.
         console.error("[Workflow] React error:", err);
+      }
+    },
+    handleEditMessage: async (messageId: string, content: string) => {
+      try {
+        await editMessageMutation.mutateAsync({ messageId, content });
+        toast.success("Mensaje editado");
+      } catch (err) {
+        console.error("[Workflow] Edit error:", err);
+      }
+    },
+    handleDeleteMessage: async (messageId: string) => {
+      try {
+        await revokeMessageMutation.mutateAsync(messageId);
+        toast.success("Mensaje eliminado");
+      } catch (err) {
+        console.error("[Workflow] Revoke error:", err);
+      }
+    },
+    handleShareLocation: () => {
+      if (!navigator.geolocation) {
+        toast.error("Este navegador no soporta compartir ubicación");
+        return;
+      }
+      const loadingToast = toast.loading("Obteniendo ubicación...");
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          toast.dismiss(loadingToast);
+          try {
+            setIsTyping(true);
+            await sendMessageMutation.mutateAsync({
+              content: "",
+              type: "location",
+              attachment: {
+                url: "",
+                type: "location",
+                name: "Ubicación",
+                mimetype: "application/octet-stream",
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+              },
+              metadata: { tempId: `temp-${Date.now()}` },
+            });
+            toast.success("Ubicación enviada");
+          } catch (err) {
+            console.error("[Workflow] Share location send error:", err);
+            toast.error("Error al enviar la ubicación");
+          } finally {
+            setIsTyping(false);
+          }
+        },
+        (geoErr) => {
+          toast.dismiss(loadingToast);
+          console.error("[Workflow] Geolocation error:", geoErr);
+          toast.error(
+            geoErr.code === geoErr.PERMISSION_DENIED
+              ? "Permiso de ubicación denegado"
+              : "No se pudo obtener la ubicación",
+          );
+        },
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+    },
+    handleStarMessage: async (messageId: string, starred: boolean) => {
+      try {
+        await starMessageMutation.mutateAsync({ messageId, starred });
+      } catch (err) {
+        console.error("[Workflow] Star error:", err);
       }
     },
     handleTransfer: async (targetId: string, type: "AGENT" | "QUEUE", note?: string) => {

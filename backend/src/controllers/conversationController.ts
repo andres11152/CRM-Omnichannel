@@ -248,6 +248,95 @@ export const reactToMessage = catchAsync(
   },
 );
 
+export const setConversationArchived = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+    const { id: conversationId } = req.params;
+    const { archived } = req.body;
+
+    const result = await conversationService.setArchived(req.companyId, conversationId, archived);
+
+    res.status(200).json({ status: "success", data: result });
+  },
+);
+
+export const setConversationPinned = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+    const { id: conversationId } = req.params;
+    const { pinned } = req.body;
+
+    const result = await conversationService.setPinned(req.companyId, conversationId, pinned);
+
+    res.status(200).json({ status: "success", data: result });
+  },
+);
+
+export const setConversationMuted = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+    const { id: conversationId } = req.params;
+    const { mutedUntil } = req.body;
+
+    const result = await conversationService.setMuted(
+      req.companyId,
+      conversationId,
+      mutedUntil ? new Date(mutedUntil) : null,
+    );
+
+    res.status(200).json({ status: "success", data: result });
+  },
+);
+
+export const editMessage = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+    const { id: conversationId, messageId } = req.params;
+    const { content } = req.body;
+
+    const updated = await conversationService.editMessage(
+      req.companyId,
+      conversationId,
+      messageId,
+      content,
+    );
+
+    res.status(200).json({ status: "success", data: updated });
+  },
+);
+
+export const revokeMessage = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+    const { id: conversationId, messageId } = req.params;
+
+    const updated = await conversationService.revokeMessage(
+      req.companyId,
+      conversationId,
+      messageId,
+    );
+
+    res.status(200).json({ status: "success", data: updated });
+  },
+);
+
+export const setMessageStarred = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.companyId) throw new AppError("Not authorized", 401);
+    const { id: conversationId, messageId } = req.params;
+    const { starred } = req.body;
+
+    const result = await conversationService.setMessageStarred(
+      req.companyId,
+      conversationId,
+      messageId,
+      starred,
+    );
+
+    res.status(200).json({ status: "success", data: result });
+  },
+);
+
 export const syncFullHistory = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     if (!req.companyId || !req.user) throw new AppError("Not authorized", 401);

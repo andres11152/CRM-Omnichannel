@@ -190,6 +190,12 @@ export interface Contact {
   // Direction of the last message — INBOUND means the customer is waiting
   // for a reply; OUTBOUND means we already answered.
   lastMessageDirection?: "INBOUND" | "OUTBOUND" | null;
+  // Real WhatsApp block state (mirrors Contact.isBlocked in the CRM).
+  isBlocked?: boolean;
+  // Inbox organization (mirrors Baileys chatModify — archive/pin/mute).
+  isArchived?: boolean;
+  isPinned?: boolean;
+  mutedUntil?: string | null;
 }
 
 // NEW: Represents the conversation/case
@@ -231,6 +237,8 @@ export interface TicketContact {
   status?: string;
   queueName?: string;
   assignedAgentName?: string;
+  // Real WhatsApp block state (mirrors Contact.isBlocked in the CRM).
+  isBlocked?: boolean;
   //  GROUP CHAT SUPPORT
   isGroup?: boolean;
   // [APP] Multi-WhatsApp Session Identification (#1, #2, #3)
@@ -267,6 +275,11 @@ export interface Ticket {
   createdAt: string; // ISO Date
   updatedAt: string;
   resolvedAt?: string | null;
+
+  // Inbox organization (mirrors Baileys chatModify — archive/pin/mute)
+  isArchived?: boolean;
+  isPinned?: boolean;
+  mutedUntil?: string | null;
 
   channel: string;
   tags: string[];

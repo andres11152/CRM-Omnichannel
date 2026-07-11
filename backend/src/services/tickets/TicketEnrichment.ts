@@ -123,6 +123,7 @@ export class TicketEnrichment {
         avatarUrl: true,
         profilePicUrl: true,
         tags: true,
+        isBlocked: true,
       },
     });
 
@@ -135,6 +136,7 @@ export class TicketEnrichment {
         avatarUrl: string | null;
         profilePicUrl: string | null;
         tags: string[];
+        isBlocked: boolean;
       }
     >();
     contacts.forEach((c) => {
@@ -147,6 +149,7 @@ export class TicketEnrichment {
           avatarUrl: string | null;
           profilePicUrl: string | null;
           tags: string[];
+          isBlocked: boolean;
         });
       }
     });
@@ -220,6 +223,7 @@ export class TicketEnrichment {
             name: isCrmNameValid ? crmName : dto.contact.name,
             avatarUrl: normalizePic(crmData.avatarUrl) || dto.contact.avatarUrl,
             profilePicUrl: normalizePic(crmData.profilePicUrl) || dto.contact.profilePicUrl,
+            isBlocked: crmData.isBlocked,
             whatsappSessionIndex,
             whatsappSessionPhone,
           },

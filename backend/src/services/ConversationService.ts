@@ -100,4 +100,38 @@ export const conversationService = {
       userId,
     );
   },
+
+  async setArchived(companyId: string, conversationId: string, archived: boolean) {
+    return conversationMessageService.setArchived(companyId, conversationId, archived);
+  },
+
+  async setPinned(companyId: string, conversationId: string, pinned: boolean) {
+    return conversationMessageService.setPinned(companyId, conversationId, pinned);
+  },
+
+  async setMuted(companyId: string, conversationId: string, mutedUntil: Date | null) {
+    return conversationMessageService.setMuted(companyId, conversationId, mutedUntil);
+  },
+
+  async editMessage(
+    companyId: string,
+    conversationId: string,
+    messageId: string,
+    newContent: string,
+  ) {
+    return conversationMessageService.editMessage(companyId, conversationId, messageId, newContent);
+  },
+
+  async revokeMessage(companyId: string, conversationId: string, messageId: string) {
+    return conversationMessageService.revokeMessage(companyId, conversationId, messageId);
+  },
+
+  async setMessageStarred(
+    companyId: string,
+    conversationId: string,
+    messageId: string,
+    starred: boolean,
+  ) {
+    return conversationMessageService.setStarred(companyId, conversationId, messageId, starred);
+  },
 };

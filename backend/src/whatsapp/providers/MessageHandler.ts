@@ -5,7 +5,7 @@ import {
   MediaPayload,
   MessagePayload,
 } from "../core/types/whatsapp.types";
-import { proto, WAMessage } from "@whiskeysockets/baileys";
+import { proto, WAMessage, ChatModification } from "@whiskeysockets/baileys";
 import { EventBus } from "../core/events/EventBus";
 import { WhatsAppEventType } from "../core/events/WhatsAppEvents";
 import { runWithCompanyId } from "@/context/requestContext";
@@ -479,5 +479,38 @@ export class MessageHandler implements IMessageHandler {
       companyId,
       fromMe,
     );
+  }
+
+  async editOutboundMessage(
+    to: string,
+    messageId: string,
+    newContent: string,
+    companyId: string,
+  ): Promise<void> {
+    return this.outboundHandler.editOutboundMessage(to, messageId, newContent, companyId);
+  }
+
+  async revokeOutboundMessage(
+    to: string,
+    messageId: string,
+    companyId: string,
+  ): Promise<void> {
+    return this.outboundHandler.revokeOutboundMessage(to, messageId, companyId);
+  }
+
+  async updateBlockStatus(
+    to: string,
+    action: "block" | "unblock",
+    companyId: string,
+  ): Promise<void> {
+    return this.outboundHandler.updateBlockStatus(to, action, companyId);
+  }
+
+  async modifyChat(
+    to: string,
+    companyId: string,
+    mod: ChatModification,
+  ): Promise<void> {
+    return this.outboundHandler.modifyChat(to, companyId, mod);
   }
 }

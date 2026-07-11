@@ -18,7 +18,9 @@ import {
   FolderOpen,
   FileText,
   Music,
-  Video
+  Video,
+  MapPin,
+  UserRound
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -40,6 +42,8 @@ interface SmartComposerProps {
   onProperty?: () => void;
   onRequestData?: () => void;
   onPayment?: () => void;
+  onShareLocation?: () => void;
+  onContact?: () => void;
 
   onClearFile?: () => void;
   replyingTo?: { id: string; content: string; senderName?: string } | null;
@@ -74,6 +78,8 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
   onProperty,
   onRequestData,
   onPayment,
+  onShareLocation,
+  onContact,
 
   disabled = false,
   isRecording = false,
@@ -290,6 +296,8 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
                         { label: t("composer.send_property", "Enviar Inmueble"), icon: Building2, color: 'text-indigo-500', onClick: onProperty },
                         { label: t("composer.request_payment", "Solicitar Pago"), icon: CreditCard, color: 'text-green-500', onClick: onPayment },
                         { label: t("composer.request_data", "Solicitar Datos"), icon: UserCheck, color: 'text-blue-500', onClick: onRequestData },
+                        { label: t("composer.share_location", "Compartir Ubicación"), icon: MapPin, color: 'text-red-500', onClick: onShareLocation },
+                        { label: t("composer.send_contact", "Enviar Contacto"), icon: UserRound, color: 'text-teal-500', onClick: onContact },
                         { label: t("composer.media_library", "Enviar desde Biblioteca"), icon: FolderOpen, color: 'text-pink-500', onClick: onMediaLibraryClick },
                         { label: t("composer.attach_file", "Adjuntar Archivo"), icon: Paperclip, color: 'text-gray-500', onClick: onAttachmentClick },
                       ].map((action, i) => (

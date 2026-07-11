@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { Message } from "@/types";
 import EmojiPicker, { Theme } from "emoji-picker-react";
-import { Plus, Smile, Reply, FileText, Download } from "lucide-react";
+import { Plus, Smile, Reply, FileText, Download, Pencil, Trash2, X, Check, Star, MapPin, User as UserIcon, ExternalLink } from "lucide-react";
 import { VoiceNotePlayer } from "./VoiceNotePlayer";
 import { jwtDecode } from "jwt-decode";
 import { api } from "@/lib/axios";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { CHAT_KEYS } from "@/hooks/useChat";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 
 // Cache token decoding for performance
 let cachedUserId: string | null = null;
@@ -27,6 +28,9 @@ interface MessageBubbleProps {
   message: Message;
   onReply?: (message: Message) => void;
   onReact?: (messageId: string, reaction: string) => void;
+  onEdit?: (messageId: string, content: string) => void;
+  onDelete?: (messageId: string) => void;
+  onStar?: (messageId: string, starred: boolean) => void;
   onQuoteClick?: () => void | null;
   onImageClick?: (mediaUrl: string) => void;
   isGroup?: boolean;
@@ -42,6 +46,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   message,
   onReply,
   onReact,
+  onEdit,
+  onDelete,
+  onStar,
   onQuoteClick,
   onImageClick,
   isGroup,
@@ -50,9 +57,48 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isOutbound = message.direction === "OUTBOUND" || message.sender === "agent";
   const isAgent = isOutbound;
   const isSystem = message.sender === "system";
+  const isRevoked = message.status === "REVOKED";
+  const isEdited = !!(message.metadata as Record<string, unknown> | null)?.isEdited;
+  const isStarred = !!(message.metadata as Record<string, unknown> | null)?.starred;
+  // Only the agent's own delivered outbound messages can be edited/deleted-for-everyone
+  // (WhatsApp/Baileys restriction — mirrored here so the buttons only appear when valid).
+  const canEditOrDelete = isAgent && !isSystem && !isRevoked;
+  const canStar = !isSystem && !isRevoked && !!onStar;
+  // Static literal class names (not runtime-interpolated) so Tailwind's JIT
+  // content scanner picks them up — see overlay button count per branch below.
+  const overlayOffsetClass = isAgent
+    ? canEditOrDelete
+      ? "-left-36"
+      : "-left-14"
+    : canStar
+      ? "-right-20"
+      : "-right-14";
   const isWhisper = !!(message.metadata as Record<string, unknown> | null)?.isWhisper;
   const [showPicker, setShowPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(message.content);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleSaveEdit = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== message.content && onEdit) {
+      onEdit(message.id, trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!onDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(message.id);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   // Extract actual sender name from possible backend populated relations.
   // Priority for group messages: metadata.senderName (WhatsApp pushName stored at ingest time)
@@ -162,10 +208,42 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         } relative`}
       >
         {/* Action Overlay (Floating) */}
-        {!isSystem && (
+        {!isSystem && !isEditing && (
           <div
-            className={`absolute top-0 ${isAgent ? "-left-14" : "-right-14"} hidden group-hover/row:flex items-center gap-1 z-20 transition-all opacity-0 group-hover/row:opacity-100 p-1 animate-in slide-in-from-${isAgent ? 'right' : 'left'}-2 duration-200`}
+            className={`absolute top-0 ${overlayOffsetClass} hidden group-hover/row:flex items-center gap-1 z-20 transition-all opacity-0 group-hover/row:opacity-100 p-1 animate-in slide-in-from-${isAgent ? 'right' : 'left'}-2 duration-200`}
           >
+            {canEditOrDelete && onEdit && (
+              <button
+                onClick={() => {
+                  setEditValue(message.content);
+                  setIsEditing(true);
+                }}
+                className="p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-indigo-50 dark:hover:bg-indigo-500/20 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90"
+                title="Editar mensaje"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+            {canEditOrDelete && onDelete && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-red-50 dark:hover:bg-red-500/20 text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90"
+                title="Eliminar para todos"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+            {canStar && (
+              <button
+                onClick={() => onStar && onStar(message.id, !isStarred)}
+                className={`p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-amber-50 dark:hover:bg-amber-500/20 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90 ${
+                  isStarred ? "text-amber-500" : "text-gray-400 hover:text-amber-500 dark:text-gray-500 dark:hover:text-amber-400"
+                }`}
+                title={isStarred ? "Quitar destacado" : "Destacar mensaje"}
+              >
+                <Star className={`w-4 h-4 ${isStarred ? "fill-amber-500" : ""}`} />
+              </button>
+            )}
             <button
               onClick={() => setShowPicker(!showPicker)}
               className="p-2 rounded-full bg-white dark:bg-[#1f2c34] hover:bg-indigo-50 dark:hover:bg-indigo-500/20 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 transition-all shadow-sm border border-gray-100 dark:border-white/10 active:scale-90"
@@ -445,10 +523,109 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               <UnavailableMediaFallback message={message} type="document" />
             ))}
 
+          {/* Location Message */}
+          {msgType === "location" && (() => {
+            const loc = message.metadata?.location as
+              | { latitude: number; longitude: number; name?: string; address?: string }
+              | undefined;
+            if (!loc) return null;
+            const mapsUrl = `https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`;
+            const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${loc.latitude},${loc.longitude}&zoom=15&size=280x140&markers=${loc.latitude},${loc.longitude}`;
+            return (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block mb-1 rounded-lg overflow-hidden border border-black/10 dark:border-white/10 hover:opacity-90 transition-opacity"
+              >
+                <div className="relative bg-gray-100 dark:bg-white/5 flex items-center justify-center h-[100px]">
+                  <img
+                    src={staticMapUrl}
+                    alt="Mapa"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                  <MapPin className="w-6 h-6 text-red-500 absolute drop-shadow" />
+                </div>
+                <div className={`flex items-center gap-1.5 p-2 text-xs font-medium ${isAgent ? "bg-black/10" : "bg-white dark:bg-[#111b21]"}`}>
+                  <span className="truncate flex-1">{loc.name || loc.address || "Ver ubicación"}</span>
+                  <ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
+                </div>
+              </a>
+            );
+          })()}
+
+          {/* Contact Card Message */}
+          {msgType === "contact" && (() => {
+            const contact = message.metadata?.contact as { name: string; phone: string } | undefined;
+            if (!contact) return null;
+            return (
+              <div className={`flex items-center gap-3 p-2.5 rounded-xl mb-1 ${isAgent ? "bg-black/10" : "bg-white dark:bg-[#111b21]"}`}>
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isAgent ? "bg-white/20" : "bg-indigo-100 dark:bg-indigo-900/40"}`}>
+                  <UserIcon className={`w-5 h-5 ${isAgent ? "text-white" : "text-indigo-600 dark:text-indigo-400"}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[13.5px] font-medium truncate">{contact.name}</p>
+                  <p className={`text-[11px] ${isAgent ? "text-white/70" : "text-gray-500"}`}>{contact.phone}</p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Inline Edit Mode */}
+          {isEditing && (
+            <div className="flex flex-col gap-2 min-w-[220px]">
+              <textarea
+                autoFocus
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSaveEdit();
+                  } else if (e.key === "Escape") {
+                    setIsEditing(false);
+                  }
+                }}
+                rows={2}
+                className={`w-full rounded-lg p-2 text-sm resize-none border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                  isAgent
+                    ? "bg-white/10 border-white/30 text-white placeholder-white/50"
+                    : "bg-white dark:bg-[#111b21] border-gray-300 dark:border-gray-600"
+                }`}
+              />
+              <div className="flex items-center justify-end gap-1.5">
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="p-1.5 rounded-full bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 transition-colors"
+                  title="Cancelar"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="p-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
+                  title="Guardar"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Revoked ("deleted for everyone") placeholder — same content/status
+              contract as inbound revokes (MessageRevocationHandler.ts) */}
+          {!isEditing && isRevoked && (
+            <p className={`italic text-sm flex items-center gap-1.5 ${isAgent ? "text-white/70" : "text-gray-500 dark:text-gray-400"}`}>
+              <Trash2 className="w-3.5 h-3.5" />
+              {message.content?.trim() || "Se eliminó este mensaje"}
+            </p>
+          )}
+
           {/* Text Content & Specialized Renderers */}
-          {message.content && (() => {
+          {!isEditing && !isRevoked && msgType !== "location" && msgType !== "contact" && message.content && (() => {
             const content = message.content;
-            
+
             // ️ SCHEDULED MESSAGE
             if (content.includes("MENSAJE PROGRAMADO:") || message.status === "SCHEDULED") {
               let realMsg = content;
@@ -537,6 +714,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               isAgent ? (isWhisper ? "text-amber-800/70 dark:text-amber-400/70" : "text-white/70") : "text-gray-400 dark:text-gray-500"
             }`}
           >
+            {isStarred && (
+              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+            )}
+            {isEdited && !isRevoked && (
+              <span className="text-[10px] leading-none italic opacity-80">Editado</span>
+            )}
             <span className="text-[10px] leading-none whitespace-nowrap">
               {formatTime(message.timestamp)}
             </span>
@@ -578,6 +761,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        title="Eliminar mensaje para todos"
+        message="Este mensaje se eliminará para ti y para el destinatario. Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 };
@@ -748,6 +943,14 @@ export const MessageBubble = React.memo(
     if (prev.status !== next.status) return false;
     if (prev.content !== next.content) return false;
     if (JSON.stringify(prev.reactions) !== JSON.stringify(next.reactions)) return false;
+    if (
+      (prev.metadata as Record<string, unknown> | undefined)?.starred !==
+      (next.metadata as Record<string, unknown> | undefined)?.starred
+    ) return false;
+    if (
+      (prev.metadata as Record<string, unknown> | undefined)?.isEdited !==
+      (next.metadata as Record<string, unknown> | undefined)?.isEdited
+    ) return false;
     
     if (Math.abs(new Date(prev.timestamp).getTime() - new Date(next.timestamp).getTime()) > 1000) {
       return false;

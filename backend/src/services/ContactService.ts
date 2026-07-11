@@ -2,6 +2,7 @@ import { AppError } from "@/utils/AppError";
 import { HTTP_STATUS } from "@/constants/httpStatus";
 import { Logger } from "@/utils/logger";
 import { planLimitsService } from "@/services/PlanLimitsService";
+import { whatsappMessagingService } from "@/whatsapp";
 import { Contact, Prisma } from "@prisma/client";
 import {
   ContactDTO,
@@ -68,6 +69,9 @@ export const contactService = {
           phone: true,
           avatarUrl: true,
           tags: true,
+          isBlocked: true,
+          blockedAt: true,
+          blockedReason: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -492,6 +496,86 @@ export const contactService = {
     await contactRepository.bulkCreate(
       contacts as Array<Prisma.ContactCreateInput>,
     );
+  },
+
+  /**
+   * Block or unblock a contact. Flips the CRM-side spam-gate flag
+   * (Contact.isBlocked, already enforced on inbound in InboundOrchestratorService)
+   * and, best-effort, mirrors it on the real WhatsApp account via Baileys'
+   * updateBlockStatus. If there's no active WhatsApp session the CRM-side flag
+   * still applies (the inbound filter doesn't depend on Baileys) — the caller
+   * gets `whatsappSynced: false` back to surface a non-fatal warning.
+   */
+  async setBlockStatus(
+    companyId: string,
+    id: string,
+    blocked: boolean,
+    reason?: string,
+  ): Promise<{ contact: ContactDTO; whatsappSynced: boolean }> {
+    const contact = await contactRepository.findFirst({
+      where: { id, companyId },
+    });
+    if (!contact) throw new AppError("Contact not found", HTTP_STATUS.NOT_FOUND);
+    if (!contact.phone) {
+      throw new AppError(
+        "Contact has no phone number to block/unblock on WhatsApp",
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+
+    let whatsappSynced = false;
+    try {
+      if (blocked) {
+        await whatsappMessagingService.blockContact(contact.phone, companyId);
+      } else {
+        await whatsappMessagingService.unblockContact(contact.phone, companyId);
+      }
+      whatsappSynced = true;
+    } catch (error) {
+      Logger.warn(
+        `[ContactService] WhatsApp ${blocked ? "block" : "unblock"} failed for contact ${id} (companyId=${companyId}); CRM-side flag still applied: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    const updated = await contactRepository.update(companyId, id, {
+      isBlocked: blocked,
+      blockedAt: blocked ? new Date() : null,
+      blockedReason: blocked ? reason || "MANUAL" : null,
+    });
+
+    return { contact: toContactDTO(updated), whatsappSynced };
+  },
+
+  /**
+   * Same as setBlockStatus, but resolved by phone instead of Contact ID.
+   * The chat header only reliably has the conversation's phone number —
+   * WhatsApp conversations link to a shadow User participant, not always
+   * to a CRM Contact row (Conversation.contactId is frequently null even
+   * for active conversations) — so find-or-create by phone (the real
+   * uniqueness key on Contact, @@unique([companyId, phone])) instead of
+   * requiring a pre-existing Contact ID the caller may not have.
+   */
+  async setBlockStatusByPhone(
+    companyId: string,
+    phone: string,
+    blocked: boolean,
+    reason?: string,
+  ): Promise<{ contact: ContactDTO; whatsappSynced: boolean }> {
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (!cleanPhone) {
+      throw new AppError("Valid phone number required", HTTP_STATUS.BAD_REQUEST);
+    }
+
+    let contact = await contactRepository.findFirst({
+      where: { companyId, phone: cleanPhone },
+    });
+    if (!contact) {
+      contact = await contactRepository.upsertByPhone(companyId, cleanPhone, {
+        name: cleanPhone,
+      });
+    }
+
+    return this.setBlockStatus(companyId, contact.id, blocked, reason);
   },
 };
 

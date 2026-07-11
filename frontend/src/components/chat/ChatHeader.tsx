@@ -27,6 +27,10 @@ interface ChatHeaderProps {
   showParticipants: () => void;
   isCustomer360Visible: boolean;
   onChangePriority?: (priority: "LOW" | "MEDIUM" | "HIGH") => void;
+  onToggleBlockContact?: () => void;
+  onToggleArchived?: () => void;
+  onTogglePinned?: () => void;
+  onToggleMuted?: () => void;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -42,6 +46,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   showParticipants,
   isCustomer360Visible,
   onChangePriority,
+  onToggleBlockContact,
+  onToggleArchived,
+  onTogglePinned,
+  onToggleMuted,
 }) => {
   const [isCopied, setIsCopied] = useState(false);
 
@@ -72,6 +80,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       onToggleParticipantsPanel={displayContact.isGroup ? showParticipants : undefined}
       onSyncHistory={onSync}
       isTyping={false} // Can be wired up if needed
+      onToggleBlockContact={onToggleBlockContact}
+      onToggleArchived={onToggleArchived}
+      onTogglePinned={onTogglePinned}
+      onToggleMuted={onToggleMuted}
     />
   );
 };

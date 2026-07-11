@@ -13,6 +13,8 @@ export const getMediaPlaceholder = (type: MediaType | string | null | undefined)
   if (normalized.includes("VIDEO") || normalized === "VIDEO") return "[VIDEO]";
   if (normalized.includes("AUDIO") || normalized === "AUDIO") return "[AUDIO]";
   if (normalized.includes("STICKER")) return "[STICKER]";
-  
+  if (normalized.includes("LOCATION")) return "[UBICACIÓN]";
+  if (normalized.includes("CONTACT")) return "[CONTACTO]";
+
   return "[DOCUMENTO]";
 };

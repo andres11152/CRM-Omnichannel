@@ -154,6 +154,10 @@ export const AgentWorkspace: React.FC<Props> = ({ aiConfig, user }) => {
                 onResolve={workspace.handleResolve}
                 onContactUpdate={workspace.handleContactUpdate}
                 onTicketUpdate={workspace.handleOptimisticTicketUpdate}
+                onSetContactBlockStatus={workspace.handleSetContactBlockStatus}
+                onSetArchived={workspace.handleSetArchived}
+                onSetPinned={workspace.handleSetPinned}
+                onSetMuted={workspace.handleSetMuted}
               />
             ) : (
               <QueuePreviewCard

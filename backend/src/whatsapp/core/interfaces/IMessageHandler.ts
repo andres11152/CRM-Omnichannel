@@ -3,7 +3,7 @@ import {
   SendMessageOptions,
   MediaPayload,
 } from "../types/whatsapp.types";
-import { proto } from "@whiskeysockets/baileys";
+import { proto, ChatModification } from "@whiskeysockets/baileys";
 
 export interface IMessageHandler {
   handleIncoming(
@@ -33,5 +33,26 @@ export interface IMessageHandler {
     reaction: string,
     companyId: string,
     fromMe?: boolean,
+  ): Promise<void>;
+  editOutboundMessage(
+    to: string,
+    messageId: string,
+    newContent: string,
+    companyId: string,
+  ): Promise<void>;
+  revokeOutboundMessage(
+    to: string,
+    messageId: string,
+    companyId: string,
+  ): Promise<void>;
+  updateBlockStatus(
+    to: string,
+    action: "block" | "unblock",
+    companyId: string,
+  ): Promise<void>;
+  modifyChat(
+    to: string,
+    companyId: string,
+    mod: ChatModification,
   ): Promise<void>;
 }

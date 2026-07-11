@@ -26,7 +26,13 @@ import { ticketSyncService } from "./TicketSyncService";
 import { instagramSessionRepository } from "@/instagram/InstagramSessionRepository";
 import { instagramProviderService, InstagramMediaContent } from "@/instagram/InstagramProviderService";
 
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
+import { ConversationQueryService } from "@/services/ConversationQueryService";
+
 export class ConversationMessageService {
+  private socketEmitter = new SocketEventEmitter(gateway);
+  private conversationQueryService = new ConversationQueryService();
+
   /**
    * Primary Messaging Orchestrator (Reply from Agent)
    */
@@ -204,6 +210,16 @@ export class ConversationMessageService {
         mimetype: attachment.mimetype || attachment.mimeType || "application/octet-stream",
         filename: attachment.name,
         caption: content || undefined,
+        location: attachment.type === "location" ? {
+          latitude: Number(attachment.latitude),
+          longitude: Number(attachment.longitude),
+          name: (attachment.locationName as string | undefined) || attachment.name,
+          address: attachment.address as string | undefined,
+        } : undefined,
+        contact: attachment.type === "contact" ? {
+          name: (attachment.contactName as string | undefined) || attachment.name,
+          phone: String(attachment.phone || ""),
+        } : undefined,
       } : undefined,
       metadata: { 
         ...metadata, 
@@ -409,6 +425,285 @@ export class ConversationMessageService {
       reaction,
       reactBy: userId,
     });
+  }
+
+  /** Resolves a conversationId param that may actually be a ticket id (same
+   * fallback used by reactToMessage/replyToConversation). */
+  private async resolveConversation(companyId: string, conversationId: string) {
+    const conv = await conversationRepository.findByIdAndCompanyId(conversationId, companyId);
+    if (conv) return conv;
+
+    const ticketConvId = await ticketSyncService.findConversationIdByTicket(conversationId, companyId);
+    if (ticketConvId) {
+      const resolved = await conversationRepository.findByIdAndCompanyId(ticketConvId, companyId);
+      if (resolved) return resolved;
+    }
+    throw new AppError("Conversation not found", 404);
+  }
+
+  private async resolveTargetPhone(companyId: string, conv: { id: string; channelId: string | null }): Promise<string> {
+    let targetPhone = conv.channelId;
+    if (!targetPhone || !/^\d+$/.test(targetPhone)) {
+      targetPhone = (await ticketSyncService.findPhoneByConversation(companyId, conv.id)) || null;
+    }
+    if (!targetPhone) throw new AppError("Target phone not found", 400);
+    return targetPhone;
+  }
+
+  /** Builds Baileys' required `lastMessages` for the `archive` chatModify —
+   * `key.remoteJid` is left unset; OutboundMessageHandler.modifyChat fills it
+   * in once it resolves the destination JID. */
+  private async buildLastMessages(companyId: string, conversationId: string) {
+    const lastMsg = await messageRepository.findFirst({
+      where: { conversationId, companyId },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!lastMsg || !lastMsg.whatsappMessageId) return [];
+    return [
+      {
+        key: {
+          id: lastMsg.whatsappMessageId,
+          fromMe: lastMsg.direction === MessageDirection.OUTBOUND,
+        },
+        messageTimestamp: Math.floor(lastMsg.createdAt.getTime() / 1000),
+      },
+    ];
+  }
+
+  async setArchived(
+    companyId: string,
+    conversationId: string,
+    archived: boolean,
+  ): Promise<{ isArchived: boolean; whatsappSynced: boolean }> {
+    const conv = await this.resolveConversation(companyId, conversationId);
+    const targetPhone = await this.resolveTargetPhone(companyId, conv);
+    const lastMessages = await this.buildLastMessages(companyId, conv.id);
+
+    let whatsappSynced = true;
+    try {
+      await whatsappMessagingService.modifyChat(targetPhone, companyId, {
+        archive: archived,
+        lastMessages,
+      });
+    } catch (error) {
+      whatsappSynced = false;
+      Logger.warn(
+        `[ConversationMessageService] WhatsApp archive sync failed for conversation ${conv.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    await conversationRepository.update(companyId, conv.id, { isArchived: archived });
+    gateway.emitToCompany(companyId, "conversation:updated", {
+      conversationId: conv.id,
+      isArchived: archived,
+    });
+
+    return { isArchived: archived, whatsappSynced };
+  }
+
+  async setPinned(
+    companyId: string,
+    conversationId: string,
+    pinned: boolean,
+  ): Promise<{ isPinned: boolean; whatsappSynced: boolean }> {
+    const conv = await this.resolveConversation(companyId, conversationId);
+    const targetPhone = await this.resolveTargetPhone(companyId, conv);
+
+    let whatsappSynced = true;
+    try {
+      await whatsappMessagingService.modifyChat(targetPhone, companyId, { pin: pinned });
+    } catch (error) {
+      whatsappSynced = false;
+      Logger.warn(
+        `[ConversationMessageService] WhatsApp pin sync failed for conversation ${conv.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    await conversationRepository.update(companyId, conv.id, { isPinned: pinned });
+    gateway.emitToCompany(companyId, "conversation:updated", {
+      conversationId: conv.id,
+      isPinned: pinned,
+    });
+
+    return { isPinned: pinned, whatsappSynced };
+  }
+
+  async setMuted(
+    companyId: string,
+    conversationId: string,
+    mutedUntil: Date | null,
+  ): Promise<{ mutedUntil: Date | null; whatsappSynced: boolean }> {
+    const conv = await this.resolveConversation(companyId, conversationId);
+    const targetPhone = await this.resolveTargetPhone(companyId, conv);
+
+    let whatsappSynced = true;
+    try {
+      await whatsappMessagingService.modifyChat(targetPhone, companyId, {
+        mute: mutedUntil ? mutedUntil.getTime() : null,
+      });
+    } catch (error) {
+      whatsappSynced = false;
+      Logger.warn(
+        `[ConversationMessageService] WhatsApp mute sync failed for conversation ${conv.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    await conversationRepository.update(companyId, conv.id, { mutedUntil });
+    gateway.emitToCompany(companyId, "conversation:updated", {
+      conversationId: conv.id,
+      mutedUntil,
+    });
+
+    return { mutedUntil, whatsappSynced };
+  }
+
+  /**
+   * Edit an already-sent OUTBOUND message. Baileys/WhatsApp only allow
+   * editing messages the account itself sent — INBOUND (customer) messages
+   * or messages missing a whatsappMessageId (never actually delivered) are
+   * rejected before ever reaching the socket. Mirrors the metadata shape
+   * MessageEditHandler.ts already uses for the inbound case (customer edits
+   * their own message) so both paths converge on one frontend contract.
+   */
+  async editMessage(
+    companyId: string,
+    conversationId: string,
+    messageId: string,
+    newContent: string,
+  ): Promise<Message> {
+    const conv = await this.resolveConversation(companyId, conversationId);
+    const msg = await messageRepository.findFirst({
+      where: { id: messageId, companyId, conversationId: conv.id },
+    });
+    if (!msg) throw new AppError("Message not found", 404);
+    if (msg.direction !== MessageDirection.OUTBOUND || !msg.whatsappMessageId) {
+      throw new AppError("Only your own delivered WhatsApp messages can be edited", 400);
+    }
+    if (msg.status === "REVOKED") {
+      throw new AppError("Cannot edit a deleted message", 400);
+    }
+
+    const targetPhone = await this.resolveTargetPhone(companyId, conv);
+    await whatsappMessagingService.editMessage(targetPhone, msg.whatsappMessageId, newContent, companyId);
+
+    const existingMeta = (msg.metadata as Record<string, unknown>) || {};
+    await messageRepository.update(
+      msg.id,
+      {
+        content: newContent,
+        metadata: { ...existingMeta, isEdited: true, editedAt: new Date().toISOString() },
+      },
+      companyId,
+    );
+    const updated = await messageRepository.findFirst({
+      where: { id: msg.id, companyId },
+      include: { sender: true },
+    });
+    if (!updated) throw new AppError("Message not found after update", 500);
+
+    const fullConv = await this.conversationQueryService.getConversation(companyId, conv.id);
+    const ticketId = fullConv.contact?.id || "";
+    this.socketEmitter.emitMessageSent(updated, fullConv, ticketId);
+
+    return updated;
+  }
+
+  /** Delete-for-everyone on an already-sent OUTBOUND message. Reuses the exact
+   * content placeholder / status / metadata shape MessageRevocationHandler.ts
+   * already uses for the inbound case (contact deletes their own message), so
+   * both paths render identically in the UI regardless of who deleted it. */
+  async revokeMessage(
+    companyId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<Message> {
+    const conv = await this.resolveConversation(companyId, conversationId);
+    const msg = await messageRepository.findFirst({
+      where: { id: messageId, companyId, conversationId: conv.id },
+    });
+    if (!msg) throw new AppError("Message not found", 404);
+    if (msg.direction !== MessageDirection.OUTBOUND || !msg.whatsappMessageId) {
+      throw new AppError("Only your own delivered WhatsApp messages can be deleted", 400);
+    }
+    if (msg.status === "REVOKED") {
+      throw new AppError("Message already deleted", 400);
+    }
+
+    const targetPhone = await this.resolveTargetPhone(companyId, conv);
+    await whatsappMessagingService.revokeMessage(targetPhone, msg.whatsappMessageId, companyId);
+
+    const existingMeta = (msg.metadata as Record<string, unknown>) || {};
+    const updated = await messageRepository.update(
+      msg.id,
+      {
+        content: " Este mensaje fue eliminado",
+        status: "REVOKED",
+        metadata: {
+          ...existingMeta,
+          revoked: true,
+          revokedAt: new Date().toISOString(),
+          revokedBy: "sender",
+        },
+      },
+      companyId,
+    );
+
+    this.socketEmitter.emitMessageRevoked(msg.id, conv.id, companyId);
+
+    return updated;
+  }
+
+  /** Star/unstar a message (any direction — WhatsApp lets you star messages
+   * you received too, not just your own). Starred state is tracked in
+   * `metadata.starred`, matching the metadata-based convention already used
+   * for isEdited/revoked rather than adding a dedicated column. */
+  async setStarred(
+    companyId: string,
+    conversationId: string,
+    messageId: string,
+    starred: boolean,
+  ): Promise<{ starred: boolean; whatsappSynced: boolean }> {
+    const conv = await this.resolveConversation(companyId, conversationId);
+    const msg = await messageRepository.findFirst({
+      where: { id: messageId, companyId, conversationId: conv.id },
+    });
+    if (!msg) throw new AppError("Message not found", 404);
+    if (!msg.whatsappMessageId) {
+      throw new AppError("Message was never delivered/received via WhatsApp", 400);
+    }
+
+    let whatsappSynced = true;
+    try {
+      const targetPhone = await this.resolveTargetPhone(companyId, conv);
+      await whatsappMessagingService.modifyChat(targetPhone, companyId, {
+        star: {
+          messages: [
+            { id: msg.whatsappMessageId, fromMe: msg.direction === MessageDirection.OUTBOUND },
+          ],
+          star: starred,
+        },
+      });
+    } catch (error) {
+      whatsappSynced = false;
+      Logger.warn(
+        `[ConversationMessageService] WhatsApp star sync failed for message ${msg.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    const existingMeta = (msg.metadata as Record<string, unknown>) || {};
+    await messageRepository.update(
+      msg.id,
+      { metadata: { ...existingMeta, starred } },
+      companyId,
+    );
+
+    gateway.emitToCompany(companyId, "message:starred", {
+      messageId: msg.id,
+      conversationId: conv.id,
+      starred,
+    });
+
+    return { starred, whatsappSynced };
   }
 }
 

@@ -29,6 +29,8 @@ interface ChatComposerProps {
   onProperty?: () => void;
   onPayment?: () => void;
   onRequestData?: () => void;
+  onShareLocation?: () => void;
+  onContact?: () => void;
   onAICopilotClick?: (action: "summarize" | "formal" | "suggest") => void;
   isWhisperMode?: boolean;
   onWhisperToggle?: () => void;
@@ -60,6 +62,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   onProperty,
   onPayment,
   onRequestData,
+  onShareLocation,
+  onContact,
   onAICopilotClick,
   isWhisperMode = false,
   onWhisperToggle = () => {},
@@ -154,6 +158,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             onProperty={onProperty}
             onPayment={onPayment}
             onRequestData={onRequestData}
+            onShareLocation={onShareLocation}
+            onContact={onContact}
             isWhisperMode={isWhisperMode}
             onWhisperToggle={onWhisperToggle}
             onKeyDown={(e) => {

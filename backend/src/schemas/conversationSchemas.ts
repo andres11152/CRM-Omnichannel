@@ -53,6 +53,61 @@ export const ReactToMessageSchema = z.object({
   }),
 });
 
+export const SetConversationArchivedSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Conversation ID is required."),
+  }),
+  body: z.object({
+    archived: z.boolean(),
+  }),
+});
+
+export const SetConversationPinnedSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Conversation ID is required."),
+  }),
+  body: z.object({
+    pinned: z.boolean(),
+  }),
+});
+
+export const EditMessageSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Conversation ID is required."),
+    messageId: z.string().min(1, "Message ID is required."),
+  }),
+  body: z.object({
+    content: z.string().min(1, "Content is required.").max(4096, "Content is too long."),
+  }),
+});
+
+export const RevokeMessageSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Conversation ID is required."),
+    messageId: z.string().min(1, "Message ID is required."),
+  }),
+});
+
+export const SetMessageStarredSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Conversation ID is required."),
+    messageId: z.string().min(1, "Message ID is required."),
+  }),
+  body: z.object({
+    starred: z.boolean(),
+  }),
+});
+
+export const SetConversationMutedSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Conversation ID is required."),
+  }),
+  body: z.object({
+    // null/undefined = unmute; ISO datetime string = mute until that time
+    mutedUntil: z.string().datetime().nullable().optional(),
+  }),
+});
+
 export const RetryMediaSchema = z.object({
   params: z.object({
     id: z.string().min(1, "Conversation ID is required."),

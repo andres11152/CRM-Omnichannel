@@ -91,8 +91,8 @@ export const deleteDeal = async (id: string): Promise<void> => {
 
 // --- CONTACTS ---
 
-export const getContacts = async (): Promise<{ contacts: CrmContact[] }> => {
-  const res = await api.get("/contacts");
+export const getContacts = async (params?: { search?: string; limit?: number }): Promise<{ contacts: CrmContact[] }> => {
+  const res = await api.get("/contacts", { params });
 
   // Axios response.data IS the body.
   // Backend might return array directly or { data: [...] }

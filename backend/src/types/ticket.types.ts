@@ -41,6 +41,11 @@ export interface TicketDTO {
   channel: string;
   tags: string[];
 
+  // 📥 INBOX ORGANIZATION (mirrors Baileys chatModify — archive/pin/mute)
+  isArchived: boolean;
+  isPinned: boolean;
+  mutedUntil: Date | null;
+
   //  GROUP CHAT SUPPORT (Enterprise CRM Feature)
   isGroup: boolean;
   groupMetadata?: {
@@ -64,6 +69,9 @@ export interface TicketContactDTO {
   channelId: string; // Raw channel ID (JID)
   unreadCount: number; // Usually 0 for tickets unless || computed
   status: string;
+  // Real WhatsApp block state (mirrors Contact.isBlocked) — only meaningful
+  // when realContactId/id resolves to an actual Contact row.
+  isBlocked?: boolean;
 
   //  GROUP CHAT SUPPORT
   isGroup?: boolean;
@@ -90,6 +98,7 @@ export type TicketWithRelations = Ticket & {
           avatarUrl: string | null;
           profilePicUrl?: string | null;
           about?: string | null;
+          isBlocked?: boolean;
         } | null;
       })
     | null;
@@ -115,6 +124,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
           avatarUrl: string | null;
           profilePicUrl?: string | null;
           about?: string | null;
+          isBlocked?: boolean;
         } | null;
         isGroup?: boolean;
         groupMetadata?: {
@@ -172,7 +182,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
   })();
 
   const customer:
-    | { id: string; name: string | null; email: string | null; phone: string | null; profilePicUrl?: string | null; about?: string | null; role?: string }
+    | { id: string; name: string | null; email: string | null; phone: string | null; profilePicUrl?: string | null; about?: string | null; role?: string; isBlocked?: boolean }
     | null
     | undefined = crmContact || participant
     ? {
@@ -193,6 +203,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
           null,
         about: crmContact?.about ?? participant?.about ?? null,
         role: participant?.role,
+        isBlocked: crmContact?.isBlocked,
       }
     : ticket.createdBy;
 
@@ -251,6 +262,7 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     about: customer?.about,
     unreadCount: 0,
     status: ticket.status,
+    isBlocked: customer?.isBlocked ?? false,
     realContactId: undefined,
     isGroup,
   };
@@ -292,6 +304,10 @@ export const toTicketDTO = (ticket: TicketWithRelations): TicketDTO => {
     lastMessageDirection: (lastMsg?.direction as "INBOUND" | "OUTBOUND" | undefined) ?? null,
     channel: "WhatsApp",
     tags: conversation?.tags || [],
+
+    isArchived: conversation?.isArchived ?? false,
+    isPinned: conversation?.isPinned ?? false,
+    mutedUntil: conversation?.mutedUntil ?? null,
 
     //  GROUP CHAT SUPPORT
     isGroup,

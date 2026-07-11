@@ -206,6 +206,9 @@ export function ticketToContact(ticket: Ticket): Contact {
     ticketId: ticket.id,
     ticketCreatedAt: ticket.createdAt,
     lastMessageDirection: ticket.lastMessageDirection,
+    isArchived: ticket.isArchived,
+    isPinned: ticket.isPinned,
+    mutedUntil: ticket.mutedUntil,
   };
 }
 
@@ -678,6 +681,144 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
     );
   }, []);
 
+  const handleSetContactBlockStatus = useCallback(
+    async (phone: string, blocked: boolean) => {
+      try {
+        const token = localStorage.getItem("token");
+        // Resolved by phone (find-or-create), not Contact ID — WhatsApp
+        // conversations link to a shadow User participant, and
+        // Conversation.contactId is frequently unset, so the chat header
+        // can't reliably supply a real Contact ID.
+        const res = await fetch(
+          `${API_BASE_URL}/contacts/by-phone/block-status`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ phone, blocked }),
+          },
+        );
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || "Error al actualizar el bloqueo");
+        }
+        const json = await res.json();
+
+        setTickets((prev) =>
+          prev.map((t) =>
+            t.contact.phone?.replace(/\D/g, "") === phone.replace(/\D/g, "")
+              ? { ...t, contact: { ...t.contact, isBlocked: blocked } }
+              : t,
+          ),
+        );
+
+        if (json.whatsappSynced === false) {
+          toast.success(
+            blocked
+              ? "Contacto bloqueado en el CRM (sin sesión de WhatsApp activa para sincronizar)"
+              : "Contacto desbloqueado en el CRM (sin sesión de WhatsApp activa para sincronizar)",
+          );
+        } else {
+          toast.success(
+            blocked ? "Contacto bloqueado" : "Contacto desbloqueado",
+          );
+        }
+      } catch (error: unknown) {
+        const msg =
+          error instanceof Error
+            ? error.message
+            : "Error al actualizar el bloqueo";
+        toast.error(msg);
+      }
+    },
+    [],
+  );
+
+  const handleSetConversationInboxState = useCallback(
+    async (
+      ticketId: string,
+      field: "archive" | "pin" | "mute",
+      body: Record<string, unknown>,
+      patch: Partial<Ticket>,
+      successMsg: string,
+    ) => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `${API_BASE_URL}/conversations/${ticketId}/${field}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+          },
+        );
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || "Error al actualizar la conversación");
+        }
+        const json = await res.json();
+
+        setTickets((prev) =>
+          prev.map((t) => (t.id === ticketId ? { ...t, ...patch } : t)),
+        );
+
+        toast.success(
+          json.data?.whatsappSynced === false
+            ? `${successMsg} (sin sesión de WhatsApp activa para sincronizar)`
+            : successMsg,
+        );
+      } catch (error: unknown) {
+        const msg =
+          error instanceof Error
+            ? error.message
+            : "Error al actualizar la conversación";
+        toast.error(msg);
+      }
+    },
+    [],
+  );
+
+  const handleSetArchived = useCallback(
+    (ticketId: string, archived: boolean) =>
+      handleSetConversationInboxState(
+        ticketId,
+        "archive",
+        { archived },
+        { isArchived: archived },
+        archived ? "Chat archivado" : "Chat desarchivado",
+      ),
+    [handleSetConversationInboxState],
+  );
+
+  const handleSetPinned = useCallback(
+    (ticketId: string, pinned: boolean) =>
+      handleSetConversationInboxState(
+        ticketId,
+        "pin",
+        { pinned },
+        { isPinned: pinned },
+        pinned ? "Chat fijado" : "Chat desfijado",
+      ),
+    [handleSetConversationInboxState],
+  );
+
+  const handleSetMuted = useCallback(
+    (ticketId: string, mutedUntil: string | null) =>
+      handleSetConversationInboxState(
+        ticketId,
+        "mute",
+        { mutedUntil },
+        { mutedUntil },
+        mutedUntil ? "Chat silenciado" : "Chat reactivado",
+      ),
+    [handleSetConversationInboxState],
+  );
+
   const handleToggleTag = useCallback((tagId: string) => {
     setSelectedTags((prev) =>
       prev.includes(tagId)
@@ -856,6 +997,9 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
             ticketId: activeTicket.id,
             ticketCreatedAt: activeTicket.createdAt,
             lastMessageDirection: activeTicket.lastMessageDirection,
+            isArchived: activeTicket.isArchived,
+            isPinned: activeTicket.isPinned,
+            mutedUntil: activeTicket.mutedUntil,
           }
         : null,
     [activeTicket],
@@ -926,6 +1070,10 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
     handleOptimisticTicketUpdate,
     handleResolve,
     handleContactUpdate,
+    handleSetContactBlockStatus,
+    handleSetArchived,
+    handleSetPinned,
+    handleSetMuted,
     handleToggleTag,
     fetchData,
   };

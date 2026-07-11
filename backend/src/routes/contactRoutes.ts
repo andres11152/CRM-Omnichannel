@@ -7,6 +7,8 @@ import {
   GetContactDetailSchema,
   GetContactsSchema,
   DeleteContactSchema,
+  SetContactBlockStatusSchema,
+  SetContactBlockStatusByPhoneSchema,
 } from "../schemas/contactSchema";
 
 import { auditLog } from "../middleware/auditMiddleware";
@@ -73,6 +75,35 @@ router.delete(
   validate(DeleteContactSchema),
   auditLog("Contact"), // Log Deletion
   contactController.deleteContact,
+);
+
+// PATCH /contacts/by-phone/block-status
+// Resolved by phone (find-or-create) — used by the chat header, which often
+// only has the conversation's phone (Conversation.contactId is frequently
+// unset for WhatsApp shadow-user conversations). MUST be registered before
+// the "/:id/block-status" route below — both are 2-segment paths, and
+// "/by-phone/block-status" would otherwise be matched as ":id" = "by-phone"
+// by the dynamic route since Express matches in registration order.
+router.patch(
+  "/by-phone/block-status",
+  validate(SetContactBlockStatusByPhoneSchema),
+  auditLog("Contact", (req) => {
+    const body = req.body as Record<string, unknown>;
+    return `${body?.blocked ? "block" : "unblock"}:${body?.phone}`;
+  }),
+  contactController.setBlockStatusByPhone,
+);
+
+// PATCH /contacts/:id/block-status
+// Block or unblock a contact (CRM spam-gate flag + real WhatsApp block via Baileys)
+router.patch(
+  "/:id/block-status",
+  validate(SetContactBlockStatusSchema),
+  auditLog("Contact", (req) => {
+    const body = req.body as Record<string, unknown>;
+    return body?.blocked ? "block" : "unblock";
+  }),
+  contactController.setBlockStatus,
 );
 
 // POST /contacts/import

@@ -14,6 +14,9 @@ export interface ContactDTO {
   tags: string[];
   notes: string | null;
   customFields: Record<string, unknown>;
+  isBlocked: boolean;
+  blockedAt: string | null;
+  blockedReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -47,6 +50,9 @@ export const toContactDTO = (contact: Contact): ContactDTO => {
     tags: contact.tags,
     notes: contact.notes,
     customFields: (contact.customFields as Record<string, unknown>) || {},
+    isBlocked: contact.isBlocked,
+    blockedAt: contact.blockedAt ? contact.blockedAt.toISOString() : null,
+    blockedReason: contact.blockedReason,
     createdAt: contact.createdAt.toISOString(),
     updatedAt: contact.updatedAt.toISOString(),
   };

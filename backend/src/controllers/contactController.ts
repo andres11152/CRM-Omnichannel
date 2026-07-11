@@ -113,5 +113,46 @@ export const contactController = {
       });
     },
   ),
+
+  setBlockStatus: catchAsync(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const companyId = req.companyId!;
+      const { id } = req.params;
+      const { blocked, reason } = req.body;
+
+      const result = await contactService.setBlockStatus(
+        companyId,
+        id,
+        blocked,
+        reason,
+      );
+
+      res.status(HTTP_STATUS.OK).json({
+        status: "success",
+        data: result.contact,
+        whatsappSynced: result.whatsappSynced,
+      });
+    },
+  ),
+
+  setBlockStatusByPhone: catchAsync(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const companyId = req.companyId!;
+      const { phone, blocked, reason } = req.body;
+
+      const result = await contactService.setBlockStatusByPhone(
+        companyId,
+        phone,
+        blocked,
+        reason,
+      );
+
+      res.status(HTTP_STATUS.OK).json({
+        status: "success",
+        data: result.contact,
+        whatsappSynced: result.whatsappSynced,
+      });
+    },
+  ),
 };
 

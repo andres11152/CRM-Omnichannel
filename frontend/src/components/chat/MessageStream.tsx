@@ -11,6 +11,9 @@ interface MessageStreamProps {
   chatEndRef: React.RefObject<HTMLDivElement>;
   scrollToMessage: (id: string) => void;
   onReact: (id: string, emoji: string) => void;
+  onEditMessage?: (id: string, content: string) => void;
+  onDeleteMessage?: (id: string) => void;
+  onStarMessage?: (id: string, starred: boolean) => void;
   onReply: (msg: Message) => void;
   onImageClick?: (url: string) => void;
   isGroup?: boolean;
@@ -74,6 +77,9 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   chatEndRef,
   scrollToMessage,
   onReact,
+  onEditMessage,
+  onDeleteMessage,
+  onStarMessage,
   onReply,
   onImageClick,
   isGroup,
@@ -272,6 +278,9 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                   }
                 }}
                 onReact={(id, emoji) => onReact(id, emoji)}
+                onEdit={onEditMessage}
+                onDelete={onDeleteMessage}
+                onStar={onStarMessage}
                 onReply={() => onReply(item.type === 'single' ? item.message : item.messages[0])}
                 onImageClick={onImageClick}
               />

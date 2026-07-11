@@ -21,7 +21,7 @@ export interface StrictWAMessage extends proto.IWebMessageInfo {
 export interface MessageMetadata {
   messageId?: string;
   media?: {
-    type: "image" | "video" | "audio" | "document" | "sticker";
+    type: "image" | "video" | "audio" | "document" | "sticker" | "location" | "contact";
     size?: number;
     url?: string;
   };

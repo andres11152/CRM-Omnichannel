@@ -5,7 +5,7 @@ import {
   MessagePayload,
 } from "../../core/types/whatsapp.types";
 import { MessageMetadata } from "@/types/whatsapp.types";
-import { generateMessageID } from "@whiskeysockets/baileys";
+import { generateMessageID, ChatModification } from "@whiskeysockets/baileys";
 import { WhatsAppIdUtils } from "../../utils/WhatsAppIdUtils";
 import { Logger } from "@/utils/logger";
 import { deduplicationService } from "../../services/DeduplicationService";
@@ -157,6 +157,10 @@ export class OutboundMessageHandler {
       const meta: MessageMetadata = {
         messageId: sentMsg?.key?.id,
         media: { type: metaType, url: media.url },
+        // Location/contact carry no real URL — persist the actual structured
+        // data so the frontend can render a map link / contact card.
+        ...(media.location ? { location: media.location } : {}),
+        ...(media.contact ? { contact: media.contact } : {}),
         ...(options.metadata || {}),
       };
 
@@ -307,5 +311,156 @@ export class OutboundMessageHandler {
       );
       throw error;
     }
+  }
+
+  async editOutboundMessage(
+    to: string,
+    messageId: string,
+    newContent: string,
+    companyId: string,
+  ): Promise<void> {
+    const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+
+    const sock = activeSession.socket;
+    if (!sock) {
+      throw new Error(`Session ${activeSession.sessionId} has no active socket`);
+    }
+
+    const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
+
+    try {
+      // Same baileys-antiban 3rd-arg quirk as sendReaction above — the wrapper
+      // reads options.circuitBreaker unconditionally, so it can't be omitted.
+      await sock.sendMessage(
+        jid,
+        {
+          text: newContent,
+          edit: { remoteJid: jid, fromMe: true, id: messageId },
+        },
+        {},
+      );
+      Logger.debug(`[EditMessage] Edited ${messageId} (jid=${jid})`);
+    } catch (error) {
+      Logger.error(
+        `[EditMessage] Failed to edit ${messageId} (jid=${jid}): ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  async revokeOutboundMessage(
+    to: string,
+    messageId: string,
+    companyId: string,
+  ): Promise<void> {
+    const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+
+    const sock = activeSession.socket;
+    if (!sock) {
+      throw new Error(`Session ${activeSession.sessionId} has no active socket`);
+    }
+
+    const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
+
+    try {
+      await sock.sendMessage(
+        jid,
+        { delete: { remoteJid: jid, fromMe: true, id: messageId } },
+        {},
+      );
+      Logger.debug(`[RevokeMessage] Revoked ${messageId} (jid=${jid})`);
+    } catch (error) {
+      Logger.error(
+        `[RevokeMessage] Failed to revoke ${messageId} (jid=${jid}): ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  async updateBlockStatus(
+    to: string,
+    action: "block" | "unblock",
+    companyId: string,
+  ): Promise<void> {
+    const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+
+    const sock = activeSession.socket;
+    if (!sock) {
+      throw new Error(`Session ${activeSession.sessionId} has no active socket`);
+    }
+
+    const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
+
+    try {
+      await sock.updateBlockStatus(jid, action);
+      Logger.info(`[Block] ${action === "block" ? "Blocked" : "Unblocked"} ${jid} (companyId=${companyId})`);
+    } catch (error) {
+      Logger.error(
+        `[Block] Failed to ${action} ${jid} (companyId=${companyId}): ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Mirrors a CRM-side inbox action (archive/pin/mute) onto the real WhatsApp
+   * account via Baileys' chatModify. Callers building a `lastMessages` array
+   * (required by the `archive` modification) can omit `key.remoteJid` — it's
+   * unknown at the service layer until JID resolution happens here, so it's
+   * filled in below before dispatch.
+   */
+  async modifyChat(
+    to: string,
+    companyId: string,
+    mod: ChatModification,
+  ): Promise<void> {
+    const activeSession = await this.sessionManager.findActiveSessionForCompany(companyId);
+    if (!activeSession) {
+      throw new Error(`No active WhatsApp session for company: ${companyId}`);
+    }
+
+    const sock = activeSession.socket;
+    if (!sock) {
+      throw new Error(`Session ${activeSession.sessionId} has no active socket`);
+    }
+
+    const jid = await this.jidResolver.resolveDestinationJid(to, companyId, activeSession.sessionId);
+    const resolvedMod = this.injectJidIntoLastMessages(mod, jid);
+
+    try {
+      await sock.chatModify(resolvedMod, jid);
+      Logger.info(`[ChatModify] Applied ${JSON.stringify(mod).slice(0, 80)} to ${jid} (companyId=${companyId})`);
+    } catch (error) {
+      Logger.error(
+        `[ChatModify] Failed to apply chat modification to ${jid} (companyId=${companyId}): ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  private injectJidIntoLastMessages(mod: ChatModification, jid: string): ChatModification {
+    if ("lastMessages" in mod && Array.isArray(mod.lastMessages)) {
+      return {
+        ...mod,
+        lastMessages: mod.lastMessages.map((m) => ({
+          ...m,
+          key: { ...m.key, remoteJid: m.key?.remoteJid || jid },
+        })),
+      } as ChatModification;
+    }
+    return mod;
   }
 }

@@ -8,7 +8,13 @@ import {
   toggleGroupSync,
   reactToMessage,
   syncFullHistory,
-  retryMediaDownload
+  retryMediaDownload,
+  setConversationArchived,
+  setConversationPinned,
+  setConversationMuted,
+  editMessage,
+  revokeMessage,
+  setMessageStarred,
 } from "../controllers/conversationController";
 import {
   getGroupParticipants,
@@ -24,6 +30,12 @@ import {
   UpdateTagsSchema,
   ReactToMessageSchema,
   RetryMediaSchema,
+  SetConversationArchivedSchema,
+  SetConversationPinnedSchema,
+  SetConversationMutedSchema,
+  EditMessageSchema,
+  RevokeMessageSchema,
+  SetMessageStarredSchema,
 } from "../schemas/conversationSchemas";
 import {
   GetGroupParticipantsSchema,
@@ -76,5 +88,24 @@ router
 router
   .route("/:id/messages/:messageId/retry-media")
   .post(validate(RetryMediaSchema), retryMediaDownload);
+
+router
+  .route("/:id/archive")
+  .patch(validate(SetConversationArchivedSchema), setConversationArchived);
+router
+  .route("/:id/pin")
+  .patch(validate(SetConversationPinnedSchema), setConversationPinned);
+router
+  .route("/:id/mute")
+  .patch(validate(SetConversationMutedSchema), setConversationMuted);
+
+router
+  .route("/:id/messages/:messageId")
+  .patch(validate(EditMessageSchema), editMessage)
+  .delete(validate(RevokeMessageSchema), revokeMessage);
+
+router
+  .route("/:id/messages/:messageId/star")
+  .patch(validate(SetMessageStarredSchema), setMessageStarred);
 
 export default router;

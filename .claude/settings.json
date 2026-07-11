@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx jest *)",
+      "Bash(docker compose logs *)",
+      "Bash(npm view *)",
+      "Bash(npm show *)"
+    ]
+  }
+}

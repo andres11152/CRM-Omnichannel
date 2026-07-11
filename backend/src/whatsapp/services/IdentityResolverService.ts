@@ -1,6 +1,4 @@
 import { WAMessage } from "@whiskeysockets/baileys";
-import { userRepository } from "@/repositories/UserRepository";
-import { conversationRepository } from "@/repositories/ConversationRepository";
 import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 import { chatService } from "@/services/ChatService";
@@ -268,36 +266,23 @@ export class IdentityResolverService {
       }
     }
 
-    // Strategy 4: Name Heuristic (Last Resort for inbound)
-    if (message.pushName && !isFromMe) {
-      Logger.info(
-        `[IdentityResolver] [SEARCH] Trying Name Heuristic for LID: ${message.pushName}`,
-      );
-
-      const possibleUsers = await userRepository.findMany({
-        where: {
-          companyId,
-          name: { contains: message.pushName, mode: "insensitive" },
-        },
-        take: 5,
-      });
-
-      Logger.info(
-        `[IdentityResolver] [SEARCH] Found ${possibleUsers.length} users matching name "${message.pushName}"`,
-      );
-
-      for (const user of possibleUsers) {
-        const userConv = await conversationRepository.findFirst({
-          where: {
-            companyId,
-            participants: { some: { id: user.id } },
-          },
-          orderBy: { updatedAt: "desc" },
-        });
-
-          return chatService.getFullConversation(companyId, userConv.id);
-      }
-    }
+    // [SEC] Strategy 4 ("Name Heuristic") REMOVED — it matched inbound WhatsApp
+    // messages to an existing conversation by fuzzy-searching Users whose name
+    // CONTAINS the message's self-reported `pushName` (fully attacker-controlled:
+    // it's the sender's own WhatsApp display name). Any external WhatsApp contact
+    // could set a short/common display name to substring-match another customer's
+    // name within the same company, get their unresolved-LID message silently
+    // attached to that OTHER customer's conversation, and — if the target queue
+    // has an AI Assistant — have AITriggerService.triggerAIResponse() read that
+    // customer's last 10 messages as AI context and reply with the AI's response,
+    // sent back to the attacker's own JID (AITriggerService.ts ~252-315). That's a
+    // cross-customer conversation data leak to an unauthenticated external party,
+    // not a benign misattribution. A fuzzy name substring is not an identity
+    // credential and must never gate access to another customer's chat history.
+    // No replacement: falling through to "create a new conversation" (below) is
+    // always safe — worst case is a phantom LID-keyed conversation, which
+    // migrateLegacyLidConversation (InboundOrchestratorService.ts) already merges
+    // automatically once the LID resolves on a later message.
 
     // Strategy 4.5: Brute Force Store Search
     type ContactStore = {

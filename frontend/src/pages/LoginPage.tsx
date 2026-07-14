@@ -555,7 +555,7 @@ export const LoginPage = () => {
       </div>
 
       {/* [AUTH] RIGHT SIDE: LOGIN FORM */}
-      <div className="flex-1 lg:ml-[48%] flex flex-col justify-start px-6 sm:px-16 xl:px-28 relative bg-white dark:bg-reply-bg-dark min-h-screen overflow-y-auto">
+      <div className="flex-1 lg:ml-[48%] flex flex-col justify-start px-6 sm:px-16 xl:px-28 pb-8 relative bg-white dark:bg-reply-bg-dark min-h-screen overflow-y-auto">
         {/* Subtle grid pattern for light and dark modes on right panel */}
         <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none bg-[radial-gradient(#808080_1px,transparent_1px)] [background-size:24px_24px] z-0" />
 
@@ -926,12 +926,12 @@ export const LoginPage = () => {
               </p>
             )}
 
-            <div className="mt-3 flex justify-center gap-6 text-[11px] font-medium text-gray-300 dark:text-gray-600">
-              <Link to="/terms" className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors">Términos</Link>
-              <span className="text-gray-200 dark:text-gray-700">·</span>
-              <Link to="/privacy" className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors">Privacidad</Link>
-              <span className="text-gray-200 dark:text-gray-700">·</span>
-              <a href="mailto:soporte@sentrycrm.cloud" className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors">Soporte</a>
+            <div className="mt-3 flex justify-center gap-6 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+              <Link to="/terms" className="text-gray-500 dark:text-gray-400 hover:text-reply-green dark:hover:text-reply-green-light transition-colors">Términos</Link>
+              <span className="text-gray-300 dark:text-gray-700">·</span>
+              <Link to="/privacy" className="text-gray-500 dark:text-gray-400 hover:text-reply-green dark:hover:text-reply-green-light transition-colors">Privacidad</Link>
+              <span className="text-gray-300 dark:text-gray-700">·</span>
+              <a href="mailto:soporte@sentrycrm.cloud" className="text-gray-500 dark:text-gray-400 hover:text-reply-green dark:hover:text-reply-green-light transition-colors">Soporte</a>
             </div>
           </div>
       </div>

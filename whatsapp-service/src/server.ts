@@ -18,8 +18,8 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 4001;
 
-// 1. Healthcheck Route
-app.get("/health", (req, res) => {
+// 1. Healthcheck Route (handles both / and /health to support default platform probes)
+app.get(["/", "/health"], (req, res) => {
   res.json({ status: "OK", timestamp: new Date() });
 });
 
@@ -52,8 +52,8 @@ const bootstrap = async () => {
       });
     }
 
-    // D. Start HTTP Server
-    app.listen(Number(PORT), () => {
+    // D. Start HTTP Server (binding to 0.0.0.0 explicitly for container orchestration compatibility)
+    app.listen(Number(PORT), "0.0.0.0", () => {
       Logger.info(`[Server] [OK] WhatsApp Microservice listening on port ${PORT}`);
     });
   } catch (err: unknown) {

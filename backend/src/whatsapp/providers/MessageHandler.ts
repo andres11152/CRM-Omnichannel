@@ -29,7 +29,6 @@ import { SessionData } from "@/types/whatsapp.types";
 
 import { getWhatsAppQueue } from "../queue/WhatsAppQueue";
 import { InboundWorker } from "../queue/workers/InboundWorker";
-import { OutboundWorker } from "../queue/workers/OutboundWorker";
 import { InboundCircuitBreaker } from "../services/InboundCircuitBreaker";
 import redisClient from "@/config/redis";
 import { Logger } from "@/utils/logger";
@@ -56,7 +55,6 @@ export class MessageHandler implements IMessageHandler {
 
   // [BUILD] Background Workers
   private inboundWorker: InboundWorker;
-  private outboundWorker: OutboundWorker;
 
   constructor(private sessionManager: ISessionManager) {
     this.eventBus = EventBus.getInstance();
@@ -93,8 +91,10 @@ export class MessageHandler implements IMessageHandler {
     );
 
     //  Start Workers
+    // Outbound worker is handled entirely by the whatsapp-service microservice now
+    // (see whatsapp-service/src/workers/OutboundWorker.ts) — this backend process
+    // only produces onto the "whatsapp-outbound" queue via sendMessage/sendMedia below.
     this.inboundWorker = new InboundWorker(this.inboundHandler);
-    // this.outboundWorker = new OutboundWorker(this.outboundHandler); // [DECOUPLED] Handled by whatsapp-service microservice
 
     this.statusHandler = new StatusUpdateHandler(this.sessionCache);
     this.revocationHandler = new MessageRevocationHandler(this.sessionCache);
@@ -466,7 +466,9 @@ export class MessageHandler implements IMessageHandler {
     type: "composing" | "recording" | "paused",
     companyId: string,
   ): Promise<void> {
-    return this.outboundHandler.sendPresenceUpdate(to, type, companyId);
+    await this.callWhatsAppService("/messages/presence", { companyId, to, type }).catch((err) => {
+      Logger.warn(`[Presence] Failed to send ${type} to ${to}`, err);
+    });
   }
 
   async sendReaction(
@@ -476,23 +478,36 @@ export class MessageHandler implements IMessageHandler {
     companyId: string,
     fromMe?: boolean,
   ): Promise<void> {
-    return this.outboundHandler.sendReaction(
+    await this.callWhatsAppService("/messages/reaction", {
+      companyId,
       to,
       messageId,
       reaction,
-      companyId,
       fromMe,
-    );
+    });
+  }
+
+  // Shared HTTP client for both /messages/* and /commands/execute — the
+  // Baileys socket for a session lives exclusively in whatsapp-service now,
+  // so any action needing a live socket must go through its HTTP surface,
+  // which is gated behind WHATSAPP_INTERNAL_SECRET.
+  private async callWhatsAppService<T>(path: string, body: Record<string, unknown>): Promise<T> {
+    const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
+    const axios = (await import("axios")).default;
+    const res = await axios.post<T>(`${WHATSAPP_SERVICE_URL}${path}`, body, {
+      headers: process.env.WHATSAPP_INTERNAL_SECRET
+        ? { "x-internal-service-key": process.env.WHATSAPP_INTERNAL_SECRET }
+        : undefined,
+    });
+    return res.data;
   }
 
   private async executeCommand<T>(companyId: string, command: string, args: unknown[]): Promise<T> {
-    const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
-    const axios = (await import("axios")).default;
-    const res = await axios.post<{ success: boolean; result: T }>(
-      `${WHATSAPP_SERVICE_URL}/commands/execute`,
-      { companyId, command, args }
+    const { result } = await this.callWhatsAppService<{ success: boolean; result: T }>(
+      "/commands/execute",
+      { companyId, command, args },
     );
-    return res.data.result;
+    return result;
   }
 
   async editOutboundMessage(

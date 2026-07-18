@@ -2,12 +2,12 @@ import { Worker, Job, UnrecoverableError } from "bullmq";
 import IORedis from "ioredis";
 import { getEnv } from "@/config/env";
 import { Logger } from "@/utils/logger";
-import { 
-  SendMessageOptions, 
-  MediaPayload, 
-  MessagePayload 
-} from "../../core/types/whatsapp.types";
-import { OutboundMessageHandler } from "../../providers/handlers/OutboundMessageHandler";
+import {
+  SendMessageOptions,
+  MediaPayload,
+  MessagePayload
+} from "../../../core/types/whatsapp.types";
+import { OutboundMessageHandler } from "../../../providers/handlers/OutboundMessageHandler";
 import { runWithCompanyId } from "@/context/requestContext";
 
 /**

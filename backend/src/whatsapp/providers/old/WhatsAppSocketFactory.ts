@@ -5,8 +5,8 @@ import makeWASocket, {
   isJidBroadcast,
   proto,
 } from "@whiskeysockets/baileys";
-import { SimpleInMemoryStore } from "./SimpleStore";
-import { createSessionLogger, sessionModuleLogger as logger } from "./SessionLogger";
+import { SimpleInMemoryStore } from "../SimpleStore";
+import { createSessionLogger, sessionModuleLogger as logger } from "../SessionLogger";
 import NodeCache from "node-cache";
 import { getProxyAgent } from "@/utils/proxy";
 import { getEnv } from "@/config/env";

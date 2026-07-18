@@ -26,11 +26,15 @@ import {
 
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import TenantContextManager from "@/config/tenantContext";
-import { bindSessionEvents } from "./events/SessionEventBinder";
+// [OLD] Local Baileys socket creation — dead in production (Baileys connection
+// lifecycle now lives entirely in the whatsapp-service microservice). Only
+// referenced by initializeSession()/reconnectSession() below, which have no
+// live callers anymore; kept for reference, see providers/old/.
+import { bindSessionEvents } from "./old/SessionEventBinder";
 import { SessionContactResolver } from "./SessionContactResolver";
 import { container } from "@/config/container";
 import { WA_TOKENS } from "../di/tokens";
-import { WhatsAppSocketFactory } from "./WhatsAppSocketFactory";
+import { WhatsAppSocketFactory } from "./old/WhatsAppSocketFactory";
 import { antiBanManager } from "../services/AntiBanManager";
 
 export class SessionManager implements ISessionManager {
@@ -433,15 +437,17 @@ export class SessionManager implements ISessionManager {
       const socket = this.sessions.get(dbSession.sessionId);
       if (socket) return { sessionId: dbSession.sessionId, socket };
 
-      // Auto-heal zombie sessions
-      if (!this.healer.hasReconnectPending(dbSession.sessionId)) {
-        logger.warn(
-          `[SessionManager] Zombie session detected: ${dbSession.sessionId}. Auto-reconnecting.`,
-        );
-        this.reconnectSession(dbSession.sessionId).catch((err) =>
-          logger.error(`[SessionManager] Auto-reconnect failed: ${err}`),
-        );
-      }
+      // [SEC] Baileys connection lifecycle now lives entirely in the
+      // whatsapp-service microservice. This backend process must NEVER open
+      // its own Baileys socket for a BAILEYS-provider session — doing so
+      // would race the microservice's live connection for the same session
+      // and trigger `conflict: replaced` kicks. Previously this branch called
+      // `this.reconnectSession(...)`, which did exactly that every time an
+      // agent sent a reaction, read receipt, or typing indicator for a
+      // company with no locally-cached socket (i.e. always, post-migration).
+      logger.info(
+        `[SessionManager] No local socket for ${dbSession.sessionId} (owned by whatsapp-service); not reconnecting locally.`,
+      );
     }
 
     return null;

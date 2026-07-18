@@ -241,15 +241,145 @@ export class WhatsAppEventWiring {
       },
     );
 
-    // [FIX] DISABLED: This handler is REDUNDANT.
-    // MessageHandler.subscribeToEvents() already subscribes to MESSAGE_RECEIVED
-    // via eventBus.subscribe() and enqueues to BullMQ.
-    // Having TWO subscribers caused every message to be processed TWICE.
-    // this.eventBus.on(
-    //   WhatsAppEventType.MESSAGE_RECEIVED,
-    //   async (event: WhatsAppEvent<WhatsAppEventType.MESSAGE_RECEIVED>) => {
-    //     ...
-    //   },
-    // );
+    this.eventBus.on(
+      WhatsAppEventType.CONTACT_UPDATED,
+      async (event: WhatsAppEvent<WhatsAppEventType.CONTACT_UPDATED>) => {
+        const update = event.data.contact;
+        if (!update.id) return;
+
+        const displayName = update.notify || update.verifiedName;
+        if (displayName) {
+          persistContactName(update.id, displayName, event.companyId).catch((err) =>
+            Logger.warn(`[WA] contacts.update name heal failed for ${update.id}: ${err instanceof Error ? err.message : err}`),
+          );
+        }
+
+        if (update.imgUrl) {
+          persistContactProfilePic(update.imgUrl, update.id, event.companyId).catch((err) =>
+            Logger.warn(`[WA] contacts.update pic persist failed for ${update.id}: ${err instanceof Error ? err.message : err}`),
+          );
+        }
+      }
+    );
   }
+}
+
+async function persistContactName(
+  jid: string,
+  notify: string,
+  companyId: string,
+): Promise<void> {
+  const base = jid.split("@")[0].split(":")[0];
+  if (!base || base.length < 3) return;
+  const email = `${base}@whatsapp.user`;
+
+  const [{ userRepository }, { TenantContextManager: TCM }] = await Promise.all([
+    import("@/repositories/UserRepository"),
+    import("@/config/tenantContext"),
+  ]);
+
+  await TCM.runAsSystem(async () => {
+    const user = await userRepository.findFirst({
+      where: { companyId, email },
+      select: { id: true, name: true },
+    });
+    const STALE_NAME_RE = /^(\+unknown|Participante|ID: \d+)$/;
+    if (!user || !STALE_NAME_RE.test(user.name)) return;
+
+    await userRepository.update(user.id, companyId, { name: notify });
+    Logger.info(`[WhatsAppEventWiring] [contacts.update] Healed stale name: ${base} → "${notify}"`);
+  });
+}
+
+async function persistContactProfilePic(
+  imgUrl: string,
+  jid: string,
+  companyId: string,
+): Promise<void> {
+  const phone = jid.split("@")[0].split(":")[0];
+  if (!phone || !/^\d{7,15}$/.test(phone)) return;
+
+  const [
+    { userRepository },
+    { contactRepository },
+    { TenantContextManager },
+    { storageService },
+    { gateway },
+    axios,
+  ] = await Promise.all([
+    import("@/repositories/UserRepository"),
+    import("@/repositories/ContactRepository"),
+    import("@/config/tenantContext"),
+    import("@/services/StorageService"),
+    import("@/gateways/socketGateway"),
+    import("axios").then((m) => m.default),
+  ]);
+
+  await TenantContextManager.runAsSystem(async () => {
+    const user = await userRepository.findFirst({
+      where: { companyId, phone },
+      select: { id: true, profilePicUrl: true, phone: true },
+    });
+    if (!user) return;
+
+    if (imgUrl === "removed") {
+      await userRepository.update(user.id, companyId, { profilePicUrl: null });
+      if (user.phone) {
+        await contactRepository.updateMany({
+          where: { companyId, phone: user.phone },
+          data: { profilePicUrl: null },
+        });
+      }
+      gateway.emitToCompany(companyId, "contact.updated", {
+        id: user.id,
+        profilePicUrl: null,
+        phone: user.phone,
+      });
+      return;
+    }
+
+    const existing = user.profilePicUrl;
+    if (
+      existing &&
+      !existing.includes("pps.whatsapp.net") &&
+      (existing.includes("amazonaws.com") ||
+        existing.includes("storage.googleapis.com") ||
+        existing.startsWith("/uploads") ||
+        existing.includes("minio"))
+    ) {
+      return;
+    }
+
+    let profilePicUrl: string;
+    try {
+      const response = await axios.get(imgUrl, {
+        responseType: "arraybuffer",
+        timeout: 10000,
+      });
+      const buffer = Buffer.from(response.data as ArrayBuffer);
+      const mimeType = (response.headers["content-type"] as string) || "image/jpeg";
+      const filename = `profile_${user.id}_${Date.now()}.jpg`;
+      const uploadResult = await storageService.uploadFile(companyId, buffer, filename, mimeType);
+      profilePicUrl = uploadResult.url;
+    } catch {
+      profilePicUrl = imgUrl;
+    }
+
+    await userRepository.update(user.id, companyId, { profilePicUrl });
+
+    if (user.phone) {
+      await contactRepository.updateMany({
+        where: { companyId, phone: user.phone },
+        data: { profilePicUrl },
+      });
+    }
+
+    gateway.emitToCompany(companyId, "contact.updated", {
+      id: user.id,
+      profilePicUrl,
+      phone: user.phone,
+    });
+
+    Logger.info(`[WhatsAppEventWiring] [contacts.update] Profile pic persisted for ${phone}`);
+  });
 }

@@ -327,7 +327,57 @@ export class ConversationMessageService {
       sender: "agent",
       metadata: savedMessage.metadata,
       type: attachment ? attachment.type : "text",
-      mediaUrl: attachment ? attachment.url : undefined,
+    };
+  }
+
+  private async replyToEmail(
+    companyId: string,
+    userId: string,
+    conversationId: string,
+    channelId: string,
+    subject: string | null,
+    toEmail: string | null,
+    messageContent: string,
+    metadata?: Metadata,
+  ): Promise<{ id: string; content: string; timestamp?: Date; status?: string; sender?: string; metadata?: unknown; type?: string }> {
+    if (!toEmail) {
+      throw new AppError("No se pudo determinar el destinatario del correo.", 400);
+    }
+
+    const sendResult = await emailService.sendEmail({
+      companyId,
+      from: `no-reply@${process.env.MAIL_DOMAIN || "localhost"}`,
+      to: [toEmail],
+      subject: subject || "Respuesta de Omnicanal",
+      bodyHtml: messageContent,
+      bodyText: messageContent,
+    });
+
+    const savedMessage = await messageRepository.create({
+      data: {
+        companyId,
+        conversationId,
+        content: messageContent,
+        direction: "OUTBOUND",
+        senderId: userId,
+        channel: Channel.EMAIL,
+        status: "SENT",
+        emailMessageId: sendResult.messageId,
+        metadata: {
+          ...metadata,
+          emailMessageId: sendResult.messageId,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return {
+      id: savedMessage.id,
+      content: savedMessage.content,
+      timestamp: savedMessage.createdAt,
+      status: "SENT",
+      sender: "agent",
+      metadata: savedMessage.metadata,
+      type: "text",
     };
   }
 

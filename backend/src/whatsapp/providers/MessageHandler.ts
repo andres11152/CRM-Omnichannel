@@ -94,7 +94,7 @@ export class MessageHandler implements IMessageHandler {
 
     //  Start Workers
     this.inboundWorker = new InboundWorker(this.inboundHandler);
-    this.outboundWorker = new OutboundWorker(this.outboundHandler);
+    // this.outboundWorker = new OutboundWorker(this.outboundHandler); // [DECOUPLED] Handled by whatsapp-service microservice
 
     this.statusHandler = new StatusUpdateHandler(this.sessionCache);
     this.revocationHandler = new MessageRevocationHandler(this.sessionCache);
@@ -485,13 +485,23 @@ export class MessageHandler implements IMessageHandler {
     );
   }
 
+  private async executeCommand<T>(companyId: string, command: string, args: unknown[]): Promise<T> {
+    const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
+    const axios = (await import("axios")).default;
+    const res = await axios.post<{ success: boolean; result: T }>(
+      `${WHATSAPP_SERVICE_URL}/commands/execute`,
+      { companyId, command, args }
+    );
+    return res.data.result;
+  }
+
   async editOutboundMessage(
     to: string,
     messageId: string,
     newContent: string,
     companyId: string,
   ): Promise<void> {
-    return this.outboundHandler.editOutboundMessage(to, messageId, newContent, companyId);
+    await this.executeCommand<void>(companyId, "editOutboundMessage", [to, messageId, newContent]);
   }
 
   async revokeOutboundMessage(
@@ -499,7 +509,7 @@ export class MessageHandler implements IMessageHandler {
     messageId: string,
     companyId: string,
   ): Promise<void> {
-    return this.outboundHandler.revokeOutboundMessage(to, messageId, companyId);
+    await this.executeCommand<void>(companyId, "revokeOutboundMessage", [to, messageId]);
   }
 
   async pinMessage(
@@ -509,7 +519,7 @@ export class MessageHandler implements IMessageHandler {
     pin: boolean,
     companyId: string,
   ): Promise<void> {
-    return this.outboundHandler.pinMessage(to, messageId, fromMe, pin, companyId);
+    await this.executeCommand<void>(companyId, "pinMessage", [to, messageId, fromMe, pin]);
   }
 
   async updateBlockStatus(
@@ -517,7 +527,7 @@ export class MessageHandler implements IMessageHandler {
     action: "block" | "unblock",
     companyId: string,
   ): Promise<void> {
-    return this.outboundHandler.updateBlockStatus(to, action, companyId);
+    await this.executeCommand<void>(companyId, "updateBlockStatus", [to, action]);
   }
 
   async modifyChat(
@@ -525,15 +535,15 @@ export class MessageHandler implements IMessageHandler {
     companyId: string,
     mod: ChatModification,
   ): Promise<void> {
-    return this.outboundHandler.modifyChat(to, companyId, mod);
+    await this.executeCommand<void>(companyId, "modifyChat", [to, mod]);
   }
 
   async updateOwnProfileName(companyId: string, name: string): Promise<void> {
-    return this.outboundHandler.updateOwnProfileName(companyId, name);
+    await this.executeCommand<void>(companyId, "updateOwnProfileName", [name]);
   }
 
   async updateOwnProfilePicture(companyId: string, imageUrl: string): Promise<void> {
-    return this.outboundHandler.updateOwnProfilePicture(companyId, imageUrl);
+    await this.executeCommand<void>(companyId, "updateOwnProfilePicture", [imageUrl]);
   }
 
   async updateGroupParticipants(
@@ -542,30 +552,34 @@ export class MessageHandler implements IMessageHandler {
     participantPhones: string[],
     action: GroupParticipantAction,
   ): Promise<{ jid: string; status: string }[]> {
-    return this.groupManagementHandler.updateParticipants(companyId, groupId, participantPhones, action);
+    return this.executeCommand<{ jid: string; status: string }[]>(
+      companyId,
+      "updateGroupParticipants",
+      [groupId, participantPhones, action]
+    );
   }
 
   async updateGroupSubject(companyId: string, groupId: string, subject: string): Promise<void> {
-    return this.groupManagementHandler.updateSubject(companyId, groupId, subject);
+    await this.executeCommand<void>(companyId, "updateGroupSubject", [groupId, subject]);
   }
 
   async updateGroupDescription(companyId: string, groupId: string, description: string): Promise<void> {
-    return this.groupManagementHandler.updateDescription(companyId, groupId, description);
+    await this.executeCommand<void>(companyId, "updateGroupDescription", [groupId, description]);
   }
 
   async updateGroupSetting(companyId: string, groupId: string, setting: GroupSettingValue): Promise<void> {
-    return this.groupManagementHandler.updateSetting(companyId, groupId, setting);
+    await this.executeCommand<void>(companyId, "updateGroupSetting", [groupId, setting]);
   }
 
   async getGroupInviteCode(companyId: string, groupId: string): Promise<string> {
-    return this.groupManagementHandler.getInviteCode(companyId, groupId);
+    return this.executeCommand<string>(companyId, "getGroupInviteCode", [groupId]);
   }
 
   async revokeGroupInviteCode(companyId: string, groupId: string): Promise<string> {
-    return this.groupManagementHandler.revokeInviteCode(companyId, groupId);
+    return this.executeCommand<string>(companyId, "revokeGroupInviteCode", [groupId]);
   }
 
   async leaveGroup(companyId: string, groupId: string): Promise<void> {
-    return this.groupManagementHandler.leaveGroup(companyId, groupId);
+    await this.executeCommand<void>(companyId, "leaveGroup", [groupId]);
   }
 }

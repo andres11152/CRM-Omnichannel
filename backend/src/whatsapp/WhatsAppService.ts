@@ -17,6 +17,9 @@ import {
   SessionStatus,
 } from "./core/types/whatsapp.types";
 import { WASocket, Contact } from "@whiskeysockets/baileys";
+import axios from "axios";
+const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
+import { Logger } from "@/utils/logger";
 
 import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { container } from "@/config/container";
@@ -84,7 +87,28 @@ export class WhatsAppService {
   // ────────────────────────────────────────────────
 
   async initialize(): Promise<void> {
-    return this.sessionService.initialize();
+    const redisClient = (await import("@/config/redis")).default;
+    if (redisClient) {
+      try {
+        const subscriber = redisClient.duplicate();
+        await subscriber.connect();
+        await subscriber.subscribe("whatsapp:events", (message) => {
+          try {
+            const event = JSON.parse(message);
+            if (event.timestamp) {
+              event.timestamp = new Date(event.timestamp);
+            }
+            Logger.info(`[WhatsAppService] Redis PubSub received event ${event.type} for session ${event.sessionId}`);
+            this.eventBus.publish(event);
+          } catch (jsonErr) {
+            Logger.error("[WhatsAppService] Redis PubSub JSON parse failed:", jsonErr);
+          }
+        });
+        Logger.info("[WhatsAppService] [OK] Subscribed to Redis PubSub whatsapp:events channel");
+      } catch (err) {
+        Logger.error("[WhatsAppService] Failed to duplicate/connect Redis subscriber:", err);
+      }
+    }
   }
 
   // ────────────────────────────────────────────────
@@ -102,7 +126,16 @@ export class WhatsAppService {
       metaVerifyToken?: string;
     }
   ): Promise<{ sessionId: string; qrCode: string | null }> {
-    return this.sessionService.createSession(companyId, sessionId, meta);
+    const res = await axios.post(`${WHATSAPP_SERVICE_URL}/sessions`, {
+      companyId,
+      sessionId,
+      provider: meta?.provider,
+      metaAccessToken: meta?.metaAccessToken,
+      metaPhoneNumberId: meta?.metaPhoneNumberId,
+      metaBusinessId: meta?.metaBusinessId,
+      metaVerifyToken: meta?.metaVerifyToken,
+    });
+    return res.data;
   }
 
   async requestPairingCode(
@@ -110,11 +143,18 @@ export class WhatsAppService {
     phone: string,
     sessionId?: string,
   ): Promise<{ sessionId: string; code: string | null }> {
-    return this.sessionService.requestPairingCode(companyId, phone, sessionId);
+    const res = await axios.post(`${WHATSAPP_SERVICE_URL}/sessions`, {
+      companyId,
+      sessionId,
+      phone,
+    });
+    return res.data;
   }
 
   async deleteSession(companyId: string, sessionId: string): Promise<void> {
-    return this.sessionService.deleteSession(companyId, sessionId);
+    await axios.delete(`${WHATSAPP_SERVICE_URL}/sessions/${sessionId}`, {
+      data: { clearAuth: true },
+    });
   }
 
   getSessionManager(): ISessionManager {
@@ -126,7 +166,8 @@ export class WhatsAppService {
   // ────────────────────────────────────────────────
 
   async getSessions(companyId: string) {
-    return this.sessionService.getSessions(companyId);
+    const res = await axios.get(`${WHATSAPP_SERVICE_URL}/sessions/${companyId}`);
+    return res.data;
   }
 
   async updateSession(
@@ -134,15 +175,25 @@ export class WhatsAppService {
     sessionId: string,
     data: { defaultQueueId?: string | null; proxyUrl?: string | null },
   ) {
-    return this.sessionService.updateSession(companyId, sessionId, data);
+    const updated = await this.sessionService.updateSession(companyId, sessionId, data);
+    if (data.proxyUrl !== undefined) {
+      await axios.post(`${WHATSAPP_SERVICE_URL}/sessions`, {
+        companyId,
+        sessionId,
+        proxyUrl: data.proxyUrl,
+      }).catch((e) => Logger.error("Failed to notify microservice about proxy change:", e));
+    }
+    return updated;
   }
 
   async listSessions(companyId: string): Promise<SessionStatus[]> {
-    return this.sessionService.listSessions(companyId);
+    const res = await axios.get(`${WHATSAPP_SERVICE_URL}/sessions/${companyId}`);
+    return res.data;
   }
 
   async getSession(companyId: string, sessionId: string): Promise<SessionStatus> {
-    return this.sessionService.getSession(companyId, sessionId);
+    const res = await axios.get(`${WHATSAPP_SERVICE_URL}/sessions/status/${sessionId}`);
+    return res.data;
   }
 
   async getSessionRecord(companyId: string, sessionId: string) {
@@ -228,7 +279,7 @@ export class WhatsAppService {
   // ────────────────────────────────────────────────
 
   async reconnectSession(companyId: string, sessionId: string): Promise<void> {
-    return this.sessionService.reconnectSession(companyId, sessionId);
+    await axios.post(`${WHATSAPP_SERVICE_URL}/sessions/${sessionId}/reconnect`);
   }
 
   async syncMessages(

@@ -56,7 +56,7 @@ const bootstrap = async () => {
     // 3. Loaders (Sockets, Workers, WhatsApp)
     await initSocketGateway(httpServer);
 
-    Logger.info("[Server]  Initializing WhatsApp service...");
+    Logger.info("[Server]  Initializing WhatsApp PubSub Events Receiver...");
     await whatsappService.initialize();
 
     // 4. Background Services

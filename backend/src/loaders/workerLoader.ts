@@ -80,6 +80,16 @@ export const initWorkers = async () => {
     const { groupContactIndexer } = await import("@/services/queue/groupContactIndexer");
     groupContactIndexer.startWorker();
 
+    // 4. History Sync Worker
+    Logger.info("[Loader] [HISTORY] Initializing History Sync Workers...");
+    const { HistorySyncWorker } = await import("@/services/queue/historySyncWorker");
+    const historySyncWorker = new HistorySyncWorker();
+
+    // 5. Outbound Callback Worker
+    Logger.info("[Loader] [CALLBACKS] Initializing Outbound Callback Workers...");
+    const { OutboundCallbackWorker } = await import("@/services/queue/outboundCallbackWorker");
+    const outboundCallbackWorker = new OutboundCallbackWorker();
+
     // ── TENANT MESSAGE WORKERS (Lazy — Only for active sessions) ──
 
     // [SEC] SCALE FIX: Instead of loading ALL companies, only load companies
@@ -113,6 +123,8 @@ export const initWorkers = async () => {
     process.on("SIGTERM", async () => {
       Logger.info("[Loader] [SHUTDOWN] SIGTERM received, shutting down gracefully...");
       await messageWorker.shutdown();
+      await historySyncWorker.shutdown();
+      await outboundCallbackWorker.shutdown();
       const { messageQueueService } = await import("@/services/queue/messageQueueService");
       await messageQueueService.shutdown();
       await flowQueueWorker.shutdown();

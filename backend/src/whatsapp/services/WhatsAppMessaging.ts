@@ -25,6 +25,8 @@ import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 import { messageTemplateRepository } from "@/repositories/MessageTemplateRepository";
 import { AppError } from "@/utils/AppError";
 import { OutboundMessageHandler } from "../providers/handlers/OutboundMessageHandler";
+import axios from "axios";
+const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
 
 export class WhatsAppMessaging {
   private outboundHandler: OutboundMessageHandler;
@@ -156,27 +158,53 @@ export class WhatsAppMessaging {
     options: SendMessageOptions & { dbId?: string },
   ) {
     try {
-      // This is called by the worker. We bypass the secondary queue (whatsapp-outbound) here
-      // to ensure the message is dispatched immediately by the worker holding the socket.
-      const result = options.media
-        ? await this.outboundHandler.sendMedia(to, options.media, options)
-        : await this.outboundHandler.sendMessage(to, content, options);
+      const res = await axios.post(`${WHATSAPP_SERVICE_URL}/messages/send`, {
+        companyId: options.companyId,
+        to,
+        type: options.media ? "media" : "text",
+        content,
+        media: options.media,
+        options: {
+          quoted: (options as SendMessageOptions & { quoted?: unknown }).quoted,
+          generatedMessageId: options.metadata?.generatedMessageId,
+        },
+      });
 
-      // OutboundMessageHandler now handles DB updates automatically using options.metadata.dbId.
-      // We no longer need to update the QUEUED message here.
+      const { messageRepository } = await import("@/repositories/MessageRepository");
+      const dbId = options.dbId || (options.metadata?.dbId as string);
+      let savedMessage;
+      if (dbId) {
+        savedMessage = await messageRepository.update(dbId, {
+          status: "SENT",
+          whatsappMessageId: res.data.messageId,
+        }, options.companyId);
+      }
 
-      return result;
+      if (savedMessage) {
+        const { gateway } = await import("@/gateways/socketGateway");
+        gateway.emitToCompany(options.companyId, "message:status", {
+          id: savedMessage.id,
+          status: "SENT",
+          whatsappMessageId: res.data.messageId,
+          sentAt: savedMessage.updatedAt,
+        });
+      }
+
+      return {
+        success: true,
+        messageId: res.data.messageId,
+        sentAt: new Date(),
+      };
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       import("@/utils/logger").then(({ Logger }) => {
-        Logger.error(`[WhatsAppMessaging] executeQueuedMessage failed`, {
+        Logger.error(`[WhatsAppMessaging] executeQueuedMessage failed via microservice:`, {
           sessionId,
           companyId: options.companyId,
           conversationId: options.conversationId,
           dbId: options.dbId,
           to,
           error: err.message,
-          stack: err.stack,
         });
       });
       throw error;
@@ -188,10 +216,13 @@ export class WhatsAppMessaging {
   // ────────────────────────────────────────────────
 
   async simulateTyping(sessionId: string, to: string) {
-    const sock = this.sessionManager.getSession(sessionId);
-    if (sock) {
-      const jid = WhatsAppIdUtils.getTargetJid(to);
-      await sock.sendPresenceUpdate("composing", jid);
+    const activeSession = await this.sessionManager.getSessionInfo(sessionId);
+    if (activeSession) {
+      await axios.post(`${WHATSAPP_SERVICE_URL}/messages/presence`, {
+        companyId: activeSession.companyId,
+        to,
+        type: "composing",
+      }).catch(() => null);
     }
   }
 
@@ -204,14 +235,11 @@ export class WhatsAppMessaging {
     type: "composing" | "recording" | "paused",
     companyId: string,
   ): Promise<void> {
-    const activeSession =
-      await this.sessionManager.findActiveSessionForCompany(companyId);
-
-    if (!activeSession) {
-      return;
-    }
-
-    return this.messageHandler.sendPresenceUpdate(to, type, companyId);
+    await axios.post(`${WHATSAPP_SERVICE_URL}/messages/presence`, {
+      companyId,
+      to,
+      type,
+    }).catch(() => null);
   }
 
   async sendReaction(
@@ -221,7 +249,13 @@ export class WhatsAppMessaging {
     companyId: string,
     fromMe?: boolean,
   ): Promise<void> {
-    return this.messageHandler.sendReaction(to, messageId, reaction, companyId, fromMe);
+    await axios.post(`${WHATSAPP_SERVICE_URL}/messages/reaction`, {
+      companyId,
+      to,
+      messageId,
+      reaction,
+      fromMe,
+    }).catch(() => null);
   }
 
   // ────────────────────────────────────────────────

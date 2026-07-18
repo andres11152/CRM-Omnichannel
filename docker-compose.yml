@@ -86,6 +86,27 @@ services:
       echo 'bucket reply-media-local listo';
       "
 
+  whatsapp-service:
+    build:
+      context: ./whatsapp-service
+      dockerfile: Dockerfile
+    container_name: reply-whatsapp-service-local
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://reply_user:reply_password@postgres:5432/reply_db_local
+      - REDIS_URL=redis://redis:6379
+      - PORT=4001
+      - WA_SYNC_FULL_HISTORY=false
+    volumes:
+      - ./whatsapp-service/data:/app/data
+
 volumes:
   postgres_data_18:
   redis_data_local:

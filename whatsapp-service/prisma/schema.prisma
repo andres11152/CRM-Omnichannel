@@ -1,0 +1,58 @@
+// Prisma schema for whatsapp-service
+// Only contains WhatsApp session and credentials models to maintain DB schema encapsulation.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
+}
+
+enum WhatsAppProvider {
+  BAILEYS
+  META
+}
+
+model WhatsAppSession {
+  id        String           @id @default(cuid())
+  companyId String
+  sessionId String           @unique // Folder name for auth creds
+  phone     String?
+  status    String           @default("DISCONNECTED") // CONNECTED, DISCONNECTED, SCANNING
+  qrCode    String?          // Base64 QR for frontend display
+  proxyUrl  String?          // Proxy URL to route session traffic (avoid shared IP bans)
+
+  // Notification tracking
+  notifiedAt DateTime?       // Last time we notified about disconnection
+
+  // Provider configuration
+  provider          WhatsAppProvider @default(BAILEYS)
+  metaAccessToken   String?
+  metaPhoneNumberId String?
+  metaBusinessId    String?
+  metaVerifyToken   String?
+
+  // Custom Default Queue for this Session (referenced as String, without relations to simplify schema)
+  defaultQueueId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status, createdAt(sort: Desc)])
+  @@map("whatsapp_sessions")
+}
+
+model WhatsAppCredential {
+  id        String   @id @default(cuid())
+  sessionId String
+  key       String   // The key (e.g., "creds", "app-state-sync-key-aaaa")
+  value     String   // JSON stringified value
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, key])
+  @@map("whatsapp_credentials")
+}

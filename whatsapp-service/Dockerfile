@@ -25,7 +25,6 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
-ENV PORT=4001
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -42,7 +41,7 @@ RUN mkdir -p /app/data && chown -R node:node /app
 
 USER node
 
-EXPOSE 4001
+EXPOSE 10000
 
 VOLUME [ "/app/data" ]
 

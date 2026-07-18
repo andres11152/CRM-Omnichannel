@@ -16,7 +16,13 @@ import { whatsAppSessionRepository } from "./repositories/WhatsAppSessionReposit
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 10000;
+const rawPort = process.env.PORT || "10000";
+const PORT = Number(rawPort);
+
+if (!Number.isInteger(PORT) || PORT <= 0) {
+  Logger.error(`[Server] Invalid PORT env var: ${JSON.stringify(rawPort)} — refusing to start.`);
+  process.exit(1);
+}
 
 // 1. Healthcheck Route (handles both / and /health to support default platform probes)
 app.get(["/", "/health"], (req, res) => {
@@ -53,7 +59,7 @@ const bootstrap = async () => {
     }
 
     // D. Start HTTP Server (binding to 0.0.0.0 explicitly for container orchestration compatibility)
-    app.listen(Number(PORT), "0.0.0.0", () => {
+    app.listen(PORT, "0.0.0.0", () => {
       Logger.info(`[Server] [OK] WhatsApp Microservice listening on port ${PORT}`);
     });
   } catch (err: unknown) {

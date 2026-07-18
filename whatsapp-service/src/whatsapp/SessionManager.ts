@@ -15,6 +15,7 @@ import { bindSessionEvents } from "./events/SessionEventBinder";
 import { SessionContactResolver } from "./SessionContactResolver";
 import { WhatsAppSocketFactory } from "./WhatsAppSocketFactory";
 import { antiBanManager } from "./AntiBanManager";
+import { sessionLockService } from "./SessionLockService";
 
 export class SessionManager implements ISessionManager {
   private sessions: Map<string, WASocket> = new Map();
@@ -105,6 +106,15 @@ export class SessionManager implements ISessionManager {
       );
     }
 
+    const acquiredLock = await sessionLockService.acquire(sessionId);
+    if (!acquiredLock) {
+      const owner = await sessionLockService.getOwner(sessionId);
+      logger.warn(
+        `[SessionManager] Refusing to initialize ${sessionId}: lock held by another instance (${owner}).`
+      );
+      throw new Error(`SESSION_OWNED_ELSEWHERE: ${sessionId} is active on instance ${owner}`);
+    }
+
     this.healer.cancelReconnect(sessionId);
     logger.info(`[SessionManager] Initializing session: ${sessionId}`);
     this.sessionMetadata.set(sessionId, {
@@ -133,6 +143,7 @@ export class SessionManager implements ISessionManager {
       );
       this.sessionStores.delete(storeKey);
       this.sessionMetadata.delete(sessionId);
+      await sessionLockService.release(sessionId);
       throw new Error(`Session ${sessionId} does not exist in database.`);
     }
 
@@ -196,6 +207,7 @@ export class SessionManager implements ISessionManager {
   ): Promise<void> {
     logger.info(`[SessionManager] Terminating session ${sessionId}. Clear: ${clearAuth}`);
 
+    await sessionLockService.release(sessionId);
     await antiBanManager.terminateSession(sessionId, true);
     this.healer.cleanupSession(sessionId);
     cleanupSessionLogger(sessionId);
@@ -331,9 +343,19 @@ export class SessionManager implements ISessionManager {
       const socket = this.sessions.get(dbSession.sessionId);
       if (socket) return { sessionId: dbSession.sessionId, socket };
 
+      const owner = await sessionLockService.getOwner(dbSession.sessionId);
+      if (owner && owner !== sessionLockService.instanceId) {
+        // Session is genuinely alive on another replica — reconnecting here
+        // would kick that live socket (`conflict: replaced`) for no reason.
+        logger.info(
+          `[SessionManager] ${dbSession.sessionId} is owned by instance ${owner}; not reconnecting locally.`,
+        );
+        return null;
+      }
+
       if (!this.healer.hasReconnectPending(dbSession.sessionId)) {
         logger.warn(
-          `[SessionManager] Zombie session detected: ${dbSession.sessionId}. Auto-reconnecting.`,
+          `[SessionManager] Zombie session detected: ${dbSession.sessionId} (lock unowned/expired). Auto-reconnecting.`,
         );
         this.reconnectSession(dbSession.sessionId).catch((err) =>
           logger.error(`[SessionManager] Auto-reconnect failed: ${err}`),

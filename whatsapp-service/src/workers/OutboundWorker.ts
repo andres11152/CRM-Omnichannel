@@ -162,7 +162,11 @@ export class OutboundWorker {
       },
       {
         connection: redis,
-        concurrency: Number(process.env.WA_OUTBOUND_CONCURRENCY) || 5,
+        // Fixed at 1: a company's messages must dispatch through one WhatsApp
+        // socket in send order. Concurrent workers can resolve JID/media async
+        // work out of enqueue order and dispatch to WhatsApp out of order —
+        // there's no per-company FIFO guarantee to fall back on otherwise.
+        concurrency: 1,
       }
     );
 

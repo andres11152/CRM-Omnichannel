@@ -12,6 +12,7 @@ import sessionRouter from "./routes/session.routes";
 import messageRouter from "./routes/message.routes";
 import commandRouter from "./routes/command.routes";
 import { whatsAppSessionRepository } from "./repositories/WhatsAppSessionRepository";
+import { internalAuth } from "./middleware/internalAuth";
 
 const app = express();
 app.use(express.json());
@@ -29,7 +30,8 @@ app.get(["/", "/health"], (req, res) => {
   res.json({ status: "OK", timestamp: new Date() });
 });
 
-// 2. Register Routers
+// 2. Register Routers (internal-only, gated behind the shared-secret header)
+app.use(internalAuth);
 app.use("/sessions", sessionRouter);
 app.use("/messages", messageRouter);
 app.use("/commands", commandRouter);

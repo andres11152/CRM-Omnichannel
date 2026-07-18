@@ -16,7 +16,7 @@ import { whatsAppSessionRepository } from "./repositories/WhatsAppSessionReposit
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 4001;
+const PORT = process.env.PORT || 10000;
 
 // 1. Healthcheck Route (handles both / and /health to support default platform probes)
 app.get(["/", "/health"], (req, res) => {

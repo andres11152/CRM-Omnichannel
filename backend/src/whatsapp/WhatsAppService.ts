@@ -60,7 +60,6 @@ export class WhatsAppService {
 
     this.sessionService = new WhatsAppSessionService(
       this.sessionManager,
-      this.eventBus,
       this.sessionRepository,
     );
 

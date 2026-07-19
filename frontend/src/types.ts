@@ -64,6 +64,22 @@ export interface Plan {
   createdAt?: Date;
 }
 
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: number;
+  config?: {
+    max_users?: number;
+    max_whatsapp_sessions?: number;
+  };
+  limits?: {
+    max_users?: number;
+    max_whatsapp_sessions?: number;
+    max_contacts?: number;
+  };
+  maxContacts?: number;
+}
+
 export type CompanyStatus = AuthCompanyStatus;
 
 export type Company = AuthCompany;

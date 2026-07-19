@@ -17,6 +17,7 @@ import { useConversationSync } from "./hooks/useConversationSync";
 
 // ROUTING
 import { AppRoutes } from "./routes/AppRoutes";
+import { ServiceProvider } from "./contexts/ServiceContext";
 
 const App: React.FC = () => {
   // Initialize security interceptors on app mount
@@ -39,7 +40,9 @@ const App: React.FC = () => {
             <div className="flex-1 relative w-full overflow-hidden flex flex-col">
               <SoundProvider>
                 <ModalProvider>
-                  <AppRoutes />
+                  <ServiceProvider>
+                    <AppRoutes />
+                  </ServiceProvider>
                 </ModalProvider>
               </SoundProvider>
             </div>

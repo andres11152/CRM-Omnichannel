@@ -106,9 +106,8 @@ export function registerWhatsAppServices(): void {
 
   container.registerSingleton(WA_TOKENS.SessionService, () => {
     const sessionManager = container.resolve(WA_TOKENS.SessionManager);
-    const eventBus = container.resolve(WA_TOKENS.EventBus);
     const sessionRepository = new WhatsAppSessionRepository();
-    return new WhatsAppSessionService(sessionManager, eventBus, sessionRepository);
+    return new WhatsAppSessionService(sessionManager, sessionRepository);
   });
 
   // ── Providers ──

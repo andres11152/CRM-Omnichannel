@@ -18,6 +18,7 @@ import {
   ChannelDistributionWidget
 } from "./DashboardWidgets";
 import { updateUserPreferences } from "@/services/userService";
+import { Skeleton } from "boneyard-js/react";
 import {
   Zap,
   TrendingUp,
@@ -213,7 +214,8 @@ const MasterAdminDashboard: React.FC<{
       />
 
       <div className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-transparent">
-        {/* KPIs Row */}
+        <Skeleton name="main-dashboard" loading={loading}>
+          {/* KPIs Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <StatCard
             title={t("dashboard.total_companies", "Total Empresas")}
@@ -439,6 +441,7 @@ const MasterAdminDashboard: React.FC<{
             </button>
           </div>
         </div>
+        </Skeleton>
       </div>
     </div>
   );

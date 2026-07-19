@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { Modal } from "./ui/Modal";
+import { SubscriptionPlan } from "@/types";
 import SoundSettings from "./SoundSettings";
 import PermissionsPanel from "./PermissionsPanel";
 
@@ -340,7 +341,7 @@ export const CompanySettings: React.FC = () => {
                     {/* Horizontal Plans Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                       {availablePlans.length > 0 ? (
-                        availablePlans.map((plan: any) => {
+                        availablePlans.map((plan: SubscriptionPlan) => {
                           const isActive = settings.billing.plan?.id === plan.id;
                           const isSelected = selectedPlanId === plan.id;
                           return (

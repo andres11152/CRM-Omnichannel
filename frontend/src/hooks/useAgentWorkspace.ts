@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { Ticket, Contact, User, Tag, Channel } from "@/types";
 import { getTickets } from "@/services/ticketService";
 import { API_BASE_URL, BASE_URL } from "@/services/apiConfig";
-import { resolveContactName } from "@/utils/contactUtils";
+import { resolveContactName, resolveContactPhone } from "@/utils/contactUtils";
 import { useAgentWorkspaceSockets } from "@/hooks/useAgentWorkspaceSockets";
 import { useSocketStore } from "@/stores/socketStore";
 
@@ -153,27 +153,7 @@ function mergeServerTickets(
   return finalTickets;
 }
 
-/** Resolves a clean phone number from a ticket's contact data */
-export function resolveContactPhone(ticket: Ticket): string {
-  const raw =
-    ticket.contact.phone ||
-    ticket.contact.channelId ||
-    ticket.conversationId ||
-    "";
-
-  const clean = String(raw)
-    .replace("@s.whatsapp.net", "")
-    .replace("@g.us", "")
-    .replace(/:.*/, "")
-    .replace(/\D/g, "");
-
-  if (clean.startsWith("000")) return "";
-  if (clean.startsWith("40000")) return "";
-  if (clean.startsWith("45") && clean.length > 12) return "";
-  if (clean.startsWith("40") && clean.length > 12) return "";
-  if (clean.length >= 7 && clean.length <= 15) return `+${clean}`;
-  return "";
-}
+// resolveContactPhone is imported from contactUtils.ts
 
 /** Converts a Ticket to a Contact for the list component */
 export function ticketToContact(ticket: Ticket): Contact {

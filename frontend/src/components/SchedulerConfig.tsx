@@ -237,9 +237,18 @@ export const SchedulerConfig: React.FC = () => {
         toast.success("Tipo de reunión creado con éxito.");
       }
       setIsMTModalOpen(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error saving meeting type:", error);
-      toast.error(error.response?.data?.message || "No se pudo guardar el tipo de reunión.");
+      let msg = "No se pudo guardar el tipo de reunión.";
+      if (error && typeof error === "object" && "response" in error) {
+        const response = (error as { response?: { data?: { message?: string } } }).response;
+        if (response?.data?.message) {
+          msg = response.data.message;
+        }
+      } else if (error instanceof Error) {
+        msg = error.message;
+      }
+      toast.error(msg);
     } finally {
       setSavingMeetingType(false);
     }

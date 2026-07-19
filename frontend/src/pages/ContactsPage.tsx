@@ -8,6 +8,8 @@ import { EmailModal } from "@/components/EmailModal";
 import { API_BASE_URL } from "@/services/apiConfig";
 import { useNavigate } from "react-router-dom";
 import { Search, User, History, Trash2, X, MessageSquare } from "lucide-react";
+import { Skeleton } from "boneyard-js/react";
+import { ContactFormModal } from "@/components/contacts/ContactFormModal";
 
 export const ContactsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -34,12 +36,7 @@ export const ContactsPage: React.FC = () => {
   const [selectedEmailContact, setSelectedEmailContact] =
     useState<Contact | null>(null);
 
-  // Form State
-  const [newName, setNewName] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newPhone, setNewPhone] = useState("");
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [newNotes, setNewNotes] = useState("");
+  // Form State handled by ContactFormModal
 
   // WhatsApp contact import control (manual / opt-in)
   const [autoImportWa, setAutoImportWa] = useState(false);
@@ -129,9 +126,10 @@ export const ContactsPage: React.FC = () => {
         { id: toastId },
       );
       await fetchContacts(page, debouncedSearch);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error importing WhatsApp contacts:", error);
-      toast.error(error.message || "Error al importar contactos", { id: toastId });
+      const msg = error instanceof Error ? error.message : "Error al importar contactos";
+      toast.error(msg, { id: toastId });
     } finally {
       setImportingWa(false);
     }
@@ -197,9 +195,6 @@ export const ContactsPage: React.FC = () => {
 
   const handleOpenModal = (contact?: Contact) => {
     if (contact) {
-      setEditingContact(contact);
-
-      // Cleanup Logic
       const isFakeEmail =
         contact.email?.includes("@whatsapp.user") ||
         contact.email?.includes("@c.us");
@@ -207,37 +202,35 @@ export const ContactsPage: React.FC = () => {
 
       let displayPhone = contact.phone || "";
       if (!displayPhone && isFakeEmail) {
-        // Extract phone from tech email if phone field is empty
         displayPhone = contact.email?.split("@")[0] || "";
       }
 
-      setNewName(
+      const cleanName =
         contact.name === "Unknown Contact" || contact.name === displayPhone
           ? ""
-          : contact.name,
-      );
-      setNewEmail(cleanEmail);
-      setNewPhone(displayPhone);
-      setSelectedTagIds(contact.tags || []);
-      setNewNotes(contact.notes || "");
+          : contact.name;
+
+      setEditingContact({
+        ...contact,
+        name: cleanName,
+        email: cleanEmail,
+        phone: displayPhone,
+      });
     } else {
       setEditingContact(null);
-      setNewName("");
-      setNewEmail("");
-      setNewPhone("");
-      setSelectedTagIds([]);
-      setNewNotes("");
     }
     setShowModal(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveContact = async (contactData: {
+    name: string;
+    email: string;
+    phone: string;
+    tagIds: string[];
+    notes: string;
+  }) => {
     try {
       const token = localStorage.getItem("token");
-
-      // Use Unified Upsert Endpoint (Smart Logic) for both Create and Update
-      // This ensures backend cleanup logic runs universally
       const url = `${API_BASE_URL}/contacts`;
 
       const res = await fetch(url, {
@@ -247,12 +240,12 @@ export const ContactsPage: React.FC = () => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          id: editingContact?.id, // Critical: Pass ID to force update on correct record
-          name: newName,
-          email: newEmail,
-          phone: newPhone,
-          tags: selectedTagIds,
-          notes: newNotes,
+          id: editingContact?.id,
+          name: contactData.name,
+          email: contactData.email,
+          phone: contactData.phone,
+          tags: contactData.tagIds,
+          notes: contactData.notes,
         }),
       });
 
@@ -519,16 +512,8 @@ export const ContactsPage: React.FC = () => {
           </div>
 
           {/* CONTENT AREA */}
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div
-                  key={i}
-                  className="h-56 bg-reply-surface dark:bg-reply-panel-dark rounded-[2.5rem] border border-reply-border dark:border-reply-border-dark animate-pulse"
-                />
-              ))}
-            </div>
-          ) : displayContacts.length === 0 ? (
+          <Skeleton name="contacts-list" loading={loading}>
+            {displayContacts.length === 0 ? (
             <div className="text-center py-20 px-6 bg-reply-surface dark:bg-reply-panel-dark rounded-[3rem] border border-dashed border-reply-border dark:border-reply-border-dark shadow-inner">
               <div className="w-24 h-24 bg-reply-bg dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform hover:scale-110">
                 <User className="w-10 h-10 text-gray-300" />
@@ -856,195 +841,19 @@ export const ContactsPage: React.FC = () => {
                 </div>
               )}
             </>
-          )}
+            )}
+          </Skeleton>
         </div>
       </div>
 
-      {/* Modal */}
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-reply-surface dark:bg-reply-panel-dark rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-reply-border dark:border-reply-border-dark transform transition-all scale-100 flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="px-8 py-6 border-b border-reply-border dark:border-reply-border-dark bg-reply-bg dark:bg-reply-bg-dark flex justify-between items-center shrink-0">
-              <div>
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                  {editingContact ? t("common.edit") : t("common.new")}
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                  {editingContact
-                    ? "Actualiza la información del cliente"
-                    : "Agrega un nuevo cliente a tu base de datos"}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Scrollable Form Area */}
-            <div className="overflow-y-auto custom-scrollbar p-8">
-              <form
-                id="contact-form"
-                onSubmit={handleSubmit}
-                className="space-y-6"
-              >
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                      {t("common.name")} <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
-                      </div>
-                      <input
-                        required
-                        type="text"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        placeholder="Ej. Juan Pérez"
-                        className="w-full pl-12 pr-4 py-3.5 bg-reply-bg dark:bg-gray-800/50 border border-gray-200 dark:border-reply-border-dark rounded-2xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none font-semibold text-gray-900 dark:text-white placeholder-gray-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        value={newEmail}
-                        onChange={(e) => setNewEmail(e.target.value)}
-                        placeholder="cliente@ejemplo.com"
-                        className="w-full px-4 py-3.5 bg-reply-bg dark:bg-gray-800/50 border border-gray-200 dark:border-reply-border-dark rounded-2xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none font-semibold text-gray-900 dark:text-white placeholder-gray-400 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                        {t("common.phone")}
-                      </label>
-                      <input
-                        type="tel"
-                        value={newPhone}
-                        onChange={(e) => setNewPhone(e.target.value)}
-                        placeholder="+57 300 123 4567"
-                        className="w-full px-4 py-3.5 bg-reply-bg dark:bg-gray-800/50 border border-gray-200 dark:border-reply-border-dark rounded-2xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none font-semibold text-gray-900 dark:text-white placeholder-gray-400 text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                      {t("navigation.tags")}
-                    </label>
-                    <div className="space-y-3 bg-reply-bg dark:bg-gray-800/30 p-4 rounded-2xl border border-gray-100 dark:border-reply-border-dark">
-                      {/* SELECTED TAGS */}
-                      <div className="flex flex-wrap gap-2 min-h-[32px]">
-                        {selectedTagIds.map((id) => {
-                          const tag = allTags.find((t) => t.id === id);
-                          return tag ? (
-                            <span
-                              key={id}
-                              className={`pl-3 pr-2 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border shadow-sm ${tag.color ? tag.color + " border-transparent" : "bg-white text-gray-800 border-gray-200"}`}
-                            >
-                              {tag.name}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setSelectedTagIds((prev) =>
-                                    prev.filter((tid) => tid !== id),
-                                  )
-                                }
-                                className="bg-black/10 hover:bg-black/20 rounded-full p-0.5 transition-colors"
-                              >
-                                <X size={10} />
-                              </button>
-                            </span>
-                          ) : null;
-                        })}
-                        {selectedTagIds.length === 0 && (
-                          <span className="text-gray-400 text-sm italic flex items-center gap-2">
-                            {t("common.unknown")}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* SEPARATOR */}
-                      <div className="h-px bg-gray-200 dark:bg-gray-700 w-full" />
-
-                      {/* AVAILABLE TAGS */}
-                      <div>
-                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2.5">
-                          Disponibles para agregar
-                        </div>
-                        <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto custom-scrollbar">
-                          {allTags
-                            .filter((t) => !selectedTagIds.includes(t.id))
-                            .map((tag) => (
-                              <button
-                                key={tag.id}
-                                type="button"
-                                onClick={() =>
-                                  setSelectedTagIds((prev) => [...prev, tag.id])
-                                }
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 active:scale-95 ${tag.color ? "bg-white dark:bg-reply-panel-dark " + tag.color.replace("text-", "border-").replace("bg-", "text-") : "border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400"}`}
-                              >
-                                + {tag.name}
-                              </button>
-                            ))}
-                          {allTags.filter((t) => !selectedTagIds.includes(t.id))
-                            .length === 0 && (
-                            <span className="text-gray-400 text-xs italic">
-                              No hay ms etiquetas disponibles
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                      Notas Internas
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={newNotes}
-                      onChange={(e) => setNewNotes(e.target.value)}
-                      placeholder="Información relevante, preferencias, historial..."
-                      className="w-full px-4 py-3.5 bg-reply-bg dark:bg-gray-800/50 border border-gray-200 dark:border-reply-border-dark rounded-2xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none font-medium text-gray-900 dark:text-white placeholder-gray-400 resize-none text-sm"
-                    />
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            {/* Footer */}
-            <div className="px-8 py-5 bg-reply-bg dark:bg-reply-surface-dark/50 border-t border-gray-100 dark:border-reply-border-dark flex justify-end gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="px-6 py-3 text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded-xl transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                form="contact-form" // Link to form via ID
-                className="px-8 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition-all transform hover:-translate-y-0.5"
-              >
-                {editingContact ? "Guardar Cambios" : "Crear Contacto"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Contact Form Modal */}
+      <ContactFormModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        editingContact={editingContact}
+        allTags={allTags}
+        onSave={handleSaveContact}
+      />
 
       {/* Timeline Modal */}
       {showTimeline && timelineContactId && (

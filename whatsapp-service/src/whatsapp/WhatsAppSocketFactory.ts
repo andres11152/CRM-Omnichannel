@@ -108,7 +108,9 @@ export class WhatsAppSocketFactory {
       },
     });
 
-    sock.serverProps.profilePicPrivacyToken = false;
+    if (sock.serverProps) {
+      sock.serverProps.profilePicPrivacyToken = false;
+    }
 
     return sock;
   }

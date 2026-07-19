@@ -50,6 +50,42 @@ interface UseAgentWorkspaceSocketsProps {
   triggerBackgroundRefresh: () => void;
 }
 
+//  NOTIFICATION SOUND (Synthesized Pop - Zero Latency, No CORS issues)
+const playNotificationSound = () => {
+  try {
+    const audioCtx = new (
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext
+    )();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.type = "sine";
+    // Start at a higher pitch and quickly sweep down (pop effect)
+    oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(
+      100,
+      audioCtx.currentTime + 0.1,
+    );
+
+    // Volume envelope (quick fade out)
+    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.01,
+      audioCtx.currentTime + 0.1,
+    );
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.1);
+  } catch (e) {
+    console.warn("Audio synthesis blocked or not supported", e);
+  }
+};
+
 export const useAgentWorkspaceSockets = ({
   user,
   setTickets,
@@ -58,42 +94,6 @@ export const useAgentWorkspaceSockets = ({
   fetchData,
   triggerBackgroundRefresh,
 }: UseAgentWorkspaceSocketsProps) => {
-
-  //  NOTIFICATION SOUND (Synthesized Pop - Zero Latency, No CORS issues)
-  const playNotificationSound = () => {
-    try {
-      const audioCtx = new (
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext
-      )();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-
-      oscillator.type = "sine";
-      // Start at a higher pitch and quickly sweep down (pop effect)
-      oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(
-        100,
-        audioCtx.currentTime + 0.1,
-      );
-
-      // Volume envelope (quick fade out)
-      gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(
-        0.01,
-        audioCtx.currentTime + 0.1,
-      );
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.1);
-    } catch (e) {
-      console.warn("Audio synthesis blocked or not supported", e);
-    }
-  };
 
   useEffect(() => {
     console.log("[AgentWorkspace] [OK] Business event listeners initializing");
@@ -542,5 +542,5 @@ export const useAgentWorkspaceSockets = ({
       socketService.off("ticket.assigned", handleTicketAssigned);
       socketService.off("contact.updated", handleContactUpdated);
     };
-  }, [user?.companyId]); // Depend on user.companyId
+  }, [user, setTickets, setActiveTicketId, fetchData]); // Avoid stale closures
 };

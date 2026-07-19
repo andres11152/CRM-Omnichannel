@@ -10,13 +10,7 @@
 import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { IAuthProvider } from "../core/interfaces/IAuthProvider";
 import { SessionConfig, SessionStatus } from "../core/types/whatsapp.types";
-import { EventBus } from "../core/events/EventBus";
-import { WhatsAppEventType } from "../core/events/WhatsAppEvents";
 import { WASocket, Contact } from "@whiskeysockets/baileys";
-
-interface ExtendedWASocket extends WASocket {
-  getLidToPhoneNumberMap?: (lids: string[]) => Promise<{ [lid: string]: string }>;
-}
 import { SimpleInMemoryStore } from "./SimpleStore";
 import { ConnectionHealer } from "./ConnectionHealer";
 import {
@@ -26,18 +20,18 @@ import {
 
 import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import TenantContextManager from "@/config/tenantContext";
-// [OLD] Local Baileys socket creation — dead in production (Baileys connection
-// lifecycle now lives entirely in the whatsapp-service microservice). Only
-// referenced by initializeSession()/reconnectSession() below, which have no
-// live callers anymore; kept for reference, see providers/old/.
-import { bindSessionEvents } from "./old/SessionEventBinder";
 import { SessionContactResolver } from "./SessionContactResolver";
 import { container } from "@/config/container";
 import { WA_TOKENS } from "../di/tokens";
-import { WhatsAppSocketFactory } from "./old/WhatsAppSocketFactory";
 import { antiBanManager } from "../services/AntiBanManager";
 
 export class SessionManager implements ISessionManager {
+  // [SEC] Baileys connection lifecycle now lives entirely in the whatsapp-service
+  // microservice — nothing ever writes to `sessions`/`sessionMetadata` here
+  // anymore (initializeSession is disabled, see below). They're kept only
+  // because SessionContactResolver and the read-only lookup methods below are
+  // still live (IdentityResolverService's LID resolution, Meta-provider
+  // sending, session status queries) and expect this shape.
   private sessions: Map<string, WASocket> = new Map();
   private sessionMetadata: Map<
     string,
@@ -45,12 +39,10 @@ export class SessionManager implements ISessionManager {
   > = new Map();
   // [SEC] MEMORY STORES (Isolated per Session/Tenant)
   private sessionStores: Map<string, SimpleInMemoryStore> = new Map();
-  private eventBus: EventBus;
   private healer: ConnectionHealer;
   private contactResolver: SessionContactResolver;
 
   constructor(private authProvider: IAuthProvider) {
-    this.eventBus = EventBus.getInstance();
     this.healer = new ConnectionHealer();
     // Pass sessionMetadata so SessionContactResolver can use the composite
     // (companyId::sessionId) store key and prevent cross-tenant store collisions.
@@ -126,121 +118,19 @@ export class SessionManager implements ISessionManager {
   // SESSION LIFECYCLE
   // ────────────────────────────────────────────────
 
-  async initializeSession(config: SessionConfig): Promise<WASocket> {
-    const { sessionId, companyId } = config;
-
-    // Cleanup existing session before re-init
-    if (this.sessions.has(sessionId)) {
-      logger.info(`[SessionManager] Cleaning up existing session ${sessionId}`);
-      await this.terminateSession(sessionId, false);
-    }
-
-    // [SEC] C3 GUARD: Prevent the same sessionId from being reused by a different company.
-    // If two tenants share a sessionId string, their in-memory stores would collide and
-    // data would leak across tenant boundaries.
-    const existingMeta = this.sessionMetadata.get(sessionId);
-    if (existingMeta && existingMeta.companyId !== companyId) {
-      throw new Error(
-        `[SessionManager] SECURITY: sessionId "${sessionId}" is already registered for company ` +
-        `"${existingMeta.companyId}" and cannot be reused by company "${companyId}". ` +
-        `Use a unique sessionId per company.`,
-      );
-    }
-
-    this.healer.cancelReconnect(sessionId);
-    logger.info(`[SessionManager] Initializing session: ${sessionId}`);
-    this.sessionMetadata.set(sessionId, {
-      companyId,
-      status: "CONNECTING",
-      isPairing: !!config.phoneForPairing,
-    });
-
-    // [SEC] CREATE ISOLATED STORE FOR THIS SESSION (composite key: companyId::sessionId)
-    // Using a composite key prevents store collisions when two companies accidentally
-    // use the same sessionId string value.
-    const sessionStore = new SimpleInMemoryStore();
-    const storeKey = `${companyId}::${sessionId}`;
-    this.sessionStores.set(storeKey, sessionStore);
-
-    // Enable Redis persistence scoped to this session.
-    // Redis key uses underscore separator (wa:store:companyId_sessionId) for legacy compatibility.
-    await sessionStore.enablePersistence(`${companyId}_${sessionId}`).catch((e) =>
-      logger.error({ err: e }, `[SessionManager] Failed to enable persistence for ${sessionId}`)
+  /**
+   * @deprecated Baileys connection lifecycle now lives entirely in the
+   * whatsapp-service microservice (see whatsapp-service/src/whatsapp/SessionManager.ts).
+   * This method has no live callers — nothing in this process may open a local
+   * Baileys socket, since doing so races the microservice's live connection for
+   * the same session (see findActiveSessionForCompany's comment below). Kept
+   * only to satisfy the ISessionManager interface contract.
+   */
+  async initializeSession(_config: SessionConfig): Promise<WASocket> {
+    throw new Error(
+      "[SessionManager] initializeSession is not supported in this process — " +
+      "Baileys session lifecycle is owned exclusively by the whatsapp-service microservice.",
     );
-
-    // Load auth state
-    const { state, saveCreds } = await this.authProvider.loadState(sessionId);
-
-    // Fetch session details from DB to read the proxyUrl if configured
-    const dbSession = await TenantContextManager.runAsSystem(async () =>
-      whatsappSessionRepository.findSystemSession(sessionId),
-    );
-
-    if (!dbSession) {
-      logger.warn(
-        `[SessionManager] Session ${sessionId} was deleted from DB during initialization. Aborting socket creation.`
-      );
-      const storeKey = `${companyId}::${sessionId}`;
-      this.sessionStores.delete(storeKey);
-      this.sessionMetadata.delete(sessionId);
-      throw new Error(`Session ${sessionId} does not exist in database.`);
-    }
-
-    const rawSock = await WhatsAppSocketFactory.createSocket({
-      sessionId,
-      companyId,
-      state,
-      sessionStore,
-      proxyUrl: dbSession?.proxyUrl,
-      onLoggerError: (sid) => {
-        this.reconnectSession(sid).catch((e) => {
-          logger.error(`[SessionGuard] Auto-healing reconnect failed: ${e}`);
-        });
-      },
-    });
-
-    // Wrap with baileys-antiban: rate limiting, warmup, group op guard,
-    // legitimacy signals, deaf-session detection, and more.
-    // The wrapped socket is a drop-in replacement — all existing sendMessage calls
-    // automatically go through anti-ban protection with no code changes required.
-    const sock = await antiBanManager.initSession(sessionId, rawSock);
-
-    // Bind events (delegated to SessionEventBinder — store.bind is called inside)
-    // [FIX] Removed duplicate sessionStore.bind(sock.ev) that was here.
-    // SessionEventBinder.bindSessionEvents already calls store.bind(sock.ev) on line 74.
-    bindSessionEvents(sock, sessionId, companyId, saveCreds, {
-      eventBus: this.eventBus,
-      healer: this.healer,
-      store: sessionStore, // Pass isolated store
-      sessions: this.sessions,
-      sessionMetadata: this.sessionMetadata,
-      terminateSession: (sid, clear) => this.terminateSession(sid, clear),
-      reconnectSession: (sid) => this.reconnectSession(sid),
-    });
-
-    this.sessions.set(sessionId, sock);
-
-    if (config.phoneForPairing && !sock.authState.creds.registered) {
-      setTimeout(async () => {
-        try {
-          const cleanPhone = config.phoneForPairing!.replace(/\D/g, "");
-          logger.info(`[SessionManager] Requesting pairing code for session ${sessionId} with phone ${cleanPhone}`);
-          const code = await sock.requestPairingCode(cleanPhone);
-          logger.info(`[SessionManager] Pairing code generated successfully for ${sessionId}: ${code}`);
-          this.eventBus.publish({
-            type: WhatsAppEventType.SESSION_PAIRING_CODE,
-            sessionId,
-            companyId,
-            timestamp: new Date(),
-            data: { code },
-          });
-        } catch (err) {
-          logger.error({ err }, `[SessionManager] Failed to request pairing code for session ${sessionId}`);
-        }
-      }, 1000);
-    }
-
-    return sock;
   }
 
   getSession(sessionId: string): WASocket | undefined {
@@ -286,26 +176,10 @@ export class SessionManager implements ISessionManager {
       }
     }
 
-    const sock = this.sessions.get(sessionId);
-    if (sock) {
-      // 1. Immediately kill listeners to prevent "zombie" scheduled reconnections
-      // when the socket drops.
-      sock.ev.removeAllListeners("connection.update");
-      sock.ev.removeAllListeners("creds.update");
-      sock.ev.removeAllListeners("messages.upsert");
-
-      try {
-        if (clearAuth) {
-          // Log out from WhatsApp completely so keys are universally flushed
-          await sock.logout();
-        } else {
-          sock.end(undefined);
-        }
-      } catch {
-        // Ignore close errors
-      }
-      this.sessions.delete(sessionId);
-    }
+    // [SEC] No `sock.logout()`/`sock.end()` here: this.sessions can never hold an
+    // entry (initializeSession, the only writer, is disabled — see above), since
+    // the actual Baileys socket for this sessionId lives in whatsapp-service, not
+    // this process. Logging out the real socket happens there.
 
     if (clearAuth) {
       this.sessionMetadata.delete(sessionId);
@@ -338,32 +212,16 @@ export class SessionManager implements ISessionManager {
     }
   }
 
+  /**
+   * @deprecated No live callers — see initializeSession above. Reconnection for
+   * a Baileys session is whatsapp-service's own responsibility (its
+   * ConnectionHealer + SessionLockService).
+   */
   public async reconnectSession(sessionId: string): Promise<void> {
-    const meta = this.sessionMetadata.get(sessionId);
-    if (!meta) {
-      const session = await TenantContextManager.runAsSystem(async () =>
-        whatsappSessionRepository.findSystemSession(sessionId),
-      );
-      if (session) {
-        await this.initializeSession({
-          sessionId,
-          companyId: session.companyId,
-          authDir: "",
-        });
-        return;
-      }
-      logger.error(
-        `[SessionManager] Cannot reconnect ${sessionId}, metadata lost.`,
-      );
-      return;
-    }
-
-    logger.info(`[SessionManager] Attempting Reconnect for ${sessionId}`);
-    await this.initializeSession({
-      sessionId,
-      companyId: meta.companyId,
-      authDir: "",
-    });
+    throw new Error(
+      `[SessionManager] reconnectSession(${sessionId}) is not supported in this process — ` +
+      "Baileys session lifecycle is owned exclusively by the whatsapp-service microservice.",
+    );
   }
 
   getSessionStatus(sessionId: string): SessionStatus {

@@ -8,6 +8,12 @@ export interface SuggestedField {
   color?: string;
 }
 
+export interface DaySchedule {
+  open: string;
+  close: string;
+  active: boolean;
+}
+
 export interface CompanySettings {
   general: {
     name: string;
@@ -17,6 +23,30 @@ export interface CompanySettings {
     phone: string;
     website: string;
     timezone: string;
+  };
+  businessHours?: {
+    enabled: boolean;
+    schedule: Record<string, DaySchedule>;
+  };
+  automation?: {
+    welcomeMessage: string;
+    welcomeEnabled: boolean;
+    oooMessage: string;
+    oooEnabled: boolean;
+  };
+  smtp?: {
+    provider: string;
+    host: string;
+    port: number;
+    user: string;
+    hasPassword?: boolean;
+    secure: boolean;
+    senderEmail: string;
+    senderName: string;
+  };
+  billing?: {
+    plan: { id?: string; name?: string; price?: number } | null;
+    subscriptionEndsAt: string | null;
   };
   dataRequest?: {
     suggestedFields: SuggestedField[];

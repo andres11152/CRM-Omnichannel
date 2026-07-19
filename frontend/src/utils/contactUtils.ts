@@ -95,3 +95,33 @@ export const getInitials = (name: string): string => {
   const clean = name.replace(/^\+/, "").trim(); // Remove leading +
   return clean.charAt(0).toUpperCase();
 };
+
+/**
+ * Resolves a clean phone number from a ticket's contact data
+ */
+export function resolveContactPhone(ticket: {
+  contact: {
+    phone?: string | null;
+    channelId?: string | null;
+  };
+  conversationId?: string | null;
+}): string {
+  const raw =
+    ticket.contact.phone ||
+    ticket.contact.channelId ||
+    ticket.conversationId ||
+    "";
+
+  const clean = String(raw)
+    .replace("@s.whatsapp.net", "")
+    .replace("@g.us", "")
+    .replace(/:.*/, "")
+    .replace(/\D/g, "");
+
+  if (clean.startsWith("000")) return "";
+  if (clean.startsWith("40000")) return "";
+  if (clean.startsWith("45") && clean.length > 12) return "";
+  if (clean.startsWith("40") && clean.length > 12) return "";
+  if (clean.length >= 7 && clean.length <= 15) return `+${clean}`;
+  return "";
+}

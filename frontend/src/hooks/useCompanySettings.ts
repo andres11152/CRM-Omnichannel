@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { api } from "@/lib/axios";
 import { useAuthStore } from "@/stores/authStore";
 import { useSound } from "@/components/SoundContext";
+import { SubscriptionPlan } from "@/types";
+import { useServices } from "@/contexts/ServiceContext";
 
 // ────────────────────────────────────────────────
 // TYPES
@@ -159,6 +161,7 @@ export type SettingsTab =
 export const useCompanySettings = () => {
   const { user } = useAuthStore();
   const { playSound } = useSound();
+  const { companyService } = useServices();
 
   // ── State ──
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
@@ -171,7 +174,7 @@ export const useCompanySettings = () => {
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
 
   // ── MercadoPago Direct Card Subscription States ──
-  const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+  const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   const [cardForm, setCardForm] = useState({
     cardNumber: "",
@@ -190,9 +193,8 @@ export const useCompanySettings = () => {
     const fetchSettings = async () => {
       try {
         setLoading(true);
-        const res = await api.get("/company/settings");
-        const data = res.data;
-        const settingsData = data.data || data;
+        const res = await companyService.getSettings();
+        const settingsData = (res as any).data || res;
 
         if (settingsData) {
           setSettings((prev) => ({
@@ -336,7 +338,7 @@ export const useCompanySettings = () => {
         setPasswords({ current: "", new: "", confirm: "" });
         toast.success("Contraseña actualizada");
       } else {
-        await api.patch("/company/settings", settings);
+        await companyService.updateSettings(settings);
         toast.success("Configuración guardada");
       }
       playSound("success");

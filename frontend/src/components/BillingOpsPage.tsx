@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { adminService } from "@/services/adminService";
 import { ModuleHeader } from "./common/ModuleHeader";
-import { Skeleton } from "./ui/Skeleton";
+import { Skeleton } from "boneyard-js/react";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
 import { Badge } from "./ui/Badge";
@@ -179,7 +179,8 @@ export const BillingOpsPage = () => {
           </div>
 
           <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left">
+            <Skeleton name="billing-ops-table" loading={loading}>
+              <table className="w-full text-left">
               <thead>
                 <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-reply-border-dark bg-slate-50/30 dark:bg-black/20">
                   <th className="px-6 py-4">Status</th>
@@ -191,36 +192,7 @@ export const BillingOpsPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-reply-border-dark text-sm">
-                {loading ? (
-                  [1, 2, 3, 4, 5].map((i) => (
-                    <tr key={`skel-${i}`}>
-                      <td className="px-6 py-4"><Skeleton className="h-6 w-16 rounded" /></td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <Skeleton className="w-8 h-8 rounded-xl" />
-                          <div className="space-y-1.5">
-                            <Skeleton className="h-3 w-24" />
-                            <Skeleton className="h-2 w-32" />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1.5">
-                          <Skeleton className="h-3 w-32" />
-                          <Skeleton className="h-2 w-20" />
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1.5">
-                          <Skeleton className="h-3 w-20" />
-                          <Skeleton className="h-2 w-12" />
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 flex justify-end"><Skeleton className="h-5 w-16" /></td>
-                      <td className="px-6 py-4"><Skeleton className="h-8 w-20 ml-auto" /></td>
-                    </tr>
-                  ))
-                ) : transactions.length === 0 ? (
+                {transactions.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-20 text-center">
                        <div className="flex flex-col items-center gap-3 text-slate-400">
@@ -293,6 +265,7 @@ export const BillingOpsPage = () => {
                 )}
               </tbody>
             </table>
+            </Skeleton>
           </div>
         </Card>
       </div>

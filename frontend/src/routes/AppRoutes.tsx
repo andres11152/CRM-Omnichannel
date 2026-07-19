@@ -109,70 +109,74 @@ const EmailInboxWrapper = () => {
   return <EmailInbox />;
 };
 
+interface RouteConfig {
+  path: string;
+  element: React.ReactNode;
+}
+
+const publicRoutes: RouteConfig[] = [
+  { path: "/login", element: <NewLoginPage /> },
+  { path: "/login-legacy", element: <LegacyLoginWrapper /> },
+  { path: "/forgot-password", element: <ForgotPassword /> },
+  { path: "/reset-password/:token", element: <ResetPassword /> },
+  { path: "/terms", element: <TermsPage /> },
+  { path: "/privacy", element: <PrivacyPage /> },
+  { path: "/p/:publicId", element: <PublicPropertyPage /> },
+  { path: "/book/:companySlug/:agentSlug/:meetingTypeSlug", element: <PublicBookingPage /> },
+];
+
+const protectedRoutes: RouteConfig[] = [
+  { path: "/", element: <Navigate to="/dashboard" replace /> },
+  { path: "/dashboard", element: <DashboardWrapper /> },
+  { path: "/workspace", element: <WorkspaceWrapper /> },
+  { path: "/contacts", element: <ContactsPage /> },
+  { path: "/accounts", element: <AccountsPage /> },
+  { path: "/deals", element: <DealsPage /> },
+  { path: "/properties", element: <PropertiesPage /> },
+  { path: "/products", element: <ProductCatalogView /> },
+  { path: "/activities", element: <ActivitiesPage /> },
+  { path: "/analytics", element: <AnalyticsDashboard /> },
+  { path: "/email", element: <EmailInboxWrapper /> },
+  { path: "/marketing", element: <MarketingDashboard /> },
+  { path: "/queue", element: <QueueDashboard /> },
+  { path: "/team", element: <TeamManager /> },
+  { path: "/integrations", element: <IntegrationsPanel /> },
+  { path: "/tags", element: <TagsManager /> },
+  { path: "/media", element: <MediaLibrary /> },
+  { path: "/chatbot/flujos", element: <FlowsListPage /> },
+  { path: "/chatbot/flujos/nuevo", element: <FlowBuilder /> },
+  { path: "/chatbot/flujos/:id/editar", element: <FlowBuilder /> },
+  { path: "/settings", element: <CompanySettings /> },
+  { path: "/profile", element: <ProfileSettings /> },
+  { path: "/settings/developers", element: <DeveloperSettings /> },
+  { path: "/developers", element: <DeveloperSettings /> },
+  { path: "/ai", element: <AIAgentConfig /> },
+  { path: "/tenants", element: <TenantManagementWrapper /> },
+  { path: "/plans", element: <PlanManagementWrapper /> },
+  { path: "/billing", element: <BillingOpsPage /> },
+  { path: "/schema", element: <SchemaVisualizer /> },
+  { path: "/audit", element: <GlobalAuditLog /> },
+  { path: "/system/health", element: <SystemDeepMonitor /> },
+  { path: "/system/flags", element: <FeatureFlagManager /> },
+  { path: "/system/marketplace", element: <GlobalTemplateMarketplace /> },
+];
+
 // --- APP ROUTES ---
 export const AppRoutes: React.FC = () => {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
         {/* PUBLIC ROUTES */}
-        <Route path="/login" element={<NewLoginPage />} />
-        <Route path="/login-legacy" element={<LegacyLoginWrapper />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password/:token" element={<ResetPassword />} />
-        <Route path="/terms" element={<TermsPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
-        <Route path="/p/:publicId" element={<PublicPropertyPage />} />
-        <Route path="/book/:companySlug/:agentSlug/:meetingTypeSlug" element={<PublicBookingPage />} />
+        {publicRoutes.map((route) => (
+          <Route key={route.path} path={route.path} element={route.element} />
+        ))}
 
         {/* PROTECTED APP ROUTES */}
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>
-            {/* DEFAULT REDIRECT */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-            {/* MAIN MODULES */}
-            <Route path="/dashboard" element={<DashboardWrapper />} />
-            <Route path="/workspace" element={<WorkspaceWrapper />} />
-            <Route path="/contacts" element={<ContactsPage />} />
-            <Route path="/accounts" element={<AccountsPage />} />
-            <Route path="/deals" element={<DealsPage />} />
-            <Route path="/properties" element={<PropertiesPage />} />
-            <Route path="/products" element={<ProductCatalogView />} />
-            <Route path="/activities" element={<ActivitiesPage />} />
-            <Route path="/analytics" element={<AnalyticsDashboard />} />
-
-            {/* COMMUNICATION & MARKETING */}
-            <Route path="/email" element={<EmailInboxWrapper />} />
-            <Route path="/marketing" element={<MarketingDashboard />} />
-            <Route path="/queue" element={<QueueDashboard />} />
-
-            {/* SETTINGS & ADMIN */}
-            <Route path="/team" element={<TeamManager />} />
-            <Route path="/integrations" element={<IntegrationsPanel />} />
-            <Route path="/tags" element={<TagsManager />} />
-            <Route path="/media" element={<MediaLibrary />} />
-
-            {/* CHATBOT FLOWS (NESTED ROUTES) */}
-            <Route path="/chatbot/flujos" element={<FlowsListPage />} />
-            <Route path="/chatbot/flujos/nuevo" element={<FlowBuilder />} />
-            <Route path="/chatbot/flujos/:id/editar" element={<FlowBuilder />} />
-
-            {/* ADVANCED SETTINGS */}
-            <Route path="/settings" element={<CompanySettings />} />
-            <Route path="/profile" element={<ProfileSettings />} />
-            <Route path="/settings/developers" element={<DeveloperSettings />} />
-            <Route path="/developers" element={<DeveloperSettings />} />
-            <Route path="/ai" element={<AIAgentConfig />} />
-
-            {/* MASTER ADMIN */}
-            <Route path="/tenants" element={<TenantManagementWrapper />} />
-            <Route path="/plans" element={<PlanManagementWrapper />} />
-            <Route path="/billing" element={<BillingOpsPage />} />
-            <Route path="/schema" element={<SchemaVisualizer />} />
-            <Route path="/audit" element={<GlobalAuditLog />} />
-            <Route path="/system/health" element={<SystemDeepMonitor />} />
-            <Route path="/system/flags" element={<FeatureFlagManager />} />
-            <Route path="/system/marketplace" element={<GlobalTemplateMarketplace />} />
+            {protectedRoutes.map((route) => (
+              <Route key={route.path} path={route.path} element={route.element} />
+            ))}
           </Route>
         </Route>
 

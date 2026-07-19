@@ -48,21 +48,22 @@ export class WhatsAppMessaging {
     options: SendMessageOptions,
   ): Promise<MessagePayload> {
     try {
-      let activeSession =
-        await this.sessionManager.findActiveSessionForCompany(
-          options.companyId,
-        );
+      // [SEC] The Baileys socket lives exclusively in whatsapp-service now —
+      // this.sessionManager is the local (backend) manager, which never has a
+      // session since no socket is ever created here. Checking it always
+      // returned null, so every send threw 503 "No active WhatsApp session"
+      // before ever reaching the enqueue step below. Ask whatsapp-service
+      // directly instead, same as the session-list endpoint already does.
+      const sessionsRes = await whatsappServiceHttp.get<{ sessionId: string; status: string }[]>(
+        `/sessions/${options.companyId}`,
+      );
+      const sessions = sessionsRes.data;
+      let activeSession = sessions.find((s) => s.status === "CONNECTED");
 
       // [SEC] HIGH AVAILABILITY ENQUEUE: If no CONNECTED session, check if any session exists
       // as it might be currently RECONNECTING. The Worker handles wait-for-ready.
-      if (!activeSession) {
-        const sessions = await this.sessionManager.listSessions(options.companyId);
-        const anySession = sessions[0];
-        if (anySession) {
-          // Bypassing strict CONNECTED check because the Worker will wait for it.
-          // @ts-expect-error - socket not needed for enqueuing
-          activeSession = { sessionId: anySession.sessionId };
-        }
+      if (!activeSession && sessions[0]) {
+        activeSession = sessions[0];
       }
 
       if (!activeSession) {

@@ -1,4 +1,5 @@
 import { Worker, Job } from "bullmq";
+import { proto } from "@whiskeysockets/baileys";
 import { chatSyncService } from "../ChatSyncService";
 import { Logger } from "@/utils/logger";
 import { contextStorage } from "@/context/requestContext";
@@ -31,7 +32,14 @@ export class HistorySyncWorker {
         
         Logger.info(`[HistorySyncWorker] Processing history sync job ${job.id} for company ${companyId}`);
 
-        const onDemand = syncType === 2; // ON_DEMAND sync type
+        // [DOCS · Baileys] proto.HistorySync.HistorySyncType: INITIAL_BOOTSTRAP=0,
+        // INITIAL_STATUS_V3=1, FULL=2, RECENT=3, PUSH_NAME=4, NON_BLOCKING_DATA=5,
+        // ON_DEMAND=6. This previously hardcoded `=== 2`, which is actually FULL —
+        // every on-demand (manual "sync history") batch was misclassified as a bulk
+        // sync: it never emitted `conversation:history_synced`, so the frontend never
+        // refetched even after messages landed in the DB. Use the real enum so this
+        // can't silently drift again.
+        const onDemand = syncType === proto.HistorySync.HistorySyncType.ON_DEMAND;
 
         await contextStorage.run({ companyId, requestId: `history-sync:${job.id}` }, async () => {
           try {

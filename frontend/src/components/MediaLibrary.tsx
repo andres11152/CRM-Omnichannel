@@ -11,20 +11,26 @@ import { ModuleHeader } from "./common/ModuleHeader";
 import { MediaCategory } from "../constants/mediaCategories";
 import { AlertTriangle, Pencil } from "lucide-react";
 import { Modal, ModalButton } from "./ui/Modal";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 
 interface MediaLibraryProps {
   onSelect?: (media: Media) => void;
   onClose?: () => void;
 }
 
+const MEDIA_LIBRARY_CACHE_KEY = "media:default-view";
+
 export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   onSelect,
   onClose,
 }) => {
-  const [media, setMedia] = useState<Media[]>([]);
+  // Stale-while-revalidate: instant render on module/picker re-open for the
+  // default (unfiltered, no search) view, silent refetch behind it.
+  const cachedMedia = getModuleCache<Media[]>(MEDIA_LIBRARY_CACHE_KEY);
+  const [media, setMedia] = useState<Media[]>(cachedMedia ?? []);
   const [filter, setFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedMedia);
   const [uploading, setUploading] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Media | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -59,13 +65,19 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   }, [media]);
 
   const loadMedia = async () => {
-    try {
+    const isDefaultView = filter === "ALL" && !search;
+    if (!(isDefaultView && getModuleCache<Media[]>(MEDIA_LIBRARY_CACHE_KEY))) {
       setLoading(true);
+    }
+    try {
       const data = await getMedia({
         type: filter === "ALL" ? undefined : filter,
         search: search || undefined,
       });
       setMedia(data);
+      if (isDefaultView) {
+        setModuleCache<Media[]>(MEDIA_LIBRARY_CACHE_KEY, data);
+      }
     } catch (error: unknown) {
       console.error(error);
       toast.error(

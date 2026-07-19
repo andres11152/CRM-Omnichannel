@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import { protect } from "../middleware/authMiddleware";
 import { validate } from "../middleware/validationMiddleware";
+import { tenantContextMiddleware } from "../middleware/tenantContext";
 import {
   uploadMedia,
   getMedia,
@@ -38,6 +39,12 @@ router.use(protect);
 router.post(
   "/upload",
   upload.single("file"),
+  // [SEC] multer's multipart parser loses the AsyncLocalStorage tenant
+  // context for files large enough to need multiple internal read cycles
+  // (100MB limit here — same bug confirmed on the property images route).
+  // req.user survives (set via Object.defineProperty in `protect`), so
+  // re-establish context from it before any downstream Prisma call.
+  tenantContextMiddleware,
   validate(UploadMediaSchema),
   uploadMedia,
 );

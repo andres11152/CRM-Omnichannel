@@ -56,7 +56,6 @@ export class MediaProcessorService {
     message: WAMessage,
     messageId: string,
     sessionId?: string,
-    getSession?: (id: string) => import("@whiskeysockets/baileys").WASocket | undefined,
   ): Promise<{
     textContent: string;
     mediaUrl?: string;
@@ -90,14 +89,14 @@ export class MediaProcessorService {
     if (messageType === "ephemeralMessage") {
       const inner = (message.message as Record<string, unknown>)?.ephemeralMessage as { message?: WAMessage["message"] } | undefined;
       if (inner?.message) {
-        return this.extractMessageContent(companyId, { ...message, message: inner.message }, messageId, sessionId, getSession);
+        return this.extractMessageContent(companyId, { ...message, message: inner.message }, messageId, sessionId);
       }
       return null;
     }
     if (messageType === "viewOnceMessageV2" || messageType === "viewOnceMessageV2Extension") {
       const inner = (message.message as Record<string, unknown>)?.[messageType] as { message?: WAMessage["message"] } | undefined;
       if (inner?.message) {
-        return this.extractMessageContent(companyId, { ...message, message: inner.message }, messageId, sessionId, getSession);
+        return this.extractMessageContent(companyId, { ...message, message: inner.message }, messageId, sessionId);
       }
       return null;
     }
@@ -172,7 +171,7 @@ export class MediaProcessorService {
 
           // 1. Download via specialized service
           const buffer = await mediaDownloaderService.downloadWithRetry(
-            message, messageType, msgObj, messageId, sessionId, getSession
+            message, messageType, msgObj, messageId, companyId, sessionId
           );
 
           if (buffer && buffer.length > 0) {

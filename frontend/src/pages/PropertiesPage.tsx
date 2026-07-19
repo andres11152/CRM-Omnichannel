@@ -20,6 +20,15 @@ import {
   PROPERTY_KIND_GROUPS,
   formatCOP,
 } from "@/types/property.types";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
+
+interface PropertiesCache {
+  items: Property[];
+  total: number;
+}
+
+const PROPERTIES_CACHE_KEY = "properties:default-view";
+const DEFAULT_FILTERS: PropertyFilters = { page: 1, limit: 24, sort: "newest" };
 
 const selectCls =
   "px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-reply-brand outline-none";
@@ -123,10 +132,14 @@ export const PropertiesPage: React.FC = () => {
   const { t } = useTranslation();
   const { OPERATION_LABELS, KIND_LABELS, STATUS_LABELS } = usePropertyLabels();
   const { confirm } = useModal();
-  const [items, setItems] = useState<Property[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<PropertyFilters>({ page: 1, limit: 24, sort: "newest" });
+  // Stale-while-revalidate: re-entering the module renders the last default
+  // view (page 1, no filters) instantly and refetches silently, instead of
+  // flashing the 8-card skeleton grid on every module switch.
+  const cached = getModuleCache<PropertiesCache>(PROPERTIES_CACHE_KEY);
+  const [items, setItems] = useState<Property[]>(cached?.items ?? []);
+  const [total, setTotal] = useState(cached?.total ?? 0);
+  const [loading, setLoading] = useState(!cached);
+  const [filters, setFilters] = useState<PropertyFilters>(DEFAULT_FILTERS);
   const [search, setSearch] = useState("");
 
   const [formOpen, setFormOpen] = useState(false);
@@ -134,11 +147,17 @@ export const PropertiesPage: React.FC = () => {
   const [detail, setDetail] = useState<Property | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const isDefaultView = JSON.stringify(filters) === JSON.stringify(DEFAULT_FILTERS);
+    if (!(isDefaultView && getModuleCache<PropertiesCache>(PROPERTIES_CACHE_KEY))) {
+      setLoading(true);
+    }
     try {
       const res = await getProperties(filters);
       setItems(res.items);
       setTotal(res.total);
+      if (isDefaultView) {
+        setModuleCache<PropertiesCache>(PROPERTIES_CACHE_KEY, { items: res.items, total: res.total });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("properties_page.load_error", "Error al cargar inmuebles"));
     } finally {

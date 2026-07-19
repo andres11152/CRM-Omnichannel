@@ -8,18 +8,19 @@ export const IntegrationsPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"whatsapp" | "instagram" | "discover">("whatsapp");
 
   return (
-    <div className="flex-1 bg-gray-50 dark:bg-reply-bg-dark min-h-screen">
-      <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        <ModuleHeader
-          title="Integraciones & Canales"
-          description="Conecta y configura tus canales de comunicación omnichannel"
-          icon={
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 10.742L12 12.75l3.316-2.008M12 12.75V21m-3.316-10.258A2 2 0 004 12v5a2 2 0 002 2h12a2 2 0 002-2v-5a2 2 0 00-4.684-1.258" />
-            </svg>
-          }
-          gradient="from-indigo-600 to-indigo-800"
-        />
+    <div className="flex-1 bg-gray-50 dark:bg-reply-bg-dark min-h-screen flex flex-col">
+      <ModuleHeader
+        title="Integraciones & Canales"
+        description="Conecta y configura tus canales de comunicación omnichannel"
+        icon={
+          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 10.742L12 12.75l3.316-2.008M12 12.75V21m-3.316-10.258A2 2 0 004 12v5a2 2 0 002 2h12a2 2 0 002-2v-5a2 2 0 00-4.684-1.258" />
+          </svg>
+        }
+        gradient="from-indigo-600 to-indigo-800"
+      />
+
+      <div className="max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
 
         {/* Tab Selector Header */}
         <div className="flex p-1 bg-gray-100 dark:bg-gray-800/60 rounded-xl max-w-md border border-gray-200/20">

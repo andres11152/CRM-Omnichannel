@@ -17,17 +17,21 @@ import { api } from "@/lib/axios";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { useAuthStore } from "@/stores/authStore";
 import { useModal } from "@/context/ModalContext";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 
 const ADMIN_ROLES = ["ADMIN", "SUPERVISOR", "MASTER"];
 const NAME_MAX_LENGTH = 40;
+const TAGS_CACHE_KEY = "tags:list";
 
 export const TagsManager: React.FC = () => {
   const { t, i18n } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const canManageTags = user?.role ? ADMIN_ROLES.includes(user.role) : false;
   const { confirm } = useModal();
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: instant render on module re-entry, silent refetch
+  const cachedTags = getModuleCache<Tag[]>(TAGS_CACHE_KEY);
+  const [tags, setTags] = useState<Tag[]>(cachedTags ?? []);
+  const [loading, setLoading] = useState(!cachedTags);
   const [saving, setSaving] = useState(false);
   const [newTag, setNewTag] = useState({
     name: "",
@@ -71,11 +75,14 @@ export const TagsManager: React.FC = () => {
 
   const fetchTags = async () => {
     try {
-      setLoading(true);
+      if (!getModuleCache<Tag[]>(TAGS_CACHE_KEY)) {
+        setLoading(true);
+      }
       const res = await api.get("/tags");
       // Handle both direct array or wrapped response
       const tagsData = Array.isArray(res.data) ? res.data : res.data.data || [];
       setTags(tagsData);
+      setModuleCache<Tag[]>(TAGS_CACHE_KEY, tagsData);
     } catch (err) {
       console.error(err);
       toast.error(t("tags_mgmt.toast_loaded_error", "Error al cargar etiquetas"));

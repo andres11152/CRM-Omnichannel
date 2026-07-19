@@ -15,17 +15,26 @@ import {
 } from "lucide-react";
 import { infrastructureService, InfrastructureStats } from "@/services/infrastructureService";
 import { ModuleHeader } from "@/components/common/ModuleHeader";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
+
+const SYSTEM_MONITOR_CACHE_KEY = "system:deep-health";
 
 export const SystemDeepMonitor: React.FC = () => {
-  const [stats, setStats] = useState<InfrastructureStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: instant render on module re-entry; also keeps the
+  // 30s polling refresh from flashing loading state over live data
+  const cachedStats = getModuleCache<InfrastructureStats>(SYSTEM_MONITOR_CACHE_KEY);
+  const [stats, setStats] = useState<InfrastructureStats | null>(cachedStats ?? null);
+  const [loading, setLoading] = useState(!cachedStats);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const fetchData = async () => {
-    setLoading(true);
+    if (!getModuleCache<InfrastructureStats>(SYSTEM_MONITOR_CACHE_KEY)) {
+      setLoading(true);
+    }
     try {
       const data = await infrastructureService.getDeepHealth();
       setStats(data);
+      setModuleCache<InfrastructureStats>(SYSTEM_MONITOR_CACHE_KEY, data);
       setLastUpdate(new Date());
     } catch (error) {
       console.error("Infrastructure fetch failed", error);

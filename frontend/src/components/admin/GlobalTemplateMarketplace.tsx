@@ -20,10 +20,15 @@ import {
 import { marketplaceService, GlobalInventory } from "@/services/marketplaceService";
 import { ModuleHeader } from "@/components/common/ModuleHeader";
 import { toast } from "sonner";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
+
+const MARKETPLACE_CACHE_KEY = "marketplace:inventory";
 
 export const GlobalTemplateMarketplace: React.FC = () => {
-  const [inventory, setInventory] = useState<GlobalInventory>({ templates: [], workflows: [] });
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: instant render on module re-entry, silent refetch
+  const cachedInventory = getModuleCache<GlobalInventory>(MARKETPLACE_CACHE_KEY);
+  const [inventory, setInventory] = useState<GlobalInventory>(cachedInventory ?? { templates: [], workflows: [] });
+  const [loading, setLoading] = useState(!cachedInventory);
   const [activeTab, setActiveTab] = useState<"templates" | "flows">("templates");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -32,10 +37,13 @@ export const GlobalTemplateMarketplace: React.FC = () => {
   }, []);
 
   const fetchInventory = async () => {
-    setLoading(true);
+    if (!getModuleCache<GlobalInventory>(MARKETPLACE_CACHE_KEY)) {
+      setLoading(true);
+    }
     try {
       const data = await marketplaceService.getInventory();
       setInventory(data);
+      setModuleCache<GlobalInventory>(MARKETPLACE_CACHE_KEY, data);
     } catch (error) {
       toast.error("Error al cargar inventario");
     } finally {

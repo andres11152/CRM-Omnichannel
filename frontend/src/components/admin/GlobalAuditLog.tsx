@@ -22,23 +22,38 @@ import { Badge } from "@/components/ui/Badge";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Modal } from "@/components/ui/Modal";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
+
+interface AuditLogCache {
+  logs: AuditLog[];
+  total: number;
+}
+
+const AUDIT_LOG_CACHE_KEY = "audit:default-view";
+const DEFAULT_FILTER: AuditFilter = { limit: 20, offset: 0 };
 
 export const GlobalAuditLog: React.FC = () => {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<AuditFilter>({
-    limit: 20,
-    offset: 0
-  });
+  // Stale-while-revalidate: re-entering the module on the default (first
+  // page, no filters) view renders instantly and refetches silently.
+  const cachedAudit = getModuleCache<AuditLogCache>(AUDIT_LOG_CACHE_KEY);
+  const [logs, setLogs] = useState<AuditLog[]>(cachedAudit?.logs ?? []);
+  const [total, setTotal] = useState(cachedAudit?.total ?? 0);
+  const [loading, setLoading] = useState(!cachedAudit);
+  const [filter, setFilter] = useState<AuditFilter>(DEFAULT_FILTER);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   const fetchLogs = async () => {
-    setLoading(true);
+    const isDefaultView = JSON.stringify(filter) === JSON.stringify(DEFAULT_FILTER);
+    if (!(isDefaultView && getModuleCache<AuditLogCache>(AUDIT_LOG_CACHE_KEY))) {
+      setLoading(true);
+    }
     try {
       const data = await auditService.getGlobalLogs(filter);
       setLogs(data.logs);
       setTotal(data.total);
+      if (isDefaultView) {
+        setModuleCache<AuditLogCache>(AUDIT_LOG_CACHE_KEY, { logs: data.logs, total: data.total });
+      }
     } catch (error) {
       console.error("Failed to fetch audit logs", error);
     } finally {

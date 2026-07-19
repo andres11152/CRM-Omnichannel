@@ -3,7 +3,6 @@ import {
   SessionHealthMonitor,
   DeliveryTracker,
   HumanEntropyService,
-  FileStateAdapter,
   classifyDisconnect,
 } from "baileys-antiban";
 import type {
@@ -14,8 +13,7 @@ import type {
 } from "baileys-antiban";
 import type { WASocket } from "@whiskeysockets/baileys";
 import { Logger } from "../utils/logger";
-import * as path from "path";
-import * as fs from "fs";
+import { PrismaAntiBanStateAdapter } from "./PrismaAntiBanStateAdapter";
 
 export interface SessionAntibanState {
   healthMonitor: SessionHealthMonitor;
@@ -24,7 +22,7 @@ export interface SessionAntibanState {
 }
 
 interface SessionEntry extends SessionAntibanState {
-  adapter: FileStateAdapter;
+  adapter: PrismaAntiBanStateAdapter;
   persistTimer: NodeJS.Timeout;
   antiban: ReturnType<typeof wrapSocket>["antiban"];
 }
@@ -32,16 +30,10 @@ interface SessionEntry extends SessionAntibanState {
 class AntiBanManager {
   private readonly registry = new Map<string, SessionEntry>();
 
-  private getStateDir(sessionId: string): string {
-    return path.join(process.cwd(), "data", "antiban", sessionId);
-  }
-
   async initSession(sessionId: string, rawSock: WASocket): Promise<WASocket> {
     await this.terminateSession(sessionId, false);
 
-    const stateDir = this.getStateDir(sessionId);
-    fs.mkdirSync(stateDir, { recursive: true });
-    const adapter = new FileStateAdapter(stateDir);
+    const adapter = new PrismaAntiBanStateAdapter(sessionId);
 
     const warmupState: WarmUpState | null = await adapter
       .load("warmup")

@@ -1,4 +1,6 @@
 import axios from "axios";
+import { proto, WAMessage } from "@whiskeysockets/baileys";
+import { Logger } from "@/utils/logger";
 
 const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
 
@@ -23,6 +25,44 @@ export async function executeWhatsAppCommand<T>(
     { companyId, command, args },
   );
   return res.data.result;
+}
+
+/**
+ * Remote media download through whatsapp-service (which owns the live socket).
+ *
+ * [DOCS · Baileys] downloadMediaMessage with reuploadRequest = sock.updateMediaMessage
+ * is the official recovery for expired CDN media: the linked phone re-uploads the
+ * file. Since the microservice split the backend has no socket, so that recovery
+ * must run inside whatsapp-service — this helper ships the message there as a
+ * protobuf blob (lossless for mediaKey/fileEncSha256 byte fields) and gets the
+ * downloaded bytes back.
+ */
+export async function downloadMediaViaService(
+  companyId: string,
+  message: WAMessage,
+): Promise<Buffer | null> {
+  try {
+    const encoded = Buffer.from(
+      proto.WebMessageInfo.encode(
+        proto.WebMessageInfo.create(message as proto.IWebMessageInfo),
+      ).finish(),
+    ).toString("base64");
+
+    const result = await executeWhatsAppCommand<{ buffer: string; size: number }>(
+      companyId,
+      "downloadMedia",
+      [encoded],
+    );
+    if (result?.buffer) {
+      return Buffer.from(result.buffer, "base64");
+    }
+    return null;
+  } catch (err) {
+    Logger.warn(
+      `[whatsappServiceHttp] Remote media download failed for ${message.key?.id}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
 }
 
 export default whatsappServiceHttp;

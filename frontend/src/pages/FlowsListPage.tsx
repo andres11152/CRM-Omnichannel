@@ -20,12 +20,17 @@ import {
 } from "lucide-react";
 
 import { Flow, FlowTriggerConfig } from "@/types";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
+
+const FLOWS_CACHE_KEY = "flows:list";
 
 export const FlowsListPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [flows, setFlows] = useState<Flow[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: instant render on module re-entry, silent refetch
+  const cachedFlows = getModuleCache<Flow[]>(FLOWS_CACHE_KEY);
+  const [flows, setFlows] = useState<Flow[]>(cachedFlows ?? []);
+  const [loading, setLoading] = useState(!cachedFlows);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -42,7 +47,9 @@ export const FlowsListPage: React.FC = () => {
       if (!response.ok) throw new Error("Failed to fetch flows");
 
       const data = await response.json();
-      setFlows(Array.isArray(data) ? data : []);
+      const flowList = Array.isArray(data) ? data : [];
+      setFlows(flowList);
+      setModuleCache<Flow[]>(FLOWS_CACHE_KEY, flowList);
     } catch (error) {
       console.error("[FlowsList] Error:", error);
       setFlows([]);

@@ -202,14 +202,39 @@ export class SessionManager implements ISessionManager {
     return this.sessions.get(sessionId);
   }
 
+  // Teardown steps must never wedge the whole reconnect cycle: a hung await here
+  // (seen live: antiBanManager.terminateSession never resolving after a
+  // "deaf-session" close) left the session permanently DISCONNECTED because
+  // initializeSession() awaits terminateSession() before creating the new socket.
+  private async settleWithTimeout(
+    step: Promise<unknown>,
+    ms: number,
+    label: string,
+  ): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        logger.warn(`[SessionManager] ${label} did not settle within ${ms}ms — continuing teardown`);
+        resolve();
+      }, ms);
+    });
+    try {
+      await Promise.race([step.catch((err) => {
+        logger.warn(`[SessionManager] ${label} failed: ${err instanceof Error ? err.message : String(err)}`);
+      }), timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async terminateSession(
     sessionId: string,
     clearAuth: boolean = false,
   ): Promise<void> {
     logger.info(`[SessionManager] Terminating session ${sessionId}. Clear: ${clearAuth}`);
 
-    await sessionLockService.release(sessionId);
-    await antiBanManager.terminateSession(sessionId, true);
+    await this.settleWithTimeout(sessionLockService.release(sessionId), 5000, "sessionLockService.release");
+    await this.settleWithTimeout(antiBanManager.terminateSession(sessionId, true), 8000, "antiBanManager.terminateSession");
     this.healer.cleanupSession(sessionId);
     cleanupSessionLogger(sessionId);
 
@@ -226,7 +251,11 @@ export class SessionManager implements ISessionManager {
         this.sessionStores.delete(resolvedStoreKey);
       } else {
         if (meta?.companyId) {
-          await store.writeToRedis(`${meta.companyId}_${sessionId}`).catch(() => {});
+          await this.settleWithTimeout(
+            store.writeToRedis(`${meta.companyId}_${sessionId}`),
+            5000,
+            "store.writeToRedis",
+          );
         }
         this.sessionStores.delete(resolvedStoreKey);
       }
@@ -240,7 +269,9 @@ export class SessionManager implements ISessionManager {
 
       try {
         if (clearAuth) {
-          await sock.logout();
+          // logout() round-trips to WhatsApp servers — on a dead socket it can
+          // hang forever, so it gets the same teardown timeout treatment.
+          await this.settleWithTimeout(sock.logout(), 10000, "sock.logout");
         } else {
           sock.end(undefined);
         }
@@ -340,6 +371,7 @@ export class SessionManager implements ISessionManager {
         status: meta?.status ?? (db.status as SessionStatus["status"]),
         phone,
         qrCode: db.qrCode ?? undefined,
+        profileName: db.profileName ?? undefined,
         updatedAt: db.updatedAt,
         createdAt: db.createdAt,
         defaultQueueId: db.defaultQueueId,

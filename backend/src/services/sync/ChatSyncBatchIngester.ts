@@ -88,7 +88,10 @@ export class ChatSyncBatchIngester {
         whatsappMessageId,
         msg,
         mediaType: parsed.mediaType,
-        msgContent: parsed.msgContent as Record<string, unknown>
+        msgContent: parsed.msgContent as Record<string, unknown>,
+        // Inline batch ingest must stay fail-fast: remote heal is a per-message
+        // phone round-trip, deferred to background hydration / manual retry.
+        remoteHeal: false,
       });
 
       // [MEDIA RETRY] When the inline download fails, persist the raw proto (same as

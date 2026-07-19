@@ -74,7 +74,7 @@ export const deleteSession = catchAsync(
     const { sessionId } = req.params;
     await whatsappService.deleteSession(req.companyId, sessionId);
 
-    res.status(204).json({
+    res.status(200).json({
       status: "success",
       data: null,
     });
@@ -177,9 +177,18 @@ export const requestPairingCode = catchAsync(
 export const updateProfileName = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const companyId = req.companyId!;
+    const { sessionId } = req.params;
     const { name } = req.body;
 
+    // A. Update in active WhatsApp connection via service command
     await whatsappMessagingService.updateOwnProfileName(companyId, name);
+
+    // B. Persist in database WhatsAppSession record
+    const { prisma } = await import("@/config/database");
+    await prisma.whatsAppSession.update({
+      where: { sessionId },
+      data: { profileName: name },
+    });
 
     res.status(200).json({ status: "success" });
   },

@@ -1,5 +1,3 @@
-import { whatsappMessagingService, SendMessageOptions } from "@/whatsapp";
-import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { gateway } from "@/gateways/socketGateway";
 import { AppError } from "@/utils/AppError";
 import { Logger } from "@/utils/logger";
@@ -23,17 +21,16 @@ import { reactionRepository } from "@/repositories/ReactionRepository";
 import { ticketRepository } from "@/repositories/TicketRepository";
 import { ticketSyncService } from "./TicketSyncService";
 
-// Instagram
-import { instagramSessionRepository } from "@/instagram/InstagramSessionRepository";
-import { instagramProviderService, InstagramMediaContent } from "@/instagram/InstagramProviderService";
-
-// Email
-import { emailService } from "@/services/email/emailService";
-import { emailRepository } from "@/repositories/EmailRepository";
+// Email & Settings
 import { companySettingsService } from "@/services/CompanySettingsService";
 
+// Sockets & Query
 import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import { ConversationQueryService } from "@/services/ConversationQueryService";
+
+// Registry
+import { messagingProviderRegistry } from "@/services/messaging/MessagingProviderRegistry";
+import { whatsappMessagingService, SendMessageOptions } from "@/whatsapp";
 
 export class ConversationMessageService {
   private socketEmitter = new SocketEventEmitter(gateway);
@@ -166,219 +163,9 @@ export class ConversationMessageService {
       };
     }
 
-    // C. Channel routing: Instagram DMs never go through the WhatsApp JID
-    // resolution / whatsappMessagingService path below.
-    if (resolvedConv.channel === Channel.INSTAGRAM_DM) {
-      return this.replyToInstagram(companyId, userId, resolvedConv.id, resolvedConv.channelId, messageContent, attachment, metadata, quotedMessageId, quotedContent);
-    }
-
-    // C2. Email replies go out via the company's SMTP, not Baileys.
-    if (resolvedConv.channel === Channel.EMAIL) {
-      return this.replyToEmail(companyId, userId, resolvedConv.id, resolvedConv.channelId, resolvedConv.subject, resolvedConv.contact?.email || null, messageContent, metadata);
-    }
-
-    // D. Determine Destination Phone / JID (WhatsApp only)
-    // For groups: channelId is the group ID (e.g. 120363408109782390) which needs @g.us
-    // For DMs: channelId is the phone number (e.g. 573138081081) which needs @s.whatsapp.net
-    const initialTargetJid = WhatsAppIdUtils.getTargetJid(resolvedConv.channelId);
-    const isGroup = resolvedConv.isGroup || initialTargetJid.endsWith("@g.us");
-    let targetPhone = resolvedConv.channelId;
-
-    if (!isGroup) {
-      // Only for DMs: try to resolve a clean phone number if channelId is not one
-      const isCleanPhone = !!(targetPhone && /^\d+$/.test(targetPhone.replace("@s.whatsapp.net", "")));
-
-      if (!isCleanPhone) {
-        // Priority 1: Use linked contact phone
-        if (resolvedConv.contact?.phone) {
-          targetPhone = resolvedConv.contact.phone;
-        } else {
-          // Priority 2: Fallback to ticket search
-          targetPhone = (await ticketSyncService.findPhoneByConversation(companyId, resolvedConv.id)) || null;
-        }
-      }
-    }
-
-    if (!targetPhone || targetPhone.length < 5) {
-      throw new AppError("No se pudo determinar el numero de teléfono del destinatario.", 400);
-    }
-
-    // [SEC] CRITICAL FIX: Use WhatsAppIdUtils to construct proper JID
-    // Groups: 120363408109782390 → 120363408109782390@g.us
-    // DMs:    573138081081       → 573138081081@s.whatsapp.net
-    targetPhone = WhatsAppIdUtils.getTargetJid(targetPhone);
-
-    const isAudio = attachment?.type === "audio";
-
-    // E. Direct Send (WhatsApp)
-    const options: SendMessageOptions = {
-      companyId,
-      conversationId: resolvedConv.id,
-      senderId: userId,
-      media: attachment ? {
-        type: attachment.type,
-        url: attachment.url,
-        mimetype: attachment.mimetype || attachment.mimeType || "application/octet-stream",
-        filename: attachment.name,
-        caption: content || undefined,
-        location: attachment.type === "location" ? {
-          latitude: Number(attachment.latitude),
-          longitude: Number(attachment.longitude),
-          name: (attachment.locationName as string | undefined) || attachment.name,
-          address: attachment.address as string | undefined,
-        } : undefined,
-        contact: attachment.type === "contact" ? {
-          name: (attachment.contactName as string | undefined) || attachment.name,
-          phone: String(attachment.phone || ""),
-        } : undefined,
-      } : undefined,
-      metadata: { 
-        ...metadata, 
-        quotedMessageId, 
-        quotedContent, 
-        attachment, 
-        type: attachment ? attachment.type : "text", 
-        mediaUrl: attachment ? attachment.url : undefined 
-      },
-      quotedMessageId,
-    };
-
-    const sent = await whatsappMessagingService.sendMessage(targetPhone, messageContent, options);
-
-    return {
-      id: sent.dbId || sent.messageId,
-      content: sent.content,
-      timestamp: sent.timestamp,
-      status: "SENT",
-      sender: "agent",
-      metadata: {
-        ...(sent.metadata || {}),
-        attachment,
-        type: attachment ? attachment.type : "text",
-        mediaUrl: attachment ? attachment.url : undefined,
-      },
-      type: attachment ? attachment.type : "text",
-      mediaUrl: attachment ? attachment.url : undefined,
-    };
-  }
-
-  /**
-   * Instagram DM send path (Reply from Agent).
-   * Mirrors the shape of the WhatsApp direct-send branch above, but routes
-   * through the Instagram Messaging API instead of Baileys/Meta WhatsApp.
-   */
-  private async replyToInstagram(
-    companyId: string,
-    userId: string,
-    conversationId: string,
-    igsid: string | null,
-    messageContent: string,
-    attachment: Attachment | undefined,
-    metadata: Metadata | undefined,
-    quotedMessageId: string | undefined,
-    quotedContent: string | undefined,
-  ): Promise<{ id: string; content: string; timestamp?: Date; status?: string; sender?: string; metadata?: unknown; type?: string; mediaUrl?: string }> {
-    if (!igsid) {
-      throw new AppError("No se pudo determinar el destinatario de Instagram.", 400);
-    }
-
-    const sessions = await instagramSessionRepository.findByCompany(companyId);
-    const session = sessions.find((s) => s.status === "CONNECTED") || sessions[0];
-    if (!session) {
-      throw new AppError("No hay una sesión de Instagram conectada para esta empresa.", 400);
-    }
-
-    const mediaContent: InstagramMediaContent | null = attachment
-      ? { type: attachment.type === "document" ? "file" : (attachment.type as "image" | "video" | "audio"), url: attachment.url }
-      : null;
-
-    const sendResult = await instagramProviderService.sendMessage(
-      session.igBusinessAccountId,
-      igsid,
-      mediaContent || messageContent,
-    );
-
-    const savedMessage = await messageRepository.create({
-      data: {
-        companyId,
-        conversationId,
-        content: messageContent,
-        direction: "OUTBOUND",
-        senderId: userId,
-        channel: Channel.INSTAGRAM_DM,
-        status: "SENT",
-        instagramMessageId: sendResult.messageId,
-        metadata: {
-          ...metadata,
-          quotedMessageId,
-          quotedContent,
-          attachment,
-          type: attachment ? attachment.type : "text",
-          mediaUrl: attachment ? attachment.url : undefined,
-        } as Prisma.InputJsonValue,
-      },
-    });
-
-    return {
-      id: savedMessage.id,
-      content: savedMessage.content,
-      timestamp: savedMessage.createdAt,
-      status: "SENT",
-      sender: "agent",
-      metadata: savedMessage.metadata,
-      type: attachment ? attachment.type : "text",
-    };
-  }
-
-  private async replyToEmail(
-    companyId: string,
-    userId: string,
-    conversationId: string,
-    channelId: string,
-    subject: string | null,
-    toEmail: string | null,
-    messageContent: string,
-    metadata?: Metadata,
-  ): Promise<{ id: string; content: string; timestamp?: Date; status?: string; sender?: string; metadata?: unknown; type?: string }> {
-    if (!toEmail) {
-      throw new AppError("No se pudo determinar el destinatario del correo.", 400);
-    }
-
-    const sendResult = await emailService.sendEmail({
-      companyId,
-      from: `no-reply@${process.env.MAIL_DOMAIN || "localhost"}`,
-      to: [toEmail],
-      subject: subject || "Respuesta de Omnicanal",
-      bodyHtml: messageContent,
-      bodyText: messageContent,
-    });
-
-    const savedMessage = await messageRepository.create({
-      data: {
-        companyId,
-        conversationId,
-        content: messageContent,
-        direction: "OUTBOUND",
-        senderId: userId,
-        channel: Channel.EMAIL,
-        status: "SENT",
-        emailMessageId: sendResult.messageId,
-        metadata: {
-          ...metadata,
-          emailMessageId: sendResult.messageId,
-        } as Prisma.InputJsonValue,
-      },
-    });
-
-    return {
-      id: savedMessage.id,
-      content: savedMessage.content,
-      timestamp: savedMessage.createdAt,
-      status: "SENT",
-      sender: "agent",
-      metadata: savedMessage.metadata,
-      type: "text",
-    };
+    // C. Channel routing via Strategy Registry
+    const provider = messagingProviderRegistry.getProvider(resolvedConv.channel);
+    return provider.send(dto, resolvedConv);
   }
 
   /**

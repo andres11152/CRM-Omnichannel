@@ -18,12 +18,14 @@ export interface CompanySettings {
   [key: string]: unknown;
 }
 
+const isDev = process.env.NODE_ENV !== "production";
+
 const DEFAULT_FLAGS: FeatureFlags = {
-  advanced_ai: false,
-  email_module: false,
-  bulk_marketing: false,
-  api_access: false,
-  group_sync: false,
+  advanced_ai: isDev ? true : false,
+  email_module: isDev ? true : false,
+  bulk_marketing: isDev ? true : false,
+  api_access: isDev ? true : false,
+  group_sync: isDev ? true : false,
   kanban_deals: true,
   voice_messages: true,
   automation_flows: true,

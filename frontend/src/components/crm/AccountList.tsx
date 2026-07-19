@@ -7,11 +7,19 @@ import { getAccounts, deleteAccount } from "@/services/crmService";
 import { AccountModal } from "./AccountModal";
 import { ModuleHeader } from "../common/ModuleHeader";
 import { useModal } from "@/context/ModalContext";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
+
+const ACCOUNTS_CACHE_KEY = "accounts:default-view";
+
 export const AccountList: React.FC = () => {
   const { t } = useTranslation();
   const { confirm } = useModal();
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: re-entering the module renders the last known
+  // list instantly and refetches silently, instead of flashing the 6-card
+  // skeleton grid on every module switch.
+  const cachedAccounts = getModuleCache<Account[]>(ACCOUNTS_CACHE_KEY);
+  const [accounts, setAccounts] = useState<Account[]>(cachedAccounts ?? []);
+  const [loading, setLoading] = useState(!cachedAccounts);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | undefined>(
     undefined,
@@ -19,9 +27,13 @@ export const AccountList: React.FC = () => {
 
   const fetchAccounts = async () => {
     try {
-      setLoading(true);
+      if (!getModuleCache<Account[]>(ACCOUNTS_CACHE_KEY)) {
+        setLoading(true);
+      }
       const data = await getAccounts();
-      setAccounts(data.accounts || []);
+      const list = data.accounts || [];
+      setAccounts(list);
+      setModuleCache<Account[]>(ACCOUNTS_CACHE_KEY, list);
     } catch (error) {
       console.error("Error fetching accounts:", error);
     } finally {

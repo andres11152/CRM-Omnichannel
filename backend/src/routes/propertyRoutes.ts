@@ -3,6 +3,7 @@ import multer from "multer";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
 import { requirePermission } from "@/middleware/permissionMiddleware";
+import { tenantContextMiddleware } from "@/middleware/tenantContext";
 import { propertyController } from "@/controllers/propertyController";
 import { AppError } from "@/utils/AppError";
 import {
@@ -114,6 +115,14 @@ router.post(
   validate(PropertyIdParamSchema),
   upload.array("images", 40),
   handleImageUploadError,
+  // [SEC] multer's busboy-based multipart parser loses the AsyncLocalStorage
+  // tenant context for files large enough to need multiple internal
+  // read/parse cycles (confirmed: present before upload.array(), gone right
+  // after it for a 1.2MB file, while small files that parse in one pass are
+  // fine) — every downstream Prisma call then throws SECURITY VIOLATION.
+  // req.user survives (set via Object.defineProperty in `protect`, not
+  // ALS-based), so re-establish context from it before reaching the controller.
+  tenantContextMiddleware,
   propertyController.uploadImages,
 );
 

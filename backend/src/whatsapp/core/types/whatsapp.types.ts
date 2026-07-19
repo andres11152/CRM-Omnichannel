@@ -57,6 +57,7 @@ export interface SessionStatus {
   status: "CONNECTED" | "DISCONNECTED" | "CONNECTING" | "FAILED" | "SCANNING";
   phone?: string;
   qrCode?: string;
+  profileName?: string;
   error?: string;
   updatedAt?: Date;
   createdAt?: Date;

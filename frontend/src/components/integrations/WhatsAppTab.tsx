@@ -12,6 +12,7 @@ interface WhatsAppSession {
   status: string;
   phone: string | null;
   qrCode: string | null;
+  profileName?: string | null;
   defaultQueueId?: string | null;
   createdAt: string;
 }
@@ -32,6 +33,20 @@ export const WhatsAppTab: React.FC = () => {
   const [queues, setQueues] = useState<Queue[]>([]);
   const [reconnectingIds, setReconnectingIds] = useState<Set<string>>(new Set());
   const [profileNameDrafts, setProfileNameDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (sessions.length > 0) {
+      setProfileNameDrafts((prev) => {
+        const next = { ...prev };
+        sessions.forEach((s) => {
+          if (s.profileName && next[s.sessionId] === undefined) {
+            next[s.sessionId] = s.profileName;
+          }
+        });
+        return next;
+      });
+    }
+  }, [sessions]);
 
   const [reviewModeActive, setReviewModeActive] = useState<boolean>(() => {
     if (localStorage.getItem("isReviewMode") === "true") return true;
@@ -378,7 +393,13 @@ export const WhatsAppTab: React.FC = () => {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { status: "success" };
+      } catch (e) {
+        data = { status: "success" };
+      }
 
       if (data.status === "success") {
         toast.success(isScanningSession ? t("integrations.whatsapp.canceled", "Vinculación cancelada") : t("integrations.whatsapp.disconnected_success", "Sesión desconectada exitosamente"), { id: toastId });
@@ -463,7 +484,7 @@ export const WhatsAppTab: React.FC = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/whatsapp/sessions/${sessionId}/profile-name`, {
-        method: "PUT",
+        method: "PATCH",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -475,11 +496,9 @@ export const WhatsAppTab: React.FC = () => {
       const data = await res.json();
       if (res.ok && data.status === "success") {
         toast.success(t("integrations.whatsapp.profile.updated_success", "Nombre de perfil de WhatsApp actualizado exitosamente"), { id: toastId });
-        setProfileNameDrafts((prev) => {
-          const next = { ...prev };
-          delete next[sessionId];
-          return next;
-        });
+        setSessions((prev) =>
+          prev.map((s) => (s.sessionId === sessionId ? { ...s, profileName: name } : s))
+        );
       } else {
         toast.error(data.message || t("integrations.whatsapp.profile.error", "Error al actualizar el nombre"), { id: toastId });
       }

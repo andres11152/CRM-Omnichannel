@@ -4,6 +4,7 @@ import { api } from "@/lib/axios";
 import { toast } from "sonner";
 import { ModuleHeader } from "@/components/common/ModuleHeader";
 import { ComposeModal } from "@/components/email/ComposeModal";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 import {
   Mail,
   Search,
@@ -94,13 +95,22 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 // MAIN COMPONENT
 // ────────────────────────────────────────────────
 
+interface EmailInboxCache {
+  emails: EmailItem[];
+  total: number;
+}
+
+const EMAIL_INBOX_CACHE_KEY = "email:default-view";
+
 export const EmailInbox: React.FC = () => {
   const { t } = useTranslation();
 
-  // State
-  const [emails, setEmails] = useState<EmailItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // State. Stale-while-revalidate: re-entering the module on the default
+  // (page 0, no filters) view renders instantly and refetches silently.
+  const cachedInbox = getModuleCache<EmailInboxCache>(EMAIL_INBOX_CACHE_KEY);
+  const [emails, setEmails] = useState<EmailItem[]>(cachedInbox?.emails ?? []);
+  const [total, setTotal] = useState(cachedInbox?.total ?? 0);
+  const [loading, setLoading] = useState(!cachedInbox);
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("ALL");
@@ -145,8 +155,11 @@ export const EmailInbox: React.FC = () => {
 
   // Fetch emails
   const fetchEmails = useCallback(async () => {
-    try {
+    const isDefaultView = page === 0 && filterType === "ALL" && filterStatus === "ALL" && !search.trim();
+    if (!(isDefaultView && getModuleCache<EmailInboxCache>(EMAIL_INBOX_CACHE_KEY))) {
       setLoading(true);
+    }
+    try {
       const params: Record<string, string | number> = {
         limit,
         offset: page * limit,
@@ -157,8 +170,13 @@ export const EmailInbox: React.FC = () => {
 
       const res = await api.get("/emails", { params });
       const data = res.data;
-      setEmails(data.data?.emails || []);
-      setTotal(data.total || 0);
+      const emailList = data.data?.emails || [];
+      const totalCount = data.total || 0;
+      setEmails(emailList);
+      setTotal(totalCount);
+      if (isDefaultView) {
+        setModuleCache<EmailInboxCache>(EMAIL_INBOX_CACHE_KEY, { emails: emailList, total: totalCount });
+      }
     } catch (error) {
       console.error("Failed to fetch emails:", error);
       toast.error("Error al cargar emails");

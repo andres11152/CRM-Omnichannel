@@ -13,22 +13,39 @@ import { Activity, Ticket, CheckCircle2, Clock } from "lucide-react";
 import { HeatmapChart } from "./HeatmapChart";
 import { AgentPerformanceTable } from "./AgentPerformanceTable";
 import { TagInsights } from "./TagInsights";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
+
+const DEFAULT_RANGE: AnalyticsDateRange = "30d";
+const ANALYTICS_CACHE_KEY = "analytics:30d";
+
+interface AnalyticsCache {
+  heatmapData: HeatmapData[];
+  agentData: AgentStats[];
+  tagData: TagData[];
+}
 
 export const AnalyticsDashboard: React.FC = () => {
-  const [dateRange, setDateRange] = useState<AnalyticsDateRange>("30d");
-  const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<AnalyticsDateRange>(DEFAULT_RANGE);
+  // Stale-while-revalidate: re-entering the module on the default range
+  // renders instantly and refetches silently, instead of flashing loading
+  // state on every module switch.
+  const cached = getModuleCache<AnalyticsCache>(ANALYTICS_CACHE_KEY);
+  const [loading, setLoading] = useState(!cached);
 
   // Strict Typed State
-  const [heatmapData, setHeatmapData] = useState<HeatmapData[]>([]);
-  const [agentData, setAgentData] = useState<AgentStats[]>([]);
-  const [tagData, setTagData] = useState<TagData[]>([]);
+  const [heatmapData, setHeatmapData] = useState<HeatmapData[]>(cached?.heatmapData ?? []);
+  const [agentData, setAgentData] = useState<AgentStats[]>(cached?.agentData ?? []);
+  const [tagData, setTagData] = useState<TagData[]>(cached?.tagData ?? []);
 
   useEffect(() => {
     loadAnalytics();
   }, [dateRange]);
 
   const loadAnalytics = async () => {
-    setLoading(true);
+    const isDefaultRange = dateRange === DEFAULT_RANGE;
+    if (!(isDefaultRange && getModuleCache<AnalyticsCache>(ANALYTICS_CACHE_KEY))) {
+      setLoading(true);
+    }
     try {
       const [heatmap, agents, tags] = await Promise.all([
         getHeatmapData(dateRange),
@@ -39,6 +56,9 @@ export const AnalyticsDashboard: React.FC = () => {
       setHeatmapData(heatmap);
       setAgentData(agents);
       setTagData(tags);
+      if (isDefaultRange) {
+        setModuleCache<AnalyticsCache>(ANALYTICS_CACHE_KEY, { heatmapData: heatmap, agentData: agents, tagData: tags });
+      }
     } catch (error) {
       console.error("Analytics Error:", error);
       toast.error("Error al cargar estadísticas");

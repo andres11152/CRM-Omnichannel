@@ -75,6 +75,14 @@ export class InboundMessageHandler {
 
     const messageId = rawMessage.key?.id;
     if (!rawMessage || !rawMessage.message || !messageId) {
+      // Not silent anymore: a real user message that arrives with no decodable
+      // content (e.g. decrypt failures surfaced as stub-only upserts) was being
+      // dropped here with zero trace, making "message never appeared" reports
+      // impossible to diagnose from logs.
+      Logger.warn(
+        `[InboundHandler] [WARNING] Dropping message with no content — id=${messageId ?? "?"}, ` +
+        `stubType=${(rawMessage as { messageStubType?: number })?.messageStubType ?? "none"}, session=${sessionId}`,
+      );
       return;
     }
 
@@ -219,13 +227,13 @@ export class InboundMessageHandler {
           return;
         }
 
-        // 3. Extract Content (Handle Media/Text) — pass live socket for reuploadRequest
+        // 3. Extract Content (Handle Media/Text). Media that fails direct CDN
+        // download is healed remotely via whatsapp-service (which owns the socket).
         const contentData = await mediaProcessor.extractMessageContent(
           companyId,
           message,
           messageId,
           sessionId,
-          (sid) => this.sessionManager.getSession(sid),
         );
         if (!contentData) {
           Logger.debug(`[InboundHandler] DROPPED: Failed to extract content for message ${messageId}`);

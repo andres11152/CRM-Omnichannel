@@ -63,8 +63,7 @@ export class AnalyticsRepository {
     start: Date,
     end: Date,
   ): Promise<HeatmapQueryResult[]> {
-    return this.db.$queryRawUnsafe<HeatmapQueryResult[]>(
-      `
+    return this.db.$queryRaw<HeatmapQueryResult[]>`
       SELECT
         EXTRACT(DOW FROM m."createdAt")::int as day,
         EXTRACT(HOUR FROM m."createdAt")::int as hour,
@@ -77,16 +76,12 @@ export class AnalyticsRepository {
         GROUP BY "conversationId"
       ) tkt ON tkt."conversationId" = m."conversationId"
         AND m."createdAt" >= tkt."firstTicketAt"
-      WHERE m."companyId" = $1
-        AND m."createdAt" >= $2
-        AND m."createdAt" <= $3
+      WHERE m."companyId" = ${companyId}
+        AND m."createdAt" >= ${start}
+        AND m."createdAt" <= ${end}
       GROUP BY 1, 2
       ORDER BY 1, 2
-      `,
-      companyId,
-      start,
-      end,
-    );
+    `;
   }
 
   async getAgentPerformance(
@@ -94,8 +89,7 @@ export class AnalyticsRepository {
     start: Date,
     end: Date,
   ): Promise<AgentPerformanceQueryResult[]> {
-    return this.db.$queryRawUnsafe<AgentPerformanceQueryResult[]>(
-      `
+    return this.db.$queryRaw<AgentPerformanceQueryResult[]>`
       SELECT 
         u.id as "agentId",
         u.name,
@@ -107,16 +101,12 @@ export class AnalyticsRepository {
             EXTRACT(EPOCH FROM (t."resolvedAt" - t."createdAt"))/60 
         END)::float as "avgResolutionTime"
       FROM users u
-      LEFT JOIN tickets t ON u.id = t."assignedToId" AND t."createdAt" >= $2 AND t."createdAt" <= $3
-      WHERE u."companyId" = $1
+      LEFT JOIN tickets t ON u.id = t."assignedToId" AND t."createdAt" >= ${start} AND t."createdAt" <= ${end}
+      WHERE u."companyId" = ${companyId}
         AND u.role::text IN ('AGENT', 'ADMIN', 'SUPERVISOR')
       GROUP BY u.id, u.name, u.email, u.role
       ORDER BY "resolvedTickets" DESC
-      `,
-      companyId,
-      start,
-      end,
-    );
+    `;
   }
 
   async getConversationsWithTags(companyId: string, start: Date, end: Date) {

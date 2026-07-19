@@ -41,7 +41,7 @@ export class SessionController {
 
   static async terminateSession(req: Request, res: Response): Promise<void> {
     const { sessionId } = req.params as { sessionId: string };
-    const clearAuth = req.query.clearAuth === "true" || req.body.clearAuth === true;
+    const clearAuth = req.query.clearAuth === "true" || req.body.clearAuth === true || req.method === "DELETE";
 
     try {
       Logger.info(`[SessionController] Terminating session ${sessionId} (clearAuth: ${clearAuth})`);

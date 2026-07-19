@@ -52,6 +52,31 @@ export class CommandController {
           result = { usedFallback: false };
           break;
         }
+        case "downloadMedia": {
+          // [DOCS · Baileys] Official recovery path for media whose CDN link
+          // expired: downloadMediaMessage with reuploadRequest = sock.updateMediaMessage
+          // asks the LINKED PHONE to re-upload the file, then downloads the fresh
+          // copy. This needs the live socket, which only exists in this process —
+          // the backend calls this command whenever its direct CDN download fails.
+          const [encodedMessage] = args as [string];
+          const { proto, downloadMediaMessage } = await import("@whiskeysockets/baileys");
+          const waMessage = proto.WebMessageInfo.decode(
+            Buffer.from(encodedMessage, "base64"),
+          ) as import("@whiskeysockets/baileys").WAMessage;
+
+          const media = await downloadMediaMessage(waMessage, "buffer", {}, {
+            logger: Logger,
+            reuploadRequest: (m) => sock.updateMediaMessage(m),
+          });
+          const buf = Buffer.isBuffer(media) ? media : Buffer.from(media as Uint8Array);
+
+          const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+          if (buf.length > MAX_MEDIA_BYTES) {
+            throw new Error(`Media exceeds 50MB limit (${buf.length} bytes)`);
+          }
+          result = { buffer: buf.toString("base64"), size: buf.length };
+          break;
+        }
         case "editOutboundMessage": {
           const [to, messageId, newContent] = args as [string, string, string];
           const jid = await jidResolver.resolveDestinationJid(to, companyId, sessionId);

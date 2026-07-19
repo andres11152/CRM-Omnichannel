@@ -256,7 +256,7 @@ describe("FlowExecutorService", () => {
       const results = await processPromise;
 
       expect(mockNavigation.endSession).toHaveBeenCalledWith("sess_timeout");
-      expect(results).toContain("Process timed out. Please try again.");
+      expect(results).toContain("El proceso tardó demasiado. Por favor, intenta de nuevo.");
 
       jest.useRealTimers();
     });

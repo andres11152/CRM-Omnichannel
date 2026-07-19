@@ -54,7 +54,7 @@ describe("AutoAssignmentService", () => {
       agents: mockAgents,
       config: {},
       companyId,
-    });
+    } as any);
 
     // 2. Pre-fetched loads (Agent 1 has 2 tickets, Agent 2 has 1 ticket)
     mockTicketRepo.getAgentLoads.mockResolvedValue({
@@ -87,7 +87,7 @@ describe("AutoAssignmentService", () => {
       type: "ROUND_ROBIN",
       agents: mockAgents,
       companyId,
-    });
+    } as any);
 
     // Agent has 2 tickets which equals maxConcurrency of 2
     mockTicketRepo.getAgentLoads.mockResolvedValue({
@@ -111,7 +111,7 @@ describe("AutoAssignmentService", () => {
       agents: mockAgents,
       config: { requiredSkills: ["english"] },
       companyId,
-    });
+    } as any);
 
     mockTicketRepo.getAgentLoads.mockResolvedValue({
       agent_english: 1,
@@ -138,7 +138,7 @@ describe("AutoAssignmentService", () => {
       type: "MANUAL",
       agents: [],
       companyId,
-    });
+    } as any);
 
     await assignTicketToAgent(companyId, ticketId, queueId);
 

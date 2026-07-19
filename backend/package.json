@@ -12,7 +12,7 @@
     "start": "node --expose-gc --max-old-space-size=${NODE_MAX_OLD_SPACE_MB:-2048} -r module-alias/register dist/server.js",
     "start:worker": "node --expose-gc --max-old-space-size=${NODE_MAX_OLD_SPACE_MB:-2048} -r module-alias/register dist/worker.js",
     "start:all": "npx pm2 start ecosystem.config.json",
-    "test": "jest",
+    "test": "dotenv -e .env cross-env NODE_ENV=test jest",
     "lint": "eslint src/**",
     "lint:strict": "eslint src/** --max-warnings=0",
     "prisma:dev": "npx prisma migrate dev",

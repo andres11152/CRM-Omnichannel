@@ -55,7 +55,7 @@ jest.mock("@prisma/client", () => {
   return {
     ...actual,
     PrismaClient: jest.fn().mockImplementation(() => {
-      return {
+      const client = {
         $connect: jest.fn().mockResolvedValue(undefined),
         $disconnect: jest.fn().mockResolvedValue(undefined),
         $on: jest.fn(),
@@ -77,6 +77,19 @@ jest.mock("@prisma/client", () => {
           return mockExtendedClient;
         }),
       };
+
+      return new Proxy(client, {
+        get(target: any, prop: string) {
+          if (prop in target) {
+            return target[prop];
+          }
+          return {
+            findFirst: async (args: any) => {
+              return { success: true, finalArgs: args };
+            },
+          };
+        },
+      });
     }),
   };
 });

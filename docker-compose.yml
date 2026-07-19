@@ -104,6 +104,10 @@ services:
       - REDIS_URL=redis://redis:6379
       - PORT=4001
       - WA_SYNC_FULL_HISTORY=false
+      # Local-only shared secret between backend and whatsapp-service (see
+      # backend/.env's matching WHATSAPP_INTERNAL_SECRET). Never reuse the
+      # production value here — this container never talks to Render.
+      - WHATSAPP_INTERNAL_SECRET=local-dev-only-secret
     volumes:
       - ./whatsapp-service/data:/app/data
 

@@ -261,14 +261,19 @@ export class SessionManager implements ISessionManager {
 
     try {
       if (clearAuth) {
+        // [SEC] Full unlink (DELETE /sessions/:id from the UI's "Desconectar"
+        // button — see frontend/src/components/IntegrationsPanel.tsx's
+        // handleDeleteSession, which drops the session from local state and
+        // expects it gone for good). This used to only flip status to
+        // DISCONNECTED, never removing the row — so listSessions() (which
+        // correctly reads the DB as the source of truth) kept resurrecting
+        // "deleted" devices forever. No FK references WhatsAppSession.id/
+        // sessionId from any other table (WhatsAppCredential.sessionId is a
+        // plain string match, not a relation), so deleting is safe.
         await this.authProvider.clearCredentials(sessionId);
-        await prisma.whatsAppSession.update({
-          where: { sessionId },
-          data: {
-            status: "DISCONNECTED",
-            qrCode: null,
-            phone: null,
-          },
+        await prisma.whatsAppSession.delete({ where: { sessionId } }).catch((err: { code?: string }) => {
+          if (err?.code === "P2025") return; // already deleted, nothing to do
+          throw err;
         });
       } else {
         await prisma.whatsAppSession.update({

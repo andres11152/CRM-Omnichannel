@@ -8,9 +8,9 @@ jest.mock("../src/repositories/FlowSessionRepository", () => {
   return {
     flowSessionRepository: {
       findWorkflow: jest.fn(),
-      deleteActiveSessions: jest.fn(),
+      deleteAllSessionsByContactAndFlow: jest.fn(),
       createSession: jest.fn(),
-      deleteSession: jest.fn(),
+      completeSession: jest.fn(),
       updateSession: jest.fn(),
     },
   };
@@ -67,7 +67,7 @@ describe("FlowNavigationService", () => {
         "conv_1"
       );
 
-      expect(flowSessionRepository.deleteActiveSessions).toHaveBeenCalledWith("contact_1", "flow_1");
+      expect(flowSessionRepository.deleteAllSessionsByContactAndFlow).toHaveBeenCalledWith("contact_1", "flow_1");
       expect(flowSessionRepository.createSession).toHaveBeenCalledWith({
         contactId: "contact_1",
         flowId: "flow_1",
@@ -154,7 +154,7 @@ describe("FlowNavigationService", () => {
   describe("endSession", () => {
     it("should call deleteSession in repository", async () => {
       await navigationService.endSession("session_abc");
-      expect(flowSessionRepository.deleteSession).toHaveBeenCalledWith("session_abc");
+      expect(flowSessionRepository.completeSession).toHaveBeenCalledWith("session_abc");
     });
   });
 
@@ -191,7 +191,7 @@ describe("FlowNavigationService", () => {
 
       await navigationService.moveToNextNode("session_abc", "node_1", flowStructure);
 
-      expect(flowSessionRepository.deleteSession).toHaveBeenCalledWith("session_abc");
+      expect(flowSessionRepository.completeSession).toHaveBeenCalledWith("session_abc");
     });
   });
 

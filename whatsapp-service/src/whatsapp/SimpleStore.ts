@@ -235,9 +235,28 @@ export class SimpleInMemoryStore {
   public async writeToRedis(redisKey: string): Promise<void> {
     if (!redisClient?.isOpen) return;
 
+    // [SEC] Memory footprint: only persist what identity resolution actually
+    // reads back out (backend's IdentityResolverService/ChatSyncJidResolver use
+    // contact.id/lid/phoneNumber/name/notify/verifiedName and lidToPhone — never
+    // imgUrl/status/username, and never `chats` at all, confirmed by grep across
+    // every consumer of getSessionStore()). `chats` in particular is pure dead
+    // weight here: it gets rebuilt fresh from WhatsApp on every reconnect anyway
+    // (see flush()), so persisting up to MAX_TOTAL_CHATS chat objects to Redis
+    // bought nothing but memory pressure on a plan shared with every BullMQ queue.
+    const trimmedContacts: Record<string, Partial<Contact>> = {};
+    for (const [jid, c] of Object.entries(this.contacts)) {
+      trimmedContacts[jid] = {
+        id: c.id,
+        lid: c.lid,
+        phoneNumber: c.phoneNumber,
+        name: c.name,
+        notify: c.notify,
+        verifiedName: c.verifiedName,
+      };
+    }
+
     const data = {
-      contacts: this.contacts,
-      chats: Array.from(this.chats.entries()),
+      contacts: trimmedContacts,
       lidToPhone: this.lidToPhone,
     };
 
@@ -264,7 +283,8 @@ export class SimpleInMemoryStore {
       if (dataStr) {
         const data = JSON.parse(dataStr as string);
         this.contacts = data.contacts || {};
-        this.chats = new Map(data.chats || []);
+        // `chats` is no longer persisted (see writeToRedis) — it rebuilds from
+        // WhatsApp's own history sync on reconnect regardless.
         this.lidToPhone = data.lidToPhone || {};
         Logger.info(
           `[Store] Loaded memory store from Redis (Key: wa:store:${redisKey})`,

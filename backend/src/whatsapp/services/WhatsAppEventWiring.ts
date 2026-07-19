@@ -173,10 +173,15 @@ export class WhatsAppEventWiring {
 
           // [SEC] ENTERPRISE FALLBACK (Omnichannel Alerts)
           // 1. Alert External APIs (Webhooks)
-          webhookDispatcher.dispatch(event.companyId, "whatsapp.disconnected", {
-            sessionId: event.sessionId,
-            reason: event.data.reason,
-            timestamp: new Date().toISOString()
+          // Same RLS fix as above — this event handler runs outside any HTTP
+          // request/tenant context, and webhookDispatcher.dispatch() queries a
+          // non-GLOBAL_MODEL (Webhook) directly, so it needs runAsSystem() too.
+          TenantContextManager.runAsSystem(async () => {
+            await webhookDispatcher.dispatch(event.companyId, "whatsapp.disconnected", {
+              sessionId: event.sessionId,
+              reason: event.data.reason,
+              timestamp: new Date().toISOString()
+            });
           }).catch(() => null);
 
           // Find Company Admins to alert via internal UI and Email

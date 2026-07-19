@@ -115,8 +115,42 @@ export const connectRedis = async () => {
 };
 
 /**
+ * [SEC] Deletes the stalest `wa:store:*` keys (lowest remaining TTL — these get
+ * their TTL refreshed on every write by an active session's persistence
+ * interval, so a low remaining TTL means the session stopped writing a while
+ * ago, i.e. disconnected/abandoned). Safe to delete: readFromRedis() already
+ * handles a missing key by starting with an empty store. Bounded per call so
+ * a single pass can't itself become a long-running scan under pressure.
+ */
+const purgeStaleWaStoreKeys = async (maxToDelete: number): Promise<number> => {
+  if (!redisClient?.isOpen) return 0;
+
+  const candidates: { key: string; ttl: number }[] = [];
+  let cursor = 0;
+  do {
+    const result = await redisClient.scan(cursor, { MATCH: "wa:store:*", COUNT: 200 });
+    cursor = result.cursor;
+    for (const key of result.keys) {
+      const ttl = await redisClient.ttl(key);
+      if (ttl >= 0) candidates.push({ key, ttl });
+    }
+  } while (cursor !== 0 && candidates.length < maxToDelete * 4);
+
+  candidates.sort((a, b) => a.ttl - b.ttl);
+  const toDelete = candidates.slice(0, maxToDelete);
+  for (const { key } of toDelete) {
+    await redisClient.del(key);
+  }
+  return toDelete.length;
+};
+
+/**
  * [SEC] REDIS MEMORY MONITOR
  * Verifica la salud y capacidad de Redis periódicamente para evitar Out Of Memory (OOM).
+ * `noeviction` es la política correcta para no perder jobs de BullMQ, pero eso significa
+ * que Redis NUNCA libera espacio solo — sin esta purga activa, cruzar el límite deja TODO
+ * comando de escritura (incluyendo los scripts Lua de BullMQ) fallando con OOM hasta que
+ * alguien libere memoria a mano. Antes esta función solo logueaba el problema.
  */
 const startMemoryMonitor = () => {
   const CHECK_INTERVAL_MS = 5 * 60 * 1000; // Revisar cada 5 minutos
@@ -126,7 +160,7 @@ const startMemoryMonitor = () => {
 
     try {
       const info = await redisClient.info("memory");
-      
+
       const extractValue = (key: string) => {
         const match = info.match(new RegExp(`${key}:(\\d+)`));
         return match ? parseInt(match[1], 10) : null;
@@ -139,7 +173,13 @@ const startMemoryMonitor = () => {
         const usagePercentage = (usedMemory / maxMemory) * 100;
 
         if (usagePercentage >= 80) {
-          Logger.error(`[CRITICAL] REDIS MEMORY LIMIT REACHED! Usando ${usagePercentage.toFixed(2)}% de la capacidad máxima. Por favor purga cachés o escala Redis.`);
+          Logger.error(`[CRITICAL] REDIS MEMORY LIMIT REACHED! Usando ${usagePercentage.toFixed(2)}% de la capacidad máxima. Purgando wa:store:* más viejos...`);
+          try {
+            const purged = await purgeStaleWaStoreKeys(100);
+            Logger.warn(`[Redis] [PURGE] Deleted ${purged} stale wa:store:* keys to relieve memory pressure.`);
+          } catch (purgeErr) {
+            Logger.error("[Redis] Emergency purge failed:", purgeErr);
+          }
         } else if (usagePercentage >= 70) {
           Logger.warn(`[WARNING] Redis Memory Warning. Usando ${usagePercentage.toFixed(2)}% de la capacidad.`);
         }

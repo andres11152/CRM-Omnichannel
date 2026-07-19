@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { User } from "@/types";
+import { clearModuleCache } from "@/lib/moduleCache";
 
 interface AuthState {
   user: User | null;
@@ -26,6 +27,9 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       login: (user, token) => {
+        // [SEC] Never serve another account's cached module data after a
+        // same-SPA-session account switch (logout hard-reloads, login doesn't)
+        clearModuleCache();
         // We set localStorage manually for Axios interceptor immediate availability
         localStorage.setItem("token", token);
         set({ user, token, isAuthenticated: true });

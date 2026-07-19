@@ -13,6 +13,7 @@ import { getDeals } from "@/services/crmService";
 import { DealModal } from "./DealModal";
 import { ModuleHeader } from "../common/ModuleHeader";
 import { api } from "@/lib/axios";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 import {
   Plus,
   TrendingUp,
@@ -113,12 +114,23 @@ const isWonStage = (name: string): boolean =>
 const isLostStage = (name: string): boolean =>
   /perdido|lost|cerrado\s?perdido/i.test(name);
 
+interface DealKanbanCache {
+  deals: Deal[];
+  pipeline: Pipeline;
+}
+
+const DEAL_KANBAN_CACHE_KEY = "deals:kanban";
+
 // ─── Component ────────────────────────────────────────────
 export const DealKanban: React.FC = () => {
   const { t } = useTranslation();
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [pipeline, setPipeline] = useState<Pipeline | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: re-entering the module renders the last known
+  // board instantly and refetches silently, instead of a full-screen spinner
+  // on every navigation.
+  const cached = getModuleCache<DealKanbanCache>(DEAL_KANBAN_CACHE_KEY);
+  const [deals, setDeals] = useState<Deal[]>(cached?.deals ?? []);
+  const [pipeline, setPipeline] = useState<Pipeline | null>(cached?.pipeline ?? null);
+  const [loading, setLoading] = useState(!cached);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState<Deal | undefined>(undefined);
 
@@ -145,7 +157,10 @@ export const DealKanban: React.FC = () => {
   // ── Data Fetch ────────────────────────────────────
   const fetchData = async () => {
     try {
-      setLoading(true);
+      // Skeleton only when there's no cached board to render underneath
+      if (!getModuleCache<DealKanbanCache>(DEAL_KANBAN_CACHE_KEY)) {
+        setLoading(true);
+      }
       const resPipelines = await api.get("/pipelines");
       const pipelines = resPipelines.data.data.pipelines || [];
       let defaultPipeline =
@@ -161,7 +176,8 @@ export const DealKanban: React.FC = () => {
 
       if (defaultPipeline) {
         const resFull = await api.get(`/pipelines/${defaultPipeline.id}`);
-        setPipeline(resFull.data.data.pipeline);
+        const fullPipeline: Pipeline = resFull.data.data.pipeline;
+        setPipeline(fullPipeline);
         const dealsData = await getDeals({ pipelineId: defaultPipeline.id });
         setDeals(dealsData.deals || []);
       }
@@ -175,6 +191,14 @@ export const DealKanban: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Mirror the rendered board into the module cache so local mutations
+  // (drag & drop, create/delete) survive navigation without a stale flash
+  useEffect(() => {
+    if (pipeline) {
+      setModuleCache<DealKanbanCache>(DEAL_KANBAN_CACHE_KEY, { deals, pipeline });
+    }
+  }, [deals, pipeline]);
 
   // ── KPIs ──────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -499,7 +523,7 @@ export const DealKanban: React.FC = () => {
                               <div className="flex flex-col items-center justify-center py-12 text-gray-300 dark:text-gray-600">
                                 <Target className="w-8 h-8 mb-2 opacity-40" />
                                 <p className="text-xs font-medium">
-                                  {t("common.loading")}...
+                                  {t("crm.kanban.empty_column", "Sin oportunidades")}
                                 </p>
                               </div>
                             )}

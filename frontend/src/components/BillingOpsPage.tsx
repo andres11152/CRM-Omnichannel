@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { adminService } from "@/services/adminService";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { Skeleton } from "boneyard-js/react";
 import { Button } from "./ui/Button";
@@ -48,18 +49,29 @@ interface BillingResponse {
   stats: BillingStats;
 }
 
+const BILLING_CACHE_KEY = "billing:ops";
+
 export const BillingOpsPage = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [stats, setStats] = useState<BillingStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: instant render on module re-entry; also keeps the
+  // 60s polling refresh from flashing the loading state over live data
+  const cached = getModuleCache<BillingResponse>(BILLING_CACHE_KEY);
+  const [transactions, setTransactions] = useState<Transaction[]>(cached?.transactions ?? []);
+  const [stats, setStats] = useState<BillingStats | null>(cached?.stats ?? null);
+  const [loading, setLoading] = useState(!cached);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      if (!getModuleCache<BillingResponse>(BILLING_CACHE_KEY)) {
+        setLoading(true);
+      }
       const res = (await adminService.getBillingTransactions()) as unknown as BillingResponse;
       setTransactions(res.transactions || []);
       setStats(res.stats);
+      setModuleCache<BillingResponse>(BILLING_CACHE_KEY, {
+        transactions: res.transactions || [],
+        stats: res.stats,
+      });
     } catch (error) {
       console.error(error);
       toast.error("Error al cargar transacciones");

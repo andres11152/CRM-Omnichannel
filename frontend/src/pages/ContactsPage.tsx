@@ -10,20 +10,33 @@ import { useNavigate } from "react-router-dom";
 import { Search, User, History, Trash2, X, MessageSquare } from "lucide-react";
 import { Skeleton } from "boneyard-js/react";
 import { ContactFormModal } from "@/components/contacts/ContactFormModal";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
+
+interface ContactsCache {
+  contacts: Contact[];
+  totalPages: number;
+  totalResults: number;
+}
+
+const CONTACTS_CACHE_KEY = "contacts:default-view";
 
 export const ContactsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  // Stale-while-revalidate: render the last default view (page 1, no search)
+  // instantly on re-entry and refetch silently, instead of flashing the
+  // skeleton on every module switch.
+  const cached = getModuleCache<ContactsCache>(CONTACTS_CACHE_KEY);
+  const [contacts, setContacts] = useState<Contact[]>(cached?.contacts ?? []);
   const [allTags, setAllTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  
+
   // Pagination State
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalResults, setTotalResults] = useState(0);
+  const [totalPages, setTotalPages] = useState(cached?.totalPages ?? 1);
+  const [totalResults, setTotalResults] = useState(cached?.totalResults ?? 0);
   const [limit] = useState(50); // Default items per page
 
   const [showModal, setShowModal] = useState(false);
@@ -156,7 +169,12 @@ export const ContactsPage: React.FC = () => {
   };
 
   const fetchContacts = async (pageNum: number, search: string) => {
-    setLoading(true);
+    const isDefaultView = pageNum === 1 && !search;
+    // Only show the skeleton when there's nothing to render underneath —
+    // a cached default view revalidates silently in the background.
+    if (!(isDefaultView && getModuleCache<ContactsCache>(CONTACTS_CACHE_KEY))) {
+      setLoading(true);
+    }
     try {
       const token = localStorage.getItem("token");
       const offset = (pageNum - 1) * limit;
@@ -169,17 +187,29 @@ export const ContactsPage: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      
+
       if (data.status === "success") {
-        setContacts(Array.isArray(data.data) ? data.data : data.data?.contacts || []);
-        
+        const list: Contact[] = Array.isArray(data.data) ? data.data : data.data?.contacts || [];
+        setContacts(list);
+
         // Handle standardized meta or legacy results field
+        let pages = 1;
+        let total = list.length;
         if (data.meta) {
-          setTotalPages(data.meta.pages || 1);
-          setTotalResults(data.meta.total || 0);
+          pages = data.meta.pages || 1;
+          total = data.meta.total || 0;
         } else if (typeof data.results === "number") {
-          setTotalResults(data.results);
-          setTotalPages(Math.ceil(data.results / limit));
+          total = data.results;
+          pages = Math.ceil(data.results / limit);
+        }
+        setTotalPages(pages);
+        setTotalResults(total);
+        if (isDefaultView) {
+          setModuleCache<ContactsCache>(CONTACTS_CACHE_KEY, {
+            contacts: list,
+            totalPages: pages,
+            totalResults: total,
+          });
         }
       } else if (Array.isArray(data)) {
         setContacts(data);

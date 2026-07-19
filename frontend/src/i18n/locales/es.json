@@ -1023,6 +1023,9 @@
     }
   },
   "crm": {
+    "kanban": {
+      "empty_column": "Sin oportunidades"
+    },
     "accounts": {
       "new_title": "Nueva Empresa",
       "edit_title": "Editar Empresa",

@@ -1023,6 +1023,9 @@
     }
   },
   "crm": {
+    "kanban": {
+      "empty_column": "No deals yet"
+    },
     "accounts": {
       "new_title": "New Company",
       "edit_title": "Edit Company",

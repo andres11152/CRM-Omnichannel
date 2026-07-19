@@ -50,6 +50,7 @@ import {
   TenantHealth,
 } from "./dashboard/TenantHealthWidget";
 import { api } from "@/lib/axios";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 
 interface Props {
   role: UserRole | string;
@@ -84,39 +85,68 @@ export const MainDashboard: React.FC<Props> = ({
 };
 
 // --- MASTER ADMIN DASHBOARD (PROFESSIONAL SaaS Style) ---
+interface MasterStats {
+  totalCompanies: number;
+  activeCompanies: number;
+  totalRevenue: number;
+  activeUsers: number;
+  systemHealth: string;
+  financials?: {
+    mrr?: number;
+    trend?: { name: string; revenue: number }[];
+    distribution?: { name: string; value: number }[];
+  };
+  systemStatus?: {
+    api: { status: string; latency: number };
+    database: { status: string; latency: number };
+    queues: { status: string; latency: number };
+    storage: { status: string; latency: number };
+  };
+}
+
+interface MasterDashboardCache {
+  stats: MasterStats;
+  companies: Company[];
+  activity: ActivityItem[];
+  tenantHealth: TenantHealth[];
+}
+
+const MASTER_DASH_CACHE_KEY = "dashboard:master";
+
 const MasterAdminDashboard: React.FC<{
   onNavigate?: (tab: string) => void;
 }> = ({ onNavigate }) => {
-  const [stats, setStats] = useState<{
-    totalCompanies: number;
-    activeCompanies: number;
-    totalRevenue: number;
-    activeUsers: number;
-    systemHealth: string;
-    financials?: {
-      mrr?: number;
-      trend?: { name: string; revenue: number }[];
-      distribution?: { name: string; value: number }[];
-    };
-    systemStatus?: {
-      api: { status: string; latency: number };
-      database: { status: string; latency: number };
-      queues: { status: string; latency: number };
-      storage: { status: string; latency: number };
-    };
-  }>({
-    totalCompanies: 0,
-    activeCompanies: 0,
-    totalRevenue: 0,
-    activeUsers: 0,
-    systemHealth: "100%",
-  });
-  const [loading, setLoading] = useState(true);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  // Stale-while-revalidate: instant render on module re-entry, silent refetch
+  const cachedDash = getModuleCache<MasterDashboardCache>(MASTER_DASH_CACHE_KEY);
+  const [stats, setStats] = useState<MasterStats>(
+    cachedDash?.stats ?? {
+      totalCompanies: 0,
+      activeCompanies: 0,
+      totalRevenue: 0,
+      activeUsers: 0,
+      systemHealth: "100%",
+    },
+  );
+  const [loading, setLoading] = useState(!cachedDash);
+  const [companies, setCompanies] = useState<Company[]>(cachedDash?.companies ?? []);
   const { t } = useTranslation();
 
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [tenantHealth, setTenantHealth] = useState<TenantHealth[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>(cachedDash?.activity ?? []);
+  const [tenantHealth, setTenantHealth] = useState<TenantHealth[]>(
+    cachedDash?.tenantHealth ?? [],
+  );
+
+  // Mirror rendered data into the module cache once real data is in
+  useEffect(() => {
+    if (!loading) {
+      setModuleCache<MasterDashboardCache>(MASTER_DASH_CACHE_KEY, {
+        stats,
+        companies,
+        activity,
+        tenantHealth,
+      });
+    }
+  }, [loading, stats, companies, activity, tenantHealth]);
 
   useEffect(() => {
     fetchMasterStats();
@@ -531,8 +561,10 @@ const AgentDashboard: React.FC<{
   onNavigate?: (tab: string) => void;
   user?: User;
 }> = ({ onNavigate, user }) => {
-  const [stats, setStats] = useState<AgentStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: instant render on module re-entry, silent refetch
+  const cachedStats = getModuleCache<AgentStats>("dashboard:agent");
+  const [stats, setStats] = useState<AgentStats | null>(cachedStats ?? null);
+  const [loading, setLoading] = useState(!cachedStats);
   const { t, i18n } = useTranslation();
 
   useEffect(() => {
@@ -541,6 +573,7 @@ const AgentDashboard: React.FC<{
         const response = await api.get("/dashboard/agent-stats");
         if (response.data && response.data.data) {
           setStats(response.data.data);
+          setModuleCache("dashboard:agent", response.data.data);
         }
       } catch (error) {
         console.error("Failed to fetch agent stats", error);
@@ -759,19 +792,20 @@ const CompanyAdminDashboard: React.FC<{
   user?: User;
   onUserUpdate?: (user: Partial<User>) => void;
 }> = ({ onNavigate, user, onUserUpdate }) => {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: instant render on module re-entry, silent refetch
+  const cachedData = getModuleCache<DashboardData>("dashboard:company-admin");
+  const [data, setData] = useState<DashboardData | null>(cachedData ?? null);
+  const [loading, setLoading] = useState(!cachedData);
   const { t, i18n } = useTranslation();
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const response = await api.get("/dashboard/stats");
-        if (response.data && response.data.data) {
-          setData(response.data.data);
-        } else {
-          setData(response.data);
-        }
+        const fresh: DashboardData =
+          response.data && response.data.data ? response.data.data : response.data;
+        setData(fresh);
+        setModuleCache("dashboard:company-admin", fresh);
       } catch (error) {
         console.error("Failed to fetch dashboard stats", error);
       } finally {

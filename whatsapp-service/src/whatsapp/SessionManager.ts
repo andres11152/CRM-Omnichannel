@@ -11,6 +11,7 @@ import {
   sessionModuleLogger as logger,
 } from "./SessionLogger";
 import { prisma } from "../config/database";
+import { whatsAppSessionRepository } from "../repositories/WhatsAppSessionRepository";
 import { bindSessionEvents } from "./events/SessionEventBinder";
 import { SessionContactResolver } from "./SessionContactResolver";
 import { WhatsAppSocketFactory } from "./WhatsAppSocketFactory";
@@ -311,14 +312,35 @@ export class SessionManager implements ISessionManager {
     return { sessionId, status: meta?.status || "DISCONNECTED" };
   }
 
-  listSessions(companyId: string): SessionStatus[] {
-    const list: SessionStatus[] = [];
-    this.sessionMetadata.forEach((meta, sessionId) => {
-      if (meta.companyId === companyId) {
-        list.push({ sessionId, status: meta.status });
+  async listSessions(companyId: string): Promise<SessionStatus[]> {
+    // [SEC] The in-memory sessionMetadata Map only reflects sessions this exact
+    // process has initialized since boot — after any restart, a session that was
+    // DISCONNECTED (not CONNECTED) at shutdown is skipped by the boot auto-heal
+    // loop (server.ts only restores CONNECTED sessions) and never re-enters this
+    // Map. Reading memory-only meant those sessions vanished from the UI forever,
+    // even with a fully intact DB record (phone, qrCode, etc). The DB is the
+    // source of truth for "does this session exist"; memory only wins for the
+    // live status of a session that's actually running in this process right now.
+    const dbSessions = await whatsAppSessionRepository.findByCompany(companyId);
+    return dbSessions.map((db) => {
+      const meta = this.sessionMetadata.get(db.sessionId);
+      const sock = this.sessions.get(db.sessionId);
+      let phone = db.phone ?? undefined;
+      if (sock?.user?.id) {
+        phone = sock.user.id.split(":")[0].split("@")[0];
       }
+      return {
+        sessionId: db.sessionId,
+        companyId: db.companyId,
+        status: meta?.status ?? (db.status as SessionStatus["status"]),
+        phone,
+        qrCode: db.qrCode ?? undefined,
+        updatedAt: db.updatedAt,
+        createdAt: db.createdAt,
+        defaultQueueId: db.defaultQueueId,
+        proxyUrl: db.proxyUrl,
+      };
     });
-    return list;
   }
 
   async findActiveSessionForCompany(

@@ -79,7 +79,7 @@ export class SessionController {
   static async listSessions(req: Request, res: Response): Promise<void> {
     const { companyId } = req.params as { companyId: string };
     try {
-      const list = sessionManager.listSessions(companyId);
+      const list = await sessionManager.listSessions(companyId);
       res.json(list);
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

@@ -6,9 +6,10 @@ export interface WhatsAppSession {
   companyId: string;
   proxyUrl: string | null;
   status: string;
-  phoneNumber: string | null;
+  phone: string | null;
   qrCode: string | null;
   provider: string;
+  defaultQueueId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -51,6 +52,13 @@ export class WhatsAppSessionRepository {
   async findActiveSessions(): Promise<WhatsAppSession[]> {
     return prisma.whatsAppSession.findMany({
       where: { status: "CONNECTED", provider: "BAILEYS" },
+    }) as unknown as Promise<WhatsAppSession[]>;
+  }
+
+  async findByCompany(companyId: string): Promise<WhatsAppSession[]> {
+    return prisma.whatsAppSession.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
     }) as unknown as Promise<WhatsAppSession[]>;
   }
 }

@@ -25,8 +25,7 @@ import { WhatsAppIdUtils } from "../utils/WhatsAppIdUtils";
 import { messageTemplateRepository } from "@/repositories/MessageTemplateRepository";
 import { AppError } from "@/utils/AppError";
 import { OutboundMessageHandler } from "../providers/handlers/OutboundMessageHandler";
-import axios from "axios";
-const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
+import { whatsappServiceHttp } from "../utils/whatsAppServiceHttp";
 
 export class WhatsAppMessaging {
   private outboundHandler: OutboundMessageHandler;
@@ -158,7 +157,7 @@ export class WhatsAppMessaging {
     options: SendMessageOptions & { dbId?: string },
   ) {
     try {
-      const res = await axios.post(`${WHATSAPP_SERVICE_URL}/messages/send`, {
+      const res = await whatsappServiceHttp.post(`/messages/send`, {
         companyId: options.companyId,
         to,
         type: options.media ? "media" : "text",
@@ -218,7 +217,7 @@ export class WhatsAppMessaging {
   async simulateTyping(sessionId: string, to: string) {
     const activeSession = await this.sessionManager.getSessionInfo(sessionId);
     if (activeSession) {
-      await axios.post(`${WHATSAPP_SERVICE_URL}/messages/presence`, {
+      await whatsappServiceHttp.post(`/messages/presence`, {
         companyId: activeSession.companyId,
         to,
         type: "composing",
@@ -235,7 +234,7 @@ export class WhatsAppMessaging {
     type: "composing" | "recording" | "paused",
     companyId: string,
   ): Promise<void> {
-    await axios.post(`${WHATSAPP_SERVICE_URL}/messages/presence`, {
+    await whatsappServiceHttp.post(`/messages/presence`, {
       companyId,
       to,
       type,
@@ -249,7 +248,7 @@ export class WhatsAppMessaging {
     companyId: string,
     fromMe?: boolean,
   ): Promise<void> {
-    await axios.post(`${WHATSAPP_SERVICE_URL}/messages/reaction`, {
+    await whatsappServiceHttp.post(`/messages/reaction`, {
       companyId,
       to,
       messageId,

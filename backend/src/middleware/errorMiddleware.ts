@@ -90,6 +90,14 @@ export const globalErrorHandler = (
   err.status = err.status || "error";
 
   let error = err;
+  // [SEC] AppError.isOperational is ALWAYS true by construction (see AppError.ts) —
+  // so checking `error.isOperational` AFTER wrapping (below) is always true and
+  // this branch never logs anything, no matter how unexpected the original error
+  // was. Capture whether it arrived as an AppError BEFORE the wrap so genuinely
+  // unhandled crashes (the ones that actually need a stack trace to debug) get
+  // logged, while deliberate `throw new AppError(...)` call sites (expected 4xx
+  // conditions) and already-handled Prisma/JWT cases stay silent as intended.
+  const wasDeliberateAppError = err instanceof AppError;
 
   // Si es error de Prisma, lo transformamos inmediato
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -110,6 +118,9 @@ export const globalErrorHandler = (
   if (process.env.NODE_ENV === "development") {
     sendErrorDev(error as AppError, res);
   } else {
+    if (!wasDeliberateAppError && error.statusCode >= 500) {
+      Logger.error("[globalErrorHandler] Unhandled error:", err);
+    }
     sendErrorProd(error as AppError, res);
   }
 };

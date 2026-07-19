@@ -319,14 +319,25 @@ export class ChatSyncIngest {
     }
   ): Promise<boolean> {
     try {
+      // [SEC] The Baileys socket lives exclusively in whatsapp-service now — this
+      // process can only check session status over HTTP and ask whatsapp-service
+      // to perform the actual fetchMessageHistory call on the live socket.
       const { whatsappService } = await import("@/whatsapp");
-      const activeSession = await whatsappService.getSessionManager().findActiveSessionForCompany(companyId);
+      const sessions = await whatsappService.listSessions(companyId);
+      const activeSession = sessions.find((s) => s.status === "CONNECTED");
       if (!activeSession) {
         Logger.warn(`[ChatSync] No active session for company ${companyId}`);
         return false;
       }
 
-      const sock = activeSession.socket;
+      const { executeWhatsAppCommand } = await import("@/whatsapp/utils/whatsAppServiceHttp");
+      const requestHistoryPage = (
+        count: number,
+        key: import("@whiskeysockets/baileys").WAMessageKey,
+        tsMs: number,
+      ) =>
+        executeWhatsAppCommand<{ usedFallback: boolean }>(companyId, "fetchMessageHistory", [count, key, tsMs]);
+
       let targetJid = WhatsAppIdUtils.getTargetJid(channelId);
       targetJid = await this.jidResolver.resolveRealJid(companyId, sessionId, targetJid);
 
@@ -383,21 +394,6 @@ export class ChatSyncIngest {
         return { key: { remoteJid: targetJid, fromMe: false, id: "" }, tsMs: 0, source: "None (Unanchored Fallback)" };
       };
 
-      // [SEC] Strategy: Use fetchMessageHistory if available, else fall back to presence wake-up
-      const hasFetchHistory = typeof (sock as Record<string, unknown>).fetchMessageHistory === "function";
-
-      if (!hasFetchHistory) {
-        Logger.info(
-          `[ChatSync] fetchMessageHistory NOT available. Requesting presence subscription for ${targetJid} to trigger sync.`
-        );
-        try {
-          await sock.presenceSubscribe(targetJid);
-        } catch (presErr) {
-          Logger.debug(`[ChatSync] presenceSubscribe failed for ${targetJid}: ${presErr instanceof Error ? presErr.message : String(presErr)}`);
-        }
-        return true;
-      }
-
       // [ENTERPRISE] Wait for the batch: poll the DB count until new messages arrive.
       // fetchMessageHistory is a peer-data-operation request to the LINKED PHONE (not
       // WhatsApp's servers) — it has to wake up, relay potentially dozens of messages,
@@ -435,8 +431,6 @@ export class ChatSyncIngest {
         return lastCount - preCount;
       };
 
-      const fetchFn = (sock as unknown as { fetchMessageHistory: (count: number, key: import("@whiskeysockets/baileys").WAMessageKey, ts: number) => Promise<void> }).fetchMessageHistory;
-
       // [Baileys 7 · CRITICAL] fetchMessageHistory's 3rd argument is forwarded VERBATIM
       // into historySyncOnDemandRequest.oldestMsgTimestampMs (see baileys
       // lib/Socket/messages-recv.js) — it must be MILLISECONDS. The previous code passed
@@ -462,7 +456,7 @@ export class ChatSyncIngest {
           `[ChatSync] On-demand ${pageLabel}: requesting ${clampedCount} messages for ${targetJid}. ` +
           `Anchor from ${anchor.source}: msg ${anchor.key.id} at ${anchor.tsMs > 0 ? new Date(anchor.tsMs).toISOString() : "0"}`
         );
-        await fetchFn.call(sock, clampedCount, anchor.key, anchor.tsMs);
+        await requestHistoryPage(clampedCount, anchor.key, anchor.tsMs);
         return waitForBatch(preDbCount, stabilize);
       };
 
@@ -485,7 +479,13 @@ export class ChatSyncIngest {
         `[ChatSync] On-demand page 1: requesting ${page1Count} messages for ${targetJid}. ` +
         `Anchor from ${anchor1.source}: msg ${anchor1.key.id} at ${anchor1.tsMs > 0 ? new Date(anchor1.tsMs).toISOString() : "0"}`
       );
-      await fetchFn.call(sock, page1Count, anchor1.key, anchor1.tsMs);
+      const page1Result = await requestHistoryPage(page1Count, anchor1.key, anchor1.tsMs);
+      if (page1Result.usedFallback) {
+        // whatsapp-service's socket doesn't support fetchMessageHistory — it already
+        // fell back to presenceSubscribe (best-effort wake-up), no batch to wait for.
+        Logger.info(`[ChatSync] fetchMessageHistory unavailable for ${targetJid}; used presence-subscribe fallback.`);
+        return true;
+      }
       const firstGained = await waitForBatch(page1PreCount, false, firstPageWaitMs);
 
       const paginateRemaining = async (initialGained: number) => {

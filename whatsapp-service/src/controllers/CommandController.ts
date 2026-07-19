@@ -26,6 +26,32 @@ export class CommandController {
       let result: unknown = null;
 
       switch (command) {
+        case "fetchMessageHistory": {
+          // On-demand backfill: ask the linked phone for older messages before
+          // `key` (fetchMessageHistory is a peer-data request to the phone, not
+          // WhatsApp's servers). The resulting batch lands via the socket's own
+          // messaging-history.set handler, which enqueues onto the
+          // whatsapp-history-sync BullMQ queue for the backend to ingest.
+          const [count, historyKey, oldestMsgTimestampMs] = args as [
+            number,
+            import("@whiskeysockets/baileys").WAMessageKey,
+            number,
+          ];
+          const hasFetchHistory = typeof (sock as Record<string, unknown>).fetchMessageHistory === "function";
+          if (!hasFetchHistory) {
+            await sock.presenceSubscribe(historyKey.remoteJid!).catch((err: unknown) => {
+              Logger.warn(`[CommandController] presenceSubscribe fallback failed: ${err instanceof Error ? err.message : String(err)}`);
+            });
+            result = { usedFallback: true };
+            break;
+          }
+          const fetchFn = (sock as unknown as {
+            fetchMessageHistory: (count: number, key: import("@whiskeysockets/baileys").WAMessageKey, ts: number) => Promise<void>;
+          }).fetchMessageHistory;
+          await fetchFn.call(sock, count, historyKey, oldestMsgTimestampMs);
+          result = { usedFallback: false };
+          break;
+        }
         case "editOutboundMessage": {
           const [to, messageId, newContent] = args as [string, string, string];
           const jid = await jidResolver.resolveDestinationJid(to, companyId, sessionId);

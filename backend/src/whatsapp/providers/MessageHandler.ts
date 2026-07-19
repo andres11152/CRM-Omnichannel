@@ -487,27 +487,15 @@ export class MessageHandler implements IMessageHandler {
     });
   }
 
-  // Shared HTTP client for both /messages/* and /commands/execute — the
-  // Baileys socket for a session lives exclusively in whatsapp-service now,
-  // so any action needing a live socket must go through its HTTP surface,
-  // which is gated behind WHATSAPP_INTERNAL_SECRET.
   private async callWhatsAppService<T>(path: string, body: Record<string, unknown>): Promise<T> {
-    const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
-    const axios = (await import("axios")).default;
-    const res = await axios.post<T>(`${WHATSAPP_SERVICE_URL}${path}`, body, {
-      headers: process.env.WHATSAPP_INTERNAL_SECRET
-        ? { "x-internal-service-key": process.env.WHATSAPP_INTERNAL_SECRET }
-        : undefined,
-    });
+    const { whatsappServiceHttp } = await import("../utils/whatsAppServiceHttp");
+    const res = await whatsappServiceHttp.post<T>(path, body);
     return res.data;
   }
 
   private async executeCommand<T>(companyId: string, command: string, args: unknown[]): Promise<T> {
-    const { result } = await this.callWhatsAppService<{ success: boolean; result: T }>(
-      "/commands/execute",
-      { companyId, command, args },
-    );
-    return result;
+    const { executeWhatsAppCommand } = await import("../utils/whatsAppServiceHttp");
+    return executeWhatsAppCommand<T>(companyId, command, args);
   }
 
   async editOutboundMessage(

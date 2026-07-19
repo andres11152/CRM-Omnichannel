@@ -364,10 +364,12 @@ export const syncFullHistory = catchAsync(
     const conversation = await conversationService.getConversation(req.companyId, conversationId);
     if (!conversation) throw new AppError("Conversation not found", 404);
 
-    // 2. Identify the active session
+    // 2. Identify the active session (via whatsapp-service HTTP — the Baileys
+    // socket lives there now, this backend process has no local session state)
     const { whatsappService } = await import("@/whatsapp");
-    const activeSession = await whatsappService.getSessionManager().findActiveSessionForCompany(req.companyId);
-    
+    const sessions = await whatsappService.listSessions(req.companyId);
+    const activeSession = sessions.find((s) => s.status === "CONNECTED");
+
     if (!activeSession) {
       throw new AppError("No hay una sesión de WhatsApp activa para sincronizar.", 400);
     }

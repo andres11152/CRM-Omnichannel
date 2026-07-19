@@ -17,14 +17,7 @@ import {
   SessionStatus,
 } from "./core/types/whatsapp.types";
 import { WASocket, Contact } from "@whiskeysockets/baileys";
-import axios from "axios";
-const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:4001";
-const whatsappServiceHttp = axios.create({
-  baseURL: WHATSAPP_SERVICE_URL,
-  headers: process.env.WHATSAPP_INTERNAL_SECRET
-    ? { "x-internal-service-key": process.env.WHATSAPP_INTERNAL_SECRET }
-    : undefined,
-});
+import { whatsappServiceHttp } from "./utils/whatsAppServiceHttp";
 import { Logger } from "@/utils/logger";
 
 import { WhatsAppSessionRepository } from "@/repositories/WhatsAppSessionRepository";

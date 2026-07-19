@@ -135,11 +135,20 @@ class ChatSyncService {
         errors: 0,
       });
 
-      // 2. Get the Baileys store
-      const store = await this.ingest["getSessionStore"](sessionId);
-      if (!store) {
-        throw new Error(`No store found for session ${sessionId}`);
-      }
+      // 2. Get the Baileys store. The live socket (and its full in-memory message
+      // store) lives in whatsapp-service, not this process — only contacts/chats/
+      // lidToPhone are mirrored to Redis (never `messages`, by design, to keep the
+      // blob small), so this is always null here. Fall back to an empty store: the
+      // manual/targeted sync path below counts new messages via DB diffing, not via
+      // this store, so an empty store doesn't affect correctness — only the
+      // "messagesFound" diagnostic stat for the non-targeted (bulk) path, which
+      // already isn't reachable from the live on-demand sync route.
+      const store = (await this.ingest["getSessionStore"](sessionId)) ?? {
+        messages: {},
+        chats: new Map(),
+        contacts: {},
+        lidToPhone: {},
+      };
 
       // [SEARCH] DIAGNOSTIC: Show what's in the store
       const storeJids = Object.keys(store.messages || {});

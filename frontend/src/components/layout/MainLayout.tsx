@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { Suspense, useState, useEffect, useMemo } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { DropResult } from "@hello-pangea/dnd";
 import { Toaster, toast } from "sonner";
@@ -11,6 +11,7 @@ import { Menu } from "lucide-react";
 import { SidebarEnhanced } from "./SidebarEnhanced";
 import { CommandCenter } from "@/components/layout/CommandCenter";
 import { NotificationBell } from "@/components/ui/NotificationBell";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 // --- MAIN LAYOUT PRO ---
 
@@ -191,7 +192,15 @@ export const MainLayout = () => {
           {/* Top Shadow Gradient for depth */}
           <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-black/5 to-transparent pointer-events-none z-10" />
           <div className="h-full w-full overflow-y-auto overflow-x-hidden bg-reply-bg/50 dark:bg-reply-bg-dark">
-            <Outlet />
+            {/* [SEC] Scoped to just the content area, not the whole route tree
+                (that Suspense lives in AppRoutes.tsx for public/pre-layout
+                routes). Without this, every lazy module navigation unmounted
+                this entire MainLayout — sidebar, header, everything — showing
+                a full-page skeleton that didn't match the real layout shape
+                ("ghost skeleton" flash) instead of just the content loading. */}
+            <Suspense fallback={<PageSkeleton />}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
       </div>

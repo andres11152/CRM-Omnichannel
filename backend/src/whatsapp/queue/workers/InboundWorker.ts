@@ -24,6 +24,10 @@ interface InboundJobData {
   encodedMessage: string;
   sessionId: string;
   companyId: string;
+  // Baileys-computed WAMessageKey fields (remoteJidAlt/addressingMode) that don't
+  // exist in the raw protobuf schema and would otherwise be lost across the
+  // encode/decode roundtrip — see SessionEventBinder.ts on the producer side.
+  keyExtras?: { remoteJidAlt?: string; addressingMode?: string };
 }
 
 export class InboundWorker {
@@ -47,13 +51,21 @@ export class InboundWorker {
     this.worker = new Worker(
       "whatsapp-inbound",
       async (job: Job) => {
-        const { encodedMessage, sessionId, companyId } = job.data as InboundJobData;
+        const { encodedMessage, sessionId, companyId, keyExtras } = job.data as InboundJobData;
 
         // [SEC] PROTOBUF BINARY DECODE: Lossless reconstruction of WAMessage
         // Base64 → Buffer → proto.WebMessageInfo.decode() preserves ALL byte fields
         // (mediaKey, fileEncSha256, fileSha256) that JSON serialization would destroy.
         const binaryData = Buffer.from(encodedMessage, "base64");
         const message = proto.WebMessageInfo.decode(binaryData) as WAMessage;
+
+        // Restore Baileys-computed key fields that aren't part of the protobuf
+        // schema and were carried separately (see InboundJobData.keyExtras above) —
+        // IdentityResolverService's primary LID resolution strategy depends on these.
+        if (keyExtras && message.key) {
+          if (keyExtras.remoteJidAlt) (message.key as { remoteJidAlt?: string }).remoteJidAlt = keyExtras.remoteJidAlt;
+          if (keyExtras.addressingMode) (message.key as { addressingMode?: string }).addressingMode = keyExtras.addressingMode;
+        }
 
         try {
           Logger.debug(`[InboundWorker] Job ${job.id} extracted for message ${message.key?.id}. Entering Handler...`);

@@ -300,10 +300,25 @@ export function bindSessionEvents(
       const jobId = msgId
         ? `${sessionId}_${msgId}`.replace(/[^A-Za-z0-9_-]/g, "")
         : undefined;
-      
+
+      // [SEC] LID resolution: Baileys attaches `remoteJidAlt`/`addressingMode` to
+      // WAMessageKey in-process from its own LID store (see WAMessageKey type —
+      // it's `proto.IMessageKey & { remoteJidAlt?: string; ... }`, an intersection
+      // ON TOP of the actual protobuf schema). These are NOT real protobuf fields,
+      // so proto.WebMessageInfo.encode() silently drops them — the backend's
+      // decode() never sees them, breaking IdentityResolverService's primary LID
+      // resolution strategy for every message that crosses this queue. Carry them
+      // as plain JSON alongside the protobuf blob instead.
+      const keyExtras = msg.key
+        ? {
+            remoteJidAlt: (msg.key as Record<string, unknown>).remoteJidAlt as string | undefined,
+            addressingMode: (msg.key as Record<string, unknown>).addressingMode as string | undefined,
+          }
+        : undefined;
+
       getInboundQueue()?.add(
         "process-message",
-        { encodedMessage, sessionId, companyId },
+        { encodedMessage, sessionId, companyId, keyExtras },
         { jobId }
       ).then((job) => {
         Logger.info(`[SessionEventBinder] Inbound ${msgId} → enqueued to 'whatsapp-inbound' (job ${job.id})`);

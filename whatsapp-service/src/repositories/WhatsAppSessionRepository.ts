@@ -8,6 +8,7 @@ export interface WhatsAppSession {
   status: string;
   phone: string | null;
   qrCode: string | null;
+  profileName: string | null;
   provider: string;
   defaultQueueId: string | null;
   createdAt: Date;

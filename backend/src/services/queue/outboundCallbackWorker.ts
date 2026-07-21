@@ -3,6 +3,7 @@ import { messageRepository } from "@/repositories/MessageRepository";
 import { Logger } from "@/utils/logger";
 import { contextStorage } from "@/context/requestContext";
 import { gateway } from "@/gateways/socketGateway";
+import { SocketEventEmitter } from "@/services/SocketEventEmitter";
 import redisClient from "@/config/redis";
 
 interface CallbackJobData {
@@ -11,12 +12,19 @@ interface CallbackJobData {
   sessionId: string;
   messageId?: string;
   dbMessageId?: string;
+  /** Threaded through from whatsapp-service's OutboundWorker so the frontend
+   * can route the status update to the right conversation's cache without a
+   * DB round-trip. Absent for jobs enqueued before this field existed —
+   * those fall back to the updated row's own conversationId (success path
+   * only; the failure path has no row to read it from). */
+  conversationId?: string;
   error?: string;
   to?: string;
 }
 
 export class OutboundCallbackWorker {
   private worker: Worker;
+  private socketEmitter = new SocketEventEmitter(gateway);
 
   constructor() {
     if (!redisClient) {
@@ -26,7 +34,7 @@ export class OutboundCallbackWorker {
     this.worker = new Worker(
       "whatsapp-outbound-callback",
       async (job: Job<CallbackJobData>) => {
-        const { success, companyId, messageId, dbMessageId, error } = job.data;
+        const { success, companyId, messageId, dbMessageId, conversationId, error } = job.data;
 
         if (!dbMessageId) {
           Logger.warn(`[OutboundCallbackWorker] Job ${job.id} received callback without dbMessageId, skipping.`);
@@ -45,21 +53,22 @@ export class OutboundCallbackWorker {
                 whatsappMessageId: messageId || null,
               }, companyId);
 
-              gateway.emitToCompany(companyId, "message:status", {
-                id: dbMessageId,
-                status: "SENT",
-                whatsappMessageId: messageId,
-                sentAt: updated.updatedAt,
-              });
+              const resolvedConversationId = conversationId || updated.conversationId;
+              if (resolvedConversationId) {
+                this.socketEmitter.emitMessageStatus(dbMessageId, resolvedConversationId, companyId, "sent");
+              } else {
+                Logger.warn(`[OutboundCallbackWorker] No conversationId for message ${dbMessageId}, cannot notify frontend`);
+              }
             } else {
               await messageRepository.update(dbMessageId, {
                 status: "FAILED",
               }, companyId).catch(() => {});
 
-              gateway.emitToCompany(companyId, "message:status", {
-                id: dbMessageId,
-                status: "FAILED",
-              });
+              if (conversationId) {
+                this.socketEmitter.emitMessageStatus(dbMessageId, conversationId, companyId, "failed");
+              } else {
+                Logger.warn(`[OutboundCallbackWorker] No conversationId for failed message ${dbMessageId}, cannot notify frontend`);
+              }
 
               Logger.warn(`[OutboundCallbackWorker] Marked message ${dbMessageId} as FAILED. Reason: ${error}`);
             }

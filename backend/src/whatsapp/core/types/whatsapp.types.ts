@@ -17,6 +17,8 @@ export interface MessagePayload {
   sender?: string;
   metadata?: Record<string, unknown>;
   dbId?: string;
+  /** Real persisted status at return time (e.g. "QUEUED") — never assume "SENT" here. */
+  status?: string;
 }
 
 export interface MediaPayload {

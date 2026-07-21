@@ -280,6 +280,34 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     };
     socketService.on('conversation:history_synced', handleHistorySynced);
 
+    // Message Status event (e.g. QUEUED -> SENT / DELIVERED / READ / FAILED)
+    const handleStatusEvent = (payload: {
+      messageId: string;
+      conversationId?: string;
+      ticketId?: string;
+      status: Message["status"];
+    }) => {
+      const isMatch =
+        payload.ticketId === ticketId ||
+        payload.conversationId === ticketId ||
+        payload.conversationId === activeContact.id ||
+        payload.conversationId === activeContact.realContactId;
+
+      console.log(`[Workflow] [WS] Message status update received for ${payload.messageId} -> ${payload.status} (match: ${!!isMatch})`);
+
+      // Always try updating the current ticket cache if matched OR by searching cache items
+      queryClient.setQueryData<Message[]>(
+        CHAT_KEYS.messages(ticketId),
+        (old = []) =>
+          old.map((m) =>
+            m.id === payload.messageId || (m.metadata?.dbId && m.metadata.dbId === payload.messageId)
+              ? { ...m, status: payload.status }
+              : m,
+          ),
+      );
+    };
+    socketService.on("message.status", handleStatusEvent);
+
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       socketService.off('message.received', handleIncomingMessage);
@@ -289,6 +317,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       socketService.off('message.pinned', handlePinEvent);
       socketService.off('message.deleted', handleMessageDeleted);
       socketService.off('conversation:history_synced', handleHistorySynced);
+      socketService.off('message.status', handleStatusEvent);
     };
   }, [ticketId, activeContact.id, activeContact.phone, queryClient, aiConfig.isActive]);
 

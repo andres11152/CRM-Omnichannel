@@ -74,7 +74,8 @@ export class WhatsAppMessagingProvider implements IMessagingProvider {
         quotedContent, 
         attachment, 
         type: attachment ? attachment.type : "text", 
-        mediaUrl: attachment ? attachment.url : undefined 
+        mediaUrl: attachment ? attachment.url : undefined,
+        originalTicketId: dto.conversationId,
       },
       quotedMessageId,
     };
@@ -85,7 +86,10 @@ export class WhatsAppMessagingProvider implements IMessagingProvider {
       id: sent.dbId || sent.messageId,
       content: sent.content,
       timestamp: sent.timestamp,
-      status: "SENT",
+      // Real status at this point — sendMessage() only enqueues, it never
+      // waits for Baileys. The frontend gets the true outcome later via the
+      // message.status socket event; showing "SENT" here would be a lie.
+      status: sent.status || "QUEUED",
       sender: "agent",
       metadata: {
         ...(sent.metadata || {}),

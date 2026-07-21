@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const MediaPayloadSchema = z.object({
   url: z.string().url().optional(),
-  type: z.enum(["image", "video", "audio", "document", "sticker", "location"]),
+  type: z.enum(["image", "video", "audio", "document", "sticker", "location", "contact"]),
   mimetype: z.string().optional(),
   filename: z.string().optional(),
   caption: z.string().optional(),
@@ -11,6 +11,10 @@ const MediaPayloadSchema = z.object({
     longitude: z.number(),
     name: z.string().optional(),
     address: z.string().optional(),
+  }).optional(),
+  contact: z.object({
+    name: z.string(),
+    phone: z.string(),
   }).optional(),
 }).optional();
 

@@ -25,6 +25,7 @@ class MessageQueueWorker {
   private socketEmitter = new SocketEventEmitter(gateway);
 
   constructor(whatsappService: WhatsAppService) {
+    this.whatsappService = whatsappService;
     messageQueueService.onQueueEvicted(async (companyId) => {
       await this.stopWorker(companyId);
     });
@@ -86,6 +87,17 @@ class MessageQueueWorker {
                 );
               });
           },
+        );
+        // Without this, a permanently-failed send left the agent's UI showing
+        // the optimistic "queued" state forever — the DB row was correctly
+        // FAILED, but nothing ever told the frontend.
+        const ticketId = (metadata?.originalTicketId as string) || undefined;
+        this.socketEmitter.emitMessageStatus(
+          dbId,
+          job.data.conversationId,
+          companyId,
+          "failed",
+          ticketId,
         );
       } catch (ctxErr) {
         Logger.error(
@@ -193,11 +205,13 @@ class MessageQueueWorker {
             .catch((e: Error) =>
               Logger.warn(`[Worker] Could not mark ${dbId} FAILED: ${e.message}`),
             );
+          const ticketId = (metadata?.originalTicketId as string) || undefined;
           this.socketEmitter.emitMessageStatus(
             dbId,
             conversationId,
             companyId,
             "failed",
+            ticketId,
           );
         }
 

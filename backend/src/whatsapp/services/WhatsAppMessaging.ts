@@ -116,7 +116,11 @@ export class WhatsAppMessaging {
         },
       });
 
-      // 3. Return the saved record for immediate UI feedback
+      // 3. Return the saved record for immediate UI feedback. Status is
+      // genuinely "QUEUED" at this point — the message hasn't reached Baileys
+      // yet, it's just been handed to messageQueueService. Callers must not
+      // assume "SENT" here; the real outcome arrives later via the
+      // message.status socket event once executeQueuedMessage() runs.
       return {
         messageId: savedMessage.whatsappMessageId!,
         companyId: savedMessage.companyId,
@@ -128,6 +132,7 @@ export class WhatsAppMessaging {
         timestamp: savedMessage.createdAt,
         metadata: savedMessage.metadata as Record<string, Prisma.JsonValue>,
         dbId: savedMessage.id,
+        status: savedMessage.status,
       };
     } catch (error: unknown) {
       if (!(error instanceof AppError)) {
@@ -182,12 +187,15 @@ export class WhatsAppMessaging {
 
       if (savedMessage) {
         const { gateway } = await import("@/gateways/socketGateway");
-        gateway.emitToCompany(options.companyId, "message:status", {
-          id: savedMessage.id,
-          status: "SENT",
-          whatsappMessageId: res.data.messageId,
-          sentAt: savedMessage.updatedAt,
-        });
+        const { SocketEventEmitter } = await import("@/services/SocketEventEmitter");
+        const ticketId = (options.metadata?.originalTicketId as string) || undefined;
+        new SocketEventEmitter(gateway).emitMessageStatus(
+          savedMessage.id,
+          options.conversationId,
+          options.companyId,
+          "sent",
+          ticketId,
+        );
       }
 
       return {

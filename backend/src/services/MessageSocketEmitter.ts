@@ -102,24 +102,23 @@ export class MessageSocketEmitter {
     conversationId: string,
     companyId: string,
     status: "sent" | "delivered" | "read" | "failed" | "queued",
+    ticketId?: string,
   ): void {
     Logger.info(
-      `[SocketEvents] [SOUND] Emitting message.status: ${messageId} → ${status}`,
+      `[SocketEvents] [SOUND] Emitting message.status: ${messageId} → ${status} (ticketId: ${ticketId || "none"})`,
     );
 
-    this.socketGateway.emitToCompany(companyId, "message.status", {
+    const payload = {
       messageId,
       conversationId,
+      ...(ticketId && { ticketId }),
       status,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    this.socketGateway.emitToCompany(companyId, "message.status", payload);
     if (this.socketGateway.emitToRoom) {
-      this.socketGateway.emitToRoom(`conversation:${conversationId}`, "message.status", {
-        messageId,
-        conversationId,
-        status,
-        timestamp: new Date().toISOString(),
-      });
+      this.socketGateway.emitToRoom(`conversation:${conversationId}`, "message.status", payload);
     }
   }
 

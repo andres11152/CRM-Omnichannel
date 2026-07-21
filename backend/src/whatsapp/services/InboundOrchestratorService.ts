@@ -378,12 +378,13 @@ export class InboundOrchestratorService {
     });
 
     let ticketId: string | undefined;
-    if (!isOutbound && customerUser && !isGroup) {
+    if (!isOutbound) {
       try {
+        const fallbackUserId = customerUser?.id || conversation.participants[0]?.id || "system";
         const ticket = await chatService.ensureTicket(
           companyId,
           conversation.id,
-          customerUser.id,
+          fallbackUserId,
           conversation.subject || "WhatsApp",
           content.textContent || "Media",
           defaultQueueId,

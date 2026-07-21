@@ -229,7 +229,7 @@ export const useAgentWorkspaceSockets = ({
         }
 
         // [SEC] Ensure Valid Date
-        let newDate = ticket.lastMessageAt;
+        let newDate: string;
         if (payload.lastMessageAt) {
           newDate = payload.lastMessageAt;
         } else {
@@ -408,9 +408,9 @@ export const useAgentWorkspaceSockets = ({
 
         // Update logic (preserve local overrides if valid)
         if (ticketIndex === -1) {
-          // 🆕 NEW TICKET CASE: Ticket matches criteria but not in list? Add it!
+          // [NEW] NEW TICKET CASE: Ticket matches criteria but not in list? Add it!
           console.log(
-            "[AgentWorkspace] 🆕 New ticket received via socket:",
+            "[AgentWorkspace] [NEW] New ticket received via socket:",
             incoming.id,
           );
           return [incoming, ...prev];

@@ -96,7 +96,7 @@ export const InlineQuickReplies: React.FC<InlineQuickRepliesProps> = ({
   if (!loading && filtered.length === 0) return null;
 
   return (
-    <div className="absolute bottom-full left-0 mb-2 w-full max-w-[400px] bg-white dark:bg-[#1f2c34] rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden z-[100] animate-in slide-in-from-bottom-2">
+    <div className="absolute bottom-full left-0 mb-2 w-full max-w-[400px] bg-white dark:bg-reply-elevated-dark rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden z-[100] animate-in slide-in-from-bottom-2">
       <div className="px-3 py-2 bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap className="w-3.5 h-3.5 text-indigo-500 fill-current" />

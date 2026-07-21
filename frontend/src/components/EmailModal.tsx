@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Mail, Send } from "lucide-react";
 import { toast } from "sonner";
 import { sendEmail, SendEmailDTO } from "@/services/emailService";
@@ -20,6 +21,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
   contactId,
   ticketId,
 }) => {
+  const { t } = useTranslation();
   const [to, setTo] = useState(contactEmail);
   const [from, setFrom] = useState("Cargando...");
   const [subject, setSubject] = useState("");
@@ -56,12 +58,12 @@ export const EmailModal: React.FC<EmailModalProps> = ({
 
   const handleSend = async () => {
     if (!emailConfigured) {
-      toast.error("Configura tu correo primero");
+      toast.error(t("email_modal.toast.not_configured", "Configura tu correo primero"));
       return;
     }
 
     if (!to || !subject || !body) {
-      toast.error("Completa todos los campos");
+      toast.error(t("email_modal.toast.missing_fields", "Completa todos los campos"));
       return;
     }
 
@@ -78,7 +80,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
       };
 
       await sendEmail(emailData);
-      toast.success("Email enviado");
+      toast.success(t("email_modal.toast.sent", "Email enviado"));
       onClose();
 
       // Reset form
@@ -88,7 +90,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
     } catch (error: unknown) {
       console.error("Error sending email:", error);
       toast.error(
-        error instanceof Error ? error.message : "Error al enviar el email",
+        error instanceof Error ? error.message : t("email_modal.toast.send_error", "Error al enviar el email"),
       );
     } finally {
       setIsSending(false);

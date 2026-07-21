@@ -50,19 +50,26 @@ const OUTPUT_NODE_TYPES = new Set([
   "SEND_VIDEO",
   "SEND_AUDIO",
   "SEND_DOCUMENT",
+  "SEND_TEMPLATE",
   "MESSAGE",
   "END",
   "AI_HANDOFF",
 ]);
 
-/** Node types that are silent/logic and should chain immediately */
+/**
+ * Node types that are silent/logic and should chain immediately. Not
+ * consulted directly by the loop below (which only checks
+ * OUTPUT_NODE_TYPES and treats everything else as implicitly silent) — kept
+ * as the authoritative, exhaustive documentation of that "everything else"
+ * so a newly added node type doesn't fall through unnoticed.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const SILENT_NODE_TYPES = new Set([
   "CONDITION",
   "CREATE_DEAL",
   "UPDATE_CONTACT",
   "HTTP_REQUEST",
   "TAG_CONTACT",
-  "SEND_TEMPLATE",
   "DELAY",
   "START",
   "TRIGGER",

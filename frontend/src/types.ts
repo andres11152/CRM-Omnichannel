@@ -669,7 +669,7 @@ export interface CreateQuickReplyDTO {
   tags?: string[];
 }
 
-export interface UpdateQuickReplyDTO extends Partial<CreateQuickReplyDTO> {}
+export type UpdateQuickReplyDTO = Partial<CreateQuickReplyDTO>;
 
 // ==========================================
 // TICKET RESOLUTION

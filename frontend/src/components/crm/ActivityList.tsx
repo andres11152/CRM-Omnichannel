@@ -9,6 +9,7 @@ import {
 } from "@/services/crmService";
 import { ActivityModal } from "./ActivityModal";
 import { ModuleHeader } from "../common/ModuleHeader";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 import {
   Calendar,
   Search,
@@ -23,10 +24,14 @@ import {
   FileText,
 } from "lucide-react";
 
+const ACTIVITIES_CACHE_KEY = "activities:default-view";
+
 export const ActivityList: React.FC = () => {
   const { t } = useTranslation();
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: instant render on module re-entry, silent refetch behind it.
+  const cachedActivities = getModuleCache<Activity[]>(ACTIVITIES_CACHE_KEY);
+  const [activities, setActivities] = useState<Activity[]>(cachedActivities ?? []);
+  const [loading, setLoading] = useState(!cachedActivities);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<
     Activity | undefined
@@ -34,10 +39,14 @@ export const ActivityList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchActivities = async () => {
-    try {
+    if (!getModuleCache<Activity[]>(ACTIVITIES_CACHE_KEY)) {
       setLoading(true);
+    }
+    try {
       const data = await getActivities();
-      setActivities(data.activities || []);
+      const list = data.activities || [];
+      setActivities(list);
+      setModuleCache<Activity[]>(ACTIVITIES_CACHE_KEY, list);
     } catch (error) {
       console.error("Error fetching activities:", error);
     } finally {

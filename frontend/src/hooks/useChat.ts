@@ -5,6 +5,7 @@ import {
   QueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Message, Conversation, SenderType } from "@/types";
 import {
   chatService,
@@ -22,7 +23,9 @@ const getCurrentUserId = () => {
       cachedUserId = (jwtDecode<{ id: string }>(token)).id;
       return cachedUserId;
     }
-  } catch (e) {}
+  } catch {
+    // malformed/expired token — falls through to the "me" fallback below
+  }
   return "me"; // fallback
 };
 
@@ -100,6 +103,7 @@ export const useMessages = (ticketId: string | null) => {
  */
 export const useSendMessage = (ticketId: string) => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (input: SendMessageInput) =>
@@ -240,7 +244,7 @@ export const useSendMessage = (ticketId: string) => {
       }
 
       console.error("[useSendMessage] Error:", error);
-      toast.error("Error al enviar mensaje");
+      toast.error(t("use_chat.toast.send_error", "Error al enviar mensaje"));
     },
 
     // 4. SETTLED (Always runs after success or error)
@@ -360,6 +364,7 @@ export const addMessageToCache = (
  */
 export const useResolveTicket = () => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: ({
@@ -373,7 +378,7 @@ export const useResolveTicket = () => {
     }) => chatService.resolveTicket(ticketId, { resolutionType, notes }),
 
     onSuccess: (_, { ticketId }) => {
-      toast.success("Ticket resuelto");
+      toast.success(t("use_chat.toast.ticket_resolved", "Ticket resuelto"));
 
       // Invalidate conversations to update status
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
@@ -395,12 +400,13 @@ export const useResolveTicket = () => {
  */
 export const useDeleteTicket = () => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (ticketId: string) => chatService.deleteTicket(ticketId),
 
     onSuccess: (_, ticketId) => {
-      toast.success("Ticket eliminado");
+      toast.success(t("use_chat.toast.ticket_deleted", "Ticket eliminado"));
 
       // Remove from conversations list
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
@@ -421,6 +427,7 @@ export const useDeleteTicket = () => {
  */
 export const useReactToMessage = (ticketId: string) => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: ({ messageId, reaction }: { messageId: string; reaction: string }) =>
@@ -461,7 +468,7 @@ export const useReactToMessage = (ticketId: string) => {
       if (context?.previousMessages) {
         queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
       }
-      toast.error("Error al reaccionar");
+      toast.error(t("use_chat.toast.react_error", "Error al reaccionar"));
     },
 
     onSettled: () => {
@@ -476,6 +483,7 @@ export const useReactToMessage = (ticketId: string) => {
  */
 export const useEditMessage = (ticketId: string) => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: ({ messageId, content }: { messageId: string; content: string }) =>
@@ -496,7 +504,7 @@ export const useEditMessage = (ticketId: string) => {
       if (context?.previousMessages) {
         queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
       }
-      toast.error("Error al editar el mensaje");
+      toast.error(t("use_chat.toast.edit_error", "Error al editar el mensaje"));
     },
 
     onSettled: () => {
@@ -511,6 +519,7 @@ export const useEditMessage = (ticketId: string) => {
  */
 export const useRevokeMessage = (ticketId: string) => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (messageId: string) => chatService.deleteMessageForEveryone(ticketId, messageId),
@@ -534,7 +543,7 @@ export const useRevokeMessage = (ticketId: string) => {
       if (context?.previousMessages) {
         queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
       }
-      toast.error("Error al eliminar el mensaje");
+      toast.error(t("use_chat.toast.revoke_error", "Error al eliminar el mensaje"));
     },
 
     onSettled: () => {
@@ -549,6 +558,7 @@ export const useRevokeMessage = (ticketId: string) => {
  */
 export const useStarMessage = (ticketId: string) => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: ({ messageId, starred }: { messageId: string; starred: boolean }) =>
@@ -573,7 +583,7 @@ export const useStarMessage = (ticketId: string) => {
       if (context?.previousMessages) {
         queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
       }
-      toast.error("Error al destacar el mensaje");
+      toast.error(t("use_chat.toast.star_error", "Error al destacar el mensaje"));
     },
 
     onSettled: () => {
@@ -590,6 +600,7 @@ export const useStarMessage = (ticketId: string) => {
  */
 export const usePinMessage = (ticketId: string) => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: ({ messageId, pinned }: { messageId: string; pinned: boolean }) =>
@@ -619,7 +630,7 @@ export const usePinMessage = (ticketId: string) => {
       if (context?.previousMessages) {
         queryClient.setQueryData(CHAT_KEYS.messages(ticketId), context.previousMessages);
       }
-      toast.error("Error al fijar el mensaje");
+      toast.error(t("use_chat.toast.pin_error", "Error al fijar el mensaje"));
     },
 
     onSettled: () => {
@@ -634,16 +645,17 @@ export const usePinMessage = (ticketId: string) => {
  */
 export const usePickNextTicket = () => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: () => chatService.pickNextTicket(),
 
     onSuccess: (conversation) => {
       if (conversation) {
-        toast.success("Ticket asignado");
+        toast.success(t("use_chat.toast.ticket_assigned", "Ticket asignado"));
         queryClient.invalidateQueries({ queryKey: CHAT_KEYS.conversations() });
       } else {
-        toast.info("No hay tickets disponibles");
+        toast.info(t("use_chat.toast.no_tickets_available", "No hay tickets disponibles"));
       }
     },
 

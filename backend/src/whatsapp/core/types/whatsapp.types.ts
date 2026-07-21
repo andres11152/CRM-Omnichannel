@@ -34,6 +34,7 @@ export interface MediaPayload {
   mimetype: string;
   filename?: string;
   caption?: string;
+  ptt?: boolean;
   // Only set when type === "location" — no url/file involved.
   location?: {
     latitude: number;

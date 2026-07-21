@@ -10,6 +10,7 @@ export class TagContactNodeHandler {
   ): Promise<string | null> {
     const tags = (node.data.tags || node.data.tag || "") as string;
     const tagList = tags.split(",").map((t: string) => t.trim()).filter(Boolean);
+    const action = ((node.data as Record<string, unknown>).action as string) || "add";
 
     if (tagList.length > 0 && session.contactId) {
       try {
@@ -20,13 +21,18 @@ export class TagContactNodeHandler {
         });
 
         const existingTags: string[] = Array.isArray(contact?.tags) ? (contact.tags as string[]) : [];
-        const mergedTags = [...new Set([...existingTags, ...tagList])];
+        const resultTags =
+          action === "remove"
+            ? existingTags.filter((t) => !tagList.includes(t))
+            : [...new Set([...existingTags, ...tagList])];
 
         await contactRepository.update(session.companyId, session.contactId, {
-          tags: mergedTags,
+          tags: resultTags,
         });
 
-        Logger.info(`[FlowExec] TAG_CONTACT: Added [${tagList.join(", ")}] to contact ${session.contactId}`);
+        Logger.info(
+          `[FlowExec] TAG_CONTACT: ${action === "remove" ? "Removed" : "Added"} [${tagList.join(", ")}] ${action === "remove" ? "from" : "to"} contact ${session.contactId}`,
+        );
       } catch (error) {
         Logger.error(`[FlowExec] TAG_CONTACT failed:`, error);
       }

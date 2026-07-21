@@ -27,6 +27,7 @@ import {
   BarChart3,
   ArrowUpRight,
   Clock,
+  Frown,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────
@@ -267,11 +268,11 @@ export const DealKanban: React.FC = () => {
       const newStage = pipeline?.stages.find((s) => s.id === newStageId);
       if (newStage) {
         if (isWonStage(newStage.name)) {
-          toast.success(t("crm.deals.won_toast"));
+          toast.success(t("crm.deals.won_toast", "¡Trato ganado!"));
         } else if (isLostStage(newStage.name)) {
-          toast(t("crm.deals.lost_toast"), { icon: "😔" });
+          toast(t("crm.deals.lost_toast", "Trato marcado como perdido"), { icon: <Frown className="w-4 h-4" /> });
         } else {
-          toast.success(`Movido a "${newStage.name}"`);
+          toast.success(t("crm.deals.moved_to", 'Movido a "{{stage}}"', { stage: newStage.name }));
         }
       }
     } catch (error) {

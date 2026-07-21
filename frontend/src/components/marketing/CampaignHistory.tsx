@@ -1,4 +1,5 @@
 import React from "react";
+import { Calendar } from "lucide-react";
 import { Campaign } from "@/types";
 
 interface CampaignHistoryProps {
@@ -39,7 +40,7 @@ export const CampaignHistory: React.FC<CampaignHistoryProps> = ({
         </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
           {campaigns.map((c) => (
-            <tr key={c.id} className="hover:bg-reply-bg dark:hover:bg-[#2a3942] transition-colors">
+            <tr key={c.id} className="hover:bg-reply-bg dark:hover:bg-reply-border-dark transition-colors">
               <td className="py-4 px-4">
                 <div className="font-bold text-gray-900 dark:text-white">{c.name}</div>
                 <div className="text-xs text-gray-400">{c.id.slice(0, 8)}</div>
@@ -59,9 +60,9 @@ export const CampaignHistory: React.FC<CampaignHistoryProps> = ({
               </td>
               <td className="py-4 px-4 text-gray-600 dark:text-gray-300">
                 {c.status === "scheduled" && c.config?.scheduledAt ? (
-                  <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-500 font-medium">
-                    <span>📅</span>
-                    {new Date(c.config.scheduledAt).toLocaleString()}
+                  <div className="flex items-center gap-1.5 text-yellow-600 dark:text-yellow-500 font-medium">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{new Date(c.config.scheduledAt).toLocaleString()}</span>
                   </div>
                 ) : (
                   <div className="text-gray-500">

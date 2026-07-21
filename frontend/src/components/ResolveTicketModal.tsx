@@ -123,7 +123,7 @@ export const ResolveTicketModal: React.FC<Props> = ({
                   className={`relative group flex items-start gap-4 p-4 rounded-xl border transition-all text-left w-full
                                         ${
                                           isSelected
-                                            ? `ring-2 ring-offset-1 ring-offset-white dark:ring-offset-[#1f2937] ${cat.borderClass} ${cat.bgClass} shadow-md`
+                                            ? `ring-2 ring-offset-1 ring-offset-white dark:ring-offset-gray-800 ${cat.borderClass} ${cat.bgClass} shadow-md`
                                             : `border-gray-200 dark:border-reply-border-dark hover:border-gray-300 dark:hover:border-gray-600 hover:bg-reply-bg dark:hover:bg-gray-800/50`
                                         }
                                     `}

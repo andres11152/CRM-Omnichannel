@@ -3,11 +3,9 @@
 
 // 1. Define la fuente de datos.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  // directUrl eliminado: DATABASE_URL ya es una conexión directa (sin pooling)
-  // en local y en Render. Tenerlo exigía una env var extra (DIRECT_URL) que
-  // rompía `prisma migrate deploy` en el build de Render (P1012).
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {

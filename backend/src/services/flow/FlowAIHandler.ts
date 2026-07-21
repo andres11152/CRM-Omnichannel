@@ -76,6 +76,12 @@ export class FlowAIHandler {
     try {
       let systemPrompt =
         agent.systemPrompt || "You are a helpful and friendly virtual assistant.";
+      // "Prompt Adicional" in the UI (AINodeProperties.tsx) — concatenated
+      // onto the assistant's base prompt for this node specifically.
+      const additionalPrompt = (node.data as Record<string, unknown>).additionalPrompt as string | undefined;
+      if (additionalPrompt) {
+        systemPrompt = `${systemPrompt}\n\n${additionalPrompt}`;
+      }
       systemPrompt = replaceVariables(systemPrompt, session.variables);
 
       // Conversational Memory
@@ -160,7 +166,7 @@ export class FlowAIHandler {
 
       // Termination Keyword Detection
       const TERMINATION_KEYWORD = "TERMINAR";
-      const shouldTerminate = finalAIResponse.includes(TERMINATION_KEYWORD);
+      let shouldTerminate = finalAIResponse.includes(TERMINATION_KEYWORD);
 
       if (shouldTerminate) {
         finalAIResponse = finalAIResponse
@@ -168,6 +174,19 @@ export class FlowAIHandler {
           .trim();
         Logger.info(
           `[FlowExecutor]  AI Termination Triggered. Advancing Flow.`,
+        );
+      }
+
+      // "Pausar flujo" checkbox in the UI (AINodeProperties.tsx). Only acts
+      // when EXPLICITLY unchecked (=== false) so flows built before this
+      // field existed — where it's simply undefined — keep looping/waiting
+      // exactly as before. When explicitly off, this node is one-shot: reply
+      // once and always advance, regardless of the TERMINAR keyword.
+      const waitForUser = (node.data as Record<string, unknown>).waitForUser;
+      if (waitForUser === false && !shouldTerminate) {
+        shouldTerminate = true;
+        Logger.info(
+          `[FlowExecutor] AI node ${node.id} has "waitForUser" disabled — advancing after a single response.`,
         );
       }
 

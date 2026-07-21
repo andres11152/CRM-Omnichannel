@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { ModuleHeader } from "../common/ModuleHeader";
 import { toast } from "sonner";
 import { AnalyticsDateRange, HeatmapData, AgentStats, TagData } from "@/types";
@@ -25,6 +26,7 @@ interface AnalyticsCache {
 }
 
 export const AnalyticsDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const [dateRange, setDateRange] = useState<AnalyticsDateRange>(DEFAULT_RANGE);
   // Stale-while-revalidate: re-entering the module on the default range
   // renders instantly and refetches silently, instead of flashing loading
@@ -61,7 +63,7 @@ export const AnalyticsDashboard: React.FC = () => {
       }
     } catch (error) {
       console.error("Analytics Error:", error);
-      toast.error("Error al cargar estadísticas");
+      toast.error(t("analytics_dashboard.toast.load_error", "Error al cargar estadísticas"));
     } finally {
       setLoading(false);
     }
@@ -90,7 +92,7 @@ export const AnalyticsDashboard: React.FC = () => {
   }, [agentData]);
 
   return (
-    <div className="flex flex-col bg-[#f8fafc] dark:bg-[#0b141a] min-h-screen transition-colors duration-200 font-sans">
+    <div className="flex flex-col bg-slate-50 dark:bg-reply-bg-dark min-h-screen transition-colors duration-200 font-sans">
       <ModuleHeader
         title="Analítica Avanzada"
         description="Insights operativos para optimizar tu equipo de soporte."
@@ -139,7 +141,7 @@ export const AnalyticsDashboard: React.FC = () => {
           <>
             {/* KPI Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white dark:bg-[#111b21] rounded-2xl p-6 border border-gray-100 dark:border-gray-800/60 shadow-sm flex items-center gap-5">
+              <div className="bg-white dark:bg-reply-surface-dark rounded-2xl p-6 border border-gray-100 dark:border-gray-800/60 shadow-sm flex items-center gap-5">
                 <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
                   <Ticket className="w-7 h-7" />
                 </div>
@@ -149,7 +151,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-[#111b21] rounded-2xl p-6 border border-gray-100 dark:border-gray-800/60 shadow-sm flex items-center gap-5">
+              <div className="bg-white dark:bg-reply-surface-dark rounded-2xl p-6 border border-gray-100 dark:border-gray-800/60 shadow-sm flex items-center gap-5">
                 <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                   <CheckCircle2 className="w-7 h-7" />
                 </div>
@@ -159,7 +161,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-[#111b21] rounded-2xl p-6 border border-gray-100 dark:border-gray-800/60 shadow-sm flex items-center gap-5">
+              <div className="bg-white dark:bg-reply-surface-dark rounded-2xl p-6 border border-gray-100 dark:border-gray-800/60 shadow-sm flex items-center gap-5">
                 <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center text-amber-600 dark:text-amber-400">
                   <Clock className="w-7 h-7" />
                 </div>

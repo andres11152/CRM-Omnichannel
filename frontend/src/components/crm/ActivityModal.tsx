@@ -504,7 +504,7 @@ export const ActivityModal: React.FC<Props> = ({
                     setFormData({ ...formData, contactId: e.target.value })
                   }
                   disabled={!!preselectedContact}
-                  className={`w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all ${!!preselectedContact ? "opacity-70 cursor-not-allowed bg-gray-100 dark:bg-gray-900" : ""}`}
+                  className={`w-full px-4 py-2.5 h-11 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all ${preselectedContact ? "opacity-70 cursor-not-allowed bg-gray-100 dark:bg-gray-900" : ""}`}
                 >
                   <option value="">{t("crm.activities.select_contact_none")}</option>
                   {contacts.map(

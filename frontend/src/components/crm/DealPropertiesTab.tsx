@@ -38,7 +38,7 @@ export const DealPropertiesTab: React.FC<Props> = ({ dealId, onPropertiesChanged
       setCatalog(unassigned);
     } catch (error) {
       console.error("Error loading deal properties:", error);
-      toast.error("Error al cargar los inmuebles");
+      toast.error(t("deal_properties_tab.toast.load_error", "Error al cargar los inmuebles"));
     } finally {
       setLoading(false);
     }
@@ -55,13 +55,13 @@ export const DealPropertiesTab: React.FC<Props> = ({ dealId, onPropertiesChanged
     try {
       // Connect property to this deal by updating its dealId
       await updateProperty(selectedPropertyId, { dealId });
-      toast.success("Inmueble asociado al trato");
+      toast.success(t("deal_properties_tab.toast.linked", "Inmueble asociado al trato"));
       setSelectedPropertyId("");
       await loadData();
       if (onPropertiesChanged) onPropertiesChanged();
     } catch (error) {
       console.error(error);
-      toast.error("No se pudo asociar el inmueble");
+      toast.error(t("deal_properties_tab.toast.link_error", "No se pudo asociar el inmueble"));
     } finally {
       setLinking(false);
     }
@@ -71,12 +71,12 @@ export const DealPropertiesTab: React.FC<Props> = ({ dealId, onPropertiesChanged
     try {
       // Disconnect property by setting dealId to null
       await updateProperty(propertyId, { dealId: null });
-      toast.success("Inmueble desvinculado");
+      toast.success(t("deal_properties_tab.toast.unlinked", "Inmueble desvinculado"));
       await loadData();
       if (onPropertiesChanged) onPropertiesChanged();
     } catch (error) {
       console.error(error);
-      toast.error("Error al desvincular el inmueble");
+      toast.error(t("deal_properties_tab.toast.unlink_error", "Error al desvincular el inmueble"));
     }
   };
 

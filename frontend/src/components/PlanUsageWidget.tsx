@@ -103,7 +103,7 @@ export const PlanUsageWidget: React.FC<Props> = ({ planName, usage }) => {
       </div>
       
       {/* Footer Up-sell */}
-      <div className="p-4 bg-gradient-to-r from-gray-50 to-white dark:from-[#1a262d] dark:to-[#202c33] border-t border-gray-100 dark:border-reply-border-dark text-center">
+      <div className="p-4 bg-gradient-to-r from-gray-50 to-white dark:from-[#1a262d] dark:to-reply-panel-dark border-t border-gray-100 dark:border-reply-border-dark text-center">
             <span className="text-xs text-gray-500 dark:text-gray-400">¿Necesitas ms recursos? </span>
             <a href="#" className="text-xs font-bold text-indigo-500 hover:text-indigo-400 hover:underline">Ver Planes</a>
       </div>

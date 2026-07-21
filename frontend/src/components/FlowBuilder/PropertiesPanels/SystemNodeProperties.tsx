@@ -1,5 +1,6 @@
 import React from "react";
 import { NodePropertiesProps } from "./MediaNodeProperties";
+import { GitBranch } from "lucide-react";
 
 export const SystemNodeProperties: React.FC<NodePropertiesProps> = ({ node, onUpdate }) => {
   if (node.type === "condition") {
@@ -7,7 +8,7 @@ export const SystemNodeProperties: React.FC<NodePropertiesProps> = ({ node, onUp
       <>
         <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800 mb-3">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xl">🔀</span>
+            <GitBranch className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
             <p className="text-xs font-bold text-yellow-900 dark:text-yellow-300">
               Condición / Ramificación
             </p>

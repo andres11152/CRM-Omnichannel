@@ -145,11 +145,26 @@ const createExtendedClient = () => {
                 } 
                 // UPDATES & DELETES
                 else if (["update", "updateMany", "delete", "deleteMany", "upsert"].includes(operation)) {
-                  argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
+                  const where = (argsObj.where as Record<string, unknown>) || {};
+                  
+                  // Check if there is already a compound unique key containing companyId in its name
+                  const compoundKey = Object.keys(where).find(
+                    (key) => key.includes("companyId_") || key.includes("_companyId")
+                  );
+                  
+                  if (compoundKey) {
+                    // Inject companyId inside the compound unique key object
+                    const compoundVal = (where[compoundKey] as Record<string, unknown>) || {};
+                    where[compoundKey] = { ...compoundVal, companyId };
+                  } else {
+                    // Otherwise, safely inject companyId at the top level
+                    where.companyId = companyId;
+                  }
+                  
+                  argsObj.where = where;
+
                   if (argsObj.data) delete (argsObj.data as Record<string, unknown>).companyId;
                   if (argsObj.update) delete (argsObj.update as Record<string, unknown>).companyId;
-                  // [SEC] Always filter the target records by companyId
-                  argsObj.where = { ...(argsObj.where as Record<string, unknown> || {}), companyId };
                   
                   if (operation === "upsert") {
                     if (argsObj.create) injectToRecord(argsObj.create as Record<string, unknown>);

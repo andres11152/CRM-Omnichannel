@@ -209,7 +209,7 @@ export const InstagramTab: React.FC = () => {
 
       {isConnectingInstagram && (
         <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl w-full max-w-xl p-6 sm:p-8 border border-gray-100 dark:border-gray-800 relative">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl w-full max-w-xl p-6 sm:p-8 border border-gray-100 dark:border-gray-800 relative">
             <button
               onClick={() => setIsConnectingInstagram(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"

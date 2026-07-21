@@ -44,7 +44,7 @@ export const HeatmapChart: React.FC<Props> = ({ data }) => {
   };
 
   return (
-    <div className="h-96 bg-white dark:bg-[#111b21] rounded-2xl p-5 border border-gray-100 dark:border-gray-800/60 shadow-sm flex flex-col">
+    <div className="h-96 bg-white dark:bg-reply-surface-dark rounded-2xl p-5 border border-gray-100 dark:border-gray-800/60 shadow-sm flex flex-col">
       <h3 className="text-base font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
           <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />

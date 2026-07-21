@@ -1,5 +1,6 @@
 import React from "react";
 import { FlowNode } from "@/types";
+import { Bot, Handshake } from "lucide-react";
 
 interface AINodePropertiesProps {
   node: FlowNode;
@@ -26,7 +27,7 @@ export const AINodeProperties: React.FC<AINodePropertiesProps> = ({
         <>
           <div className="bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 p-4 rounded-lg border border-cyan-200 dark:border-cyan-800 mb-4">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">🤖</span>
+              <Bot className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
               <p className="text-xs font-bold text-cyan-900 dark:text-cyan-300">
                 Agente IA Inteligente
               </p>
@@ -109,7 +110,7 @@ export const AINodeProperties: React.FC<AINodePropertiesProps> = ({
         <>
           <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800 mb-3">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">🤝</span>
+              <Handshake className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               <p className="text-xs font-bold text-indigo-900 dark:text-indigo-300">
                 Transferencia Inteligente (Handoff)
               </p>

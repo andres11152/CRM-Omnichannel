@@ -69,7 +69,7 @@ export const AccountModal: React.FC<Props> = ({
     setLoading(true);
 
     // Normalize URL if needed
-    let finalData = { ...formData };
+    const finalData = { ...formData };
     if (
       finalData.website &&
       !finalData.website.startsWith("http") &&

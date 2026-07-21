@@ -23,7 +23,7 @@ export const TagInsights: React.FC<Props> = ({ data }) => {
   const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: { tag: string }; value: number }> }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white dark:bg-[#111b21] p-3 border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl">
+        <div className="bg-white dark:bg-reply-surface-dark p-3 border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl">
           <div className="flex items-center gap-2 mb-1">
             <Hash className="w-3 h-3 text-violet-500" />
             <p className="font-bold text-gray-900 dark:text-white text-sm">
@@ -40,7 +40,7 @@ export const TagInsights: React.FC<Props> = ({ data }) => {
   };
 
   return (
-    <div className="h-96 bg-white dark:bg-[#111b21] rounded-2xl p-5 border border-gray-100 dark:border-gray-800/60 shadow-sm flex flex-col">
+    <div className="h-96 bg-white dark:bg-reply-surface-dark rounded-2xl p-5 border border-gray-100 dark:border-gray-800/60 shadow-sm flex flex-col">
       <h3 className="text-base font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center">
           <Tags className="w-4 h-4 text-violet-600 dark:text-violet-400" />

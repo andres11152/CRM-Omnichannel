@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { fetchAPI } from "@/services/apiConfig";
 import {
@@ -61,6 +62,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
   conversationId,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [data, setData] = useState<GroupData | null>(null);
@@ -77,7 +79,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
       setSelectedJids(new Set()); // Reset selection on refresh
     } catch (error) {
       console.error("Failed to fetch participants", error);
-      toast.error("Error al cargar participantes");
+      toast.error(t("group_participants_panel.toast.load_error", "Error al cargar participantes"));
     } finally {
       setLoading(false);
     }
@@ -158,7 +160,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           }),
         },
       );
-      toast.success("Contacto añadido");
+      toast.success(t("group_participants_panel.toast.add_success", "Contacto añadido"));
       
       // Update local state
       setData((prev) => {
@@ -181,7 +183,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
         return next;
       });
     } catch (error) {
-      toast.error("Error al añadir contacto");
+      toast.error(t("group_participants_panel.toast.add_error", "Error al añadir contacto"));
     } finally {
       setProcessing(false);
     }
@@ -200,7 +202,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
       }));
 
     if (participantsToImport.length === 0) {
-      toast.info("Sin contactos válidos");
+      toast.info(t("group_participants_panel.toast.no_valid_contacts", "Sin contactos válidos"));
       return;
     }
 
@@ -215,7 +217,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
       );
       
       const result = res.data;
-      toast.success(`${result.successful} contactos importados`);
+      toast.success(t("group_participants_panel.toast.bulk_imported", "{{count}} contactos importados", { count: result.successful }));
       
       // Update local state
       setData((prev) => {
@@ -234,7 +236,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
       });
       setSelectedJids(new Set()); // Clear selection
     } catch (error) {
-      toast.error("Error al importar contactos");
+      toast.error(t("group_participants_panel.toast.bulk_import_error", "Error al importar contactos"));
     } finally {
       setProcessing(false);
     }
@@ -253,10 +255,10 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
           body: JSON.stringify({}),
         },
       );
-      toast.success(res.message || `${res.data?.successful || 0} contactos importados`);
+      toast.success(res.message || t("group_participants_panel.toast.bulk_imported", "{{count}} contactos importados", { count: res.data?.successful || 0 }));
       fetchParticipants(); // Full refresh
     } catch (error) {
-      toast.error("Error al añadir contactos masivamente");
+      toast.error(t("group_participants_panel.toast.bulk_add_all_error", "Error al añadir contactos masivamente"));
     } finally {
       setProcessing(false);
     }
@@ -272,11 +274,11 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
 
       toast.success(
         enabled
-          ? "Sincronización automática ACTIVADA"
-          : "Sincronización automática DESACTIVADA",
+          ? t("group_participants_panel.toast.sync_enabled", "Sincronización automática ACTIVADA")
+          : t("group_participants_panel.toast.sync_disabled", "Sincronización automática DESACTIVADA"),
       );
     } catch (error) {
-      toast.error("Error al actualizar preferencia");
+      toast.error(t("group_participants_panel.toast.sync_update_error", "Error al actualizar preferencia"));
     } finally {
       setProcessing(false);
     }
@@ -287,7 +289,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
   // with a clear error surfaced via toast, same as any other failed action.
   const handleRemoveParticipant = async (participant: GroupParticipant) => {
     if (!participant.phone) {
-      toast.error("No se puede quitar: número no disponible (LID oculto)");
+      toast.error(t("group_participants_panel.toast.remove_no_phone", "No se puede quitar: número no disponible (LID oculto)"));
       return;
     }
     try {
@@ -296,14 +298,14 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
         method: "PATCH",
         body: JSON.stringify({ phones: [participant.phone], action: "remove" }),
       });
-      toast.success(`${participant.displayName} fue quitado del grupo`);
+      toast.success(t("group_participants_panel.toast.removed", "{{name}} fue quitado del grupo", { name: participant.displayName }));
       setData((prev) =>
         prev
           ? { ...prev, participants: prev.participants.filter((p) => p.jid !== participant.jid), participantCount: prev.participantCount - 1 }
           : null,
       );
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Error al quitar del grupo";
+      const msg = error instanceof Error ? error.message : t("group_participants_panel.toast.remove_error", "Error al quitar del grupo");
       toast.error(msg);
     } finally {
       setProcessing(false);
@@ -312,7 +314,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
 
   const handleToggleAdmin = async (participant: GroupParticipant) => {
     if (!participant.phone) {
-      toast.error("No se puede modificar: número no disponible (LID oculto)");
+      toast.error(t("group_participants_panel.toast.modify_no_phone", "No se puede modificar: número no disponible (LID oculto)"));
       return;
     }
     const action = participant.isAdmin ? "demote" : "promote";
@@ -322,14 +324,14 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
         method: "PATCH",
         body: JSON.stringify({ phones: [participant.phone], action }),
       });
-      toast.success(participant.isAdmin ? `${participant.displayName} ya no es admin` : `${participant.displayName} ahora es admin`);
+      toast.success(participant.isAdmin ? t("group_participants_panel.toast.demoted", "{{name}} ya no es admin", { name: participant.displayName }) : t("group_participants_panel.toast.promoted", "{{name}} ahora es admin", { name: participant.displayName }));
       setData((prev) =>
         prev
           ? { ...prev, participants: prev.participants.map((p) => (p.jid === participant.jid ? { ...p, isAdmin: !p.isAdmin } : p)) }
           : null,
       );
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Error al actualizar el rol";
+      const msg = error instanceof Error ? error.message : t("group_participants_panel.toast.role_update_error", "Error al actualizar el rol");
       toast.error(msg);
     } finally {
       setProcessing(false);
@@ -347,7 +349,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
       const res = await fetchAPI<{ data: { inviteLink: string } }>(`/conversations/${conversationId}/group/invite-code`);
       setInviteLink(res.data.inviteLink);
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Error al obtener el enlace de invitación";
+      const msg = error instanceof Error ? error.message : t("group_participants_panel.toast.invite_link_error", "Error al obtener el enlace de invitación");
       toast.error(msg);
     } finally {
       setLoadingInvite(false);
@@ -357,18 +359,18 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
   const handleCopyInviteLink = () => {
     if (!inviteLink) return;
     navigator.clipboard.writeText(inviteLink);
-    toast.success("Enlace copiado");
+    toast.success(t("group_participants_panel.toast.invite_copied", "Enlace copiado"));
   };
 
   const handleLeaveGroup = async () => {
     try {
       setLeaving(true);
       await fetchAPI(`/conversations/${conversationId}/group/leave`, { method: "POST" });
-      toast.success("Saliste del grupo");
+      toast.success(t("group_participants_panel.toast.left_group", "Saliste del grupo"));
       setShowLeaveConfirm(false);
       onClose();
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Error al salir del grupo";
+      const msg = error instanceof Error ? error.message : t("group_participants_panel.toast.leave_error", "Error al salir del grupo");
       toast.error(msg);
     } finally {
       setLeaving(false);
@@ -403,10 +405,10 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
   }
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0b141a] border-l border-gray-200 dark:border-white/5 w-96 shadow-2xl z-20 overflow-hidden animate-in slide-in-from-right duration-300">
+    <div className="h-full flex flex-col bg-white dark:bg-reply-bg-dark border-l border-gray-200 dark:border-white/5 w-96 shadow-2xl z-20 overflow-hidden animate-in slide-in-from-right duration-300">
       
       {/* Header - Glassmorphism style */}
-      <div className="p-5 border-b border-gray-100 dark:border-white/5 bg-white/80 dark:bg-[#0b141a]/80 backdrop-blur-md sticky top-0 z-10">
+      <div className="p-5 border-b border-gray-100 dark:border-white/5 bg-white/80 dark:bg-reply-bg-dark/80 backdrop-blur-md sticky top-0 z-10">
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center border border-indigo-100 dark:border-indigo-800/50">
@@ -499,7 +501,7 @@ export const GroupParticipantsPanel: React.FC<Props> = ({
       </div>
 
       {/* Search Bar + Select All */}
-      <div className="px-5 py-3 sticky top-[168px] z-10 bg-white/50 dark:bg-[#0b141a]/50 backdrop-blur-sm border-b border-gray-50 dark:border-white/5">
+      <div className="px-5 py-3 sticky top-[168px] z-10 bg-white/50 dark:bg-reply-bg-dark/50 backdrop-blur-sm border-b border-gray-50 dark:border-white/5">
         <div className="flex items-center gap-2">
           {/* Select All Toggle */}
           {selectableParticipants.length > 0 && (

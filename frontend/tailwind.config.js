@@ -48,45 +48,26 @@ export default {
               dark: "#8696a0",
             },
           },
+          elevated: {
+            // Floating surfaces above `panel` (dropdowns, popovers, sticky
+            // picker headers) — one shade lighter than reply-panel-dark so
+            // they read as "raised" over cards/modals underneath them.
+            DEFAULT: "#FFFFFF",
+            dark: "#1f2c34",
+          },
         },
-        sentry: {
-          brand: {
-            DEFAULT: "#00a884", // Pure Sentry Emerald
-            dark: "#005c4b", // Deep Emerald
-            light: "#00e6b3", // Bright Emerald
-          },
-          green: {
-            DEFAULT: "#00a884", // 🎯 Outbound Bubble Color (Sentry Emerald)
-            dark: "#005c4b", // Dark Mode Outbound Bubble
-            light: "#00e6b3", // Accent / Hover
-          },
-          bg: {
-            DEFAULT: "#F0F2F5", // Clean Light Gray
-            dark: "#0b141a", // Master Dark Background
-          },
-          surface: {
-            DEFAULT: "#FFFFFF",
-            dark: "#111b21", // Sidebar/Secondary Surface
-          },
-          panel: {
-            DEFAULT: "#FFFFFF",
-            dark: "#202c33", // Cards/Modals/Bubbles
-          },
-          border: {
-            DEFAULT: "#E9EDEF",
-            dark: "#2a3942", // Professional Dark Border
-          },
-          text: {
-            DEFAULT: "#111b21", // 🎯 Inbound text color (Light Mode)
-            dark: "#e9edef", // 🎯 Inbound text color (Dark Mode)
-            primary: {
-              DEFAULT: "#111b21",
-              dark: "#e9edef",
-            },
-            secondary: {
-              DEFAULT: "#667781",
-              dark: "#8696a0",
-            },
+        // Per-channel brand colors (contact/conversation channel badges,
+        // icons). Real external brand colors, not part of the app's own
+        // "reply" design system — kept in their own namespace.
+        channel: {
+          whatsapp: "#25D366",
+          telegram: "#0088cc",
+          messenger: "#0084FF",
+          facebook: "#1877f2",
+          instagram: {
+            from: "#833AB4",
+            via: "#FD1D1D",
+            to: "#FCB045",
           },
         },
       },

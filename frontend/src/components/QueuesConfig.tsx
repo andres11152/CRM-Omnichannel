@@ -345,7 +345,7 @@ const QueuesConfig: React.FC = () => {
                   return (
                     <tr
                       key={queue.id}
-                      className="hover:bg-reply-bg dark:hover:bg-[#2a3942] transition-colors group"
+                      className="hover:bg-reply-bg dark:hover:bg-reply-border-dark transition-colors group"
                     >
                       <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">
                         {queue.name}
@@ -598,7 +598,7 @@ const QueuesConfig: React.FC = () => {
                 <option value="ROUND_ROBIN">{t("queues_config.modal.assignment_auto", "Automática (Round Robin)")}</option>
                 <option value="AI" disabled={!aiEnabled}>
                   {t("queues_config.types.ai", "IA Automation")}
-                  {!aiEnabled ? " 🔒" : ""}
+                  {!aiEnabled ? t("queues_config.types.ai_locked_suffix", " (Bloqueado)") : ""}
                 </option>
               </select>
             </div>

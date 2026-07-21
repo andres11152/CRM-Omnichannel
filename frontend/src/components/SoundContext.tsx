@@ -50,7 +50,7 @@ export const SoundProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const playSound = (type: SoundType) => {
     if (isMuted) return;
 
-    let audioSrc = '';
+    let audioSrc: string;
     switch (type) {
       case 'message':
         // Real Base64 will be injected here

@@ -111,6 +111,13 @@
     "developers": "API & Devs"
   },
   "plans_mgmt": {
+    "toast": {
+      "load_error": "Error loading plans",
+      "saved": "Plan saved",
+      "save_error": "Error saving plan",
+      "deleted": "Plan deleted",
+      "delete_error": "Error deleting plan"
+    },
     "title": "Plans Management",
     "description": "Define limits and features of each subscription plan.",
     "back": "Back to Dashboard",
@@ -455,7 +462,8 @@
     "types": {
       "ai": "AI Automation",
       "round_robin": "Round Robin",
-      "manual": "Manual"
+      "manual": "Manual",
+      "ai_locked_suffix": " (Locked)"
     },
     "none": "None",
     "edit": "Edit",
@@ -789,8 +797,12 @@
     "no_archived": "No archived chats"
   },
   "chat": {
-    "priority_updated": "Priority updated to ",
+    "priority_updated": "Priority: {{priority}}",
     "priority_update_error": "Error updating priority",
+    "copilot_loading": "Consulting AI Copilot...",
+    "copilot_success": "Response generated",
+    "copilot_no_response": "The copilot returned no response.",
+    "copilot_connection_error": "Error connecting to AI. Make sure Gemini is configured.",
     "image": "Image",
     "agent": "Agent",
     "client": "Client",
@@ -847,7 +859,7 @@
     "email": "Email",
     "whatsapp": "WhatsApp",
     "phone": "Phone",
-    "copied": "copied",
+    "copied": "Copied",
     "edit_info": "Edit Information",
     "quick_actions": "Quick Actions",
     "new_task": "New Task",
@@ -945,6 +957,14 @@
     "last_check": "Last Check:",
     "now": "Now"
   },
+  "billing_ops": {
+    "toast": {
+      "load_error": "Failed to load transactions",
+      "retry_confirm": "Retry ${{amount}} charge for {{name}}?",
+      "retry_success": "Charge rescheduled",
+      "retry_error": "Failed to retry charge"
+    }
+  },
   "admin_tenants": {
     "active": "ACTIVE",
     "trial": "TRIAL",
@@ -964,6 +984,10 @@
     "no_companies_found": "No companies found with those criteria."
   },
   "flow_builder": {
+    "toast": {
+      "change_reverted": "Change reverted",
+      "save_error": "Error saving flow"
+    },
     "categories": {
       "messaging": "Messaging",
       "interaction": "Interaction",
@@ -1025,6 +1049,11 @@
   "crm": {
     "kanban": {
       "empty_column": "No deals yet"
+    },
+    "deals": {
+      "won_toast": "Deal won!",
+      "lost_toast": "Deal marked as lost",
+      "moved_to": "Moved to \"{{stage}}\""
     },
     "accounts": {
       "new_title": "New Company",
@@ -1302,6 +1331,7 @@
   "properties_form": {
     "catalog_load_error": "Could not load features and locations. Some filters won't be available.",
     "contacts_load_error": "Could not load the contacts list to assign an owner.",
+    "deals_load_error": "Could not load deals for association.",
     "title_required": "Title is required (min. 3 characters)",
     "price_required": "Price is required",
     "updated_success": "Property updated",
@@ -1515,5 +1545,448 @@
     "deleting": "Deleting…",
     "deleted": "Activity deleted",
     "delete_error": "Error deleting activity"
+  },
+  "contact_edit_modal": {
+    "toast": {
+      "updated": "Contact updated",
+      "update_error": "Error updating contact"
+    }
+  },
+  "email_inbox": {
+    "toast": {
+      "load_error": "Failed to load emails"
+    }
+  },
+  "email_modal": {
+    "toast": {
+      "not_configured": "Set up your email first",
+      "missing_fields": "Fill in all fields",
+      "sent": "Email sent",
+      "send_error": "Error sending email"
+    }
+  },
+  "group_participants_panel": {
+    "toast": {
+      "load_error": "Failed to load participants",
+      "add_success": "Contact added",
+      "add_error": "Failed to add contact",
+      "no_valid_contacts": "No valid contacts",
+      "bulk_imported": "{{count}} contacts imported",
+      "bulk_import_error": "Failed to import contacts",
+      "bulk_add_all_error": "Failed to bulk-add contacts",
+      "sync_enabled": "Automatic sync ENABLED",
+      "sync_disabled": "Automatic sync DISABLED",
+      "sync_update_error": "Failed to update preference",
+      "remove_no_phone": "Can't remove: phone number unavailable (hidden LID)",
+      "removed": "{{name}} was removed from the group",
+      "remove_error": "Failed to remove from group",
+      "modify_no_phone": "Can't modify: phone number unavailable (hidden LID)",
+      "demoted": "{{name}} is no longer an admin",
+      "promoted": "{{name}} is now an admin",
+      "role_update_error": "Failed to update role",
+      "invite_link_error": "Failed to get invite link",
+      "invite_copied": "Link copied",
+      "left_group": "You left the group",
+      "leave_error": "Failed to leave group"
+    }
+  },
+  "media_library": {
+    "toast": {
+      "load_error": "Error loading files",
+      "upload_success": "File uploaded",
+      "upload_error": "Error uploading {{filename}}: {{error}}",
+      "delete_success_one": "File deleted",
+      "delete_success_many": "{{count}} files deleted",
+      "delete_error": "Error deleting files",
+      "url_copied": "URL copied",
+      "renamed": "File renamed",
+      "rename_error": "Error renaming"
+    }
+  },
+  "permissions_panel": {
+    "toast": {
+      "catalog_load_error": "Error loading permissions catalog",
+      "roles_load_error": "Error loading roles",
+      "name_required": "Role name is required",
+      "role_created": "Role created",
+      "role_updated": "Role updated",
+      "save_error": "Error saving role",
+      "role_deleted": "Role deleted",
+      "delete_error": "Error deleting role"
+    },
+    "confirm": {
+      "delete_role_title": "Delete role",
+      "delete_role_message": "Are you sure you want to delete this role? Users with this role will lose their custom permissions.",
+      "delete_role_cta": "Delete role"
+    }
+  },
+  "marketing_dashboard": {
+    "toast": {
+      "test_sent": "Test sent",
+      "image_inserted": "Image inserted"
+    }
+  },
+  "profile_settings": {
+    "toast": {
+      "updated": "Profile updated",
+      "update_error": "Error updating profile",
+      "image_updated": "Image updated",
+      "image_upload_error": "Error uploading image"
+    }
+  },
+  "quick_replies": {
+    "toast": {
+      "load_error": "Could not load replies",
+      "missing_fields": "Title and content are required",
+      "created": "Reply created",
+      "updated": "Reply updated",
+      "save_error": "Error saving",
+      "deleted": "Deleted successfully",
+      "delete_error": "Error deleting"
+    }
+  },
+  "sticker_picker": {
+    "toast": {
+      "load_error": "Error loading stickers"
+    }
+  },
+  "scheduler_config": {
+    "toast": {
+      "google_connected": "Google Calendar connected successfully.",
+      "outlook_connected": "Outlook Calendar connected successfully.",
+      "calendar_connect_error": "Error connecting the calendar.",
+      "load_error": "Error loading scheduling configuration.",
+      "google_start_error": "Could not start the connection with Google",
+      "google_connect_error": "Error connecting Google Calendar",
+      "google_disconnected": "Google Calendar disconnected",
+      "google_disconnect_error": "Error disconnecting Google Calendar",
+      "outlook_start_error": "Could not start the connection with Outlook",
+      "outlook_connect_error": "Error connecting Outlook Calendar",
+      "outlook_disconnected": "Outlook Calendar disconnected",
+      "outlook_disconnect_error": "Error disconnecting Outlook Calendar",
+      "availability_saved": "Availability schedule saved successfully.",
+      "availability_save_error": "Could not save availability.",
+      "meeting_type_required": "Name and link (slug) are required.",
+      "meeting_type_updated": "Meeting type updated.",
+      "meeting_type_created": "Meeting type created successfully.",
+      "meeting_type_save_error": "Could not save meeting type.",
+      "meeting_type_deleted": "Meeting type deleted.",
+      "meeting_type_delete_error": "Could not delete meeting type.",
+      "link_copied": "Booking link copied to clipboard."
+    },
+    "confirm": {
+      "delete_meeting_type": "Are you sure you want to delete this meeting type?"
+    }
+  },
+  "feature_flag_manager": {
+    "toast": {
+      "load_error": "Error loading flags",
+      "saved": "Flags updated",
+      "save_error": "Error saving"
+    }
+  },
+  "global_template_marketplace": {
+    "toast": {
+      "load_error": "Error loading inventory",
+      "status_updated": "Status updated",
+      "update_error": "Error updating"
+    }
+  },
+  "analytics_dashboard": {
+    "toast": {
+      "load_error": "Error loading statistics"
+    }
+  },
+  "export_button": {
+    "toast": {
+      "generated": "{{format}} report generated",
+      "generated_desc": "{{count}} records exported",
+      "error": "Error generating report",
+      "error_desc_default": "Please try again"
+    }
+  },
+  "impersonation": {
+    "toast": {
+      "accessing_as": "Accessing as {{role}}",
+      "invalid_token": "Invalid token"
+    }
+  },
+  "unavailable_media_fallback": {
+    "toast": {
+      "recovered": "File recovered",
+      "recover_error": "Error recovering the file."
+    }
+  },
+  "tags_navbar": {
+    "toast": {
+      "update_error": "Error updating tag"
+    }
+  },
+  "deal_products_tab": {
+    "toast": {
+      "load_error": "Error loading products",
+      "linked": "Product linked successfully",
+      "link_error": "Could not link product",
+      "removed": "Product removed",
+      "remove_error": "Error removing product",
+      "update_error": "Error updating quantity/discount"
+    }
+  },
+  "deal_properties_tab": {
+    "toast": {
+      "load_error": "Error loading properties",
+      "linked": "Property linked to deal",
+      "link_error": "Could not link property",
+      "unlinked": "Property unlinked",
+      "unlink_error": "Error unlinking property"
+    }
+  },
+  "compose_modal": {
+    "toast": {
+      "recipient_required": "Recipient is required",
+      "subject_required": "Subject is required",
+      "sent": "Email sent",
+      "send_error": "Error sending email"
+    }
+  },
+  "template_gallery": {
+    "toast": {
+      "loaded": "Template loaded"
+    }
+  },
+  "agent_workspace": {
+    "toast": {
+      "ticket_deleted": "Ticket deleted",
+      "delete_ticket_error": "Error deleting ticket",
+      "delete_ticket_error_fallback": "Error deleting the ticket",
+      "transferred_to_agent": "Ticket transferred to agent",
+      "transferred_to_queue": "Ticket transferred to queue",
+      "transfer_error": "Error transferring the ticket",
+      "assign_error": "Error assigning ticket (it may no longer exist)",
+      "pick_error_fallback": "Error picking up ticket",
+      "ticket_assigned": "Ticket assigned",
+      "create_chat_error": "Error creating chat",
+      "create_chat_error_fallback": "Error starting chat",
+      "ticket_resolved": "Ticket resolved",
+      "resolve_error": "Error resolving ticket",
+      "contact_blocked_no_sync": "Contact blocked in CRM (no active WhatsApp session to sync)",
+      "contact_unblocked_no_sync": "Contact unblocked in CRM (no active WhatsApp session to sync)",
+      "contact_blocked": "Contact blocked",
+      "contact_unblocked": "Contact unblocked",
+      "block_update_error": "Error updating block status",
+      "no_sync_suffix": "(no active WhatsApp session to sync)",
+      "conversation_update_error": "Error updating conversation",
+      "chat_archived": "Chat archived",
+      "chat_unarchived": "Chat unarchived",
+      "chat_pinned": "Chat pinned",
+      "chat_unpinned": "Chat unpinned",
+      "chat_muted": "Chat muted",
+      "chat_unmuted": "Chat unmuted"
+    }
+  },
+  "agent_actions": {
+    "toast": {
+      "agent_deleted": "Agent deleted successfully"
+    }
+  },
+  "agent_form": {
+    "toast": {
+      "agent_created": "Agent created successfully",
+      "agent_updated": "Agent updated successfully",
+      "name_email_required": "Name and email are required",
+      "password_required": "Password is required for new agents"
+    }
+  },
+  "use_chat": {
+    "toast": {
+      "send_error": "Error sending message",
+      "ticket_resolved": "Ticket resolved",
+      "ticket_deleted": "Ticket deleted",
+      "react_error": "Error reacting",
+      "edit_error": "Error editing message",
+      "revoke_error": "Error deleting message",
+      "star_error": "Error starring message",
+      "pin_error": "Error pinning message",
+      "ticket_assigned": "Ticket assigned",
+      "no_tickets_available": "No tickets available"
+    }
+  },
+  "use_chat_workflow": {
+    "toast": {
+      "history_imported": "{{count}} messages imported from history",
+      "file_upload_error": "Error uploading file",
+      "message_scheduled": "Message scheduled",
+      "syncing_history": "Syncing history…",
+      "messages_imported": "{{count}} messages imported",
+      "sync_pending": "Request sent to the phone — messages will appear automatically in a few seconds",
+      "no_new_messages": "No new messages right now",
+      "sync_error": "Error syncing",
+      "message_edited": "Message edited",
+      "message_deleted": "Message deleted",
+      "geolocation_unsupported": "This browser doesn't support sharing location",
+      "getting_location": "Getting location...",
+      "location_sent": "Location sent",
+      "location_send_error": "Error sending location",
+      "location_permission_denied": "Location permission denied",
+      "location_unavailable": "Could not get location",
+      "message_pinned": "Message pinned",
+      "message_unpinned": "Message unpinned",
+      "transferred_to_agent": "Ticket transferred to agent",
+      "transferred_to_queue": "Ticket transferred to queue",
+      "transfer_error": "Error transferring ticket"
+    }
+  },
+  "company_settings_hook": {
+    "toast": {
+      "load_error": "Error loading settings",
+      "google_connected": "Google Calendar connected",
+      "google_connect_error_callback": "Could not connect Google Calendar",
+      "passwords_mismatch": "Passwords don't match",
+      "password_updated": "Password updated",
+      "settings_saved": "Settings saved",
+      "save_error": "Error saving changes",
+      "smtp_host_user_required": "Host and user are required",
+      "smtp_sender_required": "Set up the sender email first",
+      "smtp_testing": "Testing SMTP…",
+      "smtp_test_sent": "Test email sent",
+      "smtp_connection_failed": "Connection failed",
+      "image_updated": "Image updated",
+      "image_upload_error": "Error uploading image",
+      "google_disconnected": "Google Calendar disconnected",
+      "google_disconnect_error": "Error disconnecting",
+      "google_start_error": "Could not start the connection with Google",
+      "google_connect_error": "Error connecting Google Calendar",
+      "plan_not_found": "Plan not found",
+      "redirect_payment_error": "Error redirecting to payment",
+      "start_payment_error": "Error starting payment",
+      "select_plan": "Select a plan",
+      "complete_card_data": "Complete the card details",
+      "subscription_activated": "Subscription activated",
+      "process_payment_error": "Error processing payment",
+      "process_card_error": "Error processing card"
+    }
+  },
+  "marketing_dashboard_hook": {
+    "toast": {
+      "nothing_to_undo": "Nothing to undo",
+      "nothing_to_redo": "Nothing to redo",
+      "variable_inserted": "Variable inserted",
+      "copied": "Copied",
+      "template_created": "Template created",
+      "template_create_error": "Error creating template",
+      "campaign_deleted": "Campaign deleted",
+      "campaign_delete_error": "Error deleting campaign",
+      "required_fields": "Fill in the required fields",
+      "select_date_time": "Select a date and time",
+      "campaign_updated": "Campaign updated",
+      "campaign_created": "Campaign created and launched",
+      "campaign_save_error": "Error saving campaign",
+      "design_updated": "Design updated",
+      "generate_error": "Error generating"
+    },
+    "confirm": {
+      "delete_template": "Delete template?",
+      "delete_campaign": "Are you sure you want to delete this campaign?"
+    }
+  },
+  "push_notifications_hook": {
+    "toast": {
+      "unsupported_browser": "Browser not supported",
+      "enable_in_browser": "Enable notifications in your browser",
+      "activate_error": "Error activating notifications"
+    }
+  },
+  "team_data_hook": {
+    "toast": {
+      "load_error": "Error loading team"
+    }
+  },
+  "tenant_management_hook": {
+    "toast": {
+      "load_companies_error": "Error loading companies",
+      "status_updated": "Status updated",
+      "status_update_error": "Error updating status",
+      "company_updated": "Company updated",
+      "company_update_error": "Error updating company",
+      "load_users_error": "Error loading users",
+      "impersonation_error": "Error starting impersonation"
+    }
+  },
+  "api_client": {
+    "toast": {
+      "forbidden": "You don't have permission to perform this action.",
+      "server_error": "Server error. Please try again later.",
+      "network_error": "Connection error. Check your internet."
+    }
+  },
+  "socket_service": {
+    "toast": {
+      "reconnecting": "Reconnecting…",
+      "reconnected": "Reconnected"
+    }
+  },
+  "login_page": {
+    "toast": {
+      "welcome": "Welcome, {{name}}",
+      "google_error": "Error with Google",
+      "email_unavailable": "Email not available",
+      "auth_failed": "Authentication error",
+      "welcome_back": "Welcome back, {{name}}",
+      "too_many_attempts": "Too many attempts",
+      "invalid_credentials": "Incorrect email or password",
+      "login_error": "Error signing in",
+      "unknown_error": "Unknown error",
+      "invalid_server_response": "Invalid server response (missing token or user)"
+    }
+  },
+  "contacts_page": {
+    "toast": {
+      "auto_sync_enabled": "Automatic sync enabled",
+      "auto_sync_disabled": "Automatic sync disabled",
+      "save_preference_error": "Error saving preference",
+      "importing": "Importing contacts…",
+      "import_error": "Error importing contacts",
+      "import_summary": "{{imported}} imported · {{skipped}} skipped",
+      "connection_error": "Connection error",
+      "deleting": "Deleting…",
+      "delete_error": "Error deleting contact",
+      "invalid_phone": "Invalid phone number",
+      "opening_chat": "Opening chat…",
+      "open_chat_error": "Error opening chat"
+    }
+  },
+  "public_booking_page": {
+    "toast": {
+      "invalid_link": "This booking link is invalid or has expired.",
+      "slots_load_error": "Could not load available time slots.",
+      "name_email_required": "Name and email are required.",
+      "booked_success": "Meeting booked successfully!",
+      "booking_error": "Could not book the meeting. Please try a different time slot."
+    }
+  },
+  "developer_settings_hook": {
+    "toast": {
+      "logs_refreshed": "Logs refreshed",
+      "webhook_created": "Webhook created",
+      "webhook_create_error": "Error creating webhook",
+      "webhook_deleted": "Webhook deleted",
+      "webhook_delete_error": "Error deleting webhook",
+      "webhook_toggle_error": "Error changing webhook status",
+      "webhook_deactivated": "Webhook deactivated",
+      "webhook_activated": "Webhook activated",
+      "retry_scheduled": "Retry scheduled",
+      "retry_error": "Error retrying delivery",
+      "api_key_create_error": "Error creating API Key",
+      "api_key_revoked": "API key revoked",
+      "api_key_revoke_error": "Error revoking key"
+    },
+    "confirm": {
+      "delete_webhook_title": "Delete webhook",
+      "delete_webhook_message": "Are you sure? In-flight deliveries will be canceled and this endpoint can't be recovered.",
+      "delete_cta": "Delete",
+      "revoke_key_title": "Revoke API key",
+      "revoke_key_message": "Revoke \"{{name}}\"? Integrations using it will stop working immediately.",
+      "revoke_cta": "Revoke"
+    }
   }
 }

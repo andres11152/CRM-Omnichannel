@@ -1,192 +1,102 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from "axios";
+import { AxiosError, AxiosRequestConfig } from "axios";
 import { toast } from "sonner";
+import i18n from "@/i18n";
+import { api as httpClient } from "@/lib/axios";
 
-// Extend the request config with an opt-out for the global error toast
-// below. Use this for calls the caller already handles/expects to fail
-// (e.g. an optional feature gated behind a company feature flag) so the
-// interceptor doesn't surface a raw backend error message the user can't
-// act on.
+/**
+ * Legacy "unwrap response.data + auto-toast on error" API surface used by a
+ * handful of older services (chatService, companyService, teamService,
+ * useTeamMembers, ExportButton). Kept for backward compatibility with their
+ * call sites (`const data = await api.get(...)`, no `.data` unwrapping),
+ * but the actual HTTP transport now delegates to the single canonical axios
+ * instance in `@/lib/axios` — same base URL resolution, same Zustand-store
+ * token injection, same silent 401-refresh-and-retry queue — instead of
+ * maintaining a second, weaker axios instance (previously: its own
+ * `localStorage`-only token read with no refresh-retry, meaning a session
+ * that a refresh would have saved elsewhere in the app just logged out here).
+ */
 export interface ApiRequestConfig extends AxiosRequestConfig {
   skipErrorToast?: boolean;
 }
 
-// ==================== CONFIG ====================
+function handleError(error: unknown, skipErrorToast: boolean): never {
+  const axiosError = error as AxiosError<{ message?: string; [key: string]: unknown }>;
 
-// Use relative path in development (Vite proxy handles the rest)
-// In production, use full URL from env variable
-const API_BASE_URL = import.meta.env.DEV
-  ? "/api"
-  : (import.meta.env.VITE_API_URL || "http://localhost:4000")
-      .replace(/\/api\/?$/, "")
-      .replace(/\/$/, "") + "/api";
+  if (axiosError.response) {
+    const status = axiosError.response.status;
+    const data = axiosError.response.data as { message?: string } | undefined;
 
-// ==================== AXIOS INSTANCE ====================
-
-const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 15000,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// ==================== REQUEST INTERCEPTOR ====================
-
-/**
- * Inject authentication token automatically
- */
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    switch (status) {
+      case 401:
+        // Already retried-and-failed by the shared instance's refresh queue
+        // (which also handles the logout + redirect) — nothing more to do here.
+        break;
+      case 403:
+        if (!skipErrorToast) {
+          toast.error(data?.message || i18n.t("api_client.toast.forbidden", "No tienes permisos para realizar esta acción."));
+        }
+        break;
+      case 404:
+        // Not found — let the caller decide how to handle it, no toast.
+        break;
+      case 500:
+        if (!skipErrorToast) {
+          toast.error(i18n.t("api_client.toast.server_error", "Error del servidor. Por favor, intenta de nuevo más tarde."));
+        }
+        break;
+      default:
+        if (data?.message && !skipErrorToast) {
+          toast.error(data.message);
+        }
     }
 
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  },
-);
+    throw { status, message: data?.message || "Request failed", data };
+  }
 
-// ==================== RESPONSE INTERCEPTOR ====================
-
-/**
- * Handle global error responses
- */
-apiClient.interceptors.response.use(
-  (response) => {
-    // Success: Return data directly
-    return response.data;
-  },
-  (error: AxiosError) => {
-    const skipErrorToast = Boolean(
-      (error.config as ApiRequestConfig | undefined)?.skipErrorToast,
-    );
-
-    // Error handling
-    if (error.response) {
-      const status = error.response.status;
-      const data = error.response.data as {
-        message?: string;
-        [key: string]: unknown;
-      };
-
-      // Handle specific status codes
-      switch (status) {
-        case 401:
-          // Unauthorized: Clear token and redirect to login
-          localStorage.removeItem("token");
-          localStorage.removeItem("auth-storage");
-
-          // Only show toast if not already on login page
-          if (!window.location.pathname.includes("/login")) {
-            toast.error(
-              "Sesión expirada. Por favor, inicia sesión nuevamente.",
-            );
-            setTimeout(() => {
-              window.location.href = "/login";
-            }, 1500);
-          }
-          break;
-
-        case 403:
-          // Forbidden
-          if (!skipErrorToast) {
-            toast.error(
-              data.message || "No tienes permisos para realizar esta acción.",
-            );
-          }
-          break;
-
-        case 404:
-          // Not found - Don't show toast, let component handle it
-          break;
-
-        case 500:
-          if (!skipErrorToast) {
-            toast.error(
-              "Error del servidor. Por favor, intenta de nuevo ms tarde.",
-            );
-          }
-          break;
-
-        default:
-          // Generic error
-          if (data.message && !skipErrorToast) {
-            toast.error(data.message);
-          }
-      }
-
-      // Reject with structured error
-      return Promise.reject({
-        status,
-        message: data.message || "Request failed",
-        data: data,
-      });
-    } else if (error.request) {
-      // Network error
-      if (!skipErrorToast) {
-        toast.error("Error de conexión. Verifica tu internet.");
-      }
-      return Promise.reject({
-        status: 0,
-        message: "Network error",
-        data: null,
-      });
-    } else {
-      // Other errors
-      return Promise.reject({
-        status: 0,
-        message: error.message,
-        data: null,
-      });
+  if (axiosError.request) {
+    if (!skipErrorToast) {
+      toast.error(i18n.t("api_client.toast.network_error", "Error de conexión. Verifica tu internet."));
     }
-  },
-);
+    throw { status: 0, message: "Network error", data: null };
+  }
 
-// ==================== TYPED API CLIENT ====================
+  throw { status: 0, message: error instanceof Error ? error.message : String(error), data: null };
+}
 
-/**
- * Type-safe API client interface
- */
+// `T` defaults to `any` (not `unknown`) to match axios's own default and the
+// pre-existing behavior every one of this shim's 5 legacy callers already
+// relies on (e.g. `const res = await apiClient.get(...); res.data || res`
+// with no explicit type argument) — this is a deliberately loose, isolated
+// legacy shim, not a reintroduction of `any` into the rest of the codebase.
+async function unwrap<T>(promise: Promise<{ data: unknown }>, skipErrorToast: boolean): Promise<T> {
+  try {
+    const response = await promise;
+    return response.data as T;
+  } catch (error) {
+    return handleError(error, skipErrorToast);
+  }
+}
+
 export const api = {
-  get: <T = unknown>(url: string, config?: ApiRequestConfig): Promise<T> => {
-    return apiClient.get(url, config);
-  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy shim, see `unwrap` comment above
+  get: <T = any>(url: string, config?: ApiRequestConfig): Promise<T> =>
+    unwrap<T>(httpClient.get(url, config), Boolean(config?.skipErrorToast)),
 
-  post: <T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: ApiRequestConfig,
-  ): Promise<T> => {
-    return apiClient.post(url, data, config);
-  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy shim, see `unwrap` comment above
+  post: <T = any>(url: string, data?: unknown, config?: ApiRequestConfig): Promise<T> =>
+    unwrap<T>(httpClient.post(url, data, config), Boolean(config?.skipErrorToast)),
 
-  put: <T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: ApiRequestConfig,
-  ): Promise<T> => {
-    return apiClient.put(url, data, config);
-  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy shim, see `unwrap` comment above
+  put: <T = any>(url: string, data?: unknown, config?: ApiRequestConfig): Promise<T> =>
+    unwrap<T>(httpClient.put(url, data, config), Boolean(config?.skipErrorToast)),
 
-  patch: <T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: ApiRequestConfig,
-  ): Promise<T> => {
-    return apiClient.patch(url, data, config);
-  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy shim, see `unwrap` comment above
+  patch: <T = any>(url: string, data?: unknown, config?: ApiRequestConfig): Promise<T> =>
+    unwrap<T>(httpClient.patch(url, data, config), Boolean(config?.skipErrorToast)),
 
-  delete: <T = unknown>(
-    url: string,
-    config?: ApiRequestConfig,
-  ): Promise<T> => {
-    return apiClient.delete(url, config);
-  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy shim, see `unwrap` comment above
+  delete: <T = any>(url: string, config?: ApiRequestConfig): Promise<T> =>
+    unwrap<T>(httpClient.delete(url, config), Boolean(config?.skipErrorToast)),
 };
 
-// Export the instance for advanced usage
-export default apiClient;
+export default api;

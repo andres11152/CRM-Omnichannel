@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useForm, UseFormRegister, FieldError } from "react-hook-form";
+import { useForm, UseFormRegister, FieldError, Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate } from "react-router-dom";
@@ -35,10 +35,10 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 
 interface FormInputProps {
   label: string;
-  name: string;
+  name: Path<RegisterFormData>;
   type?: string;
   placeholder?: string;
-  register: UseFormRegister<any>;
+  register: UseFormRegister<RegisterFormData>;
   error?: FieldError;
   togglePassword?: boolean;
 }

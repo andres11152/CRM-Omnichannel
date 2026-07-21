@@ -17,7 +17,7 @@ import { useConversationSync } from "./hooks/useConversationSync";
 
 // ROUTING
 import { AppRoutes } from "./routes/AppRoutes";
-import { ServiceProvider } from "./contexts/ServiceContext";
+import { ServiceProvider } from "./context/ServiceContext";
 
 const App: React.FC = () => {
   // Initialize security interceptors on app mount

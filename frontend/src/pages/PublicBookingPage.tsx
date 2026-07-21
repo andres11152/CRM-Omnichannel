@@ -19,8 +19,10 @@ import {
   Globe,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 export const PublicBookingPage: React.FC = () => {
+  const { t } = useTranslation();
   const { companySlug, agentSlug, meetingTypeSlug } = useParams<{
     companySlug: string;
     agentSlug: string;
@@ -72,7 +74,7 @@ export const PublicBookingPage: React.FC = () => {
         setMeetingTypeInfo(res.data.data);
       } catch (error) {
         console.error("Error loading booking details:", error);
-        toast.error("Este enlace de citas no es válido o ha expirado.");
+        toast.error(t("public_booking_page.toast.invalid_link", "Este enlace de citas no es válido o ha expirado."));
       } finally {
         setLoadingMetadata(false);
       }
@@ -98,7 +100,7 @@ export const PublicBookingPage: React.FC = () => {
         setSelectedSlot(null);
       } catch (error) {
         console.error("Error loading slots:", error);
-        toast.error("No se pudieron cargar los horarios disponibles.");
+        toast.error(t("public_booking_page.toast.slots_load_error", "No se pudieron cargar los horarios disponibles."));
       } finally {
         setLoadingSlots(false);
       }
@@ -111,7 +113,7 @@ export const PublicBookingPage: React.FC = () => {
     if (!selectedSlot || !meetingTypeInfo) return;
 
     if (!bookingForm.guestName.trim() || !bookingForm.guestEmail.trim()) {
-      return toast.error("El nombre y el correo electrónico son obligatorios.");
+      return toast.error(t("public_booking_page.toast.name_email_required", "El nombre y el correo electrónico son obligatorios."));
     }
 
     setSubmitting(true);
@@ -128,10 +130,10 @@ export const PublicBookingPage: React.FC = () => {
       });
 
       setBookingSuccess(result);
-      toast.success("¡Cita reservada correctamente!");
+      toast.success(t("public_booking_page.toast.booked_success", "¡Cita reservada correctamente!"));
     } catch (error) {
       console.error("Error making booking:", error);
-      toast.error("No se pudo agendar la cita. Por favor intenta con otro horario.");
+      toast.error(t("public_booking_page.toast.booking_error", "No se pudo agendar la cita. Por favor intenta con otro horario."));
     } finally {
       setSubmitting(false);
     }
@@ -414,8 +416,11 @@ export const PublicBookingPage: React.FC = () => {
                   <h3 className="font-bold text-gray-950 dark:text-white text-base">
                     Detalles de Reserva
                   </h3>
-                  <p className="text-xs text-indigo-600 dark:text-indigo-400 capitalize mt-0.5 font-bold">
-                    📅 {new Date(selectedSlot).toLocaleString([], { weekday: "long", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 capitalize mt-0.5 font-bold flex items-center gap-1">
+                    <CalendarIcon className="w-3.5 h-3.5" />
+                    <span>
+                      {new Date(selectedSlot).toLocaleString([], { weekday: "long", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
                   </p>
                 </div>
               </div>

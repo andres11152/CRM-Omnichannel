@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { Modal } from "./ui/Modal";
@@ -7,6 +8,7 @@ import { api } from "@/lib/axios";
 import { useAuthStore } from "@/stores/authStore";
 
 export const ProfileSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { user, updateUser: onUserUpdate } = useAuthStore();
   const { playSound } = useSound();
 
@@ -52,12 +54,12 @@ export const ProfileSettings: React.FC = () => {
         onUserUpdate(userData);
       }
 
-      toast.success("Perfil actualizado");
+      toast.success(t("profile_settings.toast.updated", "Perfil actualizado"));
       playSound("success");
     } catch (error: unknown) {
       console.error("Failed to save profile:", error);
       toast.error(
-        error instanceof Error ? error.message : "Error al actualizar perfil",
+        error instanceof Error ? error.message : t("profile_settings.toast.update_error", "Error al actualizar perfil"),
       );
     } finally {
       setLoading(false);
@@ -83,13 +85,13 @@ export const ProfileSettings: React.FC = () => {
       if (uploadedUrl) {
         setUserForm((prev) => ({ ...prev, profilePicUrl: uploadedUrl }));
         setPickerOpen(false);
-        toast.success("Imagen actualizada");
+        toast.success(t("profile_settings.toast.image_updated", "Imagen actualizada"));
       } else {
-        toast.error("Error al subir imagen");
+        toast.error(t("profile_settings.toast.image_upload_error", "Error al subir imagen"));
       }
     } catch (error: unknown) {
       console.error("Upload error:", error);
-      toast.error("Error al subir imagen");
+      toast.error(t("profile_settings.toast.image_upload_error", "Error al subir imagen"));
     } finally {
       setUploadingImage(false);
     }
@@ -206,7 +208,7 @@ export const ProfileSettings: React.FC = () => {
               <div className="flex flex-col md:flex-row gap-8 items-start">
                 {/* Avatar Section */}
                 <div className="flex flex-col items-center gap-4">
-                  <div className="w-32 h-32 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-3xl font-bold text-indigo-600 dark:text-indigo-400 border-4 border-white dark:border-[#111b21] shadow-xl overflow-hidden relative group">
+                  <div className="w-32 h-32 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-3xl font-bold text-indigo-600 dark:text-indigo-400 border-4 border-white dark:border-reply-surface-dark shadow-xl overflow-hidden relative group">
                     {(() => {
                       const pic = userForm.profilePicUrl;
                       if (!pic) return userForm.name.charAt(0).toUpperCase();

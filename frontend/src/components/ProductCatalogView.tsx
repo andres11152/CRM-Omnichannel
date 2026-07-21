@@ -11,6 +11,7 @@ import {
   deleteProduct,
 } from "@/services/productService";
 import { ModuleHeader } from "./common/ModuleHeader";
+import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import {
@@ -49,20 +50,27 @@ const formatPrice = (price: number, currency: string) => {
   }
 };
 
+const PRODUCTS_CACHE_KEY = "products:default-view";
+
 export const ProductCatalogView: React.FC = () => {
   const { t } = useTranslation();
   const { confirm } = useModal();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [products, setProducts] = useState<Product[]>([]);
+  // Stale-while-revalidate: instant render on module re-entry, silent refetch behind it.
+  const cachedProducts = getModuleCache<Product[]>(PRODUCTS_CACHE_KEY);
+  const [products, setProducts] = useState<Product[]>(cachedProducts ?? []);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cachedProducts);
 
   const fetchProducts = async () => {
-    try {
+    if (!getModuleCache<Product[]>(PRODUCTS_CACHE_KEY)) {
       setIsLoading(true);
+    }
+    try {
       const data = await getProducts();
       setProducts(data);
+      setModuleCache<Product[]>(PRODUCTS_CACHE_KEY, data);
     } catch (error) {
       console.error("Failed to fetch products", error);
       toast.error(t("crm.products.save_error"));

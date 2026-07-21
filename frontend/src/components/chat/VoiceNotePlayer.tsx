@@ -16,7 +16,7 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ url, isAgent }
   const rafRef = useRef<number | null>(null);
 
   const cyclePlaybackRate = () => {
-    let nextRate = 1;
+    let nextRate: number;
     if (playbackRate === 1) nextRate = 1.5;
     else if (playbackRate === 1.5) nextRate = 2;
     else nextRate = 1;
@@ -121,7 +121,7 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ url, isAgent }
       {/* Play/Pause Button */}
       <button 
         onClick={togglePlay}
-        className={`w-10 h-10 flex shrink-0 items-center justify-center rounded-full transition-transform active:scale-95 ${isAgent ? "bg-white text-[#00a884] hover:bg-white/90" : "bg-[#00a884] text-white hover:bg-[#009676]"}`}
+        className={`w-10 h-10 flex shrink-0 items-center justify-center rounded-full transition-transform active:scale-95 ${isAgent ? "bg-white text-reply-brand hover:bg-white/90" : "bg-reply-brand text-white hover:bg-[#009676]"}`}
       >
         {isPlaying ? <Pause fill="currentColor" size={18} /> : <Play fill="currentColor" size={18} className="ml-1" />}
       </button>
@@ -134,7 +134,7 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ url, isAgent }
           max="100"
           value={progress || 0}
           onChange={handleSeek}
-          className={`w-full h-1.5 appearance-none rounded-full cursor-pointer ${isAgent ? "bg-white/30 accent-white" : "bg-gray-300 dark:bg-gray-600 accent-[#00a884]"}`}
+          className={`w-full h-1.5 appearance-none rounded-full cursor-pointer ${isAgent ? "bg-white/30 accent-white" : "bg-gray-300 dark:bg-gray-600 accent-reply-brand"}`}
           style={{
             background: `linear-gradient(to right, ${isAgent ? '#ffffff' : '#00a884'} ${progress}%, ${isAgent ? 'rgba(255,255,255,0.3)' : 'rgba(156,163,175,0.3)'} ${progress}%)`
           }}

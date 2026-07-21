@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast, Toaster } from "sonner";
+import { useTranslation } from "react-i18next";
 import { AxiosError } from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -27,10 +28,10 @@ type LoginFormData = z.infer<typeof loginSchema>;
 //  REUSABLE COMPONENT: INPUT FIELD
 interface FormInputProps {
   label: string;
-  name: string;
+  name: Path<LoginFormData>;
   type?: string;
   placeholder?: string;
-  register: UseFormRegister<any>;
+  register: UseFormRegister<LoginFormData>;
   error?: FieldError;
   togglePassword?: boolean;
 }
@@ -138,6 +139,7 @@ const FormInput = ({
 
 
 export const LoginPage = () => {
+  const { t } = useTranslation();
   const { login } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -199,7 +201,7 @@ export const LoginPage = () => {
 
           // @ts-ignore
           login(mappedUser, token);
-          toast.success(`Bienvenido, ${user.name.split(" ")[0]}`);
+          toast.success(t("login_page.toast.welcome", "Bienvenido, {{name}}", { name: user.name.split(" ")[0] }));
 
           // Clean URL parameters
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -207,18 +209,18 @@ export const LoginPage = () => {
         } catch (err) {
           console.error("[LoginPage] Google Token Fetch Error:", err);
           localStorage.removeItem("token");
-          toast.error("Error con Google");
+          toast.error(t("login_page.toast.google_error", "Error con Google"));
         }
       };
 
       fetchGoogleUser();
     } else if (errorParam) {
       if (errorParam === "no_email") {
-        toast.error("Email no disponible");
+        toast.error(t("login_page.toast.email_unavailable", "Email no disponible"));
       } else if (errorParam === "auth_failed") {
-        toast.error("Error de autenticación");
+        toast.error(t("login_page.toast.auth_failed", "Error de autenticación"));
       } else {
-        toast.error("Error con Google");
+        toast.error(t("login_page.toast.google_error", "Error con Google"));
       }
       // Clean URL parameters
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -243,7 +245,7 @@ export const LoginPage = () => {
 
       if (!token || !user) {
         throw new Error(
-          "Respuesta inválida del servidor (Falta token o usuario)",
+          t("login_page.toast.invalid_server_response", "Respuesta inválida del servidor (Falta token o usuario)"),
         );
       }
 
@@ -266,7 +268,7 @@ export const LoginPage = () => {
 
       // @ts-ignore - Explicit mapping above handles the Date/String mismatch
       login(mappedUser, token);
-      toast.success(`Bienvenido de nuevo, ${user.name.split(" ")[0]}`);
+      toast.success(t("login_page.toast.welcome_back", "Bienvenido de nuevo, {{name}}", { name: user.name.split(" ")[0] }));
       navigate(from, { replace: true });
     } catch (error: unknown) {
       console.error("[LoginPage] Login Error:", error);
@@ -275,14 +277,14 @@ export const LoginPage = () => {
         console.log("[LoginPage] Axios Response:", error.response);
 
         if (error.response?.status === 429) {
-          toast.error("Demasiados intentos");
+          toast.error(t("login_page.toast.too_many_attempts", "Demasiados intentos"));
         } else if (error.response?.status === 401) {
           //  SHOW SPECIFIC INVALID CREDENTIALS MESSAGE
           const serverMsg = error.response.data?.message;
           const displayMsg =
             typeof serverMsg === "string"
               ? serverMsg
-              : "Email o contraseña incorrectos";
+              : t("login_page.toast.invalid_credentials", "Email o contraseña incorrectos");
           console.log("[LoginPage] Displaying Toast:", displayMsg);
           toast.error(displayMsg);
         } else if (
@@ -295,11 +297,11 @@ export const LoginPage = () => {
           setBlockedStatus(match ? match[1] : "SUSPENDED");
         } else {
           toast.error(
-            error.response?.data?.message || "Error al iniciar sesión",
+            error.response?.data?.message || t("login_page.toast.login_error", "Error al iniciar sesión"),
           );
         }
       } else {
-        toast.error((error as Error).message || "Error desconocido");
+        toast.error((error as Error).message || t("login_page.toast.unknown_error", "Error desconocido"));
       }
     }
   };

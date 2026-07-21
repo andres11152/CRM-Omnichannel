@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Company, CompanyStatus, Plan, User } from "@/types";
 import { adminService, CompanyMetrics } from "@/services/adminService";
 import { Logger } from "@/utils/logger";
 
 export function useTenantManagement() {
+  const { t } = useTranslation();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,7 @@ export function useTenantManagement() {
       setAvailablePlans(planData);
     } catch (error) {
       Logger.error("[useTenantManagement] Failed to fetch data", error);
-      toast.error("Error al cargar empresas");
+      toast.error(t("tenant_management_hook.toast.load_companies_error", "Error al cargar empresas"));
     } finally {
       setLoading(false);
     }
@@ -80,10 +82,10 @@ export function useTenantManagement() {
     );
     try {
       await adminService.updateCompanyStatus(id, status);
-      toast.success("Estado actualizado");
+      toast.success(t("tenant_management_hook.toast.status_updated", "Estado actualizado"));
     } catch (error) {
       Logger.error("[useTenantManagement] Error al actualizar estado", error);
-      toast.error("Error al actualizar estado");
+      toast.error(t("tenant_management_hook.toast.status_update_error", "Error al actualizar estado"));
       fetchData(); // Rollback
     }
   };
@@ -93,10 +95,10 @@ export function useTenantManagement() {
       const updated = await adminService.updateCompany(companyId, data);
       setCompanies(companies.map((c) => (c.id === companyId ? updated : c)));
       setEditingCompany(null);
-      toast.success("Empresa actualizada");
+      toast.success(t("tenant_management_hook.toast.company_updated", "Empresa actualizada"));
     } catch (error) {
       Logger.error("[useTenantManagement] Error updating company", error);
-      toast.error("Error al actualizar empresa");
+      toast.error(t("tenant_management_hook.toast.company_update_error", "Error al actualizar empresa"));
     }
   };
 
@@ -111,7 +113,7 @@ export function useTenantManagement() {
         setCompanyUsers(users);
       } catch (error) {
         Logger.error("[useTenantManagement] Error fetching users", error);
-        toast.error("Error al cargar usuarios");
+        toast.error(t("tenant_management_hook.toast.load_users_error", "Error al cargar usuarios"));
       } finally {
         setLoadingUsers(false);
       }
@@ -135,7 +137,7 @@ export function useTenantManagement() {
       window.location.href = `/dashboard?impersonate=${result.token}`;
     } catch (error) {
       Logger.error("[useTenantManagement] Impersonation failed", error);
-      toast.error("Error al iniciar impersonación");
+      toast.error(t("tenant_management_hook.toast.impersonation_error", "Error al iniciar impersonación"));
     } finally {
       setIsImpersonateModalOpen(false);
     }

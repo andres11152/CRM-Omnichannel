@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { quickRepliesService } from "@/services/quickRepliesService";
 import { QuickReply, CreateQuickReplyDTO } from "@/types";
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
+  const { t } = useTranslation();
   const [replies, setReplies] = useState<QuickReply[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
@@ -53,7 +55,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
       setReplies(data);
     } catch (error) {
       console.error("Failed to load replies:", error);
-      toast.error("No se pudieron cargar las respuestas");
+      toast.error(t("quick_replies.toast.load_error", "No se pudieron cargar las respuestas"));
     } finally {
       setLoading(false);
     }
@@ -61,7 +63,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
 
   const handleSave = async () => {
     if (!formData.title.trim() || !formData.content.trim()) {
-      toast.error("Título y contenido son obligatorios");
+      toast.error(t("quick_replies.toast.missing_fields", "Título y contenido son obligatorios"));
       return;
     }
 
@@ -69,7 +71,7 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
       if (view === "CREATE") {
         const newReply = await quickRepliesService.createQuickReply(formData);
         setReplies((prev) => [...prev, newReply]);
-        toast.success("Respuesta creada");
+        toast.success(t("quick_replies.toast.created", "Respuesta creada"));
       } else if (view === "EDIT" && editingId) {
         const updated = await quickRepliesService.updateQuickReply(
           editingId,
@@ -78,11 +80,11 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
         setReplies((prev) =>
           prev.map((r) => (r.id === editingId ? updated : r)),
         );
-        toast.success("Respuesta actualizada");
+        toast.success(t("quick_replies.toast.updated", "Respuesta actualizada"));
       }
       resetForm();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Error al guardar");
+      toast.error(error instanceof Error ? error.message : t("quick_replies.toast.save_error", "Error al guardar"));
     }
   };
 
@@ -96,10 +98,10 @@ export const QuickReplies: React.FC<Props> = ({ onSelect, onClose }) => {
     try {
       await quickRepliesService.deleteQuickReply(deleteId);
       setReplies((prev) => prev.filter((r) => r.id !== deleteId));
-      toast.success("Eliminada correctamente");
+      toast.success(t("quick_replies.toast.deleted", "Eliminada correctamente"));
       setDeleteId(null);
     } catch (error) {
-      toast.error("Error al eliminar");
+      toast.error(t("quick_replies.toast.delete_error", "Error al eliminar"));
     }
   };
 

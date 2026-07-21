@@ -41,17 +41,32 @@ export class FlowCRMHandler {
       );
       const dealValue = parseFloat(node.data.value || "0");
 
-      let pipeline = await flowSessionRepository.findDefaultPipeline(companyId);
-      if (!pipeline) {
-        pipeline = await flowSessionRepository.findAnyPipeline(companyId);
+      // Honor an explicit pipeline/stage chosen in the builder UI; only fall
+      // back to the company's default pipeline/first stage when the node
+      // wasn't configured with one (or that pipeline no longer exists).
+      let targetPipelineId = node.data.pipelineId || undefined;
+      if (targetPipelineId) {
+        const chosen = await flowSessionRepository.findPipelineById(targetPipelineId, companyId);
+        if (!chosen) targetPipelineId = undefined;
       }
-
-      const targetPipelineId = pipeline?.id;
+      if (!targetPipelineId) {
+        let pipeline = await flowSessionRepository.findDefaultPipeline(companyId);
+        if (!pipeline) {
+          pipeline = await flowSessionRepository.findAnyPipeline(companyId);
+        }
+        targetPipelineId = pipeline?.id;
+      }
       if (!targetPipelineId) throw new Error("No pipeline found");
 
-      const defaultStage =
-        await flowSessionRepository.findFirstStage(targetPipelineId);
-      const targetStageId = defaultStage?.id;
+      let targetStageId = node.data.stageId || undefined;
+      if (targetStageId) {
+        const chosen = await flowSessionRepository.findStageById(targetStageId, targetPipelineId);
+        if (!chosen) targetStageId = undefined;
+      }
+      if (!targetStageId) {
+        const defaultStage = await flowSessionRepository.findFirstStage(targetPipelineId);
+        targetStageId = defaultStage?.id;
+      }
       if (!targetStageId) throw new Error("No stage found");
 
       await flowSessionRepository.createDeal({

@@ -5,7 +5,7 @@ import { Home, ArrowLeft, Ghost } from "lucide-react";
 
 export const NotFoundPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-6 overflow-hidden relative">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 overflow-hidden relative">
       {/* Background Decorative Elements */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-500/10 rounded-full blur-[120px]" />

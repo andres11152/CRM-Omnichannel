@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { 
+import { useTranslation } from "react-i18next";
+import {
   ShoppingBag, 
   MessageSquare, 
   Zap, 
@@ -25,6 +26,7 @@ import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 const MARKETPLACE_CACHE_KEY = "marketplace:inventory";
 
 export const GlobalTemplateMarketplace: React.FC = () => {
+  const { t: translate } = useTranslation();
   // Stale-while-revalidate: instant render on module re-entry, silent refetch
   const cachedInventory = getModuleCache<GlobalInventory>(MARKETPLACE_CACHE_KEY);
   const [inventory, setInventory] = useState<GlobalInventory>(cachedInventory ?? { templates: [], workflows: [] });
@@ -45,7 +47,7 @@ export const GlobalTemplateMarketplace: React.FC = () => {
       setInventory(data);
       setModuleCache<GlobalInventory>(MARKETPLACE_CACHE_KEY, data);
     } catch (error) {
-      toast.error("Error al cargar inventario");
+      toast.error(translate("global_template_marketplace.toast.load_error", "Error al cargar inventario"));
     } finally {
       setLoading(false);
     }
@@ -58,10 +60,10 @@ export const GlobalTemplateMarketplace: React.FC = () => {
       } else {
         await marketplaceService.toggleWorkflow(id, !currentStatus);
       }
-      toast.success("Estado actualizado");
+      toast.success(translate("global_template_marketplace.toast.status_updated", "Estado actualizado"));
       fetchInventory();
     } catch (error) {
-      toast.error("Error al actualizar");
+      toast.error(translate("global_template_marketplace.toast.update_error", "Error al actualizar"));
     }
   };
 

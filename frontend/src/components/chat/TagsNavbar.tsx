@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Contact, Tag } from "@/types";
 import { Plus, X, Tag as TagIcon } from "lucide-react";
 import { API_BASE_URL } from "@/services/apiConfig";
@@ -13,6 +14,7 @@ export const TagsNavbar: React.FC<TagsNavbarProps> = ({
   contact,
   onContactUpdate,
 }) => {
+  const { t } = useTranslation();
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [search, setSearch] = useState("");
@@ -65,7 +67,7 @@ export const TagsNavbar: React.FC<TagsNavbarProps> = ({
       // Removed setIsAdding(false) to allow multiple tag additions
     } catch (e) {
       console.error(e);
-      toast.error("Error al actualizar etiqueta");
+      toast.error(t("tags_navbar.toast.update_error", "Error al actualizar etiqueta"));
       if (onContactUpdate) {
         onContactUpdate({ ...contact, tags: currentTags });
       }
@@ -83,7 +85,7 @@ export const TagsNavbar: React.FC<TagsNavbarProps> = ({
   if (!hasTags && !isAdding) return null;
 
   return (
-    <div className="relative w-full bg-white/80 dark:bg-[#0b141a]/80 backdrop-blur-md border-b border-gray-100 dark:border-white/5 px-2 py-1 flex items-center gap-0 shrink-0 z-20 h-10">
+    <div className="relative w-full bg-white/80 dark:bg-reply-bg-dark/80 backdrop-blur-md border-b border-gray-100 dark:border-white/5 px-2 py-1 flex items-center gap-0 shrink-0 z-20 h-10">
       {/* 1. FIXED LEFT: Label */}
       <div className="flex items-center px-3 text-gray-400 shrink-0 border-r border-gray-200 dark:border-white/10 mr-2 group">
         <TagIcon className="w-3.5 h-3.5 group-hover:text-indigo-500 transition-colors" />
@@ -177,7 +179,7 @@ export const TagsNavbar: React.FC<TagsNavbarProps> = ({
           input and "Listo" with no tags to pick. Rendered as an opaque overlay under
           the bar because the h-10 flex row can't grow a second line. */}
       {isAdding && (
-        <div className="sm:hidden absolute top-full left-0 right-0 z-30 bg-white dark:bg-[#0b141a] border-b border-gray-200 dark:border-white/10 shadow-lg px-3 py-2 flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+        <div className="sm:hidden absolute top-full left-0 right-0 z-30 bg-white dark:bg-reply-bg-dark border-b border-gray-200 dark:border-white/10 shadow-lg px-3 py-2 flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
           {filteredAvailableTags.length === 0 ? (
             <span className="text-[10px] text-gray-400 italic">
               {allTags.length === 0 ? "No hay etiquetas creadas" : "No hay más etiquetas disponibles"}

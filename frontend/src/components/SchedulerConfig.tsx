@@ -82,11 +82,11 @@ export const SchedulerConfig: React.FC = () => {
     const error = params.get("error");
 
     if (google === "connected") {
-      toast.success("Google Calendar conectado con éxito.");
+      toast.success(t("scheduler_config.toast.google_connected", "Google Calendar conectado con éxito."));
     } else if (outlook === "connected") {
-      toast.success("Outlook Calendar conectado con éxito.");
+      toast.success(t("scheduler_config.toast.outlook_connected", "Outlook Calendar conectado con éxito."));
     } else if (error || outlook === "error") {
-      toast.error("Error al conectar el calendario.");
+      toast.error(t("scheduler_config.toast.calendar_connect_error", "Error al conectar el calendario."));
     }
 
     if (google || outlook || error) {
@@ -124,7 +124,7 @@ export const SchedulerConfig: React.FC = () => {
       setIsOutlookConnected(!!outlookStatus.connected);
     } catch (error) {
       console.error("Error loading scheduling config:", error);
-      toast.error("Error al cargar la configuración de citas.");
+      toast.error(t("scheduler_config.toast.load_error", "Error al cargar la configuración de citas."));
     } finally {
       setLoading(false);
     }
@@ -139,11 +139,11 @@ export const SchedulerConfig: React.FC = () => {
       if (url) {
         window.location.href = url;
       } else {
-        toast.error("No se pudo iniciar la conexión con Google");
+        toast.error(t("scheduler_config.toast.google_start_error", "No se pudo iniciar la conexión con Google"));
       }
     } catch (error) {
       console.error("Failed to start Google Calendar connect:", error);
-      toast.error("Error al conectar Google Calendar");
+      toast.error(t("scheduler_config.toast.google_connect_error", "Error al conectar Google Calendar"));
     }
   };
 
@@ -151,10 +151,10 @@ export const SchedulerConfig: React.FC = () => {
     try {
       await api.post("/google/disconnect");
       setIsGoogleConnected(false);
-      toast.success("Google Calendar desvinculado");
+      toast.success(t("scheduler_config.toast.google_disconnected", "Google Calendar desvinculado"));
     } catch (error) {
       console.error("Failed to disconnect Google Calendar:", error);
-      toast.error("Error al desvincular Google Calendar");
+      toast.error(t("scheduler_config.toast.google_disconnect_error", "Error al desvincular Google Calendar"));
     }
   };
 
@@ -165,11 +165,11 @@ export const SchedulerConfig: React.FC = () => {
       if (url) {
         window.location.href = url;
       } else {
-        toast.error("No se pudo iniciar la conexión con Outlook");
+        toast.error(t("scheduler_config.toast.outlook_start_error", "No se pudo iniciar la conexión con Outlook"));
       }
     } catch (error) {
       console.error("Failed to start Outlook Calendar connect:", error);
-      toast.error("Error al conectar Outlook Calendar");
+      toast.error(t("scheduler_config.toast.outlook_connect_error", "Error al conectar Outlook Calendar"));
     }
   };
 
@@ -177,10 +177,10 @@ export const SchedulerConfig: React.FC = () => {
     try {
       await disconnectOutlook();
       setIsOutlookConnected(false);
-      toast.success("Outlook Calendar desvinculado");
+      toast.success(t("scheduler_config.toast.outlook_disconnected", "Outlook Calendar desvinculado"));
     } catch (error) {
       console.error("Failed to disconnect Outlook Calendar:", error);
-      toast.error("Error al desvincular Outlook Calendar");
+      toast.error(t("scheduler_config.toast.outlook_disconnect_error", "Error al desvincular Outlook Calendar"));
     }
   };
 
@@ -188,10 +188,10 @@ export const SchedulerConfig: React.FC = () => {
     setSavingAvailability(true);
     try {
       await saveAvailability({ timezone, rules });
-      toast.success("Disponibilidad horaria guardada con éxito.");
+      toast.success(t("scheduler_config.toast.availability_saved", "Disponibilidad horaria guardada con éxito."));
     } catch (error) {
       console.error("Error saving availability:", error);
-      toast.error("No se pudo guardar la disponibilidad.");
+      toast.error(t("scheduler_config.toast.availability_save_error", "No se pudo guardar la disponibilidad."));
     } finally {
       setSavingAvailability(false);
     }
@@ -222,7 +222,7 @@ export const SchedulerConfig: React.FC = () => {
 
   const handleSaveMeetingType = async () => {
     if (!mtFormData.name.trim() || !mtFormData.slug.trim()) {
-      return toast.error("El nombre y el enlace (slug) son obligatorios.");
+      return toast.error(t("scheduler_config.toast.meeting_type_required", "El nombre y el enlace (slug) son obligatorios."));
     }
 
     setSavingMeetingType(true);
@@ -230,16 +230,16 @@ export const SchedulerConfig: React.FC = () => {
       if (editingMT) {
         const updated = await updateMeetingType(editingMT.id, mtFormData);
         setMeetingTypes((prev) => prev.map((t) => (t.id === editingMT.id ? updated : t)));
-        toast.success("Tipo de reunión actualizado.");
+        toast.success(t("scheduler_config.toast.meeting_type_updated", "Tipo de reunión actualizado."));
       } else {
         const created = await createMeetingType(mtFormData);
         setMeetingTypes((prev) => [...prev, created]);
-        toast.success("Tipo de reunión creado con éxito.");
+        toast.success(t("scheduler_config.toast.meeting_type_created", "Tipo de reunión creado con éxito."));
       }
       setIsMTModalOpen(false);
     } catch (error: unknown) {
       console.error("Error saving meeting type:", error);
-      let msg = "No se pudo guardar el tipo de reunión.";
+      let msg = t("scheduler_config.toast.meeting_type_save_error", "No se pudo guardar el tipo de reunión.");
       if (error && typeof error === "object" && "response" in error) {
         const response = (error as { response?: { data?: { message?: string } } }).response;
         if (response?.data?.message) {
@@ -255,14 +255,14 @@ export const SchedulerConfig: React.FC = () => {
   };
 
   const handleDeleteMeetingType = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar este tipo de reunión?")) return;
+    if (!confirm(t("scheduler_config.confirm.delete_meeting_type", "¿Estás seguro de eliminar este tipo de reunión?"))) return;
     try {
       await deleteMeetingType(id);
       setMeetingTypes((prev) => prev.filter((t) => t.id !== id));
-      toast.success("Tipo de reunión eliminado.");
+      toast.success(t("scheduler_config.toast.meeting_type_deleted", "Tipo de reunión eliminado."));
     } catch (error) {
       console.error("Error deleting meeting type:", error);
-      toast.error("No se pudo eliminar el tipo de reunión.");
+      toast.error(t("scheduler_config.toast.meeting_type_delete_error", "No se pudo eliminar el tipo de reunión."));
     }
   };
 
@@ -273,7 +273,7 @@ export const SchedulerConfig: React.FC = () => {
     
     navigator.clipboard.writeText(link).then(() => {
       setCopiedLink(slug);
-      toast.success("Enlace de reserva copiado al portapapeles.");
+      toast.success(t("scheduler_config.toast.link_copied", "Enlace de reserva copiado al portapapeles."));
       setTimeout(() => setCopiedLink(null), 3000);
     });
   };

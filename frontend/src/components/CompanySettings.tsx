@@ -1,5 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { CreditCard, Check } from "lucide-react";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { Modal } from "./ui/Modal";
 import { SubscriptionPlan } from "@/types";
@@ -223,7 +224,7 @@ export const CompanySettings: React.FC = () => {
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold text-gray-800 dark:text-white">{t("company_settings.google_calendar.title", "Google Calendar")}</h3>
                 {googleCalendarConnected ? (
-                  <span className="text-xs font-bold bg-green-100 text-green-800 px-3 py-1 rounded-full flex items-center gap-1">✓ {t("company_settings.google_calendar.connected", "Conectado")}</span>
+                  <span className="text-xs font-bold bg-green-100 text-green-800 px-3 py-1 rounded-full flex items-center gap-1"><Check className="w-3 h-3" /> {t("company_settings.google_calendar.connected", "Conectado")}</span>
                 ) : (
                   <span className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded-full">{t("company_settings.google_calendar.not_connected", "No Conectado")}</span>
                 )}
@@ -371,13 +372,13 @@ export const CompanySettings: React.FC = () => {
                                 </div>
                                 <ul className="text-xs text-gray-500 space-y-2 mb-6">
                                   <li className="flex items-center gap-2">
-                                    <span className="text-indigo-600 font-bold">✓</span> {plan.config?.max_users || plan.limits?.max_users || 0} {t("company_settings.billing.limit_users", "Usuarios")}
+                                    <Check className="w-3.5 h-3.5 text-indigo-600" strokeWidth={3} /> {plan.config?.max_users || plan.limits?.max_users || 0} {t("company_settings.billing.limit_users", "Usuarios")}
                                   </li>
                                   <li className="flex items-center gap-2">
-                                    <span className="text-indigo-600 font-bold">✓</span> {plan.config?.max_whatsapp_sessions || plan.limits?.max_whatsapp_sessions || 0} {t("company_settings.billing.limit_whatsapp", "Conexiones WA")}
+                                    <Check className="w-3.5 h-3.5 text-indigo-600" strokeWidth={3} /> {plan.config?.max_whatsapp_sessions || plan.limits?.max_whatsapp_sessions || 0} {t("company_settings.billing.limit_whatsapp", "Conexiones WA")}
                                   </li>
                                   <li className="flex items-center gap-2">
-                                    <span className="text-indigo-600 font-bold">✓</span> {plan.maxContacts || plan.limits?.max_contacts || "∞"} {t("company_settings.billing.limit_contacts", "Contactos CRM")}
+                                    <Check className="w-3.5 h-3.5 text-indigo-600" strokeWidth={3} /> {plan.maxContacts || plan.limits?.max_contacts || "∞"} {t("company_settings.billing.limit_contacts", "Contactos CRM")}
                                   </li>
                                 </ul>
                               </div>
@@ -536,7 +537,7 @@ export const CompanySettings: React.FC = () => {
                               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                             ) : (
                               <>
-                                <span>💳</span>
+                                <CreditCard className="w-4 h-4" />
                                 <span>{t("company_settings.billing.subscribe_button", "Activar Suscripción Recurrente")}</span>
                               </>
                             )}
@@ -583,7 +584,7 @@ export const CompanySettings: React.FC = () => {
                             <div key={i} className={`flex items-center justify-between p-3 rounded-lg border ${feature.enabled ? "bg-reply-bg dark:bg-gray-800/30 border-gray-100 dark:border-reply-border-dark" : "bg-reply-bg opacity-50 border-transparent"}`}>
                               <span className="font-medium text-gray-700 dark:text-gray-300">{feature.name}</span>
                               {feature.enabled ? (
-                                <span className="text-xs font-bold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full">✓ {t("company_settings.billing.included", "Incluido")}</span>
+                                <span className="text-xs font-bold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full flex items-center gap-1"><Check className="w-3 h-3" /> {t("company_settings.billing.included", "Incluido")}</span>
                               ) : (
                                 <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1 rounded-full">{t("company_settings.billing.not_included", "No incluido")}</span>
                               )}

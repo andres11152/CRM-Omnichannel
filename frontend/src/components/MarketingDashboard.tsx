@@ -1,9 +1,10 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Megaphone, Layout, History, Plus, Calendar, Zap,
   ChevronRight, Rocket, MessageSquare, Mail,
-  Smartphone as SmsIcon, CheckCircle2,
+  Smartphone as SmsIcon, CheckCircle2, Database, Palette,
 } from "lucide-react";
 import { ModuleHeader } from "./common/ModuleHeader";
 import { MediaLibrary } from "./MediaLibrary";
@@ -27,6 +28,7 @@ import { TemplateGallery } from "./marketing/TemplateGallery";
  * - Builder + TemplateEditor: Inline (deeply coupled to state context)
  */
 export const MarketingDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const ctx = useMarketingDashboard();
 
   return (
@@ -193,7 +195,10 @@ export const MarketingDashboard: React.FC = () => {
                     </div>
 
                     <div className="pt-8 border-t border-gray-100 dark:border-reply-border-dark">
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">📊 Importar desde Base de Datos Externa (Excel)</label>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">
+                        <Database className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Importar desde Base de Datos Externa (Excel)</span>
+                      </label>
                       <div className="flex flex-col sm:flex-row gap-4 items-center">
                         <label className="w-full sm:w-auto cursor-pointer bg-white dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-reply-border-dark rounded-2xl px-10 py-6 text-center hover:border-rose-500 transition-all flex flex-col items-center gap-2 group">
                           <Plus className="w-6 h-6 text-gray-300 group-hover:text-rose-500 transition-colors" />
@@ -366,7 +371,7 @@ export const MarketingDashboard: React.FC = () => {
                   </button>
                 </div>
                 <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
-                <button onClick={() => toast.success("Test enviado")} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors">Enviar Test</button>
+                <button onClick={() => toast.success(t("marketing_dashboard.toast.test_sent", "Test enviado"))} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors">Enviar Test</button>
                 <button onClick={ctx.handleCreateTemplate} disabled={!ctx.newTemplate.name || !ctx.newTemplate.content} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2">
                   <span>Guardar</span>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -383,7 +388,9 @@ export const MarketingDashboard: React.FC = () => {
                   <div className="p-6 border-b border-gray-200 dark:border-reply-border-dark bg-reply-bg dark:bg-reply-bg-dark/40 shrink-0">
                     <div className="flex justify-between items-center mb-3">
                       <label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">⚡</div>
+                        <div className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center">
+                          <Zap className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        </div>
                         <span>AI Copilot</span>
                       </label>
                       <div className="flex items-center gap-2 bg-gray-200 dark:bg-gray-800 rounded-full p-1 pl-3">
@@ -426,9 +433,9 @@ export const MarketingDashboard: React.FC = () => {
                         <div className="relative group">
                           <select className="w-full appearance-none border border-gray-200 dark:border-reply-border-dark rounded-xl px-4 py-3 text-sm bg-reply-bg dark:bg-reply-panel-dark text-gray-700 dark:text-gray-200 outline-none hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors cursor-pointer" onChange={(e) => { if (e.target.value) { ctx.insertVariable(e.target.value); e.target.value = ""; } }}>
                             <option value="">Insertar Variable Dinámica...</option>
-                            <option value="contact.firstName">👤 Nombre del Contacto</option>
-                            <option value="contact.company">🏢 Empresa</option>
-                            <option value="agent.name">🧑‍💼 Nombre Agente</option>
+                            <option value="contact.firstName">Nombre del Contacto</option>
+                            <option value="contact.company">Empresa</option>
+                            <option value="agent.name">Nombre Agente</option>
                           </select>
                         </div>
                       </div>
@@ -460,7 +467,7 @@ export const MarketingDashboard: React.FC = () => {
                     ref={ctx.editorRef}
                     value={ctx.newTemplate.content}
                     onChange={(e) => ctx.setNewTemplate({ ...ctx.newTemplate, content: e.target.value })}
-                    className="flex-1 w-full bg-[#1e1e1e] text-[#d4d4d4] font-mono text-xs p-4 focus:outline-none resize-none leading-relaxed selection:bg-indigo-500/30"
+                    className="flex-1 w-full bg-[#1e1e1e] text-neutral-300 font-mono text-xs p-4 focus:outline-none resize-none leading-relaxed selection:bg-indigo-500/30"
                     spellCheck={false}
                     placeholder="<!-- El código HTML generado aparecerá aquí -->"
                   />
@@ -487,7 +494,7 @@ export const MarketingDashboard: React.FC = () => {
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center opacity-40">
                     <div className="w-32 h-32 bg-gray-300 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                      <span className="text-4xl grayscale">🎨</span>
+                      <Palette className="w-12 h-12 text-gray-400 dark:text-gray-500" />
                     </div>
                     <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Espacio de Trabajo</h3>
                     <p className="text-gray-500 max-w-xs mt-2">Usa el panel izquierdo para generar tu primera plantilla profesional.</p>
@@ -512,7 +519,7 @@ export const MarketingDashboard: React.FC = () => {
                 const imgTag = `<img src="${media.url}" alt="Imagen" style="max-width: 100%; height: auto; border: 0; display: block;" />`;
                 ctx.setNewTemplate((prev) => ({ ...prev, content: prev.content + "\n" + imgTag }));
                 ctx.setShowMediaLibrary(false);
-                toast.success("Imagen insertada");
+                toast.success(t("marketing_dashboard.toast.image_inserted", "Imagen insertada"));
               }}
               onClose={() => ctx.setShowMediaLibrary(false)}
             />

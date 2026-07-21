@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { api } from "@/lib/axios";
 import { useAuthStore } from "@/stores/authStore";
 import { useSound } from "@/components/SoundContext";
 import { SubscriptionPlan } from "@/types";
-import { useServices } from "@/contexts/ServiceContext";
+import { useServices } from "@/context/ServiceContext";
 
 // ────────────────────────────────────────────────
 // TYPES
@@ -159,6 +160,7 @@ export type SettingsTab =
 // ────────────────────────────────────────────────
 
 export const useCompanySettings = () => {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const { playSound } = useSound();
   const { companyService } = useServices();
@@ -193,8 +195,7 @@ export const useCompanySettings = () => {
     const fetchSettings = async () => {
       try {
         setLoading(true);
-        const res = await companyService.getSettings();
-        const settingsData = (res as any).data || res;
+        const settingsData = await companyService.getSettings();
 
         if (settingsData) {
           setSettings((prev) => ({
@@ -203,7 +204,7 @@ export const useCompanySettings = () => {
             businessHours: { ...prev.businessHours, ...settingsData.businessHours },
             automation: { ...prev.automation, ...settingsData.automation },
             smtp: settingsData.smtp ? { ...prev.smtp, ...settingsData.smtp } : prev.smtp,
-            billing: settingsData.billing,
+            billing: settingsData.billing ?? prev.billing,
           }));
           if (settingsData.billing?.plan?.id) {
             setSelectedPlanId(settingsData.billing.plan.id);
@@ -211,7 +212,7 @@ export const useCompanySettings = () => {
         }
       } catch (error) {
         console.error("Failed to fetch company settings:", error);
-        toast.error("Error al cargar configuración");
+        toast.error(t("company_settings_hook.toast.load_error", "Error al cargar configuración"));
       } finally {
         setLoading(false);
       }
@@ -254,9 +255,9 @@ export const useCompanySettings = () => {
 
       if (calendar === "connected") {
         setGoogleCalendarConnected(true);
-        toast.success("Google Calendar conectado");
+        toast.success(t("company_settings_hook.toast.google_connected", "Google Calendar conectado"));
       } else if (error) {
-        toast.error("No se pudo conectar Google Calendar");
+        toast.error(t("company_settings_hook.toast.google_connect_error_callback", "No se pudo conectar Google Calendar"));
       }
       // Limpia los query params para no repetir el toast al refrescar.
       params.delete("calendar");
@@ -320,7 +321,7 @@ export const useCompanySettings = () => {
     try {
       if (activeTab === "security") {
         if (passwords.new !== passwords.confirm) {
-          toast.error("Las contraseñas no coinciden");
+          toast.error(t("company_settings_hook.toast.passwords_mismatch", "Las contraseñas no coinciden"));
           setLoading(false);
           return;
         }
@@ -336,15 +337,15 @@ export const useCompanySettings = () => {
         }
 
         setPasswords({ current: "", new: "", confirm: "" });
-        toast.success("Contraseña actualizada");
+        toast.success(t("company_settings_hook.toast.password_updated", "Contraseña actualizada"));
       } else {
         await companyService.updateSettings(settings);
-        toast.success("Configuración guardada");
+        toast.success(t("company_settings_hook.toast.settings_saved", "Configuración guardada"));
       }
       playSound("success");
     } catch (error: unknown) {
       console.error("Failed to save settings:", error);
-      const msg = error instanceof Error ? error.message : "Error al guardar cambios";
+      const msg = error instanceof Error ? error.message : t("company_settings_hook.toast.save_error", "Error al guardar cambios");
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -353,18 +354,18 @@ export const useCompanySettings = () => {
 
   const handleTestEmail = async () => {
     if (!settings.smtp.host || !settings.smtp.user) {
-      toast.error("Host y usuario requeridos");
+      toast.error(t("company_settings_hook.toast.smtp_host_user_required", "Host y usuario requeridos"));
       return;
     }
 
     const targetEmail = user?.email || settings.smtp.senderEmail;
     if (!targetEmail) {
-      toast.error("Configura el email de remitente primero");
+      toast.error(t("company_settings_hook.toast.smtp_sender_required", "Configura el email de remitente primero"));
       return;
     }
 
     setTestingConnection(true);
-    const toastId = toast.loading("Probando SMTP…");
+    const toastId = toast.loading(t("company_settings_hook.toast.smtp_testing", "Probando SMTP…"));
 
     try {
       await api.post("/emails/test-connection", {
@@ -376,11 +377,11 @@ export const useCompanySettings = () => {
         toEmail: targetEmail,
         senderEmail: settings.smtp.senderEmail,
       });
-      toast.success(`Correo de prueba enviado`, { id: toastId });
+      toast.success(t("company_settings_hook.toast.smtp_test_sent", "Correo de prueba enviado"), { id: toastId });
       playSound("success");
     } catch (error: unknown) {
       console.error("SMTP Test Failed:", error);
-      const msg = error instanceof Error ? error.message : "Falló la conexión";
+      const msg = error instanceof Error ? error.message : t("company_settings_hook.toast.smtp_connection_failed", "Falló la conexión");
       toast.error(`SMTP: ${msg}`, { id: toastId });
       playSound("error");
     } finally {
@@ -412,13 +413,13 @@ export const useCompanySettings = () => {
 
       if (uploadedUrl) {
         handleAvatarSelect(uploadedUrl);
-        toast.success("Imagen actualizada");
+        toast.success(t("company_settings_hook.toast.image_updated", "Imagen actualizada"));
       } else {
-        toast.error("Error al subir imagen");
+        toast.error(t("company_settings_hook.toast.image_upload_error", "Error al subir imagen"));
       }
     } catch (error: unknown) {
       console.error("Upload error:", error);
-      toast.error("Error al subir imagen");
+      toast.error(t("company_settings_hook.toast.image_upload_error", "Error al subir imagen"));
     } finally {
       setUploadingImage(false);
     }
@@ -428,9 +429,9 @@ export const useCompanySettings = () => {
     try {
       await api.post("/google/disconnect");
       setGoogleCalendarConnected(false);
-      toast.success("Google Calendar desvinculado");
+      toast.success(t("company_settings_hook.toast.google_disconnected", "Google Calendar desvinculado"));
     } catch {
-      toast.error("Error al desvincular");
+      toast.error(t("company_settings_hook.toast.google_disconnect_error", "Error al desvincular"));
     }
   };
 
@@ -443,11 +444,11 @@ export const useCompanySettings = () => {
       if (url) {
         window.location.href = url;
       } else {
-        toast.error("No se pudo iniciar la conexión con Google");
+        toast.error(t("company_settings_hook.toast.google_start_error", "No se pudo iniciar la conexión con Google"));
       }
     } catch (error) {
       console.error("Failed to start Google Calendar connect:", error);
-      toast.error("Error al conectar Google Calendar");
+      toast.error(t("company_settings_hook.toast.google_connect_error", "Error al conectar Google Calendar"));
     }
   };
 
@@ -456,7 +457,7 @@ export const useCompanySettings = () => {
       setLoading(true);
       const planId = settings.billing.plan?.id;
       if (!planId) {
-        toast.error("Plan no encontrado");
+        toast.error(t("company_settings_hook.toast.plan_not_found", "Plan no encontrado"));
         return;
       }
       
@@ -467,11 +468,11 @@ export const useCompanySettings = () => {
       if (res.data?.url) {
         window.location.href = res.data.url;
       } else {
-        toast.error("Error al redirigir a pago");
+        toast.error(t("company_settings_hook.toast.redirect_payment_error", "Error al redirigir a pago"));
       }
     } catch (error) {
       console.error("Failed to initialize MercadoPago checkout:", error);
-      toast.error("Error al iniciar pago");
+      toast.error(t("company_settings_hook.toast.start_payment_error", "Error al iniciar pago"));
     } finally {
       setLoading(false);
     }
@@ -479,11 +480,11 @@ export const useCompanySettings = () => {
 
   const handleSubscribeCard = async () => {
     if (!selectedPlanId) {
-      toast.error("Selecciona un plan");
+      toast.error(t("company_settings_hook.toast.select_plan", "Selecciona un plan"));
       return;
     }
     if (!cardForm.cardNumber || !cardForm.cardholderName || !cardForm.expiryDate || !cardForm.cvv) {
-      toast.error("Completa los datos de la tarjeta");
+      toast.error(t("company_settings_hook.toast.complete_card_data", "Completa los datos de la tarjeta"));
       return;
     }
 
@@ -501,7 +502,7 @@ export const useCompanySettings = () => {
       });
 
       if (res.data?.success) {
-        toast.success("Suscripción activada");
+        toast.success(t("company_settings_hook.toast.subscription_activated", "Suscripción activada"));
         playSound("success");
         // Refetch settings to update UI state
         const settingsRes = await api.get("/company/settings");
@@ -513,11 +514,11 @@ export const useCompanySettings = () => {
           }));
         }
       } else {
-        toast.error("Error al procesar pago");
+        toast.error(t("company_settings_hook.toast.process_payment_error", "Error al procesar pago"));
       }
     } catch (error) {
       console.error("Card subscription failed:", error);
-      toast.error("Error al procesar tarjeta");
+      toast.error(t("company_settings_hook.toast.process_card_error", "Error al procesar tarjeta"));
     } finally {
       setLoading(false);
     }

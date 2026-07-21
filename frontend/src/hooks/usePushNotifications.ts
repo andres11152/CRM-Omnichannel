@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 /**
@@ -18,6 +19,7 @@ interface UsePushNotificationsReturn {
 }
 
 export const usePushNotifications = (): UsePushNotificationsReturn => {
+  const { t } = useTranslation();
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,7 +81,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
    */
   const subscribe = async () => {
     if (!isSupported) {
-      toast.error("Navegador no compatible");
+      toast.error(t("push_notifications_hook.toast.unsupported_browser", "Navegador no compatible"));
       return;
     }
 
@@ -93,7 +95,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
       }
 
       if (perm !== "granted") {
-        toast.warning("Activa notificaciones en tu navegador");
+        toast.warning(t("push_notifications_hook.toast.enable_in_browser", "Activa notificaciones en tu navegador"));
         setIsLoading(false);
         return;
       }
@@ -122,7 +124,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
       console.log("Successfully subscribed to push notifications");
     } catch (error) {
       console.error("Failed to subscribe:", error);
-      toast.error("Error al activar notificaciones");
+      toast.error(t("push_notifications_hook.toast.activate_error", "Error al activar notificaciones"));
     } finally {
       setIsLoading(false);
     }

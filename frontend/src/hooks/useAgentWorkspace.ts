@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { Ticket, Contact, User, Tag, Channel } from "@/types";
@@ -197,6 +198,7 @@ export function ticketToContact(ticket: Ticket): Contact {
 // ────────────────────────────────────────────────
 
 export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
+  const { t } = useTranslation();
   // ── Core State ──
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
@@ -377,18 +379,18 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         });
         if (!res.ok) {
           const error = await res.json();
-          throw new Error(error.message || "Error al eliminar ticket");
+          throw new Error(error.message || t("agent_workspace.toast.delete_ticket_error", "Error al eliminar ticket"));
         }
         setTickets((prev) => prev.filter((t) => t.id !== ticketId));
         if (activeTicketId === ticketId) {
           setActiveTicketId(null);
         }
-        toast.success("Ticket eliminado");
+        toast.success(t("agent_workspace.toast.ticket_deleted", "Ticket eliminado"));
       } catch (error: unknown) {
         const msg =
           error instanceof Error
             ? error.message
-            : "Error al eliminar el ticket";
+            : t("agent_workspace.toast.delete_ticket_error_fallback", "Error al eliminar el ticket");
         toast.error(msg);
       }
     },
@@ -421,7 +423,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
             body: JSON.stringify(updateData),
           },
         );
-        if (!res.ok) throw new Error("Error al transferir el ticket");
+        if (!res.ok) throw new Error(t("agent_workspace.toast.transfer_error", "Error al transferir el ticket"));
 
         const json = await res.json();
         const updatedTicketData = json.data?.ticket || json;
@@ -465,8 +467,8 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
 
         toast.success(
           type === "AGENT"
-            ? "Ticket transferido a agente"
-            : "Ticket transferido a cola",
+            ? t("agent_workspace.toast.transferred_to_agent", "Ticket transferido a agente")
+            : t("agent_workspace.toast.transferred_to_queue", "Ticket transferido a cola"),
         );
         setIsTransferModalOpen(false);
         setTransferringTicketId(null);
@@ -474,7 +476,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         const msg =
           error instanceof Error
             ? error.message
-            : "Error al transferir el ticket";
+            : t("agent_workspace.toast.transfer_error", "Error al transferir el ticket");
         toast.error(msg);
       }
     },
@@ -532,7 +534,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
       }
 
       if (!response.ok) {
-        throw new Error("Error al asignar ticket (Posiblemente ya no existe)");
+        throw new Error(t("agent_workspace.toast.assign_error", "Error al asignar ticket (Posiblemente ya no existe)"));
       }
 
       setTickets((prev) =>
@@ -548,10 +550,10 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         ),
       );
       setActiveTab("my_chats");
-      toast.success("Ticket asignado");
+      toast.success(t("agent_workspace.toast.ticket_assigned", "Ticket asignado"));
     } catch (error: unknown) {
       const msg =
-        error instanceof Error ? error.message : "Error al atender ticket";
+        error instanceof Error ? error.message : t("agent_workspace.toast.pick_error_fallback", "Error al atender ticket");
       toast.error(msg);
       fetchData();
     }
@@ -578,12 +580,12 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         });
         if (!res.ok) {
           const error = await res.json();
-          throw new Error(error.message || "Error al crear chat");
+          throw new Error(error.message || t("agent_workspace.toast.create_chat_error", "Error al crear chat"));
         }
         fetchData();
       } catch (error: unknown) {
         const msg =
-          error instanceof Error ? error.message : "Error al iniciar chat";
+          error instanceof Error ? error.message : t("agent_workspace.toast.create_chat_error_fallback", "Error al iniciar chat");
         toast.error(msg);
       } finally {
         setLoading(false);
@@ -625,9 +627,9 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
           ),
         );
         setActiveTicketId(null);
-        toast.success("Ticket resuelto");
+        toast.success(t("agent_workspace.toast.ticket_resolved", "Ticket resuelto"));
       } catch {
-        toast.error("Error al resolver ticket");
+        toast.error(t("agent_workspace.toast.resolve_error", "Error al resolver ticket"));
       }
     },
     [activeTicketId],
@@ -683,7 +685,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         );
         if (!res.ok) {
           const error = await res.json();
-          throw new Error(error.message || "Error al actualizar el bloqueo");
+          throw new Error(error.message || t("agent_workspace.toast.block_update_error", "Error al actualizar el bloqueo"));
         }
         const json = await res.json();
 
@@ -698,19 +700,19 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         if (json.whatsappSynced === false) {
           toast.success(
             blocked
-              ? "Contacto bloqueado en el CRM (sin sesión de WhatsApp activa para sincronizar)"
-              : "Contacto desbloqueado en el CRM (sin sesión de WhatsApp activa para sincronizar)",
+              ? t("agent_workspace.toast.contact_blocked_no_sync", "Contacto bloqueado en el CRM (sin sesión de WhatsApp activa para sincronizar)")
+              : t("agent_workspace.toast.contact_unblocked_no_sync", "Contacto desbloqueado en el CRM (sin sesión de WhatsApp activa para sincronizar)"),
           );
         } else {
           toast.success(
-            blocked ? "Contacto bloqueado" : "Contacto desbloqueado",
+            blocked ? t("agent_workspace.toast.contact_blocked", "Contacto bloqueado") : t("agent_workspace.toast.contact_unblocked", "Contacto desbloqueado"),
           );
         }
       } catch (error: unknown) {
         const msg =
           error instanceof Error
             ? error.message
-            : "Error al actualizar el bloqueo";
+            : t("agent_workspace.toast.block_update_error", "Error al actualizar el bloqueo");
         toast.error(msg);
       }
     },
@@ -740,7 +742,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         );
         if (!res.ok) {
           const error = await res.json();
-          throw new Error(error.message || "Error al actualizar la conversación");
+          throw new Error(error.message || t("agent_workspace.toast.conversation_update_error", "Error al actualizar la conversación"));
         }
         const json = await res.json();
 
@@ -750,14 +752,14 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
 
         toast.success(
           json.data?.whatsappSynced === false
-            ? `${successMsg} (sin sesión de WhatsApp activa para sincronizar)`
+            ? `${successMsg} ${t("agent_workspace.toast.no_sync_suffix", "(sin sesión de WhatsApp activa para sincronizar)")}`
             : successMsg,
         );
       } catch (error: unknown) {
         const msg =
           error instanceof Error
             ? error.message
-            : "Error al actualizar la conversación";
+            : t("agent_workspace.toast.conversation_update_error", "Error al actualizar la conversación");
         toast.error(msg);
       }
     },
@@ -771,7 +773,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         "archive",
         { archived },
         { isArchived: archived },
-        archived ? "Chat archivado" : "Chat desarchivado",
+        archived ? t("agent_workspace.toast.chat_archived", "Chat archivado") : t("agent_workspace.toast.chat_unarchived", "Chat desarchivado"),
       ),
     [handleSetConversationInboxState],
   );
@@ -783,7 +785,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         "pin",
         { pinned },
         { isPinned: pinned },
-        pinned ? "Chat fijado" : "Chat desfijado",
+        pinned ? t("agent_workspace.toast.chat_pinned", "Chat fijado") : t("agent_workspace.toast.chat_unpinned", "Chat desfijado"),
       ),
     [handleSetConversationInboxState],
   );
@@ -795,7 +797,7 @@ export function useAgentWorkspace({ user }: UseAgentWorkspaceOptions) {
         "mute",
         { mutedUntil },
         { mutedUntil },
-        mutedUntil ? "Chat silenciado" : "Chat reactivado",
+        mutedUntil ? t("agent_workspace.toast.chat_muted", "Chat silenciado") : t("agent_workspace.toast.chat_unmuted", "Chat reactivado"),
       ),
     [handleSetConversationInboxState],
   );

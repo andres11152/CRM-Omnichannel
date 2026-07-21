@@ -155,13 +155,26 @@ export const initCronWorker = async () => {
 
                     // 5. Enqueue directly to the message queue service using existing dbId
                     const { messageQueueService } = await import("@/services/queue/messageQueueService");
+                    const attachment = meta.attachment as Record<string, unknown> | null | undefined;
+                    const isAudioNote = attachment?.type === "audio" || meta.isVoiceNote === true;
+                    
                     await messageQueueService.enqueue({
                       companyId: msg.conversation.companyId,
                       conversationId: msg.conversation.id,
                       senderId: msg.senderId,
                       to: targetPhone,
                       text: msg.content,
-                      media: meta.attachment as MediaPayload | undefined,
+                      media: attachment ? {
+                        url: (attachment.url as string) || "",
+                        type: (attachment.type as MediaPayload["type"]) || "image",
+                        mimetype: isAudioNote 
+                          ? ((attachment.mimetype as string)?.includes("codecs=opus")
+                            ? (attachment.mimetype as string)
+                            : `${(attachment.mimetype as string) || "audio/ogg"}; codecs=opus`)
+                          : (attachment.mimetype as string),
+                        filename: (attachment.filename as string) || undefined,
+                        ptt: isAudioNote ? true : !!attachment.ptt,
+                      } : undefined,
                       metadata: {
                         ...updatedMeta,
                         dbId: msg.id,

@@ -14,6 +14,7 @@ import {
   QuickReply,
 } from "@/types";
 import { jwtDecode } from "jwt-decode";
+import { AlertTriangle } from "lucide-react";
 import { useSocketStore } from "@/stores/socketStore";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -107,7 +108,9 @@ export const ChatInterface: React.FC<Props> = ({
       if (token) {
         return (jwtDecode<{ id: string }>(token)).id;
       }
-    } catch (e) {}
+    } catch {
+      // ignore malformed/expired token, treated as unauthenticated below
+    }
     return null;
   }, []);
 
@@ -291,7 +294,7 @@ export const ChatInterface: React.FC<Props> = ({
       const { updatePriority } = await import("@/services/ticketService");
       await updatePriority(activeContact.ticketId, newPriority);
       onTicketUpdate?.(activeContact.ticketId, { priority: newPriority });
-      toast.success(`Prioridad: ${newPriority}`);
+      toast.success(t("chat.priority_updated", "Prioridad: {{priority}}", { priority: newPriority }));
     } catch (error) {
       toast.error(t("chat.priority_update_error", "Error al actualizar la prioridad"));
       console.error(error);
@@ -302,7 +305,7 @@ export const ChatInterface: React.FC<Props> = ({
   const openTransferModal = () => setShowTransferModal(true);
 
   return (
-    <div className="flex h-full w-full bg-gray-50/50 dark:bg-[#0b141a] overflow-hidden relative border-l border-gray-200 dark:border-white/5">
+    <div className="flex h-full w-full bg-gray-50/50 dark:bg-reply-bg-dark overflow-hidden relative border-l border-gray-200 dark:border-white/5">
       <div className="flex-1 flex flex-col h-full relative overflow-hidden min-w-0">
         
         {/* TOP: Header */}
@@ -403,7 +406,7 @@ export const ChatInterface: React.FC<Props> = ({
           <>
             {activeViewers.filter(v => v.id !== getMyUserId()).length > 0 && (
               <div className="mx-4 mb-2 p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center gap-2 animate-in slide-in-from-bottom-2 duration-300">
-                <span className="text-sm">⚠️</span>
+                <AlertTriangle className="w-3.5 h-3.5" />
                 <span>
                   {activeViewers
                     .filter(v => v.id !== getMyUserId())
@@ -450,7 +453,7 @@ export const ChatInterface: React.FC<Props> = ({
                 .map((m) => `${m.direction === "OUTBOUND" ? "Agente" : "Cliente"}: ${m.content}`)
                 .join("\n");
 
-              const toastId = toast.loading("Consultando al Copiloto de IA...");
+              const toastId = toast.loading(t("chat.copilot_loading", "Consultando al Copiloto de IA..."));
               try {
                 const { api } = await import("@/lib/axios");
                 const res = await api.post("/ai/copilot", {
@@ -460,7 +463,7 @@ export const ChatInterface: React.FC<Props> = ({
                 });
 
                 if (res.data && res.data.response) {
-                  toast.success("Respuesta generada", { id: toastId });
+                  toast.success(t("chat.copilot_success", "Respuesta generada"), { id: toastId });
                   if (action === "summarize") {
                     // Inject summary as an internal note or overlay toast. Let's make it a nice visual toast or insert into text box
                     setInputValue((prev) => `${prev}\n\n📋 *Resumen de IA*:\n${res.data.response}`);
@@ -469,10 +472,10 @@ export const ChatInterface: React.FC<Props> = ({
                     setInputValue(res.data.response);
                   }
                 } else {
-                  toast.error("El copiloto no devolvió respuesta.", { id: toastId });
+                  toast.error(t("chat.copilot_no_response", "El copiloto no devolvió respuesta."), { id: toastId });
                 }
               } catch (err) {
-                toast.error("Error al conectar con la IA. Asegúrate de configurar Gemini.", { id: toastId });
+                toast.error(t("chat.copilot_connection_error", "Error al conectar con la IA. Asegúrate de configurar Gemini."), { id: toastId });
                 console.error("[AICopilot] Error processing action:", err);
               }
             }}
@@ -507,7 +510,7 @@ export const ChatInterface: React.FC<Props> = ({
           />
 
           <div 
-            className="absolute lg:relative right-0 top-0 h-full bg-white dark:bg-[#0b141a] flex-shrink-0 overflow-hidden min-w-0 z-50 w-full sm:w-[400px] lg:w-auto shadow-2xl lg:shadow-none transition-transform"
+            className="absolute lg:relative right-0 top-0 h-full bg-white dark:bg-reply-bg-dark flex-shrink-0 overflow-hidden min-w-0 z-50 w-full sm:w-[400px] lg:w-auto shadow-2xl lg:shadow-none transition-transform"
             style={window.innerWidth > 1024 ? { width: `${panel360Width}px` } : {}}
           >
               <Customer360Panel 
@@ -571,8 +574,8 @@ export const ChatInterface: React.FC<Props> = ({
       <ActionModals
         type={activeActionModal}
         onClose={() => setActiveActionModal(null)}
-        onSchedule={(date, msg) => {
-          handleSendMessage(msg, null, replyingTo, date);
+        onSchedule={(date, msg, file, directAttachment) => {
+          handleSendMessage(msg, file, replyingTo, date, directAttachment || undefined);
           setActiveActionModal(null);
         }}
         onProduct={(p) => {

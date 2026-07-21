@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import { getMedia, Media } from "@/services/mediaService";
@@ -16,6 +17,7 @@ export const StickerPicker: React.FC<StickerPickerProps> = ({
   onEmojiSelect,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"emoji" | "sticker">("emoji");
   const [stickers, setStickers] = useState<Media[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export const StickerPicker: React.FC<StickerPickerProps> = ({
       setStickers(data);
     } catch (error: unknown) {
       console.error(error);
-      toast.error("Error al cargar stickers");
+      toast.error(t("sticker_picker.toast.load_error", "Error al cargar stickers"));
     } finally {
       setLoading(false);
     }

@@ -15,7 +15,7 @@ type RecorderPhase = "recording" | "paused" | "preview";
 const MAX_DURATION_SECONDS = 300;
 
 /**
- * 🎙️ ENTERPRISE VOICE NOTE RECORDER
+ * ENTERPRISE VOICE NOTE RECORDER
  *
  * Flow (WhatsApp-parity plus review step):
  *  - Records WebM/Opus (backend converts to OGG/Opus mono 16kHz and sends ptt:true).

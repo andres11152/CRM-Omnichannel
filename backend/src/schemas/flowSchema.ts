@@ -92,9 +92,18 @@ export const FlowNodeDataSchema = z.object({
   delayUnit: z.string().optional(),
 }).catchall(z.unknown());
 
+// The FlowBuilder UI saves node.type lowercase (e.g. "send_message") — the
+// executor already uppercases it at runtime (FlowExecutor.ts), so this
+// normalizes the same way at the validation boundary instead of rejecting
+// every flow the visual builder actually produces.
+const FlowNodeTypeInput = z
+  .string()
+  .transform((s) => s.toUpperCase())
+  .pipe(FlowNodeTypeSchema);
+
 export const FlowNodeSchema = z.object({
   id: z.string().min(1, "Node ID is required."),
-  type: FlowNodeTypeSchema,
+  type: FlowNodeTypeInput,
   data: FlowNodeDataSchema,
   position: z.object({
     x: z.number(),

@@ -503,12 +503,12 @@ export const AIAgentConfig: React.FC<Props> = () => {
                               }}
                               className="w-full appearance-none bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl px-4 py-3 text-sm font-medium focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand transition-all outline-none cursor-pointer text-reply-text-primary dark:text-reply-text-primary-dark"
                             >
-                              <optgroup label="🤖 OpenAI" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">
+                              <optgroup label="OpenAI" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">
                                 <option value="OPENAI|gpt-4o" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">GPT-4o (Alta capacidad - Recomendado)</option>
                                 <option value="OPENAI|gpt-4o-mini" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">GPT-4o Mini (Veloz y económico)</option>
                                 <option value="OPENAI|gpt-4-turbo" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">GPT-4 Turbo (Anterior)</option>
                               </optgroup>
-                              <optgroup label="✨ Google Gemini" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">
+                              <optgroup label="Google Gemini" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">
                                 <option value="GEMINI|gemini-2.5-flash" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">Gemini 2.5 Flash (Recomendado - Veloz y económico)</option>
                                 <option value="GEMINI|gemini-2.5-pro" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">Gemini 2.5 Pro (Razonamiento complejo y análisis avanzado)</option>
                                 <option value="GEMINI|gemini-1.5-flash" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">Gemini 1.5 Flash (Estable - Versión anterior)</option>

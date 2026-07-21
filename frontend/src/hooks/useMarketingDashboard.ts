@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { read, utils } from "xlsx";
 import { Campaign, MessageTemplate } from "@/types";
@@ -43,6 +44,7 @@ const DEFAULT_TEMPLATE: NewTemplateState = {
 // ────────────────────────────────────────────────
 
 export const useMarketingDashboard = () => {
+  const { t } = useTranslation();
   // ── Navigation ──
   const [activeSection, setActiveSection] = useState<MarketingSection>("builder");
   const [builderStep, setBuilderStep] = useState(1);
@@ -159,7 +161,7 @@ export const useMarketingDashboard = () => {
       setNewTemplate((t) => ({ ...t, content: prev }));
       setHistoryIndex(historyIndex - 1);
     } else {
-      toast.info("Sin acciones para deshacer");
+      toast.info(t("marketing_dashboard_hook.toast.nothing_to_undo", "Sin acciones para deshacer"));
     }
   };
 
@@ -169,7 +171,7 @@ export const useMarketingDashboard = () => {
       setNewTemplate((t) => ({ ...t, content: next }));
       setHistoryIndex(historyIndex + 1);
     } else {
-      toast.info("Sin acciones para rehacer");
+      toast.info(t("marketing_dashboard_hook.toast.nothing_to_redo", "Sin acciones para rehacer"));
     }
   };
 
@@ -196,10 +198,10 @@ export const useMarketingDashboard = () => {
         textarea.focus();
         textarea.setSelectionRange(start + tag.length, start + tag.length);
       }, 0);
-      toast.success("Variable insertada");
+      toast.success(t("marketing_dashboard_hook.toast.variable_inserted", "Variable insertada"));
     } else {
       navigator.clipboard.writeText(tag);
-      toast.info("Copiado");
+      toast.info(t("marketing_dashboard_hook.toast.copied", "Copiado"));
     }
   };
 
@@ -250,16 +252,16 @@ export const useMarketingDashboard = () => {
         setNewTemplate(DEFAULT_TEMPLATE);
         setIsCreatingTemplate(false);
         loadData();
-        toast.success("Plantilla creada");
+        toast.success(t("marketing_dashboard_hook.toast.template_created", "Plantilla creada"));
       }
     } catch (e) {
       console.error(e);
-      toast.error("Error al crear plantilla");
+      toast.error(t("marketing_dashboard_hook.toast.template_create_error", "Error al crear plantilla"));
     }
   };
 
   const handleDeleteTemplate = async (id: string) => {
-    if (!confirm("¿Eliminar plantilla?")) return;
+    if (!confirm(t("marketing_dashboard_hook.confirm.delete_template", "¿Eliminar plantilla?"))) return;
     try {
       const token = localStorage.getItem("token");
       await fetch(`${API_BASE_URL}/templates/${id}`, {
@@ -300,24 +302,24 @@ export const useMarketingDashboard = () => {
   };
 
   const handleDeleteCampaign = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar esta campaña?")) return;
+    if (!confirm(t("marketing_dashboard_hook.confirm.delete_campaign", "¿Estás seguro de eliminar esta campaña?"))) return;
     try {
       await marketingService.deleteCampaign(id);
       setCampaigns((prev) => prev.filter((c) => c.id !== id));
-      toast.success("Campaña eliminada");
+      toast.success(t("marketing_dashboard_hook.toast.campaign_deleted", "Campaña eliminada"));
     } catch (error) {
       console.error("Error deleting campaign:", error);
-      toast.error("Error al eliminar campaña");
+      toast.error(t("marketing_dashboard_hook.toast.campaign_delete_error", "Error al eliminar campaña"));
     }
   };
 
   const handleLaunch = async () => {
     if (!campaignName || !selectedTemplateId || (selectedTags.length === 0 && targetPhones.length === 0)) {
-      toast.error("Completa los campos requeridos");
+      toast.error(t("marketing_dashboard_hook.toast.required_fields", "Completa los campos requeridos"));
       return;
     }
     if (scheduleMode === "later" && !scheduledDate) {
-      toast.error("Selecciona fecha y hora");
+      toast.error(t("marketing_dashboard_hook.toast.select_date_time", "Selecciona fecha y hora"));
       return;
     }
 
@@ -375,11 +377,11 @@ export const useMarketingDashboard = () => {
       setSelectedTemplateId("");
       setScheduledDate("");
       setScheduleMode("now");
-      toast.success(editingCampaignId ? "Campaña actualizada" : "Campaña creada y lanzada");
+      toast.success(editingCampaignId ? t("marketing_dashboard_hook.toast.campaign_updated", "Campaña actualizada") : t("marketing_dashboard_hook.toast.campaign_created", "Campaña creada y lanzada"));
     } catch (error) {
       console.error("Error launching/updating campaign:", error);
       setIsSending(false);
-      toast.error("Error al guardar campaña");
+      toast.error(t("marketing_dashboard_hook.toast.campaign_save_error", "Error al guardar campaña"));
     }
   };
 
@@ -399,10 +401,10 @@ export const useMarketingDashboard = () => {
       const clean = res.replace(/```html/g, "").replace(/```/g, "");
       setNewTemplate((prev) => ({ ...prev, content: clean }));
       setAiPrompt("");
-      toast.success("Diseño actualizado");
+      toast.success(t("marketing_dashboard_hook.toast.design_updated", "Diseño actualizado"));
     } catch (e) {
       console.error(e);
-      toast.error("Error al generar");
+      toast.error(t("marketing_dashboard_hook.toast.generate_error", "Error al generar"));
     } finally {
       setIsGeneratingAI(false);
       setGenerationStatus("");

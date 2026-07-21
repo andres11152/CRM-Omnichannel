@@ -208,7 +208,7 @@ export const LoginScreen: React.FC<Props> = ({
           <div className="mb-8">
             <a
               href={`${API_BASE_URL}/google/auth?action=login`}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm bg-white dark:bg-reply-panel-dark text-sm font-semibold text-gray-700 dark:text-white hover:bg-reply-bg dark:hover:bg-[#2a3942] transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-gray-200"
+              className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm bg-white dark:bg-reply-panel-dark text-sm font-semibold text-gray-700 dark:text-white hover:bg-reply-bg dark:hover:bg-reply-border-dark transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-gray-200"
             >
               <svg
                 className="w-5 h-5"

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { fetchAPI } from "@/services/apiConfig";
 import { useModal } from "@/context/ModalContext";
@@ -133,6 +134,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, onChange, disabled
 // ─────────────────────────────────────────────────────────────────
 
 export const PermissionsPanel: React.FC = () => {
+  const { t } = useTranslation();
   const { confirm } = useModal();
   const [catalog, setCatalog] = useState<CatalogModule[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -171,7 +173,7 @@ export const PermissionsPanel: React.FC = () => {
       setCatalog(data.catalog || []);
     } catch (error) {
       console.error("Error fetching permission catalog:", error);
-      toast.error("Error al cargar el catálogo de permisos");
+      toast.error(t("permissions_panel.toast.catalog_load_error", "Error al cargar el catálogo de permisos"));
     }
   };
 
@@ -182,7 +184,7 @@ export const PermissionsPanel: React.FC = () => {
       setRoles(data.roles || []);
     } catch (error) {
       console.error("Error fetching roles:", error);
-      toast.error("Error al cargar roles");
+      toast.error(t("permissions_panel.toast.roles_load_error", "Error al cargar roles"));
     } finally {
       setLoading(false);
     }
@@ -216,7 +218,7 @@ export const PermissionsPanel: React.FC = () => {
 
   const handleSaveRole = async () => {
     if (!roleForm.name.trim()) {
-      toast.error("Nombre del rol requerido");
+      toast.error(t("permissions_panel.toast.name_required", "Nombre del rol requerido"));
       return;
     }
     try {
@@ -228,19 +230,19 @@ export const PermissionsPanel: React.FC = () => {
 
       if (isCreating) {
         await fetchAPI("/roles", { method: "POST", body: JSON.stringify({ ...roleForm, permissions }) });
-        toast.success("Rol creado");
+        toast.success(t("permissions_panel.toast.role_created", "Rol creado"));
       } else if (selectedRole) {
         await fetchAPI(`/roles/${selectedRole.id}`, {
           method: "PATCH",
           body: JSON.stringify({ ...roleForm, permissions }),
         });
-        toast.success("Rol actualizado");
+        toast.success(t("permissions_panel.toast.role_updated", "Rol actualizado"));
       }
       fetchRoles();
       closeEditor();
     } catch (error: unknown) {
       console.error("Error saving role:", error);
-      toast.error(error instanceof Error ? error.message : "Error guardando rol");
+      toast.error(error instanceof Error ? error.message : t("permissions_panel.toast.save_error", "Error guardando rol"));
     } finally {
       setLoading(false);
     }
@@ -248,22 +250,21 @@ export const PermissionsPanel: React.FC = () => {
 
   const handleDeleteRole = async (roleId: string) => {
     const ok = await confirm({
-      title: "Eliminar rol",
-      message:
-        "¿Estás seguro de eliminar este rol? Los usuarios con este rol perderán sus permisos personalizados.",
-      confirmText: "Eliminar rol",
-      cancelText: "Cancelar",
+      title: t("permissions_panel.confirm.delete_role_title", "Eliminar rol"),
+      message: t("permissions_panel.confirm.delete_role_message", "¿Estás seguro de eliminar este rol? Los usuarios con este rol perderán sus permisos personalizados."),
+      confirmText: t("permissions_panel.confirm.delete_role_cta", "Eliminar rol"),
+      cancelText: t("common.cancel", "Cancelar"),
       variant: "danger",
     });
     if (!ok) return;
     try {
       setLoading(true);
       await fetchAPI(`/roles/${roleId}`, { method: "DELETE" });
-      toast.success("Rol eliminado");
+      toast.success(t("permissions_panel.toast.role_deleted", "Rol eliminado"));
       fetchRoles();
     } catch (error: unknown) {
       console.error("Error deleting role:", error);
-      toast.error(error instanceof Error ? error.message : "Error eliminando rol");
+      toast.error(error instanceof Error ? error.message : t("permissions_panel.toast.delete_error", "Error eliminando rol"));
     } finally {
       setLoading(false);
     }
@@ -273,7 +274,8 @@ export const PermissionsPanel: React.FC = () => {
     const key = permKey(module, action, resource);
     setSelectedPermissions((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
@@ -281,7 +283,8 @@ export const PermissionsPanel: React.FC = () => {
   const toggleModule = useCallback((moduleId: string) => {
     setExpandedModules((prev) => {
       const next = new Set(prev);
-      next.has(moduleId) ? next.delete(moduleId) : next.add(moduleId);
+      if (next.has(moduleId)) next.delete(moduleId);
+      else next.add(moduleId);
       return next;
     });
   }, []);
@@ -294,7 +297,8 @@ export const PermissionsPanel: React.FC = () => {
         const next = new Set(prev);
         module.permissions.forEach((perm) => {
           const key = permKey(moduleId, perm.action, perm.resource);
-          enabled ? next.add(key) : next.delete(key);
+          if (enabled) next.add(key);
+          else next.delete(key);
         });
         return next;
       });

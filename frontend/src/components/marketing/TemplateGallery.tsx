@@ -1,7 +1,8 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MessageTemplate } from "@/types";
-import { Plus, Layout, Edit2, Trash2 } from "lucide-react";
+import { Plus, Layout, Edit2, Trash2, FileText } from "lucide-react";
 import type { NewTemplateState } from "@/hooks/useMarketingDashboard";
 
 interface TemplateGalleryProps {
@@ -18,7 +19,9 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({
   onEditTemplate,
   onDeleteTemplate,
   onCreateNew,
-}) => (
+}) => {
+  const { t: translate } = useTranslation();
+  return (
   <div className="flex flex-col h-full gap-6 animate-fade-in">
     {/* HEADER */}
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 dark:bg-gray-800/10 p-6 rounded-[2rem] border border-gray-100 dark:border-reply-border-dark backdrop-blur-md shadow-sm">
@@ -41,8 +44,8 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({
     {/* GRID */}
     {templates.length === 0 ? (
       <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-white dark:bg-reply-surface-dark rounded-[3rem] border border-dashed border-gray-200 dark:border-reply-border-dark shadow-inner">
-        <div className="w-32 h-32 bg-reply-bg dark:bg-gray-800/50 rounded-full flex items-center justify-center mb-8 animate-pulse text-5xl">
-          📄
+        <div className="w-32 h-32 bg-reply-bg dark:bg-gray-800/50 rounded-full flex items-center justify-center mb-8 animate-pulse">
+          <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500" />
         </div>
         <h4 className="text-xl font-black text-gray-900 dark:text-white mb-2">Tu Galería está Vacía</h4>
         <p className="text-sm text-gray-500 max-w-xs uppercase tracking-widest font-bold leading-relaxed">
@@ -81,7 +84,7 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({
                     <button
                       onClick={() => {
                         onSelectTemplate(t.id);
-                        toast.success("Plantilla cargada");
+                        toast.success(translate("template_gallery.toast.loaded", "Plantilla cargada"));
                       }}
                       className="px-8 py-3 bg-white text-black rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-110 transition-transform shadow-xl"
                     >
@@ -125,4 +128,5 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({
       </div>
     )}
   </div>
-);
+  );
+};

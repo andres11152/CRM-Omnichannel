@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 
 /**
- * 🏢 MODAL — Primitivo enterprise ÚNICO para TODOS los módulos.
+ * MODAL — Primitivo enterprise ÚNICO para TODOS los módulos.
  *
  * Centraliza, para que NADA varíe entre módulos:
  *  - Backdrop con blur + fade (enter/exit con framer-motion)

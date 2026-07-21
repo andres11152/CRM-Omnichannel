@@ -43,7 +43,7 @@ export const DealProductsTab: React.FC<Props> = ({ dealId, onProductsChanged }) 
       setCatalog(fullCatalog.filter(p => p.status === "active"));
     } catch (error) {
       console.error("Error loading deal products:", error);
-      toast.error("Error al cargar los productos");
+      toast.error(t("deal_products_tab.toast.load_error", "Error al cargar los productos"));
     } finally {
       setLoading(false);
     }
@@ -63,7 +63,7 @@ export const DealProductsTab: React.FC<Props> = ({ dealId, onProductsChanged }) 
         quantity,
         discount
       });
-      toast.success("Producto asociado correctamente");
+      toast.success(t("deal_products_tab.toast.linked", "Producto asociado correctamente"));
       setSelectedProductId("");
       setQuantity(1);
       setDiscount(0);
@@ -71,7 +71,7 @@ export const DealProductsTab: React.FC<Props> = ({ dealId, onProductsChanged }) 
       if (onProductsChanged) onProductsChanged();
     } catch (error) {
       console.error(error);
-      toast.error("No se pudo asociar el producto");
+      toast.error(t("deal_products_tab.toast.link_error", "No se pudo asociar el producto"));
     } finally {
       setAdding(false);
     }
@@ -80,12 +80,12 @@ export const DealProductsTab: React.FC<Props> = ({ dealId, onProductsChanged }) 
   const handleRemove = async (dealProductId: string) => {
     try {
       await removeProductFromDeal(dealId, dealProductId);
-      toast.success("Producto removido");
+      toast.success(t("deal_products_tab.toast.removed", "Producto removido"));
       await loadData();
       if (onProductsChanged) onProductsChanged();
     } catch (error) {
       console.error(error);
-      toast.error("Error al remover el producto");
+      toast.error(t("deal_products_tab.toast.remove_error", "Error al remover el producto"));
     }
   };
 
@@ -96,7 +96,7 @@ export const DealProductsTab: React.FC<Props> = ({ dealId, onProductsChanged }) 
       if (onProductsChanged) onProductsChanged();
     } catch (error) {
       console.error(error);
-      toast.error("Error al actualizar la cantidad/descuento");
+      toast.error(t("deal_products_tab.toast.update_error", "Error al actualizar la cantidad/descuento"));
     }
   };
 

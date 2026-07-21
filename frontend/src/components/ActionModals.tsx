@@ -3,8 +3,7 @@ import { Product } from "../types";
 import type { Property } from "@/types/property.types";
 import { CrmContact } from "@/services/crmService";
 
-// Import extracted modals
-import { ScheduleModal } from "./crm/modals/ScheduleModal";
+import { ScheduleModal, AttachmentPayload } from "./crm/modals/ScheduleModal";
 import { ProductPicker } from "./crm/modals/ProductPicker";
 import { PropertyPicker } from "./crm/modals/PropertyPicker";
 import { ContactPicker } from "./crm/modals/ContactPicker";
@@ -14,7 +13,12 @@ import { DataRequestPicker } from "./crm/modals/DataRequestPicker";
 export interface ActionModalsProps {
   type: "SCHEDULE" | "PRODUCT" | "PROPERTY" | "PAYMENT" | "DATA" | "CONTACT" | null;
   onClose: () => void;
-  onSchedule: (date: Date, message: string) => void;
+  onSchedule: (
+    date: Date,
+    message: string,
+    mediaFile?: File | null,
+    directAttachment?: AttachmentPayload | null
+  ) => void;
   onProduct: (product: Product) => void;
   onProperty: (property: Property) => void;
   onPayment: (amount: string, concept: string, currency: string) => void;

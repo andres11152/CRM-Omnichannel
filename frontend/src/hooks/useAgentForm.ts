@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { teamService } from "@/services/teamService";
 import { type AgentFormData } from "@/components/team/AgentModal";
@@ -36,6 +37,7 @@ export interface UseAgentFormReturn {
  * @returns {UseAgentFormReturn} Form state and actions
  */
 export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   // Modal state
@@ -63,7 +65,7 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
   const createMutation = useMutation({
     mutationFn: (data: AgentFormData) => teamService.createAgent(data),
     onSuccess: () => {
-      toast.success("Agente creado correctamente");
+      toast.success(t("agent_form.toast.agent_created", "Agente creado correctamente"));
       queryClient.invalidateQueries({ queryKey: ["team-data"] });
       closeModal();
       if (onSuccess) onSuccess();
@@ -82,7 +84,7 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
     mutationFn: ({ id, data }: { id: string; data: Partial<AgentFormData> }) =>
       teamService.updateAgent(id, data),
     onSuccess: () => {
-      toast.success("Agente actualizado correctamente");
+      toast.success(t("agent_form.toast.agent_updated", "Agente actualizado correctamente"));
       queryClient.invalidateQueries({ queryKey: ["team-data"] });
       closeModal();
       if (onSuccess) onSuccess();
@@ -202,12 +204,12 @@ export const useAgentForm = (onSuccess?: () => void): UseAgentFormReturn => {
   const saveAgent = async (): Promise<boolean> => {
     // Validation
     if (!formData.name || !formData.email) {
-      toast.error("Nombre y email son requeridos");
+      toast.error(t("agent_form.toast.name_email_required", "Nombre y email son requeridos"));
       return false;
     }
 
     if (!isEditing && !formData.password) {
-      toast.error("La contraseña es requerida para nuevos agentes");
+      toast.error(t("agent_form.toast.password_required", "La contraseña es requerida para nuevos agentes"));
       return false;
     }
 

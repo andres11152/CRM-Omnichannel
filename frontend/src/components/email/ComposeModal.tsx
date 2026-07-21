@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/axios";
 import { toast } from "sonner";
 import { Send, Plus, Reply, Forward, ReplyAll } from "lucide-react";
@@ -56,6 +57,7 @@ const buildQuotedHtml = (email: EmailRef): string => {
 // ────────────────────────────────────────────────
 
 export const ComposeModal: React.FC<ComposeModalProps> = ({ open, onClose, onSent, mode, replyTo }) => {
+  const { t } = useTranslation();
   const [form, setForm] = useState<ComposeData>({ to: "", cc: "", bcc: "", subject: "", bodyHtml: "", contactId: undefined });
   const [sending, setSending] = useState(false);
   const [showCc, setShowCc] = useState(false);
@@ -90,8 +92,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ open, onClose, onSen
   }, [open, mode, replyTo]);
 
   const handleSend = async () => {
-    if (!form.to.trim()) { toast.error("Destinatario requerido"); return; }
-    if (!form.subject.trim()) { toast.error("Asunto requerido"); return; }
+    if (!form.to.trim()) { toast.error(t("compose_modal.toast.recipient_required", "Destinatario requerido")); return; }
+    if (!form.subject.trim()) { toast.error(t("compose_modal.toast.subject_required", "Asunto requerido")); return; }
 
     setSending(true);
     try {
@@ -108,12 +110,12 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ open, onClose, onSen
         contactId: form.contactId || undefined,
       });
 
-      toast.success("Correo enviado");
+      toast.success(t("compose_modal.toast.sent", "Correo enviado"));
       onSent();
       onClose();
     } catch (error) {
       console.error("Send email failed:", error);
-      toast.error("Error al enviar correo");
+      toast.error(t("compose_modal.toast.send_error", "Error al enviar correo"));
     } finally {
       setSending(false);
     }

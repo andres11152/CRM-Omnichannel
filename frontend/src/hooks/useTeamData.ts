@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { teamService } from "@/services/teamService";
 import { type TeamAgent } from "@/components/team/types";
@@ -49,6 +50,7 @@ export interface UseTeamDataReturn {
  * @returns {UseTeamDataReturn} Team data, loading states, and actions
  */
 export const useTeamData = (): UseTeamDataReturn => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   /**
@@ -68,7 +70,7 @@ export const useTeamData = (): UseTeamDataReturn => {
         return result;
       } catch (err) {
         console.error("[useTeamData] Error loading team data:", err);
-        toast.error("Error al cargar equipo");
+        toast.error(t("team_data_hook.toast.load_error", "Error al cargar equipo"));
         throw err;
       }
     },

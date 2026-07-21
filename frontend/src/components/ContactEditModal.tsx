@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { UserPen } from 'lucide-react';
 import { Contact } from '@/types';
 import { API_BASE_URL } from '@/services/apiConfig';
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, onSuccess }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -25,7 +27,7 @@ export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, on
 
   useEffect(() => {
     if (isOpen) {
-      console.log('️ [ContactEditModal] Opening with contact:', contact);
+      console.info('[ContactEditModal] Opening with contact:', contact);
       // 1. Hide internal tech emails from the user
       const isFakeEmail = contact.email?.includes('@whatsapp.user') || contact.email?.includes('@c.us');
       const cleanEmail = isFakeEmail ? '' : (contact.email || '');
@@ -104,12 +106,12 @@ export const ContactEditModal: React.FC<Props> = ({ isOpen, onClose, contact, on
       if (!res.ok) throw new Error('Failed to update contact');
 
       const data = await res.json();
-      toast.success('Contacto actualizado');
+      toast.success(t('contact_edit_modal.toast.updated', 'Contacto actualizado'));
       onSuccess(data); // Provide updated contact back to parent
       onClose();
     } catch (error) {
       console.error(error);
-      toast.error('Error al actualizar contacto');
+      toast.error(t('contact_edit_modal.toast.update_error', 'Error al actualizar contacto'));
     } finally {
       setLoading(false);
     }

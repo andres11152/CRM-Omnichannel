@@ -145,7 +145,7 @@ export const TransferModal: React.FC<Props> = ({
                       className="w-10 h-10 rounded-full"
                     />
                     <span
-                      className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#202c33] ${["online", "available"].includes(agent.status) ? "bg-green-500" : "bg-gray-400"}`}
+                      className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-reply-panel-dark ${["online", "available"].includes(agent.status) ? "bg-green-500" : "bg-gray-400"}`}
                     ></span>
                   </div>
                   <div className="flex-1">

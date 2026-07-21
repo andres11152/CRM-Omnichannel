@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { User, UserRole } from '@/types'; 
 import { jwtDecode } from 'jwt-decode';
@@ -17,6 +18,7 @@ interface DecodedToken {
 export const ImpersonationHandler = () => {
     const navigate = useNavigate();
     const login = useAuthStore(s => s.login);
+    const { t } = useTranslation();
 
     useEffect(() => {
         // Check for 'impersonate' query param
@@ -24,7 +26,7 @@ export const ImpersonationHandler = () => {
         const token = params.get('impersonate');
 
         if (token) {
-            console.log("️ Detectado token de impersonation...");
+            console.info("[Impersonation] Detectado token de impersonation...");
             try {
                 // Decode token manually to get minimal user info
                 // In a production app, you might want to verify this token with the backend '/me' endpoint
@@ -50,8 +52,8 @@ export const ImpersonationHandler = () => {
                      // Login via store (updates localStorage and state)
                      login(user, token);
                      
-                     toast.success(`Accediendo como ${user.role}`);
-                     console.log("[OK] Impersonation exitosa:", user);
+                     toast.success(t("impersonation.toast.accessing_as", "Accediendo como {{role}}", { role: user.role }));
+                     console.info("[Impersonation] Impersonation exitosa:", user);
                      
                      // Clean URL
                      window.history.replaceState({}, document.title, window.location.pathname);
@@ -63,8 +65,8 @@ export const ImpersonationHandler = () => {
                      // setTimeout(() => window.location.reload(), 500); 
                 }
             } catch (e) {
-                console.error("[ERROR] Fallo al procesar token de impersonation", e);
-                toast.error("Token inválido");
+                console.error("[Impersonation] Fallo al procesar token de impersonation", e);
+                toast.error(t("impersonation.toast.invalid_token", "Token inválido"));
             }
         }
     }, [login, navigate]);

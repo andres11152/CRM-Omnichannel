@@ -59,7 +59,7 @@ export const ProductPicker: React.FC<ProductPickerProps> = ({ onClose, onSelect 
   return (
     <Modal isOpen onClose={onClose} title={t("actions.product_title", "Catálogo de Productos")} size="md">
       <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
-        <div className="sticky top-0 z-10 bg-white dark:bg-[#1f2c34] pb-2">
+        <div className="sticky top-0 z-10 bg-white dark:bg-reply-elevated-dark pb-2">
            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center gap-3 border border-gray-100 dark:border-white/5">
               <Package className="w-5 h-5 text-purple-500" />
               <p className="text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">

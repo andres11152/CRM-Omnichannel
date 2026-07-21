@@ -111,6 +111,13 @@
     "developers": "API & Devs"
   },
   "plans_mgmt": {
+    "toast": {
+      "load_error": "Error al cargar planes",
+      "saved": "Plan guardado",
+      "save_error": "Error al guardar plan",
+      "deleted": "Plan eliminado",
+      "delete_error": "Error al eliminar plan"
+    },
     "title": "Gestión de Planes",
     "description": "Define límites y características de cada plan de suscripción.",
     "back": "Volver al Panel",
@@ -455,7 +462,8 @@
     "types": {
       "ai": "IA Automation",
       "round_robin": "Round Robin",
-      "manual": "Manual"
+      "manual": "Manual",
+      "ai_locked_suffix": " (Bloqueado)"
     },
     "none": "Ninguno",
     "edit": "Editar",
@@ -789,8 +797,12 @@
     "no_archived": "No hay chats archivados"
   },
   "chat": {
-    "priority_updated": "Prioridad actualizada a ",
+    "priority_updated": "Prioridad: {{priority}}",
     "priority_update_error": "Error al actualizar la prioridad",
+    "copilot_loading": "Consultando al Copiloto de IA...",
+    "copilot_success": "Respuesta generada",
+    "copilot_no_response": "El copiloto no devolvió respuesta.",
+    "copilot_connection_error": "Error al conectar con la IA. Asegúrate de configurar Gemini.",
     "image": "Imagen",
     "agent": "Agente",
     "client": "Cliente",
@@ -847,7 +859,7 @@
     "email": "Correo",
     "whatsapp": "WhatsApp",
     "phone": "Teléfono",
-    "copied": "copiado",
+    "copied": "Copiado",
     "edit_info": "Editar Información",
     "quick_actions": "Acciones Rápidas",
     "new_task": "Nueva Tarea",
@@ -945,6 +957,14 @@
     "last_check": "Últ. Chequeo:",
     "now": "Ahora"
   },
+  "billing_ops": {
+    "toast": {
+      "load_error": "Error al cargar transacciones",
+      "retry_confirm": "¿Reintentar cobro de ${{amount}} a {{name}}?",
+      "retry_success": "Cobro reprogramado",
+      "retry_error": "Error al reintentar"
+    }
+  },
   "admin_tenants": {
     "active": "ACTIVO",
     "trial": "PRUEBA",
@@ -964,6 +984,10 @@
     "no_companies_found": "No se encontraron empresas con esos criterios."
   },
   "flow_builder": {
+    "toast": {
+      "change_reverted": "Cambio revertido",
+      "save_error": "Error al guardar flujo"
+    },
     "categories": {
       "messaging": "Mensajería",
       "interaction": "Interacción",
@@ -1025,6 +1049,11 @@
   "crm": {
     "kanban": {
       "empty_column": "Sin oportunidades"
+    },
+    "deals": {
+      "won_toast": "¡Trato ganado!",
+      "lost_toast": "Trato marcado como perdido",
+      "moved_to": "Movido a \"{{stage}}\""
     },
     "accounts": {
       "new_title": "Nueva Empresa",
@@ -1302,6 +1331,7 @@
   "properties_form": {
     "catalog_load_error": "No se pudieron cargar las características y ubicaciones. Algunos filtros no estarán disponibles.",
     "contacts_load_error": "No se pudo cargar la lista de contactos para asignar propietario.",
+    "deals_load_error": "No se pudieron cargar las oportunidades para la asociación.",
     "title_required": "El título es requerido (mín. 3 caracteres)",
     "price_required": "El precio es requerido",
     "updated_success": "Inmueble actualizado",
@@ -1515,5 +1545,448 @@
     "deleting": "Eliminando…",
     "deleted": "Actividad eliminada",
     "delete_error": "Error al eliminar actividad"
+  },
+  "contact_edit_modal": {
+    "toast": {
+      "updated": "Contacto actualizado",
+      "update_error": "Error al actualizar contacto"
+    }
+  },
+  "email_inbox": {
+    "toast": {
+      "load_error": "Error al cargar emails"
+    }
+  },
+  "email_modal": {
+    "toast": {
+      "not_configured": "Configura tu correo primero",
+      "missing_fields": "Completa todos los campos",
+      "sent": "Email enviado",
+      "send_error": "Error al enviar el email"
+    }
+  },
+  "group_participants_panel": {
+    "toast": {
+      "load_error": "Error al cargar participantes",
+      "add_success": "Contacto añadido",
+      "add_error": "Error al añadir contacto",
+      "no_valid_contacts": "Sin contactos válidos",
+      "bulk_imported": "{{count}} contactos importados",
+      "bulk_import_error": "Error al importar contactos",
+      "bulk_add_all_error": "Error al añadir contactos masivamente",
+      "sync_enabled": "Sincronización automática ACTIVADA",
+      "sync_disabled": "Sincronización automática DESACTIVADA",
+      "sync_update_error": "Error al actualizar preferencia",
+      "remove_no_phone": "No se puede quitar: número no disponible (LID oculto)",
+      "removed": "{{name}} fue quitado del grupo",
+      "remove_error": "Error al quitar del grupo",
+      "modify_no_phone": "No se puede modificar: número no disponible (LID oculto)",
+      "demoted": "{{name}} ya no es admin",
+      "promoted": "{{name}} ahora es admin",
+      "role_update_error": "Error al actualizar el rol",
+      "invite_link_error": "Error al obtener el enlace de invitación",
+      "invite_copied": "Enlace copiado",
+      "left_group": "Saliste del grupo",
+      "leave_error": "Error al salir del grupo"
+    }
+  },
+  "media_library": {
+    "toast": {
+      "load_error": "Error al cargar archivos",
+      "upload_success": "Archivo subido",
+      "upload_error": "Error al subir {{filename}}: {{error}}",
+      "delete_success_one": "Archivo eliminado",
+      "delete_success_many": "{{count}} archivos eliminados",
+      "delete_error": "Error al eliminar archivos",
+      "url_copied": "URL copiada",
+      "renamed": "Archivo renombrado",
+      "rename_error": "Error al renombrar"
+    }
+  },
+  "permissions_panel": {
+    "toast": {
+      "catalog_load_error": "Error al cargar el catálogo de permisos",
+      "roles_load_error": "Error al cargar roles",
+      "name_required": "Nombre del rol requerido",
+      "role_created": "Rol creado",
+      "role_updated": "Rol actualizado",
+      "save_error": "Error guardando rol",
+      "role_deleted": "Rol eliminado",
+      "delete_error": "Error eliminando rol"
+    },
+    "confirm": {
+      "delete_role_title": "Eliminar rol",
+      "delete_role_message": "¿Estás seguro de eliminar este rol? Los usuarios con este rol perderán sus permisos personalizados.",
+      "delete_role_cta": "Eliminar rol"
+    }
+  },
+  "marketing_dashboard": {
+    "toast": {
+      "test_sent": "Test enviado",
+      "image_inserted": "Imagen insertada"
+    }
+  },
+  "profile_settings": {
+    "toast": {
+      "updated": "Perfil actualizado",
+      "update_error": "Error al actualizar perfil",
+      "image_updated": "Imagen actualizada",
+      "image_upload_error": "Error al subir imagen"
+    }
+  },
+  "quick_replies": {
+    "toast": {
+      "load_error": "No se pudieron cargar las respuestas",
+      "missing_fields": "Título y contenido son obligatorios",
+      "created": "Respuesta creada",
+      "updated": "Respuesta actualizada",
+      "save_error": "Error al guardar",
+      "deleted": "Eliminada correctamente",
+      "delete_error": "Error al eliminar"
+    }
+  },
+  "sticker_picker": {
+    "toast": {
+      "load_error": "Error al cargar stickers"
+    }
+  },
+  "scheduler_config": {
+    "toast": {
+      "google_connected": "Google Calendar conectado con éxito.",
+      "outlook_connected": "Outlook Calendar conectado con éxito.",
+      "calendar_connect_error": "Error al conectar el calendario.",
+      "load_error": "Error al cargar la configuración de citas.",
+      "google_start_error": "No se pudo iniciar la conexión con Google",
+      "google_connect_error": "Error al conectar Google Calendar",
+      "google_disconnected": "Google Calendar desvinculado",
+      "google_disconnect_error": "Error al desvincular Google Calendar",
+      "outlook_start_error": "No se pudo iniciar la conexión con Outlook",
+      "outlook_connect_error": "Error al conectar Outlook Calendar",
+      "outlook_disconnected": "Outlook Calendar desvinculado",
+      "outlook_disconnect_error": "Error al desvincular Outlook Calendar",
+      "availability_saved": "Disponibilidad horaria guardada con éxito.",
+      "availability_save_error": "No se pudo guardar la disponibilidad.",
+      "meeting_type_required": "El nombre y el enlace (slug) son obligatorios.",
+      "meeting_type_updated": "Tipo de reunión actualizado.",
+      "meeting_type_created": "Tipo de reunión creado con éxito.",
+      "meeting_type_save_error": "No se pudo guardar el tipo de reunión.",
+      "meeting_type_deleted": "Tipo de reunión eliminado.",
+      "meeting_type_delete_error": "No se pudo eliminar el tipo de reunión.",
+      "link_copied": "Enlace de reserva copiado al portapapeles."
+    },
+    "confirm": {
+      "delete_meeting_type": "¿Estás seguro de eliminar este tipo de reunión?"
+    }
+  },
+  "feature_flag_manager": {
+    "toast": {
+      "load_error": "Error al cargar flags",
+      "saved": "Flags actualizados",
+      "save_error": "Error al guardar"
+    }
+  },
+  "global_template_marketplace": {
+    "toast": {
+      "load_error": "Error al cargar inventario",
+      "status_updated": "Estado actualizado",
+      "update_error": "Error al actualizar"
+    }
+  },
+  "analytics_dashboard": {
+    "toast": {
+      "load_error": "Error al cargar estadísticas"
+    }
+  },
+  "export_button": {
+    "toast": {
+      "generated": "Reporte {{format}} generado",
+      "generated_desc": "{{count}} registros exportados",
+      "error": "Error al generar reporte",
+      "error_desc_default": "Intenta nuevamente"
+    }
+  },
+  "impersonation": {
+    "toast": {
+      "accessing_as": "Accediendo como {{role}}",
+      "invalid_token": "Token inválido"
+    }
+  },
+  "unavailable_media_fallback": {
+    "toast": {
+      "recovered": "Archivo recuperado",
+      "recover_error": "Error al recuperar el archivo."
+    }
+  },
+  "tags_navbar": {
+    "toast": {
+      "update_error": "Error al actualizar etiqueta"
+    }
+  },
+  "deal_products_tab": {
+    "toast": {
+      "load_error": "Error al cargar los productos",
+      "linked": "Producto asociado correctamente",
+      "link_error": "No se pudo asociar el producto",
+      "removed": "Producto removido",
+      "remove_error": "Error al remover el producto",
+      "update_error": "Error al actualizar la cantidad/descuento"
+    }
+  },
+  "deal_properties_tab": {
+    "toast": {
+      "load_error": "Error al cargar los inmuebles",
+      "linked": "Inmueble asociado al trato",
+      "link_error": "No se pudo asociar el inmueble",
+      "unlinked": "Inmueble desvinculado",
+      "unlink_error": "Error al desvincular el inmueble"
+    }
+  },
+  "compose_modal": {
+    "toast": {
+      "recipient_required": "Destinatario requerido",
+      "subject_required": "Asunto requerido",
+      "sent": "Correo enviado",
+      "send_error": "Error al enviar correo"
+    }
+  },
+  "template_gallery": {
+    "toast": {
+      "loaded": "Plantilla cargada"
+    }
+  },
+  "agent_workspace": {
+    "toast": {
+      "ticket_deleted": "Ticket eliminado",
+      "delete_ticket_error": "Error al eliminar ticket",
+      "delete_ticket_error_fallback": "Error al eliminar el ticket",
+      "transferred_to_agent": "Ticket transferido a agente",
+      "transferred_to_queue": "Ticket transferido a cola",
+      "transfer_error": "Error al transferir el ticket",
+      "assign_error": "Error al asignar ticket (Posiblemente ya no existe)",
+      "pick_error_fallback": "Error al atender ticket",
+      "ticket_assigned": "Ticket asignado",
+      "create_chat_error": "Error al crear chat",
+      "create_chat_error_fallback": "Error al iniciar chat",
+      "ticket_resolved": "Ticket resuelto",
+      "resolve_error": "Error al resolver ticket",
+      "contact_blocked_no_sync": "Contacto bloqueado en el CRM (sin sesión de WhatsApp activa para sincronizar)",
+      "contact_unblocked_no_sync": "Contacto desbloqueado en el CRM (sin sesión de WhatsApp activa para sincronizar)",
+      "contact_blocked": "Contacto bloqueado",
+      "contact_unblocked": "Contacto desbloqueado",
+      "block_update_error": "Error al actualizar el bloqueo",
+      "no_sync_suffix": "(sin sesión de WhatsApp activa para sincronizar)",
+      "conversation_update_error": "Error al actualizar la conversación",
+      "chat_archived": "Chat archivado",
+      "chat_unarchived": "Chat desarchivado",
+      "chat_pinned": "Chat fijado",
+      "chat_unpinned": "Chat desfijado",
+      "chat_muted": "Chat silenciado",
+      "chat_unmuted": "Chat reactivado"
+    }
+  },
+  "agent_actions": {
+    "toast": {
+      "agent_deleted": "Agente eliminado correctamente"
+    }
+  },
+  "agent_form": {
+    "toast": {
+      "agent_created": "Agente creado correctamente",
+      "agent_updated": "Agente actualizado correctamente",
+      "name_email_required": "Nombre y email son requeridos",
+      "password_required": "La contraseña es requerida para nuevos agentes"
+    }
+  },
+  "use_chat": {
+    "toast": {
+      "send_error": "Error al enviar mensaje",
+      "ticket_resolved": "Ticket resuelto",
+      "ticket_deleted": "Ticket eliminado",
+      "react_error": "Error al reaccionar",
+      "edit_error": "Error al editar el mensaje",
+      "revoke_error": "Error al eliminar el mensaje",
+      "star_error": "Error al destacar el mensaje",
+      "pin_error": "Error al fijar el mensaje",
+      "ticket_assigned": "Ticket asignado",
+      "no_tickets_available": "No hay tickets disponibles"
+    }
+  },
+  "use_chat_workflow": {
+    "toast": {
+      "history_imported": "{{count}} mensajes del historial importados",
+      "file_upload_error": "Error al subir archivo",
+      "message_scheduled": "Mensaje programado",
+      "syncing_history": "Sincronizando historial…",
+      "messages_imported": "{{count}} mensajes importados",
+      "sync_pending": "Solicitud enviada al teléfono — los mensajes aparecerán automáticamente en unos segundos",
+      "no_new_messages": "No hay mensajes nuevos por ahora",
+      "sync_error": "Error al sincronizar",
+      "message_edited": "Mensaje editado",
+      "message_deleted": "Mensaje eliminado",
+      "geolocation_unsupported": "Este navegador no soporta compartir ubicación",
+      "getting_location": "Obteniendo ubicación...",
+      "location_sent": "Ubicación enviada",
+      "location_send_error": "Error al enviar la ubicación",
+      "location_permission_denied": "Permiso de ubicación denegado",
+      "location_unavailable": "No se pudo obtener la ubicación",
+      "message_pinned": "Mensaje fijado",
+      "message_unpinned": "Mensaje desfijado",
+      "transferred_to_agent": "Ticket transferido a agente",
+      "transferred_to_queue": "Ticket transferido a cola",
+      "transfer_error": "Error al transferir ticket"
+    }
+  },
+  "company_settings_hook": {
+    "toast": {
+      "load_error": "Error al cargar configuración",
+      "google_connected": "Google Calendar conectado",
+      "google_connect_error_callback": "No se pudo conectar Google Calendar",
+      "passwords_mismatch": "Las contraseñas no coinciden",
+      "password_updated": "Contraseña actualizada",
+      "settings_saved": "Configuración guardada",
+      "save_error": "Error al guardar cambios",
+      "smtp_host_user_required": "Host y usuario requeridos",
+      "smtp_sender_required": "Configura el email de remitente primero",
+      "smtp_testing": "Probando SMTP…",
+      "smtp_test_sent": "Correo de prueba enviado",
+      "smtp_connection_failed": "Falló la conexión",
+      "image_updated": "Imagen actualizada",
+      "image_upload_error": "Error al subir imagen",
+      "google_disconnected": "Google Calendar desvinculado",
+      "google_disconnect_error": "Error al desvincular",
+      "google_start_error": "No se pudo iniciar la conexión con Google",
+      "google_connect_error": "Error al conectar Google Calendar",
+      "plan_not_found": "Plan no encontrado",
+      "redirect_payment_error": "Error al redirigir a pago",
+      "start_payment_error": "Error al iniciar pago",
+      "select_plan": "Selecciona un plan",
+      "complete_card_data": "Completa los datos de la tarjeta",
+      "subscription_activated": "Suscripción activada",
+      "process_payment_error": "Error al procesar pago",
+      "process_card_error": "Error al procesar tarjeta"
+    }
+  },
+  "marketing_dashboard_hook": {
+    "toast": {
+      "nothing_to_undo": "Sin acciones para deshacer",
+      "nothing_to_redo": "Sin acciones para rehacer",
+      "variable_inserted": "Variable insertada",
+      "copied": "Copiado",
+      "template_created": "Plantilla creada",
+      "template_create_error": "Error al crear plantilla",
+      "campaign_deleted": "Campaña eliminada",
+      "campaign_delete_error": "Error al eliminar campaña",
+      "required_fields": "Completa los campos requeridos",
+      "select_date_time": "Selecciona fecha y hora",
+      "campaign_updated": "Campaña actualizada",
+      "campaign_created": "Campaña creada y lanzada",
+      "campaign_save_error": "Error al guardar campaña",
+      "design_updated": "Diseño actualizado",
+      "generate_error": "Error al generar"
+    },
+    "confirm": {
+      "delete_template": "¿Eliminar plantilla?",
+      "delete_campaign": "¿Estás seguro de eliminar esta campaña?"
+    }
+  },
+  "push_notifications_hook": {
+    "toast": {
+      "unsupported_browser": "Navegador no compatible",
+      "enable_in_browser": "Activa notificaciones en tu navegador",
+      "activate_error": "Error al activar notificaciones"
+    }
+  },
+  "team_data_hook": {
+    "toast": {
+      "load_error": "Error al cargar equipo"
+    }
+  },
+  "tenant_management_hook": {
+    "toast": {
+      "load_companies_error": "Error al cargar empresas",
+      "status_updated": "Estado actualizado",
+      "status_update_error": "Error al actualizar estado",
+      "company_updated": "Empresa actualizada",
+      "company_update_error": "Error al actualizar empresa",
+      "load_users_error": "Error al cargar usuarios",
+      "impersonation_error": "Error al iniciar impersonación"
+    }
+  },
+  "api_client": {
+    "toast": {
+      "forbidden": "No tienes permisos para realizar esta acción.",
+      "server_error": "Error del servidor. Por favor, intenta de nuevo más tarde.",
+      "network_error": "Error de conexión. Verifica tu internet."
+    }
+  },
+  "socket_service": {
+    "toast": {
+      "reconnecting": "Reconectando…",
+      "reconnected": "Reconectado"
+    }
+  },
+  "login_page": {
+    "toast": {
+      "welcome": "Bienvenido, {{name}}",
+      "google_error": "Error con Google",
+      "email_unavailable": "Email no disponible",
+      "auth_failed": "Error de autenticación",
+      "welcome_back": "Bienvenido de nuevo, {{name}}",
+      "too_many_attempts": "Demasiados intentos",
+      "invalid_credentials": "Email o contraseña incorrectos",
+      "login_error": "Error al iniciar sesión",
+      "unknown_error": "Error desconocido",
+      "invalid_server_response": "Respuesta inválida del servidor (Falta token o usuario)"
+    }
+  },
+  "contacts_page": {
+    "toast": {
+      "auto_sync_enabled": "Sincronización automática activada",
+      "auto_sync_disabled": "Sincronización automática desactivada",
+      "save_preference_error": "Error al guardar preferencia",
+      "importing": "Importando contactos…",
+      "import_error": "Error al importar contactos",
+      "import_summary": "{{imported}} importados · {{skipped}} omitidos",
+      "connection_error": "Error de conexión",
+      "deleting": "Eliminando…",
+      "delete_error": "Error al eliminar contacto",
+      "invalid_phone": "Teléfono no válido",
+      "opening_chat": "Abriendo chat…",
+      "open_chat_error": "Error al abrir chat"
+    }
+  },
+  "public_booking_page": {
+    "toast": {
+      "invalid_link": "Este enlace de citas no es válido o ha expirado.",
+      "slots_load_error": "No se pudieron cargar los horarios disponibles.",
+      "name_email_required": "El nombre y el correo electrónico son obligatorios.",
+      "booked_success": "¡Cita reservada correctamente!",
+      "booking_error": "No se pudo agendar la cita. Por favor intenta con otro horario."
+    }
+  },
+  "developer_settings_hook": {
+    "toast": {
+      "logs_refreshed": "Logs actualizados",
+      "webhook_created": "Webhook creado",
+      "webhook_create_error": "Error al crear webhook",
+      "webhook_deleted": "Webhook eliminado",
+      "webhook_delete_error": "Error al eliminar webhook",
+      "webhook_toggle_error": "Error al cambiar estado del webhook",
+      "webhook_deactivated": "Webhook desactivado",
+      "webhook_activated": "Webhook activado",
+      "retry_scheduled": "Reintento programado",
+      "retry_error": "Error al reintentar entrega",
+      "api_key_create_error": "Error al crear API Key",
+      "api_key_revoked": "Clave API revocada",
+      "api_key_revoke_error": "Error al revocar la clave"
+    },
+    "confirm": {
+      "delete_webhook_title": "Eliminar webhook",
+      "delete_webhook_message": "¿Estás seguro? Las entregas en curso se cancelarán y no podrás recuperar este endpoint.",
+      "delete_cta": "Eliminar",
+      "revoke_key_title": "Revocar clave API",
+      "revoke_key_message": "¿Revocar \"{{name}}\"? Las integraciones que la usen dejarán de funcionar de inmediato.",
+      "revoke_cta": "Revocar"
+    }
   }
 }

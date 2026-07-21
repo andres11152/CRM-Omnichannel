@@ -27,6 +27,7 @@ import {
   Reply,
   ReplyAll,
   Forward,
+  Tag,
 } from "lucide-react";
 
 // ────────────────────────────────────────────────
@@ -179,7 +180,7 @@ export const EmailInbox: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to fetch emails:", error);
-      toast.error("Error al cargar emails");
+      toast.error(t("email_inbox.toast.load_error", "Error al cargar emails"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -419,8 +420,9 @@ export const EmailInbox: React.FC = () => {
                       </div>
                       <StatusBadge status={selectedEmail.status} />
                       {selectedEmail.ticket && (
-                        <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg font-medium">
-                          🎫 #{selectedEmail.ticket.ticketNumber}
+                        <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg font-medium flex items-center gap-1">
+                          <Tag className="w-3 h-3" />
+                          <span>#{selectedEmail.ticket.ticketNumber}</span>
                         </span>
                       )}
                     </div>

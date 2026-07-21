@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { 
+import { useTranslation } from "react-i18next";
+import {
   Flag, 
   Search, 
   Building2, 
@@ -31,6 +32,7 @@ interface CompanyItem {
 }
 
 export const FeatureFlagManager: React.FC = () => {
+  const { t } = useTranslation();
   const [companies, setCompanies] = useState<CompanyItem[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [flags, setFlags] = useState<FeatureFlags | null>(null);
@@ -58,7 +60,7 @@ export const FeatureFlagManager: React.FC = () => {
       const data = await featureFlagService.getCompanyFlags(companyId);
       setFlags(data);
     } catch (error) {
-      toast.error("Error al cargar flags");
+      toast.error(t("feature_flag_manager.toast.load_error", "Error al cargar flags"));
     } finally {
       setLoading(false);
     }
@@ -74,9 +76,9 @@ export const FeatureFlagManager: React.FC = () => {
     setSaving(true);
     try {
       await featureFlagService.updateCompanyFlags(selectedCompanyId, flags);
-      toast.success("Flags actualizados");
+      toast.success(t("feature_flag_manager.toast.saved", "Flags actualizados"));
     } catch (error) {
-      toast.error("Error al guardar");
+      toast.error(t("feature_flag_manager.toast.save_error", "Error al guardar"));
     } finally {
       setSaving(false);
     }

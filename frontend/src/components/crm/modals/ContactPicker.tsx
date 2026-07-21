@@ -43,7 +43,7 @@ export const ContactPicker: React.FC<ContactPickerProps> = ({ onClose, onSelect 
   return (
     <Modal isOpen onClose={onClose} title={t("actions.contact_title", "Enviar Contacto")} size="md">
       <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
-        <div className="sticky top-0 z-10 bg-white dark:bg-[#1f2c34] pb-2 space-y-2">
+        <div className="sticky top-0 z-10 bg-white dark:bg-reply-elevated-dark pb-2 space-y-2">
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input

@@ -121,7 +121,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   }, [inputValue]);
 
   return (
-    <div className="px-4 py-3 bg-white/80 dark:bg-[#0b141a]/80 backdrop-blur-xl border-t border-gray-200 dark:border-white/5 relative z-20">
+    <div className="px-4 py-3 bg-white/80 dark:bg-reply-bg-dark/80 backdrop-blur-xl border-t border-gray-200 dark:border-white/5 relative z-20">
       <input 
         type="file"
         ref={fileInputRef}

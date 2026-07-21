@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { jwtDecode } from "jwt-decode";
+import i18n from "@/i18n";
 import { BASE_URL } from "./apiConfig";
 import { Logger } from "@/utils/logger";
 
@@ -75,7 +76,7 @@ class SocketService {
       Logger.warn(`[SocketService]  Disconnected: ${reason}`);
       if (reason !== "io client disconnect") {
         import("sonner").then(({ toast }) => {
-          toast.error("Reconectando…");
+          toast.error(i18n.t("socket_service.toast.reconnecting", "Reconectando…"));
         });
       }
     });
@@ -83,7 +84,7 @@ class SocketService {
     this.socket.on("reconnect", (attemptNumber) => {
       Logger.info(`[SocketService] [SYNC] Reconnected (attempt ${attemptNumber})`);
       import("sonner").then(({ toast }) => {
-        toast.success("Reconectado");
+        toast.success(i18n.t("socket_service.toast.reconnected", "Reconectado"));
       });
     });
 

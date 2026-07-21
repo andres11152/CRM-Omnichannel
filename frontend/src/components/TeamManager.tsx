@@ -44,13 +44,13 @@ export const TeamManager: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#F8FAFC] dark:bg-reply-bg-dark transition-colors duration-200 font-sans">
+    <div className="h-full flex flex-col bg-slate-50 dark:bg-reply-bg-dark transition-colors duration-200 font-sans">
       {/* Header */}
       <ModuleHeader
         title={t("team.title", "Gestión de Equipo")}
         description={t("team.subtitle", "Supervisa el rendimiento y estado de tus agentes en tiempo real.")}
         icon={<Users size={32} className="text-white" />}
-        gradient="from-[#4F46E5] via-[#6366F1] to-[#8B5CF6] dark:from-indigo-900 dark:to-violet-900"
+        gradient="from-indigo-600 via-indigo-500 to-violet-500 dark:from-indigo-900 dark:to-violet-900"
         stats={{
           label: t("team.online_agents", "Agentes Online"),
           value: agents.filter((a) => a.status === "online" && !a.isAI).length,

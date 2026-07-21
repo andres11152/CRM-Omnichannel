@@ -134,7 +134,7 @@ export const PropertyFormModal: React.FC<Props> = ({
       .then((m) => m.getDeals())
       .then((r) => setDeals(r.deals.map((d) => ({ id: d.id, title: d.title }))))
       .catch(() =>
-        toast.error("No se pudieron cargar las oportunidades para la asociación."),
+        toast.error(t("properties_form.deals_load_error", "No se pudieron cargar las oportunidades para la asociación.")),
       );
   }, [isOpen]);
 

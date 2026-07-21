@@ -24,7 +24,7 @@ export const QueuePreviewCard: React.FC<QueuePreviewCardProps> = ({
   onPickTicket,
 }) => {
   return (
-    <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0b141a] dark:via-[#111b21] dark:to-[#0b141a]">
+    <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-reply-bg-dark dark:via-reply-surface-dark dark:to-reply-bg-dark">
       <div className="max-w-md w-full space-y-4">
         {/* Card */}
         <div className="bg-white dark:bg-reply-panel-dark rounded-2xl shadow-xl border border-gray-200/80 dark:border-reply-border-dark overflow-hidden">
@@ -90,7 +90,7 @@ export const QueuePreviewCard: React.FC<QueuePreviewCardProps> = ({
                 {formatDate(ticket.lastMessageAt)}
               </span>
             </div>
-            <div className="bg-gray-50 dark:bg-[#111b21] rounded-xl p-3.5 border border-gray-100 dark:border-gray-700/50">
+            <div className="bg-gray-50 dark:bg-reply-surface-dark rounded-xl p-3.5 border border-gray-100 dark:border-gray-700/50">
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-3">
                 {ticket.lastMessage || "Sin mensaje previo..."}
               </p>
@@ -99,7 +99,7 @@ export const QueuePreviewCard: React.FC<QueuePreviewCardProps> = ({
 
           {/* Context Metadata */}
           <div className="px-6 pb-4 grid grid-cols-2 gap-2.5">
-            <div className="bg-gray-50 dark:bg-[#111b21] rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/50">
+            <div className="bg-gray-50 dark:bg-reply-surface-dark rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/50">
               <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                 Ticket
               </p>
@@ -110,7 +110,7 @@ export const QueuePreviewCard: React.FC<QueuePreviewCardProps> = ({
                   : "—"}
               </p>
             </div>
-            <div className="bg-gray-50 dark:bg-[#111b21] rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/50">
+            <div className="bg-gray-50 dark:bg-reply-surface-dark rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/50">
               <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                 Espera
               </p>
@@ -119,7 +119,7 @@ export const QueuePreviewCard: React.FC<QueuePreviewCardProps> = ({
               </p>
             </div>
             {ticket.queue?.name && (
-              <div className="bg-gray-50 dark:bg-[#111b21] rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/50 col-span-2">
+              <div className="bg-gray-50 dark:bg-reply-surface-dark rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700/50 col-span-2">
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                   Cola
                 </p>

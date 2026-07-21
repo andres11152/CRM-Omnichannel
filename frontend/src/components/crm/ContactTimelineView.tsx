@@ -191,7 +191,7 @@ export const ContactTimelineView: React.FC<Props> = ({
       {/* Slide Panel */}
       <div
         className={`w-full max-w-md h-full flex flex-col shadow-2xl
-          bg-white dark:bg-[#111b21]
+          bg-white dark:bg-reply-surface-dark
           transform transition-transform duration-300 ease-out
           ${isVisible ? "translate-x-0" : "translate-x-full"}`}
         onClick={(e) => e.stopPropagation()}
@@ -307,8 +307,8 @@ export const ContactTimelineView: React.FC<Props> = ({
                     >
                       {/* Dot */}
                       <div
-                        className={`absolute -left-[5px] top-5 w-[11px] h-[11px] rounded-full border-2 border-white dark:border-[#111b21] shadow-sm ${config.dotColor}
-                          ${isFirst ? "ring-4 ring-offset-1 ring-offset-white dark:ring-offset-[#111b21]" : ""}
+                        className={`absolute -left-[5px] top-5 w-[11px] h-[11px] rounded-full border-2 border-white dark:border-reply-surface-dark shadow-sm ${config.dotColor}
+                          ${isFirst ? "ring-4 ring-offset-1 ring-offset-white dark:ring-offset-reply-surface-dark" : ""}
                           ${isFirst ? "ring-indigo-100 dark:ring-indigo-900/40" : ""}`}
                       />
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { adminService } from "@/services/adminService";
 import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 import { ModuleHeader } from "./common/ModuleHeader";
@@ -52,6 +53,7 @@ interface BillingResponse {
 const BILLING_CACHE_KEY = "billing:ops";
 
 export const BillingOpsPage = () => {
+  const { t } = useTranslation();
   // Stale-while-revalidate: instant render on module re-entry; also keeps the
   // 60s polling refresh from flashing the loading state over live data
   const cached = getModuleCache<BillingResponse>(BILLING_CACHE_KEY);
@@ -74,7 +76,7 @@ export const BillingOpsPage = () => {
       });
     } catch (error) {
       console.error(error);
-      toast.error("Error al cargar transacciones");
+      toast.error(t("billing_ops.toast.load_error", "Error al cargar transacciones"));
     } finally {
       setLoading(false);
     }
@@ -87,14 +89,14 @@ export const BillingOpsPage = () => {
   }, []);
 
   const handleRetry = async (txn: Transaction) => {
-    if (!confirm(`¿Reintentar cobro de $${txn.amount / 100} a ${txn.tenant.name}?`)) return;
+    if (!confirm(t("billing_ops.toast.retry_confirm", "¿Reintentar cobro de ${{amount}} a {{name}}?", { amount: txn.amount / 100, name: txn.tenant.name }))) return;
     try {
       setRetryingId(txn.id);
       await adminService.retryTransaction(txn.id);
-      toast.success("Cobro reprogramado");
-      setTransactions((prev) => prev.map((t) => (t.id === txn.id ? { ...t, status: "pending" } : t)));
+      toast.success(t("billing_ops.toast.retry_success", "Cobro reprogramado"));
+      setTransactions((prev) => prev.map((row) => (row.id === txn.id ? { ...row, status: "pending" } : row)));
     } catch (error) {
-      toast.error("Error al reintentar");
+      toast.error(t("billing_ops.toast.retry_error", "Error al reintentar"));
     } finally {
       setRetryingId(null);
     }

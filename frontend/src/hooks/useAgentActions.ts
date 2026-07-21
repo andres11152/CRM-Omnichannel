@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { teamService } from "@/services/teamService";
 
@@ -17,6 +18,7 @@ export interface UseAgentActionsReturn {
 export const useAgentActions = (
   onSuccess?: () => void,
 ): UseAgentActionsReturn => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   /**
@@ -26,7 +28,7 @@ export const useAgentActions = (
   const deleteMutation = useMutation({
     mutationFn: (id: string) => teamService.deleteAgent(id),
     onSuccess: () => {
-      toast.success("Agente eliminado correctamente");
+      toast.success(t("agent_actions.toast.agent_deleted", "Agente eliminado correctamente"));
       // Invalidate and refetch team data
       queryClient.invalidateQueries({ queryKey: ["team-data"] });
       if (onSuccess) onSuccess();

@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "build:bones": "npx boneyard-js build"
+    "build:bones": "npx boneyard-js build",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",
@@ -50,6 +51,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/lodash": "^4.17.21",
     "@types/node": "^20.11.24",
     "@types/react": "^18.2.56",
@@ -57,8 +59,13 @@
     "@types/react-grid-layout": "^1.3.6",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^8.2.2",
+    "eslint": "^10.7.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.7.0",
     "tsx": "^4.7.1",
     "typescript": "^5.2.2",
+    "typescript-eslint": "^8.65.0",
     "vite": "^5.4.11",
     "vite-plugin-pwa": "^1.2.0"
   }

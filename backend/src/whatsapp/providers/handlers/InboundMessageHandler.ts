@@ -204,21 +204,19 @@ export class InboundMessageHandler {
       Logger.debug(`[InboundHandler] Message is fromMe but NOT an echo: ${messageId}`);
     }
 
-    // Guard: Check if message exists in DB BEFORE heavy orchestration
-    Logger.debug(`[InboundHandler] Checking if message exists in DB: ${messageId}`);
-    const exists = await chatService.doesMessageExist(messageId, companyId);
-    if (exists) {
-      Logger.debug(`[InboundHandler] Skipping existing message: ${messageId}`);
-      return;
-    }
-    Logger.debug(`[InboundHandler] Message is NEW: ${messageId}`);
-
-
-
     Logger.debug(`[InboundHandler] Entering TenantContextManager for ${messageId}`);
     await TenantContextManager.run(
       { companyId, userId: sessionPhone || "system", requestId: `msg:${messageId}` },
       async () => {
+        // Guard: Check if message exists in DB BEFORE heavy orchestration
+        Logger.debug(`[InboundHandler] Checking if message exists in DB: ${messageId}`);
+        const exists = await chatService.doesMessageExist(messageId, companyId);
+        if (exists) {
+          Logger.debug(`[InboundHandler] Skipping existing message: ${messageId}`);
+          return;
+        }
+        Logger.debug(`[InboundHandler] Message is NEW: ${messageId}`);
+
         Logger.debug(`[InboundHandler] Resolving entities for ${messageId}`);
         // 2. Resolve Entities (User, Conversation, JIDs)
         const entities = await this.orchestrator.resolveEntities(message, sessionId, companyId, sessionPhone);

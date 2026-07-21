@@ -1,6 +1,6 @@
 import React from "react";
 import { type Conversation } from "@/types";
-import { MessageSquare, Mail, Globe, Plus, ChevronRight } from "lucide-react";
+import { MessageSquare, Mail, Globe, Plus, ChevronRight, Mic, Image, Video, FileText } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 
 interface ChatSidebarProps {
@@ -192,10 +192,30 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
 
           {/* Last Message */}
           <p className="text-sm text-gray-600 dark:text-gray-400 truncate mb-2">
-            {conversation.lastMessage === "[AUDIO]" && <><span className="text-indigo-500 font-bold mr-1">🎤</span> Audio</>}
-            {conversation.lastMessage === "[IMAGE]" && <><span className="text-blue-500 font-bold mr-1">📷</span> Imagen</>}
-            {conversation.lastMessage === "[VIDEO]" && <><span className="text-purple-500 font-bold mr-1">🎥</span> Video</>}
-            {conversation.lastMessage === "[DOCUMENT]" && <><span className="text-red-500 font-bold mr-1">📄</span> Documento</>}
+            {conversation.lastMessage === "[AUDIO]" && (
+              <span className="inline-flex items-center gap-1">
+                <Mic className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Audio</span>
+              </span>
+            )}
+            {conversation.lastMessage === "[IMAGE]" && (
+              <span className="inline-flex items-center gap-1">
+                <Image className="w-3.5 h-3.5 text-blue-500" />
+                <span>Imagen</span>
+              </span>
+            )}
+            {conversation.lastMessage === "[VIDEO]" && (
+              <span className="inline-flex items-center gap-1">
+                <Video className="w-3.5 h-3.5 text-purple-500" />
+                <span>Video</span>
+              </span>
+            )}
+            {conversation.lastMessage === "[DOCUMENT]" && (
+              <span className="inline-flex items-center gap-1">
+                <FileText className="w-3.5 h-3.5 text-red-500" />
+                <span>Documento</span>
+              </span>
+            )}
             {!["[AUDIO]", "[IMAGE]", "[VIDEO]", "[DOCUMENT]"].includes(conversation.lastMessage || "") && conversation.lastMessage}
           </p>
 

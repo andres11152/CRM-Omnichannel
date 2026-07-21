@@ -105,13 +105,13 @@ export const ContactsPage: React.FC = () => {
       if (!res.ok) throw new Error("save failed");
       toast.success(
         next
-          ? "Sincronización automática activada"
-          : "Sincronización automática desactivada",
+          ? t("contacts_page.toast.auto_sync_enabled", "Sincronización automática activada")
+          : t("contacts_page.toast.auto_sync_disabled", "Sincronización automática desactivada"),
       );
     } catch (error) {
       console.error("Error saving auto-import setting:", error);
       setAutoImportWa(!next); // revert
-      toast.error("Error al guardar preferencia");
+      toast.error(t("contacts_page.toast.save_preference_error", "Error al guardar preferencia"));
     } finally {
       setSavingAutoImport(false);
     }
@@ -119,7 +119,7 @@ export const ContactsPage: React.FC = () => {
 
   const handleImportWhatsApp = async () => {
     setImportingWa(true);
-    const toastId = toast.loading("Importando contactos…");
+    const toastId = toast.loading(t("contacts_page.toast.importing", "Importando contactos…"));
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/company/import-whatsapp-contacts`, {
@@ -131,17 +131,17 @@ export const ContactsPage: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Error al importar contactos");
+        throw new Error(data.message || t("contacts_page.toast.import_error", "Error al importar contactos"));
       }
       const r = data.data || data;
       toast.success(
-        `${r.imported} importados · ${r.skipped} omitidos`,
+        t("contacts_page.toast.import_summary", "{{imported}} importados · {{skipped}} omitidos", { imported: r.imported, skipped: r.skipped }),
         { id: toastId },
       );
       await fetchContacts(page, debouncedSearch);
     } catch (error: unknown) {
       console.error("Error importing WhatsApp contacts:", error);
-      const msg = error instanceof Error ? error.message : "Error al importar contactos";
+      const msg = error instanceof Error ? error.message : t("contacts_page.toast.import_error", "Error al importar contactos");
       toast.error(msg, { id: toastId });
     } finally {
       setImportingWa(false);
@@ -296,7 +296,7 @@ export const ContactsPage: React.FC = () => {
       }
     } catch (error: unknown) {
       console.error("[ERROR] Error saving contact (catch):", error);
-      toast.error("Error de conexión");
+      toast.error(t("contacts_page.toast.connection_error", "Error de conexión"));
     }
   };
 
@@ -309,7 +309,7 @@ export const ContactsPage: React.FC = () => {
     // Temp: Bypass confirm to test event firing
     // if (!confirm(`¿Ests seguro de eliminar a ${name}?`)) return;
 
-    const toastId = toast.loading(`Eliminando…`);
+    const toastId = toast.loading(t("contacts_page.toast.deleting", "Eliminando…"));
 
     try {
       const token = localStorage.getItem("token");
@@ -336,17 +336,17 @@ export const ContactsPage: React.FC = () => {
       toast.success(t("queues_config.toasts.deleted_success"), { id: toastId });
     } catch (error) {
       console.error("[ERROR] Error deleting contact:", error);
-      toast.error("Error al eliminar contacto", { id: toastId });
+      toast.error(t("contacts_page.toast.delete_error", "Error al eliminar contacto"), { id: toastId });
     }
   };
 
   const handleOpenChat = async (contact: Contact) => {
     if (!contact.phone) {
-      toast.error("Teléfono no válido");
+      toast.error(t("contacts_page.toast.invalid_phone", "Teléfono no válido"));
       return;
     }
 
-    const toastId = toast.loading("Abriendo chat…");
+    const toastId = toast.loading(t("contacts_page.toast.opening_chat", "Abriendo chat…"));
 
     try {
       const token = localStorage.getItem("token");
@@ -386,7 +386,7 @@ export const ContactsPage: React.FC = () => {
       }
     } catch (error) {
       console.error("Error opening chat:", error);
-      toast.error("Error al abrir chat", { id: toastId });
+      toast.error(t("contacts_page.toast.open_chat_error", "Error al abrir chat"), { id: toastId });
     }
   };
 

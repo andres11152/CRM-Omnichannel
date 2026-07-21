@@ -3,16 +3,6 @@
 @config "../tailwind.config.js";
 @plugin "tailwindcss-animate";
 
-/* [DEBUG] Diagnostic kill-switch: hides every loading skeleton app-wide
-   (manual animate-pulse placeholders + boneyard-js captured overlays) so we
-   can isolate whether the "ugly flash" reported when switching modules comes
-   from these skeletons themselves or from something else (e.g. lazy route
-   chunk loading). Remove this block to restore normal skeleton rendering. */
-.animate-pulse,
-[data-boneyard-overlay] {
-  display: none !important;
-}
-
 @theme {
   --font-sans: "Plus Jakarta Sans", "Inter", sans-serif;
   --color-reply-brand: #00a884;

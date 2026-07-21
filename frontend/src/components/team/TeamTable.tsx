@@ -71,7 +71,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 🖥️ DESKTOP TABLE VIEW */}
+      {/* DESKTOP TABLE VIEW */}
       <div className="hidden lg:block bg-white dark:bg-reply-panel-dark rounded-2xl border border-gray-100 dark:border-reply-border-dark shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead className="bg-[#FBFCFE] dark:bg-reply-surface-dark border-b border-gray-100 dark:border-reply-border-dark">
@@ -98,7 +98,7 @@ export const TeamTable: React.FC<TeamTableProps> = ({
         </table>
       </div>
 
-      {/* 📱 MOBILE CARD VIEW */}
+      {/* MOBILE CARD VIEW */}
       <div className="lg:hidden space-y-4">
         {agents.map((agent) => (
           <div

@@ -5,6 +5,7 @@ import { chatService } from "@/services/chatService";
 import { messageCacheService } from "@/services/messageCacheService";
 import { analyzeSentiment } from "@/services/geminiService";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { useMessages, useSendMessage, addMessageToCache, useReactToMessage, useEditMessage, useRevokeMessage, useStarMessage, usePinMessage, CHAT_KEYS } from "./useChat";
 import { useQueryClient } from "@tanstack/react-query";
 import { uploadMedia } from "@/services/mediaService";
@@ -28,6 +29,7 @@ interface ChatSocketPayload {
 }
 
 export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const ticketId = activeContact.ticketId || ""; // [SEC] Fallback for type safety
   const { data: messages = [], isLoading: isLoadingMessages } = useMessages(ticketId);
@@ -141,7 +143,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         (!!activePhone && !!payloadPhone && activePhone === payloadPhone);
       
       if (!isForThisChat) {
-        console.warn(`[Workflow] [WS] ❌ Skipping message.`, {
+        console.warn(`[Workflow] [WS] [SKIP] Skipping message.`, {
           event: payload.message ? 'message.received' : 'conversation.new_message',
           reason: 'No match found',
           ticketMatch: `${payloadTicketId} === ${ticketId}`,
@@ -153,7 +155,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
         return;
       }
 
-      console.log(`[Workflow] [WS] ✅ Message accepted for current chat! clearing typing...`);
+      console.log(`[Workflow] [WS] [OK] Message accepted for current chat! clearing typing...`);
       // Clear typing indicator when a message is actually received
       setIsRemoteTyping(false);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -273,7 +275,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       console.log(`[Workflow] [WS] History synced (${payload.newMessages ?? "?"} msgs) — refreshing chat`);
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
       if (payload.newMessages && payload.newMessages > 0) {
-        toast.success(`${payload.newMessages} mensajes del historial importados`);
+        toast.success(t("use_chat_workflow.toast.history_imported", "{{count}} mensajes del historial importados", { count: payload.newMessages }));
       }
     };
     socketService.on('conversation:history_synced', handleHistorySynced);
@@ -343,7 +345,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
           console.log(`[Workflow] Media uploaded:`, { url: mediaUrl, type: detectedType });
         } catch (uploadErr) {
           console.error("[Workflow] Upload failed:", uploadErr);
-          toast.error("Error al subir archivo");
+          toast.error(t("use_chat_workflow.toast.file_upload_error", "Error al subir archivo"));
           setIsTyping(false);
           return;
         }
@@ -368,7 +370,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
       await sendMessageMutation.mutateAsync(payload);
       
       if (scheduledAt) {
-        toast.success("Mensaje programado");
+        toast.success(t("use_chat_workflow.toast.message_scheduled", "Mensaje programado"));
       }
 
       setIsTyping(false);
@@ -383,7 +385,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     
     try {
       setIsSyncing(true);
-      const loadingToast = toast.loading("Sincronizando historial…");
+      const loadingToast = toast.loading(t("use_chat_workflow.toast.syncing_history", "Sincronizando historial…"));
       
       const result = await chatService.syncFullHistory(ticketId);
 
@@ -392,19 +394,19 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
 
       toast.dismiss(loadingToast);
       if (result.newMessages > 0) {
-        toast.success(`${result.newMessages} mensajes importados`);
+        toast.success(t("use_chat_workflow.toast.messages_imported", "{{count}} mensajes importados", { count: result.newMessages }));
       } else if (result.pending) {
         // The request reached the phone but its batch hadn't landed at response time
         // (a locked phone routinely takes >8s). The backend keeps waiting in background
         // and conversation:history_synced (handled above) refreshes the chat when it lands.
-        toast.info("Solicitud enviada al teléfono — los mensajes aparecerán automáticamente en unos segundos");
+        toast.info(t("use_chat_workflow.toast.sync_pending", "Solicitud enviada al teléfono — los mensajes aparecerán automáticamente en unos segundos"));
       } else {
         // Be honest: nothing was available synchronously.
-        toast.info("No hay mensajes nuevos por ahora");
+        toast.info(t("use_chat_workflow.toast.no_new_messages", "No hay mensajes nuevos por ahora"));
       }
     } catch (err) {
       console.error("[Workflow] Sync error:", err);
-      toast.error("Error al sincronizar");
+      toast.error(t("use_chat_workflow.toast.sync_error", "Error al sincronizar"));
     } finally {
       setIsSyncing(false);
     }
@@ -446,7 +448,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     handleEditMessage: async (messageId: string, content: string) => {
       try {
         await editMessageMutation.mutateAsync({ messageId, content });
-        toast.success("Mensaje editado");
+        toast.success(t("use_chat_workflow.toast.message_edited", "Mensaje editado"));
       } catch (err) {
         console.error("[Workflow] Edit error:", err);
       }
@@ -454,17 +456,17 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     handleDeleteMessage: async (messageId: string) => {
       try {
         await revokeMessageMutation.mutateAsync(messageId);
-        toast.success("Mensaje eliminado");
+        toast.success(t("use_chat_workflow.toast.message_deleted", "Mensaje eliminado"));
       } catch (err) {
         console.error("[Workflow] Revoke error:", err);
       }
     },
     handleShareLocation: () => {
       if (!navigator.geolocation) {
-        toast.error("Este navegador no soporta compartir ubicación");
+        toast.error(t("use_chat_workflow.toast.geolocation_unsupported", "Este navegador no soporta compartir ubicación"));
         return;
       }
-      const loadingToast = toast.loading("Obteniendo ubicación...");
+      const loadingToast = toast.loading(t("use_chat_workflow.toast.getting_location", "Obteniendo ubicación..."));
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           toast.dismiss(loadingToast);
@@ -483,10 +485,10 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
               },
               metadata: { tempId: `temp-${Date.now()}` },
             });
-            toast.success("Ubicación enviada");
+            toast.success(t("use_chat_workflow.toast.location_sent", "Ubicación enviada"));
           } catch (err) {
             console.error("[Workflow] Share location send error:", err);
-            toast.error("Error al enviar la ubicación");
+            toast.error(t("use_chat_workflow.toast.location_send_error", "Error al enviar la ubicación"));
           } finally {
             setIsTyping(false);
           }
@@ -496,8 +498,8 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
           console.error("[Workflow] Geolocation error:", geoErr);
           toast.error(
             geoErr.code === geoErr.PERMISSION_DENIED
-              ? "Permiso de ubicación denegado"
-              : "No se pudo obtener la ubicación",
+              ? t("use_chat_workflow.toast.location_permission_denied", "Permiso de ubicación denegado")
+              : t("use_chat_workflow.toast.location_unavailable", "No se pudo obtener la ubicación"),
           );
         },
         { enableHighAccuracy: true, timeout: 10000 },
@@ -513,7 +515,7 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     handlePinMessage: async (messageId: string, pinned: boolean) => {
       try {
         await pinMessageMutation.mutateAsync({ messageId, pinned });
-        toast.success(pinned ? "Mensaje fijado" : "Mensaje desfijado");
+        toast.success(pinned ? t("use_chat_workflow.toast.message_pinned", "Mensaje fijado") : t("use_chat_workflow.toast.message_unpinned", "Mensaje desfijado"));
       } catch (err) {
         console.error("[Workflow] Pin error:", err);
       }
@@ -521,10 +523,10 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     handleTransfer: async (targetId: string, type: "AGENT" | "QUEUE", note?: string) => {
       try {
         await chatService.transferTicket(ticketId, targetId, type, note);
-        toast.success(`Ticket transferido a ${type === "AGENT" ? "agente" : "cola"}`);
+        toast.success(type === "AGENT" ? t("use_chat_workflow.toast.transferred_to_agent", "Ticket transferido a agente") : t("use_chat_workflow.toast.transferred_to_queue", "Ticket transferido a cola"));
         // Optional: onBack() or similar if current agent loses access
       } catch (err) {
-        toast.error("Error al transferir ticket");
+        toast.error(t("use_chat_workflow.toast.transfer_error", "Error al transferir ticket"));
         console.error("[Workflow] Transfer error:", err);
       }
     }

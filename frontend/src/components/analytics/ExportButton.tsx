@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Download, FileText, FileSpreadsheet } from "lucide-react";
 import api from "@/services/apiClient";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ export const ExportButton: React.FC<Props> = ({
   label = "Exportar",
   className = "",
 }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
@@ -49,17 +51,17 @@ export const ExportButton: React.FC<Props> = ({
         const baseURL = import.meta.env.VITE_API_URL || "http://localhost:4000";
         window.open(baseURL + downloadUrl, "_blank");
 
-        toast.success(`Reporte ${format.toUpperCase()} generado`, {
-          description: `${recordCount} registros exportados`,
+        toast.success(t("export_button.toast.generated", "Reporte {{format}} generado", { format: format.toUpperCase() }), {
+          description: t("export_button.toast.generated_desc", "{{count}} registros exportados", { count: recordCount }),
         });
       } else {
         throw new Error("Export failed");
       }
     } catch (error: unknown) {
       console.error("[ExportButton] Error:", error);
-      toast.error("Error al generar reporte", {
+      toast.error(t("export_button.toast.error", "Error al generar reporte"), {
         description:
-          error instanceof Error ? error.message : "Intenta nuevamente",
+          error instanceof Error ? error.message : t("export_button.toast.error_desc_default", "Intenta nuevamente"),
       });
     } finally {
       setLoading(false);

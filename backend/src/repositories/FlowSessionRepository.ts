@@ -117,11 +117,21 @@ export class FlowSessionRepository {
     return this.db.pipeline.findFirst({ where: { companyId } });
   }
 
+  /** Validates a builder-chosen pipelineId actually belongs to this company. */
+  async findPipelineById(pipelineId: string, companyId: string) {
+    return this.db.pipeline.findFirst({ where: { id: pipelineId, companyId } });
+  }
+
   async findFirstStage(pipelineId: string) {
     return this.db.stage.findFirst({
       where: { pipelineId },
       orderBy: { order: "asc" },
     });
+  }
+
+  /** Validates a builder-chosen stageId actually belongs to the target pipeline. */
+  async findStageById(stageId: string, pipelineId: string) {
+    return this.db.stage.findFirst({ where: { id: stageId, pipelineId } });
   }
 
   async createDeal(data: Prisma.DealCreateInput) {

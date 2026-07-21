@@ -52,7 +52,7 @@ export const AgentPerformanceTable: React.FC<Props> = ({ data }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-[#111b21] rounded-2xl border border-gray-100 dark:border-gray-800/60 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-reply-surface-dark rounded-2xl border border-gray-100 dark:border-gray-800/60 shadow-sm overflow-hidden">
       <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
         <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
@@ -100,7 +100,7 @@ export const AgentPerformanceTable: React.FC<Props> = ({ data }) => {
               >
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-sm ring-2 ring-white dark:ring-[#111b21] group-hover:scale-105 transition-transform">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-sm ring-2 ring-white dark:ring-reply-surface-dark group-hover:scale-105 transition-transform">
                       {getInitials(agent.name || "Agente")}
                     </div>
                     <div className="flex flex-col">

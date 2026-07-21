@@ -60,7 +60,7 @@ const DateDivider: React.FC<{ timestamp: string | Date }> = ({ timestamp }) => {
       className="flex items-center justify-center my-3 sticky z-10 pointer-events-none"
       style={{ top: 'var(--date-divider-top, 8px)' }}
     >
-      <div className="bg-gray-100/80 dark:bg-[#1f2c34]/80 backdrop-blur-sm px-3 py-1 rounded shadow-sm text-[10.5px] text-gray-500 dark:text-gray-400 font-medium pointer-events-auto leading-none">
+      <div className="bg-gray-100/80 dark:bg-reply-elevated-dark/80 backdrop-blur-sm px-3 py-1 rounded shadow-sm text-[10.5px] text-gray-500 dark:text-gray-400 font-medium pointer-events-auto leading-none">
         {label}
       </div>
     </div>
@@ -241,7 +241,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
               }
             }}
           >
-            <div className="flex items-center gap-3 bg-white/90 dark:bg-[#1f2c34]/90 backdrop-blur-md rounded-xl px-4 py-2.5 shadow-lg border border-gray-200/50 dark:border-white/10 transition-all hover:shadow-xl hover:bg-white dark:hover:bg-[#1f2c34] group">
+            <div className="flex items-center gap-3 bg-white/90 dark:bg-reply-elevated-dark/90 backdrop-blur-md rounded-xl px-4 py-2.5 shadow-lg border border-gray-200/50 dark:border-white/10 transition-all hover:shadow-xl hover:bg-white dark:hover:bg-reply-elevated-dark group">
               <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 shrink-0">
                 <Pin className="w-4 h-4" />
               </div>
@@ -296,7 +296,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
         {/* TYPING INDICATORS */}
         {isRemoteTyping && (
           <div className="flex items-start mb-4">
-            <div className="bg-white dark:bg-[#1f2c34] px-4 py-2.5 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
+            <div className="bg-white dark:bg-reply-elevated-dark px-4 py-2.5 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
               <div className="flex gap-1">
                 <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                 <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>

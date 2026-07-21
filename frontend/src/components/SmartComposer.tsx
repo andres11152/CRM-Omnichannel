@@ -20,7 +20,8 @@ import {
   Music,
   Video,
   MapPin,
-  UserRound
+  UserRound,
+  EyeOff
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -163,7 +164,10 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
               : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
           }`}
         >
-          <span>🤫 {isWhisperMode ? "MODO SUSURRO" : "SUSURRAR"}</span>
+          <span className="flex items-center gap-1">
+            <EyeOff className="w-3 h-3" />
+            <span>{isWhisperMode ? "MODO SUSURRO" : "SUSURRAR"}</span>
+          </span>
         </button>
 
         <div className="relative group/ai shrink-0">
@@ -183,7 +187,7 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
                 className="fixed inset-0 z-40" 
                 onClick={() => setShowAIMenu(false)} 
               />
-              <div className="absolute left-0 bottom-full mb-2 w-48 bg-white dark:bg-[#1f2c34] rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 p-2 z-50 animate-in slide-in-from-bottom-2 zoom-in-95 duration-200">
+              <div className="absolute left-0 bottom-full mb-2 w-48 bg-white dark:bg-reply-elevated-dark rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 p-2 z-50 animate-in slide-in-from-bottom-2 zoom-in-95 duration-200">
                 {[
                   { label: "Responder con IA", value: "suggest" },
                   { label: "Formato Formal", value: "formal" },
@@ -210,7 +214,7 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
       <div className={`relative flex flex-col rounded-[24px] border shadow-sm transition-all ${
         isWhisperMode
           ? "bg-amber-50/70 dark:bg-amber-950/20 border-amber-500/50 focus-within:ring-2 focus-within:ring-amber-500/30 focus-within:border-amber-500"
-          : "bg-white/80 dark:bg-[#1f2c34]/80 backdrop-blur-md border-gray-200 dark:border-white/10 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50"
+          : "bg-white/80 dark:bg-reply-elevated-dark/80 backdrop-blur-md border-gray-200 dark:border-white/10 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50"
       }`}>
         
         {/* PREVIEWS (Replies/Files/Library) */}
@@ -290,7 +294,7 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
                 </button>
 
                 {showActionMenu && (
-                  <div className="absolute bottom-full left-0 mb-4 w-56 bg-white dark:bg-[#1f2c34] rounded-[24px] shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden z-50 animate-in slide-in-from-bottom-4 zoom-in-95 duration-200">
+                  <div className="absolute bottom-full left-0 mb-4 w-56 bg-white dark:bg-reply-elevated-dark rounded-[24px] shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden z-50 animate-in slide-in-from-bottom-4 zoom-in-95 duration-200">
                     <div className="p-2 space-y-1">
                       {[
                         { label: t("composer.schedule_send", "Programar Envío"), icon: Calendar, color: 'text-purple-500', onClick: onSchedule },

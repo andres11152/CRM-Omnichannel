@@ -36,8 +36,14 @@ export class HttpRequestNodeHandler {
     moveToNextNode: (sId: string, cId: string, fs: FlowStructure, v?: FlowVariables) => Promise<void>,
     moveToSpecificNode: (sId: string, tId: string) => Promise<void>,
   ): Promise<string | null> {
-    const url = replaceVariables(node.data.webhookUrl || node.data.url || "", session.variables);
-    const method = (node.data.httpMethod || "POST").toUpperCase();
+    const url = replaceVariables(
+      node.data.webhookUrl || node.data.url || (node.data as Record<string, unknown>).url as string || "",
+      session.variables,
+    );
+    // `httpMethod` is the canonical field; `method` is what the FlowBuilder UI
+    // (IntegrationNodeProperties.tsx) actually writes — both are honored.
+    const rawMethod = node.data.httpMethod || (node.data as Record<string, unknown>).method as string || "POST";
+    const method = String(rawMethod).toUpperCase();
 
     if (!url) {
       Logger.warn(`[FlowExec] HTTP_REQUEST node ${node.id} has no URL configured`);
@@ -47,12 +53,31 @@ export class HttpRequestNodeHandler {
 
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+      // `headers` is a JSON object of arbitrary custom headers (what the UI
+      // exposes); `authHeader` is a single legacy bearer-style field. Both
+      // are applied, with explicit custom headers taking precedence.
+      const rawHeaders = (node.data as Record<string, unknown>).headers as string | undefined;
+      if (rawHeaders) {
+        try {
+          const parsedHeaders = JSON.parse(replaceVariables(rawHeaders, session.variables));
+          if (parsedHeaders && typeof parsedHeaders === "object") {
+            for (const [key, value] of Object.entries(parsedHeaders)) {
+              headers[key] = String(value);
+            }
+          }
+        } catch (parseErr) {
+          Logger.warn(`[FlowExec] HTTP_REQUEST node ${node.id} has invalid JSON in "headers": ${String(parseErr)}`);
+        }
+      }
       if (node.data.authHeader) {
         headers["Authorization"] = replaceVariables(String(node.data.authHeader), session.variables);
       }
 
-      const bodyPayload = node.data.bodyTemplate
-        ? JSON.parse(replaceVariables(String(node.data.bodyTemplate), session.variables))
+      // `bodyTemplate` is canonical; `body` is what the UI writes.
+      const rawBody = node.data.bodyTemplate || (node.data as Record<string, unknown>).body as string | undefined;
+      const bodyPayload = rawBody
+        ? JSON.parse(replaceVariables(String(rawBody), session.variables))
         : { contactId: session.contactId, variables: session.variables };
 
       const response = await fetchWithRetry(
@@ -72,11 +97,19 @@ export class HttpRequestNodeHandler {
         responseData = { status: response.status, text: await response.text() };
       }
 
+      const responseText = JSON.stringify(responseData).substring(0, 500);
       const updatedVars: FlowVariables = {
         ...session.variables,
         http_status: response.status,
-        http_response: JSON.stringify(responseData).substring(0, 500),
+        http_response: responseText,
       };
+      // "Guardar Respuesta en Variable" in the UI (`node.data.variable`) —
+      // stores the same response under a caller-chosen name too, so a later
+      // node can reference `{{api_response}}` instead of the fixed name.
+      const customVariable = (node.data as Record<string, unknown>).variable as string | undefined;
+      if (customVariable) {
+        updatedVars[customVariable] = responseText;
+      }
 
       await flowSessionRepository.updateSession(session.id, { variables: updatedVars });
 

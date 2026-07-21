@@ -267,7 +267,7 @@ export const TagsManager: React.FC = () => {
                                 type="button"
                                 title={c.label}
                                 onClick={() => setFormColor(c.value)}
-                                className={`aspect-square rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-center shadow-sm relative group ${c.value} ${isSelected ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-[#111b21] scale-105 z-10" : "hover:scale-110 opacity-60 hover:opacity-100"}`}
+                                className={`aspect-square rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-center shadow-sm relative group ${c.value} ${isSelected ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-reply-surface-dark scale-105 z-10" : "hover:scale-110 opacity-60 hover:opacity-100"}`}
                               >
                                 {isSelected && <Check className="w-4 h-4 drop-shadow-sm" strokeWidth={3} />}
                                 <div className="absolute inset-0 rounded-xl bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />

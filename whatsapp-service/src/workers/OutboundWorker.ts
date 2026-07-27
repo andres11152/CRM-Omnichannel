@@ -127,6 +127,7 @@ export class OutboundWorker {
             sessionId,
             messageId: resultMessageId,
             dbMessageId,
+            conversationId: payload.options.conversationId,
             to: payload.to,
           });
 
@@ -141,6 +142,7 @@ export class OutboundWorker {
             companyId,
             error: errMsg,
             dbMessageId,
+            conversationId: payload.options.conversationId,
             to: payload.to,
           });
 

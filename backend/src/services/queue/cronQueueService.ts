@@ -43,7 +43,17 @@ const withTimeout = <T>(
   ]);
 };
 
-export const cronQueue = new Queue(CRON_QUEUE_NAME, { connection });
+export const cronQueue = new Queue(CRON_QUEUE_NAME, {
+  connection,
+  defaultJobOptions: {
+    // [PERF] Without this, every completed run of "scheduled-messages"
+    // (every 30s, forever) leaves its job hash in Redis permanently — this
+    // was the actual cause of a production Redis OOM (96k+ orphaned keys
+    // from this queue alone, ~99.5% of total keyspace).
+    removeOnComplete: true,
+    removeOnFail: { count: 500 },
+  },
+});
 
 export const initCronWorker = async () => {
   Logger.info(`[CronQueue]  Initializing Cron Queue Worker...`);

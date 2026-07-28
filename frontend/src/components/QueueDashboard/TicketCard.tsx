@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 export interface IncomingTicket {
   id: string;
@@ -75,6 +76,7 @@ const getPriorityColor = (p: string) => {
 };
 
 export const TicketCard = ({ ticket }: { ticket: IncomingTicket }) => {
+  const { t } = useTranslation();
   const isOverdue = ticket.waitTime > 15;
   const isCritical = ticket.waitTime > 30;
 
@@ -115,7 +117,7 @@ export const TicketCard = ({ ticket }: { ticket: IncomingTicket }) => {
         <span
           className={`text-[10px] font-mono font-medium ${isCritical ? "text-red-600 dark:text-red-400" : isOverdue ? "text-orange-600 dark:text-orange-400" : "text-gray-500"}`}
         >
-          {ticket.waitTime} min espera
+          {t("queue_dashboard.ticket_card.wait_time", "{{min}} min espera", { min: ticket.waitTime })}
         </span>
       </div>
     </div>

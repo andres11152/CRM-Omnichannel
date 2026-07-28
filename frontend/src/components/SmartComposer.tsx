@@ -45,6 +45,7 @@ interface SmartComposerProps {
   onPayment?: () => void;
   onShareLocation?: () => void;
   onContact?: () => void;
+  onQuotation?: () => void;
 
   onClearFile?: () => void;
   replyingTo?: { id: string; content: string; senderName?: string } | null;
@@ -81,6 +82,7 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
   onPayment,
   onShareLocation,
   onContact,
+  onQuotation,
 
   disabled = false,
   isRecording = false,
@@ -154,6 +156,17 @@ const SmartComposerComponent: React.FC<SmartComposerProps> = ({
           <Zap className="w-3 h-3" />
           <span>{t("composer.quick_replies", "RESPUESTAS RÁPIDAS")}</span>
         </button>
+
+        {onQuotation && (
+          <button
+            type="button"
+            onClick={onQuotation}
+            className="shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50/60 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-all border border-emerald-200/60 dark:border-emerald-500/20"
+          >
+            <FileText className="w-3 h-3" />
+            <span>COTIZAR</span>
+          </button>
+        )}
 
         <button
           type="button"

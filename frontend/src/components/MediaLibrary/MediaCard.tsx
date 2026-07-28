@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Pencil, FileText } from "lucide-react";
 import { Media } from "@/services/mediaService";
 import { formatFileSize, getFileExtension, addDefaultSrc } from "./helpers";
@@ -24,6 +25,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   onRename,
   onDelete,
 }) => {
+  const { t } = useTranslation();
   return (
     <div
       onClick={(e) => {
@@ -110,7 +112,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               onCopyUrl(item.url);
             }}
             className="p-2 bg-white/20 hover:bg-white text-white hover:text-purple-600 rounded-full backdrop-blur-md transition-all transform hover:scale-110"
-            title="Copiar Link"
+            title={t("media_library.card.copy_link", "Copiar Link")}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
@@ -127,7 +129,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               onRename(item);
             }}
             className="p-2 bg-white/20 hover:bg-white text-white hover:text-purple-600 rounded-full backdrop-blur-md transition-all transform hover:scale-110"
-            title="Renombrar"
+            title={t("media_library.card.rename", "Renombrar")}
           >
             <Pencil className="w-5 h-5" />
           </button>
@@ -137,7 +139,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               onDelete(item.id);
             }}
             className="p-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full backdrop-blur-md transition-all transform hover:scale-110"
-            title="Eliminar"
+            title={t("media_library.card.delete", "Eliminar")}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path

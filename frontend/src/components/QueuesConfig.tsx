@@ -490,7 +490,7 @@ const QueuesConfig: React.FC = () => {
                   onClick={() => { setIsCreatingDept(false); setNewDeptName(""); }}
                   className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                 >
-                  {t("common.cancel", "✕")}
+                  {t("common.cancel", "Cancelar")}
                 </button>
               </div>
             ) : editingDeptId ? (
@@ -517,7 +517,7 @@ const QueuesConfig: React.FC = () => {
                   disabled={isSavingDept}
                   className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                 >
-                  {t("common.cancel", "✕")}
+                  {t("common.cancel", "Cancelar")}
                 </button>
               </div>
             ) : (

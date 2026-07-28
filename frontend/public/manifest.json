@@ -4,7 +4,7 @@
   "description": "Professional CRM & WhatsApp Business Platform",
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#007bff",
+  "theme_color": "#007B65",
   "background_color": "#ffffff",
   "orientation": "any",
   "scope": "/",
@@ -56,20 +56,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshot-wide.png",
-      "sizes": "2880x1800",
-      "type": "image/png",
-      "form_factor": "wide"
-    },
-    {
-      "src": "/screenshot-mobile.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow"
     }
   ],
   "categories": ["business", "productivity", "social"],

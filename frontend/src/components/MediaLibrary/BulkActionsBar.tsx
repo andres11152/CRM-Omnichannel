@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 interface BulkActionsBarProps {
   selectedCount: number;
@@ -15,6 +16,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   onDeleteSelected,
   onCancel,
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[40] animate-in slide-in-from-bottom-10 fade-in duration-300">
       <div className="bg-gray-900/90 backdrop-blur-xl border border-gray-700 rounded-2xl px-6 py-4 shadow-2xl flex items-center gap-6">
@@ -22,7 +24,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
           <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm">
             {selectedCount}
           </div>
-          <span className="text-white font-medium text-sm">Archivos seleccionados</span>
+          <span className="text-white font-medium text-sm">{t("media_library.bulk_actions.selected_files", "Archivos seleccionados")}</span>
         </div>
 
         <div className="flex items-center gap-3">
@@ -30,7 +32,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
             onClick={onSelectAll}
             className="px-4 py-2 text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-all"
           >
-            {selectedCount === totalCount ? "Desmarcar todos" : "Seleccionar todos"}
+            {selectedCount === totalCount ? t("media_library.bulk_actions.deselect_all", "Desmarcar todos") : t("media_library.bulk_actions.select_all", "Seleccionar todos")}
           </button>
 
           <button
@@ -45,10 +47,10 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
               />
             </svg>
-            Eliminar seleccionados
+            {t("media_library.bulk_actions.delete_selected", "Eliminar seleccionados")}
           </button>
 
-          <button onClick={onCancel} className="p-2 text-gray-400 hover:text-white rounded-lg" title="Cancelar selección">
+          <button onClick={onCancel} className="p-2 text-gray-400 hover:text-white rounded-lg" title={t("media_library.bulk_actions.cancel_selection", "Cancelar selección")}>
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>

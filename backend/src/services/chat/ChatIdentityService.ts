@@ -163,56 +163,10 @@ export class ChatIdentityService {
       }
     }
 
-    // 2. CRM CONTACT SYNC — two guards:
-    //    (a) STRICT phone validation: never persist LIDs / internal IDs as contacts.
-    //    (b) OPT-IN: auto-import is OFF by default; contacts are created automatically
-    //        only when the company enables it. Otherwise the user imports manually.
-    const isGroup = params.email.includes("@g.us") ||
-                   (params.phone ? !WhatsAppIdUtils.isRealPhoneNumber(params.phone) && params.phone.startsWith("120") : false);
-
-    const hasValidCrmPhone = WhatsAppIdUtils.isValidCrmPhone(params.phone);
-
-    if (user.role === "USER" && !isGroup && hasValidCrmPhone) {
-      const autoImport = await companySettingsService.isAutoImportContactsEnabled(params.companyId);
-      if (autoImport) {
-        try {
-          await contactService.upsert(params.companyId, {
-            phone: params.phone!,
-            name: user.name,
-            email: null,
-            // Propagate the WhatsApp profile picture from the shadow User so the CRM
-            // Contact shows the avatar too (only when present — never overwrite with null).
-            ...((user as { profilePicUrl?: string | null }).profilePicUrl
-              ? { profilePicUrl: (user as { profilePicUrl?: string | null }).profilePicUrl }
-              : {}),
-            customFields: {
-              source: "whatsapp",
-              whatsappId: params.email.split("@")[0],
-              userId: user.id,
-            },
-            tags: ["Imported from Chat"],
-          });
-          Logger.info(
-            `[ChatIdentityService] [OK] CRM Contact auto-synced for real phone: ${params.phone}`,
-          );
-        } catch (error) {
-          Logger.warn(
-            `[ChatIdentityService] Failed to sync CRM contact for ${params.email}`,
-            { error },
-          );
-        }
-      } else {
-        Logger.debug(
-          `[ChatIdentityService] [SKIP] Auto-import OFF for ${params.companyId} — not creating contact for ${params.phone}`,
-        );
-      }
-    } else if (isGroup) {
-      Logger.debug(`[ChatIdentityService] [SKIP] Group chat, no contact (${params.email})`);
-    } else if (!hasValidCrmPhone) {
-      Logger.debug(
-        `[ChatIdentityService] [SKIP] Not a valid CRM phone (LID/invalid): ${params.phone || "N/A"}`,
-      );
-    }
+    // 2. CRM CONTACT SYNC is now strictly manual to avoid database clutter with spam/junk contacts.
+    // Shadow users are created for chat participation/identity, but CRM contacts are created
+    // only on-demand (via manual import or manual save on chat creation).
+    Logger.debug(`[ChatIdentityService] [SKIP] Auto-import of CRM contact disabled for ${params.phone || "N/A"}`);
 
     return user;
   }

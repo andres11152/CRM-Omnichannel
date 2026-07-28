@@ -13,7 +13,6 @@ import { api } from "@/lib/axios";
 import { ApiResponse } from "@/types/common.types";
 import { LoginResponse } from "@/types/auth.types";
 import { API_BASE_URL } from "@/services/apiConfig";
-import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { User } from "@/types";
 import { RegisterWizard } from "@/components/auth/RegisterWizard";
 
@@ -317,7 +316,7 @@ export const LoginPage = () => {
         gap={6}
         toastOptions={{ duration: 3000, closeButton: true }}
       />
-      {/* ️ LEFT SIDE: ARTWORK & BRANDING — Enterprise Grade */}
+      {/* LEFT SIDE: ARTWORK & BRANDING — Enterprise Grade */}
       <div className="hidden lg:flex w-[48%] fixed inset-y-0 left-0 bg-gradient-to-br from-[#0b3c2c] via-[#051c15] to-[#010906] items-center justify-center p-12 overflow-hidden z-0">
         {/* ═══ LAYER 1: Animated Gradient Mesh ═══ */}
         <div className="absolute inset-0">
@@ -784,9 +783,6 @@ export const LoginPage = () => {
           </div>
         </div>
       )}
-
-      {/* [APP] PWA INSTALL PROMPT */}
-      <PWAInstallPrompt />
     </div>
   );
 };

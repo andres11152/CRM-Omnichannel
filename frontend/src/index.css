@@ -102,7 +102,7 @@ body {
   animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* 🖼️ CHAT WALLPAPER SYSTEM (Optimized for Enterprise) */
+/* CHAT WALLPAPER SYSTEM (Optimized for Enterprise) */
 .chat-window-container {
   position: relative;
   background-color: #efeae2;
@@ -146,7 +146,7 @@ body {
   background: rgba(0, 0, 0, 0.35); /* Middle ground darkening */
 }
 
-/* 🔄 CUSTOM ANIMATIONS */
+/* CUSTOM ANIMATIONS */
 @keyframes scaleIn {
   from {
     opacity: 0;

@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Activity, Eye, EyeOff, Clipboard, XCircle } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -23,6 +24,7 @@ export const WebhookList: React.FC<WebhookListProps> = ({
   onToggleWebhook,
   onDeleteWebhook,
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-1 gap-4">
       {webhooks.length === 0 && !isCreatingWebhook && (
@@ -30,7 +32,7 @@ export const WebhookList: React.FC<WebhookListProps> = ({
           <div className="w-16 h-16 bg-reply-bg dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-300">
             <Activity className="w-8 h-8" />
           </div>
-          <p className="text-gray-500 dark:text-gray-400 font-medium">No hay webhooks configurados aún.</p>
+          <p className="text-gray-500 dark:text-gray-400 font-medium">{t("developer_settings.webhook_list.empty_state", "No hay webhooks configurados aún.")}</p>
         </div>
       )}
       {webhooks.map((wh) => (
@@ -60,7 +62,7 @@ export const WebhookList: React.FC<WebhookListProps> = ({
                     : ""
                 }
               >
-                {wh.isActive ? "DESACTIVAR" : "ACTIVAR"}
+                {wh.isActive ? t("developer_settings.webhook_list.deactivate", "DESACTIVAR") : t("developer_settings.webhook_list.activate", "ACTIVAR")}
               </Button>
               <Button
                 onClick={() => onDeleteWebhook(wh.id)}
@@ -76,7 +78,7 @@ export const WebhookList: React.FC<WebhookListProps> = ({
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-reply-bg dark:bg-black/20 p-4 rounded-xl border border-reply-border dark:border-reply-border-dark">
             <div>
               <span className="text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase mb-2 block tracking-widest">
-                Eventos Suscritos
+                {t("developer_settings.webhook_list.subscribed_events", "Eventos Suscritos")}
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {wh.events.map((evt) => (
@@ -92,7 +94,7 @@ export const WebhookList: React.FC<WebhookListProps> = ({
             </div>
             <div>
               <span className="text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase mb-2 block tracking-widest">
-                Signing Secret (HMAC-SHA256)
+                {t("developer_settings.webhook_list.signing_secret", "Signing Secret (HMAC-SHA256)")}
               </span>
               <div className="flex items-center gap-2 bg-white dark:bg-reply-surface-dark border border-reply-border dark:border-reply-border-dark rounded-lg px-3 py-2 font-mono text-xs shadow-sm">
                 <span className="flex-1 truncate dark:text-gray-300">
@@ -101,14 +103,14 @@ export const WebhookList: React.FC<WebhookListProps> = ({
                 <button
                   onClick={() => onToggleSecretVisibility(wh.id)}
                   className="text-gray-400 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
-                  title={visibleSecrets.has(wh.id) ? "Ocultar" : "Mostrar"}
+                  title={visibleSecrets.has(wh.id) ? t("developer_settings.webhook_list.hide", "Ocultar") : t("developer_settings.webhook_list.show", "Mostrar")}
                 >
                   {visibleSecrets.has(wh.id) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
                 <button
-                  onClick={() => copyToClipboard(wh.secretKey, "Secret copiado")}
+                  onClick={() => copyToClipboard(wh.secretKey, t("developer_settings.webhook_list.secret_copied_toast", "Secret copiado"))}
                   className="text-gray-400 hover:text-reply-brand dark:hover:text-reply-brand-light transition-colors cursor-pointer"
-                  title="Copiar"
+                  title={t("developer_settings.webhook_list.copy", "Copiar")}
                 >
                   <Clipboard className="w-4 h-4" />
                 </button>

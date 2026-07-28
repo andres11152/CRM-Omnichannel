@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Agent, QueueConfig } from "@/types";
 import { Modal, ModalButton } from "../ui/Modal";
 import { Users } from "lucide-react";
@@ -16,6 +17,7 @@ export const QueueAssignmentModal = ({
   onSave: (queues: string[]) => void;
   availableQueues: QueueConfig[];
 }) => {
+  const { t } = useTranslation();
   const [selectedQueues, setSelectedQueues] = useState<string[]>([]);
 
   useEffect(() => {
@@ -40,23 +42,23 @@ export const QueueAssignmentModal = ({
     <Modal
       isOpen
       onClose={onClose}
-      title={`Configurar Colas para ${agent.name}`}
+      title={t("queue_dashboard.assignment_modal.title", "Configurar Colas para {{name}}", { name: agent.name })}
       icon={<Users className="w-5 h-5" />}
       size="sm"
       footer={
         <>
           <ModalButton variant="secondary" onClick={onClose}>
-            Cancelar
+            {t("queue_dashboard.assignment_modal.cancel", "Cancelar")}
           </ModalButton>
           <ModalButton variant="primary" onClick={() => onSave(selectedQueues)}>
-            Guardar Cambios
+            {t("queue_dashboard.assignment_modal.save_changes", "Guardar Cambios")}
           </ModalButton>
         </>
       }
     >
       <div className="space-y-3">
         {availableQueues.length === 0 ? (
-          <p className="text-gray-500 text-sm">No hay colas disponibles.</p>
+          <p className="text-gray-500 text-sm">{t("queue_dashboard.assignment_modal.no_queues_available", "No hay colas disponibles.")}</p>
         ) : (
           availableQueues.map((queue) => (
             <label

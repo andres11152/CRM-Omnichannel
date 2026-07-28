@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Activity } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -9,17 +10,18 @@ import { DeliveryLogsSection } from "./DeliveryLogsSection";
 import { DeveloperSettingsState } from "./useDeveloperSettings";
 
 export const WebhooksTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => {
+  const { t } = useTranslation();
   return (
     <div className="animate-in fade-in duration-500 space-y-6">
       {/* Header card */}
       <Card className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
         <div>
           <h3 className="font-bold text-reply-text-primary dark:text-white text-lg flex items-center gap-2">
-            Endpoints Configurados
+            {t("developer_settings.webhooks_tab.endpoints_configured", "Endpoints Configurados")}
             <Badge variant="info">{ds.webhooks.length}</Badge>
           </h3>
           <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark mt-1">
-            Configura URLs externas donde Sentry enviará eventos en tiempo real vía HMAC-SHA256.
+            {t("developer_settings.webhooks_tab.description", "Configura URLs externas donde Sentry enviará eventos en tiempo real vía HMAC-SHA256.")}
           </p>
         </div>
         <Button
@@ -28,11 +30,11 @@ export const WebhooksTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) =>
           className="w-full sm:w-auto"
         >
           {ds.isCreatingWebhook ? (
-            <span>Cerrar</span>
+            <span>{t("developer_settings.webhooks_tab.close", "Cerrar")}</span>
           ) : (
             <>
               <Activity className="w-4 h-4" />
-              <span>Nuevo Webhook</span>
+              <span>{t("developer_settings.webhooks_tab.new_webhook", "Nuevo Webhook")}</span>
             </>
           )}
         </Button>

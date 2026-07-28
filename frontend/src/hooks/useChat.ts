@@ -307,7 +307,7 @@ export const addMessageToCache = (
         }
 
         console.log(
-          `⏭️ [Socket.IO] Already exists and identical, skipping (${(performance.now() - socketStart).toFixed(2)}ms)`,
+          `[SKIP] [Socket.IO] Already exists and identical, skipping (${(performance.now() - socketStart).toFixed(2)}ms)`,
         );
         return old; // No change = no re-render
       }

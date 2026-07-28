@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { 
+import { useTranslation } from "react-i18next";
+import {
   Cpu, 
   Database, 
   Activity, 
@@ -20,6 +21,7 @@ import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 const SYSTEM_MONITOR_CACHE_KEY = "system:deep-health";
 
 export const SystemDeepMonitor: React.FC = () => {
+  const { t } = useTranslation();
   // Stale-while-revalidate: instant render on module re-entry; also keeps the
   // 30s polling refresh from flashing loading state over live data
   const cachedStats = getModuleCache<InfrastructureStats>(SYSTEM_MONITOR_CACHE_KEY);
@@ -52,22 +54,22 @@ export const SystemDeepMonitor: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-reply-bg dark:bg-reply-bg-dark animate-in fade-in duration-500 overflow-hidden">
       <ModuleHeader
-        title="Infrastructure Deep Monitor"
-        description="Estado en tiempo real de servicios, colas y recursos críticos"
+        title={t("system_deep_monitor.title", "Infrastructure Deep Monitor")}
+        description={t("system_deep_monitor.subtitle", "Estado en tiempo real de servicios, colas y recursos críticos")}
         icon={<Cpu className="w-8 h-8 text-white" />}
         gradient="from-slate-800 via-slate-900 to-black dark:from-black dark:via-slate-900 dark:to-slate-800"
         stats={{
-          label: "Active Workers",
+          label: t("system_deep_monitor.active_workers", "Workers Activos"),
           value: stats?.queues.reduce((acc, q) => acc + (q.active > 0 ? 1 : 0), 0) || 0
         }}
         action={
-          <button 
+          <button
             onClick={fetchData}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-xl text-white text-sm font-bold transition-all active:scale-95"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refrescar
+            {t("system_deep_monitor.refresh", "Refrescar")}
           </button>
         }
       />
@@ -75,38 +77,42 @@ export const SystemDeepMonitor: React.FC = () => {
       <div className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-6">
         {/* Resource Overview Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-           <StatusCard 
-              title="API Gateway"
-              status="Healthy"
+           <StatusCard
+              title={t("system_deep_monitor.cards.api_gateway", "API Gateway")}
+              status={t("system_deep_monitor.cards.healthy", "Saludable")}
+              isHealthy
               value={`${stats?.database.latencyMs || 0}ms`}
-              label="Latency"
+              label={t("system_deep_monitor.cards.latency", "Latencia")}
               icon={<Globe className="w-5 h-5" />}
               color="text-blue-500"
               bg="bg-blue-500/10"
            />
-           <StatusCard 
-              title="Redis Memory"
-              status={stats?.redis.status || "Loading..."}
+           <StatusCard
+              title={t("system_deep_monitor.cards.redis_memory", "Memoria Redis")}
+              status={stats?.redis.status || t("system_deep_monitor.cards.loading", "Cargando...")}
+              isHealthy={!!stats?.redis.status?.toLowerCase().includes("healthy")}
               value={stats?.redis.memoryUsed || "0MB"}
-              label={`Peak: ${stats?.redis.memoryPeak}`}
+              label={t("system_deep_monitor.cards.peak", "Pico: {{value}}", { value: stats?.redis.memoryPeak })}
               icon={<Zap className="w-5 h-5" />}
               color="text-rose-500"
               bg="bg-rose-500/10"
            />
-           <StatusCard 
-              title="Database"
-              status={stats?.database.status || "Loading..."}
+           <StatusCard
+              title={t("system_deep_monitor.cards.database", "Base de Datos")}
+              status={stats?.database.status || t("system_deep_monitor.cards.loading", "Cargando...")}
+              isHealthy={!!stats?.database.status?.toLowerCase().includes("healthy")}
               value={`${stats?.database.latencyMs || 0}ms`}
-              label="Query Response"
+              label={t("system_deep_monitor.cards.query_response", "Respuesta de Consulta")}
               icon={<Database className="w-5 h-5" />}
               color="text-emerald-500"
               bg="bg-emerald-500/10"
            />
-           <StatusCard 
-              title="Workers"
-              status="Online"
+           <StatusCard
+              title={t("system_deep_monitor.cards.workers", "Workers")}
+              status={t("system_deep_monitor.cards.online", "En Línea")}
+              isHealthy
               value={stats?.queues.length || 0}
-              label="Active Queues"
+              label={t("system_deep_monitor.cards.active_queues", "Colas Activas")}
               icon={<Layers className="w-5 h-5" />}
               color="text-amber-500"
               bg="bg-amber-500/10"
@@ -120,19 +126,19 @@ export const SystemDeepMonitor: React.FC = () => {
               <div className="p-6 border-b border-slate-100 dark:border-reply-border-dark flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
                 <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-indigo-500" />
-                  BullMQ Queue Diagnostics
+                  {t("system_deep_monitor.queue_table.title", "Diagnóstico de Colas BullMQ")}
                 </h3>
-                <span className="text-[10px] font-mono text-slate-400">Last check: {lastUpdate.toLocaleTimeString()}</span>
+                <span className="text-[10px] font-mono text-slate-400">{t("system_deep_monitor.queue_table.last_check", "Última revisión: {{time}}", { time: lastUpdate.toLocaleTimeString() })}</span>
               </div>
               <div className="overflow-x-auto flex-1">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-reply-border-dark bg-slate-50/30 dark:bg-black/20">
-                      <th className="px-6 py-4">Queue</th>
-                      <th className="px-6 py-4 text-center">Waiting</th>
-                      <th className="px-6 py-4 text-center">Active</th>
-                      <th className="px-6 py-4 text-center">Failed</th>
-                      <th className="px-6 py-4 text-right">Health</th>
+                      <th className="px-6 py-4">{t("system_deep_monitor.queue_table.col_queue", "Cola")}</th>
+                      <th className="px-6 py-4 text-center">{t("system_deep_monitor.queue_table.col_waiting", "En Espera")}</th>
+                      <th className="px-6 py-4 text-center">{t("system_deep_monitor.queue_table.col_active", "Activos")}</th>
+                      <th className="px-6 py-4 text-center">{t("system_deep_monitor.queue_table.col_failed", "Fallidos")}</th>
+                      <th className="px-6 py-4 text-right">{t("system_deep_monitor.queue_table.col_health", "Salud")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-reply-border-dark">
@@ -155,7 +161,7 @@ export const SystemDeepMonitor: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-right">
                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${q.failed > 10 ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}>
-                              {q.failed > 10 ? 'Degraded' : 'Stable'}
+                              {q.failed > 10 ? t("system_deep_monitor.queue_table.degraded", "Degradado") : t("system_deep_monitor.queue_table.stable", "Estable")}
                            </span>
                         </td>
                       </tr>
@@ -172,14 +178,14 @@ export const SystemDeepMonitor: React.FC = () => {
                 <div className="flex items-center justify-between mb-6">
                    <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Server className="w-5 h-5 text-emerald-500" />
-                    Webhooks & Delivery
+                    {t("system_deep_monitor.webhooks_card.title", "Webhooks y Entregas")}
                   </h3>
                   <ExternalLink className="w-4 h-4 text-slate-400" />
                 </div>
                 <div className="space-y-6">
                    <div>
                      <div className="flex justify-between items-center mb-2">
-                       <span className="text-xs text-slate-500 dark:text-slate-400">Delivery Success Rate</span>
+                       <span className="text-xs text-slate-500 dark:text-slate-400">{t("system_deep_monitor.webhooks_card.success_rate", "Tasa de Éxito de Entrega")}</span>
                        <span className="text-xs font-bold text-emerald-500 font-mono">99.98%</span>
                      </div>
                      <div className="w-full h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
@@ -188,11 +194,11 @@ export const SystemDeepMonitor: React.FC = () => {
                    </div>
                    <div className="grid grid-cols-2 gap-4">
                       <div className="bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-slate-100 dark:border-white/5">
-                         <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Total 24h</p>
+                         <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">{t("system_deep_monitor.webhooks_card.total_24h", "Total 24h")}</p>
                          <p className="text-xl font-mono font-bold text-slate-800 dark:text-white">12,482</p>
                       </div>
                       <div className="bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-slate-100 dark:border-white/5">
-                         <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Failures</p>
+                         <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">{t("system_deep_monitor.webhooks_card.failures", "Fallos")}</p>
                          <p className="text-xl font-mono font-bold text-rose-500">2</p>
                       </div>
                    </div>
@@ -205,11 +211,11 @@ export const SystemDeepMonitor: React.FC = () => {
                     <Activity className="w-32 h-32" />
                  </div>
                  <div className="relative z-10">
-                    <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Global System Availability</p>
+                    <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">{t("system_deep_monitor.uptime_card.global_availability", "Disponibilidad Global del Sistema")}</p>
                     <h3 className="text-4xl font-black font-mono">99.99<span className="text-lg text-indigo-300">%</span></h3>
                     <div className="flex items-center gap-2 mt-4 text-[10px] font-bold text-indigo-100 bg-white/10 w-fit px-3 py-1 rounded-full">
                        <Clock className="w-3 h-3" />
-                       UPTIME: {stats?.redis.uptime || "0 days"}
+                       {t("system_deep_monitor.uptime_card.uptime_label", "TIEMPO ACTIVO: {{value}}", { value: stats?.redis.uptime || "0 days" })}
                     </div>
                  </div>
               </div>
@@ -223,20 +229,25 @@ export const SystemDeepMonitor: React.FC = () => {
 const StatusCard: React.FC<{
   title: string;
   status: string;
+  /** Explicit health flag — required now that `status` can be a translated,
+   * non-English display string. Matching on English substrings like
+   * "healthy"/"online" inside `status` would silently break (always showing
+   * red) as soon as the label is localized. */
+  isHealthy: boolean;
   value: string | number;
   label: string;
   icon: React.ReactNode;
   color: string;
   bg: string;
-}> = ({ title, status, value, label, icon, color, bg }) => (
+}> = ({ title, status, isHealthy, value, label, icon, color, bg }) => (
   <div className="bg-white dark:bg-reply-panel-dark p-5 rounded-2xl border border-slate-200 dark:border-reply-border-dark shadow-sm group hover:border-indigo-500/30 transition-all">
     <div className="flex items-center justify-between mb-4">
       <div className={`p-2.5 rounded-xl ${bg} ${color}`}>
         {icon}
       </div>
       <div className="flex items-center gap-1.5">
-        <div className={`w-1.5 h-1.5 rounded-full ${status.toLowerCase().includes('healthy') || status.toLowerCase().includes('stable') || status.toLowerCase().includes('online') ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`} />
-        <span className={`text-[10px] font-black uppercase tracking-widest ${status.toLowerCase().includes('healthy') || status.toLowerCase().includes('stable') || status.toLowerCase().includes('online') ? 'text-emerald-500' : 'text-rose-500'}`}>
+        <div className={`w-1.5 h-1.5 rounded-full ${isHealthy ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`} />
+        <span className={`text-[10px] font-black uppercase tracking-widest ${isHealthy ? 'text-emerald-500' : 'text-rose-500'}`}>
           {status}
         </span>
       </div>

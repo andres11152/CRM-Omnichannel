@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Media } from "@/services/mediaService";
 import { ModuleHeader } from "../common/ModuleHeader";
 import { AlertTriangle } from "lucide-react";
@@ -14,6 +15,7 @@ interface MediaLibraryProps {
 }
 
 export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose }) => {
+  const { t } = useTranslation();
   const lib = useMediaLibrary();
 
   const handleOpen = (item: Media) => {
@@ -36,7 +38,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
       {onClose ? (
         <div className="bg-white dark:bg-reply-panel-dark px-6 py-4 border-b border-gray-200 dark:border-reply-border-dark flex justify-between items-center shadow-sm z-10">
           <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-            <span className="text-2xl">[DIR]</span> Seleccionar Archivo
+            <span className="text-2xl">[DIR]</span> {t("media_library.select_file_title", "Seleccionar Archivo")}
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
             <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,8 +48,8 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
         </div>
       ) : (
         <ModuleHeader
-          title="Biblioteca Multimedia"
-          description="Gestiona y visualiza todos tus activos digitales"
+          title={t("media_library.title", "Biblioteca Multimedia")}
+          description={t("media_library.subtitle", "Gestiona y visualiza todos tus activos digitales")}
           icon={
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -59,7 +61,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
             </svg>
           }
           gradient="from-indigo-600 to-purple-600 dark:from-indigo-800 dark:to-purple-800"
-          stats={{ label: "Total Archivos", value: lib.media.length }}
+          stats={{ label: t("media_library.total_files", "Total Archivos"), value: lib.media.length }}
         />
       )}
 
@@ -76,7 +78,10 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
                   : "text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
-              {type === "ALL" ? "Todos" : type.charAt(0) + type.slice(1).toLowerCase()}
+              {t(
+                `media_library.filters.${type.toLowerCase()}`,
+                type === "ALL" ? "Todos" : type.charAt(0) + type.slice(1).toLowerCase(),
+              )}
             </button>
           ))}
         </div>
@@ -85,7 +90,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
           <div className="relative flex-1 md:w-64">
             <input
               type="text"
-              placeholder="Buscar..."
+              placeholder={t("media_library.search_placeholder", "Buscar...")}
               value={lib.search}
               onChange={(e) => lib.setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-reply-bg dark:bg-gray-800 border-none rounded-xl text-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500/50"
@@ -109,7 +114,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
               />
             </svg>
-            <span className="hidden sm:inline">Subir</span>
+            <span className="hidden sm:inline">{t("media_library.upload", "Subir")}</span>
             <input type="file" multiple className="hidden" onChange={(e) => e.target.files && lib.handleUpload(e.target.files)} />
           </label>
         </div>
@@ -120,7 +125,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
         {lib.loading ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-400 animate-pulse">
             <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full mb-4"></div>
-            <p>Cargando biblioteca...</p>
+            <p>{t("media_library.loading", "Cargando biblioteca...")}</p>
           </div>
         ) : lib.media.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 dark:border-reply-border-dark rounded-3xl m-4 bg-reply-bg/50 dark:bg-gray-800/30">
@@ -134,8 +139,8 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
                 />
               </svg>
             </div>
-            <p className="text-xl font-medium text-gray-600 dark:text-gray-300">Tu biblioteca está vacía</p>
-            <p className="text-sm mt-2">Arrastra archivos aquíí o usa el botón de subir</p>
+            <p className="text-xl font-medium text-gray-600 dark:text-gray-300">{t("media_library.empty_title", "Tu biblioteca está vacía")}</p>
+            <p className="text-sm mt-2">{t("media_library.empty_subtitle", "Arrastra archivos aquí o usa el botón de subir")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
@@ -179,8 +184,8 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
               />
             </svg>
-            <h2 className="text-3xl font-bold">Suelta tus archivos aquíí</h2>
-            <p className="text-lg opacity-80 mt-2">Se subirn instantneamente a tu nube</p>
+            <h2 className="text-3xl font-bold">{t("media_library.drop_title", "Suelta tus archivos aquí")}</h2>
+            <p className="text-lg opacity-80 mt-2">{t("media_library.drop_subtitle", "Se subirán instantáneamente a tu nube")}</p>
           </div>
         </div>
       )}
@@ -205,10 +210,10 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
         footer={
           <>
             <ModalButton variant="secondary" onClick={() => lib.setMediaToDelete(null)}>
-              Cancelar
+              {t("media_library.cancel", "Cancelar")}
             </ModalButton>
             <ModalButton variant="danger" onClick={lib.confirmDelete}>
-              Sí, Eliminar
+              {t("media_library.confirm_delete", "Sí, Eliminar")}
             </ModalButton>
           </>
         }
@@ -219,13 +224,15 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
           </div>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
             {lib.mediaToDelete?.length === 1
-              ? "¿Eliminar archivo permanentemente?"
-              : `¿Eliminar ${lib.mediaToDelete?.length || 0} archivos permanentemente?`}
+              ? t("media_library.delete_confirm.title_one", "¿Eliminar archivo permanentemente?")
+              : t("media_library.delete_confirm.title_many", "¿Eliminar {{count}} archivos permanentemente?", { count: lib.mediaToDelete?.length || 0 })}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 text-sm">
-            Esta acción no se puede deshacer.{" "}
-            {lib.mediaToDelete?.length === 1 ? "El archivo desaparecerá" : "Los archivos desaparecerán"} de tu biblioteca y de
-            cualquier chat donde se hayan compartido.
+            {t("media_library.delete_confirm.body_prefix", "Esta acción no se puede deshacer.")}{" "}
+            {lib.mediaToDelete?.length === 1
+              ? t("media_library.delete_confirm.body_one", "El archivo desaparecerá")
+              : t("media_library.delete_confirm.body_many", "Los archivos desaparecerán")}{" "}
+            {t("media_library.delete_confirm.body_suffix", "de tu biblioteca y de cualquier chat donde se hayan compartido.")}
           </p>
         </div>
       </Modal>
@@ -234,22 +241,22 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
       <Modal
         isOpen={!!lib.renamingMedia}
         onClose={() => lib.setRenamingMedia(null)}
-        title="Renombrar Archivo"
+        title={t("media_library.rename_modal.title", "Renombrar Archivo")}
         size="sm"
         busy={lib.isRenaming}
         footer={
           <>
             <ModalButton variant="secondary" onClick={() => lib.setRenamingMedia(null)}>
-              Cancelar
+              {t("media_library.cancel", "Cancelar")}
             </ModalButton>
             <ModalButton variant="primary" onClick={lib.confirmRename} loading={lib.isRenaming}>
-              Guardar
+              {t("media_library.rename_modal.save", "Guardar")}
             </ModalButton>
           </>
         }
       >
         <div className="space-y-2">
-          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">Nombre</label>
+          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">{t("media_library.rename_modal.name_label", "Nombre")}</label>
           <input
             type="text"
             value={lib.renameDraft}
@@ -260,7 +267,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, onClose })
           />
           {lib.renamingMedia?.type === "AUDIO" && (
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Este nombre te ayudará a identificar la nota de voz al reutilizarla en cualquier chat o chatbot.
+              {t("media_library.rename_modal.audio_hint", "Este nombre te ayudará a identificar la nota de voz al reutilizarla en cualquier chat o chatbot.")}
             </p>
           )}
         </div>

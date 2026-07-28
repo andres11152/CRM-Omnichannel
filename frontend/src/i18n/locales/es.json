@@ -62,7 +62,9 @@
     "edit": "Editar",
     "search": "Buscar...",
     "success": "Operación exitosa",
-    "error": "Ha ocurrido un error",
+    "error": {
+      "connection_title": "Error de Conexión"
+    },
     "coming_soon": "Próximamente",
     "soon": "PRONTO",
     "unknown": "Desconocido",
@@ -70,7 +72,31 @@
     "locale_code": "es-CO",
     "results": "resultados",
     "new": "Nuevo",
-    "name": "Nombre"
+    "name": "Nombre",
+    "disconnect": "Desconectar",
+    "linking": "Vinculando...",
+    "reconnect": "Reconectar",
+    "reconnecting": "Reconectando...",
+    "requesting": "Solicitando...",
+    "retry": "Reintentar",
+    "starting": "Iniciando...",
+    "step_1_of_2": "Paso 1 de 2",
+    "understand": "Entendido",
+    "available": "Disponibles",
+    "connect": "Conectar",
+    "hide": "Ocultar",
+    "phone": "Teléfono",
+    "reset": "Volver a grabar",
+    "save_changes": "Guardar Cambios",
+    "show": "Mostrar",
+    "status": {
+      "away": "Ausente",
+      "busy": "Ocupado",
+      "offline": "Offline",
+      "online": "Online"
+    },
+    "use_audio": "Usar grabación",
+    "yes": "Sí"
   },
   "chatbot": {
     "new_flow": "Nuevo Flujo",
@@ -195,7 +221,24 @@
     "email": "Correo Electrónico",
     "password": "Contraseña",
     "forgot_password": "¿Olvidaste tu contraseña?",
-    "login_button": "Entrar"
+    "login_button": "Entrar",
+    "register": {
+      "admin_email_label": "Correo del Administrador",
+      "admin_password_label": "Contraseña de Administrador",
+      "company_name_label": "Nombre de tu Empresa",
+      "credentials_divider": "o crear credenciales directas",
+      "error": {
+        "failed": "Error al registrar la empresa",
+        "invalid_response": "Respuesta inválida del servidor (Falta token o usuario)"
+      },
+      "google_signup": "Registrarme con Google",
+      "submit": "Registrar Empresa",
+      "submitting": "Registrando Empresa...",
+      "validation": {
+        "company_required": "Por favor, ingresa el nombre de tu empresa primero."
+      },
+      "welcome": "Bienvenido"
+    }
   },
   "tenants": {
     "title": "Gestión de Empresas (Tenants)",
@@ -222,7 +265,8 @@
       "subscription_end": "Fin de Suscripción",
       "account_status": "Estado de la Cuenta",
       "saving": "Guardando...",
-      "save_changes": "Guardar Cambios"
+      "save_changes": "Guardar Cambios",
+      "err_create": "Error al crear la empresa."
     },
     "metrics": {
       "full_dashboard": "Dashboard de Métricas Completo",
@@ -315,6 +359,10 @@
       "err_save": "Error al guardar asistente",
       "confirm_delete": "¿Estás seguro de eliminar este asistente?",
       "err_delete": "Error al eliminar"
+    },
+    "locked": {
+      "description": "El módulo de Agentes IA no está activo para tu empresa. Contacta a soporte para habilitarlo.",
+      "title": "Funcionalidad no disponible"
     }
   },
   "company_settings": {
@@ -388,7 +436,39 @@
       "contact_sales": "Contactar Ventas",
       "manual_payments": "Métodos de Pago Manuales",
       "temporal": "TEMPORAL",
-      "manual_desc": "Envía tu comprobante a soporte para activar tu renovación inmediatamente."
+      "manual_desc": "Envía tu comprobante a soporte para activar tu renovación inmediatamente.",
+      "card_details": "Detalles de Tarjeta",
+      "card_details_desc": "Cobro mensual automático a través de la pasarela segura de Mercado Pago.",
+      "cardholder": "Nombre en la Tarjeta",
+      "cardnumber": "Número de Tarjeta",
+      "current_plan": "Plan Activo",
+      "cvv": "Código de Seguridad (CVV)",
+      "desc_plans": "Selecciona un plan y configura tu método de pago directo.",
+      "expiry": "Vencimiento (MM/YY)",
+      "limit_contacts": "Contactos CRM",
+      "limit_users": "Usuarios",
+      "limit_whatsapp": "Conexiones WA",
+      "no_plans": "No se encontraron planes disponibles",
+      "select": "Seleccionar Plan",
+      "selected": "Seleccionado",
+      "subscribe_button": "Activar Suscripción Recurrente",
+      "title_plans": "Planes de Suscripción"
+    },
+    "email": {
+      "guides_title": "Guías Rápidas de Configuración",
+      "host": "Servidor SMTP / Host",
+      "password": "Contraseña",
+      "port": "Puerto",
+      "secure": "Conexión Segura",
+      "sender_email": "Correo Remitente",
+      "sender_name": "Nombre Remitente",
+      "subtitle": "Configura tu propio servidor de correos salientes para campañas y tickets.",
+      "test_btn": "Enviar Correo de Prueba",
+      "test_desc": "Te enviaremos un correo electrónico de prueba al instante para asegurar que la configuración es correcta.",
+      "test_title": "Prueba tu Conexión",
+      "testing": "Probando...",
+      "title": "Configuración de Email / SMTP",
+      "user": "Usuario / Correo"
     }
   },
   "agent_modal": {
@@ -482,7 +562,14 @@
       "skills_hint": "El sistema solo asignará chats a agentes que tengan TODOS estos skills.",
       "saving": "Guardando...",
       "update": "Actualizar",
-      "create": "Crear Cola"
+      "create": "Crear Cola",
+      "ai_locked": "Funcionalidad no disponible para tu empresa. Contacta a soporte para habilitarla.",
+      "ai_locked_hint": "Módulo de IA no activo para tu empresa.",
+      "delete_dept": "Eliminar Departamento",
+      "dept_placeholder": "Nombre del departamento...",
+      "edit_dept": "Editar Departamento",
+      "new_dept": "Nuevo Departamento",
+      "no_dept_option": "Sin departamento (General)"
     },
     "toasts": {
       "err_load": "Error al cargar la configuración.",
@@ -495,8 +582,18 @@
       "delete_success": "Cola eliminada correctamente",
       "err_delete": "Error al eliminar la cola",
       "dept_success": "Departamento creado",
-    "err_dept": "Error al crear departamento"
-    }
+      "err_dept": "Error al crear departamento",
+      "created_success": "Creado correctamente",
+      "deleted_success": "Eliminado correctamente",
+      "dept_delete_success": "Departamento eliminado",
+      "dept_update_success": "Departamento actualizado",
+      "err_dept_delete": "Error al eliminar departamento",
+      "err_dept_update": "Error al actualizar departamento",
+      "saved_success": "Guardado correctamente",
+      "updated_success": "Actualizado correctamente"
+    },
+    "confirm_delete_dept": "¿Eliminar este departamento? Esta acción no se puede deshacer.",
+    "confirm_delete_q": "¿Eliminar?"
   },
   "tickets_kanban": {
     "columns": {
@@ -540,108 +637,109 @@
       "err_assign": "Error al asignar el ticket"
     }
   },
-    "dashboard": {
-      "master_title": "Admin Central",
-      "master_desc": "Panel maestro de orquestación y monitoreo del ecosistema Sentry CRM",
-      "total_companies": "Total Empresas",
-      "active_companies": "Empresas Activas",
-      "total_contacts": "Contactos Totales",
-      "total_mrr": "MRR Total",
-      "active_users": "Usuarios Activos",
-      "churn_risk": "Salud de Cartera (Churn Risk)",
-      "global_activity": "Actividad Global",
-      "quick_actions": "Acciones Rápidas",
-      "manage_companies": "Gestión de Empresas",
-      "manage_companies_desc": "Administrar clientes",
-      "manage_plans": "Gestión de Planes",
-      "manage_plans_desc": "Configurar suscripciones",
-      "audit_logs": "Forensics & Audit",
-      "audit_logs_desc": "Registros de seguridad",
-      "database": "Base de Datos",
-      "database_desc": "Visualizar esquema",
-      "active_ecosystem": "Ecosistema Activo",
-      "tenants": "Empresas",
-      "agent_greeting": "Hola",
-      "agent_subtitle": "¡Vamos con todo hoy! Aquí tienes tu resumen personal.",
-      "inbox_title": "En tu bandeja",
-      "active_tickets": "tickets activos",
-      "go_to_tickets": "Ir a mis tickets",
-      "well_done": "¡Bien hecho!",
-      "resolved_today": "Resueltos Hoy",
-      "messages_sent": "Mensajes Enviados",
-      "high_activity": "Alto nivel de actividad",
-      "recent_activity": "Vistos recientemente",
-      "table_ticket": "Ticket",
-      "table_status": "Estado",
-      "table_priority": "Prioridad",
-      "table_queue": "Cola",
-      "table_updated": "Actualizado",
-      "no_recent_activity": "No hay actividad reciente",
-      "welcome_admin": "Bienvenido, {{name}}. Aquí tienes la visión general de tu negocio.",
-      "welcome_admin_generic": "Bienvenido. Aquí tienes la visión general de tu negocio.",
-      "tickets_active": "Tickets Activos",
-      "pending": "pendientes",
-      "conversations": "Conversaciones",
-      "msgs_today": "Msjs Hoy",
-      "response_time": "Tiempo Respuesta",
-      "avg_7_days": "Promedio últimos 7 días",
-      "ai_resolution": "Resolución IA",
-      "ai_resolution_full": "Resolución por IA",
-      "closed_auto": "Cerrados automáticamente",
-      "current_plan": "Tu Plan Actual",
-      "starter": "Starter",
-      "trial_until": "Prueba hasta:",
-      "renews": "Renueva:",
-      "no_expiry": "Sin caducidad",
-      "manage": "Gestionar",
-      "tickets_in_progress": "Gestión de Tickets en Curso",
-      "quick_view_load": "Vista rápida de la carga actual del equipo",
-      "loading_metrics": "Cargando métricas...",
-      "status": {
-        "active": "Activo",
-        "trial": "Prueba",
-        "suspended": "Suspendido",
-        "inactive": "Inactivo"
-      },
-      "mrr_trend": "Tendencia MRR",
-      "no_history": "Sin datos históricos",
-      "revenue": "Ingresos",
-      "plan_distribution": "Distribución de Planes",
-      "no_plan_data": "Sin datos de planes",
-      "top_tenants": "Top Clientes",
-      "available_soon": "Disponibilidad próximamente",
-      "database": "Base de Datos",
-      "queue_system": "Sistema de Colas",
-      "storage": "Almacenamiento",
-      "score": "Puntaje",
-      "export": "Exportar",
-      "inbox": "Bandeja de Entrada",
-      "manage_contacts": "Gestionar Contactos",
-      "automations": "Automatizaciones",
-      "settings": "Configuración",
-      "no_plan": "Sin Plan",
-      "navigation": {
-        "dashboard": "Panel de Control"
-      },
-      "activity_feed": {
-        "few_seconds": "hace unos segundos",
-        "minutes_ago": "hace {{count}} min",
-        "hours_ago": "hace {{count}} h",
-        "no_activity": "No hay actividad reciente registrada.",
-        "system": "Sistema",
-        "global": "Global"
-      },
-      "tenant_health": {
-        "impersonate_confirm": "¿Acceder al panel de {{name}}?",
-        "impersonation_mode": "Modo Impersonación",
-        "err_impersonate": "Error al iniciar impersonación",
-        "client": "Cliente",
-        "plan": "Plan",
-        "health_risk": "Salud / Riesgo",
-        "risk_factors": "Factores de Riesgo:",
-        "inspect_account": "Inspeccionar Cuenta"
-      }
+  "dashboard": {
+    "master_title": "Admin Central",
+    "master_desc": "Panel maestro de orquestación y monitoreo del ecosistema Sentry CRM",
+    "total_companies": "Total Empresas",
+    "active_companies": "Empresas Activas",
+    "total_contacts": "Contactos Totales",
+    "total_mrr": "MRR Total",
+    "active_users": "Usuarios Activos",
+    "churn_risk": "Salud de Cartera (Churn Risk)",
+    "global_activity": "Actividad Global",
+    "quick_actions": "Acciones Rápidas",
+    "manage_companies": "Gestión de Empresas",
+    "manage_companies_desc": "Administrar clientes",
+    "manage_plans": "Gestión de Planes",
+    "manage_plans_desc": "Configurar suscripciones",
+    "audit_logs": "Forensics & Audit",
+    "audit_logs_desc": "Registros de seguridad",
+    "database": "Base de Datos",
+    "database_desc": "Visualizar esquema",
+    "active_ecosystem": "Ecosistema Activo",
+    "tenants": "Empresas",
+    "agent_greeting": "Hola",
+    "agent_subtitle": "¡Vamos con todo hoy! Aquí tienes tu resumen personal.",
+    "inbox_title": "En tu bandeja",
+    "active_tickets": "tickets activos",
+    "go_to_tickets": "Ir a mis tickets",
+    "well_done": "¡Bien hecho!",
+    "resolved_today": "Resueltos Hoy",
+    "messages_sent": "Mensajes Enviados",
+    "high_activity": "Alto nivel de actividad",
+    "recent_activity": "Vistos recientemente",
+    "table_ticket": "Ticket",
+    "table_status": "Estado",
+    "table_priority": "Prioridad",
+    "table_queue": "Cola",
+    "table_updated": "Actualizado",
+    "no_recent_activity": "No hay actividad reciente",
+    "welcome_admin": "Bienvenido, {{name}}. Aquí tienes la visión general de tu negocio.",
+    "welcome_admin_generic": "Bienvenido. Aquí tienes la visión general de tu negocio.",
+    "tickets_active": "Tickets Activos",
+    "pending": "pendientes",
+    "conversations": "Conversaciones",
+    "msgs_today": "Msjs Hoy",
+    "response_time": "Tiempo Respuesta",
+    "avg_7_days": "Promedio últimos 7 días",
+    "ai_resolution": "Resolución IA",
+    "ai_resolution_full": "Resolución por IA",
+    "closed_auto": "Cerrados automáticamente",
+    "current_plan": "Tu Plan Actual",
+    "starter": "Starter",
+    "trial_until": "Prueba hasta:",
+    "renews": "Renueva:",
+    "no_expiry": "Sin caducidad",
+    "manage": "Gestionar",
+    "tickets_in_progress": "Gestión de Tickets en Curso",
+    "quick_view_load": "Vista rápida de la carga actual del equipo",
+    "loading_metrics": "Cargando métricas...",
+    "status": {
+      "active": "Activo",
+      "trial": "Prueba",
+      "suspended": "Suspendido",
+      "inactive": "Inactivo"
     },
+    "mrr_trend": "Tendencia MRR",
+    "no_history": "Sin datos históricos",
+    "revenue": "Ingresos",
+    "plan_distribution": "Distribución de Planes",
+    "no_plan_data": "Sin datos de planes",
+    "top_tenants": "Top Clientes",
+    "available_soon": "Disponibilidad próximamente",
+    "queue_system": "Sistema de Colas",
+    "storage": "Almacenamiento",
+    "score": "Puntaje",
+    "export": "Exportar",
+    "inbox": "Bandeja de Entrada",
+    "manage_contacts": "Gestionar Contactos",
+    "automations": "Automatizaciones",
+    "settings": "Configuración",
+    "no_plan": "Sin Plan",
+    "navigation": {
+      "dashboard": "Panel de Control"
+    },
+    "activity_feed": {
+      "few_seconds": "hace unos segundos",
+      "minutes_ago": "hace {{count}} min",
+      "hours_ago": "hace {{count}} h",
+      "no_activity": "No hay actividad reciente registrada.",
+      "system": "Sistema",
+      "global": "Global"
+    },
+    "tenant_health": {
+      "impersonate_confirm": "¿Acceder al panel de {{name}}?",
+      "impersonation_mode": "Modo Impersonación",
+      "err_impersonate": "Error al iniciar impersonación",
+      "client": "Cliente",
+      "plan": "Plan",
+      "health_risk": "Salud / Riesgo",
+      "risk_factors": "Factores de Riesgo:",
+      "inspect_account": "Inspeccionar Cuenta"
+    },
+    "total_messages": "Total Mensajes",
+    "total_sessions": "Total Sesiones"
+  },
   "sounds": {
     "title": "Configuración de Sonido",
     "subtitle": "Personaliza las notificaciónes de audio del CRM",
@@ -794,7 +892,8 @@
     "muted": "Silenciado",
     "archived": "Archivados",
     "back_to_chats": "Volver a los chats",
-    "no_archived": "No hay chats archivados"
+    "no_archived": "No hay chats archivados",
+    "no_messages": "Sin mensajes"
   },
   "chat": {
     "priority_updated": "Prioridad: {{priority}}",
@@ -839,7 +938,31 @@
     "no_messages": "Sin mensajes",
     "waiting_for_reply": "Tiempo esperando respuesta del agente",
     "pinned_message": "Mensaje Fijado",
-    "tap_to_view": "Ver ↓"
+    "tap_to_view": "Ver ↓",
+    "actions": {
+      "delete": "Eliminar para todos",
+      "edit": "Editar mensaje",
+      "pin": "Fijar mensaje",
+      "reply": "Responder",
+      "star": "Destacar mensaje",
+      "unpin": "Desfijar mensaje",
+      "unstar": "Quitar destacado"
+    },
+    "all_media": "Todos",
+    "attachments": "Archivo Adjunto (Opcional)",
+    "crm_library": "Biblioteca del CRM",
+    "from_pc": "Desde PC",
+    "library": "Biblioteca",
+    "local_pc": "Desde PC",
+    "no_media_found": "No se encontraron archivos en la biblioteca",
+    "preview_record_desc": "Escucha tu grabación o confírmala para programar.",
+    "record_audio": "Grabar Nota de Voz",
+    "recording_desc": "Grabando... Haz clic en el botón cuadrado para detener.",
+    "register_contact": "Registrar Contacto",
+    "search_library": "Buscar por nombre de archivo...",
+    "start_record_desc": "Haz clic en el micrófono para iniciar grabación.",
+    "unregistered_contact": "Este contacto no está registrado en el CRM. ¿Deseas guardarlo para hacerle seguimiento?",
+    "voice_note": "Grabar Voz"
   },
   "sidebar": {
     "light_mode": "Modo Claro",
@@ -866,7 +989,8 @@
     "assign_followup": "Asignar seguimiento",
     "schedule_meeting": "Agendar Reunión",
     "schedule_call": "Programar llamada",
-    "internal_notes": "Bitácora Interna"
+    "internal_notes": "Bitácora Interna",
+    "deals": "Oportunidades (CRM)"
   },
   "actions": {
     "schedule_title": "Programación Enterprise",
@@ -906,7 +1030,25 @@
     "pro_services": "Servicios Profesionales",
     "field_saved": "Campo guardado en la configuración",
     "err_save_config": "Error al guardar configuración",
-    "err_select_data": "Selecciona al menos un dato"
+    "err_select_data": "Selecciona al menos un dato",
+    "cancel": "Cancelar",
+    "contact_search_placeholder": "Buscar por nombre o teléfono…",
+    "contact_title": "Enviar Contacto",
+    "err_contacts": "Error cargando contactos",
+    "err_duplicate_field": "Ya existe un campo con este nombre",
+    "err_empty_field": "El nombre del campo no puede estar vacío",
+    "err_msg_or_media": "Escribe un mensaje o adjunta un archivo",
+    "err_properties": "Error cargando inmuebles",
+    "field_deleted": "Campo eliminado",
+    "field_updated": "Campo actualizado",
+    "loading_contacts": "Cargando contactos...",
+    "no_contacts": "No hay contactos",
+    "no_contacts_desc": "Ajusta la búsqueda o crea contactos con teléfono en el módulo de Contactos.",
+    "no_location": "Ubicación sin especificar",
+    "no_properties": "No hay inmuebles",
+    "no_properties_desc": "Ajusta la búsqueda o crea inmuebles en el módulo de Propiedades.",
+    "property_search_placeholder": "Buscar por título, ciudad, barrio, referencia…",
+    "property_title": "Catálogo de Inmuebles"
   },
   "composer": {
     "quick_replies": "RESPUESTAS RÁPIDAS",
@@ -924,7 +1066,10 @@
     "emojis": "Emojis",
     "write_message": "Escribe un mensaje...",
     "voice_note": "Nota de Voz",
-    "send": "Enviar"
+    "send": "Enviar",
+    "from_library": "Biblioteca Multimedia",
+    "media_library": "Enviar desde Biblioteca",
+    "send_property": "Enviar Inmueble"
   },
   "message_list": {
     "loading": "Cargando mensajes...",
@@ -955,7 +1100,8 @@
     "service": "Servicio",
     "availability": "Disponibilidad (30d):",
     "last_check": "Últ. Chequeo:",
-    "now": "Ahora"
+    "now": "Ahora",
+    "action": "Acción"
   },
   "billing_ops": {
     "toast": {
@@ -997,24 +1143,78 @@
       "control": "Control de Flujo"
     },
     "nodes": {
-      "trigger": { "label": "Inicio", "desc": "Punto de entrada del flujo" },
-      "send_message": { "label": "Enviar Mensaje", "desc": "Enviar un mensaje de texto" },
-      "send_image": { "label": "Enviar Imagen", "desc": "Enviar un archivo de imagen" },
-      "send_video": { "label": "Enviar Video", "desc": "Enviar un archivo de video" },
-      "send_audio": { "label": "Enviar Audio", "desc": "Enviar un archivo de audio" },
-      "send_document": { "label": "Enviar Documento", "desc": "Enviar un archivo de documento" },
-      "ask_data": { "label": "Pedir Datos", "desc": "Solicitar entrada del usuario" },
-      "condition": { "label": "Condición", "desc": "Bifurcar según lógica" },
-      "ai_agent": { "label": "Agente IA", "desc": "Respuesta potenciada por IA" },
-      "create_deal": { "label": "Crear Deal", "desc": "Crear un negocio en el CRM" },
-      "update_contact": { "label": "Actualizar Contacto", "desc": "Actualizar campos del contacto" },
-      "tag_contact": { "label": "Etiquetar Contacto", "desc": "Auto-etiquetar contactos" },
-      "assign_agent": { "label": "Asignar Agente", "desc": "Pasar a un agente humano" },
-      "ai_handoff": { "label": "Traspaso IA", "desc": "Transferencia a humano" },
-      "http_request": { "label": "Petición HTTP", "desc": "Llamar a una API externa" },
-      "send_template": { "label": "Enviar Plantilla", "desc": "Mensaje de plantilla WhatsApp" },
-      "delay": { "label": "Espera", "desc": "Esperar antes de continuar" },
-      "end": { "label": "Fin", "desc": "Finalizar el flujo" }
+      "trigger": {
+        "label": "Inicio",
+        "desc": "Punto de entrada del flujo"
+      },
+      "send_message": {
+        "label": "Enviar Mensaje",
+        "desc": "Enviar un mensaje de texto"
+      },
+      "send_image": {
+        "label": "Enviar Imagen",
+        "desc": "Enviar un archivo de imagen"
+      },
+      "send_video": {
+        "label": "Enviar Video",
+        "desc": "Enviar un archivo de video"
+      },
+      "send_audio": {
+        "label": "Enviar Audio",
+        "desc": "Enviar un archivo de audio"
+      },
+      "send_document": {
+        "label": "Enviar Documento",
+        "desc": "Enviar un archivo de documento"
+      },
+      "ask_data": {
+        "label": "Pedir Datos",
+        "desc": "Solicitar entrada del usuario"
+      },
+      "condition": {
+        "label": "Condición",
+        "desc": "Bifurcar según lógica"
+      },
+      "ai_agent": {
+        "label": "Agente IA",
+        "desc": "Respuesta potenciada por IA"
+      },
+      "create_deal": {
+        "label": "Crear Deal",
+        "desc": "Crear un negocio en el CRM"
+      },
+      "update_contact": {
+        "label": "Actualizar Contacto",
+        "desc": "Actualizar campos del contacto"
+      },
+      "tag_contact": {
+        "label": "Etiquetar Contacto",
+        "desc": "Auto-etiquetar contactos"
+      },
+      "assign_agent": {
+        "label": "Asignar Agente",
+        "desc": "Pasar a un agente humano"
+      },
+      "ai_handoff": {
+        "label": "Traspaso IA",
+        "desc": "Transferencia a humano"
+      },
+      "http_request": {
+        "label": "Petición HTTP",
+        "desc": "Llamar a una API externa"
+      },
+      "send_template": {
+        "label": "Enviar Plantilla",
+        "desc": "Mensaje de plantilla WhatsApp"
+      },
+      "delay": {
+        "label": "Espera",
+        "desc": "Esperar antes de continuar"
+      },
+      "end": {
+        "label": "Fin",
+        "desc": "Finalizar el flujo"
+      }
     },
     "builder": {
       "save_flow": "Guardar Flujo",
@@ -1051,8 +1251,21 @@
       "empty_column": "Sin oportunidades"
     },
     "deals": {
-      "won_toast": "¡Trato ganado!",
-      "lost_toast": "Trato marcado como perdido",
+      "value": "Valor / Monto",
+      "currency": "Moneda / Divisa",
+      "probability": "Probabilidad",
+      "avg_deal_size": "Monto Promedio",
+      "unassigned": "Sin asignar",
+      "moved_success": "Negocio movido a",
+      "won_toast": "¡Felicitaciones! Negocio cerrado como ganado.",
+      "lost_toast": "Negocio marcado como perdido.",
+      "lost_reason_label": "¿Por qué se perdió esta oportunidad? *",
+      "delete_confirm": "¿Estás seguro de eliminar este negocio? Esta acción no se puede deshacer.",
+      "delete_error": "Error al eliminar la oportunidad",
+      "no_activities": "No hay actividades registradas para este negocio.",
+      "notes_hint": "Se registrará como la primera actividad del negocio.",
+      "conversion": "Conversión",
+      "pipeline": "Pipeline",
       "moved_to": "Movido a \"{{stage}}\""
     },
     "accounts": {
@@ -1130,23 +1343,6 @@
         "meeting": "Reunión",
         "task": "Tarea"
       }
-    },
-    "deals": {
-      "value": "Valor / Monto",
-      "currency": "Moneda / Divisa",
-      "probability": "Probabilidad",
-      "avg_deal_size": "Monto Promedio",
-      "unassigned": "Sin asignar",
-      "moved_success": "Negocio movido a",
-      "won_toast": "¡Felicitaciones! Negocio cerrado como ganado.",
-      "lost_toast": "Negocio marcado como perdido.",
-      "lost_reason_label": "¿Por qué se perdió esta oportunidad? *",
-      "delete_confirm": "¿Estás seguro de eliminar este negocio? Esta acción no se puede deshacer.",
-      "delete_error": "Error al eliminar la oportunidad",
-      "no_activities": "No hay actividades registradas para este negocio.",
-      "notes_hint": "Se registrará como la primera actividad del negocio.",
-      "conversion": "Conversión",
-      "pipeline": "Pipeline"
     },
     "pipelines": {
       "title": "Pipeline de Ventas",
@@ -1555,7 +1751,12 @@
   "email_inbox": {
     "toast": {
       "load_error": "Error al cargar emails"
-    }
+    },
+    "description": "Visualiza y gestiona todos los correos de tu empresa.",
+    "search": "Buscar por asunto, remitente...",
+    "select_email": "Selecciona un correo",
+    "select_email_desc": "Haz clic en un correo de la lista para ver su contenido completo aquí.",
+    "title": "Bandeja de Email"
   },
   "email_modal": {
     "toast": {
@@ -1601,6 +1802,61 @@
       "url_copied": "URL copiada",
       "renamed": "Archivo renombrado",
       "rename_error": "Error al renombrar"
+    },
+    "select_file_title": "Seleccionar Archivo",
+    "title": "Biblioteca Multimedia",
+    "subtitle": "Gestiona y visualiza todos tus activos digitales",
+    "total_files": "Total Archivos",
+    "filters": {
+      "all": "Todos",
+      "image": "Imagen",
+      "audio": "Audio",
+      "video": "Video",
+      "document": "Documento"
+    },
+    "search_placeholder": "Buscar...",
+    "upload": "Subir",
+    "loading": "Cargando biblioteca...",
+    "empty_title": "Tu biblioteca está vacía",
+    "empty_subtitle": "Arrastra archivos aquí o usa el botón de subir",
+    "drop_title": "Suelta tus archivos aquí",
+    "drop_subtitle": "Se subirán instantáneamente a tu nube",
+    "delete_confirm": {
+      "title_one": "¿Eliminar archivo permanentemente?",
+      "title_many": "¿Eliminar {{count}} archivos permanentemente?",
+      "body_prefix": "Esta acción no se puede deshacer.",
+      "body_one": "El archivo desaparecerá",
+      "body_many": "Los archivos desaparecerán",
+      "body_suffix": "de tu biblioteca y de cualquier chat donde se hayan compartido."
+    },
+    "cancel": "Cancelar",
+    "confirm_delete": "Sí, Eliminar",
+    "rename_modal": {
+      "title": "Renombrar Archivo",
+      "name_label": "Nombre",
+      "save": "Guardar",
+      "audio_hint": "Este nombre te ayudará a identificar la nota de voz al reutilizarla en cualquier chat o chatbot."
+    },
+    "card": {
+      "copy_link": "Copiar Link",
+      "rename": "Renombrar",
+      "delete": "Eliminar"
+    },
+    "preview_modal": {
+      "copy_url": "Copiar URL",
+      "video_unsupported": "Tu navegador no soporta video.",
+      "preview_unavailable": "Vista previa no disponible para este tipo de documento.",
+      "download_open": "Descargar / Abrir",
+      "uploaded_by": "Subido por:",
+      "system": "Sistema",
+      "delete_file": "Eliminar Archivo"
+    },
+    "bulk_actions": {
+      "selected_files": "Archivos seleccionados",
+      "deselect_all": "Desmarcar todos",
+      "select_all": "Seleccionar todos",
+      "delete_selected": "Eliminar seleccionados",
+      "cancel_selection": "Cancelar selección"
     }
   },
   "permissions_panel": {
@@ -1988,5 +2244,373 @@
       "revoke_key_message": "¿Revocar \"{{name}}\"? Las integraciones que la usen dejarán de funcionar de inmediato.",
       "revoke_cta": "Revocar"
     }
+  },
+  "developer_settings": {
+    "title": "Developer API & Webhooks",
+    "subtitle": "Webhooks para eventos en tiempo real y API Keys para acceso programático externo.",
+    "stats": {
+      "active_webhooks": "Webhooks Activos",
+      "active_keys": "Keys Activas"
+    },
+    "tabs": {
+      "webhooks": "Webhooks",
+      "api_keys": "API Keys",
+      "api_docs": "API Docs"
+    },
+    "webhooks_tab": {
+      "endpoints_configured": "Endpoints Configurados",
+      "description": "Configura URLs externas donde Sentry enviará eventos en tiempo real vía HMAC-SHA256.",
+      "close": "Cerrar",
+      "new_webhook": "Nuevo Webhook"
+    },
+    "api_keys_tab": {
+      "title": "Claves API Activas",
+      "description_prefix": "Autentifica peticiones externas con el header",
+      "close": "Cerrar",
+      "new_key": "Nueva API Key",
+      "key_generated_title": "¡API Key Generada!",
+      "key_generated_desc": "Copia esta clave inmediatamente. Por seguridad, no volverá a mostrarse.",
+      "copy": "Copiar",
+      "copied_toast": "Clave copiada",
+      "saved_continue": "Ya la guardé — Continuar",
+      "key_name_label": "Nombre de la Clave",
+      "key_name_placeholder": "Ej: Servidor de Producción",
+      "generate_key": "Generar Clave",
+      "empty_state": "No hay claves API generadas aún.",
+      "created_on": "Creada el {{date}}",
+      "used_on": "· Usada el {{date}}",
+      "revoke_access": "Revocar Acceso"
+    },
+    "api_docs_tab": {
+      "title": "Referencia de API REST",
+      "description_prefix": "Integra Sentry con tus sistemas internos. Autentícate enviando tu API Key en el header",
+      "base_url_label": "Base URL:",
+      "webhook_payload_title": "Estructura de Evento Webhook",
+      "endpoints": {
+        "send_message": "Enviar Mensaje WhatsApp",
+        "upsert_contact": "Crear o Actualizar Contacto",
+        "create_deal": "Crear Oportunidad (Deal)",
+        "list_tickets": "Listar Tickets"
+      }
+    },
+    "webhook_list": {
+      "empty_state": "No hay webhooks configurados aún.",
+      "deactivate": "DESACTIVAR",
+      "activate": "ACTIVAR",
+      "subscribed_events": "Eventos Suscritos",
+      "signing_secret": "Signing Secret (HMAC-SHA256)",
+      "hide": "Ocultar",
+      "show": "Mostrar",
+      "copy": "Copiar",
+      "secret_copied_toast": "Secret copiado"
+    },
+    "delivery_logs": {
+      "title": "Logs de Entrega Recientes",
+      "refresh": "ACTUALIZAR",
+      "table": {
+        "status": "Status",
+        "event": "Evento",
+        "target_url": "URL Destino",
+        "datetime": "Fecha/Hora",
+        "latency": "Latencia"
+      },
+      "no_activity": "No hay actividad reciente.",
+      "retry_delivery": "Reintentar entrega",
+      "retry": "Reintentar",
+      "attempt": "INTENTO #{{n}}"
+    },
+    "webhook_form": {
+      "endpoint_url_label": "Endpoint URL (POST)",
+      "description_label": "Descripción (opcional)",
+      "description_placeholder": "Ej: Integración con ERP Interno",
+      "events_to_subscribe": "Eventos a Suscribir",
+      "no_selection_hint": "Sin selección → se suscribirá a",
+      "saving": "Guardando…",
+      "save_config": "Guardar Configuración"
+    }
+  },
+  "integrations_panel": {
+    "title": "Integraciones & Canales",
+    "subtitle": "Conecta y configura tus canales de comunicación omnichannel",
+    "tabs": {
+      "whatsapp": "WhatsApp",
+      "instagram": "Instagram",
+      "discover": "Explorar"
+    }
+  },
+  "system_deep_monitor": {
+    "title": "Infrastructure Deep Monitor",
+    "subtitle": "Estado en tiempo real de servicios, colas y recursos críticos",
+    "active_workers": "Workers Activos",
+    "refresh": "Refrescar",
+    "cards": {
+      "api_gateway": "API Gateway",
+      "healthy": "Saludable",
+      "latency": "Latencia",
+      "redis_memory": "Memoria Redis",
+      "loading": "Cargando...",
+      "peak": "Pico: {{value}}",
+      "database": "Base de Datos",
+      "query_response": "Respuesta de Consulta",
+      "workers": "Workers",
+      "online": "En Línea",
+      "active_queues": "Colas Activas"
+    },
+    "queue_table": {
+      "title": "Diagnóstico de Colas BullMQ",
+      "last_check": "Última revisión: {{time}}",
+      "col_queue": "Cola",
+      "col_waiting": "En Espera",
+      "col_active": "Activos",
+      "col_failed": "Fallidos",
+      "col_health": "Salud",
+      "degraded": "Degradado",
+      "stable": "Estable"
+    },
+    "webhooks_card": {
+      "title": "Webhooks y Entregas",
+      "success_rate": "Tasa de Éxito de Entrega",
+      "total_24h": "Total 24h",
+      "failures": "Fallos"
+    },
+    "uptime_card": {
+      "global_availability": "Disponibilidad Global del Sistema",
+      "uptime_label": "TIEMPO ACTIVO: {{value}}"
+    }
+  },
+  "global_audit_log": {
+    "title": "Forensics & Audit Log",
+    "subtitle": "Trazabilidad total de operaciones y eventos de seguridad multi-tenant",
+    "total_records": "Total Registros",
+    "export_forensic": "Exportar Forense",
+    "search_entity_placeholder": "Buscar entidad...",
+    "filter_tenant_placeholder": "Filtrar por Tenant ID...",
+    "filter_user_placeholder": "Filtrar por Usuario...",
+    "all_actions": "Todas las acciones",
+    "event_stream": "Event Stream",
+    "page_label": "Página {{current}} de {{total}}",
+    "table": {
+      "timestamp": "Timestamp",
+      "tenant": "Tenant",
+      "operator": "Operador",
+      "action": "Acción",
+      "entity": "Entidad",
+      "details": "Detalles",
+      "network_ip": "Red / IP"
+    },
+    "no_records": "No se encontraron registros de auditoría",
+    "view_payload": "Ver Payload",
+    "internal": "Interno",
+    "modal": {
+      "title": "Detalles de Auditoría / Payload JSON",
+      "entity": "Entidad",
+      "entity_id": "ID de Entidad",
+      "action": "Acción",
+      "operator_user": "Usuario Operador",
+      "payload_label": "Payload / Detalles Técnicos",
+      "close": "Cerrar Detalle"
+    }
+  },
+  "queue_dashboard": {
+    "alerts": {
+      "agent_saturated_title": "Agente Saturado",
+      "agent_saturated_msg": "El agente {{name}} ha alcanzado su capacidad máxima de chats.",
+      "assign_error_title": "Error de Asignación",
+      "assign_error_msg": "No se pudo asignar el ticket. Inténtalo de nuevo.",
+      "success_title": "¡Éxito!",
+      "queues_saved_msg": "Colas asignadas correctamente.",
+      "error_title": "Error",
+      "queues_save_error_msg": "No se pudieron asignar las colas.",
+      "understood": "Entendido"
+    },
+    "unknown_client": "Cliente Desconocido",
+    "general_department": "General",
+    "tabs": {
+      "monitor_title": "Monitor en Vivo",
+      "monitor_desc": "Supervisa el estado de los agentes y la cola de espera en tiempo real.",
+      "config_title": "Configuración de Colas",
+      "config_desc": "Administra las colas, departamentos y reglas de asignación.",
+      "kanban_title": "Tablero Kanban",
+      "kanban_desc": "Gestiona el flujo de trabajo de tus tickets con un tablero visual.",
+      "monitor_button": "Monitor en Vivo",
+      "config_button": "Configuración de Colas",
+      "kanban_button": "Kanban de Tickets"
+    },
+    "tickets_in_queue": "Tickets en Cola",
+    "monitor": {
+      "ai_agents_online": "Agentes IA Online",
+      "agents_online": "Agentes Online",
+      "avg_wait_time": "Tiempo Promedio Espera",
+      "active_agents": "Agentes Activos",
+      "no_agents_connected": "No hay agentes conectados",
+      "wait_queue": "Cola de Espera",
+      "all_caught_up": "¡Todo al día!",
+      "no_tickets_waiting": "No hay tickets en espera"
+    },
+    "agent_card": {
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "configure_queues": "Configurar Colas",
+      "active_chats": "Chats Activos",
+      "resolved_today": "Resueltos Hoy",
+      "capacity": "Capacidad ({{pct}}%)",
+      "agent_role_fallback": "Agente"
+    },
+    "assignment_modal": {
+      "title": "Configurar Colas para {{name}}",
+      "cancel": "Cancelar",
+      "save_changes": "Guardar Cambios",
+      "no_queues_available": "No hay colas disponibles."
+    },
+    "ticket_card": {
+      "wait_time": "{{min}} min espera"
+    }
+  },
+  "integrations": {
+    "whatsapp": {
+      "bind_new": "Vincular Nuevo Dispositivo",
+      "bind_title": "Vincular WhatsApp",
+      "choose_method": "Elige el método de vinculación que prefieras para tu dispositivo.",
+      "connect_another": "Conecta otro número de WhatsApp",
+      "default_queue": "Cola Predeterminada",
+      "description": "Conecta tu WhatsApp vía Web (Código QR) o API Oficial.",
+      "disconnected_desc": "Sesión desconectada",
+      "enter_code_instructions": "Abre la notificación de WhatsApp en tu celular o entra a Dispositivos vinculados > Vincular con número de teléfono.",
+      "enter_code_title": "Ingresa el código",
+      "failed_desc": "Conexión fallida",
+      "generate_qr": "Generar Código QR",
+      "get_pairing_code": "Obtener Código de Vinculación",
+      "helper_code_step1": "Entra a WhatsApp Web en tu celular e ingresa con número de teléfono.",
+      "helper_code_step2": "Digita el código de 8 caracteres que ves a la izquierda en tu dispositivo.",
+      "helper_step1": "Apunta la cámara de tu celular hacia la pantalla para escanear el código QR.",
+      "helper_step2": "Una vez escaneado, la sesión se vinculará automáticamente. No cierres esta ventana.",
+      "many_numbers": "números",
+      "meta": {
+        "access_token": "Meta Access Token (Token de Acceso Permanente)",
+        "save": "Guardar Configuración Meta",
+        "verify_token": "Token de Verificación:",
+        "webhook_config": "Configuración del Webhook:",
+        "webhook_url": "URL de Webhook:",
+        "connection_error": "Error de conexión al vincular con Meta",
+        "error": "Error al vincular con Meta",
+        "linked_success": "Cuenta de Meta vinculada exitosamente",
+        "linking": "Vinculando con Meta..."
+      },
+      "meta_api": "Meta Cloud API (Oficial)",
+      "no_queue_assigned": "-- Sin Cola Asignada --",
+      "one_number": "número",
+      "phone_code": "Código de Teléfono",
+      "phone_number_label": "Número de Teléfono (con código de país)",
+      "profile_name": "Nombre de Perfil de WhatsApp",
+      "profile_placeholder": "Ej: Soporte Sentry CRM",
+      "qr_code": "Código QR",
+      "scan_instructions": "Abre WhatsApp en tu teléfono, ve a Dispositivos vinculados y selecciona Vincular un dispositivo.",
+      "scan_title": "Escanea el código QR",
+      "status": {
+        "disconnected": "Desconectado",
+        "failed": "Fallido"
+      },
+      "upgrade": {
+        "description": "Tu plan actual solo permite conectar una sola sesión activa de WhatsApp. Para vincular múltiples números, debes actualizar tu suscripción.",
+        "subtitle": "Mejora tu plan para expandir tu alcance omnichannel",
+        "title": "Límite de Canales Alcanzado"
+      },
+      "view_qr": "Ver QR",
+      "waiting_scan": "Esperando escaneo...",
+      "review_mode_on": "Modo Auditoría Activado",
+      "review_mode_off": "Modo Auditoría Desactivado",
+      "canceled": "Vinculación cancelada",
+      "canceling": "Cancelando vinculación...",
+      "connected_success": "WhatsApp {{phone}} vinculado",
+      "disconnected_success": "Sesión desconectada exitosamente",
+      "disconnecting": "Desconectando sesión...",
+      "error": {
+        "code": "Error al solicitar código",
+        "connect": "Error al conectar",
+        "create": "Error de red al crear sesión",
+        "disconnect": "Error al desconectar",
+        "fetch": "No se pudo conectar con el servidor. Verifica tu conexión.",
+        "queue": "Error al actualizar cola",
+        "queue_connection": "Error al actualizar la cola predeterminada",
+        "reconnect": "Error al intentar reconectar"
+      },
+      "loading_session": "Conexión en progreso…",
+      "profile": {
+        "connection_error": "Error de conexión al actualizar el nombre de perfil",
+        "error": "Error al actualizar el nombre",
+        "updated_success": "Nombre de perfil de WhatsApp actualizado exitosamente",
+        "updating": "Actualizando nombre de perfil..."
+      },
+      "queue_updated": "Cola predeterminada actualizada",
+      "reconnect_sent": "Solicitud de reconexión enviada.",
+      "timeout_wait": "Conectando… QR en camino",
+      "validation": {
+        "phone_invalid": "Número de teléfono inválido.",
+        "phone_required": "Por favor, ingresa tu número de teléfono."
+      }
+    },
+    "discover": {
+      "desc": "Nuevas integraciones en camino para centralizar aún más canales.",
+      "messenger_desc": "Sincroniza tu fanpage y automatiza respuestas.",
+      "messenger_title": "Facebook Messenger",
+      "shopify_desc": "Integra tu catálogo y pedidos.",
+      "shopify_title": "Shopify / WooCommerce",
+      "title": "Descubrir Más Canales"
+    },
+    "instagram": {
+      "connect_desc": "Vincula una cuenta profesional de Instagram",
+      "connect_title": "Conectar Instagram",
+      "description": "Cuentas profesionales de Instagram conectadas vía Graph API.",
+      "disconnected_success": "Cuenta de Instagram desconectada",
+      "error": {
+        "connection": "Error de conexión al vincular Instagram",
+        "disconnect": "No se pudo desconectar la cuenta de Instagram",
+        "failed": "Error al vincular Instagram"
+      },
+      "linked_success": "Cuenta de Instagram vinculada exitosamente",
+      "linking": "Vinculando cuenta de Instagram...",
+      "many_accounts": "cuentas",
+      "modal": {
+        "access_token": "Access Token (Meta Graph API)",
+        "description": "Ingresa los detalles de tu cuenta profesional de Instagram para vincularla a Sentry CRM.",
+        "save": "Guardar Configuración Instagram",
+        "username": "Username (Opcional)",
+        "verify_token": "Verify Token (Para Webhook)",
+        "webhook_config": "Configuración del Webhook:",
+        "webhook_url": "URL del Webhook de Instagram:"
+      },
+      "one_account": "cuenta",
+      "status": {
+        "connected": "Conectado",
+        "disconnected": "Desconectado"
+      }
+    }
+  },
+  "contacts": {
+    "form": {
+      "create_action": "Crear Contacto",
+      "create_desc": "Agrega un nuevo cliente a tu base de datos",
+      "internal_notes": "Notas Internas",
+      "no_more_tags": "No hay más etiquetas disponibles",
+      "no_tags": "Ninguna etiqueta seleccionada",
+      "update_desc": "Actualiza la información del cliente"
+    }
+  },
+  "emoji_picker": {
+    "categories": {
+      "activities": "Actividades",
+      "animals": "Animales y naturaleza",
+      "flags": "Banderas",
+      "food": "Comida y bebida",
+      "objects": "Objetos",
+      "smileys": "Emoticonos y personas",
+      "suggested": "Usados con frecuencia",
+      "symbols": "Símbolos",
+      "travel": "Viajes y lugares"
+    },
+    "more": "Más emojis",
+    "react": "Reaccionar",
+    "remove": "Quitar reacción",
+    "search_placeholder": "Buscar emoji..."
   }
 }

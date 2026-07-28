@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Image as ImageIcon } from "lucide-react";
+import { Image as ImageIcon, Music, Video, FileText, File as FileIcon } from "lucide-react";
 import { getMedia, Media } from "@/services/mediaService";
 import { Modal, ModalButton } from "@/components/ui/Modal";
 
@@ -58,15 +58,15 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
   const getFileIcon = (type: string) => {
     switch (type) {
       case "IMAGE":
-        return "️";
+        return ImageIcon;
       case "AUDIO":
-        return "";
+        return Music;
       case "VIDEO":
-        return "";
+        return Video;
       case "DOCUMENT":
-        return "";
+        return FileText;
       default:
-        return "";
+        return FileIcon;
     }
   };
 
@@ -93,19 +93,23 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
         {/* Filters */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-reply-border-dark">
           <div className="flex items-center gap-2 flex-wrap">
-            {availableFilters.map((type) => (
-              <button
-                key={type}
-                onClick={() => setFilter(type)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                  filter === type
-                    ? "bg-indigo-600 text-white shadow-md"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                }`}
-              >
-                {type === "ALL" ? " Todos" : `${getFileIcon(type)} ${type}`}
-              </button>
-            ))}
+            {availableFilters.map((type) => {
+              const FilterIcon = type === "ALL" ? null : getFileIcon(type);
+              return (
+                <button
+                  key={type}
+                  onClick={() => setFilter(type)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all inline-flex items-center gap-1.5 ${
+                    filter === type
+                      ? "bg-indigo-600 text-white shadow-md"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {FilterIcon && <FilterIcon size={14} />}
+                  {type === "ALL" ? "Todos" : type}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -153,9 +157,10 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-4xl">
-                          {getFileIcon(item.type)}
-                        </span>
+                        {(() => {
+                          const ItemIcon = getFileIcon(item.type);
+                          return <ItemIcon size={36} className="text-gray-400 dark:text-gray-500" />;
+                        })()}
                       </div>
                     )}
                   </div>

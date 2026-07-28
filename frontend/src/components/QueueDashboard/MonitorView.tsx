@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Agent } from "@/types";
 import { AgentCard } from "./AgentCard";
 import { TicketCard, IncomingTicket } from "./TicketCard";
@@ -14,6 +15,7 @@ export const MonitorView = ({
   onTicketDrop: (agentId: string, ticketId: string) => void;
   onConfigClick: (agent: Agent) => void;
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 p-8 overflow-hidden flex flex-col gap-6">
       {/* KPI Stats Row */}
@@ -32,7 +34,7 @@ export const MonitorView = ({
           </div>
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-              Agentes IA Online
+              {t("queue_dashboard.monitor.ai_agents_online", "Agentes IA Online")}
             </p>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
               {agents.filter((a) => (a as Agent & { isAI?: boolean }).isAI).length}
@@ -53,7 +55,7 @@ export const MonitorView = ({
           </div>
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-              Agentes Online
+              {t("queue_dashboard.monitor.agents_online", "Agentes Online")}
             </p>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
               {
@@ -81,7 +83,7 @@ export const MonitorView = ({
           </div>
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-              Tiempo Promedio Espera
+              {t("queue_dashboard.monitor.avg_wait_time", "Tiempo Promedio Espera")}
             </p>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
               {tickets.length > 0
@@ -107,7 +109,7 @@ export const MonitorView = ({
           </div>
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-              Tickets en Cola
+              {t("queue_dashboard.tickets_in_queue", "Tickets en Cola")}
             </p>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
               {tickets.length}
@@ -121,7 +123,7 @@ export const MonitorView = ({
         <div className="w-2/3 flex flex-col gap-4 overflow-hidden">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-              Agentes Activos
+              {t("queue_dashboard.monitor.active_agents", "Agentes Activos")}
               <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-0.5 rounded-full">
                 {agents.length}
               </span>
@@ -130,7 +132,7 @@ export const MonitorView = ({
           <div className="flex-1 overflow-y-auto pr-2 space-y-4">
             {agents.length === 0 ? (
               <div className="text-center text-gray-500 py-10 bg-reply-bg dark:bg-reply-surface-dark rounded-xl border border-dashed border-gray-300 dark:border-reply-border-dark">
-                No hay agentes conectados
+                {t("queue_dashboard.monitor.no_agents_connected", "No hay agentes conectados")}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
@@ -152,7 +154,7 @@ export const MonitorView = ({
           <div className="bg-white dark:bg-reply-panel-dark rounded-xl border border-gray-200 dark:border-reply-border-dark shadow-sm flex flex-col h-full overflow-hidden">
             <div className="p-4 border-b border-gray-100 dark:border-reply-border-dark flex justify-between items-center bg-reply-bg/50 dark:bg-reply-surface-dark/50">
               <h3 className="font-bold text-gray-800 dark:text-white">
-                Cola de Espera
+                {t("queue_dashboard.monitor.wait_queue", "Cola de Espera")}
               </h3>
               <span className="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 text-xs font-bold px-2 py-0.5 rounded-full">
                 {tickets.length}
@@ -169,8 +171,8 @@ export const MonitorView = ({
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  <p>¡Todo al día!</p>
-                  <p className="text-xs opacity-70">No hay tickets en espera</p>
+                  <p>{t("queue_dashboard.monitor.all_caught_up", "¡Todo al día!")}</p>
+                  <p className="text-xs opacity-70">{t("queue_dashboard.monitor.no_tickets_waiting", "No hay tickets en espera")}</p>
                 </div>
               ) : (
                 tickets.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)

@@ -3,28 +3,12 @@ import { proto } from "@whiskeysockets/baileys";
 import { chatSyncService } from "../ChatSyncService";
 import { Logger } from "@/utils/logger";
 import { contextStorage } from "@/context/requestContext";
-import redisClient from "@/config/redis";
+import { connection } from "@/config/bullmq";
 
 export class HistorySyncWorker {
   private worker: Worker;
 
   constructor() {
-    if (!redisClient) {
-      throw new Error("[HistorySyncWorker] Redis client not initialized");
-    }
-
-    const isTls = process.env.REDIS_URL?.startsWith("rediss://") ?? false;
-
-    // Use a duplicate of the redis client configuration
-    const redisOptions = {
-      connection: {
-        host: process.env.REDIS_HOST || "localhost",
-        port: Number(process.env.REDIS_PORT) || 6379,
-        password: process.env.REDIS_PASSWORD || undefined,
-        tls: isTls ? { rejectUnauthorized: false } : undefined,
-      }
-    };
-
     this.worker = new Worker(
       "whatsapp-history-sync",
       async (job: Job) => {
@@ -59,7 +43,19 @@ export class HistorySyncWorker {
         });
       },
       {
-        connection: redisClient as unknown as import("ioredis").Redis,
+        // [ENTERPRISE · CRITICAL] Was `redisClient` from "@/config/redis" — the
+        // `redis` npm package's client, not ioredis. BullMQ duck-types its
+        // connection option (checking for connect/disconnect/duplicate) and
+        // the `redis` client happens to pass that check, so no error was ever
+        // thrown; but its actual read loop needs ioredis-only APIs
+        // (`defineCommand` for Lua scripts, `.status` state machine), so the
+        // worker silently never consumed a single job — every on-demand sync
+        // request landed in Redis and stayed in "waiting" forever. Confirmed
+        // empirically: a job enqueued via a real ioredis-backed Queue never
+        // left "waiting" state with a Worker built on the `redis` client, with
+        // zero error/failed events fired. Use the shared ioredis connection,
+        // same as the (working) messageQueueWorker.
+        connection,
         concurrency: 1, // Keep it sequential to avoid locking issues on messages
       }
     );

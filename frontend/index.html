@@ -1,31 +1,12 @@
 <!doctype html>
 <html lang="es">
   <head>
-    <script>
-      // 🚑 EMERGENCY: Force unregister all service workers immediately
-      // 🚑 EMERGENCY: Force unregister all service workers immediately
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker
-          .getRegistrations()
-          .then(function (registrations) {
-            let found = false;
-            for (let registration of registrations) {
-              console.log("Unregistering SW:", registration);
-              registration.unregister();
-              found = true;
-            }
-            // Force reload if we just killed a worker to clear cache
-            if (found && !sessionStorage.getItem("sw_killed")) {
-              sessionStorage.setItem("sw_killed", "true");
-              window.location.reload();
-            }
-          });
-      }
-    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sentry CRM - Español</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#007B65" />
     <link
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"

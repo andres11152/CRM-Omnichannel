@@ -31,6 +31,7 @@ interface ChatComposerProps {
   onRequestData?: () => void;
   onShareLocation?: () => void;
   onContact?: () => void;
+  onQuotation?: () => void;
   onAICopilotClick?: (action: "summarize" | "formal" | "suggest") => void;
   isWhisperMode?: boolean;
   onWhisperToggle?: () => void;
@@ -64,6 +65,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   onRequestData,
   onShareLocation,
   onContact,
+  onQuotation,
   onAICopilotClick,
   isWhisperMode = false,
   onWhisperToggle = () => {},
@@ -144,6 +146,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             onClearReply={() => setReplyingTo(null)}
             onAICopilotClick={onAICopilotClick || (() => {})}
             onQuickRepliesClick={() => setShowQuickReplies((prev) => !prev)}
+            onQuotation={onQuotation}
             onMediaLibraryClick={() => setShowMediaPicker(true)}
             onStickerClick={() => {}}
             libraryAttachment={selectedLibraryMedia ? {

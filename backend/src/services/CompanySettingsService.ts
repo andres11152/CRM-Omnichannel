@@ -15,10 +15,7 @@ import redisClient from "@/config/redis";
  * Handles read and update of general, SMTP, business hours, and automation settings.
  */
 
-// [WA-CONTACTS] Small cache for the auto-import flag. upsertWhatsAppUser runs on every
-// inbound/synced message, so we must NOT hit the DB each time. 60s TTL is plenty.
-const autoImportCache = new Map<string, { value: boolean; expires: number }>();
-const AUTO_IMPORT_TTL_MS = 60_000;
+
 
 export const companySettingsService = {
   async getSettings(companyId: string) {
@@ -128,8 +125,6 @@ export const companySettingsService = {
         ...(data.whatsappSync ? { whatsappSync: data.whatsappSync } : {}),
       };
 
-      // Invalidate the cached auto-import flag so the change takes effect immediately.
-      if (data.whatsappSync) autoImportCache.delete(companyId);
     }
 
     const updated = await companyRepository.update(companyId, updateData);
@@ -138,31 +133,8 @@ export const companySettingsService = {
     return updated;
   },
 
-  /**
-   * [WA-CONTACTS] Whether to auto-create CRM Contacts from WhatsApp chats/sync.
-   * Default FALSE — contacts are NOT created automatically; the user enables it
-   * explicitly (toggle) or imports manually. Cached to avoid per-message DB reads.
-   */
   async isAutoImportContactsEnabled(companyId: string): Promise<boolean> {
-    const cached = autoImportCache.get(companyId);
-    if (cached && cached.expires > Date.now()) return cached.value;
-
-    let value = false;
-    try {
-      const company = await companyRepository.findUnique({
-        where: { id: companyId },
-        select: { settings: true },
-      });
-      const settings = (company?.settings as Record<string, unknown>) || {};
-      const wa = (settings.whatsappSync as Record<string, unknown>) || {};
-      value = wa.autoImportContacts === true; // strict: default false
-    } catch (err) {
-      Logger.warn(`[CompanySettings] Failed to read auto-import flag for ${companyId}, defaulting OFF`, { err });
-      value = false;
-    }
-
-    autoImportCache.set(companyId, { value, expires: Date.now() + AUTO_IMPORT_TTL_MS });
-    return value;
+    return false;
   },
 
   /**

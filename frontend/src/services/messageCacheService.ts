@@ -115,7 +115,7 @@ class MessageCacheService {
       };
 
       transaction.oncomplete = () => {
-        console.log(`[MessageCache] ️ Cleared cache for ${conversationId}`);
+        console.log(`[MessageCache] Cleared cache for ${conversationId}`);
         resolve();
       };
       transaction.onerror = () => reject(transaction.error);
@@ -134,7 +134,7 @@ class MessageCacheService {
       const request = store.clear();
 
       request.onsuccess = () => {
-        console.log("[MessageCache] ️ All cache cleared");
+        console.log("[MessageCache] All cache cleared");
         resolve();
       };
       request.onerror = () => reject(request.error);

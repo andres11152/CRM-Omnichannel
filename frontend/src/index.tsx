@@ -1,15 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { registerServiceWorker } from "./hooks/usePushNotifications";
 
-//  EMERGENCY: Kill any zombie Service Workers from previous projects/versions
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      console.log("Unregistering zombie SW:", registration);
-      registration.unregister();
-    }
-  });
-}
+// Register the service worker at boot (not gated behind any settings page)
+// so the app meets standard PWA installability criteria and the browser can
+// offer its own native install affordance — no custom install UI needed.
+registerServiceWorker();
 
 import "./index.css";
 import "./i18n";

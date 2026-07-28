@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { 
+import { useTranslation } from "react-i18next";
+import {
   Building2, 
   Database,
   History,
@@ -20,7 +21,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { es, enUS } from "date-fns/locale";
 import { Modal } from "@/components/ui/Modal";
 import { getModuleCache, setModuleCache } from "@/lib/moduleCache";
 
@@ -33,6 +34,8 @@ const AUDIT_LOG_CACHE_KEY = "audit:default-view";
 const DEFAULT_FILTER: AuditFilter = { limit: 20, offset: 0 };
 
 export const GlobalAuditLog: React.FC = () => {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === "en" ? enUS : es;
   // Stale-while-revalidate: re-entering the module on the default (first
   // page, no filters) view renders instantly and refetches silently.
   const cachedAudit = getModuleCache<AuditLogCache>(AUDIT_LOG_CACHE_KEY);
@@ -77,22 +80,22 @@ export const GlobalAuditLog: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-reply-bg dark:bg-reply-bg-dark animate-in fade-in duration-500 overflow-hidden">
       <ModuleHeader
-        title="Forensics & Audit Log"
-        description="Trazabilidad total de operaciones y eventos de seguridad multi-tenant"
+        title={t("global_audit_log.title", "Forensics & Audit Log")}
+        description={t("global_audit_log.subtitle", "Trazabilidad total de operaciones y eventos de seguridad multi-tenant")}
         icon={<History className="w-8 h-8 text-white" />}
         gradient="from-indigo-600 via-blue-700 to-slate-900 dark:from-indigo-900 dark:via-blue-900 dark:to-black"
         stats={{
-          label: "Total Registros",
+          label: t("global_audit_log.total_records", "Total Registros"),
           value: total.toLocaleString()
         }}
         action={
           <div className="flex items-center gap-2">
-            <Button 
+            <Button
               variant="secondary"
               className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-bold transition-all active:scale-95"
             >
               <Download className="w-4 h-4" />
-              Exportar Forense
+              {t("global_audit_log.export_forensic", "Exportar Forense")}
             </Button>
           </div>
         }
@@ -101,19 +104,19 @@ export const GlobalAuditLog: React.FC = () => {
       <div className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-6">
         {/* Filters Bar */}
         <Card className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Input 
+          <Input
             icon={<Search className="w-4 h-4 text-reply-text-secondary/60" />}
-            placeholder="Buscar entidad..." 
+            placeholder={t("global_audit_log.search_entity_placeholder", "Buscar entidad...")}
             onChange={(e) => setFilter(f => ({ ...f, entity: e.target.value || undefined, offset: 0 }))}
           />
-          <Input 
+          <Input
             icon={<Building2 className="w-4 h-4 text-reply-text-secondary/60" />}
-            placeholder="Filtrar por Tenant ID..." 
+            placeholder={t("global_audit_log.filter_tenant_placeholder", "Filtrar por Tenant ID...")}
             onChange={(e) => setFilter(f => ({ ...f, companyId: e.target.value || undefined, offset: 0 }))}
           />
-          <Input 
+          <Input
             icon={<User className="w-4 h-4 text-reply-text-secondary/60" />}
-            placeholder="Filtrar por Usuario..." 
+            placeholder={t("global_audit_log.filter_user_placeholder", "Filtrar por Usuario...")}
             onChange={(e) => setFilter(f => ({ ...f, userId: e.target.value || undefined, offset: 0 }))}
           />
           <div className="relative group w-full">
@@ -125,7 +128,7 @@ export const GlobalAuditLog: React.FC = () => {
               className="w-full pl-10 pr-10 py-2.5 bg-reply-bg/20 dark:bg-white/5 border border-reply-border dark:border-reply-border-dark rounded-xl text-sm focus:ring-4 focus:ring-reply-brand/10 focus:border-reply-brand transition-all outline-none text-reply-text-primary dark:text-reply-text-primary-dark appearance-none font-medium cursor-pointer"
               onChange={(e) => setFilter(f => ({ ...f, action: e.target.value || undefined, offset: 0 }))}
             >
-              <option value="" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">Todas las acciones</option>
+              <option value="" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">{t("global_audit_log.all_actions", "Todas las acciones")}</option>
               <option value="CREATE" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">CREATE</option>
               <option value="UPDATE" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">UPDATE</option>
               <option value="DELETE" className="bg-white dark:bg-reply-panel-dark text-reply-text-primary dark:text-reply-text-primary-dark">DELETE</option>
@@ -141,11 +144,14 @@ export const GlobalAuditLog: React.FC = () => {
           <div className="p-6 border-b border-reply-border dark:border-reply-border-dark flex items-center justify-between bg-slate-50/20 dark:bg-white/5">
             <h3 className="font-bold text-reply-text-primary dark:text-reply-text-primary-dark flex items-center gap-2">
               <Terminal className="w-5 h-5 text-reply-brand" />
-              Event Stream
+              {t("global_audit_log.event_stream", "Event Stream")}
             </h3>
             <div className="flex items-center gap-4">
               <span className="text-xs font-semibold text-reply-text-secondary dark:text-reply-text-secondary-dark">
-                Página {Math.floor((filter.offset || 0) / (filter.limit || 20)) + 1} de {Math.ceil(total / (filter.limit || 20)) || 1}
+                {t("global_audit_log.page_label", "Página {{current}} de {{total}}", {
+                  current: Math.floor((filter.offset || 0) / (filter.limit || 20)) + 1,
+                  total: Math.ceil(total / (filter.limit || 20)) || 1,
+                })}
               </span>
               <div className="flex items-center gap-1">
                 <Button 
@@ -174,13 +180,13 @@ export const GlobalAuditLog: React.FC = () => {
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="bg-slate-50/30 dark:bg-black/20 border-b border-reply-border dark:border-reply-border-dark text-[10px] font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
-                  <th className="px-6 py-4">Timestamp</th>
-                  <th className="px-6 py-4">Tenant</th>
-                  <th className="px-6 py-4">Operador</th>
-                  <th className="px-6 py-4">Acción</th>
-                  <th className="px-6 py-4">Entidad</th>
-                  <th className="px-6 py-4">Detalles</th>
-                  <th className="px-6 py-4 text-right">Red / IP</th>
+                  <th className="px-6 py-4">{t("global_audit_log.table.timestamp", "Timestamp")}</th>
+                  <th className="px-6 py-4">{t("global_audit_log.table.tenant", "Tenant")}</th>
+                  <th className="px-6 py-4">{t("global_audit_log.table.operator", "Operador")}</th>
+                  <th className="px-6 py-4">{t("global_audit_log.table.action", "Acción")}</th>
+                  <th className="px-6 py-4">{t("global_audit_log.table.entity", "Entidad")}</th>
+                  <th className="px-6 py-4">{t("global_audit_log.table.details", "Detalles")}</th>
+                  <th className="px-6 py-4 text-right">{t("global_audit_log.table.network_ip", "Red / IP")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-reply-border dark:divide-reply-border-dark">
@@ -197,7 +203,7 @@ export const GlobalAuditLog: React.FC = () => {
                     <td colSpan={7} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-3 text-reply-text-secondary/60">
                         <Terminal className="w-12 h-12 opacity-20" />
-                        <p className="font-semibold text-sm">No se encontraron registros de auditoría</p>
+                        <p className="font-semibold text-sm">{t("global_audit_log.no_records", "No se encontraron registros de auditoría")}</p>
                       </div>
                     </td>
                   </tr>
@@ -207,9 +213,9 @@ export const GlobalAuditLog: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2 text-reply-text-secondary dark:text-reply-text-secondary-dark font-mono text-xs font-semibold">
                           <Clock className="w-3.5 h-3.5" />
-                          {format(new Date(log.createdAt), "HH:mm:ss", { locale: es })}
+                          {format(new Date(log.createdAt), "HH:mm:ss", { locale: dateLocale })}
                           <span className="opacity-50 ml-1">
-                            {format(new Date(log.createdAt), "dd MMM", { locale: es })}
+                            {format(new Date(log.createdAt), "dd MMM", { locale: dateLocale })}
                           </span>
                         </div>
                       </td>
@@ -246,12 +252,12 @@ export const GlobalAuditLog: React.FC = () => {
                           className="text-reply-brand hover:text-reply-brand-dark p-0 h-auto hover:bg-transparent font-bold text-xs flex items-center gap-1"
                         >
                           <Info className="w-3.5 h-3.5" />
-                          Ver Payload
+                          {t("global_audit_log.view_payload", "Ver Payload")}
                         </Button>
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         <div className="flex flex-col items-end">
-                          <span className="text-xs font-mono font-bold text-reply-text-primary dark:text-reply-text-primary-dark">{log.ipAddress || "Internal"}</span>
+                          <span className="text-xs font-mono font-bold text-reply-text-primary dark:text-reply-text-primary-dark">{log.ipAddress || t("global_audit_log.internal", "Interno")}</span>
                           <span className="text-[9px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 truncate max-w-[120px]">{log.userAgent?.substring(0, 30)}...</span>
                         </div>
                       </td>
@@ -268,7 +274,7 @@ export const GlobalAuditLog: React.FC = () => {
       <Modal
         isOpen={!!selectedLog}
         onClose={() => setSelectedLog(null)}
-        title="Detalles de Auditoría / Payload JSON"
+        title={t("global_audit_log.modal.title", "Detalles de Auditoría / Payload JSON")}
         icon={<Terminal className="w-5 h-5 text-indigo-500" />}
         size="lg"
       >
@@ -276,35 +282,35 @@ export const GlobalAuditLog: React.FC = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-reply-border dark:border-reply-border-dark">
               <div>
-                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">Entidad</span>
+                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">{t("global_audit_log.modal.entity", "Entidad")}</span>
                 <span className="font-semibold text-reply-text-primary dark:text-reply-text-primary-dark text-sm">{selectedLog.entity}</span>
               </div>
               <div>
-                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">ID de Entidad</span>
+                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">{t("global_audit_log.modal.entity_id", "ID de Entidad")}</span>
                 <span className="font-mono text-reply-text-primary dark:text-reply-text-primary-dark text-sm">{selectedLog.entityId}</span>
               </div>
               <div>
-                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">Acción</span>
+                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">{t("global_audit_log.modal.action", "Acción")}</span>
                 <span className="font-bold text-reply-text-primary dark:text-reply-text-primary-dark text-sm">{selectedLog.action}</span>
               </div>
               <div>
-                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">Usuario Operador</span>
+                <span className="font-bold block text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-wider text-[10px]">{t("global_audit_log.modal.operator_user", "Usuario Operador")}</span>
                 <span className="font-semibold text-reply-text-primary dark:text-reply-text-primary-dark text-sm">{selectedLog.userName}</span>
               </div>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-black text-reply-text-secondary dark:text-reply-text-secondary-dark uppercase tracking-widest">
-                Payload / Detalles Técnicos
+                {t("global_audit_log.modal.payload_label", "Payload / Detalles Técnicos")}
               </label>
               <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl font-mono text-xs overflow-x-auto max-h-[350px] border border-slate-800">
                 <pre>{JSON.stringify(selectedLog.details, null, 2)}</pre>
               </div>
             </div>
-            
+
             <div className="flex justify-end pt-2">
               <Button onClick={() => setSelectedLog(null)}>
-                Cerrar Detalle
+                {t("global_audit_log.modal.close", "Cerrar Detalle")}
               </Button>
             </div>
           </div>

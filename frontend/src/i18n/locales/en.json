@@ -62,7 +62,9 @@
     "edit": "Edit",
     "search": "Search...",
     "success": "Operation successful",
-    "error": "An error occurred",
+    "error": {
+      "connection_title": "Connection Error"
+    },
     "coming_soon": "Coming Soon",
     "soon": "SOON",
     "unknown": "Unknown",
@@ -70,7 +72,31 @@
     "locale_code": "en-US",
     "results": "results",
     "new": "New",
-    "name": "Name"
+    "name": "Name",
+    "disconnect": "Disconnect",
+    "linking": "Linking...",
+    "reconnect": "Reconnect",
+    "reconnecting": "Reconnecting...",
+    "requesting": "Requesting...",
+    "retry": "Retry",
+    "starting": "Starting...",
+    "step_1_of_2": "Step 1 of 2",
+    "understand": "Got it",
+    "available": "Available",
+    "connect": "Connect",
+    "hide": "Hide",
+    "phone": "Phone",
+    "reset": "Record again",
+    "save_changes": "Save Changes",
+    "show": "Show",
+    "status": {
+      "away": "Away",
+      "busy": "Busy",
+      "offline": "Offline",
+      "online": "Online"
+    },
+    "use_audio": "Use recording",
+    "yes": "Yes"
   },
   "chatbot": {
     "new_flow": "New Flow",
@@ -195,7 +221,24 @@
     "email": "Email Address",
     "password": "Password",
     "forgot_password": "Forgot your password?",
-    "login_button": "Sign In"
+    "login_button": "Sign In",
+    "register": {
+      "admin_email_label": "Administrator Email",
+      "admin_password_label": "Administrator Password",
+      "company_name_label": "Your Company Name",
+      "credentials_divider": "or create direct credentials",
+      "error": {
+        "failed": "Error registering the company",
+        "invalid_response": "Invalid server response (Missing token or user)"
+      },
+      "google_signup": "Sign up with Google",
+      "submit": "Register Company",
+      "submitting": "Registering Company...",
+      "validation": {
+        "company_required": "Please enter your company name first."
+      },
+      "welcome": "Welcome"
+    }
   },
   "tenants": {
     "title": "Tenant Management",
@@ -222,7 +265,8 @@
       "subscription_end": "Subscription End",
       "account_status": "Account Status",
       "saving": "Saving...",
-      "save_changes": "Save Changes"
+      "save_changes": "Save Changes",
+      "err_create": "Error creating the company."
     },
     "metrics": {
       "full_dashboard": "Full Metrics Dashboard",
@@ -315,6 +359,10 @@
       "err_save": "Error saving assistant",
       "confirm_delete": "Are you sure you want to delete this assistant?",
       "err_delete": "Error deleting"
+    },
+    "locked": {
+      "description": "The AI Agents module is not active for your company. Contact support to enable it.",
+      "title": "Feature not available"
     }
   },
   "company_settings": {
@@ -388,7 +436,39 @@
       "contact_sales": "Contact Sales",
       "manual_payments": "Manual Payment Methods",
       "temporal": "TEMPORAL",
-      "manual_desc": "Send your proof of payment to support to activate your renewal immediately."
+      "manual_desc": "Send your proof of payment to support to activate your renewal immediately.",
+      "card_details": "Card Details",
+      "card_details_desc": "Automatic monthly billing through Mercado Pago's secure gateway.",
+      "cardholder": "Cardholder Name",
+      "cardnumber": "Card Number",
+      "current_plan": "Active Plan",
+      "cvv": "Security Code (CVV)",
+      "desc_plans": "Select a plan and set up your direct payment method.",
+      "expiry": "Expiry (MM/YY)",
+      "limit_contacts": "CRM Contacts",
+      "limit_users": "Users",
+      "limit_whatsapp": "WA Connections",
+      "no_plans": "No plans available were found",
+      "select": "Select Plan",
+      "selected": "Selected",
+      "subscribe_button": "Activate Recurring Subscription",
+      "title_plans": "Subscription Plans"
+    },
+    "email": {
+      "guides_title": "Quick Setup Guides",
+      "host": "SMTP Server / Host",
+      "password": "Password",
+      "port": "Port",
+      "secure": "Secure Connection",
+      "sender_email": "Sender Email",
+      "sender_name": "Sender Name",
+      "subtitle": "Configure your own outgoing mail server for campaigns and tickets.",
+      "test_btn": "Send Test Email",
+      "test_desc": "We'll send you a test email instantly to make sure the configuration is correct.",
+      "test_title": "Test Your Connection",
+      "testing": "Testing...",
+      "title": "Email / SMTP Configuration",
+      "user": "Username / Email"
     }
   },
   "agent_modal": {
@@ -482,7 +562,14 @@
       "skills_hint": "The system will only assign chats to agents who have ALL these skills.",
       "saving": "Saving...",
       "update": "Update",
-      "create": "Create Queue"
+      "create": "Create Queue",
+      "ai_locked": "Feature not available for your company. Contact support to enable it.",
+      "ai_locked_hint": "AI module not active for your company.",
+      "delete_dept": "Delete Department",
+      "dept_placeholder": "Department name...",
+      "edit_dept": "Edit Department",
+      "new_dept": "New Department",
+      "no_dept_option": "No department (General)"
     },
     "toasts": {
       "err_load": "Error loading configuration.",
@@ -495,8 +582,18 @@
       "delete_success": "Queue deleted successfully",
       "err_delete": "Error deleting queue",
       "dept_success": "Department created",
-    "err_dept": "Error creating department"
-    }
+      "err_dept": "Error creating department",
+      "created_success": "Created successfully",
+      "deleted_success": "Deleted successfully",
+      "dept_delete_success": "Department deleted",
+      "dept_update_success": "Department updated",
+      "err_dept_delete": "Error deleting department",
+      "err_dept_update": "Error updating department",
+      "saved_success": "Saved successfully",
+      "updated_success": "Updated successfully"
+    },
+    "confirm_delete_dept": "Delete this department? This action cannot be undone.",
+    "confirm_delete_q": "Delete?"
   },
   "tickets_kanban": {
     "columns": {
@@ -540,108 +637,109 @@
       "err_assign": "Error assigning ticket"
     }
   },
-    "dashboard": {
-      "master_title": "Central Admin",
-      "master_desc": "Master orchestration and monitoring panel for the Sentry CRM ecosystem",
-      "total_companies": "Total Companies",
-      "active_companies": "Active Companies",
-      "total_contacts": "Total Contacts",
-      "total_mrr": "Total MRR",
-      "active_users": "Active Users",
-      "churn_risk": "Churn Risk",
-      "global_activity": "Global Activity",
-      "quick_actions": "Quick Actions",
-      "manage_companies": "Tenant Management",
-      "manage_companies_desc": "Manage clients",
-      "manage_plans": "Plan Management",
-      "manage_plans_desc": "Configure subscriptions",
-      "audit_logs": "Forensics & Audit",
-      "audit_logs_desc": "Security logs",
-      "database": "Database",
-      "database_desc": "Visualize schema",
-      "active_ecosystem": "Active Ecosystem",
-      "tenants": "Tenants",
-      "agent_greeting": "Hello",
-      "agent_subtitle": "Let's get to work! Here is your personal summary.",
-      "inbox_title": "In your inbox",
-      "active_tickets": "active tickets",
-      "go_to_tickets": "Go to my tickets",
-      "well_done": "Well done!",
-      "resolved_today": "Resolved Today",
-      "messages_sent": "Messages Sent",
-      "high_activity": "High level of activity",
-      "recent_activity": "Recently viewed",
-      "table_ticket": "Ticket",
-      "table_status": "Status",
-      "table_priority": "Priority",
-      "table_queue": "Queue",
-      "table_updated": "Updated",
-      "no_recent_activity": "No recent activity",
-      "navigation": {
-        "dashboard": "Control Panel"
-      },
-      "welcome_admin": "Welcome, {{name}}. Here is your business overview.",
-      "welcome_admin_generic": "Welcome. Here is your business overview.",
-      "tickets_active": "Active Tickets",
-      "pending": "pending",
-      "conversations": "Conversations",
-      "msgs_today": "Msgs Today",
-      "response_time": "Response Time",
-      "avg_7_days": "Avg last 7 days",
-      "ai_resolution": "AI Resolution",
-      "ai_resolution_full": "AI Resolution",
-      "closed_auto": "Closed automatically",
-      "current_plan": "Your Current Plan",
-      "starter": "Starter",
-      "trial_until": "Trial until:",
-      "renews": "Renews:",
-      "no_expiry": "No expiry",
-      "manage": "Manage",
-      "tickets_in_progress": "Tickets In Progress",
-      "quick_view_load": "Quick view of current team load",
-      "loading_metrics": "Loading metrics...",
-      "status": {
-        "active": "Active",
-        "trial": "Trial",
-        "suspended": "Suspended",
-        "inactive": "Inactive"
-      },
-      "mrr_trend": "MRR Trend",
-      "no_history": "No historical data",
-      "revenue": "Revenue",
-      "plan_distribution": "Plan Distribution",
-      "no_plan_data": "No plan data",
-      "top_tenants": "Top Clients",
-      "available_soon": "Available soon",
-      "database": "Database",
-      "queue_system": "Queue System",
-      "storage": "Storage",
-      "score": "Score",
-      "export": "Export",
-      "inbox": "Inbox",
-      "manage_contacts": "Manage Contacts",
-      "automations": "Automations",
-      "settings": "Settings",
-      "no_plan": "No Plan",
-      "activity_feed": {
-        "few_seconds": "a few seconds ago",
-        "minutes_ago": "{{count}} min ago",
-        "hours_ago": "{{count}} h ago",
-        "no_activity": "No recent activity recorded.",
-        "system": "System",
-        "global": "Global"
-      },
-      "tenant_health": {
-        "impersonate_confirm": "Access {{name}}'s panel?",
-        "impersonation_mode": "Impersonation Mode",
-        "err_impersonate": "Error starting impersonation",
-        "client": "Client",
-        "plan": "Plan",
-        "health_risk": "Health / Risk",
-        "risk_factors": "Risk Factors:",
-        "inspect_account": "Inspect Account"
-      }
+  "dashboard": {
+    "master_title": "Central Admin",
+    "master_desc": "Master orchestration and monitoring panel for the Sentry CRM ecosystem",
+    "total_companies": "Total Companies",
+    "active_companies": "Active Companies",
+    "total_contacts": "Total Contacts",
+    "total_mrr": "Total MRR",
+    "active_users": "Active Users",
+    "churn_risk": "Churn Risk",
+    "global_activity": "Global Activity",
+    "quick_actions": "Quick Actions",
+    "manage_companies": "Tenant Management",
+    "manage_companies_desc": "Manage clients",
+    "manage_plans": "Plan Management",
+    "manage_plans_desc": "Configure subscriptions",
+    "audit_logs": "Forensics & Audit",
+    "audit_logs_desc": "Security logs",
+    "database": "Database",
+    "database_desc": "Visualize schema",
+    "active_ecosystem": "Active Ecosystem",
+    "tenants": "Tenants",
+    "agent_greeting": "Hello",
+    "agent_subtitle": "Let's get to work! Here is your personal summary.",
+    "inbox_title": "In your inbox",
+    "active_tickets": "active tickets",
+    "go_to_tickets": "Go to my tickets",
+    "well_done": "Well done!",
+    "resolved_today": "Resolved Today",
+    "messages_sent": "Messages Sent",
+    "high_activity": "High level of activity",
+    "recent_activity": "Recently viewed",
+    "table_ticket": "Ticket",
+    "table_status": "Status",
+    "table_priority": "Priority",
+    "table_queue": "Queue",
+    "table_updated": "Updated",
+    "no_recent_activity": "No recent activity",
+    "navigation": {
+      "dashboard": "Control Panel"
     },
+    "welcome_admin": "Welcome, {{name}}. Here is your business overview.",
+    "welcome_admin_generic": "Welcome. Here is your business overview.",
+    "tickets_active": "Active Tickets",
+    "pending": "pending",
+    "conversations": "Conversations",
+    "msgs_today": "Msgs Today",
+    "response_time": "Response Time",
+    "avg_7_days": "Avg last 7 days",
+    "ai_resolution": "AI Resolution",
+    "ai_resolution_full": "AI Resolution",
+    "closed_auto": "Closed automatically",
+    "current_plan": "Your Current Plan",
+    "starter": "Starter",
+    "trial_until": "Trial until:",
+    "renews": "Renews:",
+    "no_expiry": "No expiry",
+    "manage": "Manage",
+    "tickets_in_progress": "Tickets In Progress",
+    "quick_view_load": "Quick view of current team load",
+    "loading_metrics": "Loading metrics...",
+    "status": {
+      "active": "Active",
+      "trial": "Trial",
+      "suspended": "Suspended",
+      "inactive": "Inactive"
+    },
+    "mrr_trend": "MRR Trend",
+    "no_history": "No historical data",
+    "revenue": "Revenue",
+    "plan_distribution": "Plan Distribution",
+    "no_plan_data": "No plan data",
+    "top_tenants": "Top Clients",
+    "available_soon": "Available soon",
+    "queue_system": "Queue System",
+    "storage": "Storage",
+    "score": "Score",
+    "export": "Export",
+    "inbox": "Inbox",
+    "manage_contacts": "Manage Contacts",
+    "automations": "Automations",
+    "settings": "Settings",
+    "no_plan": "No Plan",
+    "activity_feed": {
+      "few_seconds": "a few seconds ago",
+      "minutes_ago": "{{count}} min ago",
+      "hours_ago": "{{count}} h ago",
+      "no_activity": "No recent activity recorded.",
+      "system": "System",
+      "global": "Global"
+    },
+    "tenant_health": {
+      "impersonate_confirm": "Access {{name}}'s panel?",
+      "impersonation_mode": "Impersonation Mode",
+      "err_impersonate": "Error starting impersonation",
+      "client": "Client",
+      "plan": "Plan",
+      "health_risk": "Health / Risk",
+      "risk_factors": "Risk Factors:",
+      "inspect_account": "Inspect Account"
+    },
+    "total_messages": "Total Messages",
+    "total_sessions": "Total Sessions"
+  },
   "sounds": {
     "title": "Sound Settings",
     "subtitle": "Customize CRM audio notifications",
@@ -794,7 +892,8 @@
     "muted": "Muted",
     "archived": "Archived",
     "back_to_chats": "Back to chats",
-    "no_archived": "No archived chats"
+    "no_archived": "No archived chats",
+    "no_messages": "No messages"
   },
   "chat": {
     "priority_updated": "Priority: {{priority}}",
@@ -839,7 +938,31 @@
     "no_messages": "No messages",
     "waiting_for_reply": "Time waiting for agent reply",
     "pinned_message": "Pinned Message",
-    "tap_to_view": "View ↓"
+    "tap_to_view": "View ↓",
+    "actions": {
+      "delete": "Delete for everyone",
+      "edit": "Edit message",
+      "pin": "Pin message",
+      "reply": "Reply",
+      "star": "Star message",
+      "unpin": "Unpin message",
+      "unstar": "Remove star"
+    },
+    "all_media": "All",
+    "attachments": "Attachment (Optional)",
+    "crm_library": "CRM Library",
+    "from_pc": "From Computer",
+    "library": "Library",
+    "local_pc": "From Computer",
+    "no_media_found": "No files found in the library",
+    "preview_record_desc": "Listen to your recording or confirm it to schedule.",
+    "record_audio": "Record Voice Note",
+    "recording_desc": "Recording... Click the square button to stop.",
+    "register_contact": "Register Contact",
+    "search_library": "Search by file name...",
+    "start_record_desc": "Click the microphone to start recording.",
+    "unregistered_contact": "This contact is not registered in the CRM. Would you like to save it to follow up?",
+    "voice_note": "Record Voice"
   },
   "sidebar": {
     "light_mode": "Light Mode",
@@ -866,7 +989,8 @@
     "assign_followup": "Assign Follow-up",
     "schedule_meeting": "Schedule Meeting",
     "schedule_call": "Schedule Call",
-    "internal_notes": "Internal Notes"
+    "internal_notes": "Internal Notes",
+    "deals": "Deals (CRM)"
   },
   "actions": {
     "schedule_title": "Enterprise Scheduling",
@@ -906,7 +1030,25 @@
     "pro_services": "Professional Services",
     "field_saved": "Field saved in configuration",
     "err_save_config": "Error saving configuration",
-    "err_select_data": "Select at least one data point"
+    "err_select_data": "Select at least one data point",
+    "cancel": "Cancel",
+    "contact_search_placeholder": "Search by name or phone…",
+    "contact_title": "Send Contact",
+    "err_contacts": "Error loading contacts",
+    "err_duplicate_field": "A field with this name already exists",
+    "err_empty_field": "The field name cannot be empty",
+    "err_msg_or_media": "Write a message or attach a file",
+    "err_properties": "Error loading properties",
+    "field_deleted": "Field deleted",
+    "field_updated": "Field updated",
+    "loading_contacts": "Loading contacts...",
+    "no_contacts": "No contacts",
+    "no_contacts_desc": "Adjust your search or create contacts with a phone number in the Contacts module.",
+    "no_location": "Location not specified",
+    "no_properties": "No properties",
+    "no_properties_desc": "Adjust your search or create properties in the Properties module.",
+    "property_search_placeholder": "Search by title, city, neighborhood, reference…",
+    "property_title": "Property Catalog"
   },
   "composer": {
     "quick_replies": "QUICK REPLIES",
@@ -924,7 +1066,10 @@
     "emojis": "Emojis",
     "write_message": "Write a message...",
     "voice_note": "Voice Note",
-    "send": "Send"
+    "send": "Send",
+    "from_library": "Media Library",
+    "media_library": "Send from Library",
+    "send_property": "Send Property"
   },
   "message_list": {
     "loading": "Loading messages...",
@@ -955,7 +1100,8 @@
     "service": "Service",
     "availability": "Availability (30d):",
     "last_check": "Last Check:",
-    "now": "Now"
+    "now": "Now",
+    "action": "Action"
   },
   "billing_ops": {
     "toast": {
@@ -997,24 +1143,78 @@
       "control": "Flow Control"
     },
     "nodes": {
-      "trigger": { "label": "Start", "desc": "Flow entry point" },
-      "send_message": { "label": "Send Message", "desc": "Send a text message" },
-      "send_image": { "label": "Send Image", "desc": "Send an image file" },
-      "send_video": { "label": "Send Video", "desc": "Send a video file" },
-      "send_audio": { "label": "Send Audio", "desc": "Send an audio file" },
-      "send_document": { "label": "Send Document", "desc": "Send a document file" },
-      "ask_data": { "label": "Ask Data", "desc": "Ask user for input" },
-      "condition": { "label": "Condition", "desc": "Branch based on logic" },
-      "ai_agent": { "label": "AI Agent", "desc": "AI-powered response" },
-      "create_deal": { "label": "Create Deal", "desc": "Create a CRM deal" },
-      "update_contact": { "label": "Update Contact", "desc": "Update contact fields" },
-      "tag_contact": { "label": "Tag Contact", "desc": "Auto-tag contacts" },
-      "assign_agent": { "label": "Assign Agent", "desc": "Route to human agent" },
-      "ai_handoff": { "label": "Handoff", "desc": "Transfer to human" },
-      "http_request": { "label": "HTTP Request", "desc": "Call external API" },
-      "send_template": { "label": "Send Template", "desc": "WhatsApp template message" },
-      "delay": { "label": "Delay", "desc": "Wait before continuing" },
-      "end": { "label": "End", "desc": "End the flow" }
+      "trigger": {
+        "label": "Start",
+        "desc": "Flow entry point"
+      },
+      "send_message": {
+        "label": "Send Message",
+        "desc": "Send a text message"
+      },
+      "send_image": {
+        "label": "Send Image",
+        "desc": "Send an image file"
+      },
+      "send_video": {
+        "label": "Send Video",
+        "desc": "Send a video file"
+      },
+      "send_audio": {
+        "label": "Send Audio",
+        "desc": "Send an audio file"
+      },
+      "send_document": {
+        "label": "Send Document",
+        "desc": "Send a document file"
+      },
+      "ask_data": {
+        "label": "Ask Data",
+        "desc": "Ask user for input"
+      },
+      "condition": {
+        "label": "Condition",
+        "desc": "Branch based on logic"
+      },
+      "ai_agent": {
+        "label": "AI Agent",
+        "desc": "AI-powered response"
+      },
+      "create_deal": {
+        "label": "Create Deal",
+        "desc": "Create a CRM deal"
+      },
+      "update_contact": {
+        "label": "Update Contact",
+        "desc": "Update contact fields"
+      },
+      "tag_contact": {
+        "label": "Tag Contact",
+        "desc": "Auto-tag contacts"
+      },
+      "assign_agent": {
+        "label": "Assign Agent",
+        "desc": "Route to human agent"
+      },
+      "ai_handoff": {
+        "label": "Handoff",
+        "desc": "Transfer to human"
+      },
+      "http_request": {
+        "label": "HTTP Request",
+        "desc": "Call external API"
+      },
+      "send_template": {
+        "label": "Send Template",
+        "desc": "WhatsApp template message"
+      },
+      "delay": {
+        "label": "Delay",
+        "desc": "Wait before continuing"
+      },
+      "end": {
+        "label": "End",
+        "desc": "End the flow"
+      }
     },
     "builder": {
       "save_flow": "Save Flow",
@@ -1051,8 +1251,21 @@
       "empty_column": "No deals yet"
     },
     "deals": {
-      "won_toast": "Deal won!",
-      "lost_toast": "Deal marked as lost",
+      "value": "Value / Amount",
+      "currency": "Currency",
+      "probability": "Probability",
+      "avg_deal_size": "Average Deal Size",
+      "unassigned": "Unassigned",
+      "moved_success": "Deal moved to",
+      "won_toast": "Congratulations! Deal closed as won.",
+      "lost_toast": "Deal marked as lost.",
+      "lost_reason_label": "Why was this opportunity lost? *",
+      "delete_confirm": "Are you sure you want to delete this deal? This action cannot be undone.",
+      "delete_error": "Error deleting the opportunity",
+      "no_activities": "No activities recorded for this deal.",
+      "notes_hint": "Will be registered as the first activity of the deal.",
+      "conversion": "Conversion",
+      "pipeline": "Pipeline",
       "moved_to": "Moved to \"{{stage}}\""
     },
     "accounts": {
@@ -1130,23 +1343,6 @@
         "meeting": "Meeting",
         "task": "Task"
       }
-    },
-    "deals": {
-      "value": "Value / Amount",
-      "currency": "Currency",
-      "probability": "Probability",
-      "avg_deal_size": "Average Deal Size",
-      "unassigned": "Unassigned",
-      "moved_success": "Deal moved to",
-      "won_toast": "Congratulations! Deal closed as won.",
-      "lost_toast": "Deal marked as lost.",
-      "lost_reason_label": "Why was this opportunity lost? *",
-      "delete_confirm": "Are you sure you want to delete this deal? This action cannot be undone.",
-      "delete_error": "Error deleting the opportunity",
-      "no_activities": "No activities recorded for this deal.",
-      "notes_hint": "Will be registered as the first activity of the deal.",
-      "conversion": "Conversion",
-      "pipeline": "Pipeline"
     },
     "pipelines": {
       "title": "Sales Pipeline",
@@ -1555,7 +1751,12 @@
   "email_inbox": {
     "toast": {
       "load_error": "Failed to load emails"
-    }
+    },
+    "description": "View and manage all your company's emails.",
+    "search": "Search by subject, sender...",
+    "select_email": "Select an email",
+    "select_email_desc": "Click on an email in the list to see its full content here.",
+    "title": "Email Inbox"
   },
   "email_modal": {
     "toast": {
@@ -1601,6 +1802,61 @@
       "url_copied": "URL copied",
       "renamed": "File renamed",
       "rename_error": "Error renaming"
+    },
+    "select_file_title": "Select File",
+    "title": "Media Library",
+    "subtitle": "Manage and view all your digital assets",
+    "total_files": "Total Files",
+    "filters": {
+      "all": "All",
+      "image": "Image",
+      "audio": "Audio",
+      "video": "Video",
+      "document": "Document"
+    },
+    "search_placeholder": "Search...",
+    "upload": "Upload",
+    "loading": "Loading library...",
+    "empty_title": "Your library is empty",
+    "empty_subtitle": "Drag files here or use the upload button",
+    "drop_title": "Drop your files here",
+    "drop_subtitle": "They will be uploaded to your cloud instantly",
+    "delete_confirm": {
+      "title_one": "Delete file permanently?",
+      "title_many": "Delete {{count}} files permanently?",
+      "body_prefix": "This action cannot be undone.",
+      "body_one": "The file will disappear",
+      "body_many": "The files will disappear",
+      "body_suffix": "from your library and from any chat where it was shared."
+    },
+    "cancel": "Cancel",
+    "confirm_delete": "Yes, Delete",
+    "rename_modal": {
+      "title": "Rename File",
+      "name_label": "Name",
+      "save": "Save",
+      "audio_hint": "This name will help you identify the voice note when reusing it in any chat or chatbot."
+    },
+    "card": {
+      "copy_link": "Copy Link",
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "preview_modal": {
+      "copy_url": "Copy URL",
+      "video_unsupported": "Your browser does not support video.",
+      "preview_unavailable": "Preview not available for this document type.",
+      "download_open": "Download / Open",
+      "uploaded_by": "Uploaded by:",
+      "system": "System",
+      "delete_file": "Delete File"
+    },
+    "bulk_actions": {
+      "selected_files": "Selected files",
+      "deselect_all": "Deselect all",
+      "select_all": "Select all",
+      "delete_selected": "Delete selected",
+      "cancel_selection": "Cancel selection"
     }
   },
   "permissions_panel": {
@@ -1988,5 +2244,373 @@
       "revoke_key_message": "Revoke \"{{name}}\"? Integrations using it will stop working immediately.",
       "revoke_cta": "Revoke"
     }
+  },
+  "developer_settings": {
+    "title": "Developer API & Webhooks",
+    "subtitle": "Webhooks for real-time events and API Keys for external programmatic access.",
+    "stats": {
+      "active_webhooks": "Active Webhooks",
+      "active_keys": "Active Keys"
+    },
+    "tabs": {
+      "webhooks": "Webhooks",
+      "api_keys": "API Keys",
+      "api_docs": "API Docs"
+    },
+    "webhooks_tab": {
+      "endpoints_configured": "Configured Endpoints",
+      "description": "Configure external URLs where Sentry will send real-time events via HMAC-SHA256.",
+      "close": "Close",
+      "new_webhook": "New Webhook"
+    },
+    "api_keys_tab": {
+      "title": "Active API Keys",
+      "description_prefix": "Authenticate external requests with the header",
+      "close": "Close",
+      "new_key": "New API Key",
+      "key_generated_title": "API Key Generated!",
+      "key_generated_desc": "Copy this key now. For security reasons, it won't be shown again.",
+      "copy": "Copy",
+      "copied_toast": "Key copied",
+      "saved_continue": "I saved it — Continue",
+      "key_name_label": "Key Name",
+      "key_name_placeholder": "E.g: Production Server",
+      "generate_key": "Generate Key",
+      "empty_state": "No API keys generated yet.",
+      "created_on": "Created on {{date}}",
+      "used_on": "· Used on {{date}}",
+      "revoke_access": "Revoke Access"
+    },
+    "api_docs_tab": {
+      "title": "REST API Reference",
+      "description_prefix": "Integrate Sentry with your internal systems. Authenticate by sending your API Key in the header",
+      "base_url_label": "Base URL:",
+      "webhook_payload_title": "Webhook Event Structure",
+      "endpoints": {
+        "send_message": "Send WhatsApp Message",
+        "upsert_contact": "Create or Update Contact",
+        "create_deal": "Create Deal (Opportunity)",
+        "list_tickets": "List Tickets"
+      }
+    },
+    "webhook_list": {
+      "empty_state": "No webhooks configured yet.",
+      "deactivate": "DEACTIVATE",
+      "activate": "ACTIVATE",
+      "subscribed_events": "Subscribed Events",
+      "signing_secret": "Signing Secret (HMAC-SHA256)",
+      "hide": "Hide",
+      "show": "Show",
+      "copy": "Copy",
+      "secret_copied_toast": "Secret copied"
+    },
+    "delivery_logs": {
+      "title": "Recent Delivery Logs",
+      "refresh": "REFRESH",
+      "table": {
+        "status": "Status",
+        "event": "Event",
+        "target_url": "Target URL",
+        "datetime": "Date/Time",
+        "latency": "Latency"
+      },
+      "no_activity": "No recent activity.",
+      "retry_delivery": "Retry delivery",
+      "retry": "Retry",
+      "attempt": "ATTEMPT #{{n}}"
+    },
+    "webhook_form": {
+      "endpoint_url_label": "Endpoint URL (POST)",
+      "description_label": "Description (optional)",
+      "description_placeholder": "E.g: Internal ERP Integration",
+      "events_to_subscribe": "Events to Subscribe",
+      "no_selection_hint": "No selection → will subscribe to",
+      "saving": "Saving…",
+      "save_config": "Save Configuration"
+    }
+  },
+  "integrations_panel": {
+    "title": "Integrations & Channels",
+    "subtitle": "Connect and configure your omnichannel communication channels",
+    "tabs": {
+      "whatsapp": "WhatsApp",
+      "instagram": "Instagram",
+      "discover": "Discover"
+    }
+  },
+  "system_deep_monitor": {
+    "title": "Infrastructure Deep Monitor",
+    "subtitle": "Real-time status of services, queues, and critical resources",
+    "active_workers": "Active Workers",
+    "refresh": "Refresh",
+    "cards": {
+      "api_gateway": "API Gateway",
+      "healthy": "Healthy",
+      "latency": "Latency",
+      "redis_memory": "Redis Memory",
+      "loading": "Loading...",
+      "peak": "Peak: {{value}}",
+      "database": "Database",
+      "query_response": "Query Response",
+      "workers": "Workers",
+      "online": "Online",
+      "active_queues": "Active Queues"
+    },
+    "queue_table": {
+      "title": "BullMQ Queue Diagnostics",
+      "last_check": "Last check: {{time}}",
+      "col_queue": "Queue",
+      "col_waiting": "Waiting",
+      "col_active": "Active",
+      "col_failed": "Failed",
+      "col_health": "Health",
+      "degraded": "Degraded",
+      "stable": "Stable"
+    },
+    "webhooks_card": {
+      "title": "Webhooks & Delivery",
+      "success_rate": "Delivery Success Rate",
+      "total_24h": "Total 24h",
+      "failures": "Failures"
+    },
+    "uptime_card": {
+      "global_availability": "Global System Availability",
+      "uptime_label": "UPTIME: {{value}}"
+    }
+  },
+  "global_audit_log": {
+    "title": "Forensics & Audit Log",
+    "subtitle": "Full traceability of operations and multi-tenant security events",
+    "total_records": "Total Records",
+    "export_forensic": "Export Forensics",
+    "search_entity_placeholder": "Search entity...",
+    "filter_tenant_placeholder": "Filter by Tenant ID...",
+    "filter_user_placeholder": "Filter by User...",
+    "all_actions": "All actions",
+    "event_stream": "Event Stream",
+    "page_label": "Page {{current}} of {{total}}",
+    "table": {
+      "timestamp": "Timestamp",
+      "tenant": "Tenant",
+      "operator": "Operator",
+      "action": "Action",
+      "entity": "Entity",
+      "details": "Details",
+      "network_ip": "Network / IP"
+    },
+    "no_records": "No audit records found",
+    "view_payload": "View Payload",
+    "internal": "Internal",
+    "modal": {
+      "title": "Audit Details / JSON Payload",
+      "entity": "Entity",
+      "entity_id": "Entity ID",
+      "action": "Action",
+      "operator_user": "Operator User",
+      "payload_label": "Payload / Technical Details",
+      "close": "Close Detail"
+    }
+  },
+  "queue_dashboard": {
+    "alerts": {
+      "agent_saturated_title": "Agent Saturated",
+      "agent_saturated_msg": "Agent {{name}} has reached their maximum chat capacity.",
+      "assign_error_title": "Assignment Error",
+      "assign_error_msg": "Could not assign the ticket. Please try again.",
+      "success_title": "Success!",
+      "queues_saved_msg": "Queues assigned successfully.",
+      "error_title": "Error",
+      "queues_save_error_msg": "Could not assign the queues.",
+      "understood": "Got it"
+    },
+    "unknown_client": "Unknown Customer",
+    "general_department": "General",
+    "tabs": {
+      "monitor_title": "Live Monitor",
+      "monitor_desc": "Monitor agent status and the waiting queue in real time.",
+      "config_title": "Queue Configuration",
+      "config_desc": "Manage queues, departments, and assignment rules.",
+      "kanban_title": "Kanban Board",
+      "kanban_desc": "Manage your ticket workflow with a visual board.",
+      "monitor_button": "Live Monitor",
+      "config_button": "Queue Configuration",
+      "kanban_button": "Ticket Kanban"
+    },
+    "tickets_in_queue": "Tickets in Queue",
+    "monitor": {
+      "ai_agents_online": "AI Agents Online",
+      "agents_online": "Agents Online",
+      "avg_wait_time": "Average Wait Time",
+      "active_agents": "Active Agents",
+      "no_agents_connected": "No agents connected",
+      "wait_queue": "Waiting Queue",
+      "all_caught_up": "All caught up!",
+      "no_tickets_waiting": "No tickets waiting"
+    },
+    "agent_card": {
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "configure_queues": "Configure Queues",
+      "active_chats": "Active Chats",
+      "resolved_today": "Resolved Today",
+      "capacity": "Capacity ({{pct}}%)",
+      "agent_role_fallback": "Agent"
+    },
+    "assignment_modal": {
+      "title": "Configure Queues for {{name}}",
+      "cancel": "Cancel",
+      "save_changes": "Save Changes",
+      "no_queues_available": "No queues available."
+    },
+    "ticket_card": {
+      "wait_time": "{{min}} min waiting"
+    }
+  },
+  "integrations": {
+    "whatsapp": {
+      "bind_new": "Link New Device",
+      "bind_title": "Link WhatsApp",
+      "choose_method": "Choose your preferred linking method for your device.",
+      "connect_another": "Connect another WhatsApp number",
+      "default_queue": "Default Queue",
+      "description": "Connect your WhatsApp via Web (QR Code) or Official API.",
+      "disconnected_desc": "Session disconnected",
+      "enter_code_instructions": "Open the WhatsApp notification on your phone or go to Linked Devices > Link with phone number.",
+      "enter_code_title": "Enter the code",
+      "failed_desc": "Connection failed",
+      "generate_qr": "Generate QR Code",
+      "get_pairing_code": "Get Pairing Code",
+      "helper_code_step1": "Open WhatsApp Web on your phone and log in with your phone number.",
+      "helper_code_step2": "Enter the 8-character code shown on the left on your device.",
+      "helper_step1": "Point your phone camera at the screen to scan the QR code.",
+      "helper_step2": "Once scanned, the session will link automatically. Do not close this window.",
+      "many_numbers": "numbers",
+      "meta": {
+        "access_token": "Meta Access Token (Permanent Access Token)",
+        "save": "Save Meta Configuration",
+        "verify_token": "Verify Token:",
+        "webhook_config": "Webhook Configuration:",
+        "webhook_url": "Webhook URL:",
+        "connection_error": "Connection error while linking with Meta",
+        "error": "Error linking with Meta",
+        "linked_success": "Meta account linked successfully",
+        "linking": "Linking with Meta..."
+      },
+      "meta_api": "Meta Cloud API (Official)",
+      "no_queue_assigned": "-- No Queue Assigned --",
+      "one_number": "number",
+      "phone_code": "Phone Code",
+      "phone_number_label": "Phone Number (with country code)",
+      "profile_name": "WhatsApp Profile Name",
+      "profile_placeholder": "E.g: Sentry CRM Support",
+      "qr_code": "QR Code",
+      "scan_instructions": "Open WhatsApp on your phone, go to Linked Devices and select Link a Device.",
+      "scan_title": "Scan the QR code",
+      "status": {
+        "disconnected": "Disconnected",
+        "failed": "Failed"
+      },
+      "upgrade": {
+        "description": "Your current plan only allows connecting a single active WhatsApp session. To link multiple numbers, you must upgrade your subscription.",
+        "subtitle": "Upgrade your plan to expand your omnichannel reach",
+        "title": "Channel Limit Reached"
+      },
+      "view_qr": "View QR",
+      "waiting_scan": "Waiting for scan...",
+      "review_mode_on": "Audit Mode Enabled",
+      "review_mode_off": "Audit Mode Disabled",
+      "canceled": "Linking canceled",
+      "canceling": "Canceling linking...",
+      "connected_success": "WhatsApp {{phone}} linked",
+      "disconnected_success": "Session disconnected successfully",
+      "disconnecting": "Disconnecting session...",
+      "error": {
+        "code": "Error requesting code",
+        "connect": "Error connecting",
+        "create": "Network error creating session",
+        "disconnect": "Error disconnecting",
+        "fetch": "Could not connect to the server. Check your connection.",
+        "queue": "Error updating queue",
+        "queue_connection": "Error updating the default queue",
+        "reconnect": "Error trying to reconnect"
+      },
+      "loading_session": "Connection in progress…",
+      "profile": {
+        "connection_error": "Connection error updating the profile name",
+        "error": "Error updating the name",
+        "updated_success": "WhatsApp profile name updated successfully",
+        "updating": "Updating profile name..."
+      },
+      "queue_updated": "Default queue updated",
+      "reconnect_sent": "Reconnection request sent.",
+      "timeout_wait": "Connecting… QR on its way",
+      "validation": {
+        "phone_invalid": "Invalid phone number.",
+        "phone_required": "Please enter your phone number."
+      }
+    },
+    "discover": {
+      "desc": "New integrations on the way to centralize even more channels.",
+      "messenger_desc": "Sync your fanpage and automate replies.",
+      "messenger_title": "Facebook Messenger",
+      "shopify_desc": "Integrate your catalog and orders.",
+      "shopify_title": "Shopify / WooCommerce",
+      "title": "Discover More Channels"
+    },
+    "instagram": {
+      "connect_desc": "Link a professional Instagram account",
+      "connect_title": "Connect Instagram",
+      "description": "Professional Instagram accounts connected via the Graph API.",
+      "disconnected_success": "Instagram account disconnected",
+      "error": {
+        "connection": "Connection error while linking Instagram",
+        "disconnect": "Could not disconnect the Instagram account",
+        "failed": "Error linking Instagram"
+      },
+      "linked_success": "Instagram account linked successfully",
+      "linking": "Linking Instagram account...",
+      "many_accounts": "accounts",
+      "modal": {
+        "access_token": "Access Token (Meta Graph API)",
+        "description": "Enter your professional Instagram account details to link it to Sentry CRM.",
+        "save": "Save Instagram Configuration",
+        "username": "Username (Optional)",
+        "verify_token": "Verify Token (For Webhook)",
+        "webhook_config": "Webhook Configuration:",
+        "webhook_url": "Instagram Webhook URL:"
+      },
+      "one_account": "account",
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Disconnected"
+      }
+    }
+  },
+  "contacts": {
+    "form": {
+      "create_action": "Create Contact",
+      "create_desc": "Add a new customer to your database",
+      "internal_notes": "Internal Notes",
+      "no_more_tags": "No more tags available",
+      "no_tags": "No tags selected",
+      "update_desc": "Update the customer's information"
+    }
+  },
+  "emoji_picker": {
+    "categories": {
+      "activities": "Activities",
+      "animals": "Animals & Nature",
+      "flags": "Flags",
+      "food": "Food & Drink",
+      "objects": "Objects",
+      "smileys": "Smileys & People",
+      "suggested": "Frequently Used",
+      "symbols": "Symbols",
+      "travel": "Travel & Places"
+    },
+    "more": "More emojis",
+    "react": "React",
+    "remove": "Remove reaction",
+    "search_placeholder": "Search emoji..."
   }
 }

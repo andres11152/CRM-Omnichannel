@@ -80,7 +80,11 @@ export const ConnectionModal: React.FC<{
                     setReviewModeActive(nextState);
                     setConnectionMethod(nextState ? "meta" : "qr");
                     localStorage.setItem("isReviewMode", nextState ? "true" : "false");
-                    toast.success(nextState ? "Modo Auditoría Activado" : "Modo Auditoría Desactivado");
+                    toast.success(
+                      nextState
+                        ? t("integrations.whatsapp.review_mode_on", "Modo Auditoría Activado")
+                        : t("integrations.whatsapp.review_mode_off", "Modo Auditoría Desactivado"),
+                    );
                     setReviewClickCount(0);
                   } else {
                     setReviewClickCount(nextCount);

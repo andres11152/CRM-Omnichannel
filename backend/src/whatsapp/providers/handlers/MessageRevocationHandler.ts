@@ -131,7 +131,9 @@ export class MessageRevocationHandler {
     const cached = this.sessionCache.get(sessionId)?.companyId;
     if (cached) return cached;
 
-    const session = await whatsappSessionRepository.findSystemSession(sessionId);
+    const session = await TenantContextManager.runAsSystem(() =>
+      whatsappSessionRepository.findSystemSession(sessionId)
+    );
     if (!session) return null;
 
     this.sessionCache.set(sessionId, {

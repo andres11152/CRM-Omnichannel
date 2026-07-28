@@ -233,6 +233,7 @@ model Contact {
   flowSessions    ContactFlowSession[]
   conversations   Conversation[]
   ownedProperties Property[]           @relation("PropertyOwnerContact")
+  quotations      Quotation[]
 
   // === SEARCH OPTIMIZATION ===
 
@@ -342,6 +343,7 @@ model Company {
   products          Product[] // Product Catalog
   properties        Property[] // Real Estate Module
   dealProducts      DealProduct[]
+  quotations        Quotation[]
 
   // Chatbot Flows
   // Link to 'workflows' is the single source of truth (line 251)
@@ -436,6 +438,7 @@ model User {
   createdActivities       Activity[] @relation("CreatedActivities")
   participatingActivities Activity[] @relation("ActivityParticipants")
   mentionedInActivities   Activity[] @relation("ActivityMentions")
+  createdQuotations       Quotation[] @relation("CreatedQuotations")
 
   // Chatbot Flows
   // createdFlows Workflow[] -- No relation defined in Workflow model for 'createdBy' user yet??
@@ -1097,6 +1100,7 @@ model Deal {
   activities   Activity[]
   properties   Property[]
   dealProducts DealProduct[]
+  quotations   Quotation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1189,6 +1193,7 @@ model Product {
   status      ProductStatus @default(active)
 
   dealProducts DealProduct[]
+  quotationItems QuotationItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1217,6 +1222,86 @@ model DealProduct {
   @@index([dealId])
   @@index([productId])
   @@map("deal_products")
+}
+
+// ============================================
+// QUOTATIONS / PROPOSALS MODULE
+// ============================================
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Quotation {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  quoteNumber Int
+  title       String
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?   @relation("CreatedQuotations", fields: [createdById], references: [id], onDelete: SetNull)
+
+  status   QuotationStatus @default(DRAFT)
+  currency String          @default("COP")
+  subtotal Float           @default(0)
+  taxAmount Float          @default(0)
+  discount Float           @default(0)
+  total    Float           @default(0)
+
+  notes      String?
+  terms      String?
+  validUntil DateTime?
+
+  publicHash String  @unique @default(cuid())
+  pdfUrl     String?
+
+  items QuotationItem[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([companyId, quoteNumber])
+  @@index([companyId, status])
+  @@index([contactId])
+  @@index([dealId])
+  @@index([publicHash])
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id          String    @id @default(cuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  description String
+  quantity    Int    @default(1)
+  unitPrice   Float
+  discount    Float  @default(0)
+  taxRate     Float  @default(0)
+  totalLine   Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([quotationId])
+  @@index([productId])
+  @@map("quotation_items")
 }
 
 // ============================================

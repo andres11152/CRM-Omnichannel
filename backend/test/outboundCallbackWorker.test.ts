@@ -33,9 +33,8 @@ jest.mock("@/services/SocketEventEmitter", () => ({
   })),
 }));
 
-jest.mock("@/config/redis", () => ({
-  __esModule: true,
-  default: {}, // truthy stand-in so the constructor's "Redis not initialized" guard passes
+jest.mock("@/config/bullmq", () => ({
+  connection: {}, // "bullmq" itself is mocked above, so this is never really connected to
 }));
 
 import { OutboundCallbackWorker } from "../src/services/queue/outboundCallbackWorker";

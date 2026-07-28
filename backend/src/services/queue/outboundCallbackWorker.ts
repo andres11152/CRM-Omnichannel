@@ -4,7 +4,7 @@ import { Logger } from "@/utils/logger";
 import { contextStorage } from "@/context/requestContext";
 import { gateway } from "@/gateways/socketGateway";
 import { SocketEventEmitter } from "@/services/SocketEventEmitter";
-import redisClient from "@/config/redis";
+import { connection } from "@/config/bullmq";
 
 interface CallbackJobData {
   success: boolean;
@@ -27,10 +27,6 @@ export class OutboundCallbackWorker {
   private socketEmitter = new SocketEventEmitter(gateway);
 
   constructor() {
-    if (!redisClient) {
-      throw new Error("[OutboundCallbackWorker] Redis client not initialized");
-    }
-
     this.worker = new Worker(
       "whatsapp-outbound-callback",
       async (job: Job<CallbackJobData>) => {
@@ -80,7 +76,18 @@ export class OutboundCallbackWorker {
         });
       },
       {
-        connection: redisClient as unknown as import("ioredis").Redis,
+        // [ENTERPRISE · CRITICAL] Was `redisClient` from "@/config/redis" — the
+        // `redis` npm package's client, not ioredis. It duck-types past
+        // BullMQ's connection check (has connect/disconnect/duplicate), so
+        // construction never threw, but the worker's actual read loop needs
+        // ioredis-only APIs and silently never consumed a single job —
+        // confirmed empirically (a job enqueued via a real ioredis-backed
+        // Queue never leaves "waiting" with a `redis`-client-backed Worker,
+        // no error/failed event ever fires). This means the AI/flow-triggered
+        // outbound send path's status callbacks (SENT/FAILED + socket event)
+        // have never actually been processed. Use the shared ioredis
+        // connection, same as the (working) messageQueueWorker.
+        connection,
         concurrency: 5,
       }
     );

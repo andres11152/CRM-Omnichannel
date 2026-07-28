@@ -131,6 +131,7 @@ export class MessageHandler implements IMessageHandler {
         event.data.messageId,
         event.data.update,
         event.sessionId,
+        event.companyId,
       );
     });
 

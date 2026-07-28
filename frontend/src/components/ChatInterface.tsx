@@ -30,6 +30,7 @@ import { ContactEditModal } from "./ContactEditModal";
 import { TransferModal } from "./TransferModal";
 import { ActionModals } from "./ActionModals";
 import { ResolveTicketModal } from "./ResolveTicketModal";
+import { QuotationModal } from "./quotations/QuotationModal";
 import { ImageLightbox, LightboxImage } from "./chat/ImageLightbox";
 import { ActivityModal } from "./crm/ActivityModal";
 import { useResizable } from "@/hooks/useResizable";
@@ -97,6 +98,7 @@ export const ChatInterface: React.FC<Props> = ({
   // 2. UI STATE (Local Modals)
   const [inputValue, setInputValue] = useState("");
   const [isWhisperMode, setIsWhisperMode] = useState(false);
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   interface Viewer { id: string; name: string; email: string; }
@@ -486,6 +488,7 @@ export const ChatInterface: React.FC<Props> = ({
             }}
             isWhisperMode={isWhisperMode}
             onWhisperToggle={() => setIsWhisperMode(!isWhisperMode)}
+            onQuotation={() => setShowQuotationModal(true)}
           />
           </>
         )}
@@ -567,6 +570,20 @@ export const ChatInterface: React.FC<Props> = ({
         <GroupParticipantsPanel
           conversationId={activeContact.ticketId || ""} // Using ticketId as proxy if backend handles it, or needs conversationId
           onClose={() => setShowParticipants(false)}
+        />
+      )}
+
+      {showQuotationModal && (
+        <QuotationModal
+          isOpen={showQuotationModal}
+          onClose={() => setShowQuotationModal(false)}
+          contactId={activeContact.id}
+          contactName={activeContact.name}
+          onCreated={(quotation) => {
+            const publicUrl = `${window.location.origin}/quote/${quotation.publicHash}`;
+            const msg = `📄 *${quotation.title}* (Cotización #${quotation.quoteNumber})\nTotal: ${quotation.currency} $${quotation.total.toLocaleString("es-CO")}\n\n📄 Revisa y acepta tu propuesta aquí:\n${publicUrl}`;
+            handleSendMessage(msg);
+          }}
         />
       )}
 

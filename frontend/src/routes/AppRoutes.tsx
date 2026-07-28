@@ -21,6 +21,7 @@ const DealsPage = React.lazy(() => import("@/pages/DealsPage").then(m => ({ defa
 const PropertiesPage = React.lazy(() => import("@/pages/PropertiesPage").then(m => ({ default: m.PropertiesPage })));
 const PublicPropertyPage = React.lazy(() => import("@/pages/PublicPropertyPage").then(m => ({ default: m.PublicPropertyPage })));
 const PublicBookingPage = React.lazy(() => import("@/pages/PublicBookingPage").then(m => ({ default: m.PublicBookingPage })));
+const PublicQuotationPage = React.lazy(() => import("@/pages/PublicQuotationPage").then(m => ({ default: m.PublicQuotationPage })));
 const ProductCatalogView = React.lazy(() => import("@/components/ProductCatalogView").then(m => ({ default: m.ProductCatalogView })));
 const ActivitiesPage = React.lazy(() => import("@/pages/ActivitiesPage").then(m => ({ default: m.ActivitiesPage })));
 const AnalyticsDashboard = React.lazy(() => import("@/components/analytics/AnalyticsDashboard").then(m => ({ default: m.AnalyticsDashboard })));
@@ -123,6 +124,7 @@ const publicRoutes: RouteConfig[] = [
   { path: "/privacy", element: <PrivacyPage /> },
   { path: "/p/:publicId", element: <PublicPropertyPage /> },
   { path: "/book/:companySlug/:agentSlug/:meetingTypeSlug", element: <PublicBookingPage /> },
+  { path: "/quote/:hash", element: <PublicQuotationPage /> },
 ];
 
 const protectedRoutes: RouteConfig[] = [

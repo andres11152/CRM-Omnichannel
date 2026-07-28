@@ -437,15 +437,6 @@ export const ContactsPage: React.FC = () => {
         action={
           <div className="flex items-center gap-2">
             <button
-              onClick={handleImportWhatsApp}
-              disabled={importingWa}
-              title="Importar contactos de WhatsApp (solo números reales, no LIDs)"
-              className="bg-white/15 hover:bg-white/25 disabled:opacity-50 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors backdrop-blur-sm border border-white/20 font-medium"
-            >
-              <MessageSquare className="w-5 h-5" />
-              {importingWa ? "Importando…" : "Importar WhatsApp"}
-            </button>
-            <button
               onClick={() => handleOpenModal()}
               className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors backdrop-blur-sm border border-white/20 font-medium"
             >
@@ -484,9 +475,9 @@ export const ContactsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* WHATSAPP SYNC PANEL — self-explanatory enterprise control */}
+          {/* WHATSAPP SYNC PANEL — self-explanatory manual control */}
           <div className="bg-reply-surface dark:bg-reply-panel-dark rounded-[1.75rem] border border-reply-border dark:border-reply-border-dark shadow-sm overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 p-6">
               <div className="flex items-start gap-4 min-w-0">
                 <div className="h-12 w-12 shrink-0 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
                   <MessageSquare className="w-6 h-6 text-white" />
@@ -494,49 +485,27 @@ export const ContactsPage: React.FC = () => {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base font-black text-gray-900 dark:text-white tracking-tight">
-                      Sincronización de WhatsApp
+                      Sincronización Manual de Contactos
                     </h3>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                        autoImportWa
-                          ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50"
-                          : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-reply-border-dark"
-                      }`}
-                    >
-                      {autoImportWa ? "Automático activado" : "Manual"}
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50">
+                      Bajo demanda
                     </span>
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1 leading-relaxed max-w-xl">
-                    {autoImportWa
-                      ? "Cada chat de WhatsApp con número real se guarda como contacto automáticamente. Los identificadores internos (LIDs) nunca se importan."
-                      : "Los contactos no se crean solos. Activa el interruptor para guardar automáticamente cada chat con número real, o usa “Importar WhatsApp” para una importación puntual."}
+                    Para mantener tu CRM organizado y libre de números basura o chats irrelevantes, los contactos no se importan automáticamente. Sincroniza en cualquier momento para transferir tus chats con números reales de WhatsApp al CRM.
                   </p>
                 </div>
               </div>
 
-              {/* Toggle with explicit ON/OFF label */}
+              {/* Sync Button */}
               <button
-                onClick={handleToggleAutoImport}
-                disabled={savingAutoImport}
-                role="switch"
-                aria-checked={autoImportWa}
-                title="Cuando está activo, los chats de WhatsApp con número real crean contactos automáticamente. Los LIDs nunca se importan."
-                className="flex items-center justify-between sm:justify-center gap-3 shrink-0 px-4 py-3 sm:py-2.5 bg-reply-bg dark:bg-gray-800/50 rounded-2xl border border-reply-border dark:border-reply-border-dark shadow-sm disabled:opacity-50 hover:border-emerald-400 dark:hover:border-emerald-600 transition-colors"
+                onClick={handleImportWhatsApp}
+                disabled={importingWa}
+                title="Sincronizar contactos reales desde tus sesiones activas de WhatsApp"
+                className="flex items-center justify-center gap-2 shrink-0 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all active:scale-95"
               >
-                <span className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
-                  Auto-importar
-                </span>
-                <span
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    autoImportWa ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                      autoImportWa ? "translate-x-[22px]" : "translate-x-0.5"
-                    }`}
-                  />
-                </span>
+                <MessageSquare className="w-5 h-5" />
+                {importingWa ? "Sincronizando…" : "Sincronizar ahora"}
               </button>
             </div>
           </div>

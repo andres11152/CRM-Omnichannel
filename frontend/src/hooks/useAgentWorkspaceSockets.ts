@@ -279,7 +279,7 @@ export const useAgentWorkspaceSockets = ({
 
     // Listener for Ticket Deletion
     const handleTicketDeleted = (data: { ticketId: string }) => {
-      console.log("[AgentWorkspace] ️ Ticket deleted:", data.ticketId);
+      console.log("[AgentWorkspace] Ticket deleted:", data.ticketId);
       setTickets((prev) => prev.filter((t) => t.id !== data.ticketId));
       if (activeTicketIdRef.current === data.ticketId) {
         setActiveTicketId(null);

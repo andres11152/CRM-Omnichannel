@@ -40,7 +40,7 @@ const InternalNotesComponent: React.FC<Props> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [showTimeline, setShowTimeline] = useState(false);
-  // ️ Modal State
+  // Modal State
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 

@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Pencil, FileText } from "lucide-react";
 import { Media } from "@/services/mediaService";
 import { formatFileSize, getFileIcon, addDefaultSrc } from "./helpers";
@@ -12,6 +13,7 @@ interface PreviewModalProps {
 }
 
 export const PreviewModal: React.FC<PreviewModalProps> = ({ media, onClose, onRename, onCopyUrl, onDelete }) => {
+  const { t } = useTranslation();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-fade-in"
@@ -36,14 +38,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ media, onClose, onRe
             <button
               onClick={() => onRename(media)}
               className="p-2 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition-colors"
-              title="Renombrar"
+              title={t("media_library.card.rename", "Renombrar")}
             >
               <Pencil className="w-5 h-5" />
             </button>
             <button
               onClick={() => onCopyUrl(media.url)}
               className="p-2 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition-colors"
-              title="Copiar URL"
+              title={t("media_library.preview_modal.copy_url", "Copiar URL")}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -77,7 +79,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ media, onClose, onRe
           ) : media.type === "VIDEO" ? (
             <video controls autoPlay className="max-w-full max-h-[70vh] rounded shadow-2xl w-full outline-none">
               <source src={media.url} type={media.mimeType} />
-              Tu navegador no soporta video.
+              {t("media_library.preview_modal.video_unsupported", "Tu navegador no soporta video.")}
             </video>
           ) : media.type === "AUDIO" ? (
             <div className="w-full max-w-md text-center">
@@ -108,14 +110,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ media, onClose, onRe
               <div className="flex justify-center mb-4">
                 <FileText className="w-16 h-16 text-gray-400 dark:text-gray-600" />
               </div>
-              <p>Vista previa no disponible para este tipo de documento.</p>
+              <p>{t("media_library.preview_modal.preview_unavailable", "Vista previa no disponible para este tipo de documento.")}</p>
               <a
                 href={media.url}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-4 inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Descargar / Abrir
+                {t("media_library.preview_modal.download_open", "Descargar / Abrir")}
               </a>
             </div>
           )}
@@ -125,7 +127,8 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ media, onClose, onRe
         <div className="p-4 bg-gray-800 border-t border-gray-700 flex justify-between">
           <div className="flex gap-4 text-sm text-gray-400">
             <span>
-              Subido por: <span className="text-white">{media.uploadedBy?.name || "Sistema"}</span>
+              {t("media_library.preview_modal.uploaded_by", "Subido por:")}{" "}
+              <span className="text-white">{media.uploadedBy?.name || t("media_library.preview_modal.system", "Sistema")}</span>
             </span>
           </div>
           <button
@@ -143,7 +146,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ media, onClose, onRe
                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
               />
             </svg>
-            Eliminar Archivo
+            {t("media_library.preview_modal.delete_file", "Eliminar Archivo")}
           </button>
         </div>
       </div>

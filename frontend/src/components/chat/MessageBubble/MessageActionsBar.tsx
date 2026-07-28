@@ -1,5 +1,6 @@
-import React from "react";
-import { Smile, Reply, Pencil, Trash2, Star, Pin } from "lucide-react";
+import React, { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { MessageActionsDropdown } from "./MessageActionsDropdown";
 
 interface MessageActionsBarProps {
   isAgent: boolean;
@@ -20,89 +21,36 @@ interface MessageActionsBarProps {
 }
 
 /**
- * The floating action pill (pin/star/react/reply/edit/delete) that appears
- * above a message bubble on hover — Slack/Telegram pattern, anchored to the
- * message's own side so it never overlaps the bubble text.
+ * WhatsApp Web style hover action trigger button (ChevronDown) and dropdown menu.
+ * Appears on hover in the top-right corner of the message bubble.
  */
-export const MessageActionsBar: React.FC<MessageActionsBarProps> = ({
-  isAgent,
-  isRevoked,
-  isPinned,
-  isStarred,
-  canStar,
-  canEditOrDelete,
-  hasOnPin,
-  hasOnEdit,
-  hasOnDelete,
-  onPin,
-  onStar,
-  onTogglePicker,
-  onReply,
-  onEditStart,
-  onDeleteRequest,
-}) => {
+export const MessageActionsBar: React.FC<MessageActionsBarProps> = (props) => {
+  const { isAgent } = props;
+  const [isOpen, setIsOpen] = useState(false);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+
   return (
-    <div
-      className={`absolute -top-3.5 ${isAgent ? "right-1" : "left-1"} hidden group-hover/row:flex items-center gap-0.5 z-20 opacity-0 group-hover/row:opacity-100 transition-all duration-150 animate-in fade-in slide-in-from-bottom-1 bg-white dark:bg-[#233138] rounded-full shadow-md border border-gray-100 dark:border-white/10 p-0.5`}
-    >
-      {hasOnPin && !isRevoked && (
-        <button
-          onClick={onPin}
-          className={`p-1.5 rounded-full transition-colors active:scale-90 ${
-            isPinned
-              ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/20"
-              : "text-gray-400 hover:text-emerald-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-emerald-400 dark:hover:bg-white/10"
-          }`}
-          title={isPinned ? "Desfijar mensaje" : "Fijar mensaje"}
-        >
-          <Pin className={`w-3.5 h-3.5 ${isPinned ? "fill-emerald-500" : ""}`} />
-        </button>
-      )}
-      {canStar && (
-        <button
-          onClick={onStar}
-          className={`p-1.5 rounded-full transition-colors active:scale-90 ${
-            isStarred
-              ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/20"
-              : "text-gray-400 hover:text-amber-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-amber-400 dark:hover:bg-white/10"
-          }`}
-          title={isStarred ? "Quitar destacado" : "Destacar mensaje"}
-        >
-          <Star className={`w-3.5 h-3.5 ${isStarred ? "fill-amber-500" : ""}`} />
-        </button>
-      )}
+    <div className={`absolute top-1 ${isAgent ? "left-1.5" : "right-1.5"} z-20`}>
       <button
-        onClick={onTogglePicker}
-        className="p-1.5 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-white/10 transition-colors active:scale-90"
-        title="Reaccionar"
+        ref={buttonRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className={`w-6 h-6 rounded-full flex items-center justify-center bg-white/90 dark:bg-[#233138]/95 backdrop-blur-md shadow-sm border border-gray-200/60 dark:border-white/10 text-gray-500 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-white dark:hover:bg-[#2a3942] transition-all duration-150 active:scale-95 ${
+          isOpen ? "flex shadow-md text-indigo-600 dark:text-indigo-400" : "flex sm:hidden sm:group-hover/row:flex"
+        }`}
+        title="Opciones del mensaje"
       >
-        <Smile className="w-3.5 h-3.5" />
+        <ChevronDown className="w-3.5 h-3.5" />
       </button>
-      <button
-        onClick={onReply}
-        className="p-1.5 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-white/10 transition-colors active:scale-90"
-        title="Responder"
-      >
-        <Reply className="w-3.5 h-3.5" />
-      </button>
-      {canEditOrDelete && hasOnEdit && (
-        <button
-          onClick={onEditStart}
-          className="p-1.5 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-white/10 transition-colors active:scale-90"
-          title="Editar mensaje"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
-      )}
-      {canEditOrDelete && hasOnDelete && (
-        <button
-          onClick={onDeleteRequest}
-          className="p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-red-500/20 transition-colors active:scale-90"
-          title="Eliminar para todos"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      )}
+
+      <MessageActionsDropdown
+        {...props}
+        isOpen={isOpen}
+        buttonRef={buttonRef}
+        onClose={() => setIsOpen(false)}
+      />
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { Settings } from "lucide-react";
 import { Plan } from "@/types";
 import { FEATURE_META } from "./featureMeta";
 
@@ -34,7 +35,7 @@ export const GeneralConfigSection: React.FC<GeneralConfigSectionProps> = ({
             const meta = FEATURE_META[key];
             const label = t(meta.labelKey);
             const description = t(meta.descKey);
-            const icon = meta?.icon || <span className="text-2xl">️</span>;
+            const icon = meta?.icon || <Settings className="w-6 h-6" />;
             const type = meta?.type || (typeof value === "boolean" ? "boolean" : "number");
 
             return (

@@ -1,4 +1,14 @@
 import React, { useEffect } from 'react';
+import {
+  Bell,
+  BellOff,
+  MessageCircle,
+  Ticket,
+  TrendingUp,
+  AlertTriangle,
+  Smartphone,
+  ShieldAlert,
+} from 'lucide-react';
 import { usePushNotifications, registerServiceWorker } from '@/hooks/usePushNotifications';
 import '../styles/PushNotificationSettings.css';
 
@@ -38,7 +48,7 @@ export const PushNotificationSettings: React.FC = () => {
     <div className="push-notification-settings">
       <div className="setting-card">
         <div className="setting-header">
-          <h3> Push Notifications</h3>
+          <h3 className="flex items-center gap-2"><Bell size={18} /> Push Notifications</h3>
           <div className={`status-badge ${isSubscribed ? 'active' : 'inactive'}`}>
             {isSubscribed ? 'Enabled' : 'Disabled'}
           </div>
@@ -84,7 +94,7 @@ export const PushNotificationSettings: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span></span>
+                  <Bell size={16} />
                   Enable Push Notifications
                 </>
               )}
@@ -102,7 +112,7 @@ export const PushNotificationSettings: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span></span>
+                  <BellOff size={16} />
                   Disable Push Notifications
                 </>
               )}
@@ -113,13 +123,13 @@ export const PushNotificationSettings: React.FC = () => {
         {isSubscribed && (
           <div className="notification-info">
             <h4>You'll receive notifications for:</h4>
-            <ul>
-              <li>️ New messages from customers</li>
-              <li> Tickets assigned to you</li>
-              <li>[STAT] Campaign completion updates</li>
-              <li>[WARNING] Quota warnings and billing alerts</li>
-              <li>[APP] WhatsApp connection status</li>
-              <li>[AUTH] Security alerts</li>
+            <ul className="list-none pl-0">
+              <li className="flex items-center gap-2"><MessageCircle size={16} /> New messages from customers</li>
+              <li className="flex items-center gap-2"><Ticket size={16} /> Tickets assigned to you</li>
+              <li className="flex items-center gap-2"><TrendingUp size={16} /> Campaign completion updates</li>
+              <li className="flex items-center gap-2"><AlertTriangle size={16} /> Quota warnings and billing alerts</li>
+              <li className="flex items-center gap-2"><Smartphone size={16} /> WhatsApp connection status</li>
+              <li className="flex items-center gap-2"><ShieldAlert size={16} /> Security alerts</li>
             </ul>
           </div>
         )}

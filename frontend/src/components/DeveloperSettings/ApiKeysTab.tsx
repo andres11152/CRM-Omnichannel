@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { ShieldCheck, Key, Clipboard } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -8,16 +9,17 @@ import { copyToClipboard } from "./types";
 import { DeveloperSettingsState } from "./useDeveloperSettings";
 
 export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => {
+  const { t } = useTranslation();
   return (
     <div className="animate-in fade-in duration-500 space-y-6">
       <Card className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
         <div>
           <h3 className="font-bold text-reply-text-primary dark:text-white text-lg flex items-center gap-2">
-            Claves API Activas
+            {t("developer_settings.api_keys_tab.title", "Claves API Activas")}
             <Badge variant="info">{ds.apiKeys.length}</Badge>
           </h3>
           <p className="text-xs text-reply-text-secondary dark:text-reply-text-secondary-dark mt-1">
-            Autentifica peticiones externas con el header{" "}
+            {t("developer_settings.api_keys_tab.description_prefix", "Autentifica peticiones externas con el header")}{" "}
             <code className="font-mono text-reply-brand dark:text-reply-brand-light">X-API-Key</code>.
           </p>
         </div>
@@ -27,11 +29,11 @@ export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => 
           className="w-full sm:w-auto"
         >
           {ds.isCreatingKey ? (
-            <span>Cerrar</span>
+            <span>{t("developer_settings.api_keys_tab.close", "Cerrar")}</span>
           ) : (
             <>
               <ShieldCheck className="w-4 h-4" />
-              <span>Nueva API Key</span>
+              <span>{t("developer_settings.api_keys_tab.new_key", "Nueva API Key")}</span>
             </>
           )}
         </Button>
@@ -46,9 +48,9 @@ export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => 
             </div>
             <div className="flex-1 space-y-4">
               <div>
-                <h4 className="font-bold text-emerald-800 dark:text-emerald-300 text-lg">¡API Key Generada!</h4>
+                <h4 className="font-bold text-emerald-800 dark:text-emerald-300 text-lg">{t("developer_settings.api_keys_tab.key_generated_title", "¡API Key Generada!")}</h4>
                 <p className="text-emerald-700 dark:text-emerald-400/80 text-xs font-medium">
-                  Copia esta clave inmediatamente. Por seguridad, no volverá a mostrarse.
+                  {t("developer_settings.api_keys_tab.key_generated_desc", "Copia esta clave inmediatamente. Por seguridad, no volverá a mostrarse.")}
                 </p>
               </div>
 
@@ -57,12 +59,12 @@ export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => 
                   {ds.generatedKey}
                 </div>
                 <Button
-                  onClick={() => copyToClipboard(ds.generatedKey as string, "Clave copiada")}
+                  onClick={() => copyToClipboard(ds.generatedKey as string, t("developer_settings.api_keys_tab.copied_toast", "Clave copiada"))}
                   variant="primary"
                   size="lg"
                   className="bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700 border-none shrink-0"
                 >
-                  <Clipboard className="w-4 h-4" /> Copiar
+                  <Clipboard className="w-4 h-4" /> {t("developer_settings.api_keys_tab.copy", "Copiar")}
                 </Button>
               </div>
 
@@ -70,7 +72,7 @@ export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => 
                 onClick={() => ds.setGeneratedKey(null)}
                 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline uppercase tracking-widest cursor-pointer"
               >
-                Ya la guardé — Continuar
+                {t("developer_settings.api_keys_tab.saved_continue", "Ya la guardé — Continuar")}
               </button>
             </div>
           </div>
@@ -83,16 +85,16 @@ export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => 
           <div className="mb-4">
             <Input
               type="text"
-              label="Nombre de la Clave"
+              label={t("developer_settings.api_keys_tab.key_name_label", "Nombre de la Clave")}
               value={ds.newKeyName}
               onChange={(e) => ds.setNewKeyName(e.target.value)}
-              placeholder="Ej: Servidor de Producción"
+              placeholder={t("developer_settings.api_keys_tab.key_name_placeholder", "Ej: Servidor de Producción")}
               onKeyDown={(e) => e.key === "Enter" && ds.handleCreateApiKey()}
             />
           </div>
           <div className="flex justify-end">
             <Button onClick={ds.handleCreateApiKey} variant="primary">
-              Generar Clave
+              {t("developer_settings.api_keys_tab.generate_key", "Generar Clave")}
             </Button>
           </div>
         </Card>
@@ -105,7 +107,7 @@ export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => 
             <div className="w-16 h-16 bg-reply-bg dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-300">
               <ShieldCheck className="w-8 h-8" />
             </div>
-            <p className="text-gray-500 dark:text-gray-400 font-medium">No hay claves API generadas aún.</p>
+            <p className="text-gray-500 dark:text-gray-400 font-medium">{t("developer_settings.api_keys_tab.empty_state", "No hay claves API generadas aún.")}</p>
           </div>
         )}
         {ds.apiKeys.map((key) => (
@@ -121,11 +123,11 @@ export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => 
                     {key.keyPrefix}
                   </Badge>
                   <span className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 uppercase font-bold tracking-tight">
-                    Creada el {new Date(key.createdAt).toLocaleDateString()}
+                    {t("developer_settings.api_keys_tab.created_on", "Creada el {{date}}", { date: new Date(key.createdAt).toLocaleDateString() })}
                   </span>
                   {key.lastUsedAt && (
                     <span className="text-[10px] text-reply-text-secondary/60 dark:text-reply-text-secondary-dark/60 uppercase font-bold tracking-tight">
-                      · Usada el {new Date(key.lastUsedAt).toLocaleDateString()}
+                      {t("developer_settings.api_keys_tab.used_on", "· Usada el {{date}}", { date: new Date(key.lastUsedAt).toLocaleDateString() })}
                     </span>
                   )}
                 </div>
@@ -137,7 +139,7 @@ export const ApiKeysTab: React.FC<{ ds: DeveloperSettingsState }> = ({ ds }) => 
                 variant="ghost"
                 className="text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 w-full md:w-auto text-xs uppercase tracking-widest font-black"
               >
-                Revocar Acceso
+                {t("developer_settings.api_keys_tab.revoke_access", "Revocar Acceso")}
               </Button>
             </div>
           </Card>

@@ -4,6 +4,7 @@ import { Message } from "@/types";
 import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { getCurrentUserId, formatTime, getNameColor } from "./helpers";
 import { MessageActionsBar } from "./MessageActionsBar";
+import { ReactionTriggerButton } from "./ReactionTriggerButton";
 import { ReactionPicker } from "./ReactionPicker";
 import { MediaContent } from "./MediaContent";
 import { MessageText } from "./MessageText";
@@ -56,6 +57,28 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isWhisper = !!(message.metadata as Record<string, unknown> | null)?.isWhisper;
   const [showPicker, setShowPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
+  const sideReactionRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!showPicker || showFullPicker) return;
+
+    const handleClickOutside = (e: Event) => {
+      if (
+        sideReactionRef.current &&
+        !sideReactionRef.current.contains(e.target as Node)
+      ) {
+        setShowPicker(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handleClickOutside, true);
+    window.addEventListener("touchstart", handleClickOutside, true);
+
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside, true);
+      window.removeEventListener("touchstart", handleClickOutside, true);
+    };
+  }, [showPicker, showFullPicker]);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(message.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -167,59 +190,43 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           isAgent ? "items-end" : "items-start"
         } relative`}
       >
-        {/* Action Overlay — single compact pill floating just above the bubble's
-            top edge (Slack/Telegram pattern). Anchored to the message's own side
-            so it never overlaps the bubble text, and scales cleanly regardless of
-            how many actions are visible. */}
+        {/* Side Reaction Container (Trigger Button + Quick Popover) */}
         {!isSystem && !isEditing && (
-          <MessageActionsBar
-            isAgent={isAgent}
-            isRevoked={isRevoked}
-            isPinned={isPinned}
-            isStarred={isStarred}
-            canStar={canStar}
-            canEditOrDelete={canEditOrDelete}
-            hasOnPin={!!onPin}
-            hasOnEdit={!!onEdit}
-            hasOnDelete={!!onDelete}
-            onPin={() => onPin && onPin(message.id, !isPinned)}
-            onStar={() => onStar && onStar(message.id, !isStarred)}
-            onTogglePicker={() => setShowPicker(!showPicker)}
-            onReply={() => onReply && onReply(message)}
-            onEditStart={() => {
-              setEditValue(message.content);
-              setIsEditing(true);
-            }}
-            onDeleteRequest={() => setShowDeleteConfirm(true)}
-          />
-        )}
+          <div
+            ref={sideReactionRef}
+            className={`absolute top-1/2 -translate-y-1/2 ${
+              isAgent ? "-right-3 sm:right-full sm:mr-2" : "-left-3 sm:left-full sm:ml-2"
+            } z-30`}
+          >
+            <ReactionTriggerButton
+              isAgent={isAgent}
+              isOpen={showPicker}
+              onTogglePicker={() => setShowPicker(!showPicker)}
+            />
 
-        {/* Reaction Picker Popover (Enterprise Polish) + Full Emoji Picker Overlay */}
-        {showPicker && (
-          <ReactionPicker
-            isAgent={isAgent}
-            isDark={isDark}
-            reactions={reactions}
-            showFullPicker={showFullPicker}
-            onReact={handleReact}
-            onOpenFullPicker={() => {
-              setShowFullPicker(true);
-              setShowPicker(false);
-            }}
-            onCloseFullPicker={() => setShowFullPicker(false)}
-          />
-        )}
-
-        {/* AI Bot Badge */}
-        {isAgent && (message.senderName?.toLowerCase() === "bot" || message.senderType === "BOT") && (
-          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mb-1 flex items-center gap-1 ml-auto">
-             [AI] Agente IA
+            {showPicker && (
+              <ReactionPicker
+                isAgent={isAgent}
+                isDark={isDark}
+                reactions={reactions}
+                showFullPicker={showFullPicker}
+                onReact={handleReact}
+                onOpenFullPicker={() => {
+                  setShowFullPicker(true);
+                }}
+                onCloseFullPicker={() => {
+                  setShowFullPicker(false);
+                  setShowPicker(false);
+                }}
+                onClose={() => setShowPicker(false)}
+              />
+            )}
           </div>
         )}
 
         {/* Message Bubble */}
         <div
-          className={`rounded-2xl px-3 py-1.5 shadow-md transition-all relative group ${
+          className={`rounded-2xl ${isAgent ? "pl-8 pr-3" : "pl-3 pr-8"} py-1.5 min-w-[5.5rem] shadow-md transition-all relative group ${
             isAgent
               ? isWhisper
                 ? "rounded-br-none bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 border border-amber-200/50 dark:border-amber-900/30"
@@ -227,6 +234,29 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               : "rounded-bl-none border bg-slate-100 text-slate-900 border-slate-200 dark:bg-reply-panel-dark dark:text-reply-text-dark dark:border-reply-border-dark"
           }`}
         >
+          {/* Action Dropdown Trigger (Chevron button at top-right corner inside reserved bubble padding) */}
+          {!isSystem && !isEditing && (
+            <MessageActionsBar
+              isAgent={isAgent}
+              isRevoked={isRevoked}
+              isPinned={isPinned}
+              isStarred={isStarred}
+              canStar={canStar}
+              canEditOrDelete={canEditOrDelete}
+              hasOnPin={!!onPin}
+              hasOnEdit={!!onEdit}
+              hasOnDelete={!!onDelete}
+              onPin={() => onPin && onPin(message.id, !isPinned)}
+              onStar={() => onStar && onStar(message.id, !isStarred)}
+              onTogglePicker={() => setShowPicker(!showPicker)}
+              onReply={() => onReply && onReply(message)}
+              onEditStart={() => {
+                setEditValue(message.content);
+                setIsEditing(true);
+              }}
+              onDeleteRequest={() => setShowDeleteConfirm(true)}
+            />
+          )}
           {/* Whisper header label */}
           {isWhisper && (
             <div className="text-[10px] font-black text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1 uppercase tracking-wider">

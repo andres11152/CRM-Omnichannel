@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Agent, QueueConfig, Ticket } from "@/types";
 import { getTickets, updateTicket } from "@/services/ticketService";
 import { TicketsKanbanView } from "../TicketsKanbanView";
@@ -12,6 +13,7 @@ import { QueueAssignmentModal } from "./QueueAssignmentModal";
 import { IncomingTicket } from "./TicketCard";
 
 export const QueueDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"monitor" | "config" | "kanban">(
     "monitor",
   );
@@ -57,15 +59,18 @@ export const QueueDashboard: React.FC = () => {
     return {
       id: t.id,
       channel: channelMap[t.channel?.toUpperCase()] || "whatsapp",
-      clientName: t.contact?.name || "Cliente Desconocido",
+      clientName: t.contact?.name || getUnknownClientLabel(),
       waitTime: diffMins,
       priority: (t.priority?.toLowerCase() || "medium") as
         | "low"
         | "medium"
         | "high",
-      department: t.queue?.name || "General",
+      department: t.queue?.name || getGeneralDeptLabel(),
     };
   };
+
+  const getUnknownClientLabel = () => t("queue_dashboard.unknown_client", "Cliente Desconocido");
+  const getGeneralDeptLabel = () => t("queue_dashboard.general_department", "General");
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -95,8 +100,8 @@ export const QueueDashboard: React.FC = () => {
     // Validation: Check Capacity
     if (agent.currentLoad >= agent.maxCapacity) {
       showAlert(
-        "Agente Saturado",
-        `El agente ${agent.name} ha alcanzado su capacidad mxima de chats.`,
+        t("queue_dashboard.alerts.agent_saturated_title", "Agente Saturado"),
+        t("queue_dashboard.alerts.agent_saturated_msg", "El agente {{name}} ha alcanzado su capacidad máxima de chats.", { name: agent.name }),
       );
       return;
     }
@@ -123,8 +128,8 @@ export const QueueDashboard: React.FC = () => {
       .catch((err) => {
         console.error("Error assigning ticket:", err);
         showAlert(
-          "Error de Asignación",
-          "No se pudo asignar el ticket. Inténtalo de nuevo.",
+          t("queue_dashboard.alerts.assign_error_title", "Error de Asignación"),
+          t("queue_dashboard.alerts.assign_error_msg", "No se pudo asignar el ticket. Inténtalo de nuevo."),
         );
       });
   };
@@ -144,10 +149,10 @@ export const QueueDashboard: React.FC = () => {
       await saveAgentQueues(selectedAgent.id, queueIds);
       setIsModalOpen(false);
       setSelectedAgent(null);
-      showAlert("¡Éxito!", "Colas asignadas correctamente.", "success");
+      showAlert(t("queue_dashboard.alerts.success_title", "¡Éxito!"), t("queue_dashboard.alerts.queues_saved_msg", "Colas asignadas correctamente."), "success");
     } catch (error) {
       console.error("Error updating agent queues", error);
-      showAlert("Error", "No se pudieron asignar las colas.");
+      showAlert(t("queue_dashboard.alerts.error_title", "Error"), t("queue_dashboard.alerts.queues_save_error_msg", "No se pudieron asignar las colas."));
     }
   };
 
@@ -157,17 +162,17 @@ export const QueueDashboard: React.FC = () => {
       <ModuleHeader
         title={
           activeTab === "monitor"
-            ? "Monitor en Vivo"
+            ? t("queue_dashboard.tabs.monitor_title", "Monitor en Vivo")
             : activeTab === "config"
-              ? "Configuración de Colas"
-              : "Tablero Kanban"
+              ? t("queue_dashboard.tabs.config_title", "Configuración de Colas")
+              : t("queue_dashboard.tabs.kanban_title", "Tablero Kanban")
         }
         description={
           activeTab === "monitor"
-            ? "Supervisa el estado de los agentes y la cola de espera en tiempo real."
+            ? t("queue_dashboard.tabs.monitor_desc", "Supervisa el estado de los agentes y la cola de espera en tiempo real.")
             : activeTab === "config"
-              ? "Administra las colas, departamentos y reglas de asignación."
-              : "Gestiona el flujo de trabajo de tus tickets con un tablero visual."
+              ? t("queue_dashboard.tabs.config_desc", "Administra las colas, departamentos y reglas de asignación.")
+              : t("queue_dashboard.tabs.kanban_desc", "Gestiona el flujo de trabajo de tus tickets con un tablero visual.")
         }
         icon={
           activeTab === "monitor" ? (
@@ -209,7 +214,7 @@ export const QueueDashboard: React.FC = () => {
         }
         stats={
           activeTab === "monitor"
-            ? { label: "Tickets en Cola", value: tickets.length }
+            ? { label: t("queue_dashboard.tickets_in_queue", "Tickets en Cola"), value: tickets.length }
             : undefined
         }
       />
@@ -224,7 +229,7 @@ export const QueueDashboard: React.FC = () => {
                 : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             }`}
           >
-            Monitor en Vivo
+            {t("queue_dashboard.tabs.monitor_button", "Monitor en Vivo")}
           </button>
           <button
             onClick={() => setActiveTab("config")}
@@ -234,7 +239,7 @@ export const QueueDashboard: React.FC = () => {
                 : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             }`}
           >
-            Configuración de Colas
+            {t("queue_dashboard.tabs.config_button", "Configuración de Colas")}
           </button>
           <button
             onClick={() => setActiveTab("kanban")}
@@ -244,7 +249,7 @@ export const QueueDashboard: React.FC = () => {
                 : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             }`}
           >
-            Kanban de Tickets
+            {t("queue_dashboard.tabs.kanban_button", "Kanban de Tickets")}
           </button>
         </div>
       </div>
@@ -286,7 +291,7 @@ export const QueueDashboard: React.FC = () => {
             className="w-full"
             onClick={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
           >
-            Entendido
+            {t("queue_dashboard.alerts.understood", "Entendido")}
           </ModalButton>
         }
       >

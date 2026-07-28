@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Agent } from "@/types";
 
 export const AgentCard = ({
@@ -10,6 +11,7 @@ export const AgentCard = ({
   onDrop: (agentId: string, ticketId: string) => void;
   onConfigClick: (agent: Agent) => void;
 }) => {
+  const { t } = useTranslation();
   const maxCap =
     agent.maxCapacity && agent.maxCapacity > 0 ? agent.maxCapacity : 5;
   const loadPercentage = Math.min((agent.currentLoad / maxCap) * 100, 100);
@@ -92,7 +94,7 @@ export const AgentCard = ({
                     : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
                 }`}
               >
-                {agent.status === "online" ? "Conectado" : "Desconectado"}
+                {agent.status === "online" ? t("queue_dashboard.agent_card.connected", "Conectado") : t("queue_dashboard.agent_card.disconnected", "Desconectado")}
               </span>
               {connectionTime && (
                 <span className="text-xs text-gray-400 flex items-center gap-1">
@@ -120,7 +122,7 @@ export const AgentCard = ({
         <button
           onClick={() => onConfigClick(agent)}
           className={`text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-2 rounded-lg hover:bg-reply-bg dark:hover:bg-gray-800 transition-colors ${(agent as Agent & { isAI?: boolean }).isAI ? "hidden" : ""}`}
-          title="Configurar Colas"
+          title={t("queue_dashboard.agent_card.configure_queues", "Configurar Colas")}
         >
           <svg
             className="w-5 h-5"
@@ -148,7 +150,7 @@ export const AgentCard = ({
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="bg-reply-bg dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-reply-border-dark/50">
           <span className="text-[10px] text-gray-500 uppercase font-semibold">
-            Chats Activos
+            {t("queue_dashboard.agent_card.active_chats", "Chats Activos")}
           </span>
           <p className="text-lg font-bold text-gray-800 dark:text-gray-200">
             {agent.currentLoad}
@@ -156,7 +158,7 @@ export const AgentCard = ({
         </div>
         <div className="bg-reply-bg dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-reply-border-dark/50">
           <span className="text-[10px] text-gray-500 uppercase font-semibold">
-            Resueltos Hoy
+            {t("queue_dashboard.agent_card.resolved_today", "Resueltos Hoy")}
           </span>
           <p className="text-lg font-bold text-gray-800 dark:text-gray-200">
             {(agent as Agent & { resolvedToday?: number }).resolvedToday || 0}
@@ -168,7 +170,7 @@ export const AgentCard = ({
       <div>
         <div className="flex justify-between text-xs font-medium mb-1.5">
           <span className="text-gray-500 dark:text-gray-400">
-            Capacidad ({loadPercentage.toFixed(0)}%)
+            {t("queue_dashboard.agent_card.capacity", "Capacidad ({{pct}}%)", { pct: loadPercentage.toFixed(0) })}
           </span>
           <span
             className={`${loadPercentage >= 90 ? "text-red-500 font-bold" : "text-gray-700 dark:text-gray-300"}`}
@@ -194,7 +196,7 @@ export const AgentCard = ({
           </span>
         )}
         <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 uppercase">
-          {agent.role || "Agente"}
+          {agent.role || t("queue_dashboard.agent_card.agent_role_fallback", "Agente")}
         </span>
       </div>
     </div>

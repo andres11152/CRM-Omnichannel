@@ -204,7 +204,13 @@ export function bindSessionEvents(
       const classification = classifyDisconnect(statusCode);
       Logger.warn(
         `[SessionManager] Session ${sessionId} CLOSED. Reason: ${errorMsg} | ` +
-        `Category: ${classification.category} | ShouldReconnect: ${classification.shouldReconnect}`
+        `Category: ${classification.category} | ShouldReconnect: ${classification.shouldReconnect} | ` +
+        `StatusCode: ${statusCode}`
+      );
+      // [DEBUG] Temporary — statusCode/message alone don't explain instant
+      // pre-QR closes. Full Boom payload has the real WhatsApp-side reason.
+      Logger.warn(
+        `[SessionManager] [DEBUG] Full disconnect error: ${JSON.stringify(lastDisconnect?.error, Object.getOwnPropertyNames((lastDisconnect?.error as object) || {}))}`
       );
 
       antiBanManager.stopEntropy(sessionId);

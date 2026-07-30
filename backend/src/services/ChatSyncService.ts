@@ -379,8 +379,9 @@ class ChatSyncService {
     chats?: HistoryChat[],
     contacts?: HistoryContact[],
     options?: { onDemand?: boolean },
+    lidPnMappings?: { lid: string; pn: string }[],
   ): Promise<void> {
-    return this.ingest.handleHistorySync(companyId, messages, chats, contacts, options);
+    return this.ingest.handleHistorySync(companyId, messages, chats, contacts, options, lidPnMappings);
   }
 
   async contextSync(

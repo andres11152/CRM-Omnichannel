@@ -3,7 +3,6 @@ import {
   WAMessage,
   jidNormalizedUser,
 } from "@whiskeysockets/baileys";
-import { whatsappSessionRepository } from "@/repositories/WhatsAppSessionRepository";
 import { messageRepository } from "@/repositories/MessageRepository";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { syncMessageParser } from "./SyncMessageParser";
@@ -23,7 +22,15 @@ export interface HistoryContact {
   id: string;
   resolved?: boolean;
   lid?: string;
+  /** Baileys' processHistoryMessage() sets this when `id` itself is the @lid
+   * JID — the chat's real phone counterpart (from the conversation's pnJid). */
+  phoneNumber?: string;
   name?: string;
+}
+
+export interface LidPnMapping {
+  lid: string;
+  pn: string;
 }
 
 /**
@@ -37,7 +44,7 @@ export interface HistoryContact {
  */
 export class ChatSyncJidResolver {
 
-  resolveJid(jid: string, store: BaileysStore | null): string | null {
+  resolveJid(jid: string, store: BaileysStore | null, lidPhoneMap?: Map<string, string>): string | null {
     if (jid.endsWith("@g.us")) return jid;
 
     // WhatsApp Channels (newsletters) are broadcast-only and should never appear as CRM
@@ -46,15 +53,23 @@ export class ChatSyncJidResolver {
 
     // [SEC] LID RESOLUTION: WhatsApp internal IDs must be resolved to real phones
     if (jid.includes("@lid")) {
-      // Strategy 1: getPhoneFromLid helper
+      const lidBase = jid.split("@")[0].split(":")[0];
+
+      // Tier 1: explicit batch map (buildLidPhoneMap) — Baileys' own lidPnMappings
+      // + contacts + previously-persisted Contact.customFields.whatsappLid. This is
+      // the ONLY tier with real data in this process: the Baileys in-memory store
+      // (Strategy 2/3 below) lives exclusively in whatsapp-service post-split and
+      // is never populated here — kept only for interface/test compatibility.
+      if (lidPhoneMap?.has(lidBase)) return lidPhoneMap.get(lidBase)!;
+
+      // Strategy 2: getPhoneFromLid helper
       if (store?.getPhoneFromLid) {
         const resolved = store.getPhoneFromLid(jid);
         if (resolved) return resolved.split("@")[0];
       }
 
-      // Strategy 2: Direct lidToPhone map lookup
+      // Strategy 3: Direct lidToPhone map lookup
       if (store?.lidToPhone) {
-        const lidBase = jid.split("@")[0].split(":")[0];
         const mapped = store.lidToPhone[lidBase];
         if (mapped) return mapped.split("@")[0];
       }
@@ -72,43 +87,61 @@ export class ChatSyncJidResolver {
     return jid.split("@")[0].split(":")[0];
   }
 
-  async resolveStore(companyId: string, contacts?: HistoryContact[]): Promise<BaileysStore | null> {
-    const sessionGroups = await whatsappSessionRepository.findByStatus("CONNECTED", [companyId]);
-    const session = sessionGroups[0] || null;
-    const store = session ? await this.getSessionStore(session.sessionId) : null;
+  /**
+   * Builds a LID→phone map for one history-sync batch. This is the sole source
+   * of LID resolution in this process (see resolveJid's tier comment above) —
+   * merges three signals, first-write-wins:
+   *  1. Baileys' own {lid, pn} pairs, already resolved server-side and shipped
+   *     on the `messaging-history.set` event (see SessionEventBinder.ts).
+   *  2. The `contacts` array's own lid/phoneNumber fields (processHistoryMessage
+   *     emits `id` as the chat's own JID — LID or PN — and the OTHER addressing
+   *     scheme's counterpart on `lid`/`phoneNumber`; a chat entry with
+   *     `id="...@lid"` carries the real phone on `phoneNumber`, not `lid`).
+   *  3. Mappings already persisted on CRM contacts from earlier resolutions
+   *     (live-message pipeline via IdentityResolverService, or a prior sync).
+   */
+  async buildLidPhoneMap(
+    companyId: string,
+    lidPnMappings?: LidPnMapping[],
+    contacts?: HistoryContact[],
+  ): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    const norm = (jid: string) => jid.split("@")[0].split(":")[0];
 
-    if (store && store.lidToPhone) {
-      if (contacts) {
-        for (const c of contacts) {
-          if (c.id && c.lid) {
-            store.lidToPhone[c.lid.split("@")[0]] = c.id;
-          }
-        }
-      }
+    for (const { lid, pn } of lidPnMappings || []) {
+      if (lid && pn) map.set(norm(lid), norm(pn));
+    }
 
-      // Pre-populate using previously saved LID mappings from CRM contacts
-      try {
-        const { contactRepository } = await import("@/repositories/ContactRepository");
-        const dbContacts = await contactRepository.findMany({
-          where: {
-            companyId,
-            deletedAt: null,
-          },
-          select: { phone: true, customFields: true }
-        });
-
-        for (const c of dbContacts) {
-          const fields = c.customFields as { whatsappLid?: string } | null;
-          if (fields && typeof fields.whatsappLid === "string") {
-            const lidBase = fields.whatsappLid.split("@")[0];
-            store.lidToPhone[lidBase] = c.phone;
-          }
-        }
-      } catch (err) {
-        Logger.warn(`[ChatSync] Failed to pre-populate LID mappings from DB:`, err);
+    for (const c of contacts || []) {
+      if (!c.id) continue;
+      if (c.id.includes("@lid") && c.phoneNumber) {
+        const lidBase = norm(c.id);
+        if (!map.has(lidBase)) map.set(lidBase, norm(c.phoneNumber));
+      } else if (c.lid && !c.id.includes("@lid")) {
+        const lidBase = norm(c.lid);
+        if (!map.has(lidBase)) map.set(lidBase, norm(c.id));
       }
     }
-    return store;
+
+    try {
+      const { contactRepository } = await import("@/repositories/ContactRepository");
+      const dbContacts = await contactRepository.findMany({
+        where: { companyId, deletedAt: null },
+        select: { phone: true, customFields: true },
+      });
+
+      for (const c of dbContacts) {
+        const fields = c.customFields as { whatsappLid?: string } | null;
+        if (fields && typeof fields.whatsappLid === "string") {
+          const lidBase = norm(fields.whatsappLid);
+          if (!map.has(lidBase)) map.set(lidBase, c.phone);
+        }
+      }
+    } catch (err) {
+      Logger.warn(`[ChatSync] Failed to pre-populate LID mappings from DB:`, err);
+    }
+
+    return map;
   }
 
   async getSessionStore(sessionId: string): Promise<BaileysStore | null> {
@@ -140,6 +173,14 @@ export class ChatSyncJidResolver {
 
     if (latestDbMsg && latestDbMsg.metadata && typeof latestDbMsg.metadata === "object") {
       const meta = latestDbMsg.metadata as Record<string, unknown>;
+      // `remoteJid` (set by ChatSyncBatchIngester for every history-synced message)
+      // is the general-purpose field; `senderJid` is the older, narrower one that
+      // only carries a usable value on INBOUND messages. Check both for rows
+      // ingested before this field existed.
+      if (typeof meta.remoteJid === "string" && meta.remoteJid.includes("@lid")) {
+        Logger.info(`[ChatSync] Resolved Real JID ${meta.remoteJid} from DB metadata for channel ${cleanPhone}`);
+        return meta.remoteJid;
+      }
       if (typeof meta.senderJid === "string" && meta.senderJid.includes("@lid")) {
         Logger.info(`[ChatSync] Resolved Real JID ${meta.senderJid} from DB metadata for channel ${cleanPhone}`);
         return meta.senderJid;
@@ -220,10 +261,14 @@ export class ChatSyncJidResolver {
     return sorted;
   }
 
-  groupMessagesByPhone(messages: WAMessage[], store: BaileysStore | null): Map<string, WAMessage[]> {
+  groupMessagesByPhone(
+    messages: WAMessage[],
+    store: BaileysStore | null,
+    lidPhoneMap?: Map<string, string>,
+  ): Map<string, WAMessage[]> {
     const map = new Map<string, WAMessage[]>();
     for (const msg of messages) {
-      const phone = this.resolveJid(msg.key.remoteJid!, store);
+      const phone = this.resolveJid(msg.key.remoteJid!, store, lidPhoneMap);
       if (!phone) continue;
       if (!map.has(phone)) map.set(phone, []);
       map.get(phone)!.push(msg);

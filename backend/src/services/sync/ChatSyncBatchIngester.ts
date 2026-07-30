@@ -123,6 +123,12 @@ export class ChatSyncBatchIngester {
     const metadata: Record<string, unknown> = {
       origin: "sync",
       senderJid: WhatsAppIdUtils.getSenderJid(msg) || undefined,
+      // [SEC] See the equivalent field in ingestConversationBatch — the raw
+      // chat JID (LID or phone) this message actually arrived under, used by
+      // fetchHistoryFromWhatsApp's anchor. Unlike `senderJid` above (which for
+      // fromMe=true resolves to OUR OWN participant JID, not the chat's), this
+      // is always the conversation's own JID regardless of direction.
+      remoteJid: msg.key.remoteJid || undefined,
       ...mediaMeta,
       ...(parsed.contextInfo || {}),
       revoked: parsed.textContent.includes("eliminado")
@@ -247,6 +253,14 @@ export class ChatSyncBatchIngester {
 
       const metadata: Record<string, unknown> = {
         origin: "history_sync",
+        // [SEC] The RAW chat JID this specific message actually arrived under
+        // (LID or phone — whichever WhatsApp used for THIS message), regardless
+        // of direction. Needed so fetchHistoryFromWhatsApp's anchor can request
+        // the next page under the SAME addressing scheme the phone knows this
+        // message by — anchoring with a re-resolved JID from a different scheme
+        // makes the phone unable to find the referenced message and it silently
+        // drops the peer-data-operation request (see ChatSyncIngest.resolveAnchor).
+        remoteJid: msg.key.remoteJid || undefined,
         ...mediaMeta,
         ...(parsed.contextInfo || {}),
         ...(parsed.isSystem ? { system: true } : {}),

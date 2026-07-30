@@ -41,10 +41,22 @@ export class WhatsAppEventWiring {
 
             // Clean up any other zombie/unlinked sessions for this company
             const allSessions = await this.sessionRepository.findByCompany(event.companyId);
+            // [SEC] GRACE PERIOD: a session actively mid-handshake (a second
+            // device being linked concurrently, or another session's own
+            // reconnect-in-progress window) can legitimately sit in SCANNING/
+            // CONNECTING or with phone=null for a short stretch. Without an age
+            // check, THIS session's connect event would delete that other
+            // session's DB row out from under it mid-handshake — a real race,
+            // not a hypothetical one, since SESSION_CONNECTED fires on every
+            // reconnect (not just first-link) and this sweep runs every time.
+            // Only sessions that have been stuck in that state for a while are
+            // actually abandoned/zombie.
+            const ZOMBIE_GRACE_MS = 3 * 60 * 1000;
             const zombies = allSessions.filter(
               (s) =>
                 s.sessionId !== event.sessionId &&
-                (s.phone === null || ["SCANNING", "CONNECTING"].includes(s.status))
+                (s.phone === null || ["SCANNING", "CONNECTING"].includes(s.status)) &&
+                Date.now() - new Date(s.updatedAt).getTime() > ZOMBIE_GRACE_MS
             );
 
             for (const zombie of zombies) {

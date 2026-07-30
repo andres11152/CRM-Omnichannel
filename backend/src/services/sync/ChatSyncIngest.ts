@@ -69,6 +69,7 @@ export class ChatSyncIngest {
     chats?: HistoryChat[],
     contacts?: import("./ChatSyncJidResolver").HistoryContact[],
     options?: { onDemand?: boolean },
+    lidPnMappings?: import("./ChatSyncJidResolver").LidPnMapping[],
   ): Promise<void> {
     if ((!messages || messages.length === 0) && (!chats || chats.length === 0)) return;
 
@@ -76,7 +77,7 @@ export class ChatSyncIngest {
       // ON_DEMAND syncs are scoped to 1 chat and use createMany+skipDuplicates, so they
       // won't exhaust the pool. Bypass the bulk queue so the user sees history immediately
       // instead of waiting 30-40s for all pending bulk batches to finish first.
-      this.runHistorySync(companyId, messages, chats, contacts, options).catch((err) => {
+      this.runHistorySync(companyId, messages, chats, contacts, options, lidPnMappings).catch((err) => {
         Logger.error(`[ChatSync] On-demand history ingest failed:`, err);
       });
       return;
@@ -86,7 +87,7 @@ export class ChatSyncIngest {
     this.pendingHistorySyncs++;
     this.historySyncChain = this.historySyncChain
       .catch(() => {}) // never let one failure break the chain
-      .then(() => this.runHistorySync(companyId, messages, chats, contacts, options))
+      .then(() => this.runHistorySync(companyId, messages, chats, contacts, options, lidPnMappings))
       .finally(() => {
         this.pendingHistorySyncs--;
       });
@@ -98,23 +99,43 @@ export class ChatSyncIngest {
     chats?: HistoryChat[],
     contacts?: import("./ChatSyncJidResolver").HistoryContact[],
     options?: { onDemand?: boolean },
+    lidPnMappings?: import("./ChatSyncJidResolver").LidPnMapping[],
   ): Promise<void> {
     await TenantContextManager.run(
       { companyId, userId: "system", requestId: `history-sync-${companyId}` },
       async () => {
         try {
           Logger.info(
-            `[ChatSync] History Ingest Started | ${messages?.length || 0} msgs, ${chats?.length || 0} chats (queued: ${this.pendingHistorySyncs - 1})`,
+            `[ChatSync] History Ingest Started | ${messages?.length || 0} msgs, ${chats?.length || 0} chats, ${lidPnMappings?.length || 0} lid-pairs (queued: ${this.pendingHistorySyncs - 1})`,
           );
 
-          const store = await this.jidResolver.resolveStore(companyId, contacts);
+          // [SEC] `store` is ALWAYS null in this process — the Baileys in-memory
+          // store lives exclusively in whatsapp-service post microservice-split.
+          // lidPhoneMap is the real resolution source now (see buildLidPhoneMap).
+          const store = null;
+          const lidPhoneMap = await this.jidResolver.buildLidPhoneMap(companyId, lidPnMappings, contacts);
+
+          // Persist newly-learned mappings so the live-message pipeline and future
+          // syncs can resolve this contact without needing another history batch
+          // (mirrors IdentityResolverService's best-effort save on the live path).
+          if (lidPnMappings?.length) {
+            const { chatService } = await import("@/services/ChatService");
+            for (const { lid, pn } of lidPnMappings) {
+              if (!lid || !pn) continue;
+              chatService
+                .saveLidPhoneMapping(companyId, lid.split("@")[0].split(":")[0], pn.split("@")[0].split(":")[0])
+                .catch(() => {});
+            }
+          }
+
           const admin = await syncRepositoryHelper.getAdminUser(companyId);
           if (!admin) return;
 
           // 1. Identity Discovery
+          let unresolvedChats = 0;
           if (chats) {
             for (const chat of chats) {
-              const phone = this.jidResolver.resolveJid(chat.id, store);
+              const phone = this.jidResolver.resolveJid(chat.id, store, lidPhoneMap);
               if (phone && !isJidBroadcast(chat.id) && !chat.id.includes("@newsletter")) {
                 const isGroup = chat.id.endsWith("@g.us");
                 const cleanPhone = isGroup ? WhatsAppIdUtils.cleanChannelId(phone) : phone;
@@ -124,8 +145,13 @@ export class ChatSyncIngest {
                   name: chat.name || chat.subject || undefined,
                   isGroup
                 });
+              } else if (!phone && chat.id.includes("@lid")) {
+                unresolvedChats++;
               }
             }
+          }
+          if (unresolvedChats > 0) {
+            Logger.warn(`[ChatSync] ${unresolvedChats} LID chat(s) had no phone mapping and were skipped for company ${companyId}`);
           }
 
           if (!messages || messages.length === 0) return;
@@ -149,7 +175,11 @@ export class ChatSyncIngest {
           }
 
           // 2. Group Messages by Conversation
-          const msgsByPhone = this.jidResolver.groupMessagesByPhone(messagesToProcess, store);
+          const msgsByPhone = this.jidResolver.groupMessagesByPhone(messagesToProcess, store, lidPhoneMap);
+          const unresolvedMsgs = messagesToProcess.length - Array.from(msgsByPhone.values()).reduce((n, m) => n + m.length, 0);
+          if (unresolvedMsgs > 0) {
+            Logger.warn(`[ChatSync] ${unresolvedMsgs} message(s) dropped (unresolved LID or broadcast/newsletter JID) for company ${companyId}`);
+          }
 
           // 3. Process each conversation. Yield to the event loop between conversations
           // so the API stays responsive even during a large sync.
@@ -389,14 +419,31 @@ export class ChatSyncIngest {
         });
 
         if (anchorMsg?.whatsappMessageId) {
+          // [SEC] Anchor with the JID this SPECIFIC message actually arrived
+          // under (persisted at ingest time), not the globally re-resolved
+          // targetJid — fetchMessageHistory forwards this key verbatim as a
+          // peer-data-operation reference the phone looks up in its OWN chat
+          // history; a remoteJid/id pair split across two different addressing
+          // schemes (e.g. targetJid settled on @s.whatsapp.net via a live
+          // onWhatsApp check while this message actually lives under @lid) is
+          // not a message the phone can find, and it silently drops the
+          // request — this was the root cause of "solicita al celular pero
+          // nunca funciona" for exactly the conversations where targetJid
+          // didn't happen to resolve to the same scheme the history was
+          // ingested under.
+          const meta = anchorMsg.metadata as Record<string, unknown> | null;
+          const anchorJid =
+            (typeof meta?.remoteJid === "string" && meta.remoteJid) ||
+            (typeof meta?.senderJid === "string" && meta.senderJid.includes("@lid") && meta.senderJid) ||
+            targetJid;
           return {
             key: {
-              remoteJid: targetJid,
+              remoteJid: anchorJid,
               fromMe: anchorMsg.direction === "OUTBOUND",
               id: anchorMsg.whatsappMessageId,
             },
             tsMs: new Date(anchorMsg.createdAt).getTime(),
-            source: "Database (oldest msg)",
+            source: anchorJid === targetJid ? "Database (oldest msg)" : "Database (oldest msg, original JID)",
           };
         }
         // No DB anchor and no local memory store to fall back to (the Baileys

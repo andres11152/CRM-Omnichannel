@@ -124,6 +124,12 @@ export function bindSessionEvents(
       // fetchMessageHistory request that produced it (debugging/observability
       // only; onDemand detection itself still keys off syncType).
       peerDataRequestSessionId: validated.peerDataRequestSessionId,
+      // [SEC] Also previously dropped: the ONLY source of LID→phone pairs the
+      // backend can use to group historical messages by conversation (its own
+      // Baileys store is never populated in that process). Without this, every
+      // history-sync batch for a LID-addressed chat silently grouped into an
+      // empty Map and ingested zero messages.
+      lidPnMappings: validated.lidPnMappings,
     }).catch((err) => {
       Logger.error(err, `[SessionEventBinder] Failed to enqueue history sync to BullMQ:`);
     });

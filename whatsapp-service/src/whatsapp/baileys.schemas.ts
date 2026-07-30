@@ -119,6 +119,17 @@ export const HistorySyncSchema = z
     syncType: z.number().optional(),
     progress: z.number().nullable().optional(),
     peerDataRequestSessionId: z.string().nullable().optional(),
+    // [SEC] Baileys' own processHistoryMessage() (lib/Utils/history.js) already
+    // resolves explicit {lid, pn} pairs for every LID-addressed chat in this
+    // batch (from phoneNumberToLidMappings + each conversation's pnJid/lidJid)
+    // and includes them on this same event — SessionEventBinder previously
+    // dropped this field before enqueueing, which was the root cause of every
+    // LID-addressed conversation's history silently failing to group by phone
+    // (ChatSyncJidResolver's store-based resolution is dead in this split
+    // architecture; this is the only tier that actually has data here).
+    lidPnMappings: z
+      .array(z.object({ lid: z.string(), pn: z.string() }))
+      .optional(),
   })
   .passthrough();
 

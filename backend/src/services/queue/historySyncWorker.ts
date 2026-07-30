@@ -12,7 +12,7 @@ export class HistorySyncWorker {
     this.worker = new Worker(
       "whatsapp-history-sync",
       async (job: Job) => {
-        const { companyId, messages, chats, contacts, syncType, peerDataRequestSessionId } = job.data;
+        const { companyId, messages, chats, contacts, syncType, peerDataRequestSessionId, lidPnMappings } = job.data;
 
         Logger.info(
           `[HistorySyncWorker] Processing history sync job ${job.id} for company ${companyId}` +
@@ -35,7 +35,8 @@ export class HistorySyncWorker {
               messages || [],
               chats || [],
               contacts || [],
-              { onDemand }
+              { onDemand },
+              lidPnMappings || [],
             );
             Logger.info(`[HistorySyncWorker] Ingested history sync job ${job.id} successfully`);
           } catch (err: unknown) {

@@ -134,9 +134,24 @@ export class SessionManager implements ISessionManager {
 
     const { state, saveCreds } = await this.authProvider.loadState(sessionId);
 
-    const dbSession = await prisma.whatsAppSession.findUnique({
+    // [SEC] A single findUnique miss here used to be treated as a permanent
+    // "this session was deleted" verdict, deleting the in-memory metadata
+    // that reconnectSession() needs — the NEXT scheduled reconnect attempt
+    // then finds no metadata AND no DB row and gives up for good ("Cannot
+    // reconnect, metadata lost"), turning what may be a transient read (a
+    // write racing this reconnect, replica lag) into a WhatsApp line that
+    // silently stops delivering messages until someone manually re-scans a
+    // QR code. Retry briefly before accepting it as final.
+    let dbSession = await prisma.whatsAppSession.findUnique({
       where: { sessionId },
     });
+    for (let attempt = 1; !dbSession && attempt <= 3; attempt++) {
+      logger.warn(
+        `[SessionManager] Session ${sessionId} not found in DB on reconnect (attempt ${attempt}/3) — retrying before giving up.`
+      );
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+      dbSession = await prisma.whatsAppSession.findUnique({ where: { sessionId } });
+    }
 
     if (!dbSession) {
       logger.warn(

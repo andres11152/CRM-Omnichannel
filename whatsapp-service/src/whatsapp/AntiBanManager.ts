@@ -67,8 +67,27 @@ class AntiBanManager {
 
     const wrapOptions: WrapSocketOptions = {
       deafSession: {
+        // [SEC] Was 300000 (5min) — baileys-antiban's DeafSessionDetector only
+        // resets its silence timer from inside its own internal event-buffer
+        // `.process()` listener (see node_modules/baileys-antiban/dist/cjs/
+        // wrapper.js), a SEPARATE listener chain from SessionEventBinder's own
+        // `.on('messages.upsert'/'messages.update', ...)` handlers — the ones
+        // actually proven working in prod (inbound messages ARE processed and
+        // enqueued correctly). Observed live: a session with real inbound/
+        // outbound traffic flowing throughout was still killed at EXACTLY
+        // 300000ms of wall-clock uptime (22:58:09.436 connect →
+        // 23:03:09.445 close, delta 5:00.009), i.e. the detector's silence
+        // timer was never actually being reset by that traffic. Whether that's
+        // an upstream library/event-buffer interaction bug, every 5-minute
+        // forced reconnect: (a) is pure unnecessary churn on a healthy
+        // connection, (b) collides with any fetchMessageHistory in flight
+        // (whose own wait window is up to 20s — see ChatSyncIngest.ts), and
+        // (c) is the trigger for the reconnect-cycle race that can leave a
+        // session unrecoverable (see the DB-row-grace-period fix in
+        // WhatsAppEventWiring.ts). Until the detector's activity wiring is
+        // confirmed reliable, use a much less trigger-happy default.
         timeoutMs: parseInt(
-          process.env.WA_ANTIBAN_DEAF_TIMEOUT_MS ?? "300000",
+          process.env.WA_ANTIBAN_DEAF_TIMEOUT_MS ?? "1800000",
           10,
         ),
       },

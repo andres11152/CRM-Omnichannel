@@ -68,10 +68,10 @@ export function registerWhatsAppServices(): void {
     return new IdentityResolverService(sessionManager);
   });
 
-  // ── Profile Picture Service (depends on SessionManager) ──
+  // ── Profile Picture Service (calls whatsapp-service directly — no
+  // local socket dependency) ──
   container.registerSingleton(WA_TOKENS.ProfilePicture, () => {
-    const sessionManager = container.resolve(WA_TOKENS.SessionManager);
-    return new ProfilePictureService(sessionManager);
+    return new ProfilePictureService();
   });
 
   // ── Message Handler (depends on SessionManager — full orchestrator) ──

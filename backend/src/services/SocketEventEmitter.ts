@@ -51,7 +51,7 @@ export class SocketEventEmitter {
     messageId: string,
     conversationId: string,
     companyId: string,
-    status: "sent" | "delivered" | "read" | "failed" | "queued",
+    status: "sending" | "sent" | "delivered" | "read" | "failed" | "queued",
     ticketId?: string,
   ): void {
     this.messageEmitter.emitMessageStatus(messageId, conversationId, companyId, status, ticketId);

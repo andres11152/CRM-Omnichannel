@@ -83,6 +83,12 @@ export function bindSessionEvents(
         }
       }
       
+      // EventBus.publish() (whatsapp/events/EventBus.ts) already fans this
+      // out to the backend across the process boundary via Redis Pub/Sub on
+      // the "whatsapp:events" channel — WhatsAppService.initialize() on the
+      // backend subscribes to that channel and re-publishes onto its own
+      // local EventBus, which is what WhatsAppEventWiring's CONTACT_UPDATED
+      // handler actually consumes. No separate BullMQ bridge needed here.
       eventBus.publish({
         type: WhatsAppEventType.CONTACT_UPDATED,
         sessionId,
@@ -113,6 +119,11 @@ export function bindSessionEvents(
       isLatest: validated.isLatest,
       syncType: validated.syncType,
       progress: validated.progress,
+      // Validated by HistorySyncSchema but previously dropped before reaching
+      // the queue — correlates this batch back to the specific on-demand
+      // fetchMessageHistory request that produced it (debugging/observability
+      // only; onDemand detection itself still keys off syncType).
+      peerDataRequestSessionId: validated.peerDataRequestSessionId,
     }).catch((err) => {
       Logger.error(err, `[SessionEventBinder] Failed to enqueue history sync to BullMQ:`);
     });

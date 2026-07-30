@@ -110,10 +110,16 @@ class MessageQueueService {
     }
 
     const defaultJobOptions = {
-      attempts: 10,
+      // [PERF] Was attempts:10 with a 1s exponential base — worst case ~17
+      // minutes of retries before a message ever showed as failed to the
+      // agent, during which the concurrency-1 worker for this company was
+      // blocked behind the retrying job. 3 attempts / 2s base surfaces a
+      // real failure in under a minute while still absorbing transient
+      // network blips against whatsapp-service.
+      attempts: 3,
       backoff: {
         type: "exponential",
-        delay: 1000,
+        delay: 2000,
       },
       removeOnComplete: true,
       removeOnFail: 1000,

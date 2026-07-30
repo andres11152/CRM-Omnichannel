@@ -91,9 +91,6 @@ describe("messageQueueWorker", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (fakeWhatsAppService.isCompanyConnected as jest.Mock).mockResolvedValue(true);
-    (fakeWhatsAppService.getSessions as jest.Mock).mockResolvedValue([
-      { sessionId: "sess1", status: "CONNECTED" },
-    ]);
     (fakeWhatsAppService.sendPresenceUpdate as jest.Mock).mockResolvedValue(undefined);
     (fakeWhatsAppService.executeQueuedMessage as jest.Mock).mockResolvedValue({ messageId: "wa-msg-1" });
     mockMessageRepo.findUnique.mockResolvedValue(null);
@@ -107,8 +104,11 @@ describe("messageQueueWorker", () => {
         processMessage: (j: Job<MessageJob>) => Promise<unknown>;
       }).processMessage(job);
 
+      // sessionId is no longer looked up via getSessions() before send — it's
+      // not read anywhere in executeQueuedMessage's request body, so that
+      // extra HTTP round-trip was pure overhead. Passed as "" now.
       expect(fakeWhatsAppService.executeQueuedMessage).toHaveBeenCalledWith(
-        "sess1",
+        "",
         "573001234567",
         "hello",
         expect.objectContaining({ companyId: "company1", conversationId: "conv1", dbId: "db-msg-1" }),

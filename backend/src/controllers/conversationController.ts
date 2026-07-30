@@ -380,11 +380,16 @@ export const syncFullHistory = catchAsync(
     // [SEC] JID HARDENING: Use central utility for consistent domain suffixing
     const targetJid = WhatsAppIdUtils.getTargetJid(conversation.channelId);
 
+    // MAX_PAGES (ChatSyncIngest.fetchHistoryFromWhatsApp) scales automatically
+    // with this limit at 50 msgs/page (the phone-enforced cap per query), so
+    // raising it just requests more background pages — no other change needed.
+    const manualSyncLimit = parseInt(process.env.MANUAL_HISTORY_SYNC_LIMIT || "300", 10);
+
     const result = await chatSyncService.syncMessages({
       companyId: req.companyId,
       sessionId: activeSession.sessionId,
       conversationId: targetJid,
-      limit: 100, // Default to 100 messages for manual sync
+      limit: manualSyncLimit,
       dryRun: false
     }, req.user.id);
 

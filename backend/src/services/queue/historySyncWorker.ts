@@ -12,9 +12,12 @@ export class HistorySyncWorker {
     this.worker = new Worker(
       "whatsapp-history-sync",
       async (job: Job) => {
-        const { companyId, messages, chats, contacts, syncType } = job.data;
-        
-        Logger.info(`[HistorySyncWorker] Processing history sync job ${job.id} for company ${companyId}`);
+        const { companyId, messages, chats, contacts, syncType, peerDataRequestSessionId } = job.data;
+
+        Logger.info(
+          `[HistorySyncWorker] Processing history sync job ${job.id} for company ${companyId}` +
+            (peerDataRequestSessionId ? ` (peerDataRequestSessionId: ${peerDataRequestSessionId})` : ""),
+        );
 
         // [DOCS · Baileys] proto.HistorySync.HistorySyncType: INITIAL_BOOTSTRAP=0,
         // INITIAL_STATUS_V3=1, FULL=2, RECENT=3, PUSH_NAME=4, NON_BLOCKING_DATA=5,

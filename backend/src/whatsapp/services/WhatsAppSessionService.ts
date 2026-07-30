@@ -10,7 +10,17 @@ import { Prisma } from "@prisma/client";
 // (WhatsAppService.ts's facade calls it over HTTP instead). Confirmed zero
 // external callers before removal. Only updateSession/isCompanyConnected
 // survive: pure DB bookkeeping that doesn't touch a socket at all.
+// [PERF] isCompanyConnected is polled every few hundred ms by the message
+// queue worker's waitForSession loop while a session is reconnecting. A
+// short TTL cache keeps that polling from hammering Postgres with an
+// identical query multiple times a second — worst case it delays detecting
+// a just-reconnected session by one TTL window, which the poll loop already
+// tolerates by design.
+const CONNECTED_CACHE_TTL_MS = 2000;
+
 export class WhatsAppSessionService {
+  private connectedCache = new Map<string, { value: boolean; expiresAt: number }>();
+
   constructor(
     private sessionManager: ISessionManager,
     private sessionRepository: WhatsAppSessionRepository,
@@ -44,9 +54,16 @@ export class WhatsAppSessionService {
       return true;
     }
 
+    const cached = this.connectedCache.get(companyId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
     const sessions = await this.sessionRepository.findByStatus("CONNECTED", [
       companyId,
     ]);
-    return sessions.length > 0;
+    const value = sessions.length > 0;
+    this.connectedCache.set(companyId, { value, expiresAt: Date.now() + CONNECTED_CACHE_TTL_MS });
+    return value;
   }
 }

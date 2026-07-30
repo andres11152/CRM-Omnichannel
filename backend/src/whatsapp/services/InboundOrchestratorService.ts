@@ -183,7 +183,7 @@ export class InboundOrchestratorService {
           role: "USER",
         });
 
-        this.profilePicService.fetchAndPersist(sessionId, senderJid, customerUser.id, companyId).catch((err) => {
+        this.profilePicService.fetchAndPersist(senderJid, customerUser.id, companyId).catch((err) => {
           Logger.warn(`[Orchestrator] Profile pic fetch failed for ${senderJid}:`, err);
         });
       }

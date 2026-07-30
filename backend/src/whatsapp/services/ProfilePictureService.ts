@@ -1,4 +1,3 @@
-import { ISessionManager } from "../core/interfaces/ISessionManager";
 import { Logger } from "@/utils/logger";
 import { z } from "zod";
 import { TenantContextManager } from "@/config/tenantContext";
@@ -8,7 +7,6 @@ import axios from "axios";
 import { storageService } from "@/services/StorageService";
 
 const FetchProfilePicSchema = z.object({
-  sessionId: z.string().min(1, "Session ID is required"),
   jid: z.string().min(1, "JID is required"),
   userId: z.string().min(1, "User ID is required"),
   companyId: z.string().min(1, "Company ID is required"),
@@ -19,46 +17,39 @@ const FetchProfilePicSchema = z.object({
  *
  * Handles fetching and persisting WhatsApp profile pictures.
  * Extracted from MessageHandler for SRP compliance.
+ *
+ * [SEC] The Baileys socket (and the contact store the LID fallback needs)
+ * live exclusively in whatsapp-service now — the actual `profilePictureUrl`
+ * call, including its image/preview/LID-retry fallback chain, happens there
+ * via the "profilePictureUrl" command (whatsapp-service/src/controllers/
+ * CommandController.ts), which resolves the company's active session
+ * itself. This service only needs a jid/userId/companyId; it no longer
+ * needs a sessionId or a local ISessionManager.
  */
 export class ProfilePictureService {
-  constructor(private sessionManager: ISessionManager) {}
-
   /**
    * Fetch profile picture from WhatsApp and persist URL to the user record.
    * Skips fetch if user already has a valid HTTP profile picture URL.
-   * Uses "image" quality first, falls back to "preview" quality.
    *
    * This is a fire-and-forget operation — errors are logged but never thrown.
    */
   async fetchAndPersist(
-    sessionIdParam: string,
     jidParam: string,
     userIdParam: string,
     companyIdParam: string,
   ): Promise<void> {
     try {
       // [SEC] Fail-Safe Validation: strictly validate incoming parameters
-      const { sessionId, jid, userId, companyId } = FetchProfilePicSchema.parse(
-        {
-          sessionId: sessionIdParam,
-          jid: jidParam,
-          userId: userIdParam,
-          companyId: companyIdParam,
-        },
-      );
+      const { jid, userId, companyId } = FetchProfilePicSchema.parse({
+        jid: jidParam,
+        userId: userIdParam,
+        companyId: companyIdParam,
+      });
 
       // [SEC] Multi-tenant Scope: Ensure code execution is contextualized
       await TenantContextManager.run(
         { companyId, userId: "system", requestId: `profile-pic:${userId}` },
         async () => {
-          const sock = this.sessionManager.getSession(sessionId);
-          if (!sock) {
-            Logger.warn(
-              `[ProfilePic] No socket for session ${sessionId} - CompanyId: ${companyId}`,
-            );
-            return;
-          }
-
           const normalizedJid = jid.includes("@")
             ? jid
             : `${jid}@s.whatsapp.net`;
@@ -82,37 +73,21 @@ export class ProfilePictureService {
             return;
           }
 
-          // [BAILEYS 7] LID-ADDRESSED CONTACTS: tctoken is stored under the LID JID.
-          // When we call profilePictureUrl with a PN JID, Baileys must resolve it to
-          // the LID via getLIDForPN (USYNC query). If that USYNC fails (cache miss
-          // post-restart, rate limit), the tctoken lookup falls back to the PN key
-          // where nothing is stored, and WhatsApp rejects the request without a token.
-          // Fix: try the PN JID first, then retry with the LID JID from the store.
-          const PP_TIMEOUT = 15_000;
-
-          const tryFetch = async (targetJid: string): Promise<string | undefined> => {
-            try {
-              return await sock.profilePictureUrl(targetJid, "image", PP_TIMEOUT);
-            } catch {
-              try {
-                return await sock.profilePictureUrl(targetJid, "preview", PP_TIMEOUT);
-              } catch {
-                return undefined;
-              }
-            }
-          };
-
-          let profilePicUrl = await tryFetch(normalizedJid);
-
-          if (!profilePicUrl && !normalizedJid.includes("@lid")) {
-            // Fallback: look up LID JID from the in-memory store and retry with it
-            // so Baileys can find the tctoken that was stored under the LID key.
-            const contactInfo = this.sessionManager.getContactInfo(sessionId, normalizedJid);
-            const lidJid = contactInfo?.lid;
-            if (lidJid) {
-              Logger.info(`[ProfilePic] Retrying with LID JID ${lidJid} for ${normalizedJid}`);
-              profilePicUrl = await tryFetch(lidJid);
-            }
+          const { executeWhatsAppCommand } = await import("@/whatsapp/utils/whatsAppServiceHttp");
+          let profilePicUrl: string | undefined;
+          try {
+            const { url } = await executeWhatsAppCommand<{ url: string | null }>(
+              companyId,
+              "profilePictureUrl",
+              [normalizedJid],
+            );
+            profilePicUrl = url ?? undefined;
+          } catch (err) {
+            Logger.warn(
+              `[ProfilePic] profilePictureUrl command failed for ${normalizedJid} - CompanyId: ${companyId}`,
+              err,
+            );
+            return;
           }
 
           if (!profilePicUrl) {
@@ -121,8 +96,6 @@ export class ProfilePictureService {
             );
             return;
           }
-
-          if (!profilePicUrl) return;
 
           // [SEC] 100-YEAR FIX: Download and persist the image to avoid 403 errors (PPS links expire)
           try {
@@ -184,7 +157,7 @@ export class ProfilePictureService {
     } catch (error) {
       // [SEC] 100-YEAR FIX: Centralized logging with full stack trace and context
       Logger.error(
-        `[ProfilePic] Failed to fetch/save profile pic for user ${userIdParam} in company ${companyIdParam}. SessionId: ${sessionIdParam}:`,
+        `[ProfilePic] Failed to fetch/save profile pic for user ${userIdParam} in company ${companyIdParam}:`,
         error instanceof Error ? error.stack || error.message : error,
       );
     }

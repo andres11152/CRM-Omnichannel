@@ -229,12 +229,21 @@ class ChatSyncService {
       if (conversationId && fetchSuccess) {
         // If targeted sync succeeded, the socket handler messaging-history.set
         // has already bulk-inserted the messages. Count DB differences to find new/duplicates.
+        //
+        // [SEC] messagesFound previously came from extractMessagesFromStore(store, ...)
+        // — the in-memory Baileys store, which lives exclusively in whatsapp-service
+        // now and is always empty in this process (see the empty-store fallback
+        // above). That made messagesFound always 0, which made messagesDuplicate
+        // always 0 too regardless of what actually happened. The DB delta is the
+        // only ground truth available here: report it honestly instead of a
+        // fabricated found/duplicate split we can no longer actually measure.
         const cleanPhone = WhatsAppIdUtils.cleanChannelId(conversationId);
         const dbCountAfter = await messageRepository.count({
           where: { companyId, conversation: { channelId: cleanPhone } }
         });
         messagesNew = Math.max(0, dbCountAfter - dbCountBefore);
-        messagesDuplicate = Math.max(0, messagesFound - messagesNew);
+        messagesFound = messagesNew;
+        messagesDuplicate = 0;
         conversationsProcessed = 1;
         totalConversations = 1;
       } else {

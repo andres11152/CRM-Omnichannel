@@ -77,6 +77,78 @@ export class CommandController {
           result = { buffer: buf.toString("base64"), size: buf.length };
           break;
         }
+        case "getContactInfo": {
+          // LID resolution tier for ChatSyncJidResolver.resolveRealJid — the
+          // backend's own contact/lid store never populates (Baileys lives
+          // here), so this is the only place the mapping can actually be read.
+          const [jid] = args as [string];
+          const contact = sessionManager.getContactInfo(sessionId, jid);
+          result = { lid: contact?.lid || null };
+          break;
+        }
+        case "onWhatsApp": {
+          // Live existence + LID check against WhatsApp's own servers — last-
+          // resort resolution tier for a JID neither our DB nor the in-memory
+          // contact store has ever seen.
+          const [phoneNumber] = args as [string];
+          try {
+            const matches = await sock.onWhatsApp(phoneNumber);
+            const match = matches?.find((m) => m.exists);
+            result = { exists: !!match, jid: match?.jid || null };
+          } catch (err: unknown) {
+            Logger.warn(`[CommandController] onWhatsApp query failed for ${phoneNumber}: ${err instanceof Error ? err.message : String(err)}`);
+            result = { exists: false, jid: null };
+          }
+          break;
+        }
+        case "profilePictureUrl": {
+          // Individual/group avatar fetch. image → preview → LID retry, mirrors
+          // what ProfilePictureService used to do against a local socket before
+          // the backend/whatsapp-service split left it calling a socket that
+          // never exists in that process. Runs here because both the live
+          // socket and the contact store (for the LID lookup) only exist here.
+          const [jid] = args as [string];
+          const tryFetch = async (target: string, type: "image" | "preview") => {
+            try {
+              return await sock.profilePictureUrl(target, type, 8000);
+            } catch {
+              return undefined;
+            }
+          };
+
+          let url = await tryFetch(jid, "image");
+          if (!url) url = await tryFetch(jid, "preview");
+
+          if (!url && !jid.includes("@lid")) {
+            const contact = sessionManager.getContactInfo(sessionId, jid);
+            const lidJid = contact?.lid;
+            if (lidJid) {
+              url = await tryFetch(lidJid, "image");
+              if (!url) url = await tryFetch(lidJid, "preview");
+            }
+          }
+
+          result = { url: url || null };
+          break;
+        }
+        case "groupMetadata": {
+          const [groupJid] = args as [string];
+          const metadata = await sock.groupMetadata(groupJid);
+          const ownJid = sock.user?.id ? WhatsAppIdUtils.getCleanJid(sock.user.id) : null;
+          const ownPhone = ownJid ? WhatsAppIdUtils.getPhoneNumber(ownJid) : null;
+          result = { metadata, ownPhone };
+          break;
+        }
+        case "fetchStatus": {
+          const [jid] = args as [string];
+          try {
+            const status = await sock.fetchStatus(jid);
+            result = { status: status ?? null };
+          } catch {
+            result = { status: null };
+          }
+          break;
+        }
         case "editOutboundMessage": {
           const [to, messageId, newContent] = args as [string, string, string];
           const jid = await jidResolver.resolveDestinationJid(to, companyId, sessionId);

@@ -146,54 +146,40 @@ export class ChatSyncJidResolver {
       }
     }
 
-    // 2. Search in memory store
-    const store = await this.getSessionStore(sessionId);
-    if (store) {
-      const cleanTarget = jidNormalizedUser(targetJid);
-      const contact = store.contacts?.[cleanTarget];
-      if (contact?.lid) {
-        Logger.info(`[ChatSync] Resolved Real JID ${contact.lid} from memory contacts for channel ${cleanPhone}`);
-        return contact.lid;
+    // 2. Ask whatsapp-service's live contact store. The Baileys socket (and
+    // its in-memory contact/lid store) lives exclusively in that process now
+    // — this backend's own store is never populated, so this has to go over
+    // HTTP rather than reading a local Map.
+    const { executeWhatsAppCommand } = await import("@/whatsapp/utils/whatsAppServiceHttp");
+    try {
+      const { lid } = await executeWhatsAppCommand<{ lid: string | null }>(
+        companyId,
+        "getContactInfo",
+        [targetJid],
+      );
+      if (lid) {
+        Logger.info(`[ChatSync] Resolved Real JID ${lid} from contact store for channel ${cleanPhone}`);
+        return lid;
       }
-
-      if (store.lidToPhone) {
-        for (const [lidBase, phone] of Object.entries(store.lidToPhone)) {
-          if (jidNormalizedUser(phone) === cleanTarget) {
-            const resolved = `${lidBase}@lid`;
-            Logger.info(`[ChatSync] Resolved Real JID ${resolved} from memory lidToPhone for channel ${cleanPhone}`);
-            return resolved;
-          }
-        }
-      }
+    } catch (err) {
+      Logger.warn(`[ChatSync] getContactInfo command failed for ${cleanPhone}:`, err);
     }
 
-    // 3. Query WhatsApp servers in live mode (with safety timeout)
-    const { whatsappService } = await import("@/whatsapp");
-    const activeSession = await whatsappService.getSessionManager().findActiveSessionForCompany(companyId);
-    if (activeSession) {
-      try {
-        const jidToCheck = targetJid.includes("@") ? targetJid : `${targetJid}@s.whatsapp.net`;
-        const resolved = await Promise.race([
-          activeSession.socket.onWhatsApp(jidToCheck),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("WhatsApp JID query timeout")), 4000)
-          ),
-        ]);
-        if (resolved && resolved.length > 0 && resolved[0].exists) {
-          const resolvedJid = resolved[0].jid;
-          Logger.info(`[ChatSync] Resolved Real JID ${resolvedJid} from live WhatsApp query for channel ${cleanPhone}`);
-
-          // Also save in store's lidToPhone map so we don't have to query again
-          if (store && store.lidToPhone && resolvedJid.includes("@lid")) {
-            const lidBase = resolvedJid.split("@")[0];
-            store.lidToPhone[lidBase] = jidToCheck;
-          }
-
-          return resolvedJid;
-        }
-      } catch (err) {
-        Logger.warn(`[ChatSync] Live JID resolution failed for ${cleanPhone}:`, err);
+    // 3. Last resort: ask WhatsApp's own servers whether this number exists
+    // and, if so, what JID (possibly a LID) it resolves to.
+    try {
+      const jidToCheck = targetJid.includes("@") ? targetJid : `${targetJid}@s.whatsapp.net`;
+      const { exists, jid: resolvedJid } = await executeWhatsAppCommand<{ exists: boolean; jid: string | null }>(
+        companyId,
+        "onWhatsApp",
+        [jidToCheck],
+      );
+      if (exists && resolvedJid) {
+        Logger.info(`[ChatSync] Resolved Real JID ${resolvedJid} from live WhatsApp query for channel ${cleanPhone}`);
+        return resolvedJid;
       }
+    } catch (err) {
+      Logger.warn(`[ChatSync] Live JID resolution failed for ${cleanPhone}:`, err);
     }
 
     return targetJid;

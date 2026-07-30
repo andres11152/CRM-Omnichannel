@@ -3,7 +3,6 @@ import { connection } from "@/config/bullmq";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { contactService } from "@/services/ContactService";
-import { whatsappService } from "@/whatsapp";
 import { Prisma } from "@prisma/client";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { Logger } from "@/utils/logger";
@@ -112,11 +111,7 @@ async function indexGroupParticipants(
     return;
   }
 
-  const sock = whatsappService.getSocket(sessionId);
-  if (!sock) {
-    Logger.warn(`[GroupIndexer] No socket for session ${sessionId}`);
-    return;
-  }
+  const { executeWhatsAppCommand } = await import("@/whatsapp/utils/whatsAppServiceHttp");
 
   // Load conversation to heal metadata
   const conversation = await conversationRepository.findFirst({
@@ -129,8 +124,14 @@ async function indexGroupParticipants(
   }
 
   let metadata: { subject: string; desc?: string; participants: Array<{ id: string }> };
+  let sessionPhone: string | null = null;
   try {
-    metadata = await sock.groupMetadata(groupJid);
+    const groupResult = await executeWhatsAppCommand<{
+      metadata: { subject: string; desc?: string; participants: Array<{ id: string }> };
+      ownPhone: string | null;
+    }>(companyId, "groupMetadata", [groupJid]);
+    metadata = groupResult.metadata;
+    sessionPhone = groupResult.ownPhone;
   } catch (error) {
     Logger.warn(
       `[GroupIndexer] Failed to fetch group metadata for ${groupJid}`,
@@ -144,7 +145,11 @@ async function indexGroupParticipants(
   // Fetch group profile picture and persist to avoid expiry (PPS links expire)
   let resolvedPicUrl: string | null = null;
   try {
-    const groupPicUrl = await sock.profilePictureUrl(groupJid, "image").catch(() => null);
+    const { url: groupPicUrl } = await executeWhatsAppCommand<{ url: string | null }>(
+      companyId,
+      "profilePictureUrl",
+      [groupJid],
+    );
     resolvedPicUrl = groupPicUrl;
     if (groupPicUrl) {
       try {
@@ -247,11 +252,6 @@ async function indexGroupParticipants(
     }
 
     // Skip if they are the business number
-    const sessionPhone = sock.user?.id
-      ? WhatsAppIdUtils.getPhoneNumber(
-          WhatsAppIdUtils.getCleanJid(sock.user.id) || "",
-        )
-      : null;
     if (sessionPhone && phone === sessionPhone) continue;
 
     if (existingPhones.has(phone)) {
@@ -326,17 +326,21 @@ async function indexGroupParticipants(
  * from WhatsApp in background (Phase 2, lazy loading).
  */
 async function enrichContact(data: GroupIndexJob): Promise<void> {
-  const { companyId, sessionId, contactPhone, senderJid } = data;
+  const { companyId, contactPhone, senderJid } = data;
   if (!contactPhone || !senderJid) return;
 
-  const sock = whatsappService.getSocket(sessionId);
-  if (!sock) return;
+  const { executeWhatsAppCommand } = await import("@/whatsapp/utils/whatsAppServiceHttp");
 
   try {
     // Try to get profile picture
     let profilePicUrl: string | undefined;
     try {
-      profilePicUrl = await sock.profilePictureUrl(senderJid, "image");
+      const { url } = await executeWhatsAppCommand<{ url: string | null }>(
+        companyId,
+        "profilePictureUrl",
+        [senderJid],
+      );
+      profilePicUrl = url ?? undefined;
     } catch {
       // Profile pic not available (privacy settings)
     }
@@ -344,19 +348,14 @@ async function enrichContact(data: GroupIndexJob): Promise<void> {
     // Get contact status/about
     let about: string | undefined;
     try {
-      const status = await sock.fetchStatus(senderJid);
-      const statusResult = status as
-        | { status?: string }
-        | Array<{ status?: string }>
-        | undefined;
-      if (statusResult) {
-        if (Array.isArray(statusResult) && statusResult[0]?.status) {
-          about = String(statusResult[0].status);
-        } else if (
-          !Array.isArray(statusResult) &&
-          (statusResult as { status?: string }).status
-        ) {
-          about = String((statusResult as { status?: string }).status);
+      const { status } = await executeWhatsAppCommand<{
+        status: { status?: string } | Array<{ status?: string }> | null;
+      }>(companyId, "fetchStatus", [senderJid]);
+      if (status) {
+        if (Array.isArray(status) && status[0]?.status) {
+          about = String(status[0].status);
+        } else if (!Array.isArray(status) && status.status) {
+          about = String(status.status);
         }
       }
     } catch {

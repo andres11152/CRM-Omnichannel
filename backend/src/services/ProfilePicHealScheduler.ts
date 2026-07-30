@@ -42,35 +42,25 @@ class ProfilePicHealScheduler {
       this.lastAttempt.set(`${companyId}:${t.userId}`, now);
     }
 
-    // Fire-and-forget: resolve the active session once, then heal each target
-    // SERIALLY (not Promise.all) so a page of 8 contacts doesn't burst 8
-    // concurrent profile-picture IQ requests on the single WhatsApp socket.
-    import("@/whatsapp")
-      .then(({ whatsappService }) =>
-        whatsappService
-          .getSessionManager()
-          .findActiveSessionForCompany(companyId)
-          .then(async (session) => {
-            if (!session) return;
-            const { ProfilePictureService } = await import(
-              "@/whatsapp/services/ProfilePictureService"
+    // Fire-and-forget: heal each target SERIALLY (not Promise.all) so a page
+    // of 8 contacts doesn't burst 8 concurrent profile-picture IQ requests
+    // on the single WhatsApp socket (whatsapp-service resolves the active
+    // session itself per command — no session lookup needed here).
+    import("@/whatsapp/services/ProfilePictureService")
+      .then(async ({ ProfilePictureService }) => {
+        const profilePicService = new ProfilePictureService();
+        for (const t of due) {
+          const jid = WhatsAppIdUtils.getTargetJid(t.channelId);
+          await profilePicService
+            .fetchAndPersist(jid, t.userId, companyId)
+            .catch((err: Error) =>
+              Logger.warn(
+                `[ProfilePicHeal] Bulk heal failed for ${t.channelId}:`,
+                { error: err.message },
+              ),
             );
-            const profilePicService = new ProfilePictureService(
-              whatsappService.getSessionManager(),
-            );
-            for (const t of due) {
-              const jid = WhatsAppIdUtils.getTargetJid(t.channelId);
-              await profilePicService
-                .fetchAndPersist(session.sessionId, jid, t.userId, companyId)
-                .catch((err: Error) =>
-                  Logger.warn(
-                    `[ProfilePicHeal] Bulk heal failed for ${t.channelId}:`,
-                    { error: err.message },
-                  ),
-                );
-            }
-          }),
-      )
+        }
+      })
       .catch((err) =>
         Logger.warn(`[ProfilePicHeal] Bulk heal scheduling failed:`, err),
       );

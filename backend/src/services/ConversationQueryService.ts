@@ -234,16 +234,13 @@ export class ConversationQueryService {
 
   private triggerGroupHeal(companyId: string, channelId: string) {
     const groupJid = channelId.includes("@g.us") ? channelId : `${channelId}@g.us`;
-    import("@/whatsapp").then(({ whatsappService }) => {
-      whatsappService.getSessionManager().findActiveSessionForCompany(companyId).then((session) => {
-        if (session) {
-          import("./queue/groupContactIndexer").then(({ groupContactIndexer }) => {
-            groupContactIndexer.queueGroupForIndexing(companyId, groupJid, session.sessionId).catch((err: Error) =>
-              Logger.warn(`[QueryService] Failed to queue group heal:`, { error: err.message })
-            );
-          });
-        }
-      });
+    // sessionId is passthrough metadata only now — groupContactIndexer's
+    // groupMetadata/profilePictureUrl commands resolve the active session by
+    // companyId inside whatsapp-service, same as every other command call.
+    import("./queue/groupContactIndexer").then(({ groupContactIndexer }) => {
+      groupContactIndexer.queueGroupForIndexing(companyId, groupJid, "").catch((err: Error) =>
+        Logger.warn(`[QueryService] Failed to queue group heal:`, { error: err.message })
+      );
     }).catch(() => {});
   }
 
@@ -253,17 +250,12 @@ export class ConversationQueryService {
    * Fire-and-forget — errors are silently logged.
    */
   private triggerProfilePicHeal(companyId: string, channelId: string, userId: string) {
-    import("@/whatsapp").then(({ whatsappService }) => {
-      whatsappService.getSessionManager().findActiveSessionForCompany(companyId).then((session) => {
-        if (!session) return;
-        const jid = WhatsAppIdUtils.getTargetJid(channelId);
-        import("@/whatsapp/services/ProfilePictureService").then(({ ProfilePictureService }) => {
-          const profilePicService = new ProfilePictureService(whatsappService.getSessionManager());
-          profilePicService.fetchAndPersist(session.sessionId, jid, userId, companyId).catch((err: Error) =>
-            Logger.warn(`[QueryService] Profile pic heal failed for ${channelId}:`, { error: err.message })
-          );
-        });
-      });
+    const jid = WhatsAppIdUtils.getTargetJid(channelId);
+    import("@/whatsapp/services/ProfilePictureService").then(({ ProfilePictureService }) => {
+      const profilePicService = new ProfilePictureService();
+      profilePicService.fetchAndPersist(jid, userId, companyId).catch((err: Error) =>
+        Logger.warn(`[QueryService] Profile pic heal failed for ${channelId}:`, { error: err.message })
+      );
     }).catch(() => {});
   }
 }

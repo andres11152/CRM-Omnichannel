@@ -61,7 +61,7 @@ export class MessageHandler implements IMessageHandler {
 
     // Initialize SRP services
     const identityResolver = new IdentityResolverService(sessionManager);
-    const profilePicService = new ProfilePictureService(sessionManager);
+    const profilePicService = new ProfilePictureService();
 
     // Wire up outbound first (needed by AITriggerService)
     this.outboundHandler = new OutboundMessageHandler(sessionManager);

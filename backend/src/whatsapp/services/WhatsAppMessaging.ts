@@ -75,10 +75,19 @@ export class WhatsAppMessaging {
 
       await this.rateLimitService.enforceLimit(activeSession.sessionId);
 
+      // [PERF] Resolve base64 media to a hosted S3 URL here, before the job
+      // is even enqueued. Doing this inside the send worker instead ties up
+      // that company's concurrency-1 queue slot (and the per-conversation
+      // DistributedLock) for the whole upload, blocking every other queued
+      // message behind it — and it also means the raw base64 blob sits in
+      // the BullMQ job payload in Redis in the meantime.
+      const { uploadBase64MediaToS3 } = await import("../utils/mediaUpload");
+      const uploadedMedia = await uploadBase64MediaToS3(options.companyId, options.media);
+
       // [BUILD] 1. SAVE IN DB AS "QUEUED" (Audit Trail)
       const { chatService } = await import("@/services/ChatService");
       const { generateMessageID } = await import("@whiskeysockets/baileys");
-      
+
       const generatedId = generateMessageID();
 
       const savedMessage = await chatService.upsertMessage({
@@ -106,7 +115,7 @@ export class WhatsAppMessaging {
         senderId: options.senderId,
         to,
         text: content,
-        media: options.media,
+        media: uploadedMedia,
         quotedMessageId: options.quotedMessageId, // ️ FIX: Pass quoted message ID to queue
         // Metadata payload for worker
         metadata: {
@@ -163,17 +172,23 @@ export class WhatsAppMessaging {
     options: SendMessageOptions & { dbId?: string },
   ) {
     try {
-      const res = await whatsappServiceHttp.post(`/messages/send`, {
-        companyId: options.companyId,
-        to,
-        type: options.media ? "media" : "text",
-        content,
-        media: options.media,
-        options: {
-          quoted: (options as SendMessageOptions & { quoted?: unknown }).quoted,
-          generatedMessageId: options.metadata?.generatedMessageId,
+      const res = await whatsappServiceHttp.post(
+        `/messages/send`,
+        {
+          companyId: options.companyId,
+          to,
+          type: options.media ? "media" : "text",
+          content,
+          media: options.media,
+          options: {
+            quoted: (options as SendMessageOptions & { quoted?: unknown }).quoted,
+            generatedMessageId: options.metadata?.generatedMessageId,
+          },
         },
-      });
+        // Media sends (Baileys downloads/uploads the file itself) need more
+        // headroom than the 20s default.
+        { timeout: 45000 },
+      );
 
       const { messageRepository } = await import("@/repositories/MessageRepository");
       const dbId = options.dbId || (options.metadata?.dbId as string);

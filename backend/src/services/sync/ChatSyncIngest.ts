@@ -6,7 +6,6 @@ import {
 } from "@whiskeysockets/baileys";
 import { WhatsAppIdUtils } from "@/whatsapp/utils/WhatsAppIdUtils";
 import { TenantContextManager } from "@/config/tenantContext";
-import { syncMessageParser } from "./SyncMessageParser";
 import { syncRepositoryHelper } from "./SyncRepositoryHelper";
 import { chatSyncJidResolver, ChatSyncJidResolver } from "./ChatSyncJidResolver";
 import { chatSyncBatchIngester, ChatSyncBatchIngester } from "./ChatSyncBatchIngester";
@@ -246,11 +245,21 @@ export class ChatSyncIngest {
       const session = (await whatsappService.getSessions(companyId))?.find(s => s.status === "CONNECTED");
       if (!session) { failureReason = "no_connected_session"; return; }
 
-      const store = await this.jidResolver.getSessionStore(session.sessionId);
-      if (!store) { failureReason = "store_not_ready"; return; }
-
-      const admin = await syncRepositoryHelper.getAdminUser(companyId);
-      if (!admin) { failureReason = "no_admin_user"; return; }
+      // [SEC] The Baileys in-memory store lives exclusively in whatsapp-service
+      // now — this process's store is never populated (see SessionManager's
+      // sessionStores Map, which nothing ever writes to post microservice-split),
+      // so getSessionStore() always resolved null here. That used to be treated
+      // as an infra failure that aborted the whole sync; fetchHistoryFromWhatsApp()
+      // doesn't actually need this store at all — it anchors pagination off the
+      // DB and dispatches via HTTP command — so the check below no longer depends
+      // on it either.
+      //
+      // No direct ingestion happens here anymore (see removed else-branch below) —
+      // this guard just avoids burning a WhatsApp round-trip for a company with
+      // no admin user, since runHistorySync() would silently no-op on the same
+      // check once the fetched batch lands via messaging-history.set.
+      const hasAdmin = await syncRepositoryHelper.getAdminUser(companyId);
+      if (!hasAdmin) { failureReason = "no_admin_user"; return; }
 
       // Past this point we're making a genuine attempt (a real WhatsApp/DB
       // round-trip) — from here on, a 0-result outcome is a legitimate
@@ -263,28 +272,15 @@ export class ChatSyncIngest {
         where: { companyId, conversation: { channelId: cleanPhone } }
       });
 
-      let targetJid = WhatsAppIdUtils.getTargetJid(channelId);
-      targetJid = await this.jidResolver.resolveRealJid(companyId, session.sessionId, targetJid);
-      let messages = this.jidResolver.extractMessagesFromStore(store, undefined, targetJid);
-
       let fetchSuccess = false;
 
-      // If memory store has fewer than 15 messages, fetch on-demand from WhatsApp to backfill history
-      if (messages.length < 15) {
-        Logger.info(`[ContextSync] Only ${messages.length} messages in memory for ${channelId}, fetching on-demand from WhatsApp...`);
+      // Backfill from WhatsApp when this conversation is thin in the DB — the
+      // in-memory store is never populated in this process (see above), so the
+      // threshold has to be based on what we actually have persisted, not on
+      // extractMessagesFromStore() (which would always read 0 here).
+      if (dbCountBefore < 15) {
+        Logger.info(`[ContextSync] Only ${dbCountBefore} messages in DB for ${channelId}, fetching on-demand from WhatsApp...`);
         fetchSuccess = await this.fetchHistoryFromWhatsApp(companyId, session.sessionId, channelId, 500);
-        if (fetchSuccess) {
-          // Re-extract from store now that history sync event has updated it
-          messages = this.jidResolver.extractMessagesFromStore(store, undefined, targetJid);
-        }
-
-        // [ENTERPRISE] If memory store STILL has few messages, the on-demand fetch may have
-        // gone through the messaging-history.set → DB pipeline instead of populating the store.
-        // In that case, messages are already in the DB and will appear on the next query refresh.
-        // Emit the sync_completed event to force the frontend to refetch conversation data.
-        if (messages.length < 5) {
-          Logger.info(`[ContextSync] Memory store still sparse (${messages.length} msgs). Triggering frontend refresh.`);
-        }
       }
 
       if (fetchSuccess) {
@@ -294,19 +290,11 @@ export class ChatSyncIngest {
           where: { companyId, conversation: { channelId: cleanPhone } }
         });
         syncedCount = Math.max(0, dbCountAfter - dbCountBefore);
-      } else {
-        // Use the batch path (createMany + skipDuplicates) instead of per-message
-        // findFirst+create, which would take 20-30s for 500 messages on a remote DB.
-        const recent = messages.slice(-500);
-        if (recent.length > 0) {
-          const convId = await this.batchIngester.ingestConversationBatch(companyId, channelId, recent, admin.id);
-          if (convId) {
-            syncedCount = recent.length;
-            const { syncMediaService } = await import("./SyncMediaService");
-            syncMediaService.scheduleHydration(companyId, convId, 25);
-          }
-        }
       }
+      // else: either the conversation already had ≥15 DB messages (nothing to
+      // backfill) or the fetch attempt itself failed (already logged inside
+      // fetchHistoryFromWhatsApp). Either way syncedCount stays 0 — there's no
+      // local store to fall back to ingesting from (see comment above).
     } catch (err: unknown) {
       errored = true;
       failureReason = "error";
@@ -381,7 +369,6 @@ export class ChatSyncIngest {
 
       const { messageRepository } = await import("@/repositories/MessageRepository");
       const cleanPhone = WhatsAppIdUtils.cleanChannelId(channelId);
-      const store = await this.jidResolver.getSessionStore(sessionId);
 
       const countInDb = () => messageRepository.count({
         where: { companyId, conversation: { channelId: cleanPhone } }
@@ -412,23 +399,8 @@ export class ChatSyncIngest {
             source: "Database (oldest msg)",
           };
         }
-        if (store) {
-          // Tier 2: Search Baileys Memory Store for anchor message
-          const memMessages = this.jidResolver.extractMessagesFromStore(store, undefined, targetJid);
-          const oldestMemMsg = memMessages?.[0]; // Already sorted by timestamp asc
-          if (oldestMemMsg?.key?.id) {
-            return {
-              key: {
-                remoteJid: targetJid,
-                fromMe: oldestMemMsg.key.fromMe || false,
-                id: oldestMemMsg.key.id,
-              },
-              tsMs: syncMessageParser.getTimestamp(oldestMemMsg.messageTimestamp) * 1000,
-              source: "Memory Store (oldest msg)",
-            };
-          }
-        }
-        // Tier 3: Completely empty — unanchored request
+        // No DB anchor and no local memory store to fall back to (the Baileys
+        // store lives exclusively in whatsapp-service) — unanchored request.
         return { key: { remoteJid: targetJid, fromMe: false, id: "" }, tsMs: 0, source: "None (Unanchored Fallback)" };
       };
 

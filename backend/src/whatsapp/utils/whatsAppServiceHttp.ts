@@ -8,8 +8,16 @@ const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localho
 // The Baileys socket for a session lives exclusively in whatsapp-service now,
 // so any action needing a live socket must go through its HTTP surface, which
 // is gated behind WHATSAPP_INTERNAL_SECRET (whatsapp-service/src/middleware/internalAuth.ts).
+//
+// [PERF] Default timeout is required: without one, a hung whatsapp-service
+// (socket in RECONNECTING, Baileys waiting on an ack) leaves the request
+// pending forever. Since message sending runs behind a per-company
+// concurrency-1 queue worker, one stuck request stalls that company's
+// entire outbound queue instead of failing fast and letting the retry/backoff
+// policy take over.
 export const whatsappServiceHttp = axios.create({
   baseURL: WHATSAPP_SERVICE_URL,
+  timeout: 20000,
   headers: process.env.WHATSAPP_INTERNAL_SECRET
     ? { "x-internal-service-key": process.env.WHATSAPP_INTERNAL_SECRET }
     : undefined,
@@ -20,9 +28,12 @@ export async function executeWhatsAppCommand<T>(
   command: string,
   args: unknown[],
 ): Promise<T> {
+  // Longer budget than the default: history sync / media download commands
+  // can legitimately take longer than a message send.
   const res = await whatsappServiceHttp.post<{ success: boolean; result: T }>(
     "/commands/execute",
     { companyId, command, args },
+    { timeout: 60000 },
   );
   return res.data.result;
 }

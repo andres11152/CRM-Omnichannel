@@ -182,18 +182,8 @@ export const GetCampaignsSchema = z.object({
     status: CampaignStatus.optional(),
     channel: CampaignChannel.optional(),
     search: z.string().max(100).optional(),
-    limit: z
-      .string()
-      .transform((val) => parseInt(val))
-      .pipe(z.number().min(1).max(100))
-      .optional()
-      .default("50"),
-    offset: z
-      .string()
-      .transform((val) => parseInt(val))
-      .pipe(z.number().min(0))
-      .optional()
-      .default("0"),
+    limit: z.coerce.number().min(1).max(100).optional().default(50),
+    offset: z.coerce.number().min(0).optional().default(0),
   }),
 });
 

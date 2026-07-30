@@ -25,6 +25,7 @@ const PublicQuotationPage = React.lazy(() => import("@/pages/PublicQuotationPage
 const ProductCatalogView = React.lazy(() => import("@/components/ProductCatalogView").then(m => ({ default: m.ProductCatalogView })));
 const ActivitiesPage = React.lazy(() => import("@/pages/ActivitiesPage").then(m => ({ default: m.ActivitiesPage })));
 const AnalyticsDashboard = React.lazy(() => import("@/components/analytics/AnalyticsDashboard").then(m => ({ default: m.AnalyticsDashboard })));
+const SalesAnalyticsReport = React.lazy(() => import("@/components/analytics/SalesAnalyticsReport").then(m => ({ default: m.SalesAnalyticsReport })));
 const MarketingDashboard = React.lazy(() => import("@/components/MarketingDashboard").then(m => ({ default: m.MarketingDashboard })));
 const QueueDashboard = React.lazy(() => import("@/components/QueueDashboard").then(m => ({ default: m.QueueDashboard })));
 const TeamManager = React.lazy(() => import("@/components/TeamManager").then(m => ({ default: m.TeamManager })));
@@ -138,6 +139,7 @@ const protectedRoutes: RouteConfig[] = [
   { path: "/products", element: <ProductCatalogView /> },
   { path: "/activities", element: <ActivitiesPage /> },
   { path: "/analytics", element: <AnalyticsDashboard /> },
+  { path: "/sales-reports", element: <SalesAnalyticsReport /> },
   { path: "/email", element: <EmailInboxWrapper /> },
   { path: "/marketing", element: <MarketingDashboard /> },
   { path: "/queue", element: <QueueDashboard /> },

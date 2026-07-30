@@ -1,5 +1,6 @@
 import { FlowSessionState, FlowStructure, FlowNode } from "@/types/flow.types";
 import { Logger } from "@/utils/logger";
+import { applyContactTags } from "@/services/nodeActions/tagContactAction";
 
 export class TagContactNodeHandler {
   async handle(
@@ -9,30 +10,11 @@ export class TagContactNodeHandler {
     moveToNextNode: (sId: string, cId: string, fs: FlowStructure) => Promise<void>
   ): Promise<string | null> {
     const tags = (node.data.tags || node.data.tag || "") as string;
-    const tagList = tags.split(",").map((t: string) => t.trim()).filter(Boolean);
-    const action = ((node.data as Record<string, unknown>).action as string) || "add";
+    const action = (((node.data as Record<string, unknown>).action as string) || "add") as "add" | "remove";
 
-    if (tagList.length > 0 && session.contactId) {
+    if (tags && session.contactId) {
       try {
-        const { contactRepository } = await import("@/repositories/ContactRepository");
-        const contact = await contactRepository.findFirst({
-          where: { id: session.contactId, companyId: session.companyId },
-          select: { tags: true },
-        });
-
-        const existingTags: string[] = Array.isArray(contact?.tags) ? (contact.tags as string[]) : [];
-        const resultTags =
-          action === "remove"
-            ? existingTags.filter((t) => !tagList.includes(t))
-            : [...new Set([...existingTags, ...tagList])];
-
-        await contactRepository.update(session.companyId, session.contactId, {
-          tags: resultTags,
-        });
-
-        Logger.info(
-          `[FlowExec] TAG_CONTACT: ${action === "remove" ? "Removed" : "Added"} [${tagList.join(", ")}] ${action === "remove" ? "from" : "to"} contact ${session.contactId}`,
-        );
+        await applyContactTags(session.companyId, session.contactId, tags, action);
       } catch (error) {
         Logger.error(`[FlowExec] TAG_CONTACT failed:`, error);
       }

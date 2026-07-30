@@ -470,7 +470,7 @@ export const FlowBuilder: React.FC = () => {
         />
 
         {selectedNode ? (
-          <FlowPropertiesPanel node={selectedNode} onUpdate={updateNodeData} onDelete={handleDeleteNode} />
+          <FlowPropertiesPanel node={selectedNode} onUpdate={updateNodeData} onDelete={handleDeleteNode} triggerType={flow?.triggerType} />
         ) : selectedEdgeId ? (
           <div className="w-80 bg-white dark:bg-reply-surface-dark border-l border-gray-200 dark:border-reply-border-dark flex flex-col">
             <div className="p-4 border-b border-gray-200 dark:border-reply-border-dark">

@@ -75,6 +75,11 @@ export const initWorkers = async () => {
     const { initCronWorker } = await import("@/services/queue/cronQueueService");
     const cronWorker = await initCronWorker();
 
+    // 2b. Workflow Resume Worker (CRM automation "delay" node)
+    Logger.info("[Loader] [WORKFLOW] Initializing Workflow Resume Worker...");
+    const { workflowResumeQueueWorker } = await import("@/services/queue/workflowResumeQueueWorker");
+    workflowResumeQueueWorker.startWorker();
+
     // 3. Group Contact Indexer
     Logger.info("[Loader] [CONTACTS] Initializing Group Contact Indexer...");
     const { groupContactIndexer } = await import("@/services/queue/groupContactIndexer");
@@ -128,6 +133,7 @@ export const initWorkers = async () => {
       const { messageQueueService } = await import("@/services/queue/messageQueueService");
       await messageQueueService.shutdown();
       await flowQueueWorker.shutdown();
+      await workflowResumeQueueWorker.shutdown();
       await cronWorker.close();
       await groupContactIndexer.shutdown();
       initializedWorkers.clear();

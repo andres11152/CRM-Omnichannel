@@ -95,7 +95,7 @@ export class DashboardRepository {
         name: true,
         _count: {
           select: {
-            assignedDeals: { where: { stage: { name: "Ganado" } } },
+            assignedDeals: { where: { stage: { isWon: true } } },
             assignedConversations: { where: { status: "RESOLVED" } },
           },
         },
@@ -180,7 +180,7 @@ export class DashboardRepository {
                 status: "COMPLETED",
               },
             },
-            assignedDeals: { where: { stage: { name: "Ganado" } } },
+            assignedDeals: { where: { stage: { isWon: true } } },
           },
         },
       },
@@ -195,7 +195,7 @@ export class DashboardRepository {
         value: true,
         probability: true,
         updatedAt: true,
-        stage: { select: { name: true } },
+        stage: { select: { name: true, isWon: true, isLost: true } },
       },
     });
   }

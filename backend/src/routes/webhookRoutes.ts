@@ -54,6 +54,12 @@ import {
 router.get("/instagram", verifyInstagramWebhook);
 router.post("/instagram", verifyMetaWebhookSignature, handleInstagramWebhookEvent);
 
+// Resend email tracking webhook (delivered/opened/clicked/bounced/spam)
+import { handleResendWebhook } from "@/controllers/emailController";
+import { verifyResendWebhookSignature } from "@/middleware/resendWebhookVerifyMiddleware";
+
+router.post("/email/resend", verifyResendWebhookSignature, handleResendWebhook);
+
 // ── Protected management endpoints ──────────────────────────────────────────
 
 router.use("/", protect);

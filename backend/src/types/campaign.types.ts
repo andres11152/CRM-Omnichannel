@@ -44,7 +44,9 @@ export interface CampaignExecutionPayload {
 // Service Filter type
 export interface AudienceFilter {
   companyId: string;
-  phone: { not: null };
+  phone?: { not: null };
+  email?: { not: null };
+  emailOptOut?: false;
   deletedAt: null;
   tags?: { hasSome: string[] };
 }

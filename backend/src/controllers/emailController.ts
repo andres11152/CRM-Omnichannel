@@ -1,4 +1,4 @@
-import { Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "../types";
 import { emailService } from "../services/email/emailService";
 import { timelineService } from "../services/TimelineService";
@@ -11,6 +11,7 @@ import type {
   TestEmailConnectionInput,
 } from "../schemas/emailSchema";
 import { EmailProviderFactory } from "../services/email/email.provider";
+import { TenantContextManager } from "../config/tenantContext";
 
 /**
  * Get all emails (Inbox)
@@ -102,12 +103,33 @@ export const sendEmail = catchAsync(
  */
 export const receiveWebhook = catchAsync(
   async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
-    await emailService.processWebhook(req.body, req.headers);
+    // [SEC] Public, unauthenticated route (no tenant established by
+    // `protect`) — the lookup inside processWebhook is by provider
+    // messageId only, already scoped correctly without a companyId filter,
+    // so runAsSystem here is intentional, not a bypass.
+    await TenantContextManager.runAsSystem(() =>
+      emailService.processWebhook(req.body, req.headers),
+    );
 
     res.status(200).json({
       status: "success",
       message: "Webhook processed",
     });
+  },
+);
+
+/**
+ * Receive Resend's tracking webhook (delivered/opened/clicked/bounced/spam)
+ * POST /api/webhooks/email/resend — signature verified upstream by
+ * verifyResendWebhookSignature before this handler runs.
+ */
+export const handleResendWebhook = catchAsync(
+  async (req: Request, res: Response) => {
+    await TenantContextManager.runAsSystem(() =>
+      emailService.processWebhook(req.body, req.headers),
+    );
+
+    res.status(200).json({ status: "success" });
   },
 );
 

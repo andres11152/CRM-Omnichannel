@@ -11,6 +11,10 @@ export class WorkflowExecutionRepository {
   async update(args: Prisma.WorkflowExecutionUpdateArgs) {
     return this.db.workflowExecution.update(args);
   }
+
+  async findById(id: string) {
+    return this.db.workflowExecution.findUnique({ where: { id } });
+  }
 }
 
 export const workflowExecutionRepository = new WorkflowExecutionRepository();

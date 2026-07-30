@@ -271,3 +271,22 @@ export const launchCampaign = catchAsync(
     });
   },
 );
+
+/**
+ * Real open/click/bounce report for an EMAIL campaign.
+ * GET /campaigns/:id/report
+ */
+export const getCampaignReport = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const parsed = GetCampaignSchema.parse({ params: req.params });
+    const { id } = parsed.params;
+    const companyId = req.companyId || req.user?.companyId;
+
+    if (!companyId) {
+      return next(new AppError("Company ID missing", 400));
+    }
+
+    const report = await campaignService.getCampaignReport(id, companyId);
+    res.status(200).json({ status: "success", data: report });
+  },
+);

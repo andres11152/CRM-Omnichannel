@@ -1,6 +1,7 @@
 import { dashboardRepository } from "@/repositories/DashboardRepository";
 import { cacheService } from "@/services/CacheService";
 import { planLimitsService } from "@/services/PlanLimitsService";
+import { dealRiskService } from "@/services/DealRiskService";
 import { Logger } from "@/utils/logger";
 
 // --- DTOs ---
@@ -61,6 +62,8 @@ export interface SalesStatsDTO {
   wonCount: number;
   wonValue: number;
   conversionRate: number;
+  stalledDealsCount: number;
+  overdueTasksCount: number;
   leaderboard: {
     id: string;
     name: string;
@@ -378,33 +381,47 @@ export class DashboardService {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const [deals, topAgents] = await Promise.all([
+        const [deals, topAgents, dealHealth] = await Promise.all([
           dashboardRepository.getAllDealsForSales(companyId),
           dashboardRepository.getTopAgentsForMonthlyActivity(
             companyId,
             startOfMonth,
             5,
           ),
+          dealRiskService.getDealHealthSummary(companyId),
         ]);
 
         let pipelineValue = 0,
           wonValue = 0,
-          wonCount = 0;
+          wonCount = 0,
+          lostCount = 0,
+          forecast = 0;
         deals.forEach((deal) => {
-          if (deal.stage?.name === "Ganado") {
+          if (deal.stage?.isWon) {
             wonCount++;
             wonValue += deal.value;
+          } else if (deal.stage?.isLost) {
+            lostCount++;
           } else {
+            // [SALES] Open deal: contributes to raw pipeline value, and to the
+            // weighted forecast in proportion to its probability of closing.
             pipelineValue += deal.value;
+            forecast += deal.value * (deal.probability / 100);
           }
         });
 
+        const closedCount = wonCount + lostCount;
+        const conversionRate =
+          closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0;
+
         return {
-          forecast: 0,
+          forecast: Math.round(forecast),
           pipelineValue,
           wonCount,
           wonValue,
-          conversionRate: 0,
+          conversionRate,
+          stalledDealsCount: dealHealth.stalledDealsCount,
+          overdueTasksCount: dealHealth.totalOverdueTasks,
           leaderboard: topAgents.map((a) => ({
             id: a.id,
             name: a.name,

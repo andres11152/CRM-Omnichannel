@@ -6,6 +6,7 @@ import { workflowEngine } from "./WorkflowEngine";
 import { Prisma } from "@prisma/client";
 import { CreateDealInput, UpdateDealInput } from "../schemas/dealSchema";
 import { activityRepository } from "@/repositories/ActivityRepository";
+import { dealStageHistoryRepository } from "@/repositories/DealStageHistoryRepository";
 import { Logger } from "@/utils/logger";
 import { webhookDispatcher } from "@/services/WebhookDispatcher";
 import { WebhookEvents } from "@/types/types";
@@ -83,7 +84,7 @@ export class DealService {
     const newOrder = (maxOrder._max.order || 0) + 1;
 
     // Detect if the stage is Won/Lost for auto-setting closedAt
-    const isWonOrLost = /ganado|won|perdido|lost/i.test(stage.name);
+    const isWonOrLost = stage.isWon || stage.isLost;
 
     const dealData: Prisma.DealCreateInput = {
       title,
@@ -103,6 +104,17 @@ export class DealService {
     };
 
     const deal = await this.dealRepo.create(dealData);
+
+    // [SALES] Seed the stage history with the deal's initial placement so
+    // "time in stage" and velocity metrics have a starting point.
+    await dealStageHistoryRepository.create({
+      companyId,
+      dealId: deal.id,
+      fromStageId: null,
+      toStageId: deal.stageId,
+      valueAtChange: deal.value,
+      changedById: userId || null,
+    }).catch((e) => Logger.warn("[DealService] Failed to write initial stage history:", e));
 
     //  Auto-create initial Activity note if notes provided
     if (notes && userId) {
@@ -149,7 +161,12 @@ export class DealService {
     return deal;
   }
 
-  async updateDeal(id: string, companyId: string, data: UpdateDealInput) {
+  async updateDeal(
+    id: string,
+    companyId: string,
+    data: UpdateDealInput,
+    userId?: string,
+  ) {
     const deal = await this.dealRepo.findById(id, companyId);
     if (!deal) throw new AppError("Deal not found", 404);
 
@@ -191,7 +208,7 @@ export class DealService {
       updateData.order = (maxOrder._max.order || 0) + 1;
 
       // Auto-set closedAt when moving to Won/Lost stages
-      const isClosingStage = /ganado|won|perdido|lost/i.test(newStage.name);
+      const isClosingStage = newStage.isWon || newStage.isLost;
       if (isClosingStage && !deal.closedAt) {
         updateData.closedAt = new Date();
       } else if (!isClosingStage && deal.closedAt) {
@@ -204,6 +221,19 @@ export class DealService {
     const updatedDeal = await this.dealRepo.update(id, companyId, updateData);
 
     if (deal.stageId !== updatedDeal.stageId) {
+      await dealStageHistoryRepository
+        .create({
+          companyId,
+          dealId: deal.id,
+          fromStageId: deal.stageId,
+          toStageId: updatedDeal.stageId,
+          valueAtChange: updatedDeal.value,
+          changedById: userId || null,
+        })
+        .catch((e) =>
+          Logger.warn("[DealService] Failed to write stage history:", e),
+        );
+
       workflowEngine.emit("DEAL_UPDATED", {
         dealId: deal.id,
         companyId,
@@ -222,13 +252,13 @@ export class DealService {
         value: updatedDeal.value,
       });
 
-      // [WEBHOOK] Detect Won/Lost transitions
-      const newStageName = updatedDeal.stage.name;
-      if (/ganado|won/i.test(newStageName)) {
+      // [WEBHOOK] Detect Won/Lost transitions via the semantic stage flags,
+      // not a name match — a client can rename "Ganado" to anything.
+      if (updatedDeal.stage.isWon) {
         void webhookDispatcher.dispatch(companyId, WebhookEvents.DEAL_WON, {
           id: deal.id, title: deal.title, value: updatedDeal.value, closedAt: updatedDeal.closedAt,
         });
-      } else if (/perdido|lost/i.test(newStageName)) {
+      } else if (updatedDeal.stage.isLost) {
         void webhookDispatcher.dispatch(companyId, WebhookEvents.DEAL_LOST, {
           id: deal.id, title: deal.title, value: updatedDeal.value, lostReason: updatedDeal.lostReason,
         });
@@ -243,6 +273,7 @@ export class DealService {
     companyId: string,
     newOrder: number,
     newStageId?: string,
+    userId?: string,
   ) {
     const deal = await this.dealRepo.findById(id, companyId);
     if (!deal) throw new AppError("Deal not found", 404);
@@ -261,6 +292,19 @@ export class DealService {
     const updatedDeal = await this.dealRepo.update(id, companyId, updateData);
 
     if (newStageId && newStageId !== deal.stageId) {
+      await dealStageHistoryRepository
+        .create({
+          companyId,
+          dealId: deal.id,
+          fromStageId: deal.stageId,
+          toStageId: updatedDeal.stageId,
+          valueAtChange: updatedDeal.value,
+          changedById: userId || null,
+        })
+        .catch((e) =>
+          Logger.warn("[DealService] Failed to write stage history:", e),
+        );
+
       workflowEngine.emit("DEAL_UPDATED", {
         dealId: deal.id,
         companyId,

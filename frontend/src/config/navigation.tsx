@@ -21,6 +21,7 @@ import {
   BrainCircuit,
   Database,
   BarChart3,
+  TrendingUp,
   Settings,
   Receipt,
   Shield,
@@ -168,6 +169,13 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/analytics",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={BarChart3} />,
+  },
+  {
+    id: "sales-reports",
+    title: "Reportes de Ventas",
+    path: "/sales-reports",
+    allowedRoles: ["company_admin", "ADMIN"],
+    icon: <Icon I={TrendingUp} />,
   },
   {
     id: "ai",

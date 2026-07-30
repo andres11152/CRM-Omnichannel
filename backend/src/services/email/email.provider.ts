@@ -5,6 +5,7 @@ import {
   SendEmailParams,
   SendEmailResult,
   WebhookEvent,
+  WebhookEventType,
 } from "../../types/email.types";
 
 /**
@@ -182,6 +183,109 @@ export class SendGridProvider extends BaseEmailProvider {
 }
 
 // ===================================
+// RESEND IMPLEMENTATION
+// ===================================
+
+interface ResendWebhookPayload {
+  type: string;
+  created_at: string;
+  data: { email_id?: string; [key: string]: unknown };
+}
+
+const RESEND_EVENT_MAP: Record<string, WebhookEventType> = {
+  "email.delivered": WebhookEventType.DELIVERED,
+  "email.opened": WebhookEventType.OPENED,
+  "email.clicked": WebhookEventType.CLICKED,
+  "email.bounced": WebhookEventType.BOUNCED,
+  "email.complained": WebhookEventType.SPAM,
+  "email.delivery_delayed": WebhookEventType.FAILED,
+};
+
+export class ResendProvider extends BaseEmailProvider {
+  private apiKey: string;
+
+  constructor() {
+    super();
+    this.apiKey = process.env.RESEND_API_KEY || "";
+    if (!this.apiKey) {
+      Logger.warn("[ResendProvider] RESEND_API_KEY is missing — sends will fail until it's configured");
+    }
+  }
+
+  async sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+    if (!this.apiKey) {
+      return { success: false, error: "RESEND_API_KEY is not configured" };
+    }
+
+    try {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: params.from,
+          to: Array.isArray(params.to) ? params.to : [params.to],
+          cc: params.cc,
+          bcc: params.bcc,
+          subject: params.subject,
+          html: params.htmlBody,
+          text: params.textBody,
+          reply_to: params.replyTo,
+          headers: params.headers,
+          attachments: params.attachments?.map((att) => ({
+            filename: att.filename,
+            content: typeof att.content === "string" ? att.content : att.content?.toString("base64"),
+            path: att.path,
+          })),
+        }),
+      });
+
+      const body = (await response.json()) as { id?: string; message?: string };
+
+      if (!response.ok) {
+        Logger.error(`[ResendProvider] Send failed (${response.status}): ${body.message}`);
+        return { success: false, error: body.message || `Resend API returned ${response.status}` };
+      }
+
+      Logger.info(`[ResendProvider] Email sent: ${body.id}`);
+      return { success: true, messageId: body.id };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      Logger.error("[ResendProvider] Send failed:", error);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  parseWebhook(body: unknown, _headers: unknown): WebhookEvent | null {
+    const payload = body as ResendWebhookPayload;
+    const eventType = RESEND_EVENT_MAP[payload?.type];
+    const messageId = payload?.data?.email_id;
+
+    if (!eventType || !messageId) {
+      Logger.warn(`[ResendProvider] Unhandled or malformed webhook: ${payload?.type}`);
+      return null;
+    }
+
+    return {
+      messageId,
+      eventType,
+      timestamp: payload.created_at ? new Date(payload.created_at) : new Date(),
+      metadata: payload.data,
+    };
+  }
+
+  // Full cryptographic verification happens in verifyResendWebhookSignature
+  // middleware (needs the raw request body + svix-* headers, which this
+  // interface's (body, signature) shape can't carry) — see webhookRoutes.ts,
+  // mirroring how Meta/Instagram webhooks are already verified in this app.
+  verifyWebhookSignature(_body: unknown, _signature: string): boolean {
+    return true;
+  }
+}
+
+// ===================================
 // AWS SES IMPLEMENTATION (Future)
 // ===================================
 
@@ -211,7 +315,7 @@ export class AWSSESProvider extends BaseEmailProvider {
 // FACTORY PATTERN
 // ===================================
 
-export type EmailProviderType = "nodemailer" | "sendgrid" | "ses";
+export type EmailProviderType = "nodemailer" | "sendgrid" | "ses" | "resend";
 
 export class EmailProviderFactory {
   static createProvider(
@@ -229,6 +333,8 @@ export class EmailProviderFactory {
         return new SendGridProvider();
       case "ses":
         return new AWSSESProvider();
+      case "resend":
+        return new ResendProvider();
       default:
         Logger.warn(
           `[EmailProviderFactory] Unknown provider: ${providerType}, falling back to Nodemailer`,

@@ -1,5 +1,6 @@
 import { FlowSessionState, FlowStructure, FlowNode } from "@/types/flow.types";
 import { Logger } from "@/utils/logger";
+import { evaluateOperator } from "@/utils/conditionEvaluator";
 
 export class ConditionNodeHandler {
   async handle(
@@ -18,35 +19,7 @@ export class ConditionNodeHandler {
       for (const condition of conditions) {
         const { operator, value, targetHandle } = condition;
 
-        let matched = false;
-        const numA = parseFloat(valueToCheck);
-        const numB = parseFloat(value);
-        switch (operator) {
-          case "equals":
-            matched = valueToCheck.toLowerCase() === value.toLowerCase();
-            break;
-          case "contains":
-            matched = valueToCheck.toLowerCase().includes(value.toLowerCase());
-            break;
-          case "starts_with":
-            matched = valueToCheck.toLowerCase().startsWith(value.toLowerCase());
-            break;
-          case "ends_with":
-            matched = valueToCheck.toLowerCase().endsWith(value.toLowerCase());
-            break;
-          case "regex":
-            try { matched = new RegExp(value, "i").test(valueToCheck); } catch { matched = false; }
-            break;
-          case "is_empty":
-            matched = valueToCheck.trim().length === 0;
-            break;
-          case "greater_than":
-            matched = !isNaN(numA) && !isNaN(numB) && numA > numB;
-            break;
-          case "less_than":
-            matched = !isNaN(numA) && !isNaN(numB) && numA < numB;
-            break;
-        }
+        const matched = evaluateOperator(operator, valueToCheck, value);
 
         if (matched) {
           const edge = flowStructure.edges.find(
@@ -75,42 +48,8 @@ export class ConditionNodeHandler {
 
     const operator = node.data.conditionOperator || "contains";
     const conditionValue = node.data.conditionValue || "";
-    
-    let conditionMet = false;
-    const numA = parseFloat(valueToCheck);
-    const numB = parseFloat(conditionValue);
 
-    switch (operator) {
-      case "equals":
-        conditionMet = valueToCheck.toLowerCase() === conditionValue.toLowerCase();
-        break;
-      case "contains":
-        conditionMet = valueToCheck.toLowerCase().includes(conditionValue.toLowerCase());
-        break;
-      case "starts_with":
-        conditionMet = valueToCheck.toLowerCase().startsWith(conditionValue.toLowerCase());
-        break;
-      case "ends_with":
-        conditionMet = valueToCheck.toLowerCase().endsWith(conditionValue.toLowerCase());
-        break;
-      case "regex":
-        try { conditionMet = new RegExp(conditionValue, "i").test(valueToCheck); } catch { conditionMet = false; }
-        break;
-      case "is_empty":
-        conditionMet = valueToCheck.trim().length === 0;
-        break;
-      case "greater_than":
-        conditionMet = !isNaN(numA) && !isNaN(numB) && numA > numB;
-        break;
-      case "less_than":
-        conditionMet = !isNaN(numA) && !isNaN(numB) && numA < numB;
-        break;
-      case "exists":
-        conditionMet = valueToCheck.trim().length > 0;
-        break;
-      default:
-        conditionMet = valueToCheck.toLowerCase().includes(conditionValue.toLowerCase());
-    }
+    const conditionMet = evaluateOperator(operator, valueToCheck, conditionValue);
 
     const targetLabel = conditionMet ? "TRUE" : "FALSE";
     

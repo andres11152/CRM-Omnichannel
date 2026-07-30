@@ -88,6 +88,15 @@ export class EmailRepository {
     });
   }
 
+  /** Per-status counts for a campaign — the raw material for open/click/bounce rates. */
+  async countByCampaignStatus(campaignId: string, companyId: string) {
+    return prisma.email.groupBy({
+      by: ["status"],
+      where: { campaignId, companyId },
+      _count: { _all: true },
+    });
+  }
+
   // ────────────────────────────────────────────────
   // INBOX LISTING (Paginated, Filterable)
   // ────────────────────────────────────────────────

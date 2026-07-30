@@ -18,12 +18,14 @@ interface FlowPropertiesPanelProps {
   node: FlowNode;
   onUpdate: (key: string, value: unknown) => void;
   onDelete: () => void;
+  triggerType?: string;
 }
 
 export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
   node,
   onUpdate,
   onDelete,
+  triggerType,
 }) => {
   const { t } = useTranslation();
   const [aiAgents, setAiAgents] = useState<
@@ -122,7 +124,7 @@ export const FlowPropertiesPanel: React.FC<FlowPropertiesPanelProps> = ({
         <MessageNodeProperties node={node} onUpdate={onUpdate} />
         <MediaNodeProperties node={node} onUpdate={onUpdate} />
         <CRMNodeProperties node={node} onUpdate={onUpdate} />
-        <RoutingNodeProperties node={node} onUpdate={onUpdate} />
+        <RoutingNodeProperties node={node} onUpdate={onUpdate} triggerType={triggerType} />
         <ActionNodeProperties node={node} onUpdate={onUpdate} />
         <SystemNodeProperties node={node} onUpdate={onUpdate} />
         <IntegrationNodeProperties node={node} onUpdate={onUpdate} />

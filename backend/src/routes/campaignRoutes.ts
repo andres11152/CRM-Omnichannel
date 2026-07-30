@@ -6,6 +6,7 @@ import {
   updateCampaign,
   deleteCampaign,
   launchCampaign,
+  getCampaignReport,
 } from "@/controllers/campaignController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
@@ -61,5 +62,8 @@ router.route("/:id/launch").post(
   auditLog("Campaign", (req) => req.params.id), // Log Launch as UPDATE/ACTION
   launchCampaign,
 );
+
+// GET /campaigns/:id/report — open/click/bounce rates for EMAIL campaigns
+router.route("/:id/report").get(validate(GetCampaignSchema), getCampaignReport);
 
 export default router;

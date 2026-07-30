@@ -179,18 +179,8 @@ export const GetTicketsSchema = z.object({
     assignedToId: z.string().cuid().optional(),
     queueId: z.string().cuid().optional(),
     search: z.string().max(100, "Search query too long").optional(),
-    limit: z
-      .string()
-      .transform((val) => parseInt(val))
-      .pipe(z.number().min(1).max(100))
-      .optional()
-      .default("50"),
-    offset: z
-      .string()
-      .transform((val) => parseInt(val))
-      .pipe(z.number().min(0))
-      .optional()
-      .default("0"),
+    limit: z.coerce.number().min(1).max(100).optional().default(50),
+    offset: z.coerce.number().min(0).optional().default(0),
   }),
 });
 

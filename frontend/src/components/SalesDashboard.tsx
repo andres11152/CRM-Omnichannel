@@ -11,6 +11,8 @@ export const SalesDashboard: React.FC = () => {
     wonValue: number;
     wonCount: number;
     conversionRate: number;
+    stalledDealsCount: number;
+    overdueTasksCount: number;
     leaderboard: Array<{
       id: string;
       name: string;
@@ -30,6 +32,8 @@ export const SalesDashboard: React.FC = () => {
           wonValue: number;
           wonCount: number;
           conversionRate: number;
+          stalledDealsCount: number;
+          overdueTasksCount: number;
           leaderboard: Array<{
             id: string;
             name: string;
@@ -218,13 +222,15 @@ export const SalesDashboard: React.FC = () => {
                 <span className="text-gray-500">
                   {t("sales.stagnant_deals", "Deals Estancados (>30 días)")}
                 </span>
-                <span className="font-bold text-red-500">0</span>{" "}
-                {/* Placeholder for future metric */}
+                <span className="font-bold text-red-500">
+                  {stats?.stalledDealsCount ?? 0}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">{t("sales.overdue_tasks", "Tareas Vencidas")}</span>
-                <span className="font-bold text-amber-500">0</span>{" "}
-                {/* Placeholder */}
+                <span className="font-bold text-amber-500">
+                  {stats?.overdueTasksCount ?? 0}
+                </span>
               </div>
 
               <div className="mt-6 pt-6 border-t dark:border-reply-border-dark">

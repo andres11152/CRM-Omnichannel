@@ -214,6 +214,11 @@ model Contact {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  // [EMAIL] CAN-SPAM / GDPR: contacts who unsubscribed from email campaigns.
+  // Enforced at send time in CampaignExecutionService — never bypass this.
+  emailOptOut   Boolean   @default(false)
+  emailOptOutAt DateTime?
+
   // 🗑️ SOFT DELETE
   deletedAt DateTime?
   deletedBy String?
@@ -311,8 +316,8 @@ model Company {
   imapPort            Int?
   imapUser            String?
   imapPassword        String? // Encrypted (same mechanism as smtpPassword)
-  imapSecure          Boolean  @default(true)
-  emailInboundEnabled Boolean  @default(false)
+  imapSecure          Boolean   @default(true)
+  emailInboundEnabled Boolean   @default(false)
   // Incremental fetch cursor so the poller never reprocesses old mail.
   imapLastSeenUid     Int?
   imapLastSeenAt      DateTime?
@@ -344,6 +349,7 @@ model Company {
   properties        Property[] // Real Estate Module
   dealProducts      DealProduct[]
   quotations        Quotation[]
+  dealStageHistory  DealStageHistory[]
 
   // Chatbot Flows
   // Link to 'workflows' is the single source of truth (line 251)
@@ -432,13 +438,14 @@ model User {
   uploadedMedia Media[]
 
   // CRM Relations
-  assignedDeals           Deal[]     @relation("AssignedDeals")
-  assignedProperties      Property[] @relation("PropertyAssignedTo")
-  assignedActivities      Activity[] @relation("AssignedActivities")
-  createdActivities       Activity[] @relation("CreatedActivities")
-  participatingActivities Activity[] @relation("ActivityParticipants")
-  mentionedInActivities   Activity[] @relation("ActivityMentions")
-  createdQuotations       Quotation[] @relation("CreatedQuotations")
+  assignedDeals           Deal[]             @relation("AssignedDeals")
+  dealStageChanges        DealStageHistory[]
+  assignedProperties      Property[]         @relation("PropertyAssignedTo")
+  assignedActivities      Activity[]         @relation("AssignedActivities")
+  createdActivities       Activity[]         @relation("CreatedActivities")
+  participatingActivities Activity[]         @relation("ActivityParticipants")
+  mentionedInActivities   Activity[]         @relation("ActivityMentions")
+  createdQuotations       Quotation[]        @relation("CreatedQuotations")
 
   // Chatbot Flows
   // createdFlows Workflow[] -- No relation defined in Workflow model for 'createdBy' user yet??
@@ -541,14 +548,14 @@ enum WhatsAppProvider {
 }
 
 model WhatsAppSession {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sessionId String  @unique // Folder name for auth creds
-  phone     String?
-  status    String  @default("DISCONNECTED") // CONNECTED, DISCONNECTED, SCANNING
-  qrCode    String? // Base64 QR for frontend display
-  proxyUrl  String? // Proxy URL to route session traffic (avoid shared IP bans)
+  id          String  @id @default(cuid())
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sessionId   String  @unique // Folder name for auth creds
+  phone       String?
+  status      String  @default("DISCONNECTED") // CONNECTED, DISCONNECTED, SCANNING
+  qrCode      String? // Base64 QR for frontend display
+  proxyUrl    String? // Proxy URL to route session traffic (avoid shared IP bans)
   profileName String?
 
   // Notification tracking
@@ -928,6 +935,8 @@ model Campaign {
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id])
 
+  emails Email[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1020,7 +1029,15 @@ model Stage {
   order Float   @default(0) // Float for flexible drag-and-drop reordering
   color String? @default("#6B7280") // Hex color for UI customization
 
-  deals Deal[]
+  // [SALES] Semantic outcome flags — analytics must never infer "won"/"lost"
+  // from stage.name (a client-renameable string). Exactly one of these
+  // should be true for a closing stage; both false means the deal is open.
+  isWon  Boolean @default(false)
+  isLost Boolean @default(false)
+
+  deals                Deal[]
+  dealStageHistoryFrom DealStageHistory[] @relation("DealStageHistoryFrom")
+  dealStageHistoryTo   DealStageHistory[] @relation("DealStageHistoryTo")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1028,6 +1045,35 @@ model Stage {
   @@unique([pipelineId, order])
   @@index([pipelineId, order])
   @@map("stages")
+}
+
+// [SALES] Append-only log of deal stage transitions — the source of truth
+// for sales velocity, per-stage conversion, and historical pipeline
+// snapshots. Written once per transition, never updated or deleted.
+model DealStageHistory {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  fromStageId String?
+  fromStage   Stage?  @relation("DealStageHistoryFrom", fields: [fromStageId], references: [id], onDelete: SetNull)
+
+  toStageId String?
+  toStage   Stage?  @relation("DealStageHistoryTo", fields: [toStageId], references: [id], onDelete: SetNull)
+
+  valueAtChange Float
+
+  changedById String?
+  changedBy   User?   @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  changedAt DateTime @default(now())
+
+  @@index([companyId, changedAt])
+  @@index([dealId, changedAt])
+  @@map("deal_stage_history")
 }
 
 enum ActivityType {
@@ -1101,6 +1147,7 @@ model Deal {
   properties   Property[]
   dealProducts DealProduct[]
   quotations   Quotation[]
+  stageHistory DealStageHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1129,7 +1176,7 @@ model Activity {
   status      String       @default("PENDING") // PENDING, COMPLETED
   dueDate     DateTime?
 
-  googleEventId String? // Store Google Calendar Event ID
+  googleEventId  String? // Store Google Calendar Event ID
   outlookEventId String? // Store Outlook Calendar Event ID
 
   // Relations (Polymorphic-ish)
@@ -1192,7 +1239,7 @@ model Product {
   imageUrl    String?
   status      ProductStatus @default(active)
 
-  dealProducts DealProduct[]
+  dealProducts   DealProduct[]
   quotationItems QuotationItem[]
 
   createdAt DateTime @default(now())
@@ -1253,12 +1300,12 @@ model Quotation {
   createdById String?
   createdBy   User?   @relation("CreatedQuotations", fields: [createdById], references: [id], onDelete: SetNull)
 
-  status   QuotationStatus @default(DRAFT)
-  currency String          @default("COP")
-  subtotal Float           @default(0)
-  taxAmount Float          @default(0)
-  discount Float           @default(0)
-  total    Float           @default(0)
+  status    QuotationStatus @default(DRAFT)
+  currency  String          @default("COP")
+  subtotal  Float           @default(0)
+  taxAmount Float           @default(0)
+  discount  Float           @default(0)
+  total     Float           @default(0)
 
   notes      String?
   terms      String?
@@ -1723,6 +1770,11 @@ model Email {
   conversationId String?
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 
+  // Links a campaign-triggered send back to its Campaign, for open/click/
+  // bounce reporting per campaign.
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
   // RFC 5322 In-Reply-To header of the inbound mail — set on outbound replies
   // so the recipient's mail client threads the conversation correctly.
   inReplyTo String?
@@ -1748,6 +1800,7 @@ model Email {
   @@index([contactId, createdAt(sort: Desc)]) // Contact timeline
   @@index([ticketId, createdAt(sort: Desc)]) // Ticket timeline
   @@index([conversationId, createdAt(sort: Desc)]) // Conversation → emails
+  @@index([campaignId]) // Campaign report aggregation
   @@index([status]) // Status filtering
   @@index([messageId]) // Webhook lookups
   @@map("emails")
@@ -1956,20 +2009,20 @@ model BillingTransaction {
 }
 
 model MeetingType {
-  id           String   @id @default(cuid())
-  companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  name         String
-  slug         String
-  description  String?
-  duration     Int      @default(30)
-  isActive     Boolean  @default(true)
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  slug        String
+  description String?
+  duration    Int     @default(30)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, slug])
   @@index([companyId])
@@ -1977,14 +2030,14 @@ model MeetingType {
 }
 
 model Availability {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  timezone  String   @default("America/Bogota")
-  rules     Json
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String  @unique
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  timezone String @default("America/Bogota")
+  rules    Json
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

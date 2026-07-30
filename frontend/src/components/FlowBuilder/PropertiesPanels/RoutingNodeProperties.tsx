@@ -2,10 +2,11 @@ import React, { useState, useEffect } from "react";
 import { NodePropertiesProps } from "./MediaNodeProperties";
 import { getAgents, getQueues } from "@/services/queueService";
 
-export const RoutingNodeProperties: React.FC<NodePropertiesProps> = ({ node, onUpdate }) => {
+export const RoutingNodeProperties: React.FC<NodePropertiesProps> = ({ node, onUpdate, triggerType }) => {
   const [humanAgents, setHumanAgents] = useState<Array<{ id: string; name: string; email?: string }>>([]);
   const [supportQueues, setSupportQueues] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingRouting, setLoadingRouting] = useState(false);
+  const isCrmWorkflow = triggerType === "EVENT";
 
   useEffect(() => {
     if (node.type === "assign_agent") {
@@ -16,9 +17,11 @@ export const RoutingNodeProperties: React.FC<NodePropertiesProps> = ({ node, onU
   const fetchRoutingData = async () => {
     setLoadingRouting(true);
     try {
+      // A CRM automation reassigns the deal's owner — there's no support
+      // queue concept for a deal, so skip that fetch entirely.
       const [agentsData, queuesData] = await Promise.all([
         getAgents(),
-        getQueues(),
+        isCrmWorkflow ? Promise.resolve([]) : getQueues(),
       ]);
       setHumanAgents(agentsData);
       setSupportQueues(queuesData);
@@ -28,6 +31,48 @@ export const RoutingNodeProperties: React.FC<NodePropertiesProps> = ({ node, onU
       setLoadingRouting(false);
     }
   };
+
+  if (node.type === "assign_agent" && isCrmWorkflow) {
+    return (
+      <>
+        <div className="bg-pink-50 dark:bg-pink-900/20 p-3 rounded-lg border border-pink-200 dark:border-pink-800 mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-xs font-bold text-pink-900 dark:text-pink-300">
+              Reasignar Dueño del Deal
+            </p>
+          </div>
+          <p className="text-xs text-pink-700 dark:text-pink-400">
+            Cambia el vendedor responsable de este negocio.
+          </p>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">
+            Nuevo Dueño
+          </label>
+          {loadingRouting ? (
+            <div className="text-xs text-gray-400">Cargando agentes...</div>
+          ) : (
+            <select
+              value={node.data.agentId || ""}
+              onChange={(e) => onUpdate("agentId", e.target.value)}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-reply-surface-dark text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-pink-500"
+            >
+              <option value="">-- Seleccionar Vendedor --</option>
+              {humanAgents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name} {agent.email ? `(${agent.email})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
+          <p className="text-xs text-gray-400 mt-1">
+            El deal se reasignará automáticamente a este vendedor.
+          </p>
+        </div>
+      </>
+    );
+  }
 
   if (node.type === "assign_agent") {
     return (

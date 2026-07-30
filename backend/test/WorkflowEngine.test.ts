@@ -42,12 +42,22 @@ import { dealRepository } from "../src/repositories/DealRepository";
 import { contactRepository } from "../src/repositories/ContactRepository";
 import { activityRepository } from "../src/repositories/ActivityRepository";
 import { flowSessionRepository } from "../src/repositories/FlowSessionRepository";
+import { workflowResumeQueueService } from "../src/services/queue/workflowResumeQueueService";
 
 // Mock Repositories
 jest.mock("../src/repositories/WorkflowRepository", () => {
   return {
     workflowRepository: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
+    },
+  };
+});
+
+jest.mock("../src/services/queue/workflowResumeQueueService", () => {
+  return {
+    workflowResumeQueueService: {
+      scheduleResume: jest.fn(),
     },
   };
 });
@@ -57,6 +67,7 @@ jest.mock("../src/repositories/WorkflowExecutionRepository", () => {
     workflowExecutionRepository: {
       create: jest.fn(),
       update: jest.fn(),
+      findById: jest.fn(),
     },
   };
 });
@@ -73,6 +84,7 @@ jest.mock("../src/repositories/DealRepository", () => {
   return {
     dealRepository: {
       findById: jest.fn(),
+      update: jest.fn(),
     },
   };
 });
@@ -81,6 +93,7 @@ jest.mock("../src/repositories/ContactRepository", () => {
   return {
     contactRepository: {
       findFirst: jest.fn(),
+      update: jest.fn(),
     },
   };
 });
@@ -394,6 +407,342 @@ describe("WorkflowEngine", () => {
           status: "FAILED",
           error: "AI Agent node missing AssistantId",
         }),
+      });
+    });
+  });
+
+  describe("Condition Node Branching", () => {
+    it("only executes the TRUE branch when the legacy condition matches — not both (real FlowBuilder canvas shape: edge.label, not sourceHandle)", async () => {
+      const payload = { dealId, companyId, newStage: "negotiation" };
+
+      const mockWorkflow = {
+        id: "wf_cond",
+        companyId,
+        isActive: true,
+        triggerConfig: { event: "DEAL_UPDATED" },
+        nodes: [
+          { id: "n_start", type: "START", data: {} },
+          {
+            id: "n_cond",
+            type: "condition",
+            data: { conditionVariable: "newStage", conditionOperator: "equals", conditionValue: "negotiation" },
+          },
+          { id: "n_true", type: "action_task", data: { label: "TRUE branch task" } },
+          { id: "n_false", type: "action_task", data: { label: "FALSE branch task" } },
+        ],
+        // This is exactly what FlowBuilder/index.tsx's handleNodeConnectEnd
+        // produces: { id, source, target, label } — no sourceHandle.
+        edges: [
+          { id: "e1", source: "n_start", target: "n_cond" },
+          { id: "e2", source: "n_cond", target: "n_true", label: "TRUE" },
+          { id: "e3", source: "n_cond", target: "n_false", label: "FALSE" },
+        ],
+      };
+
+      (workflowRepository.findMany as jest.Mock).mockResolvedValue([mockWorkflow]);
+
+      workflowEngine.emit("DEAL_UPDATED", payload);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(activityRepository.create).toHaveBeenCalledTimes(1);
+      expect(activityRepository.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ subject: "TRUE branch task" }),
+      });
+    });
+
+    it("routes via targetHandle when using the conditions[] array shape, only running the matched branch", async () => {
+      const payload = { dealId, companyId, newStage: "won" };
+
+      const mockWorkflow = {
+        id: "wf_cond_array",
+        companyId,
+        isActive: true,
+        triggerConfig: { event: "DEAL_UPDATED" },
+        nodes: [
+          { id: "n_start", type: "START", data: {} },
+          {
+            id: "n_cond",
+            type: "condition",
+            data: {
+              conditionVariable: "newStage",
+              conditions: [
+                { operator: "equals", value: "won", targetHandle: "big_win" },
+                { operator: "equals", value: "lost", targetHandle: "loss" },
+              ],
+            },
+          },
+          { id: "n_win", type: "action_task", data: { label: "Celebrate win" } },
+          { id: "n_loss", type: "action_task", data: { label: "Log loss" } },
+        ],
+        edges: [
+          { id: "e1", source: "n_start", target: "n_cond" },
+          { id: "e2", source: "n_cond", target: "n_win", sourceHandle: "big_win" },
+          { id: "e3", source: "n_cond", target: "n_loss", sourceHandle: "loss" },
+        ],
+      };
+
+      (workflowRepository.findMany as jest.Mock).mockResolvedValue([mockWorkflow]);
+
+      workflowEngine.emit("DEAL_UPDATED", payload);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(activityRepository.create).toHaveBeenCalledTimes(1);
+      expect(activityRepository.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ subject: "Celebrate win" }),
+      });
+    });
+
+    it("falls back to the unlabeled edge when no rule in conditions[] matches", async () => {
+      const payload = { dealId, companyId, newStage: "qualifying" };
+
+      const mockWorkflow = {
+        id: "wf_cond_default",
+        companyId,
+        isActive: true,
+        triggerConfig: { event: "DEAL_UPDATED" },
+        nodes: [
+          { id: "n_start", type: "START", data: {} },
+          {
+            id: "n_cond",
+            type: "condition",
+            data: {
+              conditionVariable: "newStage",
+              conditions: [{ operator: "equals", value: "won", targetHandle: "big_win" }],
+            },
+          },
+          { id: "n_win", type: "action_task", data: { label: "Celebrate win" } },
+          { id: "n_default", type: "action_task", data: { label: "Default path" } },
+        ],
+        edges: [
+          { id: "e1", source: "n_start", target: "n_cond" },
+          { id: "e2", source: "n_cond", target: "n_win", sourceHandle: "big_win" },
+          { id: "e3", source: "n_cond", target: "n_default" },
+        ],
+      };
+
+      (workflowRepository.findMany as jest.Mock).mockResolvedValue([mockWorkflow]);
+
+      workflowEngine.emit("DEAL_UPDATED", payload);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(activityRepository.create).toHaveBeenCalledTimes(1);
+      expect(activityRepository.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ subject: "Default path" }),
+      });
+    });
+  });
+
+  describe("Tag Contact Action", () => {
+    it("adds the configured tags to the deal's linked contact", async () => {
+      const payload = { dealId, companyId, newStage: "won" };
+
+      const mockWorkflow = {
+        id: "wf_tag",
+        companyId,
+        isActive: true,
+        triggerConfig: { event: "DEAL_UPDATED" },
+        nodes: [
+          { id: "n_start", type: "START", data: {} },
+          { id: "n_tag", type: "tag_contact", data: { tags: "vip, hot-lead" } },
+        ],
+        edges: [{ id: "e1", source: "n_start", target: "n_tag" }],
+      };
+
+      (dealRepository.findById as jest.Mock).mockResolvedValue({
+        id: dealId,
+        contact: { id: "contact_vip", tags: ["existing"] },
+      });
+      (contactRepository.findFirst as jest.Mock).mockResolvedValue({ tags: ["existing"] });
+
+      (workflowRepository.findMany as jest.Mock).mockResolvedValue([mockWorkflow]);
+
+      workflowEngine.emit("DEAL_UPDATED", payload);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(contactRepository.update).toHaveBeenCalledWith(
+        companyId,
+        "contact_vip",
+        { tags: expect.arrayContaining(["existing", "vip", "hot-lead"]) },
+      );
+    });
+  });
+
+  describe("HTTP Request Action", () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it("calls the configured webhook and stores the response in payload.variables", async () => {
+      const payload: { dealId: string; companyId: string; newStage: string; variables?: Record<string, unknown> } = {
+        dealId,
+        companyId,
+        newStage: "won",
+        variables: {},
+      };
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ received: true }),
+      }) as unknown as typeof fetch;
+
+      const mockWorkflow = {
+        id: "wf_http",
+        companyId,
+        isActive: true,
+        triggerConfig: { event: "DEAL_UPDATED" },
+        nodes: [
+          { id: "n_start", type: "START", data: {} },
+          { id: "n_http", type: "http_request", data: { url: "https://example.com/webhook", method: "POST" } },
+        ],
+        edges: [{ id: "e1", source: "n_start", target: "n_http" }],
+      };
+
+      (workflowRepository.findMany as jest.Mock).mockResolvedValue([mockWorkflow]);
+
+      workflowEngine.emit("DEAL_UPDATED", payload);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://example.com/webhook",
+        expect.objectContaining({ method: "POST" }),
+      );
+      expect(payload.variables?.http_status).toBe(200);
+    });
+  });
+
+  describe("Delay Node (pause / durable resume)", () => {
+    it("pauses at a delay node instead of running the rest of the graph inline, and schedules a durable resume", async () => {
+      const payload = { dealId, companyId, newStage: "won" };
+
+      const mockWorkflow = {
+        id: "wf_delay",
+        companyId,
+        isActive: true,
+        triggerConfig: { event: "DEAL_UPDATED" },
+        nodes: [
+          { id: "n_start", type: "START", data: {} },
+          { id: "n_delay", type: "delay", data: { delayValue: "3", delayUnit: "days" } },
+          { id: "n_task", type: "action_task", data: { label: "After the wait" } },
+        ],
+        edges: [
+          { id: "e1", source: "n_start", target: "n_delay" },
+          { id: "e2", source: "n_delay", target: "n_task" },
+        ],
+      };
+
+      (workflowRepository.findMany as jest.Mock).mockResolvedValue([mockWorkflow]);
+
+      workflowEngine.emit("DEAL_UPDATED", payload);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // The action AFTER the delay must not have run yet.
+      expect(activityRepository.create).not.toHaveBeenCalled();
+
+      expect(workflowExecutionRepository.update).toHaveBeenCalledWith({
+        where: { id: "exec_001" },
+        data: expect.objectContaining({
+          status: "WAITING",
+          logs: expect.objectContaining({
+            pausedState: expect.objectContaining({
+              resumeNodeIds: ["n_task"],
+            }),
+          }),
+        }),
+      });
+
+      expect(workflowResumeQueueService.scheduleResume).toHaveBeenCalledWith(
+        "exec_001",
+        3 * 24 * 60 * 60 * 1000,
+      );
+    });
+
+    it("resumeExecution continues from the paused node and completes the workflow", async () => {
+      const payload = { dealId, companyId, newStage: "won" };
+
+      const mockWorkflow = {
+        id: "wf_delay",
+        companyId,
+        isActive: true,
+        triggerConfig: { event: "DEAL_UPDATED" },
+        nodes: [
+          { id: "n_start", type: "START", data: {} },
+          { id: "n_delay", type: "delay", data: { delayValue: "1", delayUnit: "hours" } },
+          { id: "n_task", type: "action_task", data: { label: "After the wait" } },
+        ],
+        edges: [
+          { id: "e1", source: "n_start", target: "n_delay" },
+          { id: "e2", source: "n_delay", target: "n_task" },
+        ],
+      };
+
+      (workflowExecutionRepository.findById as jest.Mock).mockResolvedValue({
+        id: "exec_001",
+        workflowId: "wf_delay",
+        companyId,
+        status: "WAITING",
+        logs: {
+          steps: [{ nodeId: "n_delay", type: "delay", timestamp: new Date(), status: "PAUSED" }],
+          pausedState: {
+            visited: ["n_start", "n_delay"],
+            resumeNodeIds: ["n_task"],
+            payload,
+            stepLogs: [{ nodeId: "n_delay", type: "delay", timestamp: new Date(), status: "PAUSED" }],
+          },
+        },
+      });
+      (workflowRepository.findFirst as jest.Mock).mockResolvedValue(mockWorkflow);
+
+      await workflowEngine.resumeExecution("exec_001");
+
+      expect(activityRepository.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ subject: "After the wait" }),
+      });
+
+      expect(workflowExecutionRepository.update).toHaveBeenCalledWith({
+        where: { id: "exec_001" },
+        data: expect.objectContaining({ status: "SUCCESS" }),
+      });
+    });
+
+    it("resumeExecution is a no-op when the execution is not in WAITING status (avoids double-processing)", async () => {
+      (workflowExecutionRepository.findById as jest.Mock).mockResolvedValue({
+        id: "exec_001",
+        status: "SUCCESS",
+      });
+
+      await workflowEngine.resumeExecution("exec_001");
+
+      expect(workflowRepository.findFirst).not.toHaveBeenCalled();
+      expect(activityRepository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Assign Deal Owner Action (CRM reuse of assign_agent)", () => {
+    it("reassigns the deal's owner to the configured agentId", async () => {
+      const payload = { dealId, companyId, newStage: "negotiation" };
+
+      const mockWorkflow = {
+        id: "wf_assign",
+        companyId,
+        isActive: true,
+        triggerConfig: { event: "DEAL_UPDATED" },
+        nodes: [
+          { id: "n_start", type: "START", data: {} },
+          { id: "n_assign", type: "assign_agent", data: { agentId: "user_new_owner" } },
+        ],
+        edges: [{ id: "e1", source: "n_start", target: "n_assign" }],
+      };
+
+      (workflowRepository.findMany as jest.Mock).mockResolvedValue([mockWorkflow]);
+
+      workflowEngine.emit("DEAL_UPDATED", payload);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(dealRepository.update).toHaveBeenCalledWith(dealId, companyId, {
+        assignedToId: "user_new_owner",
       });
     });
   });

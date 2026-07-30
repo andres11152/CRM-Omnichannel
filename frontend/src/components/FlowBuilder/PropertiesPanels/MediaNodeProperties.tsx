@@ -5,6 +5,11 @@ import { MediaSelectorModal } from "../MediaSelectorModal";
 export interface NodePropertiesProps {
   node: FlowNode;
   onUpdate: (key: string, value: unknown) => void;
+  // "KEYWORD" (chatbot) vs "EVENT" (CRM automation) — lets a panel show
+  // context-appropriate copy for node types shared between both engines
+  // (e.g. assign_agent means "route this chat" in one, "reassign deal
+  // owner" in the other).
+  triggerType?: string;
 }
 
 export const MediaNodeProperties: React.FC<NodePropertiesProps> = ({ node, onUpdate }) => {

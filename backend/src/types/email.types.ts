@@ -136,6 +136,8 @@ export interface CreateEmailDTO {
   ticketId?: string;
   /** Links the Email row to its EMAIL-channel Conversation (omnichannel inbox). */
   conversationId?: string;
+  /** Links to the Campaign that triggered this send, for open/click/bounce reporting. */
+  campaignId?: string;
   /** RFC 5322 In-Reply-To — set on outbound replies so clients thread correctly. */
   inReplyTo?: string;
 

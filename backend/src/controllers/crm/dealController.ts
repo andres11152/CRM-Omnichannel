@@ -82,7 +82,12 @@ export const updateDeal = catchAsync(
     const companyId = req.user?.companyId;
     if (!companyId) return next(new AppError("Company ID is missing", 400));
 
-    const deal = await dealService.updateDeal(params.id, companyId, body);
+    const deal = await dealService.updateDeal(
+      params.id,
+      companyId,
+      body,
+      req.user?.id,
+    );
 
     res.status(200).json({
       status: "success",
@@ -105,6 +110,7 @@ export const updateDealOrder = catchAsync(
       companyId,
       body.order,
       body.stageId,
+      req.user?.id,
     );
 
     res.status(200).json({

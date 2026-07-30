@@ -11,6 +11,8 @@ import {
   Moon,
   ChevronRight,
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
   GripVertical,
 } from "lucide-react";
 import { User } from "@/types/auth.types";
@@ -28,6 +30,7 @@ interface SidebarProps {
   currentPath: string;
   onNavigate: (path: string) => void;
   onReorder: (result: DropResult) => void;
+  onMoveItem: (id: string, direction: "up" | "down") => void;
   user: User | null;
   logout: () => void;
   darkMode: boolean;
@@ -44,9 +47,10 @@ const NavIcon: React.FC<{
   isExpanded: boolean;
   disabled?: boolean;
   badge?: string;
-  dragHandleProps?:
-    | import("@hello-pangea/dnd").DraggableProvidedDragHandleProps
-    | null;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }> = ({
   active,
   onClick,
@@ -55,11 +59,14 @@ const NavIcon: React.FC<{
   isExpanded,
   disabled,
   badge,
-  dragHandleProps,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
 }) => {
   return (
     <div
-      className={`relative group w-full flex ${isExpanded ? "justify-start px-3" : "justify-center px-2"}`}
+      className={`relative group w-full flex items-center ${isExpanded ? "justify-start px-3" : "justify-center px-2"}`}
     >
       {/* Active Indicator (Left Border) */}
       {active && !disabled && (
@@ -68,15 +75,26 @@ const NavIcon: React.FC<{
         />
       )}
 
+      {/* Drag Handle (Only visible on hover, expanded mode only — the
+          collapsed icon-only rail has no room for a separate grab affordance) */}
+      {!disabled && isExpanded && (
+        <div
+          className="flex-shrink-0 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity -mr-1 pointer-events-none"
+          title={title}
+        >
+          <GripVertical size={16} />
+        </div>
+      )}
+
       <button
         onClick={disabled ? undefined : onClick}
         disabled={disabled}
         className={`
-                    flex items-center gap-3 relative
+                    flex items-center gap-3 relative flex-1 min-w-0
                     transition-all duration-300 ease-out
                     ${
                       isExpanded
-                        ? "w-full px-4 py-3 rounded-xl justify-start"
+                        ? "px-4 py-3 rounded-xl justify-start"
                         : "w-14 h-14 rounded-2xl justify-center"
                     }
                     ${
@@ -88,16 +106,6 @@ const NavIcon: React.FC<{
                     }
                 `}
       >
-        {/* Drag Handle (Only visible on hover) */}
-        {!disabled && (
-          <div
-            {...dragHandleProps}
-            className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 hover:!opacity-100 cursor-grab active:cursor-grabbing p-1 -ml-1.5"
-          >
-            {/* We might hide drag handle in expanded mode or style it differently */}
-          </div>
-        )}
-
         <div
           className={`flex-shrink-0 transition-transform duration-300 ${active && !isExpanded ? "scale-100" : "group-hover:scale-110"}`}
         >
@@ -135,6 +143,39 @@ const NavIcon: React.FC<{
           </div>
         )}
       </button>
+
+      {/* Up/Down reorder controls — visible on hover, expanded mode only.
+          Explicit and discoverable, unlike a bare drag handle. */}
+      {!disabled && isExpanded && (onMoveUp || onMoveDown) && (
+        <div className="flex-shrink-0 flex flex-col opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp?.();
+            }}
+            disabled={!canMoveUp}
+            className="p-0.5 rounded text-gray-400 hover:text-reply-blue hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-20 disabled:pointer-events-none transition-colors"
+            title="Mover arriba"
+          >
+            <ChevronUp size={14} />
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown?.();
+            }}
+            disabled={!canMoveDown}
+            className="p-0.5 rounded text-gray-400 hover:text-reply-blue hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-20 disabled:pointer-events-none transition-colors"
+            title="Mover abajo"
+          >
+            <ChevronDown size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -144,6 +185,7 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
   currentPath,
   onNavigate,
   onReorder,
+  onMoveItem,
   user,
   logout,
   darkMode,
@@ -253,7 +295,10 @@ export const SidebarEnhanced: React.FC<SidebarProps> = ({
                           disabled={item.disabled}
                           badge={item.badge ? t(`common.coming_soon`, item.badge) : undefined}
                           isExpanded={isExpanded || isMobileMenuOpen}
-                          dragHandleProps={provided.dragHandleProps}
+                          onMoveUp={() => onMoveItem(item.id, "up")}
+                          onMoveDown={() => onMoveItem(item.id, "down")}
+                          canMoveUp={index > 0}
+                          canMoveDown={index < navItems.length - 1}
                         />
                       </div>
                     )}

@@ -40,6 +40,8 @@ export class StageService {
       name: data.name,
       color: data.color || "#6B7280",
       order: stageOrder,
+      isWon: data.isWon ?? false,
+      isLost: data.isLost ?? false,
     });
   }
 
@@ -60,6 +62,8 @@ export class StageService {
     if (data.name !== undefined) updateData.name = data.name;
     if (data.color !== undefined) updateData.color = data.color;
     if (data.order !== undefined) updateData.order = data.order;
+    if (data.isWon !== undefined) updateData.isWon = data.isWon;
+    if (data.isLost !== undefined) updateData.isLost = data.isLost;
 
     return this.stageRepo.update(stageId, pipelineId, updateData);
   }

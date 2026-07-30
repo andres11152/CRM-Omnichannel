@@ -15,6 +15,9 @@ import { campaignRepository } from "@/repositories/CampaignRepository";
 import { contactRepository } from "@/repositories/ContactRepository";
 import { conversationRepository } from "@/repositories/ConversationRepository";
 import { userRepository } from "@/repositories/UserRepository";
+import { emailService } from "@/services/email/emailService";
+import { companySettingsService } from "@/services/CompanySettingsService";
+import { generateUnsubscribeToken } from "@/utils/unsubscribeToken";
 
 /**
  *  CAMPAIGN EXECUTION ENGINE
@@ -128,6 +131,7 @@ export const campaignExecutionService = {
       const contacts = await this.getAudience(
         companyId,
         rawCampaign.targetTags,
+        rawCampaign.channel,
       );
 
       Logger.info(`[Campaign] Audience size: ${contacts.length}`);
@@ -189,19 +193,30 @@ export const campaignExecutionService = {
         const contact = contacts[i];
 
         try {
-          await this.sendCampaignMessage(
-            contact,
-            rawCampaign.name,
-            rawCampaign.template as {
-              id: string;
-              name: string;
-              components: Prisma.JsonValue;
-            } | null,
-            rawCampaign.messageContent,
-            companyId,
-            campaignId,
-            systemUser.id,
-          );
+          if (rawCampaign.channel === "EMAIL") {
+            await this.sendCampaignEmail(
+              contact,
+              rawCampaign.name,
+              rawCampaign.subject || rawCampaign.name,
+              rawCampaign.messageContent,
+              companyId,
+              campaignId,
+            );
+          } else {
+            await this.sendCampaignMessage(
+              contact,
+              rawCampaign.name,
+              rawCampaign.template as {
+                id: string;
+                name: string;
+                components: Prisma.JsonValue;
+              } | null,
+              rawCampaign.messageContent,
+              companyId,
+              campaignId,
+              systemUser.id,
+            );
+          }
 
           stats.sent++;
           consecutiveRateLimitErrors = 0;
@@ -283,12 +298,12 @@ export const campaignExecutionService = {
   async getAudience(
     companyId: string,
     targetTags: string[],
+    channel: string = "WHATSAPP",
   ): Promise<AudienceContact[]> {
-    const where: AudienceFilter = {
-      companyId,
-      phone: { not: null },
-      deletedAt: null,
-    };
+    const where: AudienceFilter =
+      channel === "EMAIL"
+        ? { companyId, email: { not: null }, emailOptOut: false, deletedAt: null }
+        : { companyId, phone: { not: null }, deletedAt: null };
 
     if (targetTags && targetTags.length > 0) {
       where.tags = {
@@ -395,6 +410,64 @@ export const campaignExecutionService = {
         templateId: template?.id,
         templateName: template?.name,
       },
+    });
+  },
+
+  async sendCampaignEmail(
+    contact: AudienceContact,
+    campaignName: string,
+    subjectTemplate: string,
+    bodyTemplate: string | null,
+    companyId: string,
+    campaignId: string,
+  ): Promise<void> {
+    if (!contact.email) {
+      throw new Error("Contact has no email address");
+    }
+
+    const parameters: Record<string, string> = {
+      name: contact.name || "Cliente",
+      email: contact.email,
+      phone: contact.phone || "",
+    };
+    if (contact.customFields) {
+      Object.entries(contact.customFields).forEach(([key, val]) => {
+        if (typeof val === "string" || typeof val === "number") {
+          parameters[key] = String(val);
+        }
+      });
+    }
+
+    const subject = renderTemplate(subjectTemplate, parameters);
+    const renderedBody = renderTemplate(bodyTemplate || "", parameters);
+
+    // CAN-SPAM/GDPR: every campaign email carries a working one-click
+    // unsubscribe link — never send a marketing email without this.
+    const unsubToken = generateUnsubscribeToken(companyId, contact.id);
+    const apiBase = process.env.API_PUBLIC_URL || process.env.BACKEND_URL || "";
+    const unsubscribeUrl = `${apiBase}/public/email/unsubscribe/${companyId}/${contact.id}/${unsubToken}`;
+
+    const htmlBody = `${renderedBody.replace(/\n/g, "<br>")}
+      <hr style="margin-top:32px;border:none;border-top:1px solid #e2e8f0" />
+      <p style="font-size:11px;color:#94a3b8;margin-top:12px">
+        Recibiste este correo como parte de la campaña "${campaignName}".
+        <a href="${unsubscribeUrl}" style="color:#94a3b8">Darse de baja</a>
+      </p>`;
+
+    const senderConfig = await companySettingsService.getSenderConfig(companyId).catch(() => null);
+    const fromEmail = senderConfig?.fromEmail || process.env.DEFAULT_SENDER_EMAIL || "no-reply@sentry.software";
+    const fromName = senderConfig?.fromName || campaignName;
+
+    await emailService.sendEmail({
+      companyId,
+      from: `"${fromName}" <${fromEmail}>`,
+      to: [contact.email],
+      subject,
+      bodyHtml: htmlBody,
+      bodyText: renderedBody,
+      contactId: contact.id,
+      campaignId,
+      enableTracking: true,
     });
   },
 };

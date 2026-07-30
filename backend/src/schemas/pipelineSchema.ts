@@ -23,6 +23,10 @@ export const StageSchema = z.object({
     .default("#6B7280")
     .optional(),
   order: z.number().int().min(0).optional(),
+  // [SALES] Marks this stage as a closing stage for sales analytics
+  // (forecast, conversion rate). At most one of these should be true.
+  isWon: z.boolean().optional(),
+  isLost: z.boolean().optional(),
 });
 
 export const CreateStageBodySchema = StageSchema;

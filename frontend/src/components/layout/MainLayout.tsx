@@ -72,11 +72,7 @@ export const MainLayout = () => {
     }
   };
 
-  const handleDragEnd = async (result: DropResult) => {
-    if (!result.destination) return;
-    const newOrder = Array.from(sidebarOrder);
-    const [moved] = newOrder.splice(result.source.index, 1);
-    newOrder.splice(result.destination.index, 0, moved);
+  const persistSidebarOrder = (newOrder: string[]) => {
     setSidebarOrder(newOrder);
     if (user) {
       updateUser({
@@ -86,6 +82,35 @@ export const MainLayout = () => {
         console.error,
       );
     }
+  };
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const newOrder = Array.from(sidebarOrder);
+    const [moved] = newOrder.splice(result.source.index, 1);
+    newOrder.splice(result.destination.index, 0, moved);
+    persistSidebarOrder(newOrder);
+  };
+
+  // Move a module up or down within the CURRENTLY VISIBLE list (the one the
+  // user actually sees), then translate that back into a full sidebarOrder —
+  // items hidden by role/feature flags keep their relative position instead
+  // of being silently reshuffled to the end.
+  const moveNavItem = (id: string, direction: "up" | "down") => {
+    const visibleIds = visibleNavItems.map((i) => i.id);
+    const visibleIndex = visibleIds.indexOf(id);
+    const targetVisibleIndex = visibleIndex + (direction === "up" ? -1 : 1);
+    if (visibleIndex === -1 || targetVisibleIndex < 0 || targetVisibleIndex >= visibleIds.length) {
+      return;
+    }
+    const targetId = visibleIds[targetVisibleIndex];
+
+    const newOrder = Array.from(sidebarOrder);
+    const fromIndex = newOrder.indexOf(id);
+    const toIndex = newOrder.indexOf(targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    [newOrder[fromIndex], newOrder[toIndex]] = [newOrder[toIndex], newOrder[fromIndex]];
+    persistSidebarOrder(newOrder);
   };
 
   const visibleNavItems = useMemo(() => {
@@ -179,6 +204,7 @@ export const MainLayout = () => {
           currentPath={location.pathname}
           onNavigate={(path) => navigate(path)}
           onReorder={handleDragEnd}
+          onMoveItem={moveNavItem}
           user={user}
           logout={logout}
           darkMode={darkMode}

@@ -142,6 +142,9 @@ export class EmailService {
           conversation: dto.conversationId
             ? { connect: { id: dto.conversationId } }
             : undefined,
+          campaign: dto.campaignId
+            ? { connect: { id: dto.campaignId } }
+            : undefined,
           attachments: dto.attachments
             ? (sanitizeForJson(dto.attachments) as Prisma.InputJsonValue)
             : undefined,

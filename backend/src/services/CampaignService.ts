@@ -1,11 +1,26 @@
 import { Prisma } from "@prisma/client";
 import { AppError } from "@/utils/AppError";
 import { campaignRepository } from "@/repositories/CampaignRepository";
+import { emailRepository } from "@/repositories/EmailRepository";
 import {
   CreateCampaignInput,
   UpdateCampaignInput,
 } from "@/schemas/campaignSchema";
 import { campaignExecutionService } from "./CampaignExecutionService";
+
+export interface CampaignEmailReport {
+  channel: string;
+  totalSent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  spam: number;
+  failed: number;
+  openRate: number;
+  clickRate: number;
+  bounceRate: number;
+}
 
 /**
  *  CAMPAIGN CRUD SERVICE
@@ -100,5 +115,43 @@ export const campaignService = {
 
   async launchCampaign(id: string, companyId: string) {
     return await campaignExecutionService.launchCampaign(id, companyId);
+  },
+
+  /**
+   * Real open/click/bounce rates for an EMAIL campaign, computed from the
+   * Email rows it actually created — not the coarse sent/failed counters
+   * CampaignExecutionService tracks during the send itself.
+   */
+  async getCampaignReport(id: string, companyId: string): Promise<CampaignEmailReport> {
+    const campaign = await campaignRepository.findFirst({ where: { id, companyId } });
+    if (!campaign) throw new AppError("Campaign not found", 404);
+
+    const grouped = await emailRepository.countByCampaignStatus(id, companyId);
+    const counts: Record<string, number> = {};
+    for (const row of grouped) {
+      counts[row.status] = row._count._all;
+    }
+
+    const totalSent = Object.values(counts).reduce((sum, n) => sum + n, 0);
+    const delivered = counts.DELIVERED || 0;
+    const opened = counts.OPENED || 0;
+    const clicked = counts.CLICKED || 0;
+    const bounced = counts.BOUNCED || 0;
+    const spam = counts.SPAM || 0;
+    const failed = counts.FAILED || 0;
+
+    return {
+      channel: campaign.channel,
+      totalSent,
+      delivered,
+      opened,
+      clicked,
+      bounced,
+      spam,
+      failed,
+      openRate: totalSent > 0 ? Math.round((opened / totalSent) * 100) : 0,
+      clickRate: totalSent > 0 ? Math.round((clicked / totalSent) * 100) : 0,
+      bounceRate: totalSent > 0 ? Math.round((bounced / totalSent) * 100) : 0,
+    };
   },
 };

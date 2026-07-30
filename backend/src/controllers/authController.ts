@@ -11,6 +11,7 @@ import { passwordResetEmail } from "@/utils/emailTemplates";
 import { authCrudService } from "@/services/AuthCrudService";
 import { sessionService, SESSION_TTL } from "@/services/SessionService";
 import { auditService } from "@/services/AuditService";
+import { TenantContextManager } from "@/config/tenantContext";
 import {
   SignupSchema,
   LoginSchema,
@@ -210,16 +211,25 @@ export const login = catchAsync(
     );
 
     // [AUTH] Audit successful logins
-    void auditService.logAction({
-      companyId: user.companyId,
-      userId: user.id,
-      action: "LOGIN",
-      entity: "User",
-      entityId: user.id,
-      details: { email: user.email },
-      ipAddress: String(ipAddress),
-      userAgent: String(userAgent),
-    });
+    // [SEC] /login runs BEFORE `protect` establishes tenant context (there's no
+    // session yet at this point) — auditRepository.createLog writes to a
+    // tenant-scoped model, so without this wrapper every login silently threw
+    // "SECURITY VIOLATION: Access to AuditLog denied" (swallowed inside
+    // createLog's own try/catch, but the login was never actually audited).
+    void TenantContextManager.run(
+      { companyId: user.companyId, userId: user.id, requestId: `login:${user.id}` },
+      () =>
+        auditService.logAction({
+          companyId: user.companyId,
+          userId: user.id,
+          action: "LOGIN",
+          entity: "User",
+          entityId: user.id,
+          details: { email: user.email },
+          ipAddress: String(ipAddress),
+          userAgent: String(userAgent),
+        }),
+    );
 
     // Response includes token in body for backward compatibility (mobile, Postman)
     res.status(200).json({

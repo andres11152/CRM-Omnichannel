@@ -504,25 +504,36 @@ class WebSocketGateway {
 
       const viewersMap = new Map<string, { id: string; name: string; email: string }>();
       const { prisma } = await import("@/config/database");
+      const { default: TenantContextManager } = await import("@/config/tenantContext");
 
-      for (const s of sockets) {
-        if (s.data.activeConversationId === conversationId && s.data.user) {
-          const uid = s.data.user.id;
-          if (!viewersMap.has(uid)) {
-            const dbUser = await prisma.user.findUnique({
-              where: { id: uid },
-              select: { id: true, name: true, email: true },
-            });
-            if (dbUser) {
-              viewersMap.set(uid, {
-                id: dbUser.id,
-                name: dbUser.name,
-                email: dbUser.email,
-              });
+      // [SEC] User is a tenant-scoped model — reading it needs an async-local
+      // tenant context, same as updateUserStatus() above. This call site never
+      // had one, so every viewer-presence broadcast (chat open/close, agent
+      // disconnect) silently threw "SECURITY VIOLATION: Access to User denied"
+      // and viewers were never populated.
+      await TenantContextManager.run(
+        { companyId, userId: "system", requestId: `active-viewers:${conversationId}` },
+        async () => {
+          for (const s of sockets) {
+            if (s.data.activeConversationId === conversationId && s.data.user) {
+              const uid = s.data.user.id;
+              if (!viewersMap.has(uid)) {
+                const dbUser = await prisma.user.findUnique({
+                  where: { id: uid },
+                  select: { id: true, name: true, email: true },
+                });
+                if (dbUser) {
+                  viewersMap.set(uid, {
+                    id: dbUser.id,
+                    name: dbUser.name,
+                    email: dbUser.email,
+                  });
+                }
+              }
             }
           }
-        }
-      }
+        },
+      );
 
       const viewers = Array.from(viewersMap.values());
       this.emitToCompany(companyId, "conversation:active_viewers", {

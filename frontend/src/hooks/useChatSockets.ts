@@ -251,7 +251,7 @@ export const useChatSockets = (currentTicketId: string | null) => {
     socketService.on("conversation.closed", handleConversationClosed);
     socketService.on("conversation:typing", handleConversationTyping);
     socketService.on("message.reaction", handleMessageReaction);
-    socketService.on("sync:started", handleSyncStarted);
+    socketService.on("conversation:sync_started", handleSyncStarted);
     socketService.on("conversation:history_synced", handleHistorySynced);
 
     // Cleanup on unmount
@@ -264,7 +264,7 @@ export const useChatSockets = (currentTicketId: string | null) => {
       socketService.off("conversation.closed", handleConversationClosed);
       socketService.off("conversation:typing", handleConversationTyping);
       socketService.off("message.reaction", handleMessageReaction);
-      socketService.off("sync:started", handleSyncStarted);
+      socketService.off("conversation:sync_started", handleSyncStarted);
       socketService.off("conversation:history_synced", handleHistorySynced);
     };
   }, [queryClient, currentTicketId]);

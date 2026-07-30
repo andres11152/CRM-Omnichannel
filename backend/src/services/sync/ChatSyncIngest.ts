@@ -35,7 +35,17 @@ export class ChatSyncIngest {
   // every time (which otherwise hammers the DB/socket — observed in prod logs). Once a
   // conversation has attempted an on-demand backfill, skip re-attempts for this window.
   private contextSyncCooldown = new Map<string, number>();
+  // Tracks which lockKeys' last attempt was a genuine fetch (vs an infra
+  // early-exit) — determines which of the two cooldown windows applies.
+  private contextSyncFullAttempt = new Set<string>();
   private static readonly CONTEXT_SYNC_COOLDOWN_MS = 5 * 60 * 1000;
+  // Short retry window for attempts that never got past infra checks (no
+  // CONNECTED session yet, store not ready, no admin user) — those are
+  // transient conditions that can resolve within seconds, and it was never
+  // an actual WhatsApp/DB round-trip that needs the long cooldown's
+  // protection. The full cooldown above still applies once a real fetch
+  // attempt happens, successful or not.
+  private static readonly CONTEXT_SYNC_INFRA_RETRY_MS = 30 * 1000;
 
   // [POOL-SAFETY] Serial executor for history syncs. Baileys can fire many
   // `messaging-history.set` events in a burst (reconnect / full re-link), and each
@@ -211,27 +221,41 @@ export class ChatSyncIngest {
 
     // [LOAD] Skip if we already attempted a backfill for this chat recently. Prevents the
     // 8s on-demand fetch from re-running on every chat re-open (a major source of DB load).
+    // The window differs by outcome (see `attempted` below): a real fetch attempt gets the
+    // full cooldown; an early exit before we ever touched WhatsApp/DB gets a short one, since
+    // that's usually a transient condition (session still reconnecting, store warming up).
     const lastAttempt = this.contextSyncCooldown.get(lockKey);
-    if (lastAttempt && Date.now() - lastAttempt < ChatSyncIngest.CONTEXT_SYNC_COOLDOWN_MS) {
-      return;
+    if (lastAttempt) {
+      const isFullCooldown = this.contextSyncFullAttempt.has(lockKey);
+      const window = isFullCooldown
+        ? ChatSyncIngest.CONTEXT_SYNC_COOLDOWN_MS
+        : ChatSyncIngest.CONTEXT_SYNC_INFRA_RETRY_MS;
+      if (Date.now() - lastAttempt < window) return;
     }
-    this.contextSyncCooldown.set(lockKey, Date.now());
 
     this.activeContextSyncs.add(lockKey);
     gateway.emitToCompany(companyId, "conversation:sync_started", { conversationId, channelId, type: "chat_context" });
 
     let syncedCount = 0;
+    let attempted = false;
+    let errored = false;
+    let failureReason: string | undefined;
 
     try {
       const { whatsappService } = await import("@/whatsapp");
       const session = (await whatsappService.getSessions(companyId))?.find(s => s.status === "CONNECTED");
-      if (!session) return;
+      if (!session) { failureReason = "no_connected_session"; return; }
 
       const store = await this.jidResolver.getSessionStore(session.sessionId);
-      if (!store) return;
+      if (!store) { failureReason = "store_not_ready"; return; }
 
       const admin = await syncRepositoryHelper.getAdminUser(companyId);
-      if (!admin) return;
+      if (!admin) { failureReason = "no_admin_user"; return; }
+
+      // Past this point we're making a genuine attempt (a real WhatsApp/DB
+      // round-trip) — from here on, a 0-result outcome is a legitimate
+      // "nothing to backfill", not an infra failure, and earns the long cooldown.
+      attempted = true;
 
       const { messageRepository } = await import("@/repositories/MessageRepository");
       const cleanPhone = WhatsAppIdUtils.cleanChannelId(channelId);
@@ -284,6 +308,8 @@ export class ChatSyncIngest {
         }
       }
     } catch (err: unknown) {
+      errored = true;
+      failureReason = "error";
       Logger.error(`[ContextSync] ERROR: Failed for ${channelId}:`, {
         companyId,
         channelId,
@@ -293,11 +319,23 @@ export class ChatSyncIngest {
       });
     } finally {
       this.activeContextSyncs.delete(lockKey);
+      this.contextSyncCooldown.set(lockKey, Date.now());
+      if (attempted) {
+        this.contextSyncFullAttempt.add(lockKey);
+      } else {
+        this.contextSyncFullAttempt.delete(lockKey);
+      }
       // ALWAYS emit finished event to unlock the UI, even if it returns early or fails!
+      // `failed` only covers genuine infra failures or exceptions — a clean attempt
+      // that simply found nothing new is NOT "failed", it's the common case, and
+      // stays silent on the frontend to avoid a toast on every chat open.
+      const failed = !attempted || errored;
       gateway.emitToCompany(companyId, "conversation:history_synced", {
         conversationId,
         channelId,
-        newMessages: syncedCount
+        newMessages: syncedCount,
+        failed,
+        failureReason: failed ? failureReason : undefined,
       });
     }
   }

@@ -266,16 +266,33 @@ export const useChatWorkflow = ({ activeContact, aiConfig }: ChatWorkflowProps) 
     // via contextSync OR late-arriving manual sync batches via messaging-history.set), it
     // emits conversation:history_synced. Without this listener the messages were written to
     // the DB but the open chat never refreshed — so it looked like sync "did nothing".
-    const handleHistorySynced = (payload: { conversationId?: string; channelId?: string; newMessages?: number }) => {
+    const handleHistorySynced = (payload: {
+      conversationId?: string;
+      channelId?: string;
+      newMessages?: number;
+      failed?: boolean;
+      failureReason?: string;
+    }) => {
       const matches =
         payload.conversationId === ticketId ||
         payload.conversationId === activeContact.id ||
         payload.channelId === activeContact.phone?.replace(/\D/g, "");
       if (!matches) return;
-      console.log(`[Workflow] [WS] History synced (${payload.newMessages ?? "?"} msgs) — refreshing chat`);
+      console.log(`[Workflow] [WS] History synced (${payload.newMessages ?? "?"} msgs, failed=${payload.failed ?? false}) — refreshing chat`);
       queryClient.invalidateQueries({ queryKey: CHAT_KEYS.messages(ticketId) });
       if (payload.newMessages && payload.newMessages > 0) {
         toast.success(t("use_chat_workflow.toast.history_imported", "{{count}} mensajes del historial importados", { count: payload.newMessages }));
+      } else if (payload.failed) {
+        // Distinguish "we tried and genuinely found nothing" (silent, the
+        // common case) from "we couldn't even try" (worth telling the agent
+        // why older messages aren't showing up).
+        const reasonKey = payload.failureReason === "no_connected_session"
+          ? "use_chat_workflow.toast.sync_failed_no_session"
+          : "use_chat_workflow.toast.sync_failed_generic";
+        const reasonDefault = payload.failureReason === "no_connected_session"
+          ? "No pudimos cargar más historial: WhatsApp no está conectado ahora mismo"
+          : "No pudimos cargar más historial. Intenta de nuevo en un momento";
+        toast.info(t(reasonKey, reasonDefault));
       }
     };
     socketService.on('conversation:history_synced', handleHistorySynced);

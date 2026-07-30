@@ -2077,6 +2077,8 @@
       "sync_pending": "Request sent to the phone — messages will appear automatically in a few seconds",
       "no_new_messages": "No new messages right now",
       "sync_error": "Error syncing",
+      "sync_failed_no_session": "Couldn't load more history: WhatsApp isn't connected right now",
+      "sync_failed_generic": "Couldn't load more history. Try again in a moment",
       "message_edited": "Message edited",
       "message_deleted": "Message deleted",
       "geolocation_unsupported": "This browser doesn't support sharing location",

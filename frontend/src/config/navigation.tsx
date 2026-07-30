@@ -145,8 +145,7 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/marketing",
     allowedRoles: ["company_admin", "ADMIN"],
     icon: <Icon I={Megaphone} />,
-    disabled: true,
-    badge: "Próximamente",
+    requiredFlag: "bulk_marketing",
   },
   {
     id: "flows",

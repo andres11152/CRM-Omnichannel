@@ -10,6 +10,7 @@ import {
 } from "@/controllers/campaignController";
 import { protect } from "@/middleware/authMiddleware";
 import { validate } from "@/middleware/validationMiddleware";
+import { requireFeature } from "@/middleware/requireFeature";
 import {
   CreateCampaignSchema,
   UpdateCampaignSchema,
@@ -24,6 +25,7 @@ import { auditLog } from "@/middleware/auditMiddleware";
 const router = express.Router();
 
 router.use(protect);
+router.use(requireFeature("bulk_marketing"));
 
 /**
  * [GROUP] CAMPAIGN ROUTES

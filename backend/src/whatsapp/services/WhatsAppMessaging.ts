@@ -26,6 +26,7 @@ import { messageTemplateRepository } from "@/repositories/MessageTemplateReposit
 import { AppError } from "@/utils/AppError";
 import { OutboundMessageHandler } from "../providers/handlers/OutboundMessageHandler";
 import { whatsappServiceHttp } from "../utils/whatsAppServiceHttp";
+import { getEnv } from "@/config/env";
 
 export class WhatsAppMessaging {
   private outboundHandler: OutboundMessageHandler;
@@ -172,14 +173,35 @@ export class WhatsAppMessaging {
     options: SendMessageOptions & { dbId?: string },
   ) {
     try {
+      // [SEC] LOCAL-DEV ONLY: rewrite the origin of the outbound media URL
+      // whatsapp-service will fetch to build the Baileys payload. The URL was
+      // built by the browser (host machine's view of the backend); in the
+      // local docker-compose setup whatsapp-service runs in its own
+      // container where that origin is unreachable. Never touches the DB
+      // record or what the frontend displays — only this outbound copy.
+      // No-op whenever WA_MEDIA_FETCH_HOST_OVERRIDE is unset (production).
+      let media = options.media;
+      const overrideHost = getEnv().WA_MEDIA_FETCH_HOST_OVERRIDE;
+      if (media?.url && overrideHost) {
+        try {
+          const rewritten = new URL(media.url, overrideHost);
+          const overrideOrigin = new URL(overrideHost);
+          rewritten.protocol = overrideOrigin.protocol;
+          rewritten.host = overrideOrigin.host;
+          media = { ...media, url: rewritten.toString() };
+        } catch {
+          // Malformed URL — fall through with the original, unmodified media.
+        }
+      }
+
       const res = await whatsappServiceHttp.post(
         `/messages/send`,
         {
           companyId: options.companyId,
           to,
-          type: options.media ? "media" : "text",
+          type: media ? "media" : "text",
           content,
-          media: options.media,
+          media,
           options: {
             quoted: (options as SendMessageOptions & { quoted?: unknown }).quoted,
             generatedMessageId: options.metadata?.generatedMessageId,

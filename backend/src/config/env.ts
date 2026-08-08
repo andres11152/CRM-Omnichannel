@@ -30,6 +30,23 @@ const EnvSchema = z.object({
     .default("http://localhost:4000")
     .describe("Public URL of the backend API"),
 
+  // [SEC] LOCAL-DEV ONLY. Media URLs attached to an outbound WhatsApp send are
+  // built by the BROWSER (using its own view of the backend, e.g.
+  // http://localhost:4000) and later fetched by whatsapp-service to build the
+  // Baileys payload. In production both sides reach the same public HTTPS
+  // domain, so this is a non-issue — but in the local docker-compose setup,
+  // whatsapp-service runs in its OWN container, where `localhost` resolves to
+  // the container itself, not the host machine running `npm run dev`
+  // (ECONNREFUSED 127.0.0.1:4000). Set this to the host-reachable origin
+  // (Docker Desktop: "http://host.docker.internal:4000") to rewrite ONLY the
+  // outbound-to-whatsapp-service copy of the URL — the DB record and
+  // frontend-facing URL are untouched. Leave unset in production.
+  WA_MEDIA_FETCH_HOST_OVERRIDE: z
+    .string()
+    .url()
+    .optional()
+    .describe("Local-dev only: origin whatsapp-service's container should use instead of BACKEND_URL to fetch outbound media (e.g. http://host.docker.internal:4000)"),
+
   // ==================== DATABASE ====================
   DATABASE_URL: z
     .string()

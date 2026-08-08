@@ -46,16 +46,6 @@ export class ChatSyncIngest {
   // attempt happens, successful or not.
   private static readonly CONTEXT_SYNC_INFRA_RETRY_MS = 30 * 1000;
 
-  // [POOL-SAFETY] Serial executor for history syncs. Baileys can fire many
-  // `messaging-history.set` events in a burst (reconnect / full re-link), and each
-  // sync runs hundreds of sequential DB round-trips. Running them concurrently
-  // drained the Prisma pool (connection_limit=15) → every API request (incl. /health)
-  // queued 20s and 408'd. Chaining them so AT MOST ONE runs at a time leaves the
-  // pool free for live API traffic. Background sync slowing down is an acceptable
-  // trade vs. taking the whole app down.
-  private historySyncChain: Promise<void> = Promise.resolve();
-  private pendingHistorySyncs = 0;
-
   private jidResolver: ChatSyncJidResolver = chatSyncJidResolver;
   private batchIngester: ChatSyncBatchIngester = chatSyncBatchIngester;
 
@@ -73,24 +63,19 @@ export class ChatSyncIngest {
   ): Promise<void> {
     if ((!messages || messages.length === 0) && (!chats || chats.length === 0)) return;
 
-    if (options?.onDemand) {
-      // ON_DEMAND syncs are scoped to 1 chat and use createMany+skipDuplicates, so they
-      // won't exhaust the pool. Bypass the bulk queue so the user sees history immediately
-      // instead of waiting 30-40s for all pending bulk batches to finish first.
-      this.runHistorySync(companyId, messages, chats, contacts, options, lidPnMappings).catch((err) => {
-        Logger.error(`[ChatSync] On-demand history ingest failed:`, err);
-      });
-      return;
-    }
-
-    // Enqueue onto the serial chain (fire-and-forget — keep the socket handler non-blocking).
-    this.pendingHistorySyncs++;
-    this.historySyncChain = this.historySyncChain
-      .catch(() => {}) // never let one failure break the chain
-      .then(() => this.runHistorySync(companyId, messages, chats, contacts, options, lidPnMappings))
-      .finally(() => {
-        this.pendingHistorySyncs--;
-      });
+    // [SEC · REDIS-DURABILITY] MUST be genuinely awaited — the only caller is
+    // historySyncWorker.ts's BullMQ job processor, which marks the job COMPLETE
+    // (removeOnComplete deletes it from Redis) the instant this promise resolves.
+    // This used to fire real ingestion onto an in-process promise chain and
+    // return immediately, so BullMQ deleted the job — and its only durable
+    // record of "this batch still needs processing" — before a single message
+    // was persisted. A crash/restart/OOM between that false "completed" log and
+    // the real DB writes lost the batch permanently with zero trace in Redis.
+    // Observed in production: batches of ~4,700 messages logged "Ingested
+    // history sync job N successfully" while genuinely landing 0 rows.
+    // The worker's own `concurrency: 1` (HistorySyncWorker) already serializes
+    // DB load across jobs, so no separate in-process chain is needed for that.
+    await this.runHistorySync(companyId, messages, chats, contacts, options, lidPnMappings);
   }
 
   private async runHistorySync(
@@ -104,37 +89,47 @@ export class ChatSyncIngest {
     await TenantContextManager.run(
       { companyId, userId: "system", requestId: `history-sync-${companyId}` },
       async () => {
-        try {
-          Logger.info(
-            `[ChatSync] History Ingest Started | ${messages?.length || 0} msgs, ${chats?.length || 0} chats, ${lidPnMappings?.length || 0} lid-pairs (queued: ${this.pendingHistorySyncs - 1})`,
-          );
+        // [SEC] Deliberately NOT wrapped in a swallowing try/catch anymore — a
+        // fatal failure here (e.g. DB pool exhausted, connection dropped) must
+        // propagate to historySyncWorker.ts so BullMQ marks the job FAILED and
+        // retries it (attempts: 3, exponential backoff) instead of silently
+        // logging "Fatal History Ingest Failure" while BullMQ deletes the job
+        // as if it had succeeded. Retrying a partially-completed batch is safe:
+        // `ingestConversationBatch` writes via createMany({skipDuplicates:true})
+        // against the @@unique([companyId, whatsappMessageId]) constraint, so
+        // already-persisted messages are silently skipped, not duplicated.
+        Logger.info(
+          `[ChatSync] History Ingest Started | ${messages?.length || 0} msgs, ${chats?.length || 0} chats, ${lidPnMappings?.length || 0} lid-pairs`,
+        );
 
-          // [SEC] `store` is ALWAYS null in this process — the Baileys in-memory
-          // store lives exclusively in whatsapp-service post microservice-split.
-          // lidPhoneMap is the real resolution source now (see buildLidPhoneMap).
-          const store = null;
-          const lidPhoneMap = await this.jidResolver.buildLidPhoneMap(companyId, lidPnMappings, contacts);
+        // [SEC] `store` is ALWAYS null in this process — the Baileys in-memory
+        // store lives exclusively in whatsapp-service post microservice-split.
+        // lidPhoneMap is the real resolution source now (see buildLidPhoneMap).
+        const store = null;
+        const lidPhoneMap = await this.jidResolver.buildLidPhoneMap(companyId, lidPnMappings, contacts);
 
-          // Persist newly-learned mappings so the live-message pipeline and future
-          // syncs can resolve this contact without needing another history batch
-          // (mirrors IdentityResolverService's best-effort save on the live path).
-          if (lidPnMappings?.length) {
-            const { chatService } = await import("@/services/ChatService");
-            for (const { lid, pn } of lidPnMappings) {
-              if (!lid || !pn) continue;
-              chatService
-                .saveLidPhoneMapping(companyId, lid.split("@")[0].split(":")[0], pn.split("@")[0].split(":")[0])
-                .catch(() => {});
-            }
+        // Persist newly-learned mappings so the live-message pipeline and future
+        // syncs can resolve this contact without needing another history batch
+        // (mirrors IdentityResolverService's best-effort save on the live path).
+        if (lidPnMappings?.length) {
+          const { chatService } = await import("@/services/ChatService");
+          for (const { lid, pn } of lidPnMappings) {
+            if (!lid || !pn) continue;
+            chatService
+              .saveLidPhoneMapping(companyId, lid.split("@")[0].split(":")[0], pn.split("@")[0].split(":")[0])
+              .catch(() => {});
           }
+        }
 
-          const admin = await syncRepositoryHelper.getAdminUser(companyId);
-          if (!admin) return;
+        const admin = await syncRepositoryHelper.getAdminUser(companyId);
+        if (!admin) return;
 
-          // 1. Identity Discovery
-          let unresolvedChats = 0;
-          if (chats) {
-            for (const chat of chats) {
+        // 1. Identity Discovery. Per-chat try/catch so one malformed chat entry
+        // can't abort (and force a full BullMQ retry of) the whole batch.
+        let unresolvedChats = 0;
+        if (chats) {
+          for (const chat of chats) {
+            try {
               const phone = this.jidResolver.resolveJid(chat.id, store, lidPhoneMap);
               if (phone && !isJidBroadcast(chat.id) && !chat.id.includes("@newsletter")) {
                 const isGroup = chat.id.endsWith("@g.us");
@@ -148,41 +143,47 @@ export class ChatSyncIngest {
               } else if (!phone && chat.id.includes("@lid")) {
                 unresolvedChats++;
               }
+            } catch (chatErr) {
+              Logger.error(`[ChatSync] Failed to process chat ${chat.id} (company ${companyId}):`, {
+                error: chatErr instanceof Error ? chatErr.message : String(chatErr),
+              });
             }
           }
-          if (unresolvedChats > 0) {
-            Logger.warn(`[ChatSync] ${unresolvedChats} LID chat(s) had no phone mapping and were skipped for company ${companyId}`);
-          }
+        }
+        if (unresolvedChats > 0) {
+          Logger.warn(`[ChatSync] ${unresolvedChats} LID chat(s) had no phone mapping and were skipped for company ${companyId}`);
+        }
 
-          if (!messages || messages.length === 0) return;
+        if (!messages || messages.length === 0) {
+          Logger.info(`[ChatSync] History Ingest Complete for ${companyId}`);
+          return;
+        }
 
-          // [PERF] Cap maximum history sync messages on low-memory containers (Render/Heroku)
-          // to prevent OOM. We prioritize the most recent messages.
-          let messagesToProcess = messages;
-          const MAX_MESSAGES = parseInt(process.env.MAX_HISTORY_SYNC_MESSAGES || "1500", 10);
-          if (!options?.onDemand && messages.length > MAX_MESSAGES) {
-            Logger.info(
-              `[ChatSync] [MEMORY-LIMIT] Capping history messages from ${messages.length} to ${MAX_MESSAGES} to prevent OOM.`
-            );
-            messagesToProcess = [...messages]
-              .sort((a, b) => {
-                const tsA = typeof a.messageTimestamp === "number" ? a.messageTimestamp : 0;
-                const tsB = typeof b.messageTimestamp === "number" ? b.messageTimestamp : 0;
-                return tsB - tsA; // newest first
-              })
-              .slice(0, MAX_MESSAGES)
-              .reverse(); // back to chronological
-          }
+        // [PERF] Process large batches in ordered chunks instead of one giant
+        // pass — bounds how much conversation-batch state is in flight at once
+        // and gives the event loop a yield point even for one pathologically
+        // large conversation, WITHOUT ever discarding a message. This used to
+        // `.slice(0, MAX_MESSAGES)` after sorting newest-first, silently
+        // discarding everything past the cap — observed losing ~68% of every
+        // reconnect's history batch (thousands of messages per batch, gone
+        // with no trace, no retry, no log beyond a terse "Capping..." line).
+        const { syncMessageParser } = await import("./SyncMessageParser");
+        const CHUNK_SIZE = parseInt(process.env.MAX_HISTORY_SYNC_MESSAGES || "1500", 10);
+        const orderedMessages = [...messages].sort(
+          (a, b) => syncMessageParser.getTimestamp(a.messageTimestamp) - syncMessageParser.getTimestamp(b.messageTimestamp),
+        );
 
-          // 2. Group Messages by Conversation
-          const msgsByPhone = this.jidResolver.groupMessagesByPhone(messagesToProcess, store, lidPhoneMap);
-          const unresolvedMsgs = messagesToProcess.length - Array.from(msgsByPhone.values()).reduce((n, m) => n + m.length, 0);
-          if (unresolvedMsgs > 0) {
-            Logger.warn(`[ChatSync] ${unresolvedMsgs} message(s) dropped (unresolved LID or broadcast/newsletter JID) for company ${companyId}`);
-          }
+        let totalUnresolved = 0;
 
-          // 3. Process each conversation. Yield to the event loop between conversations
-          // so the API stays responsive even during a large sync.
+        for (let i = 0; i < orderedMessages.length; i += CHUNK_SIZE) {
+          const chunk = orderedMessages.slice(i, i + CHUNK_SIZE);
+
+          // 2. Group this chunk's messages by conversation
+          const msgsByPhone = this.jidResolver.groupMessagesByPhone(chunk, store, lidPhoneMap);
+          totalUnresolved += chunk.length - Array.from(msgsByPhone.values()).reduce((n, m) => n + m.length, 0);
+
+          // 3. Process each conversation. Yield to the event loop between
+          // conversations so the API stays responsive even during a large sync.
           for (const [phone, chatMsgs] of msgsByPhone.entries()) {
             // [FIX] One conversation's batch failing (e.g. a constraint error not
             // caught by the batch ingester) used to propagate to this loop's caller,
@@ -217,25 +218,22 @@ export class ChatSyncIngest {
               );
             }
             await new Promise((r) => setImmediate(r));
-            
+
             // [HEAP] Proactively clean dereferenced objects on memory-constrained platforms
             if (global.gc) {
               try {
                 global.gc();
-              } catch (e) {
+              } catch {
                 // Garbage collection is best-effort; ignore errors
               }
             }
           }
-
-          Logger.info(`[ChatSync] History Ingest Complete for ${companyId}`);
-        } catch (err: unknown) {
-          Logger.error(`[ChatSync] ERROR: Fatal History Ingest Failure:`, {
-            companyId,
-            error: err instanceof Error ? err.message : String(err),
-            stack: err instanceof Error ? err.stack : undefined
-          });
         }
+
+        if (totalUnresolved > 0) {
+          Logger.warn(`[ChatSync] ${totalUnresolved} message(s) unresolved (LID with no phone mapping, or broadcast/newsletter JID) for company ${companyId}`);
+        }
+        Logger.info(`[ChatSync] History Ingest Complete for ${companyId} | ${messages.length} received, ${totalUnresolved} unresolved`);
       }
     );
   }

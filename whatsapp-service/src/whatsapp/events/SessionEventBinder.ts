@@ -339,12 +339,29 @@ export function bindSessionEvents(
           }
         : undefined;
 
-      getInboundQueue()?.add(
+      const queue = getInboundQueue();
+      if (!queue) {
+        // [SEC · REDIS-DURABILITY] Previously a silent no-op via `?.add(...)` —
+        // if REDIS_URL is unset/misconfigured, every inbound message vanished
+        // with zero trace: no log, no error, nothing. This is a fatal
+        // misconfiguration for a WhatsApp CRM (every message is customer data),
+        // so it must be as loud as possible.
+        Logger.error(`[SessionEventBinder] [FATAL] Inbound queue unavailable (Redis not configured) — message ${msgId} DROPPED for company ${companyId}, session ${sessionId}.`);
+        return;
+      }
+
+      queue.add(
         "process-message",
         { encodedMessage, sessionId, companyId, keyExtras },
         { jobId }
       ).then((job) => {
         Logger.info(`[SessionEventBinder] Inbound ${msgId} → enqueued to 'whatsapp-inbound' (job ${job.id})`);
+      }).catch((err) => {
+        // [SEC · REDIS-DURABILITY] Previously unhandled — a Redis blip here
+        // (connection drop, timeout) silently dropped the message with only an
+        // unhandled-rejection stack trace, if that. This is the single most
+        // direct cause of "I sent a message and it never showed up in the CRM."
+        Logger.error(err, `[SessionEventBinder] [FATAL] Failed to enqueue inbound message ${msgId} for company ${companyId} — message DROPPED:`);
       });
     } catch (queueErr) {
       Logger.error(queueErr, `[SessionEventBinder] BullMQ enqueue failed for ${msgId}:`);

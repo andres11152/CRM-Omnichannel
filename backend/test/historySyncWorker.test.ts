@@ -1,29 +1,14 @@
-// Regression test for a critical bug in the on-demand WhatsApp history sync
-// pipeline: HistorySyncWorker previously passed `redisClient` (built from the
-// `redis` npm package, via "@/config/redis") as BullMQ's `connection` option.
-// That client duck-types past BullMQ's connection check (it has
-// connect/disconnect/duplicate, same names ioredis uses) so construction
-// never threw — but BullMQ's actual job-processing loop needs ioredis-only
-// APIs (`defineCommand` for its Lua scripts, the `.status` state machine),
-// so the worker silently never consumed a single job. Confirmed empirically
-// against a real local Redis: a job enqueued via a real ioredis-backed Queue
-// stayed in "waiting" forever with a `redis`-client-backed Worker, with zero
-// error/failed events ever firing — exactly why "on-demand sync doesn't
-// work" produced no errors anywhere. Fixed by reusing the shared ioredis
-// `connection` from "@/config/bullmq", same as the (working) messageQueueWorker.
-//
-// This test's most important assertion is the simplest one: the `connection`
-// object handed to `new Worker(...)` must be the real ioredis-backed
-// singleton, not a redis-package client or an ad-hoc options object.
+import { proto } from "@whiskeysockets/baileys";
+import { Job } from "bullmq";
 
-const capturedProcessors: Array<(job: unknown) => Promise<void>> = [];
+const capturedProcessors: Array<(job: Job) => Promise<void>> = [];
 const capturedWorkerOptions: Array<Record<string, unknown>> = [];
 
 const FAKE_IOREDIS_CONNECTION = { __brand: "real-ioredis-connection" };
 
 jest.mock("bullmq", () => ({
   Worker: jest.fn().mockImplementation(
-    (_name: string, processor: (job: unknown) => Promise<void>, options: Record<string, unknown>) => {
+    (_name: string, processor: (job: Job) => Promise<void>, options: Record<string, unknown>) => {
       capturedProcessors.push(processor);
       capturedWorkerOptions.push(options);
       return { on: jest.fn(), close: jest.fn() };
@@ -35,18 +20,12 @@ jest.mock("@/config/bullmq", () => ({
   connection: FAKE_IOREDIS_CONNECTION,
 }));
 
-jest.mock("../src/services/ChatSyncService", () => ({
+jest.mock("@/services/ChatSyncService", () => ({
   chatSyncService: {
     handleHistorySync: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
-// The real @whiskeysockets/baileys ships ESM source Jest's CommonJS transform
-// can't parse (node_modules is untransformed by default) — none of this
-// worker's logic under test calls into a real socket, only the
-// HistorySyncType enum values, which are stable, documented protocol
-// constants (see WAProto/index.d.ts): INITIAL_BOOTSTRAP=0, INITIAL_STATUS_V3=1,
-// FULL=2, RECENT=3, PUSH_NAME=4, NON_BLOCKING_DATA=5, ON_DEMAND=6.
 jest.mock("@whiskeysockets/baileys", () => ({
   proto: {
     HistorySync: {
@@ -63,18 +42,17 @@ jest.mock("@whiskeysockets/baileys", () => ({
   },
 }));
 
-import { HistorySyncWorker } from "../src/services/queue/historySyncWorker";
-import { chatSyncService } from "../src/services/ChatSyncService";
-import { proto } from "@whiskeysockets/baileys";
+import { HistorySyncWorker } from "@/services/queue/historySyncWorker";
+import { chatSyncService } from "@/services/ChatSyncService";
 
 const mockChatSyncService = chatSyncService as unknown as { handleHistorySync: jest.Mock };
 
-function makeJob(data: Record<string, unknown>) {
-  return { id: "job1", data };
+function makeJob(data: Record<string, unknown>): Job {
+  return { id: "job1", data } as unknown as Job;
 }
 
 describe("HistorySyncWorker", () => {
-  let processor: (job: unknown) => Promise<void>;
+  let processor: (job: Job) => Promise<void>;
 
   beforeAll(() => {
     new HistorySyncWorker();
@@ -108,10 +86,11 @@ describe("HistorySyncWorker", () => {
       [],
       [],
       { onDemand: true },
+      [],
     );
   });
 
-  it("does NOT classify syncType 2 (FULL) as on-demand — regression guard for the previous `=== 2` misclassification bug", async () => {
+  it("skips non-onDemand sync types (e.g. FULL=2, RECENT=3) to prevent DB bloat", async () => {
     await processor(
       makeJob({
         companyId: "company1",
@@ -122,32 +101,24 @@ describe("HistorySyncWorker", () => {
       }),
     );
 
-    expect(mockChatSyncService.handleHistorySync).toHaveBeenCalledWith(
-      "company1",
-      [{ key: { id: "m1" } }],
-      [],
-      [],
-      { onDemand: false },
-    );
-  });
+    expect(mockChatSyncService.handleHistorySync).not.toHaveBeenCalled();
 
-  it("defaults missing messages/chats/contacts to empty arrays rather than passing undefined", async () => {
     await processor(makeJob({ companyId: "company1", syncType: proto.HistorySync.HistorySyncType.RECENT }));
 
-    expect(mockChatSyncService.handleHistorySync).toHaveBeenCalledWith(
-      "company1",
-      [],
-      [],
-      [],
-      { onDemand: false },
-    );
+    expect(mockChatSyncService.handleHistorySync).not.toHaveBeenCalled();
   });
 
-  it("propagates an error from handleHistorySync so BullMQ retries the job", async () => {
+  it("propagates an error from handleHistorySync on on-demand sync so BullMQ retries the job", async () => {
     mockChatSyncService.handleHistorySync.mockRejectedValue(new Error("DB unavailable"));
 
     await expect(
-      processor(makeJob({ companyId: "company1", messages: [{ key: { id: "m1" } }] })),
+      processor(
+        makeJob({
+          companyId: "company1",
+          messages: [{ key: { id: "m1" } }],
+          syncType: proto.HistorySync.HistorySyncType.ON_DEMAND,
+        }),
+      ),
     ).rejects.toThrow("DB unavailable");
   });
 });

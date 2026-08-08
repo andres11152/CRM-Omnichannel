@@ -28,6 +28,13 @@ export class HistorySyncWorker {
         // can't silently drift again.
         const onDemand = syncType === proto.HistorySync.HistorySyncType.ON_DEMAND;
 
+        if (!onDemand) {
+          Logger.info(
+            `[HistorySyncWorker] Skipping automatic history sync job ${job.id} (syncType: ${syncType}) for company ${companyId} to prevent DB bloat.`,
+          );
+          return;
+        }
+
         await contextStorage.run({ companyId, requestId: `history-sync:${job.id}` }, async () => {
           try {
             await chatSyncService.handleHistorySync(

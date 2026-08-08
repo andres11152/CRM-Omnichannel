@@ -65,12 +65,56 @@ export const uploadMedia = async (req: AuthenticatedRequest, res: Response): Pro
   if (!file) return res.status(400).json({ error: "No file provided" });
 
   try {
-    const filename = `${Date.now()}_${file.originalname}`;
+    let buffer = file.buffer;
+    let mimetype = file.mimetype;
+    let originalname = file.originalname;
+
+    // [SEC] Voice notes recorded in the chat composer are always WebM (see
+    // frontend/src/components/AudioRecorder.tsx — MediaRecorder never
+    // produces anything else) and land here — this IS the only upload
+    // endpoint the composer calls (see frontend's uploadMedia() /
+    // useChatWorkflow.ts's handleSendMessage) BEFORE the file's hosted URL is
+    // attached to an outbound WhatsApp send. WhatsApp's mobile clients
+    // silently fail to render a PTT audioMessage in any container other than
+    // OGG/Opus, and Baileys does NOT transcode outbound audio (its one
+    // ffmpeg usage is video thumbnails) — a WebM voice note reaches
+    // "sent"/"delivered" status (WhatsApp ACKs the encrypted blob without
+    // validating its codec) but the recipient's client can never decode it.
+    // Converting once here, at upload time, means every downstream consumer
+    // (WhatsApp send, in-CRM preview, reuse in another conversation) gets a
+    // playable file — no other point in the pipeline sees the raw upload.
+    const isAudio = mimetype.startsWith("audio/");
+    const isAlreadyOgg = mimetype.toLowerCase().includes("ogg");
+
+    if (isAudio && !isAlreadyOgg) {
+      const { convertAudioToMP4, cleanupTempFile } = await import("@/utils/audioConverter");
+      const { writeFile, readFile, mkdir } = await import("fs/promises");
+      const path = await import("path");
+
+      const tempDir = path.join(process.cwd(), "temp");
+      await mkdir(tempDir, { recursive: true });
+      const inputPath = path.join(tempDir, `upload_${Date.now()}_${file.originalname}`);
+      await writeFile(inputPath, file.buffer);
+
+      let convertedPath: string | null = null;
+      try {
+        convertedPath = await convertAudioToMP4(inputPath);
+        buffer = await readFile(convertedPath);
+        mimetype = "audio/ogg; codecs=opus";
+        originalname = file.originalname.replace(/\.[^./]+$/, ".ogg");
+        Logger.info(`[MediaUpload] Converted audio upload to OGG/Opus: ${originalname}`);
+      } finally {
+        await cleanupTempFile(inputPath).catch(() => {});
+        if (convertedPath) await cleanupTempFile(convertedPath).catch(() => {});
+      }
+    }
+
+    const filename = `${Date.now()}_${originalname}`;
     const uploadResult = await storageService.uploadFile(
       companyId,
-      file.buffer,
+      buffer,
       filename,
-      file.mimetype
+      mimetype
     );
 
     const media = await TenantContextManager.run(
@@ -78,12 +122,12 @@ export const uploadMedia = async (req: AuthenticatedRequest, res: Response): Pro
       () => mediaRepository.create({
         company: { connect: { id: companyId } },
         filename: uploadResult.key,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-        size: file.size,
+        originalName: originalname,
+        mimeType: mimetype,
+        size: buffer.length,
         url: uploadResult.url,
         key: uploadResult.key,
-        type: mapMimeToType(file.mimetype),
+        type: mapMimeToType(mimetype),
         category: req.body.category || "media-library", // Default to library asset for manual uploads
         uploadedBy: { connect: { id: req.user!.id } },
       })
@@ -91,6 +135,9 @@ export const uploadMedia = async (req: AuthenticatedRequest, res: Response): Pro
 
     return res.status(201).json(media);
   } catch (error: unknown) {
+    // [SEC] Fail loudly instead of falling back to uploading the raw WebM —
+    // an "upload succeeded" that produces an unplayable voice note is worse
+    // than a visible failure the agent can retry.
     Logger.error("[MediaUpload] [ERROR] Upload failed:", error);
     const errObj = error instanceof Error ? error : new Error(String(error));
     return res.status(500).json({ error: "Upload failed", details: errObj.message });

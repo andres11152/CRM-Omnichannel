@@ -1,4 +1,4 @@
-# CRM Omnichannel SaaS - Enterprise Technical Documentation
+# CRM Sentry Omnichannel SaaS - Enterprise Technical Documentation
 
 This repository houses a multi-tenant Omnichannel CRM backend and frontend built for high performance, modularity, and strict architectural isolation.
 
